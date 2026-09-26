@@ -325,7 +325,8 @@ func begin_formal(rid, d: int, fate: Variant = "") -> void:
 	loot_bag.clear()
 	last_foe.clear()
 	# ㉛：buffs 的清空＋命数挂载已搬到函数头（舍装签要先被看见）
-	money = START_MONEY
+	# v24：阅历线·财富「盘缠」段——开局盘缠 +N 文（与"文钱"那张命数各算各的）
+	money = START_MONEY + int(GameState.insight_fx().get("start_money", 0.0))
 	recalc()
 
 # 把一个成员按村里的账装好（原来 begin_formal 的那一整段，逐个成员跑）
@@ -480,6 +481,7 @@ func add_card(set_id: String, part: int) -> bool:
 func add_item(set_id: String, village := false) -> bool:
 	if bag.size() >= bag_cap():
 		return false
+	# v24：阅历线的"行囊"段也走 bag_cap()，这里不用另加
 	var e := {"kind": "item", "set": set_id}
 	if village:
 		e["village"] = true   # 优化批⑮：村里出身的件——结算不再入库（防重复）
@@ -494,6 +496,8 @@ func bag_cap() -> int:
 		base = GameState.backpack_cap() + run_expand   # 优化批㉓：＋本趟临时扩仓
 	if buffs.has("fate_fullbag"):
 		base += 6   # v63（用户："包裹签改为6格"）：+8 → **+6**（代价仍是速度 -50%）
+	# v24：阅历线·财富「行囊」段（+3 格/段）——与宠物驮运同一处相加
+	base += int(GameState.insight_fx().get("bag_slots", 0.0))
 	return base + int(GameState.pet_fx().get("bag_slots", 0))
 
 func bag_full() -> bool:
@@ -729,6 +733,10 @@ func stats_of(m: Dictionary) -> Dictionary:
 	for k1 in ELEM_KEYS:
 		out[k1] = float(elem.get(k1, 0.0))
 	Bonds.apply_to(out, m_role, party_role_ids())
+	# v24（阅历线）：**场外养成 → 游历内辅助**——最后一层并进这一份属性。
+	#   ⚠ 只在这一口（游历那一条链）里并：村里的 effective_stats/squad_stats 不读阅历线，
+	#     所以爬塔/村战一个字不吃（用户："专门场外给予游历内辅助"）。
+	GameState.insight_apply_to(out)
 	# ㊿z9：宠物随行加成不在这一层再加一遍——它在快照（carry_stats）里就算过了。
 	#   这里若顺手再乘一次，就是"面板 +13%、实际 +26%"那种双算，见 effective_stats 的注。
 	return out
@@ -1262,10 +1270,13 @@ func make_shop_offers(node_idx: int) -> Array:
 		var p := randi() % maxi(1, parts.size())
 		if p > 0 and not _entry_open(str(sid)):
 			p = 0   # ㊲：入口卡——没拿过首片的套，货摊只摆首片
+		# v24：阅历线·财富「人脉」段——货郎担要价 -N%
+		var cut := float(GameState.insight_fx().get("shop_cut", 0.0))
+		var pr := float(clampi(30 + node_idx, 30, 60)) * Cards.price_mul(str(sid)) * (1.0 - clampf(cut, 0.0, 0.8))
 		offers.append({
 			"set_id": str(sid),
 			"part": p,
-			"price": int(round(float(clampi(30 + node_idx, 30, 60)) * Cards.price_mul(str(sid)))),
+			"price": maxi(1, int(round(pr))),
 		})
 	return offers
 

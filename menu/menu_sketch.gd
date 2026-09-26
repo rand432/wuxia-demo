@@ -46,6 +46,7 @@ const StarPanel := preload("res://menu/star_panel.gd")   # v4.3：统一升星�
 const PetPanel := preload("res://menu/pet_panel.gd")
 const ShopPanel := preload("res://menu/shop_panel.gd")
 const JourneyDepart := preload("res://menu/journey_depart.gd")
+const InsightPanel := preload("res://menu/insight_panel.gd")   # v64b：阅历线（底排第 6 格）
 const JourneySave := preload("res://journey/journey_save.gd")
 const BattleLite := preload("res://menu/battle_lite.gd")
 const GameState := preload("res://shared/game_state.gd")
@@ -1596,8 +1597,12 @@ func _on_idle_collect() -> void:
 	var ex := int(r.get("exp", 0))
 	if ex > 0:
 		parts.append("经验 +" + str(ex) + " 入经验池（现 " + str(GameState.exp_pool) + "，弟子面板［分配］）")
+	# v64b：阅历（阅历线）——与银两/经验同一口收
+	var ins := int(r.get("insight", 0))
+	if ins > 0:
+		parts.append("阅历 +" + str(ins) + "（现 " + str(GameState.insight) + "，底排［阅历］点线）")
 	_show_toast("挂机（第 " + str(GameState.idle_tier() + 1) + " 档）收取：" + _fmt_min(mins) + " → " + " · ".join(PackedStringArray(parts)), 3.4)
-	print("[主界面] 挂机收取：", mins, " 分（第 ", GameState.idle_tier() + 1, " 档）→ 银两 +", int(r["silver"]), " · 木料 +", int(r["wood"]), " · 经验 +", ex, " 入池（现 ", GameState.exp_pool, "）")
+	print("[主界面] 挂机收取：", mins, " 分（第 ", GameState.idle_tier() + 1, " 档）→ 银两 +", int(r["silver"]), " · 木料 +", int(r["wood"]), " · 经验 +", ex, " 入池（现 ", GameState.exp_pool, "）· 阅历 +", ins, "（现 ", GameState.insight, "）")
 	_refresh_idle_btn()
 	if _char_panel != null and _char_panel.visible:
 		_char_panel.refresh()
@@ -1880,7 +1885,8 @@ func _tag_fire(i: int) -> void:
 			# v4.2：底排第 5 格＝宝箱（宝箱专页：自绘箱子 + 开箱动画，见 chest_panel.gd）
 			_open_chests()
 		5:
-			_show_toast("「关于」——下一轮接通：版本 · 制作")
+			# v64b：第 6 格「阅历」——阅历线面板（原来是「关于」空壳；TAGN 那边也改了字）
+			_open_insight()
 
 # ---- 出村 → 整备/引导 → 自动战斗 ----
 
@@ -1918,6 +1924,16 @@ func _open_depart() -> void:
 		return
 	print("[主界面] 出征屏：D1=", GameState.diff_state(1), " 已清=", GameState.diff_cleared_count(), " 携宠=", GameState.pet_follow)
 	_depart.open()
+
+# ---- v64b：阅历线面板 ----
+var _insight_panel = null
+
+func _open_insight() -> void:
+	_clear_toast()
+	if _insight_panel == null:
+		_insight_panel = InsightPanel.new()
+		add_child(_insight_panel)
+	_insight_panel.open()
 
 func _on_deploy_started(party: Array, diff: int) -> void:
 	print("[主界面] 出征：", party, " · ", GameState.diff_name(diff), " → ", Conf.JOURNEY_SCENE)

@@ -33,7 +33,9 @@ const TAG_H := 86.0
 const TAG_Y := DH - TAG_BM - TAG_H
 const HINT_Y := TAG_Y - 20.0
 const TOAST_Y := TAG_Y - 66.0
-const TAGN := ["开始历练", "弟子", "行囊", "设置", "宝箱", "关于"]
+# v64b：第 6 格「关于」→ **「阅历」**（用户挑的入口：第 5 问"可"）——阅历线面板
+#   ⚠ 改这一格时 memu_sketch._tag_fire() 的 case 5 要一起改。
+const TAGN := ["开始历练", "弟子", "行囊", "设置", "宝箱", "阅历"]
 const TAG_CHEST := 4   # 宝箱那一格的下标（HUD 在那儿画计数角标，sketch 在那儿开面板）
 
 # ---- 剧本：游历结束、落脚青山村之后（名字随便改，只影响显示） ----

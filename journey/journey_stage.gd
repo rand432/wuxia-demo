@@ -1,6 +1,11 @@
 extends Control
 # ============================================================
-# journey_stage.gd —— 总调度（v35 · 开局行装五选一 ＋ v34 那一批）
+# journey_stage.gd —— 总调度（v36 · 文钱收益 ×1.2 ＋ v35 开局行装 ＋ v34 那一批）
+# v36（用户："文钱收益提升20%"）：全局文钱收益 MONEY_MUL＝1.2——只作用在 _money_gain
+#   （打赢/击退来敌的进账）那一口；卖卡、折现、货栈那些"卖东西换钱"不算收益，不动。
+# v35b（用户："装备和功法进包裹就行了"）：开局行装拿到的**装备/功法一律进包裹**，
+#   **不自动上身**（原来直接给领队穿上）；发奖那一段抽成 _kit_grant()（纯逻辑，好验）。
+#   ⚠ 只有"包裹真满"那种极端情况才兜底给领队穿上——绝不把这一件弄丢。
 # v35（用户："进入游历第一节 根据当前难度 给予五个选项 装备 披风 玉佩 功法 初始文钱翻倍
 #   且文钱收益增加+20%【此选项不消耗文钱 且带出去才能真正带出去 死亡带不走】"）：
 #   正式趟进第 1 节摆一页**开局行装 · 五选一**（护甲/玉佩/披风/功法/文钱，给的都是**成品**）。
@@ -195,6 +200,8 @@ var _kit_offers: Array = []       # v35：开局行装那五张牌（摆出来�
 
 # v35（用户："初始文钱翻倍且文钱收益增加+20%"）：选了"文钱"那一张才有——本趟文钱收益加成。
 const KIT_MONEY_PCT := 0.20
+# v36（用户："文钱收益提升20%"）：**全局**文钱收益（不分哪一趟、不看拿没拿那张）——只改这一个数。
+const MONEY_MUL := 1.2
 
 func _ready() -> void:
 	GameState.load_game()   # ㊿l：游历场开工先读账——直跑/兜底进游历场时，写盘不再拿空白村账盖真账
@@ -796,7 +803,9 @@ func _advance() -> void:
 		# ㉘：统一每节回复＝上限 10%（歇脚全复照旧）
 		# ㊿：三个人一起回——以前只回"当前成员"那一个
 		if _party_hurt():
-			var heal_n: int = _state.party_heal(NODE_HEAL_RATE)
+			# v36：阅历线·防御「调息」段——每节恢复 10% → +N%
+			var heal_rate: float = NODE_HEAL_RATE + float(GameState.insight_fx().get("heal_add", 0.0))
+			var heal_n: int = _state.party_heal(heal_rate)
 			_float_over_walker("气血 +" + str(heal_n), UiKit.GREEN)   # ㉞：飘人，不飘顶
 			_refresh_alert()
 	_bag._update_tip()
@@ -1043,6 +1052,8 @@ func _spawn_loot(kind: String) -> void:
 	if _has_fate("fate_noarmor"):
 		lk *= FATE_NOARMOR_MULT
 	lk *= 1.0 + _state.talent_loot_bonus()
+	# v36：阅历线·财富「眼力」段——搜刮出货率 +N%
+	lk *= 1.0 + float(GameState.insight_fx().get("loot_pct", 0.0))
 	chance = minf(LOOT_CHANCE_CAP, chance * lk)
 	if _has_fate("fate_scavenge"):
 		chance = 1.0
@@ -1208,7 +1219,11 @@ func _has_fate(id: String) -> bool:
 	return _state != null and _state.buffs.has(id)
 
 func _money_gain(g: int) -> int:
-	var k := 1.0
+	# v36（用户："文钱收益提升20%"）：**全局文钱收益 ×1.2**。
+	#   游历里"打赢给的钱"只有这一口（战斗与遭遇战两处调用），所以改这一处就够；
+	#   卖卡/折现那些"卖东西换钱"不走这里（那不是收益）。
+	#   ⚠ 与开局行装"文钱"那张的 +20% **相乘**（都拿 ＝ ×1.44）——要只留一份就把这张表调成 1.0。
+	var k := MONEY_MUL
 	if _has_fate("fate_greed"):
 		k *= FATE_GREED_MONEY
 	if _has_fate("fate_fullbag"):
@@ -1216,6 +1231,9 @@ func _money_gain(g: int) -> int:
 	# v35：开局行装选了"文钱"那一张 → 本趟文钱收益 +20%（与命数那两张相乘，互不顶替）
 	if _state != null and _state.kit_money_pct > 0.0:
 		k *= 1.0 + float(_state.kit_money_pct)
+	# v36：阅历线·财富「财路」段——本趟文钱收益 +N%（同样相乘）
+	if _state != null:
+		k *= 1.0 + float(GameState.insight_fx().get("money_pct", 0.0))
 	return maxi(1, int(round(float(g) * k)))
 
 func _open_fate(node: Dictionary) -> void:
@@ -1471,14 +1489,14 @@ func _kit_make_offers() -> Array:
 			# ⚠ 品阶照**这件真实**的写：绝品难度下装备没有绝品、会往下借到极品——
 			#   写 qn 的话会把极品标成"绝品"（探针当场抓到的）。
 			"title": cn + " · " + str(Cards.item_name(sid)) + "（" + _q_cn(sid) + "）",
-			"sub": "穿上就生效：" + str(Cards.bonus_text(Cards.item_bonus(sid))) + "——装备格＝" + cn,
+			"sub": str(Cards.bonus_text(Cards.item_bonus(sid))) + "（装备格＝" + cn + "）——拿了放包裹里，自己穿",
 		})
 	var asid := Ladder.pick_of_q("arts", q)
 	if asid != "":
 		out.append({
 			"kind": "arts", "sid": asid,
 			"title": "功法 · " + str(Cards.item_name(asid)) + "（" + _q_cn(asid) + "）",
-			"sub": "装上就生效：" + str(Cards.art_of(asid).get("desc", "—")),
+			"sub": str(Cards.art_of(asid).get("desc", "—")) + "——拿了放包裹里，自己装",
 		})
 	out.append({
 		"kind": "money",
@@ -1488,19 +1506,26 @@ func _kit_make_offers() -> Array:
 	})
 	return out
 
-func _on_kit_pick(i: int) -> void:
-	if i < 0 or i >= _kit_offers.size():
-		return
-	var o: Dictionary = _kit_offers[i]
-	var msg := ""
+# v35b（用户："装备和功法进包裹就行了"）：这一张的**落点**抽成纯逻辑（不碰 UI、不落盘），
+#   _on_kit_pick 只负责"发奖 → 收摊 → 落盘"这三步。探针可以直接调这一口验"进没进包裹"。
+func _kit_grant(o: Dictionary) -> String:
 	if str(o.get("kind", "")) == "money":
 		var before: int = int(_state.money)
 		_state.money = before * 2
 		_state.kit_money_pct = KIT_MONEY_PCT
-		msg = "盘缠翻倍：" + str(before) + " → " + str(_state.money) + " 文　本趟文钱收益 +" + str(int(KIT_MONEY_PCT * 100.0)) + "%"
-	else:
-		# 给**领队**（出征屏点的第一个人＝站前排那位）；格子占着就进包裹——place_item 自己会挑
-		msg = _state.place_item_for(0, str(o.get("sid", "")), "equip")
+		return "盘缠翻倍：" + str(before) + " → " + str(_state.money) + " 文　本趟文钱收益 +" + str(int(KIT_MONEY_PCT * 100.0)) + "%"
+	var sid := str(o.get("sid", ""))
+	# 用户："装备和功法进包裹就行了"——**不自动上身**：放进包裹，由玩家自己决定给谁穿。
+	if _state.add_item(sid):
+		return str(Cards.item_name(sid)) + " 已放进包裹（到包裹里自己穿）"
+	# 兜底（开局包裹基本不可能是满的）：真满了就直接给领队穿上，绝不把这一件弄丢
+	return "包裹满了——先给领队穿上：" + _state.place_item_for(0, sid, "equip")
+
+func _on_kit_pick(i: int) -> void:
+	if i < 0 or i >= _kit_offers.size():
+		return
+	var o: Dictionary = _kit_offers[i]
+	var msg := _kit_grant(o)
 	_close_popup()
 	_kit_offers = []
 	_busy = false

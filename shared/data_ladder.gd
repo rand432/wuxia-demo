@@ -723,8 +723,10 @@ static func pick_of_q(pool: String, q: int, rng: RandomNumberGenerator = null) -
 			return got
 	return ""
 
-static func _pick_in_pool(pool: String, q: int, rng: RandomNumberGenerator) -> String:
-	var cand: Array = []
+# v59b：某一池里**所有**该品阶的可掉落套（专武/不掉落的除外）——货栈"补缺"挑范围也用它，
+#   免得"哪些能掉"这件事在两处各写一遍（写岔了就会出现"补的是一张根本掉不出来的卡"）。
+static func sets_of_q(pool: String, q: int) -> Array:
+	var out: Array = []
 	for d_v in Cards.SETS:
 		var d: Dictionary = d_v
 		if str(d.get("pool", "")) != pool:
@@ -733,8 +735,12 @@ static func _pick_in_pool(pool: String, q: int, rng: RandomNumberGenerator) -> S
 			continue                 # 专武不落货仓
 		if bool(d.get("no_drop", false)):
 			continue
-		if Cards.q_idx(str(d.get("id", ""))) == q:
-			cand.append(str(d.get("id", "")))
+		if Cards.q_idx(str(d.get("id", ""))) == clampi(q, 0, Cards.QUALITY_ORDER.size() - 1):
+			out.append(str(d.get("id", "")))
+	return out
+
+static func _pick_in_pool(pool: String, q: int, rng: RandomNumberGenerator) -> String:
+	var cand: Array = sets_of_q(pool, q)
 	if cand.is_empty():
 		return ""
 	var i := (rng.randi_range(0, cand.size() - 1) if rng != null else randi_range(0, cand.size() - 1))

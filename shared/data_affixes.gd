@@ -14,7 +14,8 @@ const Tuning := preload("res://shared/tuning.gd")
 const LIST := {
 	"thorns":  {"name": "反伤", "desc": "挨一下弹一下——出手的人受 12% 回的伤（一次最多打掉他上限的一成）"},
 	"swift":   {"name": "速攻", "desc": "每第 3 手追一记快招（六成力）"},
-	"regen":   {"name": "回春", "desc": "出手即回气——每手回 6% 气血上限"},
+	# v3（用户："回春词缀改为 10%恢复 两手恢复一次"）：6%/每手 → **10%／每两手**
+	"regen":   {"name": "回春", "desc": "出手即回气——**每两手**回 **10%** 气血上限"},
 	# v36：说明写清"哪一边的全队"——它只炸**对面**（我方），绝不会伤到它自己的同伴
 	"bomb":    {"name": "自爆", "desc": "倒下时轰然炸开——**对面全队**各受**他自己**气血上限四成的伤（只炸对面，不伤它自己的同伴；满血挨炸不会一下炸死）"},
 	"shock":   {"name": "电盾", "desc": "挨打 30% 几率电手——出手的人下一手落空"},
@@ -97,7 +98,8 @@ const T_THORN_PCT := 0.12
 const T_THORN_CAP := 0.10       # 一次反伤 ≤ 出手人气血上限的这么多
 const T_SWIFT_EVERY := 3
 const T_SWIFT_PCT := 0.6
-const T_REGEN_PCT := 0.06
+const T_REGEN_PCT := 0.10        # v3：0.06 → 0.10（用户："回春…10%恢复"）
+const T_REGEN_EVERY := 2         # v3：每几手回一次（用户："两手恢复一次"）
 const T_BOMB_PCT := 0.40        # ⚠ 基数是"挨炸那个人的上限"，不是怪的上限
 const T_SHOCK_CHANCE := 0.30
 const T_BERSERK_MUL := 1.6
@@ -128,6 +130,10 @@ static func SWIFT_PCT() -> float:
 
 static func REGEN_PCT() -> float:
 	return Tuning.num("affix", "regen_pct", T_REGEN_PCT)
+
+# v3：回春每几手回一次（1＝每手，2＝每两手）——两套引擎都读这一口，别各写各的
+static func REGEN_EVERY() -> int:
+	return maxi(1, Tuning.intv("affix", "regen_every", T_REGEN_EVERY))
 
 static func BOMB_PCT() -> float:
 	return Tuning.num("affix", "bomb_pct", T_BOMB_PCT)

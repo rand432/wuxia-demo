@@ -1,6 +1,10 @@
 extends RefCounted
 # ============================================================
-# journey_settle.gd —— 结算件 v4（优化批㉒：杂物银两口径＋血脉带出）
+# journey_settle.gd —— 结算件 v5（行囊清点：面板撑高 ＋ 正文滚动）
+# v5（用户："行囊清点框需要优化 字数超出"）：三个人的清单一屏装不下，文字从"残卡"
+#   那一段起画到按钮上、再画到面板外。现在：面板高度按屏幕算（420~860），正文进
+#   ScrollContainer（按住上下滑），按钮钉底；放不下时角上给一句"按住上下滑"。
+# v4（优化批㉒：杂物银两口径＋血脉带出）
 # v4：①杂物行文案改"银两"（杂物值多少银两就是多少——v3 里写"文"是旧口径的误导）；
 #   ②临时仓库里的血脉随结算递交（journey_deposit 的"bloods"桶）。
 # v3（优化批⑮）：①村里出身的件（随身清单里的三件套/功法）趟内被换下、卸下、落回
@@ -65,7 +69,20 @@ static func open(st: RunState, veil: ColorRect, on_restart: Callable, on_return:
 		print("[游历] 杂物折银：+", junk_silver, " 文")
 	# R4（Q3=b）：随身成品随通关带出村——带出才登记收集册
 	var haul_line := _deposit_run_items(st)
-	var panel := UiKit.make_paper_panel(veil, Rect2(60, POPUP_TOP, 600, 500))
+	# v5b（阅历线 · 用户："游历也可以给一点"）：**通关给一笔阅历**（按难度算），
+	#   殒命那条路也给三成（见 open_death）——"走过一遭，也算见识"。
+	var ins_gain := _insight_of_run(st)
+	GameState.insight_add(ins_gain)
+	# v5（用户："行囊清点框需要优化 字数超出"）：**面板按屏幕留白撑高 ＋ 正文进滚动区**。
+	#   旧版是死高 500、正文框只有 330 高（≈12 行），三个人一列（每人天赋/自带/兵器/
+	#   随身装备/功法 五~六行）＋残卡＋盘缠＋带出，二十好几行——从"残卡"那一段起
+	#   就画到按钮上、再画到面板外面去了（玩家截图里那一幕）。
+	#   现在：面板高度＝按屏幕算（最多 860），正文一律放进 ScrollContainer（按住上下滑），
+	#   按钮钉在面板底部，正文再长也不会压到按钮。
+	var vp := veil.size
+	# 下限 300：小屏（矮窗口）也要整块落在屏幕里——正文那边会自动进滚动
+	var ph := clampf(vp.y - POPUP_TOP - 40.0, 300.0, 860.0)
+	var panel := UiKit.make_paper_panel(veil, Rect2(60, POPUP_TOP, 600, ph))
 
 	var title := UiKit.make_label(panel, Vector2(0, 18), Vector2(600, 44), 32, UiKit.INK)
 	UiKit.set_text(title, "行囊清点")
@@ -99,20 +116,51 @@ static func open(st: RunState, veil: ColorRect, on_restart: Callable, on_return:
 					have += 1
 			lines += "　" + str(Cards.name_of(str(s))) + " · " + str(have) + "/" + str(parts.size()) + "\n"
 	lines += "\n盘缠 " + str(st.money) + " 文（出局清零）"
+	# v5b：这趟挣到的阅历（阅历线在村口底排「阅历」那一格点）
+	if ins_gain > 0:
+		lines += "\n阅历 +" + str(ins_gain) + "（现有 " + str(GameState.insight) + " 点——去底排［阅历］点线）"
 	if loot_line != "":
 		lines += "\n" + loot_line
 	if haul_line != "":
 		lines += "\n" + haul_line
 
-	var body := UiKit.make_label(panel, Vector2(40, 72), Vector2(520, 330), 18, UiKit.INK)
+	# 正文：滚动区（VBox 撑高 → Label 自动换行；装不下就上下滑，不再冲出面板）
+	var body_top := 74.0
+	var foot_h := 74.0        # 底部留给按钮＋那行小提示
+	var scroll := ScrollContainer.new()
+	UiKit.drag_scroll(scroll)
+	scroll.position = Vector2(30, body_top)
+	scroll.size = Vector2(540, maxf(120.0, ph - body_top - foot_h))
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	panel.add_child(scroll)
+	var col := VBoxContainer.new()
+	col.custom_minimum_size = Vector2(520, 0)
+	col.add_theme_constant_override("separation", 0)
+	scroll.add_child(col)
+	var body := UiKit.make_label(col, Vector2.ZERO, Vector2(520, 0), 18, UiKit.INK)
 	UiKit.set_text(body, lines)
+	body.custom_minimum_size = Vector2(520, 0)
 	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 
-	var rb := UiKit.make_button(panel, Vector2(88, 428), Vector2(200, 46), "再来一趟", 20)
+	# 装不下时给一句提示（行数 × 行高 ≈ 需要多高）
+	var need_h := float(lines.split("
+").size()) * 26.0
+	var hint := UiKit.make_label(panel, Vector2(32, ph - foot_h + 6.0), Vector2(300, 22), 15,
+		Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.50))
+	UiKit.set_text(hint, "（正文放不下：按住上下滑）" if need_h > scroll.size.y else "")
+
+	var by := ph - 58.0
+	var rb := UiKit.make_button(panel, Vector2(88, by), Vector2(200, 46), "再来一趟", 20)
 	rb.pressed.connect(on_restart)
 
-	var vb := UiKit.make_button(panel, Vector2(312, 428), Vector2(200, 46), "回村", 20)
+	var vb := UiKit.make_button(panel, Vector2(312, by), Vector2(200, 46), "回村", 20)
 	vb.pressed.connect(on_return)
+
+# v5b：这一趟能给多少阅历——按难度算（难度 1 → 28 点；难度 10 → 100 点）
+static func _insight_of_run(st: RunState) -> int:
+	if str(st.mode) != "formal":
+		return 0
+	return 20 + maxi(1, int(st.diff)) * 8
 
 # 殒命：全丢——不入仓库、不登记收集册、不记难度、不动村况；盘缠就地作废。
 # 舞台已做完：_busy/_run_dead 置位、抹档、清容器、关幕布、造幕布（veil）。
@@ -148,6 +196,11 @@ static func open_death(st: RunState, veil: ColorRect, on_restart: Callable, on_r
 	lines += "　残卡 " + str(cards_n) + " 张 · 随身成品 " + str(items_n) + " 件 · 临时仓库 " + str(loot_n) + " 件\n"
 	lines += "未入村仓库，也未登记收集册。\n"
 	lines += "盘缠 " + str(st.money) + " 文，一并埋在了路边。"
+	# v5b：阅历线——东西全丢，但"走过一遭"这件事留得住：给三成
+	var ins_lost := int(float(_insight_of_run(st)) * 0.3)
+	if ins_lost > 0:
+		GameState.insight_add(ins_lost)
+		lines += "\n\n只有见识留住了：阅历 +" + str(ins_lost) + "（三成——去底排［阅历］点线）"
 
 	var body := UiKit.make_label(panel, Vector2(40, 86), Vector2(520, 250), 18, Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.92))
 	UiKit.set_text(body, lines)

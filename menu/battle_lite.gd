@@ -1,6 +1,15 @@
 extends Control
 # ============================================================
-# battle_lite.gd —— 出村清缴 · 自动战斗 v11（㊿c：清重——玩法零变化）
+# battle_lite.gd —— 出村清缴 · 自动战斗 v12（对手清空却卡住：收场总闸）
+# v12（用户："爬塔时有时候 对手血量清空了 会卡住不动"）：
+#   病根＝**敌人死在"非收尾路径"上时没人收摊**。最典型的是反刺：
+#   怪打人 → 被反刺反死（_enemy_act 尾部、_enemy_hit_member 那两段只判"我方死没死"），
+#   而 _member_act 又在"没有活着的敌人"时提前 return（want < 0），
+#   于是"杀完就收摊"那句永远走不到 → 双方干站着空转（截图里 0/499 那一幕）。
+#   改法三处：①_act() 开头放**收场总闸**（敌人清空/我方全灭，无论血是谁扣的都当场收摊）；
+#   ②_enemy_death_check 补"敌人清空"分支（怪放完招的收尾那一口）；
+#   ③_enemy_act 尾部反刺之后补同一道判定；另把"我方还剩几个"收成 _party_alive()。
+#   口径与 _member_act 收尾一致：敌人清完＋我方还有人＝胜；两边同时倒＝败。
 # v11（㊿c）：㊿c 补丁误贴的两处重复清掉——①THORN_HP_LO/HI 只留头部那一份
 #   （重复定义＝脚本报"已定义"，整场战斗都起不来）；②删多余的 _thorn_reflect()
 #   （v10 的 _thorn_calc() 就是同一口径，两处反刺都走它）。
@@ -473,7 +482,7 @@ func _foes_alive() -> int:
 			n += 1
 	return n
 
-# v67：我方还剩几个（这段原来在四五处各抄一遍；这次修卡死要用它，收成一口）
+# v12：我方还剩几个（这段原来在四五处各抄一遍；这次修卡死要用它，收成一口）
 func _party_alive() -> int:
 	var n := 0
 	for m in _party:
@@ -1426,7 +1435,7 @@ func _turn_order() -> Array:
 
 func _act() -> void:
 	# ============================================================
-	# v67（用户："爬塔时有时候 对手血量清空了 会卡住不动"）：**收场总闸**。
+	# v12（用户："爬塔时有时候 对手血量清空了 会卡住不动"）：**收场总闸**。
 	#   病根：敌人有几条"死在别人手里"的路——最典型的是**反刺**（怪打人时被反死，
 	#   见 _enemy_act 尾部与 _enemy_hit_member 的反刺那两段）。那两条路原来只判
 	#   "我方死没死"，**从不判敌人死没死**；而 _member_act 又在"没有活着的敌人"时
@@ -2873,7 +2882,7 @@ func _enemy_death_check(tx: float, target: Dictionary) -> bool:
 		_fall(target["node"], -1.0)
 		_dust_at(tx, _ground_y)
 		_push([str(target["name"]) + " 倒下了。"])
-	# v67：**反刺把怪反死**也要收摊——这一口是"怪放完招之后的收尾"，
+	# v12：**反刺把怪反死**也要收摊——这一口是"怪放完招之后的收尾"，
 	#   原来只数我方；敌人在它自己出手时被打死就一直没人管（见 _act 开头那段）。
 	if _foes_alive() <= 0:
 		_enemy_fall_pending()
@@ -3087,9 +3096,12 @@ func _enemy_act() -> void:
 	if target.is_empty():
 		return
 	_set_e_acts(_e_acts() + (1))
-	# v9 词缀：回春（每手回气）／鼓舞（士气叠加）
+	# v9 词缀：回春（回气）／鼓舞（士气叠加）
 	# v53：「封脉」把回春压到三成；「挫锐」让怒气只剩四成
-	if _e_affixes().has("regen") and _e_hp() > 0 and _e_hp() < _e_max():
+	# v13（用户："回春词缀改为 10%恢复 两手恢复一次"）：**改成每两手回一次**
+	#   （上一行刚把 _e_acts 加过 1，所以"第 2、4、6…手"各回一次；
+	#     间距与百分比都在 data_affixes.REGEN_EVERY()/REGEN_PCT() 那一口里）
+	if _e_affixes().has("regen") and _e_hp() > 0 and _e_hp() < _e_max() 			and _e_acts() % Affixes.REGEN_EVERY() == 0:
 		var rh := maxi(1, int(round(float(_e_max()) * Affixes.REGEN_PCT() * St.heal_mul(_e()))))
 		_set_e_hp(mini(_e_max(), _e_hp() + rh))
 		_float_at(Vector2(_enemy_base_x(), _ground_y - 158.0), "回春 +" + str(rh), GREEN, 20)
@@ -3212,7 +3224,7 @@ func _enemy_act() -> void:
 			var rb := _thorn_calc(target, raw)
 			_e_take(rb)
 			_float_at(Vector2(_enemy_base_x(), _ground_y - 158.0), "反刺 -" + str(rb), C_COUNTER, 20)
-	# v67：**这一手可能把反刺的怪反死**——当场收摊（与 _member_act 收尾那句同一口径：
+	# v12：**这一手可能把反刺的怪反死**——当场收摊（与 _member_act 收尾那句同一口径：
 	#   敌人清完 ＋ 我方还有人 ＝ 胜；两边同时倒 ＝ 败）。少了这一段就是玩家报的"卡住"。
 	if _foes_alive() <= 0:
 		_enemy_fall_pending()

@@ -1,6 +1,11 @@
 extends RefCounted
 # ============================================================
 # game_state.gd —— 小账本（静态类）v37
+# v64（货栈四连改 · 用户："基础残兵/基础残装备/基础功法 价格下调40% 增加限购 10/每种；
+#   购买时弥补仓库最缺的那一件或者没有的那一件；增加良品的残卡【武器/装备/功法】限购5"）：
+#   价 91/119/91 → **55/71/55**（×0.6）；限购 3/2/2 → **每种 10**；新增**良品**残卡三种
+#   （110/142/110，限购 5，按自己那一档定价）；买残卡**不再是随机一张**——
+#   走 _shop_pick_missing()：优先"差一张就齐"的套，其次一张没有的套，全齐了才退回随机。
 # v37（用户定的两件）：①**爬塔宝箱**（咸鱼之王那套）——每清一关给一个箱子（手动打与挂机
 #   推都算），品质跟关卡走（杂兵木箱 / 精英银箱 / 首领金箱 / 里程碑玉箱·小概率龙箱）；
 #   开箱先掷两次运气（**角色碎片** / **突破丹**），其余给银两与炼丹材料。表与掷法在
@@ -795,6 +800,15 @@ static func dange_unlocked() -> bool:
 	return herbs_granted or stage_progress >= STORY_HERB_STAGE
 static var coins := {"wen": 0, "silver": 0, "yuanbao": 0}
 
+# ---- v64b：**阅历线**（场外养成 → 游历内辅助）----
+#   用户："增加一个新线 阅历线 这个是专门场外给予游历内辅助的 挂机给阅历值
+#   消耗银两和阅历值可以提升阅历线 · 游历也可以给一点 · 吃挂机档位 ·
+#   分四条线 财富【经济】进攻 防御 技巧【暴击 闪避】· 走满要很久 · 要洗点但消耗银两"
+#   · 表与价目全在 shared/data_insight.gd（唯一真源）
+#   · insight＝现有阅历值；insight_lv＝{支线 → 已升到第几段}
+static var insight := 0
+static var insight_lv := {}
+
 # ---- 货栈（银两换材料 / 残卡；残卡每日限购，按真实日期重置） ----
 const SHOP_CFG := "user://shop.cfg"
 
@@ -803,9 +817,30 @@ const SHOP_ITEMS := [
 	#   一起上架。不然第 1 关就能买一堆，压在包里到 300 关才用得上（"上架闸"）。
 	{"key": "bone", "name": "兽骨碎", "price": 14, "cat": "basic", "need": "dange", "desc": "养灵丹主料——猎人剩下的硬货"},
 	{"key": "rice", "name": "灵米", "price": 11, "cat": "basic", "need": "dange", "desc": "养灵丹辅料——喂灵兽的细粮"},   # v62：10 → 15（×1.4 后被"取整到十"吃掉了，手工补上）
-	{"key": "weapon_card", "name": "基础兵器残卡", "price": 91, "cat": "weapon", "desc": "随机现役兵器的残卡一张——凑齐一套可合成", "kind": "card", "pool": "weapon", "limit": 3},
-	{"key": "art_card", "name": "基础武学残页", "price": 119, "cat": "arts", "desc": "随机现役武学的残页一张——凑齐一套可合成", "kind": "card", "pool": "arts", "limit": 2},
-	{"key": "gear_card", "name": "基础装备残卡", "price": 91, "cat": "gear", "desc": "随机现役装备的残片一张（护甲/玉佩/披风都可能）——凑齐一套可合成", "kind": "card", "pool": "gear", "limit": 2},
+	# ============================================================
+	# v64（用户："商店的基础残兵 基础残装备 基础功法 价格下调40% 增加限购 10/每种
+	#   同时增加特殊效果 购买时 弥补仓库最缺的那一件或者没有的那一件残页或者残兵 残装备
+	#   同时增加良品的残卡【武器/装备/功法】限购5"）：
+	#   ① 价：91/119/91 →（v64b 定稿）**凡品一口价 150/120/120**，**不再乘池顶系数**；
+	#      良品卡按自己那一档 ×2（300/240/240）。两档都走 shop_card_price() 那一个口。
+	#   ② **限购 3/2/2 → 每种 10**（每日，凌晨 4 点换日）。
+	#   ③ **不再是"随机一张"**：买的时候**补你仓库里最缺的那一张**——优先"差一张就齐"的套，
+	#      其次一张都没有的套，再次缺得最多的套；全齐了才退回随机（见 _shop_pick_missing）。
+	#   ④ 新增**良品**残卡三种（限购 **5**）：只补良品套的缺页——池子滑过去了也能补齐旧套。
+	#   ⚠ desc 都要短（货栈那一行只放得下 ~19 字，长了会溢到右边价格/按钮上）。
+	# ============================================================
+	#   v64b（用户："基础的就是凡品 这个价格太低了 全部120吧 兵器150"）：
+	#     **基础卡＝凡品货**，价按凡品一口价写死——**不再跟现役池顶品级涨**（原来池子一升价就跟着翻）：
+	#     兵器 **150** · 武学 **120** · 装备 **120**；补缺也只在**凡品套**里补（它就是凡品那一档的货）。
+	{"key": "weapon_card", "name": "基础兵器残卡", "price": 150, "cat": "weapon", "desc": "凡品残兵一张——补仓库最缺的那张", "kind": "card", "pool": "weapon", "q": 0, "limit": 10},
+	{"key": "art_card", "name": "基础武学残页", "price": 120, "cat": "arts", "desc": "凡品残页一张——补仓库最缺的那张", "kind": "card", "pool": "arts", "q": 0, "limit": 10},
+	{"key": "gear_card", "name": "基础装备残卡", "price": 120, "cat": "gear", "desc": "凡品残片一张——补仓库最缺的那张", "kind": "card", "pool": "gear", "q": 0, "limit": 10},
+	#   ⚠ 良品卡的 price 写**凡品基价**，实际价由 shop_card_price 按它自己的 q 乘系数
+	#     （良品 ×2）——用户："良品你看着来"：就按品级系数走，与凡品同比例：
+	#     兵器 150→**300** · 武学 120→**240** · 装备 120→**240**。
+	{"key": "weapon_card_l", "name": "良品兵器残卡", "price": 150, "cat": "weapon", "desc": "良品残兵一张——补最缺的那张", "kind": "card", "pool": "weapon", "q": 1, "limit": 5},
+	{"key": "art_card_l", "name": "良品武学残页", "price": 120, "cat": "arts", "desc": "良品残页一张——补最缺的那张", "kind": "card", "pool": "arts", "q": 1, "limit": 5},
+	{"key": "gear_card_l", "name": "良品装备残卡", "price": 120, "cat": "gear", "desc": "良品残片一张——补最缺的那张", "kind": "card", "pool": "gear", "q": 1, "limit": 5},
 	# v62c（用户："商店卖的那个血脉变为随机 90%紫色 8.9%金色 0.1%红色"）：
 	#   名字从「金纹血脉囊」改成**「血脉囊」**——原来名字里写死"金"，现在九成是紫的，
 	#   挂着"金纹"就是名不副实（想改回去只动 name 这一处）。
@@ -928,6 +963,11 @@ static func shop_card_price(k: String) -> int:
 	var base := int(item.get("price", 0))
 	if str(item.get("kind", "mat")) != "card":
 		return base
+	# v64：**自己点了品级的货（良品残卡）按自己那一档算**，不再跟池顶跑
+	#   （它给的就是良品，跟着池顶涨到极品价就名不副实了）；基础残卡照旧＝池顶一口价。
+	if item.has("q"):
+		var qq := clampi(int(item.get("q", 0)), 0, Cards.PRICE_MUL.size() - 1)
+		return int(round(float(base) * float(Cards.PRICE_MUL[qq])))
 	var ids: Array = shop_pool_of(str(item.get("pool", "")))
 	var q := 0
 	for sid_v in ids:
@@ -961,6 +1001,61 @@ static func buy_material(k: String, n: int) -> Dictionary:
 	add_material(k, n)
 	return {"ok": true, "msg": "买了「" + str(item["name"]) + "」×" + str(n) + "（花 " + str(price) + " 两，现共 " + str(material_count(k)) + "）"}
 
+# v64：这一套在仓库里还差几张（0 ＝ 齐了）
+static func _shop_set_missing(sid: String) -> int:
+	var parts: Array = Cards.parts_of(sid)
+	if parts.is_empty():
+		return 0
+	var bucket: Dictionary = vault_cards.get(sid, {})
+	var n := 0
+	for i in parts.size():
+		if int(bucket.get(i, 0)) <= 0:
+			n += 1
+	return n
+
+# ============================================================
+# v64（用户："购买时 弥补仓库最缺的那一件或者没有的那一件残页或者残兵 残装备"）：
+#   从这几套里挑"最该补的那一张"，返回 {"sid":…, "part":…}；**全都齐了**才返回 {}
+#   （调用方退回随机——不让钱白花）。优先级（越靠前越该补）：
+#     ① **差一张就齐**的套——拿下去当场能合成，最有用（同档里挑手里件数最多的那套）
+#     ② **一张都没有**的套——开个头
+#     ③ 其余：缺得越多的套越优先
+#   ⚠ 只看**仓库残卡**（vault_cards）——店里买来的也是进那里，口径同一处。
+# ============================================================
+static func _shop_pick_missing(ids: Array) -> Dictionary:
+	var best_sid := ""
+	var best_part := -1
+	var best_score := -1
+	for sid_v in ids:
+		var sid := str(sid_v)
+		var parts: Array = Cards.parts_of(sid)
+		if parts.is_empty():
+			continue
+		var bucket: Dictionary = vault_cards.get(sid, {})
+		var own := 0
+		var miss: Array = []
+		for i in parts.size():
+			var c := int(bucket.get(i, 0))
+			own += c
+			if c <= 0:
+				miss.append(i)
+		if miss.is_empty():
+			continue              # 这套已经齐了
+		var score := 0
+		if miss.size() == 1:
+			score = 100000 + own
+		elif own == 0:
+			score = 50000
+		else:
+			score = miss.size()
+		if score > best_score:
+			best_score = score
+			best_sid = sid
+			best_part = int(miss[randi() % miss.size()])
+	if best_sid == "":
+		return {}
+	return {"sid": best_sid, "part": best_part}
+
 static func _buy_card(item: Dictionary, n: int) -> Dictionary:
 	_shop_sync_day()
 	var key := str(item.get("key", ""))
@@ -976,13 +1071,31 @@ static func _buy_card(item: Dictionary, n: int) -> Dictionary:
 	var ids: Array = shop_pool_of(pool)   # R4/㊽：普通池走现役卡池；装备走三池合一
 	if ids.is_empty():
 		return {"ok": false, "msg": "这类货还没备好（数据表里查不到）——再看"}
+	# v64（用户："购买时 弥补仓库最缺的那一件或者没有的那一件"）：
+	#   **良品残卡**只在良品套里补缺（池子是滑动窗，旧套滑出去了也得能补齐）；
+	#   基础残卡仍在**现役池**里补缺（它的货就是"现役"那几套）。
+	if item.has("q"):
+		var by_q: Array = Ladder.sets_of_q(pool, int(item.get("q", 0)))
+		if not by_q.is_empty():
+			ids = by_q
 	add_coin("silver", -price)
 	var got: Array = []
 	for i in cnt:
-		var sid := str(ids[randi() % ids.size()])
-		var part := randi() % Cards.part_count(sid)
+		var pick := _shop_pick_missing(ids)
+		var sid := ""
+		var part := 0
+		var tail := ""
+		if pick.is_empty():
+			# 这一类的套**全都齐了**——没得补，退回随机一张（不让钱白花）
+			sid = str(ids[randi() % ids.size()])
+			part = randi() % maxi(1, Cards.part_count(sid))
+		else:
+			sid = str(pick["sid"])
+			part = int(pick["part"])
+			var leave := _shop_set_missing(sid) - 1
+			tail = "（这套齐了！）" if leave <= 0 else "（还差 " + str(leave) + " 张）"
 		vault_deposit({sid: {part: 1}})
-		got.append(str(Cards.card_name(sid, part)))
+		got.append(str(Cards.card_name(sid, part)) + tail)
 	shop_used[key] = int(shop_used.get(key, 0)) + cnt
 	_shop_save()
 	print("[账本] 货栈残卡：", key, " ×", cnt, " → ", got, "（今日剩 ", left - cnt, "）")
@@ -1375,6 +1488,7 @@ static func _deposit_one(e: Dictionary) -> void:
 # 关卡/敌人/收益/离线估算的参数全在 tower.gd 顶部，调难度只开那一个文件。
 # ============================================================
 const Tower := preload("res://shared/tower.gd")
+const Insight := preload("res://shared/data_insight.gd")   # v64b：阅历线表（唯一真源）
 
 const STAGE_MAX := Tower.STAGE_MAX
 
@@ -3878,7 +3992,7 @@ static func idle_rate_text() -> String:
 		tier_note = "每清 " + str(IDLE_STEP) + " 关涨一档"
 	else:
 		tier_note = str(IDLE_TIER_SWITCH) + " 关后每 " + str(IDLE_STEP_LATE) + " 关涨一档（不封顶）"
-	return "银两 " + str(idle_silver_per_min()) + "/分 · 木料 " + str(idle_wood_per_10min()) + "/10分 · 经验 " + str(idle_exp_per_min()) + "/分（第 " + str(idle_tier() + 1) + " 档；" + tier_note + "）"
+	return "银两 " + str(idle_silver_per_min()) + "/分 · 木料 " + str(idle_wood_per_10min()) + "/10分 · 经验 " + str(idle_exp_per_min()) + "/分 · 阅历 " + str(snappedf(insight_rate(), 0.1)) + "/分（第 " + str(idle_tier() + 1) + " 档；" + tier_note + "）"
 
 static func idle_collect() -> Dictionary:
 	idle_sync()
@@ -3895,9 +4009,96 @@ static func idle_collect() -> Dictionary:
 	var exp_total := exp_each * formation.size()
 	if exp_total > 0:
 		exp_pool += exp_total
+	# v64b：阅历——与银两/经验同一个池、同一口收取（用户："挂机给阅历值 · 吃挂机档位"）
+	var ins := int(round(float(mins) * insight_rate()))
+	insight_add(ins)
 	idle_pool_sec = 0
 	_idle_save()
-	return {"minutes": mins, "silver": silver, "wood": wood, "exp": exp_total, "exp_pool": exp_pool}
+	return {"minutes": mins, "silver": silver, "wood": wood, "exp": exp_total, "exp_pool": exp_pool, "insight": ins}
+
+# ============================================================
+# v64b：**阅历线**的账（唯一真源＝shared/data_insight.gd；这里只管"攒/花/并进属性"）
+# ============================================================
+
+# 每分多少阅历——**吃挂机档位**（用户点名）：0 档 1/分，每高一档 +0.5
+static func insight_rate() -> float:
+	return 1.0 + float(idle_tier()) * 0.5
+
+static func insight_add(n: int) -> void:
+	if n > 0:
+		insight += n
+
+# 已升的那些段合起来给什么（fx 键见 data_insight 文件头）
+static func insight_fx() -> Dictionary:
+	return Insight.fx_of_levels(insight_lv)
+
+static func insight_lv_of(bid: String) -> int:
+	return clampi(int(insight_lv.get(bid, 0)), 0, Insight.max_lv(bid))
+
+static func insight_cost(bid: String) -> Dictionary:
+	return Insight.cost_next(bid, insight_lv_of(bid))
+
+# 能不能升下一段（顺带给一句人话）
+static func insight_can(bid: String) -> Dictionary:
+	if Insight.branch_of(bid).is_empty():
+		return {"ok": false, "msg": "没有这一支"}
+	var lv := insight_lv_of(bid)
+	if lv >= Insight.max_lv(bid):
+		return {"ok": false, "msg": "「" + str(Insight.branch_of(bid).get("name", bid)) + "」已经走满了"}
+	var c := insight_cost(bid)
+	if insight < int(c.get("insight", 0)):
+		return {"ok": false, "msg": "阅历不够：还差 " + str(int(c["insight"]) - insight) + " 点"}
+	if coin("silver") < int(c.get("silver", 0)):
+		return {"ok": false, "msg": "银两不够：还差 " + str(int(c["silver"]) - coin("silver")) + " 两"}
+	return {"ok": true, "msg": ""}
+
+static func insight_upgrade(bid: String) -> Dictionary:
+	var can := insight_can(bid)
+	if not bool(can.get("ok", false)):
+		return can
+	var lv := insight_lv_of(bid)
+	var nd := Insight.node_next(bid, lv)
+	var c := insight_cost(bid)
+	insight -= int(c.get("insight", 0))
+	add_coin("silver", -int(c.get("silver", 0)))
+	insight_lv[bid] = lv + 1
+	save_game()
+	var b := Insight.branch_of(bid)
+	print("[阅历] ", b.get("name", bid), " 第 ", lv + 1, " 段「", nd.get("name", ""), "」——", nd.get("desc", ""))
+	return {"ok": true, "msg": "「" + str(b.get("name", bid)) + "·" + str(nd.get("name", "")) + "」已通——" + str(nd.get("desc", ""))}
+
+# 洗点（用户："要 但是消耗银两"）：**退全部阅历**、收手续费（每级 200 两），银两不退
+static func insight_respec_cost() -> int:
+	return Insight.total_lv(insight_lv) * Insight.RESPEC_SILVER_PER_LV
+
+static func insight_respec() -> Dictionary:
+	var lv := Insight.total_lv(insight_lv)
+	if lv <= 0:
+		return {"ok": false, "msg": "还没点过阅历——没什么可洗的"}
+	var fee := insight_respec_cost()
+	if coin("silver") < fee:
+		return {"ok": false, "msg": "洗点要 " + str(fee) + " 两（现有 " + str(coin("silver")) + "）"}
+	add_coin("silver", -fee)
+	var back := Insight.spent_insight(insight_lv)
+	insight += back
+	insight_lv = {}
+	save_game()
+	print("[阅历] 洗点：退回阅历 ", back, " 点，花 ", fee, " 两")
+	return {"ok": true, "msg": "已洗点——退回阅历 " + str(back) + " 点（花 " + str(fee) + " 两手续费；银两不退）"}
+
+# 把阅历线并进**一份游历属性**（run_state.stats_of 的最后一道；村里那份不走这里）
+static func insight_apply_to(st: Dictionary) -> void:
+	var fx := insight_fx()
+	if fx.is_empty():
+		return
+	st["atk"] = float(st.get("atk", 0.0)) * (1.0 + float(fx.get("atk_pct", 0.0)))
+	st["hp"] = float(st.get("hp", 0.0)) * (1.0 + float(fx.get("hp_pct", 0.0)))
+	st["dmg"] = float(st.get("dmg", 0.0)) + float(fx.get("dmg_add", 0.0))
+	st["crit"] = float(st.get("crit", 0.0)) + float(fx.get("crit_add", 0.0))
+	st["crit_dmg"] = float(st.get("crit_dmg", 0.0)) + float(fx.get("crit_dmg_add", 0.0))
+	st["def"] = float(st.get("def", 0.0)) + float(fx.get("def_add", 0.0))
+	st["dodge"] = float(st.get("dodge", 0.0)) + float(fx.get("dodge_add", 0.0))
+	st["spd"] = float(st.get("spd", 0.0)) + float(fx.get("spd_add", 0.0))
 
 static func idle_debug_add(sec: int) -> void:
 	idle_pool_sec = mini(idle_pool_sec + sec, IDLE_CAP_SEC)
@@ -4984,6 +5185,8 @@ static func load_game() -> void:
 	stage_gift_got = bool(vd.get("stage_gift", stage_gift_got))
 	stage_gift_opened = clampi(int(vd.get("stage_gift_opened", stage_gift_opened)), 0, stage_gift_total())
 	coins = _sd(cf.get_value("world", "coins", coins), coins)
+	insight = maxi(0, int(cf.get_value("world", "insight", 0)))            # v64b：阅历值
+	insight_lv = _sd(cf.get_value("world", "insight_lv", {}), insight_lv)  # v64b：四支等级
 	exp_pool = maxi(0, int(cf.get_value("world", "exp_pool", 0)))   # ㊾：经验池
 	run_expand_n = int(cf.get_value("world", "run_expand", 0))
 	var rd := _sd(cf.get_value("world", "roles", {}), {})
@@ -5063,6 +5266,9 @@ static func save_game() -> void:
 		"stage_gift": stage_gift_got, "stage_gift_opened": stage_gift_opened,
 	})
 	cf.set_value("world", "coins", coins)
+	# v64b：阅历线（阅历值 ＋ 四支各自升到第几段）
+	cf.set_value("world", "insight", insight)
+	cf.set_value("world", "insight_lv", insight_lv)
 	cf.set_value("world", "exp_pool", exp_pool)   # ㊾：经验池
 	cf.set_value("world", "run_expand", run_expand_n)
 	cf.set_value("world", "roles", {"chen": chen_shi, "player": player_role, "qing": qingluan})

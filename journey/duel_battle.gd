@@ -180,6 +180,31 @@ const CARD_WAIT_SEC := 30.0
 #   实测（17 招平均）：旧的一下 0.15 秒 → 现在"起手＋冲"平均 0.50÷倍速。
 const MOVE_ANIM := true
 const MOVE_SPEED := 1.8
+
+# ============================================================
+# v10（用户："游历战斗界面加一个 2倍加速【4倍不加】"）：**这一场的节奏倍速**
+#   口径照出村战斗（battle_lite v38 起）：只压"等一会儿"与"招式播放"，**不碰任何数值**。
+#   ⚠ 用户点名"4 倍不加"——SPEED_STEPS 里只有 1× 与 2×，别再往里塞。
+#   ⚠ 招式那边走 _move_spd()（MOVE_SPEED × 本倍速）。**move_time() 返回的 windup 已经除过
+#     这个倍速**了，所以等它的那一句要调原来的 create_timer、**别再走 _wait**（除两遍＝四倍）。
+#   静态存一份：这一场按了 2×，下一场进来还是 2×（与"出手方式" last_manual 同一处手感）。
+# ============================================================
+static var SPEED := 1.0
+const SPEED_STEPS := [1.0, 2.0]
+
+static func next_speed(cur: float) -> float:
+	var i := SPEED_STEPS.find(cur)
+	i = 0 if i < 0 else (i + 1) % SPEED_STEPS.size()
+	return float(SPEED_STEPS[i])
+
+# 这一场"等一会儿"的唯一出口——倍速只在这一行生效
+func _wait(sec: float) -> void:
+	await get_tree().create_timer(sec / maxf(1.0, SPEED)).timeout
+
+# 招式播放的实际倍速＝表定 1.8 × 这一场的快进
+func _move_spd() -> float:
+	return MOVE_SPEED * maxf(1.0, SPEED)
+
 var _p_focus := 0
 
 const ALLY_ROW_DX := -58.0      # 我方站位：越靠后越往左、越往上（镜像敌人的排布）
@@ -585,6 +610,8 @@ var _info_btn: Button = null
 # v63h（用户："战斗就爬塔那样"）：出手方式搬回右上，爬塔同款两排大钮（17 号字 / 50 高）。
 #   v63h2（用户："暂时不用加速"）：快进钮与倍速逻辑撤掉——只留布局，出手节奏照旧。
 var _mode_btn: Button = null
+# v10（用户："游历战斗界面加一个 2倍加速【4倍不加】"）：［快进 ×1/×2］——摆在第二排中间
+var _speed_btn: Button = null
 
 var _root: Control = null
 var _bar_p: ProgressBar = null
@@ -700,7 +727,18 @@ func _build_bars() -> void:
 	_info_btn.visible = false
 	add_child(_info_btn)
 
-	for b in [_log_btn, _info_btn]:
+	# v10：［快进 ×1/×2］——第二排正中那道缝（战报 96 ＋ 快进 176 ＋ 敌情 136 ＝ 正好排满）
+	_speed_btn = Button.new()
+	_speed_btn.focus_mode = Control.FOCUS_NONE
+	_speed_btn.position = Vector2(vpw - 330.0, 64.0)
+	_speed_btn.size = Vector2(176, 50)
+	_speed_btn.add_theme_font_size_override("font_size", 17)
+	_speed_btn.pressed.connect(_on_speed_toggle)
+	_speed_btn.visible = false
+	_paint_speed_btn()
+	add_child(_speed_btn)
+
+	for b in [_log_btn, _info_btn, _speed_btn]:
 		(b as Button).add_theme_stylebox_override("normal", dk)
 		(b as Button).add_theme_stylebox_override("hover", dk)
 		(b as Button).add_theme_stylebox_override("pressed", dk)
@@ -734,7 +772,31 @@ func _paint_mode_btn() -> void:
 	_mode_btn.add_theme_color_override("font_color", Color(1.0, 0.97, 0.88) if manual else Color(0.94, 0.91, 0.84))
 	_mode_btn.add_theme_font_size_override("font_size", 17)
 
-# v63h：快进（×1/×2/×4）已撤（v63h2：用户"暂时不用加速"）——出手节奏照旧。
+# ============================================================
+# v10：［快进］——1× ⇄ 2×（用户："加一个 2倍加速【4倍不加】"）
+#   v63h2 那次"暂时不用加速"撤掉的是这一块；现在按用户点的口径只做 **2 倍**一档。
+#   只压"等一会儿"（_wait）与"招式播放"（_move_spd）——数值/概率/回合数一个字没动。
+# ============================================================
+func _on_speed_toggle() -> void:
+	SPEED = next_speed(SPEED)
+	_paint_speed_btn()
+	print("[游历战斗] 快进 ×", SPEED)
+	UiKit.float_text(self, ("快进 ×2——这一场打得快些" if SPEED > 1.0 else "快进关了（×1）"), UiKit.GOLD, 172.0)
+
+func _paint_speed_btn() -> void:
+	if _speed_btn == null:
+		return
+	var on := SPEED > 1.0
+	UiKit.set_btn_text(_speed_btn, ("快进 ×2（点我切）" if on else "快进 ×1（点我切）"))
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.24, 0.46, 0.30, 0.95) if on else Color(0.21, 0.19, 0.20, 0.92)
+	sb.set_corner_radius_all(8)
+	_speed_btn.add_theme_stylebox_override("normal", sb)
+	_speed_btn.add_theme_stylebox_override("hover", sb)
+	_speed_btn.add_theme_stylebox_override("pressed", sb)
+	_speed_btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	_speed_btn.add_theme_color_override("font_color", Color(1.0, 0.97, 0.88) if on else Color(0.94, 0.91, 0.84))
+	_speed_btn.add_theme_font_size_override("font_size", 17)
 
 func _make_bar(pos: Vector2, sz: Vector2, col: Color) -> ProgressBar:
 	var bar := ProgressBar.new()
@@ -1323,6 +1385,9 @@ func _setup_ally(rid: String, nd: Node2D, idx: int) -> Dictionary:
 		al["crit_add"] = pv * pup
 		hp_cut = float(pas.get("hp_cut", 0.0)) * maxf(0.0, 1.0 - float(fb.get("passive_up", 0.0)))
 	al["cut_add"] = (pv * pup if pkind == "taken_cut" else 0.0) + maxf(float(fb.get("cut_add", 0.0)), float(fb.get("taken_cut", 0.0)))
+	# v10（阅历线）：防御支「卸力」段的"受到的伤害 -N%"——与卡组那份**相加**
+	#   （卡组那几条是"取大不叠加"，阅历这条是常驻养成，直接加上去更直观）
+	al["cut_add"] = float(al["cut_add"]) + float(GameState.insight_fx().get("cut_add", 0.0))
 	al["rage_mul"] = 1.0 + maxf(float(fb.get("rage_pct", 0.0)), float(fb.get("rage_up", 0.0)))
 	if pkind == "rage_up":
 		al["rage_mul"] = float(al["rage_mul"]) + pv * pup
@@ -1505,7 +1570,7 @@ func _choose_action() -> Dictionary:
 	var want := _auto_choice(cards)
 	_build_card_row(cards, false)
 	_flash_card(str(want.get("k", "normal")), str(want.get("sid", "")))
-	await get_tree().create_timer(0.32).timeout
+	await _wait(0.32)
 	_close_card_row()
 	return want
 
@@ -2133,8 +2198,10 @@ func run(state, player: Node2D, fx: Control, node: Dictionary, foe_first := fals
 		_log_btn.visible = true
 	if _mode_btn != null:   # v63h：右上两排大钮跟血条同进同出
 		_mode_btn.visible = true
+	if _speed_btn != null:  # v10：快进钮同一批
+		_speed_btn.visible = true
 	_update_bars()
-	await get_tree().create_timer(0.25).timeout
+	await _wait(0.25)
 	# v36：战报开场——这一场打谁、带什么词缀、我方是谁
 	_log_lines.clear()
 	_blog("── 遭遇「" + str(node.get("name", "敌")) + "」", "sys")
@@ -2161,7 +2228,7 @@ func run(state, player: Node2D, fx: Control, node: Dictionary, foe_first := fals
 	if not _foe_affixes().is_empty():
 		_blog("敌带词缀：" + Affixes.names_text(_foe_affixes()), "bomb")
 		_banner("敌带词缀：" + Affixes.names_text(_foe_affixes()), Color(0.62, 0.30, 0.26))
-		await get_tree().create_timer(0.9).timeout
+		await _wait(0.9)
 	if foe_first:
 		_blog("来敌先手！", "hit")
 		_banner("来敌先手！", UiKit.SEAL)
@@ -2276,6 +2343,8 @@ func run(state, player: Node2D, fx: Control, node: Dictionary, foe_first := fals
 		_log_btn.visible = false
 	if _mode_btn != null:
 		_mode_btn.visible = false
+	if _speed_btn != null:  # v10：快进钮跟另外两颗一起收
+		_speed_btn.visible = false
 	_close_card_row()   # ㊿：收摊时把牌面也收掉（免得留一排牌在结算页上）
 	_close_info()
 	# ㊼：打完写回——按比例折回游历气血（胜：残血上路；败＝殒命，不回写）
@@ -2715,7 +2784,7 @@ func _player_ult() -> void:
 		if _fx != null:
 			_fx.flash(Color(1, 1, 1, 0.12))
 		UiKit.float_text(self, "枪势起——" + str(_ult_turns) + " 手回气 · 挨打反刺（上限 8~12%）", UiKit.BLUE, 192.0)
-		await get_tree().create_timer(0.5).timeout
+		await _wait(0.5)
 		return
 	if uk == "song":
 		_ult_turns = int(_ult.get("turns", 3)) + int(maxf(float(_fx_buff.get("ult_dur", 0.0)), float(_fx_buff.get("song_turns", 0.0))))
@@ -2724,7 +2793,7 @@ func _player_ult() -> void:
 		if _fx != null:
 			_fx.flash(Color(1, 1, 1, 0.12))
 		UiKit.float_text(self, "剑歌起——" + str(_ult_turns) + " 手，暴击追剑", UiKit.BLUE, 192.0)
-		await get_tree().create_timer(0.5).timeout
+		await _wait(0.5)
 		return
 	var r2 := _roll_p_damage(2.5)
 	var dmg2 := _foe_take(int(r2["dmg"]))
@@ -2770,7 +2839,7 @@ func _song_follow(depth := 1) -> void:
 				_fx.number("追击暴击" + ("·连环 " + str(depth) if depth > 1 else ""), _foe, UiKit.GOLD)
 		_foe.play_hit()
 		_update_bars()
-		await get_tree().create_timer(0.12).timeout
+		await _wait(0.12)
 		# 追剑自己暴击 → 再追一层（有上限）
 		if fcrit2 and depth < SONG_CHAIN_MAX and _foe_hp() > 0:
 			await _song_follow(depth + 1)
@@ -3203,7 +3272,7 @@ func _foe_bomb_if_dead() -> void:
 	UiKit.float_text(self, "自爆 " + str(worst) + "　" + "、".join(PackedStringArray(seg)), UiKit.SEAL, 214.0)
 	_mark_hit_if_hurt()      # ㊿：轻身卡——挨炸也算受击（谁掉了血就置谁）
 	_update_bars()
-	await get_tree().create_timer(0.5).timeout
+	await _wait(0.5)
 
 # ㊹：逐只补倒地动画。多人上场后"只倒一两只"是常态（群攻大招尤其明显），
 #   不能等全灭才倒。用每只自己的 "downed" 标记保证只演一次。
@@ -3366,14 +3435,14 @@ func _foe_art_strike(a: Dictionary) -> void:
 			if _hp <= 0:
 				break
 			if hi + 1 < hits:
-				await get_tree().create_timer(0.16).timeout
+				await _wait(0.16)
 		# v52：怪招自带的状态（第 50 关往后首领的焚身掌/锁脉手/封穴指那一路）
 		if _hp > 0:
 			_st_hit(_a(), a.get("apply", {}), str(_a().get("name", "我")))
 		print("[游历战斗] ", _foe_name(), " 施『", anm, "』：", total)
 	var rt: Tween = _foe.push_move_to(_e_base, 0.18, Tween.TRANS_QUAD, Tween.EASE_IN)   # ㊿x：退回来同样排队
 	await rt.finished
-	await get_tree().create_timer(0.08).timeout
+	await _wait(0.08)
 	_update_bars()
 
 func _foe_ult_strike() -> void:
@@ -3398,7 +3467,7 @@ func _foe_ult_strike() -> void:
 	print("[游历战斗] ", _foe_name(), " 放大招『", un, "』：", rr["dmg"])
 	var rt: Tween = _foe.push_move_to(_e_base, 0.2, Tween.TRANS_QUAD, Tween.EASE_IN)
 	await rt.finished
-	await get_tree().create_timer(0.10).timeout
+	await _wait(0.10)
 
 # ㊿：加持目标 → 我方下标数组。站位＝名册顺序：0 前、1 中、末位 后（两场战斗同一条规矩）。
 #   单人时"前排/后排"都是他本人——一人一趟也照样能用这几门。
@@ -3639,7 +3708,7 @@ func _strike(is_player: bool, pre_pick: Dictionary = {}) -> void:
 		_skip_enemy = false
 		if _fx != null:
 			_fx.number("落空", _foe, Color(0.45, 0.45, 0.52))
-		await get_tree().create_timer(0.30).timeout
+		await _wait(0.30)
 		return
 
 	# ============================================================
@@ -3654,13 +3723,15 @@ func _strike(is_player: bool, pre_pick: Dictionary = {}) -> void:
 		if f_skip:
 			UiKit.float_text(self, f_who + " 被震慑", St.col_of("stun"), 192.0)
 			_blog(f_who + " 被震慑——这一手整个没使出来。", "sys")
-			await get_tree().create_timer(0.30).timeout
+			await _wait(0.30)
 			return
 
 	# v7：词缀——回春 / 淬毒（敌中毒）/ 鼓舞
 	if not is_player:
 		_set_foe_acts(_foe_acts() + (1))
-		if _foe_affixes().has("regen") and _foe_hp() > 0 and _foe_hp() < _foe_hp_max():
+		# v10（用户："回春词缀改为 10%恢复 两手恢复一次"）：与出村战斗同一口径——
+		#   每两手回一次（上面刚把 _foe_acts 加过 1，所以落在第 2、4、6…手）
+		if _foe_affixes().has("regen") and _foe_hp() > 0 and _foe_hp() < _foe_hp_max() 				and _foe_acts() % Affixes.REGEN_EVERY() == 0:
 			# v53：回春也吃「封脉」（只剩三成）
 			var rh := maxi(1, int(round(float(_foe_hp_max()) * Affixes.REGEN_PCT() * St.heal_mul(_cur()))))
 			_set_foe_hp(mini(_foe_hp_max(), _foe_hp() + rh))
@@ -3706,7 +3777,7 @@ func _strike(is_player: bool, pre_pick: Dictionary = {}) -> void:
 		if _fx != null:
 			_fx.number("手麻", _player, Color(0.45, 0.55, 0.85))
 		UiKit.float_text(self, "电盾余麻——这一手落空", UiKit.BLUE, 192.0)
-		await get_tree().create_timer(0.30).timeout
+		await _wait(0.30)
 		return
 	# v52：负面状态——我方这一手开头（同上：先看震慑，再结算）
 	if is_player:
@@ -3717,7 +3788,7 @@ func _strike(is_player: bool, pre_pick: Dictionary = {}) -> void:
 		if p_skip:
 			UiKit.float_text(self, p_who + " 被震慑", St.col_of("stun"), 192.0)
 			_blog(p_who + " 被震慑——这一手整个没使出来。", "sys")
-			await get_tree().create_timer(0.30).timeout
+			await _wait(0.30)
 			return
 	if is_player and _p_poison > 0:
 		var pd := maxi(1, int(round(float(_my_hp_max) * Affixes.POISON_PCT() * float(_p_poison))))
@@ -3850,7 +3921,7 @@ func _strike(is_player: bool, pre_pick: Dictionary = {}) -> void:
 			_fx.number("缴械", _player, St.col_of("disarm"))
 		UiKit.float_text(self, str(_a().get("name", "我")) + " 兵器被打落——这一手只能格挡", St.col_of("disarm"), 192.0)
 		_blog(str(_a().get("name", "我")) + " 兵器被打落——这一手只能格挡。", "sys")
-		await get_tree().create_timer(0.40).timeout
+		await _wait(0.40)
 		return
 
 	# 护体 / 疗伤 / 加持 / 驱散：原地起手，不出击
@@ -3861,7 +3932,7 @@ func _strike(is_player: bool, pre_pick: Dictionary = {}) -> void:
 			_fx.flash(Color(1, 1, 1, 0.12))
 		if kind == "cleanse":
 			_cleanse_apply(art)
-			await get_tree().create_timer(0.55).timeout
+			await _wait(0.55)
 			return
 		if kind == "guard":
 			_guard_left = int(art.get("turns", 3))
@@ -3875,7 +3946,7 @@ func _strike(is_player: bool, pre_pick: Dictionary = {}) -> void:
 			if hm <= 0.0:
 				UiKit.float_text(self, "经脉被封——这一口回不上来", St.col_of("healseal"), 192.0)
 				_blog(str(_a().get("name", "我")) + " " + banner_txt + "：经脉被封，这一口回不上来。", "sys")
-				await get_tree().create_timer(0.45).timeout
+				await _wait(0.45)
 				return
 			# ⚠ 「寄生」的回血加成已经并进 St.heal_mul()（一处落地），这里别再乘一遍
 			var heal := maxi(1, int(float(_my_hp_max) * float(art.get("heal_pct", 0.25)) * hm * _art_fit(art) * _heal_mul()))
@@ -3890,7 +3961,7 @@ func _strike(is_player: bool, pre_pick: Dictionary = {}) -> void:
 		else:
 			# ㊿：加持——按 target 挑自己人，给每个人挂"持续 N 手"的状态
 			_cast_bless(art)
-		await get_tree().create_timer(0.55).timeout
+		await _wait(0.55)
 		return
 
 	# ㊿x：冲上去/退回来都走 StickFighter 的位移队列——同一个人的 position
@@ -3914,10 +3985,10 @@ func _strike(is_player: bool, pre_pick: Dictionary = {}) -> void:
 	if MOVE_ANIM:
 		lunge_dist = float(pr.get("dist", 92.0))
 		lunge_y = float(pr.get("y", 0.0))
-		lunge_time = float(pr.get("time", 0.15)) / MOVE_SPEED
+		lunge_time = float(pr.get("time", 0.15)) / _move_spd()
 		push_k = float(pr.get("push", 1.0))
-		var mt: Dictionary = atk.move_time(mv, MOVE_SPEED)
-		atk.play_move(mv, MOVE_SPEED)
+		var mt: Dictionary = atk.move_time(mv, _move_spd())
+		atk.play_move(mv, _move_spd())
 		# 起手：招式表第 1 步的定格——姿势与等待同源，所以永远不会"姿势还没抬手，伤害已经出了"
 		await get_tree().create_timer(float(mt.get("windup", 0.15))).timeout
 		if not (is_instance_valid(atk) and is_instance_valid(dfd)):
@@ -3997,7 +4068,7 @@ func _strike(is_player: bool, pre_pick: Dictionary = {}) -> void:
 					+ "（第 " + str(k2 + 1) + "/" + str(seg_n) + " 段" + ("·暴击）" if bool(rk["crit"]) else "）"), "deal")
 				if bool(rk["crit"]):
 					await _song_follow()
-				await get_tree().create_timer(0.12).timeout
+				await _wait(0.12)
 			dmg = seg_total
 			if crit_n > 0:
 				crit = true
@@ -4011,7 +4082,7 @@ func _strike(is_player: bool, pre_pick: Dictionary = {}) -> void:
 			await _extras_after_plain(is_player, art)
 			var rt0: Tween = atk.push_move_to(home, 0.18, Tween.TRANS_QUAD, Tween.EASE_IN)
 			await rt0.finished
-			await get_tree().create_timer(0.08).timeout
+			await _wait(0.08)
 			return
 		var r := _roll_p_damage(mult)
 		crit = bool(r["crit"])
@@ -4056,7 +4127,7 @@ func _strike(is_player: bool, pre_pick: Dictionary = {}) -> void:
 		if St.blocks_plain(_cur()):
 			UiKit.float_text(self, str(_cur().get("name", "敌")) + " 兵器被打落", St.col_of("disarm"), 192.0)
 			_blog(str(_cur().get("name", "敌")) + " 兵器被打落——这一手没能递上来。", "sys")
-			await get_tree().create_timer(0.30).timeout
+			await _wait(0.30)
 			return
 		var er := _roll_e_damage()
 		dmg = int(er["dmg"])
@@ -4125,7 +4196,7 @@ func _strike(is_player: bool, pre_pick: Dictionary = {}) -> void:
 	if is_player and crit and _ult_turns > 0 and _ult_follow > 0.0 and _foe_hp() > 0:
 		await _song_follow()
 	if is_player and kind == "dash" and _foe_hp() > 0 and _foe != null and is_instance_valid(_foe):
-		await get_tree().create_timer(0.20).timeout
+		await _wait(0.20)
 		var fr := _roll_p_damage(float(art.get("follow", 0.7)))
 		var fdmg := _foe_take(int(fr["dmg"]))
 		_st_art_foe(art)   # v52：连追那一支也认 apply
@@ -4141,7 +4212,7 @@ func _strike(is_player: bool, pre_pick: Dictionary = {}) -> void:
 
 	var rt: Tween = atk.push_move_to(home, 0.18, Tween.TRANS_QUAD, Tween.EASE_IN)   # ㊿x：退回来同样排队
 	await rt.finished
-	await get_tree().create_timer(0.08).timeout
+	await _wait(0.08)
 
 # ㊿：普通攻击之后的"额外普攻"（速度压制）。
 #   只有真·普攻才算：art 非空（武学那一手）不走这里；大招那一手在别处 return 了。
@@ -4189,4 +4260,4 @@ func _extras_after_plain(is_player: bool, art: Dictionary) -> void:
 				_num_me(d3, _player)
 				_player.play_hit()
 			_update_bars()
-		await get_tree().create_timer(0.16).timeout
+		await _wait(0.16)
