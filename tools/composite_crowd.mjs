@@ -73,6 +73,19 @@ function encodePNG(w, h, rgba) {
   ]);
 }
 
+function cropPNG(img, x, y, w, h) {
+  const out = Buffer.alloc(w * h * 4);
+  for (let yy = 0; yy < h; yy++) {
+    for (let xx = 0; xx < w; xx++) {
+      const sx = Math.min(img.w - 1, Math.max(0, x + xx));
+      const sy = Math.min(img.h - 1, Math.max(0, y + yy));
+      const si = (sy * img.w + sx) * 4, di = (yy * w + xx) * 4;
+      out[di] = img.data[si]; out[di+1] = img.data[si+1]; out[di+2] = img.data[si+2]; out[di+3] = img.data[si+3];
+    }
+  }
+  return { w, h, data: out };
+}
+
 function toInk(layer, gain = 1.18, inkGamma = 0.86) {
   const { w, h, data } = layer;
   const out = Buffer.alloc(w * h * 4);
@@ -106,6 +119,44 @@ function stamp(dst, src, dx, dy, scale, opacity) {
       dst.data[di+3] = 255;
     }
   }
+}
+
+// --cols <file>：报告墨色像素的列分布，用于找出图里每个人物所在的 x 区间
+if (process.argv[2] === '--cols') {
+  for (const f of process.argv.slice(3)) {
+    const img = decodePNG(fs.readFileSync(f));
+    const cols = new Array(img.w).fill(0);
+    for (let x = 0; x < img.w; x++) {
+      let c = 0;
+      for (let y = 0; y < img.h; y++) {
+        const i = (y * img.w + x) * 4;
+        const lum = 0.30*img.data[i] + 0.59*img.data[i+1] + 0.11*img.data[i+2];
+        if (lum < 170) c++;
+      }
+      cols[x] = c;
+    }
+    const seg = [];
+    let st = -1;
+    for (let x = 0; x < img.w; x++) {
+      const on = cols[x] > img.h * 0.012;
+      if (on && st < 0) st = x;
+      if (!on && st >= 0) { if (x - st > 40) seg.push([st, x]); st = -1; }
+    }
+    if (st >= 0) seg.push([st, img.w]);
+    console.log(path.basename(f) + '  ' + img.w + 'x' + img.h + '  人物段: ' + JSON.stringify(seg));
+    for (const [a, b] of seg) {
+      let top = img.h, bot = 0;
+      for (let y = 0; y < img.h; y++) {
+        for (let x = a; x < b; x++) {
+          const i = (y * img.w + x) * 4;
+          const lum = 0.30*img.data[i] + 0.59*img.data[i+1] + 0.11*img.data[i+2];
+          if (lum < 170) { if (y < top) top = y; if (y > bot) bot = y; break; }
+        }
+      }
+      console.log('   x[' + a + ',' + b + ']  y[' + top + ',' + bot + ']  尺寸 ' + (b-a) + 'x' + (bot-top));
+    }
+  }
+  process.exit(0);
 }
 
 // --info <file>：报告墨色像素的行分布，用于确定人群带实际所在的 y 区间
@@ -143,11 +194,16 @@ const bg = decodePNG(fs.readFileSync(bgPath));
 console.log('背景 ' + bg.w + 'x' + bg.h);
 const cache = new Map();
 for (const spec of stamps) {
-  const m = spec.match(/^(.*):(-?\d+),(-?\d+),([\d.]+),([\d.]+)$/);
+  const m = spec.match(/^(.+?)(?:#(-?\d+),(-?\d+),(\d+),(\d+))?:(-?\d+),(-?\d+),([\d.]+),([\d.]+)$/);
   if (!m) { console.log('跳过: ' + spec); continue; }
-  const [, file, dxs, dys, scales, ops] = m;
-  if (!cache.has(file)) cache.set(file, toInk(decodePNG(fs.readFileSync(file))));
-  stamp(bg, cache.get(file), parseInt(dxs, 10), parseInt(dys, 10), parseFloat(scales), parseFloat(ops));
+  const [, file, cxs, cys, cws, chs, dxs, dys, scales, ops] = m;
+  const key = file + (cxs !== undefined ? '#' + cxs + ',' + cys + ',' + cws + ',' + chs : '');
+  if (!cache.has(key)) {
+    let img = decodePNG(fs.readFileSync(file));
+    if (cxs !== undefined) img = cropPNG(img, +cxs, +cys, +cws, +chs);
+    cache.set(key, toInk(img));
+  }
+  stamp(bg, cache.get(key), parseInt(dxs, 10), parseInt(dys, 10), parseFloat(scales), parseFloat(ops));
   console.log('  叠加 ' + path.basename(file) + ' @(' + dxs + ',' + dys + ') x' + scales + ' a=' + ops);
 }
 // 原子写入：先写临时文件再改名，避开被 git/编辑器/引擎占用导致的写入失败
