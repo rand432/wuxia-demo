@@ -1,6 +1,19 @@
 extends Control
 # ============================================================
-# journey_depart.gd —— 出征屏 v9（㊿c：路程按档）
+# journey_depart.gd —— 出征屏 v11（随身功法：每人带一门进游历）
+# v11（用户："玩家角色可以携带一件功法和一件武器进入游历"）：**功法那一半补上**——
+#   兵器 v62h 起就随行了，功法却一直是"全卸回仓库"（入趟 arts 恒空）。
+#   现在：出征屏新增「随身功法」一行（与命数各占半行宽），点开给**每个人挑一门**放在身上的功法；
+#   挑中的那一门**不卸**（_auto_unequip 的 keep_art），跟兵器同一条待遇：
+#     · 游历那边照旧从账上快照扣掉、再按 arts 槽加回来（run_state._fill_member_from_village）
+#     · 它在 run_base_arts 里 → 结算不会当"趟内新学"再入一份库
+#     · 回村 strip_restore 只补空格子 → 还挂在身上的那门不会被重复装上
+#   默认＝身上第一门（不点也带得走）；点"这趟不带"就记成空手。
+# v10（用户："游历的出战设置保存没有用"）：open() 不再无条件清空选人——
+#   起手照 GameState.formation（＝整备面板［保存阵容］写下的那份）落人，
+#   再按名册过滤/兜底（_refresh）。以前每开一次屏都从"只有少侠"起，
+#   玩家在［出战配置▸］里排的前/中/后下次开屏就看不见了，像"保存没用"。
+# v9（㊿c）：①「路程 N 节」按档回填——与 data_journey.formal_cycles 同式：
 # v9（㊿c）：①「路程 N 节」按档回填——与 data_journey.formal_cycles 同式：
 #   N ＝ min(2＋档, 9) × 5 ＋ 1（1 档 16 节；每高一档 +5；7 档起封顶 46 节）；
 #   ②_input 里重复的 ESC 分支（会错跑 debug_clear_diffs）删掉——ESC 只收摊/关屏。
@@ -84,10 +97,16 @@ var _diff_lb: Label = null        # v62c：当前游历难度那一行（原来�
 var _row_veil: Control = null     # ㊿："站哪儿"那个小框
 var _expand_btn: Button
 var _fate_btn: Button = null      # ㉛：命数一行
+var _art_btn: Button = null       # v11：随身功法一行（每人一门）
 var _go_btn: Button
 var _pick_roles: Array = []            # ㊿：这趟带谁（最多 GameState.DEPLOY_MAX 个；第一个是领队）
 var _pick_diff := 0
 var _pick_fates: Array = []     # v62r（用户："开局命数可多选"）：选中的命数 id 列表（空 = 空手走）
+# v11（用户："玩家角色可以携带一件功法和一件武器进入游历"）：
+#   每人随身带的那**一门功法**（rid → sid；"" ＝ 明确决定不带；键不存在 ＝ 还没决定，按第一门自动补）。
+#   兵器本来就随身（v62h），这里补的是功法那一半。
+var _pick_arts: Dictionary = {}
+var _art_veil: Control = null
 var _confirm_veil: Control = null
 var _fate_veil: Control = null    # ㉛：挑卡页
 
@@ -212,15 +231,29 @@ func _build() -> void:
 	_panel.add_child(_expand_btn)
 
 	# ㉛：命数——出征前挑一张带上（负面换好处；只顶这一趟；也可以空手走）
+	# v11：这一行**一分为二**（命数 ＋ 随身功法）——面板已经排满，见缝插针只能拆行：
+	#   上面「四·临时仓库」那颗钮到 584 为止，随身清单从 590 起、三个人时正好占满，
+	#   插不进第三行。两张半宽钮的文案跟着收短（详情都在各自的挑卡页里）。
 	_fate_btn = Button.new()
 	_fate_btn.text = "命数"
 	_fate_btn.position = Vector2(28, 536)
-	_fate_btn.size = Vector2(584, 48)
+	_fate_btn.size = Vector2(282, 48)
 	_fate_btn.add_theme_font_size_override("font_size", 19)   # v54：15 → 19
 	_fate_btn.focus_mode = Control.FOCUS_NONE
 	_fate_btn.pressed.connect(_ask_fate_pick)
 	_style_light_button(_fate_btn)
 	_panel.add_child(_fate_btn)
+
+	# v11：随身功法——出征前给每个人挑一门带进游历（只一门；兵器照旧随身）
+	_art_btn = Button.new()
+	_art_btn.text = "随身功法"
+	_art_btn.position = Vector2(322, 536)
+	_art_btn.size = Vector2(290, 48)
+	_art_btn.add_theme_font_size_override("font_size", 19)
+	_art_btn.focus_mode = Control.FOCUS_NONE
+	_art_btn.pressed.connect(_ask_art_pick)
+	_style_light_button(_art_btn)
+	_panel.add_child(_art_btn)
 
 	# v5：随身一行——出征将自动卸下的清单（预告；真卸在确认之后）
 	# ㊿：高度按"三个人各两行"留（12 号字 × 6 行 ≈ 100）——原来只给 36，
@@ -546,6 +579,18 @@ func _refresh() -> void:
 	_pick_roles = keep
 	if _pick_roles.is_empty() and ids.size() > 0:
 		_pick_roles.append(str(ids[0]))
+	# v11：随身功法——先剔掉不在队里的记录，再给"还没决定"的人补默认（身上第一门）
+	for rid_k in _pick_arts.keys():
+		if not _pick_roles.has(str(rid_k)):
+			_pick_arts.erase(rid_k)
+	for r_v in _pick_roles:
+		var rid := str(r_v)
+		var sk0: Array = GameState.role_data(rid).get("skills", [])
+		if not _pick_arts.has(rid):
+			# 默认＝身上第一门（"可以携带一件功法"是这个意思：不点也能带）
+			_pick_arts[rid] = str(sk0[0]) if not sk0.is_empty() else ""
+		elif str(_pick_arts[rid]) != "" and not sk0.has(str(_pick_arts[rid])):
+			_pick_arts[rid] = ""   # 这门已经不在他身上了（换过/卸过）——退回"不带"
 	if _pick_diff <= 0 or GameState.diff_state(_pick_diff) != "open":
 		_pick_diff = 0
 		for d in range(1, GameState.DIFF_MAX + 1):
@@ -569,7 +614,9 @@ func _open_formation() -> void:
 
 func _on_formation_saved() -> void:
 	_pick_roles = GameState.formation.duplicate()
-	_paint()
+	# v11：走 _refresh()（而不是只 _paint()）——它会顺手给新进队的人补上"随身功法"默认，
+	#   并把不在队里的旧记录剔掉；不这么做，刚换过阵型时那一行会空着显示"空手走"。
+	_refresh()
 
 func _paint() -> void:
 	if _expand_btn != null:
@@ -604,6 +651,7 @@ func _paint() -> void:
 	_paint_bonds()
 	_foot_lb.text = "本趟残卡到结算收进仓库；盘缠不带出；随身装备与功法出征前已自动卸回仓库。"
 	_paint_fate_btn()
+	_paint_art_btn()   # v11：随身功法那一行
 	_go_btn.disabled = (_pick_roles.is_empty() or _pick_diff <= 0)
 	if _go_btn.disabled and _pick_diff <= 0:
 		_msg_lb.text = "眼下没有可出征的路——走通的档不再列，新路等后续版本。"
@@ -617,18 +665,16 @@ func _fate_open() -> bool:
 func _paint_fate_btn() -> void:
 	if _fate_btn == null:
 		return
+	# v11：这一行现在只占半宽（另一半是随身功法）——文案收短，详情在挑卡页里
 	if not _fate_open():
-		_fate_btn.text = "命数：走通前 " + str(FATE_MIN_DIFF - 1) + " 档才开（已走通 " + str(GameState.diff_cleared_count()) + " 档）"
+		_fate_btn.text = "命数：未解锁（" + str(GameState.diff_cleared_count()) + "/" + str(FATE_MIN_DIFF - 1) + " 档）"
 		_fate_btn.disabled = true
 		return
 	_fate_btn.disabled = false
 	if _pick_fates.is_empty():
-		_fate_btn.text = "命数：空手走——点我挑一张带上（负面换好处）"
+		_fate_btn.text = "命数：空手走 ▸"
 	else:
-		var fnames: Array = []
-		for f_v in _pick_fates:
-			fnames.append(str(Buffs.name_of(str(f_v))))
-		_fate_btn.text = "命数：" + str(_pick_fates.size()) + " 张（" + "、".join(PackedStringArray(fnames)) + "）　（点我改）"
+		_fate_btn.text = "命数：已选 " + str(_pick_fates.size()) + " 张 ▸"
 
 func _ask_fate_pick() -> void:
 	if not _fate_open():
@@ -790,6 +836,145 @@ func _close_fate_pick() -> void:
 		_fate_veil.queue_free()
 	_fate_veil = null
 
+# ---- v11：随身功法（每人一门）一行 + 挑功法页 ----
+
+# 这个人这趟带哪一门（"" ＝ 不带）。带的那门**不卸下**——跟兵器一样随身走这一趟。
+func _art_carry_of(rid: String) -> String:
+	var sid := str(_pick_arts.get(rid, ""))
+	if sid == "":
+		return ""
+	var sk: Array = GameState.role_data(rid).get("skills", [])
+	return sid if sk.has(sid) else ""
+
+func _paint_art_btn() -> void:
+	if _art_btn == null:
+		return
+	var names: Array = []
+	for r_v in _pick_roles:
+		var rid := str(r_v)
+		var sid := _art_carry_of(rid)
+		if sid == "":
+			continue
+		names.append(str(GameState.role_data(rid).get("name", rid)) + "·" + str(Cards.name_of(sid)))
+	if names.size() == 0:
+		_art_btn.text = "随身功法：空手走 ▸"
+	elif names.size() == 1:
+		_art_btn.text = "随身功法：" + str(names[0]) + " ▸"
+	else:
+		_art_btn.text = "随身功法：已挑 " + str(names.size()) + " 门 ▸"
+
+# 挑功法页——每人一段：身上那几门各一行＋一行"这趟不带"（再点已选的那条＝不带）。
+#   与挑命数同一套手感（点整行即生效、重画立刻反映 ✔）。
+func _ask_art_pick() -> void:
+	if _pick_roles.is_empty():
+		_msg_lb.text = "先在上面挑一个人，再挑他的功法。"
+		return
+	if _art_veil != null and is_instance_valid(_art_veil):
+		return
+	var vp := get_viewport_rect().size
+	var veil := ColorRect.new()
+	veil.color = Color(0, 0, 0, 0.42)
+	veil.size = vp
+	veil.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(veil)
+	_art_veil = veil
+	var pw := 640.0
+	var ph := minf(vp.y - 120.0, 820.0)
+	var panel := Panel.new()
+	panel.position = Vector2((vp.x - pw) * 0.5, (vp.y - ph) * 0.5)
+	panel.size = Vector2(pw, ph)
+	panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	var psb := StyleBoxFlat.new()
+	psb.bg_color = Color(PAPER.r, PAPER.g, PAPER.b, 0.99)
+	psb.set_corner_radius_all(14)
+	psb.border_color = Color(0.32, 0.27, 0.22, 0.55)
+	psb.set_border_width_all(2)
+	panel.add_theme_stylebox_override("panel", psb)
+	veil.add_child(panel)
+
+	var tt := _label("随身功法 · 每人最多一门", 26, INK)
+	tt.position = Vector2(0, 14)
+	tt.size = Vector2(pw, 34)
+	tt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	panel.add_child(tt)
+
+	var sub := _label("挑中的那门**不卸**，跟着人走这一趟（兵器照旧随身）；其余功法与三件套全部卸回村仓库。回村照原样穿回——殒命也一样。",
+		17, Color(INK.r, INK.g, INK.b, 0.62))
+	sub.position = Vector2(22, 50)
+	sub.size = Vector2(pw - 44.0, 46)
+	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	panel.add_child(sub)
+
+	var scroll = ScrollContainer.new()
+	UiKit.drag_scroll(scroll)
+	scroll.position = Vector2(20, 104)
+	scroll.size = Vector2(pw - 40.0, ph - 104.0 - 78.0)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	panel.add_child(scroll)
+	var box := VBoxContainer.new()
+	box.custom_minimum_size = Vector2(pw - 40.0, 0)
+	box.add_theme_constant_override("separation", 6)
+	scroll.add_child(box)
+
+	for r_v in _pick_roles:
+		var rid := str(r_v)
+		var who := str(GameState.role_data(rid).get("name", rid))
+		var cur := _art_carry_of(rid)
+		var sk: Array = GameState.role_data(rid).get("skills", [])
+		if sk.is_empty():
+			var none := _label(who + "：身上还没有功法（先去［仓库］装一门）", 18, Color(INK.r, INK.g, INK.b, 0.58))
+			none.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			box.add_child(none)
+			continue
+		for a_v in sk:
+			var sid := str(a_v)
+			var b := Button.new()
+			b.text = ("✔ " if sid == cur else "　") + who + " · " + str(Cards.name_of(sid))
+			b.custom_minimum_size = Vector2(pw - 54.0, 52)
+			b.add_theme_font_size_override("font_size", 19)
+			b.focus_mode = Control.FOCUS_NONE
+			b.clip_text = true
+			if sid == cur:
+				_style_pick(b, true)
+			else:
+				_style_light_button(b)
+			b.pressed.connect(_on_art_pick.bind(rid, sid))
+			box.add_child(b)
+		var off := Button.new()
+		off.text = ("✔ " if cur == "" else "　") + who + " · 这趟不带功法"
+		off.custom_minimum_size = Vector2(pw - 54.0, 46)
+		off.add_theme_font_size_override("font_size", 18)
+		off.focus_mode = Control.FOCUS_NONE
+		off.clip_text = true
+		if cur == "":
+			_style_pick(off, true)
+		else:
+			_style_light_button(off)
+		off.pressed.connect(_on_art_pick.bind(rid, ""))
+		box.add_child(off)
+
+	var ok := Button.new()
+	ok.text = "就这些"
+	ok.position = Vector2(pw - 168.0, ph - 68.0)
+	ok.size = Vector2(144, 46)
+	ok.add_theme_font_size_override("font_size", 18)
+	ok.focus_mode = Control.FOCUS_NONE
+	ok.pressed.connect(_close_art_pick)
+	_style_dark_button(ok)
+	panel.add_child(ok)
+
+func _on_art_pick(rid: String, sid: String) -> void:
+	_pick_arts[rid] = sid
+	_close_art_pick()
+	_paint()
+	_ask_art_pick()   # 重画（✔ 与底色立刻反映选中状态）
+
+func _close_art_pick() -> void:
+	if _art_veil != null and is_instance_valid(_art_veil):
+		_art_veil.queue_free()
+	_art_veil = null
+
 func _paint_carry() -> void:
 	if _carry_lb == null:
 		return
@@ -830,11 +1015,19 @@ func _carry_line(rid: String) -> String:
 	var wsid := str(rd.get("weapon", ""))
 	# v62h：兵器随身带走（不卸），其余照卸——这一行就是"本趟随身清单"的预告
 	segs.append("兵器（随身）" + ("（空手）" if wsid == "" else str(Cards.item_name(wsid))))
+	# v11：功法分两半——随身那一门（不卸）与其余要卸回仓库的
 	var sk: Array = rd.get("skills", [])
-	var snames: Array = []
+	var keep_art := _art_carry_of(rid)
+	var rest_arts: Array = []
 	for a_v in sk:
-		snames.append(str(Cards.name_of(str(a_v))))
-	segs.append("功法 " + str(sk.size()) + "/3 " + ("（空）" if snames.is_empty() else "、".join(PackedStringArray(snames))))
+		var asid := str(a_v)
+		if keep_art != "" and asid == keep_art:
+			continue
+		rest_arts.append(str(Cards.name_of(asid)))
+	var art_seg := "功法（随身）" + ("（这趟不带）" if keep_art == "" else str(Cards.name_of(keep_art)))
+	if not rest_arts.is_empty():
+		art_seg += "　卸下 " + str(rest_arts.size()) + " 门：" + "、".join(PackedStringArray(rest_arts))
+	segs.append(art_seg)
 	var gear: Dictionary = rd.get("gear", {})
 	var gsegs: Array = []
 	for slot_v in ["armor", "helm", "cloak"]:
@@ -991,12 +1184,21 @@ func _strip_text_for(rid: String, compact: bool, row_cn := "") -> String:
 			gsegs.append(cn + "：" + str(Cards.item_name(gsid)))
 	if not gsegs.is_empty():
 		lines.append("装备：" + " · ".join(PackedStringArray(gsegs)))
+	# v11：功法分两半——随身那一门标出来，其余写明"卸回仓库"
 	var sk: Array = rd.get("skills", [])
-	if not sk.is_empty():
-		var sn: Array = []
-		for a_v in sk:
-			sn.append(str(Cards.name_of(str(a_v))))
+	var keep_art := _art_carry_of(rid)
+	var sn: Array = []
+	var off_sn: Array = []
+	for a_v in sk:
+		var asid := str(a_v)
+		if keep_art != "" and asid == keep_art:
+			sn.append(str(Cards.name_of(asid)) + "（随身）")
+		else:
+			off_sn.append(str(Cards.name_of(asid)))
+	if not sn.is_empty():
 		lines.append("功法：" + "、".join(PackedStringArray(sn)))
+	if not off_sn.is_empty():
+		lines.append("功法（卸回仓库）：" + "、".join(PackedStringArray(off_sn)))
 	if compact:
 		var pre := ""
 		if row_cn != "":
@@ -1009,13 +1211,23 @@ func _strip_text_for(rid: String, compact: bool, row_cn := "") -> String:
 	else:
 		for i in lines.size():
 			lines[i] = "　" + str(lines[i])
-	return rname + " 出征前将自动卸下随身之物（全部放回村仓库）：\n" + "\n".join(PackedStringArray(lines)) + "\n\n本趟从零开始：赤手空拳上路，兵器、装备与功法靠沿途再捡。\n（收工回村时会照这一份原样穿回去——殒命/中途退出也一样穿回，只有这趟捡的东西带不带得回另说）"
+	# v11（用户："玩家角色可以携带一件功法和一件武器进入游历"）：
+	#   这句原来写"赤手空拳上路"——v62h 起兵器就随行了，现在功法也带一门；
+	#   字面不改的话，玩家看着这一页会以为兵器与功法都会被收走。
+	#   ⚠ GDScript 的换行续行只在括号里认（行尾挂个 + 不算）——这一段必须整句括起来
+	return (rname + " 出征前将把这些卸回村仓库：\n" + "\n".join(PackedStringArray(lines))
+		+ "\n\n随身带走的：兵器，外加挑中的那一门功法（其余装备与功法靠沿途再捡）。"
+		+ "\n（收工回村时会照这一份原样穿回去——殒命/中途退出也一样穿回，只有这趟捡的东西带不带得回另说）")
 
-func _auto_unequip(rid: String) -> Array:
+func _auto_unequip(rid: String, keep_art := "") -> Array:
 	var out: Array = []
 	# v62h（用户："游历允许每个角色允许装备武器"）：**兵器不再卸下**——
 	#   它跟人走进游历（出发屏那一行的文案也改成了"兵器（随身）"）。
-	#   护甲/玉佩/披风/功法照旧全部卸回村仓库。
+	#   护甲/玉佩/披风照旧全部卸回村仓库。
+	# v11（用户："玩家角色可以携带一件功法和一件武器进入游历"）：
+	#   **随身那一门功法也不卸**（keep_art）——它跟兵器同一条待遇：
+	#   出发时留在他身上，游历那边照旧从账上快照扣掉、再按 arts 槽加回来（不会算两遍），
+	#   结算时它在 run_base_arts 里 → 不会被当成"趟内新学的"再入一份库。
 	for slot_v in ["armor", "helm", "cloak"]:
 		var g := GameState.unequip_gear(rid, str(slot_v))
 		if g.begins_with("已卸下"):
@@ -1023,6 +1235,8 @@ func _auto_unequip(rid: String) -> Array:
 	var rd: Dictionary = GameState.role_data(rid)
 	var sk: Array = (rd.get("skills", []) as Array).duplicate()
 	for i in range(sk.size() - 1, -1, -1):
+		if str(sk[i]) == keep_art and keep_art != "":
+			continue   # v11：随身这一门留着
 		var a := GameState.unequip_art(rid, i)
 		if a.begins_with("已卸下"):
 			out.append(a)
@@ -1041,14 +1255,15 @@ func _do_depart() -> void:
 	# ㊿v：**卸之前**把每个人的随身记一份——回来照这个穿回去
 	GameState.strip_remember(_strip_snapshot(rids))
 	for r_v in rids:
-		var got := _auto_unequip(str(r_v))
+		var got := _auto_unequip(str(r_v), _art_carry_of(str(r_v)))   # v11：随身那一门功法不卸
 		if not got.is_empty():
 			print("[出征] 自动卸下：", got)
 	_close_strip_confirm()
 	# ㊿：把**整车**交给出征交接——游历那边是从 deploy_take() 取名单的（信号只负责切场景）。
 	#   deploy_set 内部会把第一个记成领队（存档的 role_id 也记他）。
 	GameState.deploy_set(rids, _pick_diff, _pick_fates)   # v62r：命数**整批**交出去（多选）
-	print("[出征] 出发：队伍=", rids, " 难度=", _pick_diff, " 命数=", _pick_fates, "（已自动卸装，本趟从零开始；临时扩仓 ", GameState.run_expand_slots(), " 格随行）")
+	print("[出征] 出发：队伍=", rids, " 难度=", _pick_diff, " 命数=", _pick_fates,
+		" 随身功法=", _pick_arts, "（兵器与这一门功法随身，其余自动卸回仓库；临时扩仓 ", GameState.run_expand_slots(), " 格随行）")
 	deploy_started.emit(rids, _pick_diff)
 	close()
 
@@ -1069,11 +1284,19 @@ func _strip_snapshot(rids: Array) -> Dictionary:
 
 func open() -> void:
 	_msg_lb.text = ""
-	_pick_roles.clear()
+	# v10（用户："游历的出战设置保存没有用"）：开屏**先照账上那份阵型**落选人。
+	#   病根：这里原来是无条件 _pick_roles.clear()，于是"出战配置▸（整备·阵容）"里
+	#   排好的前/中/后，**每关一次屏再开就没了**（_refresh 见空又补名册第一个）——
+	#   保存其实进了账（GameState.formation），只是这一屏从来不读它，玩家看到的就是
+	#   "保存没有用"：出征屏永远只带少侠一人。
+	#   现在起手＝账上阵型（按名册过滤、空的兜底第一个，都在 _refresh 里），
+	#   点人仍可当场改（改不改回账上，见 _on_formation_saved 的说明）。
+	_pick_roles = GameState.formation.duplicate()
 	_pick_diff = 0
 	_pick_fates.clear()            # ㉛：每次开屏从"空手走"起
 	_close_strip_confirm()
 	_close_fate_pick()
+	_close_art_pick()
 	_refresh()
 	visible = true
 
@@ -1082,6 +1305,7 @@ func close() -> void:
 		return
 	_close_strip_confirm()
 	_close_fate_pick()
+	_close_art_pick()
 	visible = false
 	closed.emit()
 

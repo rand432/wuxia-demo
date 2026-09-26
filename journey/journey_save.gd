@@ -123,6 +123,10 @@ static func apply_resume(host) -> void:
 	host._shop_active = false
 	host._show_ui_all()
 	host._enter_node()
+	# v2（v35 配套）：开局行装那一页是"摆出来就落盘"的——万一在下手之前被强杀/切后台回收，
+	#   接档时补摆一次（kit_taken 没记上就说明还没领）。领过的人这里一个字都不会发生。
+	if str(host._state.mode) == "formal" and not bool(host._state.kit_taken):
+		host._open_start_kit()
 	host._node_done = bool(snap.get("node_done", false))
 	var cont: Array = snap.get("containers", [])
 	host._loot_containers = cont

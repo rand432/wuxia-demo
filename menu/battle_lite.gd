@@ -473,6 +473,14 @@ func _foes_alive() -> int:
 			n += 1
 	return n
 
+# v67：我方还剩几个（这段原来在四五处各抄一遍；这次修卡死要用它，收成一口）
+func _party_alive() -> int:
+	var n := 0
+	for m in _party:
+		if int((m as Dictionary).get("hp", 0)) > 0:
+			n += 1
+	return n
+
 func _front_foe() -> int:
 	for i in _foes.size():
 		if _foe_alive(i):
@@ -1417,6 +1425,24 @@ func _turn_order() -> Array:
 	return order
 
 func _act() -> void:
+	# ============================================================
+	# v67（用户："爬塔时有时候 对手血量清空了 会卡住不动"）：**收场总闸**。
+	#   病根：敌人有几条"死在别人手里"的路——最典型的是**反刺**（怪打人时被反死，
+	#   见 _enemy_act 尾部与 _enemy_hit_member 的反刺那两段）。那两条路原来只判
+	#   "我方死没死"，**从不判敌人死没死**；而 _member_act 又在"没有活着的敌人"时
+	#   提前 return（want < 0 → return）——于是"杀完了就收摊"那一句永远走不到：
+	#   双方干站着，血条 0/499，一帧一帧空转（正是玩家截图里那一幕）。
+	#   这里放一道总闸：不管血是谁扣的，只要**敌人已清空 / 我方已全灭**，当场收摊。
+	#   （口径与 _member_act 收尾那句一致：敌人清完 ＋ 我方还有人 ＝ 胜；两边同时倒 ＝ 败。）
+	# ============================================================
+	if not _over:
+		if _foes_alive() <= 0:
+			_enemy_fall_pending()
+			_end(_party_alive() > 0)
+			return
+		if _party_alive() <= 0:
+			_end(false)
+			return
 	# ㊿：出手顺序**一轮算一次**（存 _act_order），不是每个动作都重算。
 	#   原先每调一次 _act() 都重算顺序、却拿一个全局游标 _turn 去取——只要顺序
 	#   中途变了（比如刚放了「疾风令」加速），游标就指到别人身上：有人连出两手、
@@ -2847,11 +2873,13 @@ func _enemy_death_check(tx: float, target: Dictionary) -> bool:
 		_fall(target["node"], -1.0)
 		_dust_at(tx, _ground_y)
 		_push([str(target["name"]) + " 倒下了。"])
-	var alive := 0
-	for m in _party:
-		if int(m["hp"]) > 0:
-			alive += 1
-	if alive == 0:
+	# v67：**反刺把怪反死**也要收摊——这一口是"怪放完招之后的收尾"，
+	#   原来只数我方；敌人在它自己出手时被打死就一直没人管（见 _act 开头那段）。
+	if _foes_alive() <= 0:
+		_enemy_fall_pending()
+		_end(_party_alive() > 0)
+		return true
+	if _party_alive() <= 0:
 		_end(false)
 		return true
 	_refresh()
@@ -3184,15 +3212,17 @@ func _enemy_act() -> void:
 			var rb := _thorn_calc(target, raw)
 			_e_take(rb)
 			_float_at(Vector2(_enemy_base_x(), _ground_y - 158.0), "反刺 -" + str(rb), C_COUNTER, 20)
+	# v67：**这一手可能把反刺的怪反死**——当场收摊（与 _member_act 收尾那句同一口径：
+	#   敌人清完 ＋ 我方还有人 ＝ 胜；两边同时倒 ＝ 败）。少了这一段就是玩家报的"卡住"。
+	if _foes_alive() <= 0:
+		_enemy_fall_pending()
+		_end(_party_alive() > 0)
+		return
 	if int(target["hp"]) <= 0:
 		_fall(target["node"], -1.0)
 		_dust_at(tx, _ground_y)
 		_push([str(target["name"]) + " 倒下了。"])
-	var alive := 0
-	for m in _party:
-		if int(m["hp"]) > 0:
-			alive += 1
-	if alive == 0:
+	if _party_alive() <= 0:
 		_end(false)
 		return
 	_refresh()

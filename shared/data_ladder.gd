@@ -711,6 +711,35 @@ static func _pick_of_q(pool: String, q: int, rng: RandomNumberGenerator) -> Stri
 	var i := (rng.randi_range(0, cand.size() - 1) if rng != null else randi_range(0, cand.size() - 1))
 	return str(cand[i])
 
+# v59（用户："开局五选一 · 给的完整"）：按"**单池** ＋ 品阶"抽一件**成品** id。
+#   与 _pick_of_q 的区别：那个把护甲/玉佩/披风合成一个"装备"池（货仓抽货用），
+#   开局那五张牌要分得清是哪一格，所以这里按单池抽。
+#   本阶没货就**往下借**（装备没有绝品 → 绝品难度下装备仍给极品）；一阶都没有＝空串。
+static func pick_of_q(pool: String, q: int, rng: RandomNumberGenerator = null) -> String:
+	var top := clampi(q, 0, Cards.QUALITY_ORDER.size() - 1)
+	for qq in range(top, -1, -1):
+		var got := _pick_in_pool(pool, qq, rng)
+		if got != "":
+			return got
+	return ""
+
+static func _pick_in_pool(pool: String, q: int, rng: RandomNumberGenerator) -> String:
+	var cand: Array = []
+	for d_v in Cards.SETS:
+		var d: Dictionary = d_v
+		if str(d.get("pool", "")) != pool:
+			continue
+		if str(d.get("role", "")) != "":
+			continue                 # 专武不落货仓
+		if bool(d.get("no_drop", false)):
+			continue
+		if Cards.q_idx(str(d.get("id", ""))) == q:
+			cand.append(str(d.get("id", "")))
+	if cand.is_empty():
+		return ""
+	var i := (rng.randi_range(0, cand.size() - 1) if rng != null else randi_range(0, cand.size() - 1))
+	return str(cand[i])
+
 static func _mat_entry(Loot, rng: RandomNumberGenerator) -> Dictionary:
 	var i := (rng.randi_range(0, Loot.MATS.size() - 1) if rng != null else randi_range(0, Loot.MATS.size() - 1))
 	var m: Dictionary = Loot.MATS[i]

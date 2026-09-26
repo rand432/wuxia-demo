@@ -1,6 +1,12 @@
 extends Control
 # ============================================================
-# duel_battle.gd —— 1v1 交手演出（v8 · ㉙：反刺按上限比例 · 反伤橙字落人）
+# duel_battle.gd —— 1v1 交手演出（v9 · 自带 row_priority 接线：苏青鸾持匕首绕前排）
+# v9（用户："苏 被动带匕首不打后排"）：**自带天赋的 row_priority 在游历这边补接线**——
+#   村里战斗一直认它（battle_lite._enemy_attack_index：row_prio "back" ＝ 普攻挑最靠后的活人），
+#   游历这边却一律打最前排 → 苏青鸾拿匕首绕前排直取后排那只「杀手」的设定等于没写。
+#   改法三处：_blank_ally 加字段、_setup_ally 按兵器闸记下（innate_active 判过）、
+#   _pick_player_target 在**普攻**分支落点（带 target 的招式本来自己点名，不动）；
+#   闭窍（nopassive）压着时一并压住。一只敌时与 _front_foe 同值，老场面一字不变。
 # v8（㉙）：①陈石枪势反刺——不再按"敌伤 35%"，改按陈石气血上限的比例带 8%~12%
 #   （挨的打越重比例越高：THORN_HP_LO/HI 两个常数；铁蒺卡整带加乘）；
 #   ②反伤/反刺浮字改"橙字数字、打在挨打的人身上"（回复仍旧绿字）；敌"反伤词缀"同理；
@@ -192,6 +198,9 @@ static func _blank_ally() -> Dictionary:
 		"guard_left": 0, "guard_cut": 0.8,
 		"next_mult": 1.0, "innate_noted": false,
 		"talent_cut": 0.0, "talent_wpn": 1.0, "inn_thorn": 1.0, "talent_cut_noted": false,
+		# v9（用户："苏 被动带匕首不打后排"）：自带里的 row_priority——"back"＝普攻绕前排直取后排。
+		#   与出村战斗 battle_lite._enemy_attack_index 同一条规矩；谁生效由 _setup_ally 判兵器闸。
+		"row_prio": "",
 		"rage": 0, "rage_mul": 1.0,
 		"ult": {}, "ult_turns": 0, "ult_new": false, "ult_follow": 0.0,
 		"ult_thorn": 0.0, "ult_thorn_on": false, "ult_regen_pct": 0.0,
@@ -1170,6 +1179,14 @@ func _front_foe() -> int:
 			return i
 	return -1
 
+# v9（用户："苏 被动带匕首不打后排"）：最靠后还站着的敌人——自带 row_priority="back" 的普攻落点。
+#   与 _front_foe 对称；一只敌（下标 0）时两者同值，老场面一字不变。
+func _back_foe() -> int:
+	for i in range(_foes.size() - 1, -1, -1):
+		if _foe_alive(i):
+			return i
+	return -1
+
 # 我方出手该打谁：默认打最前排；带 target 的招式按够到距离越排。
 # reaches = 0/1/2（GameData.target_reach 给）
 #   v48（用户："全修"）：**mid/back 要真的"绕过去"**——以前这里是"从前往后找第一个
@@ -1263,6 +1280,14 @@ func _setup_ally(rid: String, nd: Node2D, idx: int) -> Dictionary:
 	var inn_on := Roles.innate_active(inn, str(al["weapon"]))
 	var inn_hp := 0.0
 	al["inn_thorn"] = 1.0
+	# v9（用户："苏 被动带匕首不打后排"）：自带的 row_priority 以前**游历这边根本没接线**——
+	#   「洞察」写着 row_priority "back"（持匕首时普攻绕前排直取后排），村里战斗
+	#   （battle_lite._enemy_attack_index 3209 那段）照着做了，游历这边却一律 _front_foe()：
+	#   于是苏青鸾拿匕首在游历里永远是"跟着打前排"，描述与行为不符。
+	#   这里只把"生效中"的那一条记下来（兵器闸由 innate_active 判过），落点在 _pick_player_target。
+	al["row_prio"] = ""
+	if inn_on and str(inn.get("row_priority", "")) == "back":
+		al["row_prio"] = "back"
 	if inn_on:
 		var inn_kind := str(inn.get("kind", ""))
 		if inn_kind == "innate_hp_pct":
@@ -2040,6 +2065,12 @@ func _flash_card(kind: String, sid: String) -> void:
 #   target=sweep           → 主目标仍是前排，但伤害由调用方铺满所有活人
 func _pick_player_target(art: Dictionary) -> int:
 	if art.is_empty():
+		# v9（用户："苏 被动带匕首不打后排"）：自带 row_priority="back" 的人（苏青鸾·洞察 持匕首）
+		#   普攻**绕开当面挡刀的，直取最后面那只**——与出村战斗同一条规矩。
+		#   ⚠ 闭窍（nopassive）压着时这条也一并压住（与 _roll_p_damage 里那两段现算增伤同源）。
+		var al0 := _a()
+		if str(al0.get("row_prio", "")) == "back" and not St.blocks_passive(al0):
+			return _back_foe()
 		return _front_foe()
 	var t := str(art.get("target", "front"))
 	if t == "sweep":

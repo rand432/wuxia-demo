@@ -75,6 +75,11 @@ var diff := 0                # 正式趟的难度档（1~10；引子趟恒 0）
 var run_expand := 0                  # 本趟额外格数（bag_cap 里叠；结算即失效）
 # ---- 优化批㉔：卡组（增益；只在这趟生效，带不出去） ----
 var buffs: Array = []                # 已请的卡 id（三种都可重复叠；专属只对卡上那个人）
+# ---- v23（用户："进入游历第一节 根据当前难度 给予五个选项…五选一"）：开局行装 ----
+#   kit_taken  ＝ 这一趟领过没有（摆出那一页就先记上，随续行档走——强杀重进不重复领）
+#   kit_money_pct ＝ 选了"文钱"那一张才有（本趟文钱收益加成，0 ＝ 没拿）
+var kit_taken := false
+var kit_money_pct := 0.0
 
 # ============================================================
 # ㊿：三人成队——成员表
@@ -240,6 +245,8 @@ func reset(talent_list: Array, gift_sid: String) -> void:
 	run_gear.clear()
 	run_base_gear.clear()
 	run_expand = 0
+	kit_taken = false
+	kit_money_pct = 0.0
 	buffs.clear()
 	carry_stats.clear()
 	bag.clear()
@@ -283,6 +290,8 @@ func begin_formal(rid, d: int, fate: Variant = "") -> void:
 	if rids.size() > PARTY_MAX:
 		rids = rids.slice(0, PARTY_MAX)
 	run_expand = GameState.take_run_expand()   # 优化批㉓：带上出征屏买的临时格
+	kit_taken = false                          # v23：开局行装重新摆（每趟一张）
+	kit_money_pct = 0.0
 	# ㉛：出征屏选的命数——先挂上（舍装签要在装随身时就被看见；只顶这一趟）
 	# v62r（用户："开局命数可多选"）：`fate` 现在可以是**字符串或数组**——
 	#   出征屏多选后一次交过来，这里逐张挂上（各张的效果本来就互相独立）。
@@ -1350,6 +1359,8 @@ func to_save() -> Dictionary:
 		"run_base_gear": run_base_gear.duplicate(true),
 		"run_expand": run_expand,
 		"buffs": buffs.duplicate(),
+		# v23：开局行装那两格也要进档——不然中途退出重进会又摆一次五选一（白拿一件）
+		"kit_taken": bool(kit_taken), "kit_money_pct": float(kit_money_pct),
 		# ㊾：当前气血**必须**存——以前这里没有它，而 resume_from 结尾 recalc() 把 hp
 		#   直接顶成满血。于是"残血上路"这条设计只活在这一趟的内存里：
 		#   一旦强退/杀进程再进，人就满血复活了（duel_battle._end 明明把残血写回了 _state.hp，
@@ -1370,6 +1381,8 @@ func resume_from(d: Dictionary) -> void:
 	loot_bag = (d.get("loot_bag", []) as Array).duplicate(true)
 	last_foe = (d.get("last_foe", {}) as Dictionary).duplicate(true)
 	run_expand = int(d.get("run_expand", 0))
+	kit_taken = bool(d.get("kit_taken", false))
+	kit_money_pct = float(d.get("kit_money_pct", 0.0))
 	buffs = (d.get("buffs", []) as Array).duplicate()
 	# ㊿：先恢复队伍。有 "members" 就按它建（三人档）；没有就是旧档
 	#   （单人形状）——把老键拼成一个成员，进度一点不丢。

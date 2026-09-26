@@ -1,6 +1,11 @@
 extends Control
 # ============================================================
-# journey_stage.gd —— 总调度（v34 · 精英三抽满包改"替换/折现" · 精英三抽即刻生效 · 卡组 · 命数抉择 · 搜刮稀疏）
+# journey_stage.gd —— 总调度（v35 · 开局行装五选一 ＋ v34 那一批）
+# v35（用户："进入游历第一节 根据当前难度 给予五个选项 装备 披风 玉佩 功法 初始文钱翻倍
+#   且文钱收益增加+20%【此选项不消耗文钱 且带出去才能真正带出去 死亡带不走】"）：
+#   正式趟进第 1 节摆一页**开局行装 · 五选一**（护甲/玉佩/披风/功法/文钱，给的都是**成品**）。
+#   品阶＝data_ladder.q_of_diff(难度)（8 关一档：1~8 凡品 … 33+ 绝品；装备没绝品就往下借）；
+#   "文钱"那张＝盘缠 ×2 ＋ 本趟文钱收益 +20%（在 _money_gain 里乘）；领过记 kit_taken（进续行档）。
 # v34（用户报的②）：精英战利·三选一的后两轮**只有包裹一条路**——以前"包裹满→退临时仓库，
 #   两处都满就直接 append（越过上限）"，等于精英战利能把临时仓库撑爆。现在包裹满＝
 #   停下来问一句：**替换**（点包裹里的一件丢掉，换回它的卖价＝盘缠，这件收下）或
@@ -61,6 +66,7 @@ const DataPets := preload("res://shared/data_pets.gd")   # ㊿z10：宠物牌（
 const Settle := preload("res://journey/journey_settle.gd")
 const SynthPanel := preload("res://journey/journey_synth_panel.gd")
 const Tuning := preload("res://shared/tuning.gd")   # ㉘：可调参数读取口
+const Ladder := preload("res://shared/data_ladder.gd")   # v35：开局行装按"难度→品阶"那把尺子取件
 
 # 「回村」按钮切场用（主界面场景）
 const MENU_SCENE := "res://menu_sketch.tscn"
@@ -185,6 +191,10 @@ var _buff_btn: Button = null      # ㉘：卡组钮（左上常驻）
 # v63h：出手方式钮已搬到战斗界面右上（duel_battle 的 _mode_btn），舞台不再持有
 var _buff_panel: Control = null   # ㉘：卡组面板（开着就挡赶路）
 var _buff_offers: Array = []      # ㉘：卡面存舞台——关掉重开不免费换（刷新/买光才变）
+var _kit_offers: Array = []       # v35：开局行装那五张牌（摆出来的那一刻就摇定，重开不免费换）
+
+# v35（用户："初始文钱翻倍且文钱收益增加+20%"）：选了"文钱"那一张才有——本趟文钱收益加成。
+const KIT_MONEY_PCT := 0.20
 
 func _ready() -> void:
 	GameState.load_game()   # ㊿l：游历场开工先读账——直跑/兜底进游历场时，写盘不再拿空白村账盖真账
@@ -683,6 +693,9 @@ func _start_formal_run() -> void:
 	_refresh_all()
 	UiKit.float_text(self, "出征 · " + GameState.diff_name(_state.diff) + "　盘缠 " + str(_state.money) + " 文", UiKit.GOLD)
 	_enter_node()
+	# v35（用户："进入游历第一节 根据当前难度 给予五个选项…五选一"）：第一节摆开局行装
+	if not _state.kit_taken:
+		_open_start_kit()
 
 # ============ 创建完成 → 开局 ============
 
@@ -738,6 +751,10 @@ func _start_run() -> void:
 	_refresh_all()
 	UiKit.float_text(self, "行前盘缠 " + str(RunState.START_MONEY) + " 文", UiKit.GOLD)
 	_enter_node()
+	# v35：［再来一趟］重开也要摆开局行装（kit_taken 在 begin_formal 里已复位）；
+	#   引子趟（mode=="intro"）不算正式游历，不摆。
+	if _state.mode == "formal" and not _state.kit_taken:
+		_open_start_kit()
 
 func _enter_node() -> void:
 	_walk_delay = -1.0
@@ -1196,6 +1213,9 @@ func _money_gain(g: int) -> int:
 		k *= FATE_GREED_MONEY
 	if _has_fate("fate_fullbag"):
 		k *= FATE_FULLBAG_MONEY
+	# v35：开局行装选了"文钱"那一张 → 本趟文钱收益 +20%（与命数那两张相乘，互不顶替）
+	if _state != null and _state.kit_money_pct > 0.0:
+		k *= 1.0 + float(_state.kit_money_pct)
 	return maxi(1, int(round(float(g) * k)))
 
 func _open_fate(node: Dictionary) -> void:
@@ -1356,6 +1376,139 @@ func _on_gain_pick(bid: String) -> void:
 	_refresh_buff_btn()
 	UiKit.float_text(self, "抽到签：「" + Buffs.title_of(bid) + "」——" + Buffs.desc_of(bid), UiKit.GOLD)
 	_advance()
+
+# ============ v35：开局行装 · 五选一（进游历第一节摆一次） ============
+# 用户："进入游历第一节 根据当前难度 给予五个选项 装备 披风 玉佩 功法 初始文钱翻倍且文钱收益增加+20%
+#   【此选项不消耗文钱 且带出去才能真正带出去 死亡带不走】"
+#   · 五张牌＝**护甲 / 玉佩 / 披风 / 功法 / 文钱**，五选一（跟事件三选一同一个手感：点整行即拿）。
+#   · 品阶＝data_ladder.q_of_diff(当前难度)——**8 关一档**那把尺子
+#     （1~8 凡品 · 9~16 良品 · 17~24 上品 · 25~32 极品 · 33+ 绝品），与掉落表同源；
+#     装备没有绝品 → 往上没货就往下借一件（Ladder.pick_of_q 里办）。
+#   · **给的是成品**（用户："【给的完整】"），不是残卡。
+#   · 白拿，不消耗文钱；拿到的件照旧"活着走出游历才算你的"——
+#     结算才入村仓库（journey_settle._deposit_run_items），殒命全丢（open_death），
+#     所以这里**不盖 village 章**、也不写村账。
+#   · 领过就记 kit_taken（随续行档走）：摆出这一页先记上再落盘，强杀重进不会重复领。
+func _open_start_kit() -> void:
+	if _state == null or _busy:
+		return
+	var offers := _kit_make_offers()
+	_state.kit_taken = true     # 摆过就算领过——防"退出重进再白拿一件"
+	JourneySave.save_run(self)
+	if offers.is_empty():
+		return
+	_busy = true                # 这一页是阻塞页：不点完不给赶路
+	_kit_offers = offers
+	_close_overlay()
+	var veil := _make_popup_veil(true)
+	veil.mouse_filter = Control.MOUSE_FILTER_STOP
+	var row_h := 92.0
+	var ph := 156.0 + float(offers.size()) * (row_h + 8.0)
+	var panel := UiKit.make_paper_panel(veil, Rect2(58, POPUP_TOP, 604, ph))
+	var t1 := UiKit.make_label(panel, Vector2(0, 16), Vector2(604, 38), 28, UiKit.INK)
+	UiKit.set_text(t1, "开局行装 · 五选一")
+	t1.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var q: int = Ladder.q_of_diff(int(_state.diff))
+	var qn := str(Cards.QUALITY_ORDER[clampi(q, 0, Cards.QUALITY_ORDER.size() - 1)])
+	var t2 := UiKit.make_label(panel, Vector2(22, 56), Vector2(560, 56), 17,
+		Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.72))
+	UiKit.set_text(t2, "难度 " + str(_state.diff) + " · 本档给的是「" + qn
+		+ "」成品——挑一样带走，白拿。路上捡的、这里拿的，都得活着走出游历才算你的。")
+	t2.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	t2.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	var ry := 122.0
+	for i in offers.size():
+		_kit_row(panel, i, offers[i], ry, row_h)
+		ry += row_h + 8.0
+	print("[游历] 开局行装：摆出 ", offers.size(), " 张（难度 ", _state.diff, " · 品阶 ", qn, "）")
+
+func _kit_row(panel: Control, i: int, o: Dictionary, y: float, h: float) -> void:
+	var row := Panel.new()
+	row.position = Vector2(24, y)
+	row.size = Vector2(556, h)
+	row.mouse_filter = Control.MOUSE_FILTER_STOP
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.96, 0.93, 0.86, 1.0)
+	sb.set_corner_radius_all(8)
+	sb.border_color = Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.45)
+	sb.set_border_width_all(2)
+	row.add_theme_stylebox_override("panel", sb)
+	row.gui_input.connect(_on_kit_row_input.bind(i))
+	panel.add_child(row)
+	var ttl := UiKit.make_label(row, Vector2(16, 8), Vector2(524, 32), 21, UiKit.INK)
+	UiKit.set_text(ttl, str(o.get("title", "?")))
+	var ds := UiKit.make_label(row, Vector2(16, 42), Vector2(524, h - 50.0), 17,
+		Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.82))
+	UiKit.set_text(ds, str(o.get("sub", "")))
+	ds.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+
+func _on_kit_row_input(ev: InputEvent, i: int) -> void:
+	if not (ev is InputEventMouseButton):
+		return
+	var mb := ev as InputEventMouseButton
+	if mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
+		_on_kit_pick(i)
+
+# 一件成品是哪一品（"凡品/良品/…"）——标题照真实的那一件写，别照难度档写
+func _q_cn(sid: String) -> String:
+	var qi: int = clampi(Cards.q_idx(sid), 0, Cards.QUALITY_ORDER.size() - 1)
+	return str(Cards.QUALITY_ORDER[qi])
+
+# 五张牌的内容——摆出来的那一刻就摇定
+func _kit_make_offers() -> Array:
+	var q: int = Ladder.q_of_diff(int(_state.diff))
+	var qn := str(Cards.QUALITY_ORDER[clampi(q, 0, Cards.QUALITY_ORDER.size() - 1)])
+	var out: Array = []
+	var slots := [["armor", "护甲"], ["helm", "玉佩"], ["cloak", "披风"]]
+	for s_v in slots:
+		var pool := str(s_v[0])
+		var cn := str(s_v[1])
+		var sid := Ladder.pick_of_q(pool, q)
+		if sid == "":
+			continue
+		out.append({
+			"kind": "gear", "slot": pool, "sid": sid,
+			# ⚠ 品阶照**这件真实**的写：绝品难度下装备没有绝品、会往下借到极品——
+			#   写 qn 的话会把极品标成"绝品"（探针当场抓到的）。
+			"title": cn + " · " + str(Cards.item_name(sid)) + "（" + _q_cn(sid) + "）",
+			"sub": "穿上就生效：" + str(Cards.bonus_text(Cards.item_bonus(sid))) + "——装备格＝" + cn,
+		})
+	var asid := Ladder.pick_of_q("arts", q)
+	if asid != "":
+		out.append({
+			"kind": "arts", "sid": asid,
+			"title": "功法 · " + str(Cards.item_name(asid)) + "（" + _q_cn(asid) + "）",
+			"sub": "装上就生效：" + str(Cards.art_of(asid).get("desc", "—")),
+		})
+	out.append({
+		"kind": "money",
+		"title": "文钱 · 盘缠翻倍（" + str(_state.money) + " → " + str(int(_state.money) * 2) + " 文）",
+		# ⚠ 界面是纯 Label（不吃 ** 加粗），文案里别写 markdown
+		"sub": "本趟文钱收益 +" + str(int(KIT_MONEY_PCT * 100.0)) + "%；这一样不花文钱。盘缠出局清零，只顶这一趟。",
+	})
+	return out
+
+func _on_kit_pick(i: int) -> void:
+	if i < 0 or i >= _kit_offers.size():
+		return
+	var o: Dictionary = _kit_offers[i]
+	var msg := ""
+	if str(o.get("kind", "")) == "money":
+		var before: int = int(_state.money)
+		_state.money = before * 2
+		_state.kit_money_pct = KIT_MONEY_PCT
+		msg = "盘缠翻倍：" + str(before) + " → " + str(_state.money) + " 文　本趟文钱收益 +" + str(int(KIT_MONEY_PCT * 100.0)) + "%"
+	else:
+		# 给**领队**（出征屏点的第一个人＝站前排那位）；格子占着就进包裹——place_item 自己会挑
+		msg = _state.place_item_for(0, str(o.get("sid", "")), "equip")
+	_close_popup()
+	_kit_offers = []
+	_busy = false
+	_money()
+	_refresh_all()
+	JourneySave.save_run(self)   # 领了立刻落盘：强杀重进既不重复领、也不落空
+	UiKit.float_text(self, msg, UiKit.GOLD)
+	print("[游历] 开局行装：", str(o.get("title", "")), " → ", msg)
 
 # 优化批⑩（#15）：退出游历——居中确认页；退出＝放弃本趟（同败走：东西全丢、不记档）
 # ㊿：可接的命数＝八张。前六张靠 journey 这边的 flag 生效（搜刮/文钱/护甲），

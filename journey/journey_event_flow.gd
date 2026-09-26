@@ -1,6 +1,15 @@
 extends RefCounted
 # ============================================================
-# journey_event_flow.gd —— 事件三选一件 v4（优化批⑥/#8：重复与"差一张"提示）
+# journey_event_flow.gd —— 事件三选一件 v5（签摊不下架：多拿要钱 ＋ ［不选了］）
+# v5（用户："我说的是节点 每走一步不是三选一吗 选完之后就消失吗 现在改为不消失
+#   选第二个第三个需要钱 【加个不选了的按钮】"）：
+#   以前**拿一张整页就收掉**（_finish_node），剩下两张白作废。现在：
+#     · 拿完一张，签面**留着**——那张下架，其余照摆（点一下就是再拿一张）；
+#     · **第一张照旧白拿**，第二张起要文钱（价按"已经拿了几张"走，见 PICK_PRICE）；
+#     · 盘缠不够就不给拿（这一页不收，等玩家改主意），底排多一颗 **［不选了］** ＝ 收摊赶路；
+#     · 拿光了自动收摊；刷新（10 文）照旧一轮一次（价目不清零——拿得越多越贵）。
+#   ⚠ 精英战利那三抽（journey_stage._open_elite_draw）**不在这一页**，一个字没动
+#     （用户："【精英三选一不算】"）。
 # v4（优化批⑥/#8）：三选一页给卡加标注——包里已有同一张（同组同页）＝卡下标
 #   "已有一张（重复）"；收下就凑齐整套＝描金边＋"收下即齐！"。只标注，不动出卡/刷新规则。
 # v3（R4 门面批）：三选一（含刷新）改从现役卡池出（GameState.pool_active）——
@@ -27,6 +36,11 @@ var _node: Dictionary = {}
 var _pending_offer: Array = []
 var _refresh_used := false
 var _replace_pending: Dictionary = {}
+var _taken := 0               # v5：这一节已经拿了几张（决定下一张的价，也决定还有没有得拿）
+
+# v5：拿第 N 张的价（下标＝**已经拿了几张**：0 张时免费，第 2 张 40 文、第 3 张 80 文…）。
+#   贵过"折现/卖店"，但远低于补齐价（80×品级系数）——"懒得等刷新"的那点钱。
+const PICK_PRICE := [0, 40, 80, 120]
 
 
 func setup(host) -> void:
@@ -37,6 +51,13 @@ func setup(host) -> void:
 func _reset() -> void:
 	_pending_offer = []
 	_replace_pending = {}
+	_taken = 0
+	_refresh_used = false
+
+# v5：下一张要多少文（0 ＝ 白拿）
+func _pick_price() -> int:
+	var i: int = clampi(_taken, 0, PICK_PRICE.size() - 1)
+	return int(PICK_PRICE[i])
 
 
 func _event_offer_count() -> int:
@@ -48,6 +69,7 @@ func _event_offer_count() -> int:
 func _open_event(node: Dictionary) -> void:
 	_host._busy = true
 	_refresh_used = false
+	_taken = 0
 	_host._cur_node = node
 	_node = node
 	var pool := str(node.get("pool", "arts"))
@@ -104,7 +126,7 @@ func _show_event_cards() -> void:
 			lb2.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			lb2.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-	var rb := UiKit.make_button(panel, Vector2(40, 404), Vector2(200, 52), "刷新（10 文）", 21)
+	var rb := UiKit.make_button(panel, Vector2(20, 404), Vector2(150, 52), "刷新（10 文）", 19)
 	if _refresh_used:
 		UiKit.set_btn_text(rb, "已刷新")
 		rb.disabled = true
@@ -112,16 +134,61 @@ func _show_event_cards() -> void:
 		rb.disabled = true
 	rb.pressed.connect(_on_refresh_pressed)
 
-	var mid := UiKit.make_label(panel, Vector2(250, 404), Vector2(180, 52), 17, Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.62))
-	UiKit.set_text(mid, "点卡片先看说明，再按［收下］")
+	# v5：［不选了］——这一页的正门出口。以前"拿一张就自动收摊"，根本没有"够了"这个动作。
+	var dn := UiKit.make_button(panel, Vector2(180, 404), Vector2(150, 52), "不选了", 21)
+	dn.pressed.connect(_leave_event)
+
+	var mid := UiKit.make_label(panel, Vector2(336, 404), Vector2(200, 52), 17, Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.62))
+	UiKit.set_text(mid, _row_status_text())
 	mid.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	mid.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	mid.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 
-	var hl := UiKit.make_label(panel, Vector2(440, 404), Vector2(200, 52), 20, Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.70))
+	var hl := UiKit.make_label(panel, Vector2(540, 404), Vector2(124, 52), 18, Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.70))
 	UiKit.set_text(hl, "包裹 " + str(_state.bag.size()) + "/" + str(_state.bag_cap()))
 	hl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+
+# v5：底排那句状态——第一张白拿，之后写明"再拿要多少文、盘缠够不够"
+func _row_status_text() -> String:
+	if _pending_offer.is_empty():
+		return "签面拿光了"
+	var p := _pick_price()
+	if p <= 0:
+		return "第一张不要钱"
+	var tail := "" if _state.money >= p else "（盘缠不够）"
+	return "已拿 " + str(_taken) + " 张\n再拿 " + str(p) + " 文" + tail
+
+# v5：收摊赶路——［不选了］与"签面拿光"都走这里（正好一次 _finish_node）
+func _leave_event() -> void:
+	_pending_offer = []
+	_replace_pending = {}
+	_host._close_overlay()
+	_host._finish_node("event")
+
+# v5：把一张从签面上摘掉（同组同页只摘一张）
+func _drop_offer(card: Dictionary) -> void:
+	var sid := str(card.get("set_id", ""))
+	var part := int(card.get("part", 0))
+	var rest: Array = []
+	for c_v in _pending_offer:
+		var c2: Dictionary = c_v
+		if str(c2.get("set_id", "")) == sid and int(c2.get("part", 0)) == part:
+			continue
+		rest.append(c2)
+	_pending_offer = rest
+
+# v5：拿到一张之后——那张下架、**其余的照摆**，价按张数涨
+func _after_take(card: Dictionary, quiet := false) -> void:
+	_taken += 1
+	_drop_offer(card)
+	_host._refresh_all()
+	if not quiet:
+		UiKit.float_text(_host, "收下 " + str(Cards.card_name(str(card.get("set_id", "")), int(card.get("part", 0)))), UiKit.INK)
+	if _pending_offer.is_empty():
+		_leave_event()
+		return
+	_show_event_cards()
 
 
 # 优化批⑥（#8）：给出卡提示——"dup"＝同组同页已有一张；"complete"＝收下就凑齐
@@ -224,17 +291,25 @@ func _confirm_pick(card: Dictionary) -> void:
 func _on_card_picked(card: Dictionary) -> void:
 	var sid := str(card.get("set_id", ""))
 	var part := int(card.get("part", 0))
+	# v5：第二张起要钱——盘缠不够就不给拿（**这一页不收**，玩家可以改主意或点［不选了］）
+	var price := _pick_price()
+	if price > 0 and _state.money < price:
+		UiKit.float_text(_host, "再拿一张要 " + str(price) + " 文——盘缠不够", UiKit.SEAL)
+		_show_event_cards()
+		return
 	if _state.bag_full():
 		_enter_replace_mode(card)
 		return
+	if price > 0:
+		_state.money -= price
+		_host._money()
 	_state.add_card(sid, part)
-	_host._refresh_all()
-	if not _host._told_card:
+	# 第一次收下时那句"包裹在哪"的提示照旧；不然与浮动字撞在一起
+	var first: bool = not bool(_host._told_card)
+	if first:
 		_host._told_card = true
 		UiKit.float_text(_host, "收下了：点右上角包裹里的东西可查看／丢弃", UiKit.INK)
-	else:
-		UiKit.float_text(_host, "收下 " + str(Cards.card_name(sid, part)), UiKit.INK)
-	_host._finish_node("event")
+	_after_take(card, first)
 
 
 func _on_refresh_pressed() -> void:
@@ -273,12 +348,18 @@ func _enter_replace_mode(card: Dictionary) -> void:
 
 
 func _on_cashout_pressed() -> void:
-	var cp: int = int(_state.cashout_price(str(_replace_pending.get("set_id", ""))))
+	var card: Dictionary = _replace_pending
+	var cp: int = int(_state.cashout_price(str(card.get("set_id", ""))))
 	_state.money += cp
 	_replace_pending = {}
-	_host._refresh_all()
 	UiKit.float_text(_host, "折现 +" + str(cp) + " 文", UiKit.GOLD)
-	_host._finish_node("event")
+	# v5：折现＝这一张不要了——它下架，其余照摆（整页不再收摊）
+	_drop_offer(card)
+	_host._refresh_all()
+	if _pending_offer.is_empty():
+		_leave_event()
+		return
+	_show_event_cards()
 
 
 func _on_replace_back() -> void:
@@ -299,7 +380,7 @@ func _do_replace(i: int) -> bool:
 	var card: Dictionary = _replace_pending
 	_replace_pending = {}
 	_state.add_card(str(card.get("set_id", "")), int(card.get("part", 0)))
-	_host._refresh_all()
 	UiKit.float_text(_host, "+" + str(sp) + " 文", UiKit.GOLD)
-	_host._finish_node("event")
+	# v5：换进来的这一张也算"拿了"——照走"下架＋其余照摆"那条路
+	_after_take(card, true)
 	return true

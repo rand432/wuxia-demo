@@ -1,6 +1,17 @@
 extends RefCounted
 # ============================================================
-# data_buffs.gd —— 运签卡组 v3.5（㊿：专属每角色 +1、命数 +2）
+# data_buffs.gd —— 运签卡组 v3.6（用户："增益卡的属性增幅上调 50%"）
+# v3.6（用户："增益卡的属性增幅上调 50%"）：**普通/特殊/专属三类增益卡的数值一律 ×1.5**
+#   （v62 那一刀是"伤害增幅全部减半"，这次只回补一半——说明文字同步改成新数）。
+#   ①只动**数值**：hp_pct / atk_pct / cut_add / hand_heal / vengeance / spd_pct / follow_dmg /
+#     rage_pct / open_rage / ult_cut / rage_on_hit / thorn_up / ult_dmg / ult_window_regen /
+#     passive_up。**机制类的整数一个没动**——冰心卡（冷却 -1）、坚壁/长歌（大招 +1 手）、
+#     引吭（追剑 +1 段）、淬毒（命中上毒）不是"增幅"，乘 1.5 没有意义。
+#   ②**命数签（kind="fate"）一个字没动**——那是"负面换好处"的另一条线，不在"增益卡"里。
+#   ③两处封顶照旧吃原口径：回气卡 0.15×2 张 → 仍被 VENG_CAP(0.20) 封住（文案已写明）；
+#     轻身卡是"按张相加"（USEFUL_COPIES 里没登记它），两张＝+30%，文案跟着改。
+#   ④个别数取整：0.075×1.5＝0.1125 → **0.11**（铁骨/惊鸿），其余保留 .5 级小数。
+#   调法：只改下面每条 fx 里的数；PRICE 与封顶值都没动。
 # v3.5：①专属卡每角色各加一张（踏浪/磐石桩/惊鸿）——用的都是引擎里已经在读的键，
 #     所以战斗引擎一行没动；②命数加两张（续命/锐意），走的是"负面换好处"那条线，
 #     代价统一落在 hp_pct（气血上限）上——它只在本场战斗里折算，不会永久削人
@@ -71,47 +82,47 @@ const CARDS := {
 	# ---- 普通卡（养身） ----
 	# v62（用户："先伤害增幅全部减半"）：下面是**百分比**（0.15＝15%），一律减半；说明文字同步。
 	#   机制类（怒气/冷却/手数/回血/减伤）**没动**——那是玩法不是纯数值。
-	"tiegu": {"name": "铁骨卡", "kind": "normal", "price": 40, "desc": "气血上限 +8%（本趟）", "fx": {"hp_pct": 0.075}},
-	"ruifeng": {"name": "锐锋卡", "kind": "normal", "price": 40, "desc": "攻击 +6%（本趟）", "fx": {"atk_pct": 0.06}},
-	"panshi": {"name": "磐石卡", "kind": "normal", "price": 40, "desc": "受到的伤害 -4%（本趟）", "fx": {"cut_add": 0.04}},
-	"shensheng": {"name": "生生卡", "kind": "normal", "price": 40, "desc": "每出手 3 次回复 5% 气血（本趟）", "fx": {"hand_heal": 0.05}},
-	"huiqi": {"name": "回气卡", "kind": "normal", "price": 40, "desc": "每次受伤后，接下来一次出手伤害 +10%（本趟·连挨几下也只算一次；请两张也只算 +10%）", "fx": {"vengeance": 0.10}},
-	"qingshen": {"name": "轻身卡", "kind": "normal", "price": 40, "desc": "每次受击后速度 +10%——出手更快（本趟·挨打只算一次、不按挨打次数累积；请两张＝各算一份，最多 +20%）", "fx": {"spd_pct": 0.10}},
+	"tiegu": {"name": "铁骨卡", "kind": "normal", "price": 40, "desc": "气血上限 +11%（本趟）", "fx": {"hp_pct": 0.11}},
+	"ruifeng": {"name": "锐锋卡", "kind": "normal", "price": 40, "desc": "攻击 +9%（本趟）", "fx": {"atk_pct": 0.09}},
+	"panshi": {"name": "磐石卡", "kind": "normal", "price": 40, "desc": "受到的伤害 -6%（本趟）", "fx": {"cut_add": 0.06}},
+	"shensheng": {"name": "生生卡", "kind": "normal", "price": 40, "desc": "每出手 3 次回复 7.5% 气血（本趟）", "fx": {"hand_heal": 0.075}},
+	"huiqi": {"name": "回气卡", "kind": "normal", "price": 40, "desc": "每次受伤后，接下来一次出手伤害 +15%（本趟·连挨几下也只算一次；请两张封顶 +20%）", "fx": {"vengeance": 0.15}},
+	"qingshen": {"name": "轻身卡", "kind": "normal", "price": 40, "desc": "每次受击后速度 +15%——出手更快（本趟·挨打只算一次、不按挨打次数累积；请两张＝各算一份，共 +30%）", "fx": {"spd_pct": 0.15}},
 	# ---- 特殊卡（改出手） ----
 	# v62k（用户："现在可以加点不同命数 和不同增益"）：**三张新增益**——
 	#   追风（追击）/ 护心（气血上限，与铁骨卡相加）/ 蓄气（开场怒气，与乘胜卡相加）。
 	#   ⚠ 键都挑了"引擎真会读"的那几个（follow_dmg / hp_pct / open_rage），不是白写的。
-	"zhuifeng": {"name": "追风卡", "kind": "normal", "price": 40, "desc": "追击伤害 +20%（本趟）", "fx": {"follow_dmg": 0.20}},
-	"huxin": {"name": "护心卡", "kind": "normal", "price": 40, "desc": "气血上限 +6%（与铁骨卡相加·本趟）", "fx": {"hp_pct": 0.06}},
-	"xuqi": {"name": "蓄气卡", "kind": "normal", "price": 40, "desc": "开场怒气 +20（与乘胜卡相加·本趟）", "fx": {"open_rage": 20}},
-	"nutao": {"name": "怒涛卡", "kind": "special", "price": 70, "desc": "怒气获取 +50%（本趟）", "fx": {"rage_pct": 0.5}},
+	"zhuifeng": {"name": "追风卡", "kind": "normal", "price": 40, "desc": "追击伤害 +30%（本趟）", "fx": {"follow_dmg": 0.30}},
+	"huxin": {"name": "护心卡", "kind": "normal", "price": 40, "desc": "气血上限 +9%（与铁骨卡相加·本趟）", "fx": {"hp_pct": 0.09}},
+	"xuqi": {"name": "蓄气卡", "kind": "normal", "price": 40, "desc": "开场怒气 +30（与乘胜卡相加·本趟）", "fx": {"open_rage": 30}},
+	"nutao": {"name": "怒涛卡", "kind": "special", "price": 70, "desc": "怒气获取 +75%（本趟）", "fx": {"rage_pct": 0.75}},
 	"cuidu": {"name": "淬毒卡", "kind": "special", "price": 70, "desc": "出手命中即上毒（叠 3 层，每层 3% 上限/手）（本趟）", "fx": {"poison_hit": 1.0}},
 	"bingxin": {"name": "冰心卡", "kind": "special", "price": 70, "desc": "功法冷却 -1（本趟·最多减到冷却 1；减冷却封顶 -2，请第三张不再有效）", "fx": {"art_cd_minus": 1.0}},
 	# v62k（用户："现在可以加点不同命数 和不同增益"）：**三张新特殊**——
 	#   卸势（自己放大招那几手减伤）/ 守真（受击回怒）/ 尖刺（反刺）。
 	#   键同样是引擎已在读的：ult_cut / rage_on_hit / thorn_up。
-	"xieshi": {"name": "卸势卡", "kind": "special", "price": 70, "desc": "自己放大招的那几手，受到的伤害 -15%（本趟）", "fx": {"ult_cut": 0.15}},
-	"shouzhen": {"name": "守真卡", "kind": "special", "price": 70, "desc": "每次受击回怒 +8%（怒气上限 100，即 +8 点·本趟）", "fx": {"rage_on_hit": 0.08}},
-	"jianci": {"name": "尖刺卡", "kind": "special", "price": 70, "desc": "反刺伤害 +20%（与铁蒺卡相加·本趟）", "fx": {"thorn_up": 0.20}},
+	"xieshi": {"name": "卸势卡", "kind": "special", "price": 70, "desc": "自己放大招的那几手，受到的伤害 -22.5%（本趟）", "fx": {"ult_cut": 0.225}},
+	"shouzhen": {"name": "守真卡", "kind": "special", "price": 70, "desc": "每次受击回怒 +12%（怒气上限 100，即 +12 点·本趟）", "fx": {"rage_on_hit": 0.12}},
+	"jianci": {"name": "尖刺卡", "kind": "special", "price": 70, "desc": "反刺伤害 +30%（与铁蒺卡相加·本趟）", "fx": {"thorn_up": 0.30}},
 	# ---- 专属卡 · 主角 ----
-	"pojun": {"name": "破军卡", "kind": "exclusive", "role": "player", "price": 100, "desc": "大招伤害 +15%（本趟）", "fx": {"ult_dmg": 0.15}},
-	"chengsheng": {"name": "乘胜卡", "kind": "exclusive", "role": "player", "price": 100, "desc": "开场怒气 +30（击杀返还待多敌战再归位）（本趟）", "fx": {"open_rage": 30}},
-	"yanghui": {"name": "养晦卡", "kind": "exclusive", "role": "player", "price": 100, "desc": "大招收势后 3 手，每手回复 3% 气血（本趟）", "fx": {"ult_window_regen": 0.03}},
+	"pojun": {"name": "破军卡", "kind": "exclusive", "role": "player", "price": 100, "desc": "大招伤害 +22.5%（本趟）", "fx": {"ult_dmg": 0.225}},
+	"chengsheng": {"name": "乘胜卡", "kind": "exclusive", "role": "player", "price": 100, "desc": "开场怒气 +45（击杀返还待多敌战再归位）（本趟）", "fx": {"open_rage": 45}},
+	"yanghui": {"name": "养晦卡", "kind": "exclusive", "role": "player", "price": 100, "desc": "大招收势后 3 手，每手回复 4.5% 气血（本趟）", "fx": {"ult_window_regen": 0.045}},
 	# ㊿：主角第四张——前面的都在"大招"上做文章，这张管续航
-	"talang": {"name": "踏浪卡", "kind": "exclusive", "role": "player", "price": 100, "desc": "每出手 3 次回复 6% 气血（与生生卡相加·本趟）", "fx": {"hand_heal": 0.06}},
+	"talang": {"name": "踏浪卡", "kind": "exclusive", "role": "player", "price": 100, "desc": "每出手 3 次回复 9% 气血（与生生卡相加·本趟）", "fx": {"hand_heal": 0.09}},
 	# ---- 专属卡 · 陈石 ----
 	"jianbi": {"name": "坚壁卡", "kind": "exclusive", "role": "chen_shi", "price": 100, "desc": "大招枪势持续 +1 手（本趟）", "fx": {"ult_dur": 1}},
-	"pangen": {"name": "盘根卡", "kind": "exclusive", "role": "chen_shi", "price": 100, "desc": "被动减伤效果 +50%——6%→9%（本趟）", "fx": {"passive_up": 0.5}},
-	"tieji": {"name": "铁蒺卡", "kind": "exclusive", "role": "chen_shi", "price": 100, "desc": "反刺伤害 +25%（本趟）", "fx": {"thorn_up": 0.25}},
+	"pangen": {"name": "盘根卡", "kind": "exclusive", "role": "chen_shi", "price": 100, "desc": "被动减伤效果 +75%——6%→10.5%（本趟）", "fx": {"passive_up": 0.75}},
+	"tieji": {"name": "铁蒺卡", "kind": "exclusive", "role": "chen_shi", "price": 100, "desc": "反刺伤害 +37.5%（本趟）", "fx": {"thorn_up": 0.375}},
 	# ㊿：陈石第四张——站桩的底子。挑 hp_pct 而不是 cut_add：减伤那条是"取大"，
 	#   会跟盘石卡/他自己的被动撞车；气血上限是"相加"，跟铁骨卡是实打实叠。
-	"panshizhuang": {"name": "磐石桩卡", "kind": "exclusive", "role": "chen_shi", "price": 100, "desc": "气血上限 +6%（与铁骨卡相加·本趟）", "fx": {"hp_pct": 0.06}},
+	"panshizhuang": {"name": "磐石桩卡", "kind": "exclusive", "role": "chen_shi", "price": 100, "desc": "气血上限 +9%（与铁骨卡相加·本趟）", "fx": {"hp_pct": 0.09}},
 	# ---- 专属卡 · 苏青鸾 ----
 	"changge": {"name": "长歌卡", "kind": "exclusive", "role": "qingluan", "price": 100, "desc": "大招剑歌持续 +1 手（本趟）", "fx": {"ult_dur": 1}},
 	"yinhang": {"name": "引吭卡", "kind": "exclusive", "role": "qingluan", "price": 100, "desc": "大招追剑 +1 段——暴击时多追一剑（本趟）", "fx": {"follow_hits": 1}},
-	"cuifeng": {"name": "淬锋卡", "kind": "exclusive", "role": "qingluan", "price": 100, "desc": "被动效果 +50%——暴击 +15%→+22%、上限 -15%→-22%（本趟）", "fx": {"passive_up": 0.5}},
+	"cuifeng": {"name": "淬锋卡", "kind": "exclusive", "role": "qingluan", "price": 100, "desc": "被动效果 +75%——暴击 +15%→+26.25%、上限惩罚 -15%→-3.75%（本趟）", "fx": {"passive_up": 0.75}},
 	# ㊿：青鸾第四张——她的三张都在被动/大招上，这张直接加刀口（与锐锋卡相加）
-	"jinghong": {"name": "惊鸿卡", "kind": "exclusive", "role": "qingluan", "price": 100, "desc": "攻击 +8%（与锐锋卡相加·本趟）", "fx": {"atk_pct": 0.075}},
+	"jinghong": {"name": "惊鸿卡", "kind": "exclusive", "role": "qingluan", "price": 100, "desc": "攻击 +11%（与锐锋卡相加·本趟）", "fx": {"atk_pct": 0.11}},
 	# ---- 命数卡（㉙b/㉛：出征屏选一 或 游历中接；不进货郎、不进抽卡；price 0 只是占位） ----
 	"fate_greed": {"name": "横财签", "kind": "fate", "price": 0, "desc": "命数·横财——每场文钱收入 **+100%**；攻击 -25%（本趟内一直挂着）", "fx": {"atk_pct": -0.25}},
 	"fate_scavenge": {"name": "翻财签", "kind": "fate", "price": 0, "desc": "命数·翻财——**每走一节必定可搜刮**；**每显示一种物品**，当前气血 **-1.5%**（按上限算，**不动上限**·最低剩 1）", "fx": {}},
