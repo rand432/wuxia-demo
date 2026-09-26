@@ -41,6 +41,7 @@ const CONF_CANDIDATES = [
 ].filter(Boolean);
 const CONF = CONF_CANDIDATES.find((p) => { try { return fs.existsSync(p); } catch { return false; } }) || CONF_CANDIDATES[1];
 const OUT_DIR = path.resolve('assets/gen/keyframes');
+const SKETCH_DIR = path.resolve('assets/gen/sketches');   // 构图草图（本地免费生成）；存在则自动走垫图
 
 const args = process.argv.slice(2);
 const has = (f) => args.includes('--' + f);
@@ -48,15 +49,18 @@ const opt = (f, d) => { const i = args.indexOf('--' + f); return i >= 0 && args[
 
 // ---------- 统一风格前缀（全片锁死，改一处全片变）----------
 const PREFIX =
-  '中国古风水墨画,宣纸质感,笔触洒脱,浓淡墨五层,大面留白,冷青灰为基调,极简构图,' +
-  '人物为墨块身躯配柔灰面部(半剪影),以黑白灰为主,慢镜头,电影感,16:9,无文字无数字无字幕无logo,';
+  '中国古风水墨画,宣纸质感,笔触洒脱,浓淡墨五层,留白占七成,冷青灰为基调,极简构图,' +
+  '人物为墨块身躯配柔灰面部,面部仅淡墨轮廓无清晰五官不辨容貌,黑白灰为主,慢镜头,电影感,16:9,无文字无数字无字幕无logo,';
 
 // 全片共用负向词。注意：不要写「彩色」——会把各镜唯一的那点暖色也杀掉。
 const NEGATIVE =
   'ng_deepnegative_v1_75t,(badhandv4:1.2),EasyNegative,(worst quality:2),' +
-  'standing,正面,现代服饰,复杂背景,bedroom,照片质感,3D渲染,高饱和度,五彩斑斓,' +
+  'standing,正面,现代服饰,复杂背景,照片质感,3D渲染,高饱和度,五彩斑斓,' +
   '日式,和服,武士,太刀,金色刀镡,文字,数字,水印,签名,logo,' +
-  '多余的手,三只手,畸形手指,六指,手指粘连,刀身弯曲,nsfw';
+  '多余的手,三只手,畸形手指,六指,手指粘连,刀身弯曲,' +
+  '两把刀,双刀,三把刀,交叉的刀,刀尖朝上,举刀,挥舞,刀尖朝外,' +
+  '清晰五官,写实人脸,美型脸,浓妆,' +
+  '地面血迹,血泊,大面积血迹,nsfw';
 
 const SHOTS = [
   ['01_墨入水',
@@ -65,11 +69,17 @@ const SHOTS = [
    '水墨荒原大远景,一支流民队伍如蝼蚁般在荒原上缓慢挪动,全部为墨点剪影,远处王城轮廓压在地平线上,天边一轮残阳是血红色(全图唯一暖色),冷青灰为底,风卷尘土,地平线压得很低,上方大面积空白天'],
   ['03_宫殿纸醉金迷',
    '水墨宫殿内景,剪影宴饮群像,贵人举杯舞女扭动,姿态夸张如傀儡,烟在人群间缭绕,长案上酒壶倾倒杯盏狼藉,一只举杯的手特写,杯中酒映一点暗红,整幅画静得诡异,墨色剪影,大面留白'],
-  ['04_刀在膝上',
-   '一位刀客跪坐于地,侧身半剪影,头戴斗笠压低遮去半张脸,双膝并拢跪地,脚跟垫于臀下,上身挺直如松,头微低,' +
-   '长刀横放于双膝之上,刀鞘朝左刀柄朝右,右手五指虚握刀柄,左手食中二指贴住刀身缓缓擦拭,往复摩挲,' +
-   '心绪不稳,他自己的手指磨破了,刀身上擦出一道淡淡血痕(全图唯一暖色),指节泛白,刀身映一点冷光,' +
-   '空无的室内仅地面一线光影,人物置于画面右三分之一,左侧与上方大面积留白,平视中景'],
+  ['04_刀在膝上_A按刀',
+   '一位刀客跪坐于地,侧身半剪影,头戴斗笠压低遮去半张脸,双膝并拢跪地,上身挺直如松,头微低,' +
+   '画面中只有一把刀,长刀横放于双膝之上,鞘朝左柄朝右,右手五指虚握刀柄,左手掌心轻按在刀身上,指尖微曲,' +
+   '指节泛白,刀身映一点冷光,刀锋上一线暗红,空无的室内仅地面一道光影,' +
+   '人物偏画面右三分之一,左侧三分之二全空'],
+  ['04_刀在膝上_B擦刀',
+   '一位刀客跪坐于地,侧身半剪影,头戴斗笠压低遮去半张脸,双膝并拢跪地,上身挺直如松,头微低,' +
+   '画面中只有一把刀,长刀横放于双膝之上,鞘朝左柄朝右,右手五指虚握刀柄,' +
+   '左手的食中二指并拢贴住刀身,由刀镡向刀尖缓缓推抹,反复摩挲,心绪不宁,' +
+   '指腹已磨得发红,刀锋上一线暗红,指节泛白,刀身映一点冷光,空无的室内仅地面一道光影,' +
+   '人物偏画面右三分之一,左侧三分之二全空'],
   ['05_红烛婚礼',
    '一对红烛燃着,一只涂着蔻丹的手把一条红绸系到刀鞘上打结,动作缓慢仔细,像在系一只铃铛,只拍手与刀鞘,' +
    '红绸结成的瞬间烛火晃了一下,满目墨色中只有红——烛火蔻丹红绸是唯一暖色,没有喜乐,近景特写,大面留白'],
@@ -137,6 +147,28 @@ async function api(uri, accessKey, secretKey, body, tries = 6) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// 上传本地图片到 OSS（垫图 / 蒙版要用 URL）
+async function uploadImage(filePath, cfg) {
+  const base = path.basename(filePath);
+  const ext = base.split('.').pop();
+  const sig = await api('/api/generate/upload/signature', cfg.accessKey, cfg.secretKey,
+    { name: base.replace(/\.[^.]+$/, ''), extension: ext });
+  // ⚠ 接口返回的是 xOss…（大写 O），SDK 文档写的 xoss… 是错的，照文档写会发 undefined
+  const mime = ext.toLowerCase() === 'jpg' || ext.toLowerCase() === 'jpeg' ? 'image/jpeg' : 'image/png';
+  const form = new FormData();
+  form.append('x-oss-signature', sig.xOssSignature);
+  form.append('x-oss-date', sig.xOssDate);
+  form.append('x-oss-signature-version', sig.xOssSignatureVersion);
+  form.append('policy', sig.policy);
+  form.append('key', sig.key);
+  form.append('x-oss-credential', sig.xOssCredential);
+  form.append('x-oss-expires', String(sig.xOssExpires));
+  form.append('file', new Blob([fs.readFileSync(filePath)], { type: mime }), base);
+  const r = await fetch(sig.postUrl, { method: 'POST', body: form });
+  if (!r.ok) throw new Error('上传失败 [' + r.status + '] ' + (await r.text()).slice(0, 250));
+  return new URL(sig.key, sig.postUrl).toString();
+}
+
 async function main() {
   if (!fs.existsSync(CONF)) {
     console.log('✗ 找不到配置文件：' + CONF);
@@ -187,8 +219,23 @@ async function main() {
 
     if (dry) { console.log('— ' + name + '\n  prompt: ' + prompt + '\n'); continue; }
 
+    // 有同名构图草图 → 走垫图，构图由草图锁死
+    const sketchFile = path.join(SKETCH_DIR, name + '.png');
+    let endpoint = '/api/generate/webui/text2img';
+    if (!repro && fs.existsSync(sketchFile)) {
+      const url = await uploadImage(sketchFile, cfg);
+      Object.assign(payload.generateParams, {
+        sourceImage: url, resizeMode: 0,
+        resizedWidth: cfg.width, resizedHeight: cfg.height,
+        mode: 0, denoisingStrength: parseFloat(opt('denoise', '0.72')),
+      });
+      payload.templateUuid = cfg.templateUuidImg2img || cfg.templateUuid;   // img2img 必须换模板
+      endpoint = '/api/generate/webui/img2img';
+      process.stdout.write('  [垫图 ' + path.basename(sketchFile) + ' @' + payload.generateParams.denoisingStrength + '] ');
+    }
+
     try {
-      const sub = await api('/api/generate/webui/text2img', cfg.accessKey, cfg.secretKey, payload);
+      const sub = await api(endpoint, cfg.accessKey, cfg.secretKey, payload);
       const uuid = sub.generateUuid;
       process.stdout.write('· ' + name + ' 提交 ' + uuid + ' 等待中');
 
