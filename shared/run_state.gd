@@ -496,8 +496,10 @@ func bag_cap() -> int:
 		base = GameState.backpack_cap() + run_expand   # 优化批㉓：＋本趟临时扩仓
 	if buffs.has("fate_fullbag"):
 		base += 6   # v63（用户："包裹签改为6格"）：+8 → **+6**（代价仍是速度 -50%）
-	# v24：阅历线·财富「行囊」段（+3 格/段）——与宠物驮运同一处相加
+	# v24：阅历线·财富——「行囊」（包裹）与「仓廪」（临时仓库）两条都并进这里：
+	#   引擎里"容量＝包裹＋仓格"本来就是**同一个池**（出征屏那行字也是这么写的）
 	base += int(GameState.insight_fx().get("bag_slots", 0.0))
+	base += int(GameState.insight_fx().get("stash_slots", 0.0))
 	return base + int(GameState.pet_fx().get("bag_slots", 0))
 
 func bag_full() -> bool:
@@ -812,17 +814,21 @@ func _cashout_base() -> int:
 
 # R3 货价批：基价 × 品级系数（data_cards.PRICE_MUL）。sid 可省——省 = 凡品系数
 # （旧的空参调用者不受影响）；卖价天赋 sell_pct 照旧按百分比乘在外层。
+# v24：卖价那两口都再乘一道"阅历线·财富"的 sell_pct（用户："卖价提升"）
+func _sell_mul() -> float:
+	return 1.0 + float(GameState.insight_fx().get("sell_pct", 0.0))
+
 func sell_price(sid := "") -> int:
 	var mul := 1.0
 	if sid != "":
 		mul = Cards.price_mul(str(sid))
-	return int(round(float(_sell_base()) * mul * (1.0 + float(talent_fx_sum().get("sell_pct", 0)) / 100.0)))
+	return int(round(float(_sell_base()) * mul * (1.0 + float(talent_fx_sum().get("sell_pct", 0)) / 100.0) * _sell_mul()))
 
 func item_sell_price(sid := "") -> int:
 	var mul := 1.0
 	if sid != "":
 		mul = Cards.price_mul(str(sid))
-	return int(round(float(_sell_item_base()) * mul * (1.0 + float(talent_fx_sum().get("sell_pct", 0)) / 100.0)))
+	return int(round(float(_sell_item_base()) * mul * (1.0 + float(talent_fx_sum().get("sell_pct", 0)) / 100.0) * _sell_mul()))
 
 func price_of(e: Dictionary) -> int:
 	var sid := str(e.get("set", ""))
@@ -845,7 +851,7 @@ func fix_price(sid: String) -> int:
 
 # 折现：满包时的下策，必须低于卖店（理由见上面那把"货价梯子"）
 func cashout_price(sid: String) -> int:
-	return int(round(float(_cashout_base()) * Cards.price_mul(sid)))
+	return int(round(float(_cashout_base()) * Cards.price_mul(sid) * _sell_mul()))
 
 # ---- 卡组统计 ----
 

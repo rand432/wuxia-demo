@@ -4091,14 +4091,18 @@ static func insight_apply_to(st: Dictionary) -> void:
 	var fx := insight_fx()
 	if fx.is_empty():
 		return
-	st["atk"] = float(st.get("atk", 0.0)) * (1.0 + float(fx.get("atk_pct", 0.0)))
-	st["hp"] = float(st.get("hp", 0.0)) * (1.0 + float(fx.get("hp_pct", 0.0)))
-	st["dmg"] = float(st.get("dmg", 0.0)) + float(fx.get("dmg_add", 0.0))
+	# 顺序：**先加平面、再乘百分比**（用户："小节点给数值，大节点数值+百分比"）
+	st["atk"] = (float(st.get("atk", 0.0)) + float(fx.get("atk_flat", 0.0))) * (1.0 + float(fx.get("atk_pct", 0.0)))
+	st["hp"] = (float(st.get("hp", 0.0)) + float(fx.get("hp_flat", 0.0))) * (1.0 + float(fx.get("hp_pct", 0.0)))
+	# v2i：防御也吃一道百分比（用户："防御加成"）——先加平面、再乘百分比，与攻击/气血同序
+	st["def"] = (float(st.get("def", 0.0)) + float(fx.get("def_flat", 0.0)) + float(fx.get("def_add", 0.0))) 		* (1.0 + float(fx.get("def_pct", 0.0)))
+	st["dodge"] = float(st.get("dodge", 0.0)) + float(fx.get("dodge_flat", 0.0)) + float(fx.get("dodge_add", 0.0))
+	st["spd"] = float(st.get("spd", 0.0)) + float(fx.get("spd_add", 0.0))
 	st["crit"] = float(st.get("crit", 0.0)) + float(fx.get("crit_add", 0.0))
 	st["crit_dmg"] = float(st.get("crit_dmg", 0.0)) + float(fx.get("crit_dmg_add", 0.0))
-	st["def"] = float(st.get("def", 0.0)) + float(fx.get("def_add", 0.0))
-	st["dodge"] = float(st.get("dodge", 0.0)) + float(fx.get("dodge_add", 0.0))
-	st["spd"] = float(st.get("spd", 0.0)) + float(fx.get("spd_add", 0.0))
+	# 伤害增幅（dmg 在引擎里就是"百分点"：面板 ×(1 + dmg/100)）——
+	#   表里写 0.04 表示 +4%
+	st["dmg"] = float(st.get("dmg", 0.0)) + float(fx.get("dmg_add", 0.0)) + float(fx.get("dmg_pct", 0.0)) * 100.0
 
 static func idle_debug_add(sec: int) -> void:
 	idle_pool_sec = mini(idle_pool_sec + sec, IDLE_CAP_SEC)

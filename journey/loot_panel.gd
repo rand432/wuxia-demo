@@ -445,6 +445,14 @@ func _take(ti: int) -> void:
 			UiKit.set_text(tile.get_child(1), "已拿")
 	_refresh_bag_strip()
 	UiKit.float_text(_stage, "已入临时仓库：" + str(e.get("name", "?")), UiKit.INK)
+	# v24（阅历线·财富）：**搜刮时额外掉文钱**——取走一件就给几文（用户："搜刮给文钱"）
+	var lm := int(GameState.insight_fx().get("loot_money", 0.0))
+	if lm > 0:
+		_state.money += lm
+		UiKit.float_text(_stage, "顺手捡到 " + str(lm) + " 文", UiKit.GOLD, 168.0)
+		var host = _stage
+		if host != null and host.has_method("_money"):
+			host._money()
 
 # ============================================================
 # v62s / v62t（用户："每显示一种物品，当前气血 -3%" → "-1.5%"）：翻财签的代价——
