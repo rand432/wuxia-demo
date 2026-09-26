@@ -134,28 +134,25 @@ Make '02_荒原流民' {
 }
 
 
-# ---------- 03 纸醉金迷（以物代事：几只从画外伸进来的手**在中间碰杯**，酒溅出来，垫桌脚的是残破的书）----------
+# ---------- 03 纸醉金迷（回到出过好酒杯的构图；低 denoise 让它被字面执行）----------
 Make '03_宫殿纸醉金迷' {
   param($g)
   $g.Clear([System.Drawing.Color]::FromArgb(255,248,246,242))
-  # 案面
   $g.FillRectangle($INK2, 0, 600, $W, 328)
   $g.FillRectangle($INK, 0, 592, $W, 24)
-  $CX = 832; $CY = 470                       # 碰杯的中心点
+  $CX = 832; $CY = 470
   $wine = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255,150,22,30))
-  # 四只手从画面四角伸向中心，杯子在中心相撞
   $arms = @(
-    @{x= 120; y=690; tx=$CX-150; ty=$CY+86},   # 左下
-    @{x=1540; y=690; tx=$CX+150; ty=$CY+86},   # 右下
-    @{x= 150; y=170; tx=$CX-176; ty=$CY-72},   # 左上
-    @{x=1520; y=170; tx=$CX+176; ty=$CY-72}    # 右上
+    @{x= 120; y=690; tx=$CX-150; ty=$CY+ 86},
+    @{x=1540; y=690; tx=$CX+150; ty=$CY+ 86},
+    @{x= 150; y=170; tx=$CX-176; ty=$CY- 72},
+    @{x=1520; y=170; tx=$CX+176; ty=$CY- 72}
   )
   foreach ($a in $arms) {
     $pw = [int](48 + [math]::Abs($a.y-$CY)/60)
     $penArm = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(255,26,26,30), $pw)
     $g.DrawLine($penArm, $a.x, $a.y, $a.tx, $a.ty)
     $g.FillEllipse($INK, $a.tx-42, $a.ty-18, 84, 62)          # 手
-    # 杯：从手的位置指向中心，杯口朝中心
     $dx = $CX - $a.tx; $dy = $CY - $a.ty
     $len = [math]::Sqrt($dx*$dx + $dy*$dy); if ($len -lt 1) { $len = 1 }
     $ux = $dx/$len; $uy = $dy/$len
@@ -167,28 +164,25 @@ Make '03_宫殿纸醉金迷' {
     $cup.AddLine([int]($a.tx + $ux*92 + $uy*26), [int]($a.ty + $uy*92 - $ux*26))
     $cup.CloseFigure()
     $g.FillPath($INK, $cup)
-    $g.FillEllipse($wine, [int]($bx + $ux*28 - $uy*22), [int]($by + $uy*28 + $ux*22), 44, 18)  # 杯中红酒
+    $g.FillEllipse($wine, [int]($bx + $ux*28 - $uy*22), [int]($by + $uy*28 + $ux*22), 44, 18)
   }
-  # 碰杯处溅开的酒（全图唯一暖色，也是画面的中心）
   $g.FillEllipse($wine, $CX-96, $CY-62, 192, 132)
-  for ($i=0; $i -lt 16; $i++) {
-    $ang = $i * 22.5 * [math]::PI / 180
-    $r = 60 + ($i % 4) * 34
+  for ($i2=0; $i2 -lt 16; $i2++) {
+    $ang = $i2 * 22.5 * [math]::PI / 180
+    $r = 60 + ($i2 % 4) * 34
     $g.FillEllipse($wine, [int]($CX + [math]::Cos($ang)*$r - 16), [int]($CY + [math]::Sin($ang)*$r*0.7 - 12), 32, 24)
   }
-  # 酒顺着案沿往下淌
-  for ($i=0; $i -lt 5; $i++) {
-    $x = 620 + $i * 96
-    $g.FillRectangle($wine, $x, 616, 30, 90 + $i*26)
-    $g.FillEllipse($wine, $x + 3, 690 + $i*28, 24, 34)
+  for ($i2=0; $i2 -lt 5; $i2++) {
+    $x = 620 + $i2 * 96
+    $g.FillRectangle($wine, $x, 616, 30, 90 + $i2*26)
+    $g.FillEllipse($wine, $x + 3, 690 + $i2*28, 24, 34)
   }
-  # 案腿 + 垫在桌脚的三本残破的书
   $g.FillRectangle($INK, 130, 700, 56, 228)
   $g.FillRectangle($INK, 1420, 700, 56, 228)
-  for ($i=0; $i -lt 3; $i++) {
+  for ($i2=0; $i2 -lt 3; $i2++) {
     $g.FillRectangle((New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255,236,232,224))),
-      104 - $i*7, 928 - 17 - $i*19, 108 + $i*14, 17)
-    $g.FillRectangle($INK, 104 - $i*7, 928 - 17 - $i*19, 108 + $i*14, 4)
+      104 - $i2*7, 928 - 17 - $i2*19, 108 + $i2*14, 17)
+    $g.FillRectangle($INK, 104 - $i2*7, 928 - 17 - $i2*19, 108 + $i2*14, 4)
   }
 }
 
@@ -558,7 +552,7 @@ Make '09_没死' {
   # 一只手从下方伸上来，五指扣进石缝
   $hand = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255,38,39,45))
   $g.FillEllipse($hand, 754, 552, 168, 132)                      # 掌
-  for ($f=0; $f -lt 4; $f++) {                                   # 四指分开，扣住石缝
+  for ($f=0; $f -lt 4; $f++) {                                   # 四指扣住石缝（别画太大，会被读成人物）
     $fx = 782 + $f * 34
     $g.FillRectangle($hand, $fx, 486, 26, 92)
     $g.FillEllipse($hand, $fx - 3, 468, 32, 36)
