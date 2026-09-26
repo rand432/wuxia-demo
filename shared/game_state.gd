@@ -671,6 +671,29 @@ static var role_stars := {}
 static func role_star_of(rid: String) -> int:
 	return int(role_stars.get(rid, 0))
 
+# ============================================================
+# v65f（用户："大招的怒气的显示是不是该更新了 怎么还是34？"）：
+#   弟子面板的大招页把"每行动一次 +34"**写死**了——可战斗里实际涨的是
+#     **34 × 0.7（全体怒气 -30%）× 本人的怒气加成**
+#   （出口：journey/duel_battle 3868 与 menu/battle_lite 1632，两条式子同源）。
+#   少侠带「引气归元」（rage_up +30%）→ 34×0.7×1.3 ≈ **31**；陈石/苏 的被动不是
+#   rage 类 → **24**。这里给"某个角色每行动一次涨多少"的**唯一出口**，
+#   面板只许读它——以后再调怒气的旋钮，显示自动跟着变。
+#   ⚠ 这一份是**村里口径**（不含这一趟的卡组/加持：聚气令 bless_rage、挫锐…）。
+# ============================================================
+static func rage_per_action(rid: String) -> int:
+	# 两个旋钮：游历那套读 journey/duel_rage_gain · 塔战那套读 combat/rage_gain（默认都是 34）。
+	#   显示取两者较大的一档，免得调了其中一个、面板还写旧数。
+	var base_gain := maxi(Tuning.intv("journey", "duel_rage_gain", 34), Tuning.intv("combat", "rage_gain", 34))
+	var base := float(base_gain) * Tuning.num("combat", "rage_mul", 0.7)
+	var ps: Dictionary = _role_mut(rid).get("passive", {})
+	var pv := 0.0
+	if str(ps.get("kind", "")) == "rage_up":
+		pv = float(ps.get("v", 0.0))
+	# 被动强化（角色星 ＋ 专武的 passive_up）——与两套战斗的 rage_mul 同一口径
+	var pup := 1.0 + float(combat_mech(rid).get("passive_up", 0.0))
+	return maxi(1, int(round(base * (1.0 + pv * pup))))
+
 static func role_star_max() -> int:
 	return Stars.MAX
 

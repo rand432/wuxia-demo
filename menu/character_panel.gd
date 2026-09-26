@@ -1435,7 +1435,12 @@ func _tip_for(kind: String, idx: int) -> Dictionary:
 		var ult: Dictionary = role.get("ult", {})
 		return {
 			"title": "『" + str(ult.get("name", "—")) + "』· 大招",
-			"body": str(ult.get("desc", "—")) + "\n怒气：自己每行动一次 +34，满 100 下一次出手自动放大招（数值暂定）\n后两格不可卸——这是他的看家本事",
+			# v65f（用户："大招的怒气的显示是不是该更新了 怎么还是34？"）：
+			#   这里原来写死 +34，可战斗里实际是 34 × 0.7 × 本人的怒气加成 →
+			#   少侠（引气归元 +30%）约 31、陈石/苏 24。改成读 GameState.rage_per_action()。
+			"body": str(ult.get("desc", "—")) + "\n怒气：自己每行动一次 +"
+				+ str(GameState.rage_per_action(str(ROLE_IDS[_sel])))
+				+ "，满 100 下一次出手自动放大招（这一趟带上聚气令／加持还会更多）\n后两格不可卸——这是他的看家本事",
 		}
 	if kind == "tech":
 		var pas: Dictionary = role.get("passive", {})

@@ -31,7 +31,15 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 
 const BASE = 'https://openapi.liblibai.cloud';
-const CONF = path.join(os.homedir(), '.liblib', 'liblib.json');
+// 配置查找顺序：环境变量 > 工作区根目录 .liblib.json（已 gitignore）> 用户目录
+const HERE = path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1'));
+const CONF_CANDIDATES = [
+  process.env.LIBLIB_CONF,
+  path.join(HERE, '..', '.liblib.json'),
+  path.resolve('.liblib.json'),
+  path.join(os.homedir(), '.liblib', 'liblib.json'),
+].filter(Boolean);
+const CONF = CONF_CANDIDATES.find((p) => { try { return fs.existsSync(p); } catch { return false; } }) || CONF_CANDIDATES[1];
 const OUT_DIR = path.resolve('assets/gen/keyframes');
 
 const args = process.argv.slice(2);
@@ -85,6 +93,16 @@ const SHOTS = [
    '雾渐渐合拢把他吞掉,固定机位镜头不推不追,整幅冷青,人物一点浓墨,大面留白'],
 ];
 
+// 原图（你满意的那张 04）的完整提示词 —— 只用于 --repro 精确复现测试
+const REPRO_SHOT =
+  '一位刀客跪坐于地,侧身剪影,双膝并拢跪地,脚跟垫于臀下,上身挺直如松,头微低,双手置于膝上,' +
+  '一手虚按膝前横放的长刀刀鞘,指节泛白,刀身映一点冷光,空无的室内仅地面一线光影,' +
+  '人物置于画面右三分之一,左侧与上方大面积留白,平视中景,中国古风水墨画,纯黑剪影人物,无五官无细节,' +
+  '黑白灰三色,浓淡墨五层,宣纸质感,留白占七成,冷青色基调,血红为唯一暖色点缀,极简构图,16:9';
+const REPRO_NEG =
+  'ng_deepnegative_v1_75t,(badhandv4:1.2),EasyNegative,(worst quality:2),standing,正面,现代服饰,' +
+  '复杂背景,bedroom,照片质感,3D渲染,,nsfw';
+
 // ---------- 签名（HMAC-SHA1 → base64 URL-safe 去 padding）----------
 function signedPath(uri, accessKey, secretKey) {
   const timestamp = Date.now();
@@ -95,7 +113,8 @@ function signedPath(uri, accessKey, secretKey) {
   return uri + '?AccessKey=' + accessKey + '&Signature=' + sig + '&Timestamp=' + timestamp + '&SignatureNonce=' + nonce;
 }
 
-async function api(uri, accessKey, secretKey, body) {
+async function api(uri, accessKey, secretKey, body, tries = 6) {
+  for (let attempt = 0; ; attempt++) {
   const url = BASE + signedPath(uri, accessKey, secretKey);
   const r = await fetch(url, {
     method: 'POST',
@@ -103,9 +122,17 @@ async function api(uri, accessKey, secretKey, body) {
     body: JSON.stringify(body),
   });
   const text = await r.text();
-  let j; try { j = JSON.parse(text); } catch { throw new Error('非 JSON 响应 [' + r.status + '] ' + text.slice(0, 300)); }
-  if (j.code !== 0) throw new Error('API 错误 code=' + j.code + ' msg=' + j.msg);
+  let j; try { j = JSON.parse(text); } catch { throw new Error('非 JSON 响应 [' + r.status + '] ' + text.slice(0, 400)); }
+  if (j.code === 429 || j.code === 100054) {
+    if (attempt >= tries) throw new Error('限流/并发超限，重试 ' + tries + ' 次仍失败：' + j.msg);
+    const wait = 15000 * (attempt + 1);
+    console.log('  … 限流(' + j.code + ')，等 ' + (wait/1000) + 's 重试');
+    await sleep(wait);
+    continue;
+  }
+  if (j.code !== 0) throw new Error('API 错误 code=' + j.code + ' msg=' + j.msg + ' | 原始: ' + text.slice(0, 300));
   return j.data;
+  }
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -121,8 +148,10 @@ async function main() {
   const force = has('force');
   const only = opt('only', '');
   const seedOpt = parseInt(opt('seed', '-1'), 10);
+  const repro = has('repro');
 
-  const todo = SHOTS.filter(([name]) => (!only || name.startsWith(only)));
+  let todo = SHOTS.filter(([name]) => (!only || name.startsWith(only)));
+  if (repro) todo = [['_repro_原图复现', REPRO_SHOT]];
   fs.mkdirSync(OUT_DIR, { recursive: true });
 
   console.log('底模 checkPointId = ' + cfg.checkPointId);
@@ -135,13 +164,14 @@ async function main() {
     const file = path.join(OUT_DIR, name + '.png');
     if (fs.existsSync(file) && !force) { console.log('跳过 ' + name + '（已存在，--force 可重出）'); continue; }
 
-    const prompt = (PREFIX + shot).slice(0, 2000);
+    const prompt = (repro ? REPRO_SHOT : PREFIX + shot).slice(0, 2000);
+    const negative = repro ? REPRO_NEG : NEGATIVE;
     const payload = {
       templateUuid: cfg.templateUuid,
       generateParams: {
-        checkPointId: cfg.checkPointId,
+        ...(cfg.checkPointId && !String(cfg.checkPointId).startsWith('待填') ? { checkPointId: cfg.checkPointId } : {}),
         prompt,
-        negativePrompt: NEGATIVE,
+        negativePrompt: negative,
         sampler: cfg.sampler,
         steps: cfg.steps,
         cfgScale: cfg.cfgScale,
@@ -149,7 +179,7 @@ async function main() {
         height: cfg.height,
         imgCount: 1,
         randnSource: cfg.randnSource ?? 1,
-        seed: seedOpt,
+        seed: (repro && seedOpt < 0) ? 1619041440 : seedOpt,
         restoreFaces: 0,
         additionalNetwork: cfg.loras,
       },

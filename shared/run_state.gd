@@ -1309,6 +1309,11 @@ func buff_fx(role_id := "") -> Dictionary:
 	#   （大招持续/追剑/被动/武学冷却/回气…）**一行都不用改**就吃到了星。
 	#   ⚠ stat 组不在这里：那条走 stats_of 的 tfx（见下面 talent_fx_of 那一口）。
 	if role_id != "":
+		# ⚠ 这里**只并角色星**——专武**不在这里并**：
+		#   duel_battle._setup_ally（约 1368~1379 行）会按「这个人随身那几门被动功法」
+		#   把专武的 **mech 与 fx 两栏都**加进 al["fx_buff"]（随星放大）。
+		#   若在这一层也并一次专武，游历里就是**两倍**。
+		#   （2026-09 我误判过一次「专武在游历失效」，就是只看这一层得出的——别再改它。）
 		var sfx: Dictionary = GameState.role_star_mech_fx(role_id)
 		for k2 in sfx.keys():
 			out[k2] = float(out.get(k2, 0.0)) + float(sfx[k2])

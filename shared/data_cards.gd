@@ -279,8 +279,12 @@ const SETS := [
 			"desc": "为少侠量身定做——常驻：出手伤害 +5%。\n专属机制：大招伤害 +10%；对多人时**每一名**中招的对手让那一击再 +6%（逐个叠）；\n放完大招后**三回合**内再放大招，那一下再 +20%（续得上就一路 +20%）。数值随星数提升"}},
 	{"id": "art_ex_tiebi", "name": "铁壁桩功", "pool": "arts", "weapon": "any", "role": "chen_shi", "quality": "绝品", "no_drop": true,
 		"parts": ["卷上", "卷中", "卷下", "卷尾"], "item": "铁壁桩功",
-		"art": {"kind": "passive", "fx": {"rage_on_hit": 0.15, "thorn_up": 0.15}, "move": "铁桩入地",
-			"mech": {"ult_cut": 0.075, "thorn_all": 1, "thorn_per_hit": 0.10, "thorn_heal": 0.03},
+		# v65h（用户：「修专武」）：原来 fx 栏挂着 rage_on_hit / thorn_up ——
+		#   这两条是**运签卡那套单位（小数＝比例）**，住在 fx 栏只有游历认（那边两栏都并），
+		#   塔战那边 smech 只读 mech 栏 → 「受击回怒 +15%、反刺 +15%」在塔战里整个丢了。
+		#   挪进 mech 栏（两套引擎都读）——数值一个没改。
+		"art": {"kind": "passive", "fx": {}, "move": "铁桩入地",
+			"mech": {"rage_on_hit": 0.15, "thorn_up": 0.15, "ult_cut": 0.075, "thorn_all": 1, "thorn_per_hit": 0.10, "thorn_heal": 0.03},
 			"desc": "为陈石量身定做——常驻：受击怒气 +15%、反刺 +15%。\n专属机制：放大招期间减伤 +7.5%，且反刺**打全体**；\n自己每击中一名敌人，反刺再 +10%（封顶 +100%）；每次反刺回 3% 气血。数值随星数提升"}},
 	{"id": "art_ex_duange", "name": "短歌行", "pool": "arts", "weapon": "any", "role": "qingluan", "quality": "绝品", "no_drop": true,
 		"parts": ["卷上", "卷中", "卷下", "卷尾"], "item": "短歌行",

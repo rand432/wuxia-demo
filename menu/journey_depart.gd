@@ -106,6 +106,12 @@ var _pick_fates: Array = []     # v62r（用户："开局命数可多选"）：�
 #   每人随身带的那**一门功法**（rid → sid；"" ＝ 明确决定不带；键不存在 ＝ 还没决定，按第一门自动补）。
 #   兵器本来就随身（v62h），这里补的是功法那一半。
 var _pick_arts: Dictionary = {}
+# v12（用户："出战带多功法的时候提醒一下 选择哪本功法进入游历【三人的话三人都要哦】"）：
+#   "待挑" ＝ 在队里 · 身上 ≥2 门功法 · 且这一屏还没给他定过（_art_seen）。
+#   提醒两处：①主面板那颗［随身功法］按钮的字变红报警；②点［出发］时先弹挑功法页
+#   （看过一次 _art_ack 就放行，不堵第二回）。
+var _art_seen: Dictionary = {}
+var _art_ack := false
 var _art_veil: Control = null
 var _confirm_veil: Control = null
 var _fate_veil: Control = null    # ㉛：挑卡页
@@ -846,9 +852,46 @@ func _art_carry_of(rid: String) -> String:
 	var sk: Array = GameState.role_data(rid).get("skills", [])
 	return sid if sk.has(sid) else ""
 
+# ---- v12：谁还没挑（"三人的话三人都要哦"）----
+
+func _art_multi(rid: String) -> bool:
+	return (GameState.role_data(rid).get("skills", []) as Array).size() >= 2
+
+func _art_pending() -> Array:
+	var out: Array = []
+	if _art_ack:
+		return out
+	for r_v in _pick_roles:
+		var rid := str(r_v)
+		if _art_seen.has(rid):
+			continue
+		if _art_multi(rid):
+			out.append(rid)
+	return out
+
+func _art_pending_cn() -> String:
+	var nm: Array = []
+	for rid in _art_pending():
+		nm.append(str(GameState.role_data(str(rid)).get("name", rid)))
+	return "、".join(PackedStringArray(nm))
+
 func _paint_art_btn() -> void:
 	if _art_btn == null:
 		return
+	var pend := _art_pending()
+	# v12：有"待挑"的人就把这颗钮写成报警的样子（红字），点了就进挑功法页
+	if not pend.is_empty():
+		_art_btn.text = "随身功法：★ " + str(pend.size()) + " 人待挑 ▸"
+		var seal := Color(0.72, 0.16, 0.12)
+		_art_btn.add_theme_color_override("font_color", seal)
+		_art_btn.add_theme_color_override("font_hover_color", seal)
+		_art_btn.add_theme_color_override("font_pressed_color", Color(1, 0.94, 0.90))
+		_art_btn.tooltip_text = "这几个人身上不止一门功法，出征前先定带哪一门：\n" + _art_pending_cn()
+		return
+	_art_btn.add_theme_color_override("font_color", INK)
+	_art_btn.add_theme_color_override("font_hover_color", INK)
+	_art_btn.add_theme_color_override("font_pressed_color", Color(0.96, 0.93, 0.86))
+	_art_btn.tooltip_text = "出征前给每个人挑一门随身功法（每人最多一门；三人的话三人都要挑）"
 	var names: Array = []
 	for r_v in _pick_roles:
 		var rid := str(r_v)
@@ -871,6 +914,7 @@ func _ask_art_pick() -> void:
 		return
 	if _art_veil != null and is_instance_valid(_art_veil):
 		return
+	_art_ack = true   # v12：这一页露过面 ＝ 提醒到了——第二回点［出发］不再拦
 	var vp := get_viewport_rect().size
 	var veil := ColorRect.new()
 	veil.color = Color(0, 0, 0, 0.42)
@@ -966,6 +1010,7 @@ func _ask_art_pick() -> void:
 
 func _on_art_pick(rid: String, sid: String) -> void:
 	_pick_arts[rid] = sid
+	_art_seen[rid] = true   # v12：这个人定过了（"不带"也算定过）
 	_close_art_pick()
 	_paint()
 	_ask_art_pick()   # 重画（✔ 与底色立刻反映选中状态）
@@ -1068,6 +1113,15 @@ func _on_go() -> void:
 	if _pick_roles.is_empty() or _pick_diff <= 0:
 		_msg_lb.text = "先挑至少一个人、再挑一条路。"
 		return
+	# v12（用户："出战带多功法的时候提醒一下 选择哪本功法进入游历【三人的话三人都要哦】"）：
+	#   身上不止一门功法的人，**先把他带哪一门定下来**再走出征流程——
+	#   这一下会把挑功法页摊开（三人在队就是三段），看过一次（_art_ack）就不再拦第二回。
+	var pend := _art_pending()
+	if not pend.is_empty():
+		_msg_lb.text = "出征前先定：★ " + _art_pending_cn() + " 身上不止一门功法——挑一门带进游历（三个人的话三人都要挑）。"
+		_ask_art_pick()
+		_paint_art_btn()
+		return
 	_ask_strip_confirm()
 
 func _ask_strip_confirm() -> void:
@@ -1107,8 +1161,9 @@ func _ask_strip_confirm() -> void:
 	veil.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(veil)
 	_confirm_veil = veil
+	var pend := _art_pending()   # v12：还有人没挑 → 这一页加高一点、多一行红字
 	var pw := 560.0
-	var ph := 400.0
+	var ph := 452.0 if not pend.is_empty() else 400.0
 	var panel := Panel.new()
 	panel.position = Vector2((vp.x - pw) * 0.5, (vp.y - ph) * 0.5)
 	panel.size = Vector2(pw, ph)
@@ -1133,11 +1188,33 @@ func _ask_strip_confirm() -> void:
 	bd.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	panel.add_child(bd)
 
+	if not pend.is_empty():
+		# v12：提醒（不拦——确认出征照走；［去挑随身功法］开那一页，回来再出征）
+		var warn := _label("★ " + _art_pending_cn() + " 身上不止一门功法，还没定带哪一门——"
+			+ "不定的话默认带身上第一门。", 16, Color(0.72, 0.16, 0.12))
+		warn.position = Vector2(34, 330)
+		warn.size = Vector2(pw - 68.0, 44)
+		warn.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		panel.add_child(warn)
+		var pick := Button.new()
+		pick.text = "去挑随身功法"
+		pick.position = Vector2(24, ph - 76.0)
+		pick.size = Vector2(176, 56)
+		pick.add_theme_font_size_override("font_size", 18)
+		pick.focus_mode = Control.FOCUS_NONE
+		pick.pressed.connect(_on_confirm_art_pick)
+		_style_light_button(pick)
+		panel.add_child(pick)
+
 	var go := Button.new()
 	go.text = "确认出征"
-	go.position = Vector2(56, ph - 76.0)
-	go.size = Vector2(200, 56)
-	go.add_theme_font_size_override("font_size", 20)
+	if pend.is_empty():
+		go.position = Vector2(56, ph - 76.0)
+		go.size = Vector2(200, 56)
+	else:
+		go.position = Vector2(212, ph - 76.0)
+		go.size = Vector2(150, 56)
+	go.add_theme_font_size_override("font_size", 20 if pend.is_empty() else 18)
 	go.focus_mode = Control.FOCUS_NONE
 	go.pressed.connect(_do_depart)
 	_style_dark_button(go)
@@ -1145,13 +1222,23 @@ func _ask_strip_confirm() -> void:
 
 	var back := Button.new()
 	back.text = "再想想"
-	back.position = Vector2(pw - 256.0, ph - 76.0)
-	back.size = Vector2(200, 56)
-	back.add_theme_font_size_override("font_size", 20)
+	if pend.is_empty():
+		back.position = Vector2(pw - 256.0, ph - 76.0)
+		back.size = Vector2(200, 56)
+	else:
+		back.position = Vector2(374, ph - 76.0)
+		back.size = Vector2(162, 56)
+	back.add_theme_font_size_override("font_size", 20 if pend.is_empty() else 18)
 	back.focus_mode = Control.FOCUS_NONE
 	back.pressed.connect(_close_strip_confirm)
 	_style_light_button(back)
 	panel.add_child(back)
+
+# v12：确认页那颗［去挑随身功法］——关掉确认页、摊开挑功法页（回来了再点出发）
+func _on_confirm_art_pick() -> void:
+	_close_strip_confirm()
+	_ask_art_pick()
+	_paint_art_btn()
 
 func _close_strip_confirm() -> void:
 	if _confirm_veil != null and is_instance_valid(_confirm_veil):
@@ -1293,6 +1380,10 @@ func open() -> void:
 	#   点人仍可当场改（改不改回账上，见 _on_formation_saved 的说明）。
 	_pick_roles = GameState.formation.duplicate()
 	_pick_diff = 0
+	# v12：每开一次出征屏，重新提醒一遍"谁还没挑随身功法"（挑过的那几个人记在 _art_seen 里，
+	#   同一次开屏内不再啰嗦；关掉重开＝重新提一次）
+	_art_seen.clear()
+	_art_ack = false
 	_pick_fates.clear()            # ㉛：每次开屏从"空手走"起
 	_close_strip_confirm()
 	_close_fate_pick()
