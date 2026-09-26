@@ -2189,6 +2189,9 @@ static func panel_stats(role_id: String) -> Dictionary:
 		out["hp"] = maxi(1, int(round(float(out.get("hp", 0)) * (1.0 - float(pas.get("hp_cut", 0.0))))))
 	return out
 
+# ⚠ v65b（用户：「不需要抽天赋 就正常我定的那几个天赋 那些随机天赋我后面用」）：
+#   **当前没有任何人调它**——人物一律用"定好的那几条"（苏青鸾＝QINGLUAN_TALENTS，
+#   陈石/少侠＝不带）。这一口原样留着，等以后给弟子/新角色用。
 static func roll_talents(good_n := 1, bad_n := 1) -> Array:
 	var goods: Array = []
 	var bads: Array = []
@@ -2228,7 +2231,15 @@ const CHEN_SHI_DEFAULT := {
 	"innate_desc": "",
 		"ult": {"name": "回马断枪", "kind": "aura", "turns": 3, "regen_pct": 0.08, "thorn": 0.35, "desc": "怒气满时自动放出：枪势起——其后 3 手，每手回 8% 气血；期间挨打反刺（按气血上限的 8~12%）"},
 	"tech": {"name": "扎马稳桩", "desc": "每 4 次行动：回复 15% 气血（暂定）"},
-	"passive": {"kind": "taken_cut", "v": 0.06, "name": "扎马稳桩", "desc": "专属被动：受到的伤害 -6%（出村战斗与游历决斗都已接入）"},
+	# v65（用户：「陈石加强天赋减伤提升至10%」）：6% → **10%**。
+	#   ⚠ 面板显示的就是这一行 desc——改数值必须两处一起改（与 data_talents 的「守拙」不是同一条：
+	#     守拙是自带天赋·气血上限 +15%，这里是专属被动·受伤减免）。
+	# v65e（用户：「陈石 专属被动 额外加一个气血成长+1【突破不加 就升级加】」）：
+	#   hp_grow 这一格走的是**每级成长**那条管线（hp_grow_bonus → level_gain → 升级结算），
+	#   与「突破」（break_gain，按根骨现算）**互不相干**——正是「只升级加、突破不加」。
+	#   ⚠ 成长一变，已过的级数由 grow_sync 在读档时补回来（见那条注释）。
+	"passive": {"kind": "taken_cut", "v": 0.10, "hp_grow": 1, "name": "扎马稳桩",
+		"desc": "专属被动：受到的伤害 -10%（出村战斗与游历决斗都已接入）· 每级气血成长 +1"},
 }
 
 const PLAYER_DEFAULT := {
@@ -2280,7 +2291,33 @@ const QINGLUAN_DEFAULT := {
 	"talents": [],
 	"innate": "",
 	"innate_desc": "",
-	"ult": {"name": "青鸾出岫", "target": "mid", "kind": "song", "turns": 3, "follow": 0.6, "desc": "怒气满时自动放出：剑歌 3 手——期间每次暴击都追一剑（六成力）"},
+	# v65（用户："苏的大招看一下"）：**原来那支偏弱**——
+	#   剑歌 3 手 · 追击六成力 · 触发条件是"这一手暴击"。她暴击 27%（12 底子 ＋ 被动 15），
+	#   期望追击 ＝ p+p²+p³ ≈ 0.36 次/触发 → 0.36×0.6 ＝ **0.22 手/次**，
+	#   3 手合计只有 **0.65 手**的额外伤害（主角大招 ×1.7 群攻、陈石大招 3 手回气＋反刺，
+	#   都比它实在得多）。
+	#   v65b/c（用户：「还是六成力 她的大招不是还有个多段伤害吗」）：
+	#   **追击六成力（不动）· 窗口 3 手 · 窗口内暴击 +15 个百分点**（27% → 42%）。
+	#   ⚠ **算这支大招必须把「段数」算进去**——一次追击不是一剑，是 **N 段**：
+	#     角色星「出岫」（ult_dur+1 · follow_hits+1）· 引吭卡（follow_hits+1）· 专武「短歌行」再抬追击伤害。
+	#   每一段各自掷暴击，暴击了再往下追一层（上限 SONG_CHAIN_MAX=3 层）。
+	#   期望 = p × [N + N²p + N³p²] 段，每段 ×0.6：
+	#     N=1（白板）   ≈ 0.67 段/手 → 3 手 ≈ **1.2 手**
+	#     N=2（带星）   ≈ 2.14 段/手 → 4 手（星还 +1 手）≈ **5.1 手**
+	#     N=3（星＋引吭）≈ 4.85 段/手 → 4 手 ≈ **11.6 手**
+	#   所以力度**不能给八成**（那样 N=3 会爆），六成是对的。
+	#   ⚠ 窗口里那 +15 的落点在两个战斗引擎各一处：duel_battle._roll_p_damage /
+	#     battle_lite._crit_chance（都叫 SONG_CRIT_UP，改一处必须改两处）。
+	# v65d（用户："她的大招 出手有一个大招伤害 2-3段 打完之后 附加一个追击状态
+	#   接下来三回合 暴击额外追击0.6 优先攻击后排【追击可暴击 但是不会继续追击】"）：
+	#   ① 出手：**3 段**（每段 ×0.8，取后排）；② 打完挂**追击状态 3 手**：
+	#      期间每次暴击额外追一剑 ×0.6，优先后排，**可暴击但不连锁**（SONG_CHAIN_MAX = 1）。
+	#   账：出手 3×0.8 = **2.4 手**（与主角大招 ×1.7 群攻 / ×2.8 单体同档）；
+	#   追击部分每手期望 = p×N×0.6（不连锁了）：N=1 时 0.25 手/手 → 3 手 ≈ 0.76 手，
+	#   带星「出岫」（+1 段 +1 手）→ 0.5 手/手 × 4 手 ≈ 2.0 手。
+	"ult": {"name": "青鸾出岫", "target": "mid", "kind": "song", "hits": 3, "mult": 0.8,
+		"turns": 3, "follow": 0.6,
+		"desc": "怒气满时自动放出：先取后排连击 3 段（各 ×0.8）；此后 3 手，每次暴击额外追一剑（六成力 · 取后排 · 可暴击但不连锁）"},
 	"tech": {"name": "剑心如镜", "desc": "每 4 次行动：回复 15% 气血（暂定）"},
 	"passive": {"kind": "glass_crit", "v": 15, "hp_cut": 0.15, "name": "剑走轻灵", "desc": "专属被动：暴击 +15%，气血上限 -15%（出村战斗与游历决斗都已接入）"},
 }
@@ -2517,9 +2554,11 @@ static func exp_need(lv: int) -> int:
 #   与"气血% (hp_pct)"是两件事，别混：
 #     · hp_pct  → 当下这一口气涨两成（战斗/面板立刻算，见 battle_lite / run_state）
 #     · hp_grow → **以后每一级都多涨几点**（只在升级时结算，落点在 level_gain）
-#   来源两处（以后加第三条就在这里加一行）：
-#     · 人物自带（`Roles.innate_of` 的 hp_grow——陈石「守拙」+2）
-#     · 角色星（`Stars.grow_fx` 的 hp_grow——陈石第 4 星「稳桩」+2）
+#   来源三处（以后加第四条就在这里加一行）：
+#     · 人物自带（Roles.innate_of 的 hp_grow）——v62x 起已清空（现为 0）
+#     · 角色星（Stars.grow_fx 的 hp_grow）——同上，已清空
+#     · **专属被动**（role.passive 的 hp_grow）——v65e 新开的一路：陈石「扎马稳桩」+1
+#   ⚠ 这里给的是「**升级**那一份」；突破给的是 break_gain（按根骨），两码事。
 #   ⚠ 老档补课：这条成长是**后加**的，所以只要它变了就得把"已经过的级数"补上，
 #     否则 50 级的人拿到星也只从 51 级才开始涨。补课口＝ hp_grow_sync（见下）。
 # ============================================================
@@ -2529,6 +2568,9 @@ static func hp_grow_bonus(role_id: String) -> int:
 	if not inn.is_empty():
 		n += int(inn.get("hp_grow", 0))
 	n += int(Stars.grow_fx(role_id, role_star_of(role_id)).get("hp_grow", 0.0))
+	# v65e：专属被动那一路（陈石「扎马稳桩」+1）——读角色身上那一份（老档由 _sync_role_kit 刷新）
+	var ps: Dictionary = _role_mut(role_id).get("passive", {})
+	n += int(ps.get("hp_grow", 0))
 	return maxi(0, n)
 
 # v44（用户："我刚刚给苏用了洗髓丹 到50点 但是前面升了等级没有补回来"）：
@@ -2646,21 +2688,22 @@ static func growth_box(role_id: String) -> Dictionary:
 	var lv := maxi(1, int(role.get("lv", 1)))
 	var gain := level_gain(role_id)
 	var grow := hp_grow_bonus(role_id)
-	var to_hp := GENGU_HP_EVERY - (g % GENGU_HP_EVERY)
-	var to_atk := GENGU_ATK_EVERY - (g % GENGU_ATK_EVERY)
+	# v65e：这一段文案早就跟实现对不上了（写着「基础 2/1 ＋ 根骨档」，可 level_gain 早就
+	#   压平成「基础 1 ＋ 成长类」，根骨也不再进每级成长了）——顺手改成实话：
+	#   每级成长 ＝ 基础 ＋ 成长类；根骨改由**突破**折算（break_gain）。
+	var bg := break_gain(role_id)
 	var lines: Array = []
 	lines.append("根骨 " + str(g) + "　·　" + str(lv) + " 级（已过 " + str(maxi(0, lv - 1)) + " 级）")
 	lines.append("现在每级：气血 +" + str(int(gain.get("hp", 0))) + "　攻击 +" + str(int(gain.get("atk", 0))))
-	lines.append("　＝ 基础 2/1 ＋ 根骨档 气+" + str(g / GENGU_HP_EVERY) + " 攻+" + str(g / GENGU_ATK_EVERY)
-		+ (" ＋ 成长 气+" + str(grow) if grow > 0 else "") + "（只随根骨，跟等级无关）")
+	lines.append("　＝ 基础 " + str(int(LEVEL_GROWTH["hp"])) + "/" + str(int(LEVEL_GROWTH["atk"]))
+		+ (" ＋ 成长类 气+" + str(grow) if grow > 0 else "（现在没有成长类加成）"))
 	lines.append("")
-	lines.append("门槛：每 " + str(GENGU_HP_EVERY) + " 点根骨 → 每级气血 +1（现在 " + str(g / GENGU_HP_EVERY) + " 档）")
-	lines.append("　　　每 " + str(GENGU_ATK_EVERY) + " 点根骨 → 每级攻击 +1（现在 " + str(g / GENGU_ATK_EVERY) + " 档）")
-	lines.append("下一档：还差 " + str(to_hp) + " 点根骨（到 " + str(g + to_hp) + " 点）→ 每级气血 +1")
-	lines.append("　　　　还差 " + str(to_atk) + " 点根骨（到 " + str(g + to_atk) + " 点）→ 每级攻击 +1")
+	lines.append("根骨不进每级成长——它管**突破**：每 " + str(BREAK_STEP) + " 级一道关，每次按根骨折算")
+	lines.append("　　根骨 " + str(g) + " → 突破一次：攻 +" + str(int(bg.get("atk", 0)))
+		+ " · 血 +" + str(int(bg.get("hp", 0))) + " · 防 +" + str(int(bg.get("def", 0))))
 	lines.append("")
 	# v61：洗髓丹已下线 → 根骨只由人物模板定，这里说明一句，别再指路丹药
-	lines.append("根骨已定（不随等级、也没有丹药可涨）——每级成长就按上面这几档算")
+	lines.append("根骨已定（不随等级、也没有丹药可涨）——每级成长就看上面那一行")
 	var body := "\n".join(PackedStringArray(lines))
 	return {"title": "根骨 · 成长（" + str(role.get("name", role_id)) + "）", "body": body.replace("**", "")}
 
@@ -2982,11 +3025,32 @@ static func toggle_deploy(id: String) -> String:
 static func join_disciple() -> void:
 	disciple_joined = true
 
+# v65（用户：「苏 移除天赋 悟性高 和闪避那个」）：
+#   原来 join_qingluan 给她 roll_talents(2, 1)（随机两条好签 ＋ 一条坏签），
+#   于是会抽到「悟性过人（经验 +15%）」「身轻如燕（闪避 +4）」这种**跟她打法无关**的签——
+#   她是匕首暴击刺客（自带洞察·残敌增伤 ＋ 被动剑走轻灵·暴击 +15%），要的是暴击与先手。
+#   现在改成**固定两条**（下表），新档招募即如此；老档里已抽过的由
+#   _sync_qingluan_talents 在读档时走一遍（只走一次，用 talents_fixed 标记）。
+# v65c（用户：「苏天赋也无 就专属就够了」）：**空表**——她只靠专属那两条：
+#   自带「洞察」（持匕首·绕前排直取后排 ＋ 残敌增伤）＋ 被动「剑走轻灵」（暴击 +15%、气血 -15%）。
+#   想给她补签就往这个数组里写名字（表在 shared/data_talents.gd）。
+const QINGLUAN_TALENTS: Array = []
+
+static func _sync_qingluan_talents(role: Dictionary) -> void:
+	if role.is_empty() or bool(role.get("talents_fixed", false)):
+		return
+	role["talents"] = QINGLUAN_TALENTS.duplicate()
+	role["talents_fixed"] = true
+	if QINGLUAN_TALENTS.is_empty():
+		print("[账本] 苏青鸾不带天赋（只靠专属：洞察 ＋ 剑走轻灵）——原来的随机签已清掉")
+	else:
+		print("[账本] 苏青鸾的天赋已改为固定：", QINGLUAN_TALENTS)
+
 static func join_qingluan() -> String:
 	qingluan_joined = true
 	var role := _role_mut("qingluan")
-	var ts := roll_talents(2, 1)
-	role["talents"] = ts
+	_sync_qingluan_talents(role)
+	var ts: Array = role.get("talents", [])
 	if not formation.has("qingluan") and formation.size() < DEPLOY_MAX:
 		formation.append("qingluan")
 	var lines: Array = []
@@ -5205,6 +5269,7 @@ static func load_game() -> void:
 	_sync_role_kit(chen_shi, "chen_shi")
 	_sync_role_kit(player_role, "player")
 	_sync_role_kit(qingluan, "qingluan")
+	_sync_qingluan_talents(qingluan)   # v65：老档里她那些随机天赋（悟性/闪避）换成固定两条
 	# ㊿v：出征自动卸下的记录（回来后照原样穿回去用）
 	strip_saved = _sd(cf.get_value("world", "strip_saved", {}), {})
 	# ㊿y：角色星

@@ -29,6 +29,7 @@ var _body: Control = null
 var _tab_btns: Array = []
 var _tab := "wealth"
 var _ph := 1040.0
+var _pw := 680.0
 
 func _ready() -> void:
 	size = get_viewport_rect().size
@@ -44,10 +45,13 @@ func _build() -> void:
 	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(dim)
 
-	_ph = clampf(vp.y - 110.0, 460.0, 1060.0)
+	# v3（用户："阅历横框可以大一点【至少一倍】"）：面板铺到近满屏（宽 700 / 高 屏高-40），
+	#   行高与字号整体**翻倍**——手机上看得清、点得着。
+	_ph = clampf(vp.y - 40.0, 520.0, 1240.0)
+	_pw = minf(vp.x - 20.0, 700.0)
 	_panel = Panel.new()
-	_panel.position = Vector2((vp.x - 680.0) * 0.5, (vp.y - _ph) * 0.5)
-	_panel.size = Vector2(680.0, _ph)
+	_panel.position = Vector2((vp.x - _pw) * 0.5, (vp.y - _ph) * 0.5)
+	_panel.size = Vector2(_pw, _ph)
 	_panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	var psb := StyleBoxFlat.new()
 	psb.bg_color = Color(PAPER.r, PAPER.g, PAPER.b, 0.98)
@@ -57,42 +61,42 @@ func _build() -> void:
 	_panel.add_theme_stylebox_override("panel", psb)
 	add_child(_panel)
 
-	var title := _label("阅　历", 30, INK)
-	title.position = Vector2(28, 14)
-	title.size = Vector2(300, 40)
+	var title := _label("阅　历", 36, INK)
+	title.position = Vector2(30, 16)
+	title.size = Vector2(360, 48)
 	_panel.add_child(title)
 
-	_top_lb = _label("", 16, Color(INK.r, INK.g, INK.b, 0.78))
-	_top_lb.position = Vector2(30, 56)
-	_top_lb.size = Vector2(620, 24)
+	_top_lb = _label("", 20, Color(INK.r, INK.g, INK.b, 0.78))
+	_top_lb.position = Vector2(32, 68)
+	_top_lb.size = Vector2(_pw - 64.0, 30)
 	_panel.add_child(_top_lb)
 
-	# ---- 四个页签 ----
+	# ---- 四个页签（每个 ~160 宽、52 高）----
 	_tab_btns = []
-	var tw := 154.0
+	var tw := (_pw - 40.0 - 18.0) / 4.0
 	for i in Insight.BRANCHES.size():
 		var b: Dictionary = Insight.BRANCHES[i]
 		var bid := str(b.get("id", ""))
 		var tb := Button.new()
-		tb.position = Vector2(30.0 + float(i) * (tw + 6.0), 86)
-		tb.size = Vector2(tw, 42)
-		tb.add_theme_font_size_override("font_size", 17)
+		tb.position = Vector2(20.0 + float(i) * (tw + 6.0), 104)
+		tb.size = Vector2(tw, 52)
+		tb.add_theme_font_size_override("font_size", 19)
 		tb.focus_mode = Control.FOCUS_NONE
 		tb.pressed.connect(_on_tab.bind(bid))
 		_style_light(tb)
 		_panel.add_child(tb)
 		_tab_btns.append(tb)
 
-	_msg_lb = _label("", 16, Color(SEAL.r, SEAL.g, SEAL.b, 0.95))
-	_msg_lb.position = Vector2(30, _ph - 78.0)
-	_msg_lb.size = Vector2(620, 24)
+	_msg_lb = _label("", 19, Color(SEAL.r, SEAL.g, SEAL.b, 0.95))
+	_msg_lb.position = Vector2(32, _ph - 88.0)
+	_msg_lb.size = Vector2(_pw - 64.0, 28)
 	_panel.add_child(_msg_lb)
 
-	var by := _ph - 62.0
+	var by := _ph - 72.0
 	_respec_btn = Button.new()
-	_respec_btn.position = Vector2(30, by)
-	_respec_btn.size = Vector2(330, 50)
-	_respec_btn.add_theme_font_size_override("font_size", 17)
+	_respec_btn.position = Vector2(20, by)
+	_respec_btn.size = Vector2(_pw - 40.0 - 150.0, 58)
+	_respec_btn.add_theme_font_size_override("font_size", 19)
 	_respec_btn.focus_mode = Control.FOCUS_NONE
 	_respec_btn.pressed.connect(_on_respec)
 	_style_light(_respec_btn)
@@ -100,9 +104,9 @@ func _build() -> void:
 
 	var cl := Button.new()
 	cl.text = "关闭"
-	cl.position = Vector2(470, by)
-	cl.size = Vector2(180, 50)
-	cl.add_theme_font_size_override("font_size", 18)
+	cl.position = Vector2(_pw - 20.0 - 140.0, by)
+	cl.size = Vector2(140, 58)
+	cl.add_theme_font_size_override("font_size", 21)
 	cl.focus_mode = Control.FOCUS_NONE
 	cl.pressed.connect(close)
 	_style_dark(cl)
@@ -139,81 +143,105 @@ func _rebuild() -> void:
 	if _body != null and is_instance_valid(_body):
 		_body.queue_free()
 	_body = Control.new()
-	_body.size = Vector2(648, 10)
+	_body.size = Vector2(_pw - 20.0, 10)
+	# ⚠ 这一层**不能吃掉手指/鼠标事件**——不然"按住列表上下拖"传不到 ScrollContainer
 	_body.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_panel.add_child(_body)
 
 	var b := Insight.branch_of(_tab)
-	var head := _label(str(b.get("name", "")) + "　·　" + str(b.get("sub", "")) + "　　" + str(b.get("desc", "")),
-		16, Color(INK.r, INK.g, INK.b, 0.62))
-	head.position = Vector2(32, 134)
-	head.size = Vector2(620, 22)
+	var head := _label(str(b.get("name", "")) + "　·　" + str(b.get("sub", "")), 18,
+		Color(INK.r, INK.g, INK.b, 0.62), true)
+	head.position = Vector2(32, 160)
+	head.size = Vector2(300, 26)          # ⚠ 要放得下"技巧　·　暴击 · 闪避 · 伤害增幅"（实测 250px）
 	_body.add_child(head)
+	var head2 := _label(str(b.get("desc", "")), 17, Color(INK.r, INK.g, INK.b, 0.55), true)
+	head2.position = Vector2(340, 161)
+	head2.size = Vector2(_pw - 372.0, 24)
+	_body.add_child(head2)
 
 	var scroll := ScrollContainer.new()
-	UiKit.drag_scroll(scroll)
-	scroll.position = Vector2(20, 160)
-	scroll.size = Vector2(640, _ph - 160.0 - 92.0)
+	UiKit.drag_scroll(scroll)          # v3：按住内容上下拖＝滚动（指尖滑动页面）
+	scroll.position = Vector2(20, 192)
+	scroll.size = Vector2(_pw - 40.0, _ph - 192.0 - 108.0)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.mouse_filter = Control.MOUSE_FILTER_PASS
 	_body.add_child(scroll)
 	var box := VBoxContainer.new()
-	box.custom_minimum_size = Vector2(616, 0)
-	box.add_theme_constant_override("separation", 5)
+	box.custom_minimum_size = Vector2(_pw - 60.0, 0)
+	box.add_theme_constant_override("separation", 8)
+	box.mouse_filter = Control.MOUSE_FILTER_PASS   # ⚠ PASS：事件继续往上传给 ScrollContainer
 	scroll.add_child(box)
 
 	var lv := GameState.insight_lv_of(_tab)
+	# ⚠ 行的**实际**宽度＝面板宽 − 60（VBox 在滚动区里另有 20+20 边距）——
+	#   靠右的东西一律按它定位，别再拿 _pw 当行宽（"字超出"就是这么来的）。
+	# v3b 排版：第一行＝名字 ·（价格/状态）·［升级］；第二行＝说明（**自动换行**，两行封顶）。
+	var rw := _pw - 60.0
 	for i in Insight.max_lv(_tab):
 		var nd := Insight.node_next(_tab, i)
 		var big := Insight.is_big(i)
 		var row := Panel.new()
-		row.custom_minimum_size = Vector2(616, 62 if big else 56)
+		row.custom_minimum_size = Vector2(rw, 136.0 if big else 124.0)
+		row.mouse_filter = Control.MOUSE_FILTER_PASS
 		var done := i < lv
 		var cur := i == lv
 		var rsb := StyleBoxFlat.new()
 		rsb.bg_color = (Color(0.90, 0.87, 0.80, 1.0) if done
 			else (Color(0.96, 0.93, 0.86, 1.0) if cur else Color(0.93, 0.91, 0.86, 1.0)))
-		rsb.set_corner_radius_all(8)
+		rsb.set_corner_radius_all(10)
 		rsb.border_color = (GOLD if (cur or big) else Color(INK.r, INK.g, INK.b, 0.28))
-		rsb.set_border_width_all(3 if cur else (2 if big else 1))
-		rsb.set_content_margin_all(6)
+		rsb.set_border_width_all(4 if cur else (3 if big else 1))
+		rsb.set_content_margin_all(8)
 		row.add_theme_stylebox_override("panel", rsb)
 		box.add_child(row)
-		var nm := _label(("◆ " if big else "") + str(i + 1) + ". " + str(nd.get("name", "")), 19,
-			(INK if not done else Color(INK.r, INK.g, INK.b, 0.45)))
-		nm.position = Vector2(12, 4)
-		nm.size = Vector2(320, 26)
+
+		var nm := _label(("◆ " if big else "") + str(i + 1) + ". " + str(nd.get("name", "")), 26,
+			(INK if not done else Color(INK.r, INK.g, INK.b, 0.45)), true)
+		nm.position = Vector2(18, 8)
+		nm.size = Vector2(rw - 400.0, 36)
 		row.add_child(nm)
-		var ds := _label(str(nd.get("desc", "")), 15, Color(INK.r, INK.g, INK.b, 0.72))
-		ds.position = Vector2(12, 30)
-		ds.size = Vector2(430, 22)
-		row.add_child(ds)
+
+		# ⚠ v3c（用户："消耗显示不见了"）：价格必须**独占第一行右侧**——
+		#   上一版把［升级］也放在第一行，按钮在标签之后入树＝画在上面，
+		#   右对齐的价格正好被整块盖住（看着就是"消耗没了"）。
+		#   现在：第一行＝名字 ＋ 价格（右侧）；第二行＝说明（左）＋［升级］（右）。
 		var cost := Insight.cost_next(_tab, i)
+		var ct := _label("阅历 " + str(cost.get("insight", 0)) + " · 银两 " + str(cost.get("silver", 0)),
+			18, (Color(INK.r, INK.g, INK.b, 0.42) if done else Color(SEAL.r, SEAL.g, SEAL.b, 0.95)), true)
+		ct.position = Vector2(rw - 380.0, 12)
+		ct.size = Vector2(360, 28)
+		ct.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		row.add_child(ct)
 		if done:
-			var tag := _label("已通", 17, Color(INK.r, INK.g, INK.b, 0.45))
-			tag.position = Vector2(510, 16)
-			tag.size = Vector2(90, 26)
+			var tag := _label("已通", 22, Color(INK.r, INK.g, INK.b, 0.45), true)
+			tag.position = Vector2(rw - 200.0, 62)
+			tag.size = Vector2(180, 32)
+			tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 			row.add_child(tag)
 		elif i > lv:
-			var lk := _label("先通上一段", 15, Color(INK.r, INK.g, INK.b, 0.45))
-			lk.position = Vector2(460, 18)
-			lk.size = Vector2(140, 24)
+			var lk := _label("先通上一段", 19, Color(INK.r, INK.g, INK.b, 0.45), true)
+			lk.position = Vector2(rw - 210.0, 64)
+			lk.size = Vector2(190, 30)
+			lk.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 			row.add_child(lk)
 		else:
-			var ct := _label("阅历 " + str(cost.get("insight", 0)) + " · 银两 " + str(cost.get("silver", 0)),
-				15, Color(SEAL.r, SEAL.g, SEAL.b, 0.95))
-			ct.position = Vector2(420, 4)
-			ct.size = Vector2(188, 22)
-			ct.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-			row.add_child(ct)
 			var up := Button.new()
 			up.text = "升级"
-			up.position = Vector2(506, 26)
-			up.size = Vector2(100, 28)
-			up.add_theme_font_size_override("font_size", 16)
+			up.position = Vector2(rw - 170.0, 60)
+			up.size = Vector2(150, 50)
+			up.add_theme_font_size_override("font_size", 22)
 			up.focus_mode = Control.FOCUS_NONE
 			up.pressed.connect(_on_upgrade.bind(_tab))
 			_style_dark(up)
 			row.add_child(up)
+
+		# 说明：占满整行、**自动换行**（最多两行）——再长也不会顶出框外
+		var ds := _label(str(nd.get("desc", "")), 18, Color(INK.r, INK.g, INK.b, 0.72))
+		ds.position = Vector2(18, 58)
+		ds.size = Vector2(rw - 220.0, 62)
+		ds.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		ds.clip_text = true
+		row.add_child(ds)
 
 func _on_tab(bid: String) -> void:
 	_tab = bid
@@ -235,11 +263,14 @@ func _on_respec() -> void:
 
 # ---- 小件 ----
 
-func _label(text: String, font_size: int, col: Color) -> Label:
+func _label(text: String, font_size: int, col: Color, clip := false) -> Label:
+	# v3b（用户："字超出了"）：凡是"靠右贴边"的那几行一律 clip_text——
+	#   宁可裁掉尾巴，也不许它溢出框外（字号/宽度都算好了，正常情况裁不到）。
 	var lb := Label.new()
 	lb.text = text
 	lb.add_theme_font_size_override("font_size", font_size)
 	lb.add_theme_color_override("font_color", col)
+	lb.clip_text = clip
 	lb.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return lb
 

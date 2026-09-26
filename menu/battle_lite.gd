@@ -697,6 +697,9 @@ func _build_party() -> void:
 			"ult": str(ult.get("name", "大招")),
 			"ult_kind": str(ult.get("kind", "hit")),
 			"ult_mult": float(ult.get("mult", ULT_MUL)) * (1.0 + star_um),
+			# v13b（苏青鸾的大招改版）：出手那几段——"hits" 段数 · "mult" 每段倍率（取后排由引擎管）
+			"ult_hits": maxi(1, int(ult.get("hits", 1))),
+			"ult_seg_mult": float(ult.get("mult", 0.0)) * (1.0 + float(smech.get("ult_dmg", 0.0))),
 			# ㊺：只剩一个敌人时改用的倍率（群攻大招的"单体档"；0＝不区分）
 			"ult_mult_single": float(ult.get("mult_single", 0.0)) * (1.0 + star_um),
 			# ㊹：大招的落点。不写＝只打当前那一只；"sweep"＝横扫所有活着的敌人。
@@ -1561,6 +1564,9 @@ func _crit_chance(m: Dictionary, foe_low: bool) -> float:
 	var c := float(m.get("crit", 5.0))
 	if foe_low:
 		c += float(m.get("star_crit_low", 0.0))
+	# v13（苏的大招加强）：剑歌窗口内暴击 +SONG_CRIT_UP（与 duel_battle 同一个数）
+	if int(m.get("ult_turns", 0)) > 0 and float(m.get("ult_follow", 0.0)) > 0.0:
+		c += SONG_CRIT_UP
 	return c
 
 # ㊿z：这个人的暴击倍率——**暴击伤害现在是真属性**：
@@ -1856,12 +1862,38 @@ func _member_ult(m: Dictionary, n, bx: float, ex: float, col: Color, lines: Arra
 		lines.append(str(m["name"]) + " 放出『" + str(m["ult"]) + "』：枪势起——此后 " + str(int(m.get("ult_turns_max", 3))) + " 手回气，挨打反刺（按气血上限 8~12%）")
 		return
 	if uk == "song":
+		# v13c（用户："先挂追击状态再打大招伤害也行 · 我说的是追击暴击不会继续追击
+		#   但是武学啊 大招的多段啊 普攻产生的暴击依旧会追击"）：
+		#   ① **先挂追击状态**（turns 手 · 每次暴击追一剑 ×follow）
+		#   ② **再打出手那几段**——**每段各自掷暴击，暴击就追一剑**
+		#   ③ 「不连锁」只约束追剑自己（SONG_CHAIN_MAX = 1）。（塔战是单体，没有前后排）
 		m["ult_turns"] = int(m.get("ult_turns_max", 3))
 		# ㊿y：角色星「引吭/出岫」——追剑段数（1 + 星给的段数）
 		m["ult_follow_hits"] = 1 + int(m.get("star_follow", 0))
 		_fx("wind", Vector2(bx, _ground_y - 92.0), ART_DASH_COL, 0.8, 80.0, 1.0)
 		_float_at(Vector2(bx, _ground_y - 152.0), "剑歌起", ART_DASH_COL, 22)
-		lines.append(str(m["name"]) + " 放出『" + str(m["ult"]) + "』：剑歌 " + str(int(m.get("ult_turns_max", 3))) + " 手——期间每次暴击追一剑")
+		lines.append(str(m["name"]) + " 剑歌起——此后 " + str(int(m.get("ult_turns_max", 3))) + " 手，每次暴击追一剑（不连锁）")
+		var segn := maxi(1, int(m.get("ult_hits", 1)))
+		var segm := float(m.get("ult_seg_mult", 0.0))
+		var seg_tot := 0
+		for si in segn:
+			if _e_hp() <= 0:
+				break
+			var sd := maxi(1, int(round(float(m["atk"]) * segm * DMG_MUL * randf_range(0.9, 1.1))))
+			var sc := randf() * 100.0 < _crit_chance(m, _foe_below_half())
+			if sc:
+				sd = int(round(float(sd) * _crit_mul(m)))
+			sd = _e_take(sd, m)
+			seg_tot += sd
+			_ex_thorn_gain(m)
+			_fx("slash", Vector2(bx + 46.0, _ground_y - 96.0), col, 0.3, 44.0, 1.0)
+			_fx("hit", Vector2(ex, _ground_y - 92.0), SEAL, 0.38, 40.0)
+			_float_at(Vector2(ex, _ground_y - 150.0 - float(si) * 20.0), "-" + str(sd), SEAL if sc else INK, 24, _member_elem_mark(m))
+			# v13c：**这一段暴击 → 追一剑**（每段各追一次）
+			if sc and _e_hp() > 0:
+				_song_follow(m, n, bx, ex, col, lines)
+		_shake(11.0)
+		lines.append(str(m["name"]) + " 放出『" + str(m["ult"]) + "』——连击 " + str(segn) + " 段：" + str(seg_tot))
 		return
 	var dmg2 := maxi(1, int(round(float(m["atk"]) * ULT_MUL * DMG_MUL * randf_range(0.9, 1.1))))
 	dmg2 = _e_take(dmg2, m)
@@ -2174,7 +2206,12 @@ func _ex_chain_arm(m: Dictionary) -> void:
 #     SONG_CHAIN_MAX ＝ 一次触发最多追到第几层（1 ＝ 老行为；3 ＝ 最多"追了又追"两轮）。
 #   期望追击次数（暴击率 p）＝ p + p² + p³，苏青鸾 27% 暴击时约 0.36 次/触发，不会失控。
 # ============================================================
-const SONG_CHAIN_MAX := 3
+# v13b（用户："【追击可暴击 但是不会继续追击】"）：追剑**不连锁** → 1
+#   ⚠ 与 journey/duel_battle.SONG_CHAIN_MAX 同一个数，改一处必须改两处。
+const SONG_CHAIN_MAX := 1
+# v13：剑歌窗口内的暴击加成（百分点）——苏青鸾的大招加强。
+#   ⚠ 与 journey/duel_battle.SONG_CRIT_UP 同一个数，改一处必须改两处。
+const SONG_CRIT_UP := 15.0
 
 func _song_follow(m: Dictionary, n, bx: float, ex: float, col: Color, lines: Array, depth := 1) -> int:
 	if depth > SONG_CHAIN_MAX:

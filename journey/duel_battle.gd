@@ -73,8 +73,12 @@ static var INTRO_EASE := Tuning.num("journey", "intro_ease", 0.7)
 const ART_CD_MINUS_CAP := Buffs.ART_CD_CAP
 # v49：追剑连环的上限（与 battle_lite.SONG_CHAIN_MAX 同一个数、同一个含义）：
 #   一次触发里"追剑自己暴击 → 再追一层"最多追到第几层。
-#   1 ＝ 老行为（只追一层）；3 ＝ 最多"追了又追"两轮。见 _song_follow 的注。
-const SONG_CHAIN_MAX := 3
+#   1 ＝ 只追一层（不再连环）；3 ＝ 最多"追了又追"两轮。见 _song_follow 的注。
+# v11d（用户："【追击可暴击 但是不会继续追击】"）：**苏青鸾的追剑改为不连锁 → 1**。
+const SONG_CHAIN_MAX := 1
+# v11：剑歌窗口内的暴击加成（百分点）——苏青鸾的大招加强，见 QINGLUAN_DEFAULT.ult。
+#   ⚠ 与 menu/battle_lite.SONG_CRIT_UP 同一个数，改一处必须改两处。
+const SONG_CRIT_UP := 15.0
 # 文钱收入总系数：2.0 → v6 减半 → 本次再降（花不完）；还想更低就 0.4，一个数
 static var MONEY_MULT := Tuning.num("journey", "money_mult", 0.6)
 # 精英怒气增速：敌人每出一手 +34；满 100 放大招（与队员同口径）
@@ -2405,6 +2409,11 @@ func _roll_p_damage(mult: float) -> Dictionary:
 	# ㊿z：角色星——「猎影」（对手残血时暴击 +30 个百分点）
 	#   ⚠ 这一格用**百分点**（跟 stat 组一个口径），不是比例——crit 在引擎里就是 5~30 这种数
 	var crit_pt := float(st["crit"]) + _crit_add + float(_a().get("bless_crit", 0.0))   # ㊿：加持暴击
+	# v11（苏的大招加强）：**剑歌窗口内她自己暴击 +SONG_CRIT_UP**——
+	#   那支大招本来就是"暴击才追剑"，暴击率不够整支就空转（见 QINGLUAN_DEFAULT.ult 的账）。
+	#   判据用 _ult_follow > 0（只有"剑歌"那支会设它；陈石的枪势只设 _ult_turns）✓
+	if _ult_turns > 0 and _ult_follow > 0.0:
+		crit_pt += SONG_CRIT_UP
 	# ============================================================
 	# v62v（用户："舍装签 攻击 +40% 暴击 +50%"）：**暴击率按比例加**——
 	#   `crit_pct` 是比例（0.50＝×1.5），与上面那格"百分点"（crit_pt，5~30 这种数）
@@ -2787,12 +2796,55 @@ func _player_ult() -> void:
 		await _wait(0.5)
 		return
 	if uk == "song":
+		# ============================================================
+		# v11e（用户："先挂追击状态再打大招伤害也行 · 我说的是追击暴击不会继续追击
+		#   但是武学啊 大招的多段啊 普攻产生的暴击依旧会追击"）
+		#   ① **先挂追击状态**（turns 手 · 每次暴击追一剑 ×follow · 取后排）
+		#   ② **再打出手那几段**（每段 mult）——**每一段各自掷暴击，暴击就追一剑**
+		#   ③ 「不连锁」只约束**追剑自己**：追剑暴击只吃暴伤，不再生出新的追剑
+		#      （SONG_CHAIN_MAX = 1）；普攻 / 武学 / 大招各段的暴击照追
+		# ============================================================
 		_ult_turns = int(_ult.get("turns", 3)) + int(maxf(float(_fx_buff.get("ult_dur", 0.0)), float(_fx_buff.get("song_turns", 0.0))))
 		_ult_follow = float(_ult.get("follow", 0.6)) + maxf(0.0, float(_fx_buff.get("song_follow", 0.0)))
 		_ult_new = true
 		if _fx != null:
 			_fx.flash(Color(1, 1, 1, 0.12))
-		UiKit.float_text(self, "剑歌起——" + str(_ult_turns) + " 手，暴击追剑", UiKit.BLUE, 192.0)
+		UiKit.float_text(self, "剑歌起——" + str(_ult_turns) + " 手，暴击追剑（取后排）", UiKit.BLUE, 192.0)
+		var segn := maxi(1, int(_ult.get("hits", 1)))
+		var segm := float(_ult.get("mult", 0.0)) * (1.0 + float(_fx_buff.get("ult_dmg", 0.0)))
+		var keep_s := _focus
+		var back_s := _back_foe()
+		if back_s >= 0 and back_s != keep_s:
+			_focus_on(back_s)
+		var tws: Tween = _player.push_move_to(_p_base + Vector2(112.0, 0.0), 0.18)
+		await tws.finished
+		if not is_instance_valid(_player) or not is_instance_valid(_foe):
+			return
+		var seg_tot := 0
+		for si in segn:
+			if _foe_hp() <= 0:
+				break
+			if _fx != null and is_instance_valid(_foe):
+				_fx.burst(_foe.global_position + Vector2(0.0, -95.0), "cut")
+			var rs := _roll_p_damage(segm)
+			var ds := _foe_take(int(rs["dmg"]))
+			seg_tot += ds
+			_num_foe(ds)
+			_foe.play_hit()
+			_update_bars()
+			await _wait(0.16)
+			# v11e：**这一段暴击 → 追一剑**（每一段各追一次；追剑自己不连锁）
+			if bool(rs["crit"]) and _foe_hp() > 0:
+				_cur_crit = true
+				await _song_follow()
+		print("[游历战斗] 我放大招『", un, "』：出手 ", segn, " 段，合计 ", seg_tot)
+		# 焦点还回去（别让大招把"当前目标"永久抢到后排）
+		if back_s >= 0 and back_s != keep_s:
+			var back_to_s := keep_s if _foe_alive(keep_s) else _front_foe()
+			if back_to_s >= 0:
+				_focus_on(back_to_s)
+		var tws2: Tween = _player.push_move_to(_p_base, 0.2, Tween.TRANS_QUAD, Tween.EASE_IN)
+		await tws2.finished
 		await _wait(0.5)
 		return
 	var r2 := _roll_p_damage(2.5)
@@ -2821,6 +2873,14 @@ func _song_follow(depth := 1) -> void:
 		return
 	if _foe_hp() <= 0 or not is_instance_valid(_foe):
 		return
+	# v11b（用户："大招追击 且打后排"）：**追剑跟她普攻同一条路数——有后排就点后排**。
+	#   她的自带「洞察」本来就是"持匕首绕开当面挡刀的"，追剑若还打在挡刀的身上，
+	#   等于那条自带白写一半。打完把焦点还回去（原来那只还活着就还回去，死了退最前排）。
+	#   ⚠ 连环那一层是递归进来的：两层都会切一次、也都还一次，幂等，不会越切越偏。
+	var keep_focus := _focus
+	var back_i := _back_foe()
+	if back_i >= 0 and back_i != keep_focus:
+		_focus_on(back_i)
 	var f_up := 1.0 + float(_fx_buff.get("follow_dmg", 0.0))
 	var fc_up := 1.0 + float(_fx_buff.get("follow_crit_up", 0.0))
 	for hi2 in 1 + int(_fx_buff.get("follow_hits", 0.0)):
@@ -2843,6 +2903,11 @@ func _song_follow(depth := 1) -> void:
 		# 追剑自己暴击 → 再追一层（有上限）
 		if fcrit2 and depth < SONG_CHAIN_MAX and _foe_hp() > 0:
 			await _song_follow(depth + 1)
+	if back_i >= 0 and back_i != keep_focus:
+		# 焦点还回去（别让追剑把"当前目标"永久抢到后排去）
+		var back_to := keep_focus if _foe_alive(keep_focus) else _front_foe()
+		if back_to >= 0:
+			_focus_on(back_to)
 
 # ============================================================
 # v52：负面状态（缴械 / 燃烧 / 震慑 / 破防 / 虚弱 / 迟缓 / 封脉）
