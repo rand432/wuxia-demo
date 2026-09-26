@@ -23,3 +23,7 @@ debug.log
 Thumbs.db
 desktop.ini
 .DS_Store
+
+# ---- 本会话脚本产生的临时文件（不进版本库）----
+.*-out.txt
+probe_*
