@@ -1,0 +1,25 @@
+# Godot 4+ specific ignores
+.godot/
+/android/
+
+# ---- 构建产物：每次导出都会变，不进版本库 ----
+*.apk
+*.idsig
+*.aab
+export/
+
+# ---- 开发期临时/取证文件 ----
+twitch_dump.csv
+twitch_dump.*
+*.bak
+*.bak-*
+.installer.*
+
+# ---- 搜狗输入法会往进程工作目录里写日志/缓存（CWD=工程目录时）----
+debug.log
+%SystemDrive%/
+
+# ---- 系统/编辑器 ----
+Thumbs.db
+desktop.ini
+.DS_Store

@@ -1,0 +1,280 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<opml version="2.0">
+  <head>
+    <title>江湖游历 · 思维导图</title>
+    <dateCreated>2026-09-22T21:29:27.626Z</dateCreated>
+    <ownerName>江湖游历 / wuxia-demo</ownerName>
+  </head>
+  <body>
+    <outline text="江湖游历">
+      <outline text="0. 一句话与骨架">
+        <outline text="游戏：单机武侠养成 + 两条 PvE 线；竖屏 720×1280，Godot 4.7">
+        </outline>
+        <outline text="两条线：">
+          <outline text="村内爬塔（出村清缴）：全自动战斗，menu/battle_lite.gd">
+          </outline>
+          <outline text="游历决斗：手动出牌 / 自动二选一，journey/duel_battle.gd">
+          </outline>
+        </outline>
+        <outline text="一句循环：修村 → 炼器炼丹升星 → 整备出征 → 游历（或爬塔）带资源回村 → 修村">
+        </outline>
+        <outline text="三个可玩角色：少侠（剑）、陈石（枪·断枪只是标签）、苏青鸾（匕首）">
+        </outline>
+        <outline text="两只宠物：白狐（护主·气血%）、青隼（速度%）">
+        </outline>
+      </outline>
+      <outline text="1. 玩法循环">
+        <outline text="村内段">
+          <outline text="修村：村况 5 段（焦土 → 立木 → 成屋 → 炊烟 → 桃花），menu/data_build.gd STAGE_MAX=4">
+          </outline>
+          <outline text="起建筑：藏宝阁（通关 50 关触发）→ 山洞 → 品酒坊 → 炼丹阁（通关 300 关）">
+          </outline>
+          <outline text="造物：炼丹阁（5 种丹）· 品酒坊（酿酒/卖酒）· 升星台（器物升星）· 仓库（残页合成）">
+          </outline>
+          <outline text="整备：弟子面板（属性/天赋/装备/武学/角色星）· 整备面板（站位＝出手顺序）">
+          </outline>
+        </outline>
+        <outline text="爬塔段：出村面板选关 → battle_lite 自动打 → 银两/经验/首领赏">
+        </outline>
+        <outline text="游历段：出征屏（选人 / 选路 / 携宠 / 临时仓库 / 命数）→ 游历舞台逐节点推进 → 结算带回">
+        </outline>
+        <outline text="挂机：在线＋离线同一个池（上限 8 小时）· 自动爬塔两形态（屏幕内连打 / 回村后台估算）">
+        </outline>
+      </outline>
+      <outline text="2. 战斗">
+        <outline text="两套引擎，别混">
+          <outline text="menu/battle_lite.gd：村内爬塔/清缴，全自动，不吃运签卡">
+          </outline>
+          <outline text="journey/duel_battle.gd：游历决斗，手动（出牌）或自动，吃运签卡">
+          </outline>
+          <outline text="同一个 journey/stick_fighter.gd 演两边的小人（火柴人 + 姿态弹簧 + 位移补间队列）">
+          </outline>
+        </outline>
+        <outline text="出手：按速度排序；一轮 ＝ 全员各出一次手；一手 STEP=0.72s">
+        </outline>
+        <outline text="怒气：上限 100；每手 34 × 0.7 ≈ 23.8（引气归元 ×1.3）">
+        </outline>
+        <outline text="伤害：普攻倍率 DMG_MUL=2.0；大招基准 ULT_MUL=2.5">
+        </outline>
+        <outline text="暴击＝真属性：倍率 1.0 + 暴伤/100，默认 50 → 1.5 倍（旧版写死 1.6）">
+        </outline>
+        <outline text="反刺/反伤：陈石枪势按自己气血上限 8%~12%（挨得越重越高）；词缀反伤一次封顶 10%">
+        </outline>
+        <outline text="敌人词缀 12 条：反伤 / 速攻 / 回春 / 自爆 / 电盾 / 狂暴 / 鼓舞 / 战意 / 毒刃 / 破前 / 偷袭 / 截后">
+        </outline>
+        <outline text="站位与范围：target 8 种（front/mid/back/sweep/ally_front/ally_mid/ally_back/ally_all）；多人时副手按 60%/40% 折算">
+        </outline>
+        <outline text="大招形态（决定能吃什么加成）">
+          <outline text="少侠「长风破浪」＝ hit 瞬发群攻（只能吃倍率/开怒）">
+          </outline>
+          <outline text="陈石「回马断枪」＝ aura（能吃持续/反刺）">
+          </outline>
+          <outline text="苏青鸾「青鸾出岫」＝ song（能吃持续/追击）">
+          </outline>
+        </outline>
+      </outline>
+      <outline text="3. 成长">
+        <outline text="等级 / 境界：上限 100 级，每 10 级一境，10 个境界（初出茅庐 … 一代宗师）；每级 +2 气血 +1 攻击（另有根骨加成）">
+        </outline>
+        <outline text="五问天赋：5 问，前 4 问各发一条天赋，第 5 问只送礼物；定签（按表序取，不随机）">
+          <outline text="五系：武势 / 智谋 / 韧劲 / 财路 / 缘法，各 3 条（抽取池 5×3=15）">
+          </outline>
+          <outline text="天赋总表 26 条：好 15 / 坏 7 / 人物自带 4（其中「身法」尚未接线）">
+          </outline>
+        </outline>
+        <outline text="角色星（shared/data_stars.gd，6 级，顺序解锁）">
+          <outline text="排布：1/3/5 ＝ 数值 · 2 ＝ 机制 · 4 ＝ 被动强化 · 6 ＝ 大招强化">
+          </outline>
+          <outline text="消耗：碎片 [0,1,1,2,3,5,8]（共 20 片）＋ 银两 [0,300,600,1200,2400,4800,9600]（共 18900，妙手 −30%）">
+          </outline>
+          <outline text="碎片来源：游历红件搜刮（frag_player/frag_chen/frag_qing）">
+          </outline>
+        </outline>
+        <outline text="器物升星（升星台）：兵器/装备/武学同规则，五行每星 +20%">
+          <outline text="同名份数 [0,1,2,4,8,16] ＋ 银两 [0,200,400,800,1600,3200] × 品级系数 × 妙手折扣">
+          </outline>
+          <outline text="星记在「谁手里那把」上（主人|套名）">
+          </outline>
+        </outline>
+        <outline text="专武（3 部，HSR 光锥口径）">
+          <outline text="不锁人（role 只是推荐）、被动常驻（不进出手轮转）、no_drop 哪儿都不出">
+          </outline>
+          <outline text="数值随佩者星级缩放 1 + 0.1×(星−1)，计数/开关类不缩放（持续手数、追击段数、无视兵器要求…）">
+          </outline>
+          <outline text="长风诀（少侠）· 铁壁桩功（陈石）· 短歌行（青鸾）">
+          </outline>
+        </outline>
+        <outline text="宠物">
+          <outline text="五阶：幼年期 → 成长期 → 成熟期 → 通灵期 → 化形期；每阶主加成 +2">
+          </outline>
+          <outline text="白狐护主（气血 +5% 起）· 青隼加速（速度 +4% 起）">
+          </outline>
+          <outline text="资质：入册随机 30~60，洗灵丹 +2/颗、每阶限 1 颗">
+          </outline>
+          <outline text="血脉：四档 15 条，值 ＝ 基础 ×(0.5+资质/100)×(0.5+纯度/100)×(契合 1.5)">
+          </outline>
+          <outline text="升星：5 星，每星 ×1.2（吃同名份数，消耗表与器物共用）">
+          </outline>
+        </outline>
+      </outline>
+      <outline text="4. 内容表（数出来的）">
+        <outline text="兵器 25 件：剑/双刀/匕首/枪/棍 各 5 件（每品质各 1 件）；品质 5 档 凡/良/上/极/绝；残页 3~7 片（按品质递增）">
+        </outline>
+        <outline text="装备 12 件：护甲 / 玉佩 / 披风 各 4 件（凡~极品，无绝品）">
+        </outline>
+        <outline text="武学 33 部：主动 30 + 专武 3；kind 有 damage/dash/guard/heal/stone/bless/passive">
+        </outline>
+        <outline text="卡（data_buffs.gd）：普通 6 · 特殊 3 · 专属 12（三角色各 4，只在主人在阵时可请）· 命数签 8">
+        </outline>
+        <outline text="羁绊 3 组：师徒（少侠+陈石）· 同门（陈石+青鸾）· 三人同心（+10% 六维）；只在村内一队口径生效，游历不带">
+        </outline>
+        <outline text="丹药 5 种：强身丹（气血+10）· 淬体丹（攻击+2）· 洗髓丹（根骨+1）· 养灵丹（宠物灵息+30）· 洗灵丹（宠物资质+2，只能搜刮、炼不出来）">
+        </outline>
+        <outline text="酒：5 个名（新酿米酒…竹叶酒）× 5 星等 × 5 轴品评（色/香/味/韵/劲）；只影响售价，没有战斗效果">
+        </outline>
+        <outline text="材料 6 种：木料 / 紫芝 / 雪参 / 朱果 / 兽骨碎 / 灵米">
+        </outline>
+        <outline text="货币 3 种：文钱（游历盘缠，出局清零）/ 银两 / 元宝">
+        </outline>
+        <outline text="血脉 15 条：凡 3 / 紫 5 / 金 4 / 绝 3；掉落权重 34/48/16/2">
+        </outline>
+      </outline>
+      <outline text="5. 游历细节">
+        <outline text="难度 10 档：风平浪静 → 十死无生（前一档清了才开下一档）">
+        </outline>
+        <outline text="正式趟节点数：5 节一轮 × min(2+档, 9) 轮 + 首领收尾 → 16 ~ 46 节">
+          <outline text="每轮固定顺序：武学残页事件 → 兵器残卡事件 → 装备残片事件 → 战斗（精英）→ 歇脚+商店">
+          </outline>
+        </outline>
+        <outline text="节点 9 类：story / gain / rest_shop / rest / event / battle / shop / fate / settle（gain 目前无数据产出）">
+        </outline>
+        <outline text="引子趟另走老表：28 节（首次游历的脚本趟）">
+        </outline>
+        <outline text="搜刮 8 种容器：尸体 / 散落包袱 / 木箱 / 药篓 / 石缝 / 储物柜 / 枯井 / 密柜（密柜最肥）">
+        </outline>
+        <outline text="警戒：上限 100，满了就打（且敌先手）；开箱 +10 / 揭晓 +8 / 拿取 +2 / 过节点 −15">
+        </outline>
+        <outline text="续行存档 3 处：进节点 / 正事办完 / 搜刮关板；档在 user://run.cfg">
+        </outline>
+        <outline text="结算 9 桶：cards / items / mats / fragments / pills / wines / bloods / silver / yuanbao；文钱就地作废；死了全丢">
+        </outline>
+        <outline text="出征前自动卸装（随身三样全回仓库），回村照原样穿回——所以游历是&quot;从零开始捡&quot;">
+        </outline>
+      </outline>
+      <outline text="6. 村内经营">
+        <outline text="村况 5 段：焦土 / 立木 / 成屋 / 炊烟 / 桃花">
+        </outline>
+        <outline text="建筑与门槛：藏宝阁（50 关剧情 + 8 木料）· 山洞（6 木料）· 品酒坊（8 木料）· 炼丹阁（300 关剧情 + 10 木料）">
+        </outline>
+        <outline text="村里 12 个可点记号：瓦房/竹屋（行囊·仓库）/石桌/山门/工地/溪畔/后山/藏宝阁/山洞/品酒坊/炼丹阁/货栈">
+        </outline>
+        <outline text="货栈 6 件：木料类（兽骨碎 15 / 灵米 10）· 三类残卡（90/120/90，日限 3/2/2）· 金纹血脉囊 280（日限 1）">
+        </outline>
+        <outline text="四个价，顺序不能乱：买进 30~60×品级（货郎担）＞ 卖店 12（残卡）/25（成品）＞ 折现 6（满包下策，必须低于卖店）· 另有&quot;补齐&quot; 80×品级（点菜代价）">
+        </outline>
+        <outline text="挂机收益：银两 1/分 · 木料 1/10 分 · 经验 2/分；每清 50 关涨一档，10 档封顶">
+        </outline>
+        <outline text="离线推塔：上限 300 关/次，单场估算 4~40 手，一手 0.72s（与战斗同口径）">
+        </outline>
+      </outline>
+      <outline text="7. 爬塔（出村清缴）">
+        <outline text="上限 20000 关（不是 500——先给到两万）">
+        </outline>
+        <outline text="首领每 25 / 50 / 100 关（按关号分档）；精英每 10 / 25 / 50 关；两者独立，公倍数关两个都算">
+        </outline>
+        <outline text="章名 10 个循环：落草 → 流寇 → 黑风寨 → 翻江 → 铁棍门 → 残党 → 断魂谷 → 铁旗堡 → 血鹰崖 → 天王寨（每章 5 关）">
+        </outline>
+        <outline text="强度公式：气血 110 + 3×i、攻击 6 + 0.12×i（复利系数留 1.0＝不生效）；精英 ×1.5/×1.15，首领 ×2.4/×1.35">
+        </outline>
+        <outline text="收益：银两 (8 + 0.22×i)×0.5（精英 ×2.5）· 经验 24 + 0.5×i（精英 ×2）">
+        </outline>
+        <outline text="首领赏：只首领给；每一品级每一件都发过才升下一级；凡品给整套、良品起给残页；只发到极品（绝品不开放）；发完一轮从凡品重来">
+        </outline>
+      </outline>
+      <outline text="8. 界面与入口">
+        <outline text="村内：主界面（村子全景 + 底排）· 弟子 · 仓库 · 货栈 · 炼丹阁 · 品酒坊 · 宠物 · 升星台 · 出村 · 整备（站位/上阵/宠物随行）· 出征屏">
+        </outline>
+        <outline text="游历：舞台（节点推进）· 卡组面板（请签/命数/我的卡组）· 包裹 · 角色面板 · 货郎担 · 合成 · 事件 · 搜刮面板 · 结算页「行囊清点」">
+        </outline>
+        <outline text="战斗：battle_lite（自动）· duel_battle（手牌/自动 + 长按看详情）">
+        </outline>
+        <outline text="测试键 19 个字母键（主界面，menu_sketch.gd，另加出征屏 F9）：F 阵容 · I 重播弟子入门 · K 重播宠链 · M 仓库塞货 · T 挂机 +1h · Y 挂机灌满 · G 建筑+炼丹链 · H 送酒 · C 炼丹测试包 · V 炉火快进 · X 进度推到满关 · L 村况切换 · P 宠物测试包 · Q 女侠剧情 · N 季节预览 · O 写出调参配置 · J 存档版本自检 · R 清档（连按两次）· W 窗口尺寸 · （出征屏 F9 走通难度档）">
+        </outline>
+      </outline>
+      <outline text="9. 技术与存档">
+        <outline text="目录：shared/（数据表 + 账本 + 两套工具）· menu/（村内）· journey/（游历）">
+        </outline>
+        <outline text="数据与逻辑分家：所有数值都在 shared/data_*.gd 与各文件顶部常量里，改数只改表">
+        </outline>
+        <outline text="存档：save.cfg（村况/货币/三角色/仓库/器物星/宠与血脉/角色星/卸装记录）">
+          <outline text="六份旁账：journey.cfg（难度·背包档）· shop.cfg（日限购）· idle.cfg（挂机池）· run.cfg（游历续行）· season.cfg（季节）· tuning.cfg（调参）">
+          </outline>
+          <outline text="写入先备份（save.bak）· 版本迁移（比本程序新的档改名 save.cfg.vN.bak 留档，绝不静默丢）">
+          </outline>
+          <outline text="auto_bg（回村后台）不存档——重启就回到屏幕内连打">
+          </outline>
+        </outline>
+        <outline text="静态体检五个脚本（在 %TEMP%，不在仓库里）：">
+          <outline text="gdchk.js 结构（缩进/括号/块头/重复声明/类级重复/先用后声明/未声明的下划线私有名）">
+          </outline>
+          <outline text="chkapi.js 跨文件接口（别名.成员 是否真的存在）">
+          </outline>
+          <outline text="chkcards.js 卡表自洽 · chkarts.js 武学/专武/角色星单位 · chkexcl.js 专属卡归属">
+          </outline>
+        </outline>
+      </outline>
+      <outline text="10. 未定与风险（逐条给位置）">
+        <outline text="来路未定">
+          <outline text="专武到手方式未定（data_cards.gd 专武段注释；满星礼代码被注释掉，game_state.gd:248）">
+          </outline>
+          <outline text="宠物同名份数（升星材料）来路未定，目前只有账本口 pet_dup_add（game_state.gd:635/823）">
+          </outline>
+          <outline text="角色碎片已能拿，但&quot;升星系统未开&quot;的注释还在（game_state.gd:2110）">
+          </outline>
+        </outline>
+        <outline text="数值风险">
+          <outline text="升星材料量：器物/宠物满星要 31 只同名（1/2/4/8/16 累计）">
+          </outline>
+          <outline text="血脉可叠加且整数键也吃资质纯度缩放 → 极限 +243% 全队气血、携行格可堆到 20+（五格同种绝品＋五星）">
+          </outline>
+          <outline text="宠物加成现在村内与游历都生效（走 effective_stats 一处），且游历里会跟着走/站在战场边">
+          </outline>
+        </outline>
+        <outline text="文案与口径冲突（代码注释层面）">
+          <outline text="character_panel.gd 的属性提示还写&quot;闪避/暴击是预备属性、战斗里还没接&quot;——已过期（两套引擎都吃暴击真属性了）">
+          </outline>
+          <outline text="journey_buff_panel.gd 与 journey_stage.gd 对&quot;专属卡每趟限一张&quot;说法相反（实现是可重复请）">
+          </outline>
+          <outline text="data_buffs.gd 里&quot;撤了角色过滤&quot;与&quot;只对卡上角色生效&quot;两段注释互相矛盾">
+          </outline>
+          <outline text="RUN_EXPAND_FREE=0（不白给格）与 journey_depart.gd 注释&quot;每趟 6 格底&quot;不符">
+          </outline>
+        </outline>
+        <outline text="上线前要处理">
+          <outline text="20 个测试键 + 6 个 debug_* 测试包（注释都标了「测试用·上线前删」）">
+          </outline>
+          <outline text="ALLOW_SAVE_WIPE=false：导出包里清档键已被挡住（只在编辑器放行）">
+          </outline>
+          <outline text="BOOT_INTO_INTRO=true：改回 false 就恢复&quot;开机进村&quot;">
+          </outline>
+        </outline>
+        <outline text="尚未接线">
+          <outline text="天赋「身法」·「慢热 / 怯阵 / 贪杯 / 守旧」四条 fx 为空（表里标&quot;以后接&quot;）">
+          </outline>
+          <outline text="词缀 pierce / ambush / cutoff 只有文案，没有数值常量">
+          </outline>
+          <outline text="alert_cap（警戒上限）键在宠物血脉表里挂着，但 15 条血脉一条都没用">
+          </outline>
+        </outline>
+      </outline>
+      <outline text="11. 附：三条最该记住的口径">
+        <outline text="两套引擎，一份数据：村内＝battle_lite（自动）· 游历＝duel_battle（手动/自动）。">
+        </outline>
+        <outline text="单位两套，别混：角色星/天赋的 stat 组整数＝百分点（dmg/hp_pct/crit/crit_dmg/dodge/def/dmg_cut/art_dmg）；">
+        </outline>
+        <outline text="一处算清，别处只读：宠物随行加成落在 GameState.effective_stats；">
+        </outline>
+      </outline>
+    </outline>
+  </body>
+</opml>

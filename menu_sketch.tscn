@@ -1,0 +1,12 @@
+[gd_scene format=3 uid="uid://i13b458l0v74"]
+
+[ext_resource type="Script" uid="uid://drfmjpl0ukcbg" path="res://menu/menu_sketch.gd" id="1_afguj"]
+
+[node name="menu_sketch" type="Control" unique_id=1692639367]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_afguj")
