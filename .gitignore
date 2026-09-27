@@ -35,3 +35,11 @@ probe_*
 # ---- 临时拼图（不进版本库）----
 .res*.png
 .sheet*.png
+
+# ---- 临时拼图 / 备份（不进版本库）----
+.sk*.png
+.look*.png
+.film*.png
+*.bak
+*.bak-v2
+*.damaged
