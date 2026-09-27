@@ -6,7 +6,10 @@
 *.apk
 *.idsig
 *.aab
-export/
+# export/ 默认不进库（挡 Godot 导出的 APK），但**成片是交付物，必须放行**
+export/*
+!export/开场_成片.mp4
+!export/样片_*.mp4
 
 # ---- 开发期临时/取证文件 ----
 twitch_dump.csv
