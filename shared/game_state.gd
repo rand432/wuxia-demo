@@ -2352,6 +2352,42 @@ static var qingluan := {}
 # ㉖：自带的"唯一真源"是 journey/data_roles.gd（按角色 id 查）。
 # 账本三个模板里的 innate / innate_desc 是给人看的副本——这里统一刷一遍，
 # 新档、旧档（存着空字符串）、以后改表，走这一条路就都能对上。
+# ============================================================
+# v65i（用户：「少侠的速度是不是太高了」）：**是**——而且后果比「抢出手位」重得多。
+#
+#   设计量级是「**10 ＝ 常人**」：村里三人底子 9/10/12 · 塔战的怪 9~28 ·
+#   游历敌人表里写的是 88~110，但 duel_battle._foe_spd() **已经 ÷10 折过**
+#   （→ 8.8~11）——三边本来就该在同一档。
+#
+#   而少侠存档里的 stats.spd 是 **104**（旧档遗留；现在的代码里**没有任何一条**
+#   会把速度加进 stats：升级只涨气血、突破涨攻/血/防、属性丹只有强身(气血)/淬体(攻击)、
+#   星/装备/天赋/宠物都走另外的层）。104 ÷ 9.5 ≈ **11 倍** →
+#   GameData.extra_attacks() 是**倍率**规矩（≥2 倍 → 多打 floor(比)−1 下，封顶 2）→
+#   **他的每一次普攻都自动多打 2 下**（战报上就是连着三条「少侠 普攻」）。
+#
+#   只校正一次（spd_fixed 标记）。想让谁真的「身法快」，要走正规来源：
+#   装备（披风）· 天赋（料敌先机 +4）· 宠物青隼（速度%）——别留旧档的野数。
+# ============================================================
+static func role_spd_base(id: String) -> int:
+	if id == "chen_shi":
+		return int((CHEN_SHI_DEFAULT.get("stats", {}) as Dictionary).get("spd", 9))
+	if id == "qingluan":
+		return int((QINGLUAN_DEFAULT.get("stats", {}) as Dictionary).get("spd", 12))
+	return int((PLAYER_DEFAULT.get("stats", {}) as Dictionary).get("spd", 10))
+
+static func _fix_legacy_spd(role: Dictionary, id: String) -> void:
+	if role.is_empty() or bool(role.get("spd_fixed", false)):
+		return
+	var base := role_spd_base(id)
+	var st: Dictionary = role.get("stats", {})
+	var cur := int(st.get("spd", base))
+	if cur != base:
+		st["spd"] = base
+		role["stats"] = st
+		print("[账本] 速度校正：", str(role.get("name", id)), " ", cur, " → ", base,
+			"（旧档遗留值；设计量级 10＝常人——不校正的话「快一倍多打一下」那条会把普攻翻三倍）")
+	role["spd_fixed"] = true
+
 static func _sync_role_innate(role: Dictionary, id: String) -> void:
 	if role.is_empty():
 		return
@@ -5293,6 +5329,10 @@ static func load_game() -> void:
 	_sync_role_kit(player_role, "player")
 	_sync_role_kit(qingluan, "qingluan")
 	_sync_qingluan_talents(qingluan)   # v65：老档里她那些随机天赋（悟性/闪避）换成固定两条
+	# v65i：速度校正（旧档遗留的野数——见 _fix_legacy_spd 的长注）
+	_fix_legacy_spd(chen_shi, "chen_shi")
+	_fix_legacy_spd(player_role, "player")
+	_fix_legacy_spd(qingluan, "qingluan")
 	# ㊿v：出征自动卸下的记录（回来后照原样穿回去用）
 	strip_saved = _sd(cf.get_value("world", "strip_saved", {}), {})
 	# ㊿y：角色星
