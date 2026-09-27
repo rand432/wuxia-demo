@@ -2059,17 +2059,37 @@ func _tick_arts_all() -> void:
 #   注意跟 _auto_choice 的分工：那个只在"某一个人的牌"里挑（自动那一手要亮牌用），
 #   这个在全队摊开的牌里挑（决定这一手该由谁出）。
 func _auto_choice_team(cards: Array) -> Dictionary:
+	# ============================================================
+	# v64（用户："上了少侠，就只有少侠出手…不上少侠的话 陈和苏会出手"）：
+	#   **原来只看（优先级, 速度）**——速度那一项一压，同优先级下**最快的人每格都赢**：
+	#   少侠 116 对陈石 12 / 苏 18，一回合 7 个位子他能吃掉大半，
+	#   战报上看着就是"只有少侠在打"（复现：少侠 81 行 vs 陈石 14 行）。
+	#   现在加一层**公平**：这一轮还没出过手的人优先（权重 200——
+	#   高过任何速度差，又低过"大招＞武学"那 1000 的档），于是
+	#   **只要某人这轮一张牌都还没出，他就排在所有"已出过手"的人前面** ✓
+	#   大招/武学仍然优先于普攻，只是不再被同一个人包场。
+	# ============================================================
 	var best: Dictionary = {}
 	var best_score := -1.0
 	for c_v in cards:
 		var c: Dictionary = c_v
 		var k := str(c.get("k", "normal"))
 		var pri := 2.0 if k == "ult" else (1.0 if k == "art" else 0.0)
-		var score := pri * 1000.0 + _ally_spd(int(c.get("ai", 0)))
+		var ai := int(c.get("ai", 0))
+		var fair := 0.0 if _acted_this_round(ai) else 1.0
+		var score := pri * 1000.0 + fair * 200.0 + _ally_spd(ai)
 		if score > best_score:
 			best_score = score
 			best = c
 	return best
+
+# v64：这一轮这个人出过手没有（台账 _used 每轮开头清，见 _reset_used）
+func _acted_this_round(ai: int) -> bool:
+	var pre := str(ai) + "|"
+	for u_v in _used:
+		if str(u_v).begins_with(pre):
+			return true
+	return false
 
 # ㊿：一个"我方出手位"。一个位子＝出一张牌；**还能出几张就有几个位子**，
 #   所以一个人一轮里可能连出好几手（技能冷却好了就能出）。
@@ -2268,6 +2288,10 @@ func run(state, player: Node2D, fx: Control, node: Dictionary, foe_first := fals
 					continue
 				var pk: Dictionary = t.get("pick", {})
 				_p_focus_on(act_i)
+				# v64：这一手开始前先清掉"上一次是谁出的"——
+				#   否则 _strike 中途被打断（电麻/震慑/毒发倒下）时，
+				#   下面那句会把**上一个人**的牌记进台账，位子白白少一个。
+				_last_ai = -1
 				await _strike(true, pk)
 				# ㊿：记台账——照"真出的那一张"记（手动点的／自动挑的都汇到这儿）
 				if _last_ai >= 0:
@@ -2279,6 +2303,18 @@ func run(state, player: Node2D, fx: Control, node: Dictionary, foe_first := fals
 					continue
 				_focus_on(fi)
 				await _strike(false)
+		# v64：一轮收尾——**手上有牌却一张没出**的人，写一行到战报里。
+		#   修完公平那一层之后正常不该出现；留着当兜底（也是"自动会不会漏人"的现场取证）。
+		if _allies_alive() > 0 and _foes_alive() > 0:
+			for i2 in _allies.size():
+				if not _ally_alive(i2) or _acted_this_round(i2):
+					continue
+				var mine := 0
+				for c_v in _available_cards():
+					if int((c_v as Dictionary).get("ai", -1)) == i2:
+						mine += 1
+				if mine > 0:
+					_blog("（这一轮 " + str(ally_at(i2).get("name", "队友")) + " 没轮上——手上还剩 " + str(mine) + " 张牌）", "sys")
 		# 这一轮里倒下的敌人补一次自爆判定
 		for i in _foes.size():
 			if not _foe_alive(i):
