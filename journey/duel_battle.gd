@@ -2069,15 +2069,23 @@ func _auto_choice_team(cards: Array) -> Dictionary:
 	#   **只要某人这轮一张牌都还没出，他就排在所有"已出过手"的人前面** ✓
 	#   大招/武学仍然优先于普攻，只是不再被同一个人包场。
 	# ============================================================
+	# v64c（用户："挑人那层改成硬性一轮一人一次"）：
+	#   **本轮已出过手的人，直接从候选里剔掉**——一轮里每人至多一个位子。
+	#   只有当"剩下这些牌的主人都已经出过手"（＝全队都轮过了）时才放开重复，
+	#   否则位子会白白空过。
+	var pool: Array = []
+	for c_v in cards:
+		if not _acted_this_round(int((c_v as Dictionary).get("ai", 0))):
+			pool.append(c_v)
+	if pool.is_empty():
+		pool = cards
 	var best: Dictionary = {}
 	var best_score := -1.0
-	for c_v in cards:
+	for c_v in pool:
 		var c: Dictionary = c_v
 		var k := str(c.get("k", "normal"))
 		var pri := 2.0 if k == "ult" else (1.0 if k == "art" else 0.0)
-		var ai := int(c.get("ai", 0))
-		var fair := 0.0 if _acted_this_round(ai) else 1.0
-		var score := pri * 1000.0 + fair * 200.0 + _ally_spd(ai)
+		var score := pri * 1000.0 + _ally_spd(int(c.get("ai", 0)))
 		if score > best_score:
 			best_score = score
 			best = c
@@ -2314,7 +2322,14 @@ func run(state, player: Node2D, fx: Control, node: Dictionary, foe_first := fals
 					if int((c_v as Dictionary).get("ai", -1)) == i2:
 						mine += 1
 				if mine > 0:
-					_blog("（这一轮 " + str(ally_at(i2).get("name", "队友")) + " 没轮上——手上还剩 " + str(mine) + " 张牌）", "sys")
+					# v64b：把"这一轮谁被挑过"一起写出来——下一次截图就能看出是
+					# 「位子不够」还是「被挑了但没打出去」（票根见 _used）
+					var seat2: Array = []
+					for u2 in _used:
+						seat2.append(str(u2).split("|")[0])
+					_blog("（这一轮 " + str(ally_at(i2).get("name", "队友")) + " 没轮上——手上还剩 "
+						+ str(mine) + " 张牌；本轮的位子：" + str(order.size()) + " 个，出过手的下标 ["
+						+ ",".join(PackedStringArray(seat2)) + "]）", "sys")
 		# 这一轮里倒下的敌人补一次自爆判定
 		for i in _foes.size():
 			if not _foe_alive(i):
