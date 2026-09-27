@@ -1,0 +1,522 @@
+﻿# ============================================================
+# 开场分镜 · 11 镜构图草图生成器（本地，零成本）
+# 用途：给 LibTV/Liblib AI 的 img2img 垫图，把构图锁死，不让模型自由发挥。
+#       草图只表达「什么在哪、占多大」——不表达风格，风格交给 LoRA。
+# 输出：assets/gen/sketches/<镜名>.png
+# 跑法：powershell -NoProfile -ExecutionPolicy Bypass -File tools\make_sketches.ps1
+# ============================================================
+Add-Type -AssemblyName System.Drawing
+$ErrorActionPreference = 'Stop'
+
+$W = 1664; $H = 928
+$OUT = Join-Path (Split-Path -Parent $PSScriptRoot) 'assets\gen\sketches'
+New-Item -ItemType Directory -Path $OUT -Force | Out-Null
+
+$INK  = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255,24,24,28))
+$INK2 = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255,52,56,64))
+$GREY = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255,150,155,163))
+$PALE = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255,205,208,214))
+$RED  = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255,190,32,38))
+$PEN_K  = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(255,24,24,28), 10)
+$PEN_K2 = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(255,24,24,28), 5)
+$PEN_G  = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(255,175,180,188), 4)
+$PEN_R  = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(255,190,32,38), 9)
+
+function Make([string]$name, [scriptblock]$draw) {
+  $bmp = New-Object System.Drawing.Bitmap($W,$H)
+  $g = [System.Drawing.Graphics]::FromImage($bmp)
+  $g.SmoothingMode = 'AntiAlias'
+  $g.Clear([System.Drawing.Color]::FromArgb(255,252,251,249))
+  & $draw $g
+  $p = Join-Path $OUT ($name + '.png')
+  $g.Dispose(); $bmp.Save($p, [System.Drawing.Imaging.ImageFormat]::Png); $bmp.Dispose()
+  Write-Output ("  " + $name + ".png")
+}
+
+# ---------- 01 墨入水 · 大特写 · 纯黑画面中央偏下一滴墨 ----------
+Make '01_墨入水' {
+  param($g)
+  $g.Clear([System.Drawing.Color]::FromArgb(255,12,12,14))
+  $g.FillEllipse((New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255,30,30,34))), 300, 180, 1064, 620)
+  $g.FillEllipse($INK2, 760, 470, 150, 110)                    # 墨滴落点
+  for ($i=0; $i -lt 26; $i++) {                                 # 晕散丝
+    $a = $i * 13.8 * [math]::PI / 180
+    $len = 240 + ($i % 5) * 90
+    $g.DrawLine((New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(120,70,72,80), 3)),
+      (835 + [math]::Cos($a)*70), (525 + [math]::Sin($a)*50),
+      (835 + [math]::Cos($a)*$len), (525 + [math]::Sin($a)*$len*0.62))
+  }
+  $g.DrawEllipse((New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(160,150,160,175), 4)), 600, 380, 470, 290)  # 水波
+}
+
+# ---------- 02 荒原流民 · 大远景 · 下半幅塞满枯瘦流民，上半幅全空，天不管人 ----------
+Make '02_荒原流民' {
+  param($g)
+  $g.Clear([System.Drawing.Color]::FromArgb(255,250,249,247))
+  # 地面带（地平线压到 y≈700，下方是密密麻麻的人）
+  # 干裂荒原：只铺极淡的土色，且做成斑驳不匀（不要出现"水面/倒影"的平整横带）
+  $rnd0 = New-Object System.Random(5)
+  for ($i=0; $i -lt 220; $i++) {
+    $g.FillEllipse((New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb($rnd0.Next(10,34), 176,168,150))),
+      $rnd0.Next(-60, $W), 660 + $rnd0.Next(0, 250), $rnd0.Next(60,240), $rnd0.Next(10,40))
+  }
+  $g.DrawLine($PEN_G, 0, 690, $W, 690)
+  # 血红的残阳：全图唯一暖色，钉在右上
+  $g.FillEllipse($RED, 1188, 132, 216, 216)
+  $g.FillEllipse((New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(70,190,32,38))), 1160, 108, 272, 264)
+  # 远处低矮中式城郭：城墙 + 垛口 + 城门洞 + 两座城楼
+  $wall = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255,203,206,212))
+  $g.FillRectangle($wall, 726, 664, 386, 30)
+  for ($x = 732; $x -lt 1108; $x += 26) { $g.FillRectangle($wall, $x, 656, 15, 10) }
+  $hole = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255,250,249,247))
+  $g.FillRectangle($hole, 896, 670, 38, 24)
+  $g.FillEllipse($hole, 896, 658, 38, 24)
+  foreach ($tx in @(772, 1016)) {
+    $g.FillRectangle($wall, $tx, 636, 48, 30)
+    $roof = New-Object System.Drawing.Drawing2D.GraphicsPath
+    $roof.AddLine($tx-16, 640); $roof.AddLine($tx+64, 640); $roof.AddLine($tx+24, 610); $roof.AddLine($tx-16, 640)
+    $g.FillPath($wall, $roof)
+  }
+  # 右侧一棵枯树 + 围树刨土哄抢的一簇人
+  $treePen = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(255,24,24,28), 9)
+  $g.DrawLine($treePen, 1408, 700, 1408, 508)
+  foreach ($b in @(@(1408,556,1330,470),@(1408,576,1490,492),@(1408,608,1352,540),@(1408,624,1466,556))) {
+    $g.DrawLine((New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(255,24,24,28), 6)), $b[0], $b[1], $b[2], $b[3])
+  }
+  # ---- 密密麻麻的流民：枯瘦、佝偻、匍匐、伏地，杂乱无章 ----
+  $rnd = New-Object System.Random(2024)
+  $figCount = 78
+  for ($i = 0; $i -lt $figCount; $i++) {
+    $x = 40 + $rnd.Next(0, 1580)
+    $depth = $rnd.Next(0, 100) / 100.0                       # 0=远 1=近
+    $y = 688 + [int]($depth * 158)
+    $scale = 1.05 + $depth * 1.55                             # 近大远小（整体放大 1.8x，密度才读得出来）
+    $k = $rnd.Next(0, 100)
+    if ($k -lt 42) {
+      # 佝偻站立／行走：极瘦，头小，身如柴
+      $bw = [int](9 * $scale); $bh = [int]((58 + $rnd.Next(0,46)) * $scale)
+      $g.FillEllipse($INK, $x, $y - $bh, [int](16*$scale), [int](16*$scale))
+      $g.FillRectangle($INK, $x + 2, $y - $bh + [int](14*$scale), $bw, $bh - [int](14*$scale))
+      $g.DrawLine((New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(255,24,24,28), [int](4*$scale))), $x + 4, $y, $x + [int](10*$scale), $y + [int](14*$scale))
+    } elseif ($k -lt 64) {
+      # 匍匐／爬行：身子接近水平
+      $g.FillEllipse($INK, $x, $y - [int](14*$scale), [int](15*$scale), [int](13*$scale))
+      $g.DrawLine((New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(255,24,24,28), [int](9*$scale))), $x + [int](12*$scale), $y - [int](8*$scale), $x + [int](54*$scale), $y - [int](2*$scale))
+    } elseif ($k -lt 78) {
+      # 伏地不起：一条短横墨
+      $g.DrawLine((New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(220,24,24,28), [int](8*$scale))), $x, $y, $x + [int]((28 + $rnd.Next(0,22))*$scale), $y + [int](2*$scale))
+    } elseif ($k -lt 88) {
+      # 拄杖者：身＋斜杖
+      $bh = [int]((64 + $rnd.Next(0,26)) * $scale)
+      $g.FillEllipse($INK, $x, $y - $bh, [int](15*$scale), [int](15*$scale))
+      $g.FillRectangle($INK, $x + 2, $y - $bh + [int](13*$scale), [int](9*$scale), $bh - [int](13*$scale))
+      $g.DrawLine((New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(255,24,24,28), [int](3*$scale))), $x + [int](14*$scale), $y - [int]($bh*0.72), $x + [int](24*$scale), $y)
+    } else {
+      # 抱襁褓者：身前一小团
+      $bh = [int]((56 + $rnd.Next(0,20)) * $scale)
+      $g.FillEllipse($INK, $x, $y - $bh, [int](15*$scale), [int](15*$scale))
+      $g.FillRectangle($INK, $x + 2, $y - $bh + [int](13*$scale), [int](10*$scale), $bh - [int](13*$scale))
+      $g.FillEllipse($INK, $x - [int](6*$scale), $y - [int](30*$scale), [int](16*$scale), [int](13*$scale))
+    }
+  }
+  # 枯树上／树根旁挤着抢食的一圈人（再压一层）
+  for ($i = 0; $i -lt 16; $i++) {
+    $x = 1330 + $rnd.Next(0, 170); $y = 706 + $rnd.Next(0, 40)
+    $g.FillEllipse($INK, $x, $y - 34, 14, 14)
+    $g.FillRectangle($INK, $x + 2, $y - 22, 9, 22)
+  }
+  # 散落的折断木杖与森然枯枝（暗示惨状，不画血肉）
+  for ($i = 0; $i -lt 26; $i++) {
+    $x = 60 + $rnd.Next(0, 1520); $y = 716 + $rnd.Next(0, 96)
+    $g.DrawLine((New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(190,60,62,70), 4)),
+      $x, $y, $x + 20 + $rnd.Next(0, 26), $y + $rnd.Next(-8, 9))
+  }
+}
+
+
+# ---------- 03 纸醉金迷（用户草图版：两只大酒杯在中间相碰，碰撞点放射出线条，下方桌面）----------
+Make '03_宫殿纸醉金迷' {
+  param($g)
+  $g.Clear([System.Drawing.Color]::FromArgb(255,246,243,236))
+  $rnd = New-Object System.Random(303)
+  for ($k=0; $k -lt 900; $k++) {                                 # 宣纸纤维
+    $g.FillRectangle((New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb($rnd.Next(6,22), 120,116,104))),
+      $rnd.Next(0,$W), $rnd.Next(0,$H), $rnd.Next(1,4), $rnd.Next(1,3))
+  }
+  $CX = 832; $CY = 430
+  $wine = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255,146,22,30))
+  # 从碰撞点放射出去的线条（冲击力）
+  for ($k=0; $k -lt 30; $k++) {
+    $ang = ($k * 12 + $rnd.Next(-4,5)) * [math]::PI / 180
+    $r0 = 60 + $rnd.Next(0,40); $r1 = $r0 + 90 + $rnd.Next(0,240)
+    $pen = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb($rnd.Next(70,180), 26,27,31), $rnd.Next(2,7))
+    $g.DrawLine($pen, [int]($CX+[math]::Cos($ang)*$r0), [int]($CY+[math]::Sin($ang)*$r0),
+                     [int]($CX+[math]::Cos($ang)*$r1), [int]($CY+[math]::Sin($ang)*$r1))
+  }
+  # 两只高脚杯：各自朝中心倾斜，杯口在中心相碰
+  $cups = @(@{cx=$CX-236; cy=$CY+66; rot=-38}, @{cx=$CX+236; cy=$CY+66; rot=38})
+  foreach ($c in $cups) {
+    $g.ResetTransform()
+    $g.TranslateTransform($c.cx, $c.cy)
+    $g.RotateTransform($c.rot)
+    # 杯身（碗）
+    $bowl = New-Object System.Drawing.Drawing2D.GraphicsPath
+    $bowl.AddBezier(-72,-118, -66,10, -22,34, 0,34)
+    $bowl.AddBezier(0,34, 22,34, 66,10, 72,-118)
+    $bowl.AddBezier(72,-118, 40,-92, -40,-92, -72,-118)
+    $g.FillPath($INK, $bowl)
+    # 杯口的椭圆
+    $g.FillEllipse((New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255,246,243,236))), -72, -136, 144, 36)
+    $g.DrawEllipse((New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(255,26,27,31), 6)), -72, -136, 144, 36)
+    $g.FillEllipse($wine, -62, -128, 124, 24)                     # 杯中的红酒
+    # 杯柄 + 杯脚
+    $g.FillRectangle($INK, -7, 34, 14, 62)
+    $g.FillEllipse($INK, -34, 92, 68, 18)
+    $g.ResetTransform()
+  }
+  # 碰撞处炸开的酒（放射状多瓣）
+  for ($k=0; $k -lt 26; $k++) {
+    $ang = $rnd.Next(0,360) * [math]::PI / 180
+    $r = [math]::Pow($rnd.NextDouble(), 0.5) * 110
+    $rr = 20 + $rnd.Next(0,46)
+    $g.FillEllipse($wine, [int]($CX+[math]::Cos($ang)*$r-$rr/2), [int]($CY+[math]::Sin($ang)*$r*0.8-$rr/2), $rr, [int]($rr*0.8))
+  }
+  for ($k=0; $k -lt 18; $k++) {
+    $ang = $rnd.Next(0,360) * [math]::PI / 180
+    $r = 110 + $rnd.Next(0,190)
+    $g.FillEllipse($wine, [int]($CX+[math]::Cos($ang)*$r), [int]($CY+[math]::Sin($ang)*$r*0.75), $rnd.Next(5,16), $rnd.Next(4,12))
+  }
+  # 桌面：透视的平行四边形
+  $table = New-Object System.Drawing.Drawing2D.GraphicsPath
+  $table.AddLine(120, 700); $table.AddLine(1544, 700); $table.AddLine(1664, 928); $table.AddLine(0, 928)
+  $table.CloseFigure()
+  $g.FillPath($INK2, $table)
+  $g.DrawLine((New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(255,26,27,31), 14)), 120, 700, 1544, 700)
+  # 酒顺着桌沿往下淌
+  for ($k=0; $k -lt 5; $k++) {
+    $x = 620 + $k * 96 + $rnd.Next(-14,14)
+    $hh = 50 + $rnd.Next(0,110)
+    $g.FillRectangle($wine, $x, 706, $rnd.Next(14,28), $hh)
+    $g.FillEllipse($wine, $x, 706+$hh-6, $rnd.Next(16,28), $rnd.Next(18,32))
+  }
+  # 桌上一叠残破的书 + 倒下的酒壶
+  for ($k=0; $k -lt 3; $k++) {
+    $g.FillRectangle((New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255,238,234,226))), 300-$k*7, 660-$k*18, 122+$k*12, 17)
+    $g.FillRectangle($INK, 300-$k*7, 660-$k*18, 122+$k*12, 4)
+  }
+  $g.FillEllipse($INK, 1180, 640, 122, 56)
+  $g.FillRectangle($INK, 1236, 612, 22, 42)
+}
+
+# ---------- 04 刀在膝上 · 特写 · 刀横放膝上；右手握柄、左手压刀身（两手都要明确）----------
+Make '04_刀在膝上_B擦刀' {
+  param($g)
+  $g.DrawLine($PEN_G, 700, 812, 1520, 812)
+  $g.FillEllipse((New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(90,120,124,132))), 900, 770, 620, 70)
+  # 跪坐身躯（墨块）
+  $body = New-Object System.Drawing.Drawing2D.GraphicsPath
+  $body.AddBezier(1080,400,1420,430,1460,640,1400,790); $body.AddLine(1400,790,980,790)
+  $body.AddBezier(980,790,960,620,1010,430,1080,400); $g.FillPath($INK,$body)
+  # 斗笠
+  $hat = New-Object System.Drawing.Drawing2D.GraphicsPath
+  $hat.AddBezier(1010,330,1250,250,1420,330,1440,360); $hat.AddLine(1440,360,1010,360); $g.FillPath($INK,$hat)
+  $g.FillRectangle($INK, 1200, 268, 42, 60)
+  $g.FillEllipse($GREY, 1180, 350, 96, 110)
+  # ---- 长刀：**粗横条**，横放膝上；柄在右（贴近身体），刃向左伸出 ----
+  $g.FillRectangle($INK, 790, 606, 500, 26)                     # 刀身（粗）
+  $tip = New-Object System.Drawing.Drawing2D.GraphicsPath      # 刀尖
+  $tip.AddLine(790, 606); $tip.AddLine(726, 619); $tip.AddLine(790, 632); $tip.CloseFigure()
+  $g.FillPath($INK, $tip)
+  $g.FillRectangle($INK, 1288, 594, 126, 44)                    # 刀柄（右侧贴身处）
+  $g.FillEllipse($INK, 1256, 584, 44, 62)                       # 刀镡
+  # ---- 右手：握住刀柄 ----
+  $g.FillEllipse($GREY, 1300, 566, 104, 70)
+  for ($f=0; $f -lt 4; $f++) { $g.FillRectangle($GREY, 1308 + $f*24, 546, 16, 30) }
+  # ---- 左手：掌心压在刀身上（画成明确的手形，不是一团灰）----
+  $g.FillEllipse($GREY, 968, 560, 118, 72)
+  for ($f=0; $f -lt 4; $f++) { $g.FillRectangle($GREY, 976 + $f*28, 636, 18, 34) }   # 四指垂在刀身下缘
+  # 刀身一线暗红（画粗才留得住）
+  $g.DrawLine($PEN_R, 812, 620, 1240, 620)
+}
+
+# ---------- 05 婚礼（古代婚房：喜烛/喜帐/喜床；他穿新郎吉服靠在门框边）----------
+Make '05_红烛婚礼' {
+  param($g)
+  $g.Clear([System.Drawing.Color]::FromArgb(255,244,240,234))
+  $RED = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255,158,26,32))
+  # 左侧：门框（深墨竖条），他靠在这
+  $g.FillRectangle($INK, 0, 0, 150, 928)
+  $g.FillRectangle($INK, 150, 0, 22, 928)
+  # 右侧：婚房内景
+  $g.FillRectangle((New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255,228,222,212))), 172, 0, 1492, 928)
+  # 两根高烛台 + 喜烛（红）
+  foreach ($cx in @(560, 1180)) {
+    $g.FillRectangle($INK, $cx, 430, 26, 400)
+    $g.FillEllipse($INK, $cx-24, 812, 74, 40)
+    $g.FillEllipse($RED, $cx-6, 344, 38, 92)
+  }
+  # 喜帐：从上方垂下的红绸
+  foreach ($dx in @(400, 760, 1120, 1420)) {
+    $dr = New-Object System.Drawing.Drawing2D.GraphicsPath
+    $dr.AddLine($dx, 0); $dr.AddLine($dx+130, 0)
+    $dr.AddBezier($dx+130, 0, $dx+150, 200, $dx+96, 330, $dx+40, 420)
+    $dr.AddBezier($dx+40, 420, $dx-16, 330, $dx-20, 160, $dx, 0); $dr.CloseFigure()
+    $g.FillPath($RED, $dr)
+  }
+  # 喜床一角（右侧）
+  $g.FillRectangle($INK2, 1180, 640, 484, 288)
+  $g.FillRectangle($RED, 1200, 600, 464, 60)
+  # **他：穿新郎吉服，靠在门框边**
+  $px = 300
+  $g.FillEllipse($INK, $px-46, 236, 116, 120)
+  $robe = New-Object System.Drawing.Drawing2D.GraphicsPath
+  $robe.AddBezier($px-64, 356, $px+84, 360, $px+96, 560, $px+88, 748)
+  $robe.AddLine($px+88, 748, $px-80, 748)
+  $robe.AddBezier($px-80, 748, $px-92, 560, $px-72, 356, $px-64, 356)
+  $g.FillPath($RED, $robe)
+  $g.FillRectangle($INK, $px-80, 560, 176, 30)
+  $g.FillEllipse($RED, $px-26, 420, 84, 84)
+  $penArm = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(255,24,24,28), 28)
+  $g.DrawLine($penArm, $px-52, 400, 130, 470)
+  $g.FillRectangle($INK, $px-18, 748, 52, 150)
+  $g.FillRectangle($INK, $px+46, 748, 52, 150)
+  $g.FillEllipse($INK, $px-38, 878, 92, 40)
+  $g.FillEllipse($INK, $px+28, 878, 92, 40)
+  $g.FillEllipse((New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(50,120,124,132))), 240, 890, 460, 40)
+}
+
+# ---------- 06 门外护卫 · 中景 · 门缝一线光 + 背对按刀的剪影 + 长影 ----------
+Make '06_门外护卫' {
+  param($g)
+  $g.FillRectangle((New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255,26,27,31))), 0, 0, 1664, 928)
+  $g.FillRectangle((New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255,232,222,196))), 1180, 90, 26, 700)  # 门缝金线
+  $g.FillEllipse((New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(70,232,222,196))), 1120, 120, 150, 640)
+  $g.FillEllipse($INK, 330, 300, 104, 104)                       # 头
+  $g.FillRectangle($INK, 336, 392, 92, 300)                      # 身
+  $g.FillRectangle($INK, 336, 690, 40, 130); $g.FillRectangle($INK, 388, 690, 40, 130)
+  $g.DrawLine((New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(255,140,143,150), 14)), 250, 818, 900, 818)  # 拉长的影
+}
+
+# ============================================================
+# 07 暗算 · 扩写为五段：翻杯围拢 → 混战中刀 → 师傅的话 → 宗门焚毁 → 被逼崖边
+# 来源：用户看了参考片《剑意》3-39s「师门毁灭」后重排的结构
+# ============================================================
+
+# ---------- 07a 翻杯围拢（室内酒宴，人影成弧围拢；必须画成"人"不是柱子）----------
+Make '07a_翻杯围拢' {
+  param($g)
+  $g.Clear([System.Drawing.Color]::FromArgb(255,246,245,242))
+  $g.FillRectangle($INK2, 0, 620, $W, 308)                       # 长案
+  $g.FillRectangle($INK, 0, 700, $W, 50)
+  # 打翻的酒杯 + 淌开的酒
+  $g.FillEllipse($INK, 340, 500, 130, 100)
+  $g.FillRectangle($INK, 396, 470, 22, 50)
+  $g.FillEllipse((New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255,126,26,32))), 300, 610, 300, 44)
+  # 人影：成弧围拢，每个人都有头/肩/双臂，姿态各不相同
+  $cfg = @(
+    @{x=150; y=470; h=250; lean= 12},
+    @{x=390; y=420; h=300; lean=  8},
+    @{x=640; y=396; h=320; lean=  2},
+    @{x=890; y=420; h=300; lean= -8},
+    @{x=1130; y=470; h=250; lean=-12},
+    @{x=1330; y=560; h=180; lean=-16}
+  )
+  foreach ($c in $cfg) {
+    $x = $c.x; $y = $c.y; $h = $c.h; $ln = $c.lean
+    $g.FillEllipse($INK, $x, $y, 74, 74)                                          # 头
+    $sh = New-Object System.Drawing.Drawing2D.GraphicsPath                          # 肩+躯干（有肩宽，不是矩形）
+    $sh.AddBezier($x-6, $y+66, $x+80, $y+66, $x+86, $y+$h, $x+80, 700)
+    $sh.AddLine($x+80, 700, $x-18, 700)
+    $sh.AddBezier($x-18, 700, $x-24, $y+$h, $x-18, $y+66, $x-6, $y+66)
+    $g.FillPath($INK, $sh)
+    # 双臂：向外张开或前伸（关键：有手臂才像人）
+    $g.DrawLine((New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(255,24,24,28), 22)),
+      $x+8, $y+112, $x-70, $y+150+$ln)
+    $g.DrawLine((New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(255,24,24,28), 22)),
+      $x+66, $y+112, $x+132, $y+150-$ln)
+    # 眼里两点冷光
+    $g.FillEllipse($PALE, $x+16, $y+30, 15, 10)
+    $g.FillEllipse($PALE, $x+44, $y+30, 15, 10)
+  }
+  # 前景：他自己（背对，跪坐在案前，握刀）
+  $g.FillEllipse($INK, 796, 402, 96, 96)
+  $k = New-Object System.Drawing.Drawing2D.GraphicsPath
+  $k.AddBezier(802,498, 888,502, 900,620, 890,760); $k.AddLine(890,760, 800,760)
+  $k.AddBezier(800,760, 790,620, 792,498, 802,498); $g.FillPath($INK,$k)
+  $g.DrawLine((New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(255,24,24,28), 24)), 810, 560, 742, 400)  # 举起的手/刀柄
+  $g.FillRectangle($INK, 706, 336, 30, 76)                       # 刀柄
+}
+
+# ---------- 07b 混战中刀（被围攻，墨爆，胸口一道暗红）----------
+Make '07b_混战中刀' {
+  param($g)
+  $g.Clear([System.Drawing.Color]::FromArgb(255,244,243,240))
+  $rnd = New-Object System.Random(19)
+  for ($i = 0; $i -lt 9; $i++) {                                  # 四周扑上来的围攻者
+    $a = $i * 40 * [math]::PI / 180
+    $x = 832 + [math]::Cos($a) * (330 + $rnd.Next(0, 190))
+    $y = 470 + [math]::Sin($a) * (230 + $rnd.Next(0, 130))
+    $hh = 120 + $rnd.Next(0, 90)
+    $g.FillEllipse($INK, [int]$x, [int]$y, 96, 96)
+    $g.FillRectangle($INK, [int]$x + 14, [int]$y + 88, 68, $hh)
+    $ang = -50 + $rnd.Next(0, 100)
+    $g.DrawLine((New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(255,24,24,28), 14)),
+      [int]($x + 48), [int]($y + 110), [int]($x + 48 + 150 * [math]::Cos($a)), [int]($y + 110 + $ang))
+  }
+  # 主角：被围在正中，屈身撑地
+  $g.FillEllipse($INK, 780, 400, 100, 104)
+  $t = New-Object System.Drawing.Drawing2D.GraphicsPath
+  $t.AddBezier(786,496, 878,500, 892,596, 882,684); $t.AddLine(882,684, 772,684)
+  $t.AddBezier(772,684, 762,596, 776,496, 786,496); $g.FillPath($INK,$t)
+  $g.DrawLine((New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(255,24,24,28), 28)), 790, 540, 640, 690)   # 撑地的手
+  $g.DrawLine((New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(255,24,24,28), 26)), 878, 552, 1010, 700)
+  # 胸口一道暗红
+  $g.DrawLine((New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(255,182,26,32), 12)), 800, 540, 866, 606)
+  $g.FillEllipse((New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255,182,26,32))), 846, 596, 46, 30)
+  # 墨点炸开
+  for ($i=0; $i -lt 90; $i++) {
+    $g.FillEllipse($INK, $rnd.Next(60, 1600), $rnd.Next(160, 900), $rnd.Next(4,16), $rnd.Next(4,16))
+  }
+  for ($i=0; $i -lt 12; $i++) {                                   # 甩出去的墨线
+    $x0 = $rnd.Next(300, 1300); $y0 = $rnd.Next(300, 700)
+    $g.DrawLine((New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(200,24,24,28), $rnd.Next(3,9))),
+      $x0, $y0, $x0 + $rnd.Next(-320,320), $y0 + $rnd.Next(-220,220))
+  }
+}
+
+# ---------- 07c 师傅的话（暗底闪回，老者与跪坐的他）----------
+Make '07c_师傅的话' {
+  param($g)
+  $g.Clear([System.Drawing.Color]::FromArgb(255,26,27,31))
+  for ($i=0; $i -lt 7; $i++) {                                    # 墨雾
+    $g.FillEllipse((New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(34,150,158,175))),
+      20 + $i * 230, 80 + ($i % 3) * 200, 560, 320)
+  }
+  # 师傅：一整个身形（头 + 长袍），头身相连
+  $robe = New-Object System.Drawing.Drawing2D.GraphicsPath
+  $robe.AddBezier(688, 300, 1000, 304, 1046, 640, 1024, 928)
+  $robe.AddLine(1024, 928, 664, 928)
+  $robe.AddBezier(664, 928, 642, 640, 688, 300, 688, 300)
+  $g.FillPath($INK2, $robe)                                       # 长袍
+  $g.FillEllipse($GREY, 748, 132, 200, 190)                       # 头部外圈（须发皆白）
+  $g.FillEllipse($INK, 774, 158, 148, 150)                        # 面部暗部
+  $g.FillRectangle($INK2, 806, 300, 84, 60)                       # 颈/领
+  # 他跪坐在前下方（背对画面，小）
+  $g.FillEllipse($INK, 292, 646, 78, 82)
+  $k = New-Object System.Drawing.Drawing2D.GraphicsPath
+  $k.AddBezier(298,726, 372,730, 382,812, 376,892); $k.AddLine(376,892, 286,892)
+  $k.AddBezier(286,892, 278,812, 290,726, 298,726); $g.FillPath($INK,$k)
+}
+
+# ---------- 07d 宗门焚毁（夜，山门牌楼在烈火中）----------
+Make '07d_宗门焚毁' {
+  param($g)
+  $g.Clear([System.Drawing.Color]::FromArgb(255,20,20,24))
+  $fire  = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255,206,116,28))
+  $fire2 = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255,246,196,96))
+  $rnd = New-Object System.Random(41)
+  # 火：大量不规则堆叠，越靠中越亮（不要规整椭圆）
+  for ($i = 0; $i -lt 150; $i++) {
+    $x = 480 + $rnd.Next(0, 760); $y = 340 + $rnd.Next(0, 380)
+    $g.FillEllipse($fire, $x, $y, $rnd.Next(70, 240), $rnd.Next(60, 260))
+  }
+  for ($i = 0; $i -lt 80; $i++) {
+    $x = 660 + $rnd.Next(0, 380); $y = 470 + $rnd.Next(0, 260)
+    $g.FillEllipse($fire2, $x, $y, $rnd.Next(50, 170), $rnd.Next(40, 170))
+  }
+  for ($i = 0; $i -lt 46; $i++) {                                 # 窜起的火舌
+    $x = 560 + $rnd.Next(0, 580); $h = 90 + $rnd.Next(0, 260)
+    $fl = New-Object System.Drawing.Drawing2D.GraphicsPath
+    $fl.AddLine($x, 760); $fl.AddLine($x + 24, 760 - $h); $fl.AddLine($x + 48, 760); $fl.CloseFigure()
+    $g.FillPath($fire2, $fl)
+  }
+  # 山门牌楼剪影（压在火前）
+  $g.FillRectangle($INK, 640, 452, 44, 320); $g.FillRectangle($INK, 1052, 452, 44, 320)
+  $g.FillRectangle($INK, 596, 418, 548, 40)
+  $roof = New-Object System.Drawing.Drawing2D.GraphicsPath
+  $roof.AddLine(560, 422); $roof.AddLine(1180, 422); $roof.AddLine(1086, 352); $roof.AddLine(654, 352); $roof.CloseFigure()
+  $g.FillPath($INK, $roof)
+  $g.FillRectangle($INK, 736, 306, 268, 50)                       # 匾额（不写字，后期程序叠）
+  $g.DrawRectangle((New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(170,246,196,96), 5)), 736, 306, 268, 50)
+  # 黑烟冲天
+  for ($i = 0; $i -lt 30; $i++) {
+    $g.FillEllipse((New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb($rnd.Next(30, 95), 16,16,20))),
+      $rnd.Next(160, 1440), $rnd.Next(-40, 300), $rnd.Next(180, 460), $rnd.Next(130, 320))
+  }
+}
+
+# ---------- 07e 被逼崖边（用户草图版：夜色，左侧大树，他靠在树干边警惕侧望；灌木线外全是追杀的敌人）----------
+Make '07e_被逼崖边' {
+  param($g)
+  $g.Clear([System.Drawing.Color]::FromArgb(255,238,238,236))
+  $rnd = New-Object System.Random(707)
+  for ($k=0; $k -lt 700; $k++) {                                 # 宣纸纤维
+    $g.FillRectangle((New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb($rnd.Next(6,20), 120,116,104))),
+      $rnd.Next(0,$W), $rnd.Next(0,$H), $rnd.Next(1,4), $rnd.Next(1,3))
+  }
+  # 远山（最左一小段锯齿）
+  $far = @()
+  foreach ($pt in @(@(0,404),@(70,330),@(120,378),@(180,316),@(240,392),@(300,344),@(360,410))) {
+    $far += New-Object System.Drawing.Point($pt[0], $pt[1])
+  }
+  $g.DrawLines((New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(150,40,42,48), 7)), $far)
+  # 月亮（右上，一弯）
+  $moon = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255,236,236,232))
+  $g.FillEllipse($moon, 1380, 46, 148, 148)
+  $g.FillEllipse((New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255,238,238,236))), 1352, 26, 148, 148)
+  # 大树：树冠（大团墨，边缘有瓣）+ 分叉的树干
+  for ($k=0; $k -lt 26; $k++) {
+    $a = $k * 14 * [math]::PI / 180
+    $g.FillEllipse($INK, [int](330 + [math]::Cos($a)*128 - 96), [int](196 + [math]::Sin($a)*86 - 84), 200, 178)
+  }
+  $g.FillEllipse($INK, 214, 142, 234, 176)                       # 树冠主体
+  for ($k=0; $k -lt 150; $k++) {                                 # 树冠的碎叶（边缘不齐）
+    $a = $rnd.Next(0,360) * [math]::PI / 180
+    $r = 96 + $rnd.Next(0,86)
+    $g.FillEllipse($INK, [int](330+[math]::Cos($a)*$r), [int](200+[math]::Sin($a)*$r*0.72), $rnd.Next(16,52), $rnd.Next(12,38))
+  }
+  # 树干：两根分叉（V 形）
+  $g.DrawLine((New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(255,26,27,31), 44)), 316, 330, 268, 130)
+  $g.DrawLine((New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(255,26,27,31), 44)), 352, 330, 404, 132)
+  $g.DrawLine((New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(255,26,27,31), 66)), 334, 320, 356, 764)
+  # **他：靠在树干右边，小的，侧脸朝右警惕张望**
+  $px = 452; $py = 556
+  $g.FillEllipse($INK, $px-34, $py, 68, 72)                      # 头
+  $g.FillEllipse((New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255,236,235,230))), $px-20, $py+18, 40, 34)  # 侧脸留白
+  $g.FillEllipse($INK, $px+2, $py+26, 12, 10)                    # 朝向右边的一只眼
+  $g.FillRectangle($INK, $px-40, $py-16, 80, 24)                 # 发髻/顶发
+  $body = New-Object System.Drawing.Drawing2D.GraphicsPath        # 躯干（微微前倾，靠向树干）
+  $body.AddBezier($px-40, $py+66, $px+34, $py+66, $px+38, $py+186, $px+34, $py+232)
+  $body.AddLine($px+34, $py+232, $px-44, $py+232)
+  $body.AddBezier($px-44, $py+232, $px-40, $py+186, $px-46, $py+66, $px-40, $py+66)
+  $g.FillPath($INK, $body)
+  # 一手扶着树干
+  $g.DrawLine((New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(255,26,27,31), 22)), $px-32, $py+96, 372, $py+150)
+  $g.FillEllipse($INK, 356, $py+142, 44, 34)
+  # 另一手握刀在身侧
+  $g.DrawLine((New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(255,26,27,31), 20)), $px+26, $py+110, $px+60, $py+170)
+  $g.DrawLine((New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(255,26,27,31), 14)), $px+30, $py+176, $px+86, $py+236)
+  # 腿
+  $g.DrawLine((New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(255,26,27,31), 32)), $px-16, $py+230, $px-24, $py+334)
+  $g.DrawLine((New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(255,26,27,31), 32)), $px+22, $py+230, $px+40, $py+332)
+  # 灌木线：横贯画面的一条参差不齐的墨带
+  for ($x=-60; $x -lt $W+60; $x+=34) {
+    $hh = 44 + $rnd.Next(0,64)
+    $g.FillEllipse($INK, $x, 640 + $rnd.Next(-22,14), 96, $hh)
+  }
+  $g.FillRectangle($INK, 0, 690, $W, 238)                        # 灌木以下压暗
+  # **灌木外全是追杀的敌人**（只露头与肩，越往右越小 —— 透视）
+  $ex = 560
+  while ($ex -lt $W + 40) {
+    $sc = 1.0 - ($ex - 560) / 1500.0 * 0.48
+    $hw = [int](64 * $sc); $hh = [int](72 * $sc)
+    $ty = 640 - $hh + $rnd.Next(-16, 10)
+    $g.FillEllipse($INK, $ex, $ty, $hw, $hh)                     # 头
+    $g.FillRectangle($INK, $ex - 10, $ty + $hh - 8, $hw + 20, [int](46*$sc))  # 肩
+    $g.DrawLine((New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(255,26,27,31), [int](9*$sc))),
+      $ex + $hw + 6, $ty + $hh + 10, $ex + $hw + [int](48*$sc), $ty + [int](8*$sc))  # 举起的一把刀
+    $ex += [int]($hw * (1.55 + $rnd.NextDouble() * 0.5))
+  }
+}
+
+
