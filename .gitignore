@@ -46,3 +46,6 @@ probe_*
 *.bak
 *.bak-v2
 *.damaged
+
+# Godot 导入副产物
+*.import

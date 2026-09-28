@@ -1,0 +1,124 @@
+[
+  {
+    "i": 0,
+    "src": "aivideo/01_墨入水.mp4",
+    "type": "ai",
+    "note": "墨入水"
+  },
+  {
+    "i": 1,
+    "src": "aivideo/02_荒原流民.mp4",
+    "type": "ai",
+    "note": "荒原流民"
+  },
+  {
+    "i": 2,
+    "src": "aivideo/03_纸醉金迷.mp4",
+    "type": "ai",
+    "note": "纸醉金迷"
+  },
+  {
+    "i": 3,
+    "src": "aivideo/04_刀在膝上.mp4",
+    "type": "ai",
+    "note": "刀在膝上"
+  },
+  {
+    "i": 4,
+    "src": "aivideo/05_婚礼.mp4",
+    "type": "ai",
+    "note": "婚礼"
+  },
+  {
+    "i": 5,
+    "src": "aivideo/06_门外护卫.mp4",
+    "type": "ai",
+    "note": "门外护卫"
+  },
+  {
+    "i": 6,
+    "src": "aivideo/07a_翻杯围拢.mp4",
+    "type": "ai",
+    "note": "翻杯围拢"
+  },
+  {
+    "i": 7,
+    "src": "BLACK_敌人",
+    "type": "black",
+    "dur": 4.5,
+    "note": "【敌人】这酒，你喝还是不喝？"
+  },
+  {
+    "i": 8,
+    "src": "ref/剑意_混战.mp4",
+    "type": "ref",
+    "note": "◆《剑意》混战（授权）"
+  },
+  {
+    "i": 9,
+    "src": "aivideo/07b_混战中刀.mp4",
+    "type": "ai",
+    "note": "混战中刀"
+  },
+  {
+    "i": 10,
+    "src": "ref/剑意_刀光.mp4",
+    "type": "ref",
+    "note": "◆《剑意》刀光（授权）"
+  },
+  {
+    "i": 11,
+    "src": "aivideo/07e_被逼崖边.mp4",
+    "type": "ai",
+    "note": "靠树喘息"
+  },
+  {
+    "i": 12,
+    "src": "aivideo/08_坠崖.mp4",
+    "type": "ai",
+    "note": "坠崖（清晰/模糊交替）"
+  },
+  {
+    "i": 13,
+    "src": "BLACK_我",
+    "type": "black",
+    "dur": 3,
+    "note": "【我】我要死了吗？"
+  },
+  {
+    "i": 14,
+    "src": "aivideo/07c_师傅的话.mp4",
+    "type": "ai",
+    "note": "师父出现"
+  },
+  {
+    "i": 15,
+    "src": "aivideo/10_五问.mp4",
+    "type": "ai",
+    "note": "五问快闪 + 师父我好想你"
+  },
+  {
+    "i": 16,
+    "src": "ref/剑意_焚门.mp4",
+    "type": "ref",
+    "note": "◆《剑意》师门焚毁（授权）"
+  },
+  {
+    "i": 17,
+    "src": "ref/剑意_力竭.mp4",
+    "type": "ref",
+    "note": "◆《剑意》力竭（授权）"
+  },
+  {
+    "i": 18,
+    "src": "aivideo/09_没死.mp4",
+    "type": "ai",
+    "note": "没死"
+  },
+  {
+    "i": 19,
+    "src": "aivideo/11_江湖新客.mp4",
+    "type": "ai",
+    "note": "江湖新客"
+  }
+]
