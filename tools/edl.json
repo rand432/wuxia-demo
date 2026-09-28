@@ -69,12 +69,6 @@
     "speed": 0.85
   },
   {
-    "type": "black",
-    "file": "BLACK_我.mp4",
-    "note": "【我】我要死了吗？",
-    "speed": 0.85
-  },
-  {
     "type": "ai",
     "file": "07c_师傅的话.mp4",
     "note": "师父出现",

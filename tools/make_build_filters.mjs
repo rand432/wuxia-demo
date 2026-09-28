@@ -138,8 +138,7 @@ const ANCHOR = {
   '旁_尾': ['行走墨线', 1.0, 4.2],    '旁_尾b': ['行走墨线', 6.2, 6.6],
   '声_敌人2': ['靠树喘息', 1.5, 2.5],  '声_我1': ['五问', 3.0, 6.6],
   '声_敌人1': ['这酒', 0.5, 4.0],
-  '黑幕我': ['我要死了吗', 0.3, 2.6],
-  '不甘A': ['没死', 0.4, 3.2],        '不甘B': ['没死', 4.6, 3.8]
+  '不甘A': ['没死', 0.2, 3.4],        '不甘B': ['没死', 3.4, 3.8]
 };
 const PUNCT = '。，、；：？！…—）」』';
 const wrap = (t) => {
@@ -173,6 +172,13 @@ SB.black.forEach((n, i) => {
   const g = seg(a[0]); const s = +(g.start + a[1]).toFixed(2), e = +(g.start + a[1] + a[2]).toFixed(2);
   const fn = ST + '/K' + i + '.txt'; fs.writeFileSync(fn, wrap(n.t), 'utf8');
   sf += DRAWTEXT(fn, '(h-text_h)/2', 48, s, e, true);
+});
+// center 类：压在画面上的居中大字（台词）
+(SB.center || []).forEach((n, i) => {
+  const a = ANCHOR[n.k] || ['墨入水', 0.5, 2];
+  const g = seg(a[0]); const s = +(g.start + a[1]).toFixed(2), e = +(g.start + a[1] + a[2]).toFixed(2);
+  const fn = ST + '/N' + i + '.txt'; fs.writeFileSync(fn, wrap(n.t), 'utf8');
+  sf += DRAWTEXT(fn, 'h-text_h-52', FSZ, s, e, false);
 });
 if (AMISS.length) { console.error('!!! 声轨锚点匹配失败: ' + AMISS.join(' / ')); process.exitCode = 3; }
 if (MISS.length) {
