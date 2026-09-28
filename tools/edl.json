@@ -61,13 +61,13 @@
     "type": "ai",
     "file": "07e_被逼崖边.mp4",
     "note": "靠树喘息",
-    "speed": 0.9
+    "speed": 0.68
   },
   {
     "type": "ai",
     "file": "08_坠崖.mp4",
     "note": "坠崖",
-    "speed": 0.9
+    "speed": 0.85
   },
   {
     "type": "black",
@@ -96,12 +96,6 @@
     "type": "ref",
     "file": "师父_刀插地.mp4",
     "note": "◆剑意·刀插地"
-  },
-  {
-    "type": "black",
-    "file": "BLACK_不甘.mp4",
-    "note": "【我】我应该死了吧／不甘心",
-    "speed": 0.85
   },
   {
     "type": "ai",
