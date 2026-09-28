@@ -34,10 +34,9 @@
     "speed": 0.85
   },
   {
-    "type": "ai",
-    "file": "07a_翻杯围拢.mp4",
-    "note": "翻杯围拢",
-    "speed": 0.85
+    "type": "fx",
+    "file": "07a_无手版.mp4",
+    "note": "翻杯围拢"
   },
   {
     "type": "black",
