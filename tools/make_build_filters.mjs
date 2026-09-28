@@ -76,6 +76,7 @@ for (const s of AM.sfx) {
   if (s.fin)    ch += ',afade=t=in:st=0:d=' + s.fin;
   if (s.foutAt) ch += ',afade=t=out:st=' + s.foutAt + ':d=' + (s.fout ?? 2);
   if (s.af) ch += ',' + s.af;
+  if (s.dur) ch += ',atrim=0:' + s.dur;                 // 硬截断，防止长素材串到下一段
   ch += ',adelay=' + ms(s.at) + '|' + ms(s.at) + '[x' + (k++) + ']';
   af.push(ch);
 }
