@@ -105,7 +105,12 @@ fs.mkdirSync(ST, { recursive: true });
 const FSZ = 38, MAXC = 19;
 // 按时间轴自动定位：文字属于哪一段，就跟着那一段的起止
 const TJ = JSON.parse(fs.readFileSync(W + '/times.json', 'utf8'));
-const seg = (kw) => TJ.times.find((t) => t.note.includes(kw)) || { start: 0, end: 5 };
+const MISS = [];
+const seg = (kw) => {
+  const hit = TJ.times.find((t) => t.note.includes(kw));
+  if (!hit) { MISS.push(kw); return { start: 0, end: 5 }; }
+  return hit;
+};
 // 每句给一个「锚点关键词」，落点 = 该段的 start + 偏移
 const ANCHOR = {
   // 拆段点全部按 silencedetect 实测的句号停顿校准
@@ -116,7 +121,7 @@ const ANCHOR = {
   '旁_05': ['婚礼', 1.2, 4.2],      '旁_05b': ['婚礼', 5.6, 3.2],
   '旁_06': ['门外护卫', 1.2, 2.5],   '旁_06b': ['门外护卫', 5.25, 5.6],
   '旁_07': ['翻杯围拢', 1.5, 5.2],
-  '旁_尾': ['一笔墨路', 1.2, 2.9],   '旁_尾b': ['一笔墨路', 4.35, 4.0],
+  '旁_尾': ['行走墨线', 4.6, 2.9],   '旁_尾b': ['行走墨线', 7.8, 4.2],
   '声_敌人2': ['靠树喘息', 1.5, 2.5], '声_我1': ['五问', 8.0, 5.7],
   '声_敌人1': ['这酒', 0.5, 4.0],
   '黑幕我': ['我要死了吗', 0.3, 2.4],
@@ -146,5 +151,13 @@ SB.black.forEach((n, i) => {
   const fn = ST + '/K' + i + '.txt'; fs.writeFileSync(fn, wrap(n.t), 'utf8');
   sf += DRAWTEXT(fn, '(h-text_h)/2', 48, s, e, true);
 });
+if (MISS.length) {
+  const uniq = [...new Set(MISS)];
+  console.error('');
+  console.error('!!! 锚点匹配失败 ' + uniq.length + ' 个（会被错放到片头 0s）: ' + uniq.join(' / '));
+  console.error('!!! 请检查 subs.json 的 k 是否在生成器 ANCHOR 里、且关键词能在 edl.json 的 note 里找到');
+  console.error('');
+  process.exitCode = 3;
+}
 fs.writeFileSync(W + '/subs.txt', sf.replace(/^,/, ''), 'utf8');
 console.log('[生成] subs.txt  ' + sf.length + ' 字符');
