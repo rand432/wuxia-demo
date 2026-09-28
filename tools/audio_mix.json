@@ -78,13 +78,13 @@
       "off": 0.5,
       "vol": 0.46,
       "fin": 3,
-      "foutAt": 15,
+      "foutAt": 8.5,
       "fout": 2.5
     },
     {
       "f": "乐_忆",
       "anchor": "师父出现",
-      "off": 0.3,
+      "off": -6,
       "vol": 15,
       "fin": 2.5,
       "foutAt": 12.5,
