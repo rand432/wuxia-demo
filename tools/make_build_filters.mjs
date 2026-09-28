@@ -16,6 +16,7 @@ const clipPath = (e) => {
   if (e.type === 'ai')    return WS + '/assets/gen/aivideo/' + e.file;
   if (e.type === 'ref')   return T + '/ref/' + e.file;
   if (e.type === 'black') return T + '/black/' + e.file;
+  if (e.type === 'fx')    return T + '/fx/' + e.file;
   throw new Error('未知类型 ' + e.type);
 };
 const dur = (p) => {
