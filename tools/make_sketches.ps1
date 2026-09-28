@@ -152,21 +152,25 @@ Make '03_宫殿纸醉金迷' {
     $g.DrawLine($pen, [int]($CX+[math]::Cos($ang)*$r0), [int]($CY+[math]::Sin($ang)*$r0),
                      [int]($CX+[math]::Cos($ang)*$r1), [int]($CY+[math]::Sin($ang)*$r1))
   }
-  $cups = @(@{cx=$CX-236; cy=$CY+66; rot=-38}, @{cx=$CX+236; cy=$CY+66; rot=38})
+  # 陶瓷酒盏（不是高脚杯）：宽浅盏身 + 短圈足，两盏相碰
+  $cups = @(@{cx=$CX-232; cy=$CY+92; rot=-30}, @{cx=$CX+232; cy=$CY+92; rot=30})
   foreach ($c in $cups) {
     $g.ResetTransform()
     $g.TranslateTransform($c.cx, $c.cy)
     $g.RotateTransform($c.rot)
     $bowl = New-Object System.Drawing.Drawing2D.GraphicsPath
-    $bowl.AddBezier(-72,-118, -66,10, -22,34, 0,34)
-    $bowl.AddBezier(0,34, 22,34, 66,10, 72,-118)
-    $bowl.AddBezier(72,-118, 40,-92, -40,-92, -72,-118)
+    $bowl.AddBezier(-92,-56, -86,24, -34,54, 0,54)
+    $bowl.AddBezier(0,54, 34,54, 86,24, 92,-56)
+    $bowl.AddBezier(92,-56, 46,-78, -46,-78, -92,-56)
     $g.FillPath($INK, $bowl)
-    $g.FillEllipse((New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255,246,243,236))), -72, -136, 144, 36)
-    $g.DrawEllipse((New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(255,26,27,31), 6)), -72, -136, 144, 36)
-    $g.FillEllipse($wine, -62, -128, 124, 24)
-    $g.FillRectangle($INK, -7, 34, 14, 62)
-    $g.FillEllipse($INK, -34, 92, 68, 18)
+    # 盏口（口沿）
+    $g.FillEllipse((New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255,246,243,236))), -92, -74, 184, 38)
+    $g.DrawEllipse((New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(255,26,27,31), 7)), -92, -74, 184, 38)
+    # 盏中酒
+    $g.FillEllipse($wine, -78, -66, 156, 26)
+    # 短圈足（没有细高脚）
+    $g.FillRectangle($INK, -30, 48, 60, 18)
+    $g.FillEllipse($INK, -40, 60, 80, 18)
     $g.ResetTransform()
   }
   for ($k=0; $k -lt 26; $k++) {
@@ -298,9 +302,11 @@ Make '07a_翻杯围拢' {
   $g.Clear([System.Drawing.Color]::FromArgb(255,246,245,242))
   $g.FillRectangle($INK2, 0, 620, $W, 308)                       # 长案
   $g.FillRectangle($INK, 0, 700, $W, 50)
-  # 打翻的酒杯 + 淌开的酒
-  $g.FillEllipse($INK, 340, 500, 130, 100)
-  $g.FillRectangle($INK, 396, 470, 22, 50)
+  # 打翻的陶制酒盏（侧倒：宽浅盏身 + 短圈足，没有细高脚）+ 淌开的酒
+  $g.FillEllipse($INK, 318, 504, 176, 94)                      # 侧倒的盏身
+  $g.FillEllipse((New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255,246,245,242))), 456, 518, 46, 66)
+  $g.DrawEllipse((New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(255,24,24,28), 6)), 456, 518, 46, 66)
+  $g.FillEllipse($INK, 292, 556, 60, 46)                       # 短圈足，贴着案面
   $g.FillEllipse((New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255,126,26,32))), 300, 610, 300, 44)
   # 人影：成弧围拢，每个人都有头/肩/双臂，姿态各不相同
   $cfg = @(
