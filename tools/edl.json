@@ -92,7 +92,8 @@
   {
     "type": "ref",
     "file": "师父_刀插地.mp4",
-    "note": "◆剑意·刀插地"
+    "note": "◆剑意·刀插地",
+    "cut": true
   },
   {
     "type": "ai",
