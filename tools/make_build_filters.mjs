@@ -91,55 +91,46 @@ fs.writeFileSync(W + '/af.txt', af.join(';'), 'utf8');
 fs.writeFileSync(W + '/ainputs.json', JSON.stringify(afIn), 'utf8');
 console.log('[生成] af.txt  ' + k + ' 路混音');
 
-// ---------- ③ 字幕 ----------
+// ---------- ③ 字幕（横排 · 浓墨描边 + 淡墨外晕 · 无衬底）----------
 const SB = rd('subs.json');
 const ST = W + '/subs';
 fs.mkdirSync(ST, { recursive: true });
-const FSZ = 34, LS = 9, COLW = FSZ + 22, X0 = 42;
-let sf = '';
-const box = (x, y, w, h, s, e) => {   // 柔边墨色衬底：4 层套叠，越靠外越淡
-  const layers = [[26, '0.09'], [18, '0.14'], [10, '0.24'], [0, '0.36']];
+const FSZ = 38, MAXC = 19;
+// 按时间轴自动定位：文字属于哪一段，就跟着那一段的起止
+const TJ = JSON.parse(fs.readFileSync(W + '/times.json', 'utf8'));
+const seg = (kw) => TJ.times.find((t) => t.note.includes(kw)) || { start: 0, end: 5 };
+// 每句给一个「锚点关键词」，落点 = 该段的 start + 偏移
+const ANCHOR = {
+  '旁_01': ['墨入水', 0.6, 4.0],   '旁_02': ['荒原流民', 0.6, 6.3],  '旁_03': ['纸醉金迷', 0.6, 7.2],
+  '旁_04': ['刀在膝上', 0.7, 7.1],  '旁_05': ['婚礼', 0.7, 7.2],     '旁_06': ['门外护卫', 0.8, 8.2],
+  '旁_07': ['翻杯围拢', 0.6, 4.7],  '旁_08': ['五问', 0.6, 2.0],
+  '旁_尾': ['江湖新客', 0.8, 9.4],  '声_敌人2': ['靠树喘息', 1.4, 2.5],
+  '声_我1': ['五问', 8.1, 5.7],     '声_敌人1': ['这酒', 0.3, 4.0],
+  '声_我2': ['不甘', 0.3, 1.8],     '声_我3': ['不甘', 2.0, 3.0]
+};
+const wrap = (t) => { const c = [...t]; const out = []; for (let i = 0; i < c.length; i += MAXC) out.push(c.slice(i, i + MAXC).join('')); return out.join('\n'); };
+// 三层套叠 = 淡墨外晕 + 浓墨描边 + 亮字
+const DRAWTEXT = (fn, y, fs2, s, e, big) => {
+  const base = "fontfile='C\\:/Windows/Fonts/simkai.ttf':textfile='" + fn.replace(/:/g, '\\:') + "'" +
+               ':x=(w-text_w)/2:y=' + y + ':fontsize=' + fs2 + ":line_spacing=10:enable='between(t," + s + ',' + e + ')' + "'";
   let o = '';
-  for (const [pad, a] of layers) {
-    o += ',drawbox=x=' + (x - pad) + ':y=' + (y - pad) + ':w=' + (w + pad * 2) + ':h=' + (h + pad * 2) +
-         ':color=0x17140f@' + a + ':t=fill:enable=\'between(t,' + s + ',' + e + ')\'';
-  }
+  o += ',drawtext=' + base + ":fontcolor=0x000000@0:bordercolor=0x000000@0.20:borderw=" + (big ? 16 : 13);
+  o += ',drawtext=' + base + ":fontcolor=0x000000@0:bordercolor=0x000000@0.42:borderw=" + (big ? 9 : 7);
+  o += ',drawtext=' + base + ':fontcolor=0xf7f3e8@0.98:bordercolor=0x0b0b0e@0.90:borderw=3';
   return o;
 };
-SB.left.forEach((n, i) => {
-  const chars = [...n.t]; const cols = [];
-  for (let q = 0; q < chars.length; q += 15) cols.push(chars.slice(q, q + 15));
-  const rows = Math.max(...cols.map((c) => c.length));
-  const bw = (cols.length - 1) * COLW + FSZ;
-  const bh = rows * (FSZ + LS) + 26;          // 多留余量，别让末字露在框外
-  const bx = X0 - 14, by = Math.round((720 - bh) / 2);
-  sf += box(bx, by, bw + 28, bh, n.s, n.e);
-  cols.forEach((col, ci) => {
-    const fn = ST + '/L' + i + '_' + ci + '.txt';
-    fs.writeFileSync(fn, col.join('\n'), 'utf8');
-    const xo = X0 + (cols.length - 1 - ci) * COLW;
-    sf += ',drawtext=fontfile=\'C\\:/Windows/Fonts/simkai.ttf\':textfile=\'' + fn.replace(/:/g, '\\:') +
-          '\':x=' + xo + ':y=(h-text_h)/2:fontsize=' + FSZ + ':fontcolor=0xf3efe5@0.96:line_spacing=' + LS +
-          ':enable=\'between(t,' + n.s + ',' + n.e + ')\'';
-  });
-});
-SB.center.forEach((n, i) => {
-  const fn = ST + '/C' + i + '.txt'; fs.writeFileSync(fn, n.t, 'utf8');
-  sf += ',drawtext=fontfile=\'C\\:/Windows/Fonts/simkai.ttf\':textfile=\'' + fn.replace(/:/g, '\\:') +
-        '\':x=(w-text_w)/2:y=h-text_h-58:fontsize=40:fontcolor=0xf6f2e8@0.97:borderw=3:bordercolor=0x000000@0.72' +
-        ':enable=\'between(t,' + n.s + ',' + n.e + ')\'';
+let sf = '';
+SB.bottom.forEach((n, i) => {
+  const a = ANCHOR[n.k] || ['墨入水', 0.5, 4];
+  const g = seg(a[0]); const s = +(g.start + a[1]).toFixed(2), e = +(g.start + a[1] + a[2]).toFixed(2);
+  const fn = ST + '/T' + i + '.txt'; fs.writeFileSync(fn, wrap(n.t), 'utf8');
+  sf += DRAWTEXT(fn, 'h-text_h-52', FSZ, s, e, false);
 });
 SB.black.forEach((n, i) => {
-  const fn = ST + '/B' + i + '.txt'; fs.writeFileSync(fn, [...n.t].join('\n'), 'utf8');
-  sf += ',drawtext=fontfile=\'C\\:/Windows/Fonts/simkai.ttf\':textfile=\'' + fn.replace(/:/g, '\\:') +
-        '\':x=(w-text_w)/2:y=(h-text_h)/2:fontsize=46:fontcolor=0xf6f2e8@0.97:line_spacing=11' +
-        ':enable=\'between(t,' + n.s + ',' + n.e + ')\'';
-});
-SB.flash.forEach((n, i) => {
-  const fn = ST + '/F' + i + '.txt'; fs.writeFileSync(fn, n.t, 'utf8');
-  sf += ',drawtext=fontfile=\'C\\:/Windows/Fonts/simkai.ttf\':textfile=\'' + fn.replace(/:/g, '\\:') +
-        '\':x=(w-text_w)/2:y=(h-text_h)/2:fontsize=42:fontcolor=0xf6f2e8@0.95:borderw=3:bordercolor=0x000000@0.75' +
-        ':enable=\'between(t,' + n.s + ',' + n.e + ')\'';
+  const a = ANCHOR[n.k] || ['墨入水', 0.5, 2];
+  const g = seg(a[0]); const s = +(g.start + a[1]).toFixed(2), e = +(g.start + a[1] + a[2]).toFixed(2);
+  const fn = ST + '/K' + i + '.txt'; fs.writeFileSync(fn, wrap(n.t), 'utf8');
+  sf += DRAWTEXT(fn, '(h-text_h)/2', 48, s, e, true);
 });
 fs.writeFileSync(W + '/subs.txt', sf.replace(/^,/, ''), 'utf8');
 console.log('[生成] subs.txt  ' + sf.length + ' 字符');
