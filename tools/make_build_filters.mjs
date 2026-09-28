@@ -121,13 +121,22 @@ const ANCHOR = {
   '旁_05': ['婚礼', 1.2, 4.2],      '旁_05b': ['婚礼', 5.6, 3.2],
   '旁_06': ['门外护卫', 1.2, 2.5],   '旁_06b': ['门外护卫', 5.25, 5.6],
   '旁_07': ['翻杯围拢', 1.5, 5.2],
-  '旁_尾': ['行走墨线', 4.6, 2.9],   '旁_尾b': ['行走墨线', 7.8, 4.2],
+  '旁_尾': ['行走墨线', 4.0, 3.0],   '旁_尾b': ['行走墨线', 7.25, 4.9],
   '声_敌人2': ['靠树喘息', 1.5, 2.5], '声_我1': ['五问', 8.0, 5.7],
   '声_敌人1': ['这酒', 0.5, 4.0],
   '黑幕我': ['我要死了吗', 0.3, 2.4],
   '不甘A': ['没死', 0.4, 2.0],       '不甘B': ['没死', 2.6, 3.4]
 };
-const wrap = (t) => { const c = [...t]; const out = []; for (let i = 0; i < c.length; i += MAXC) out.push(c.slice(i, i + MAXC).join('')); return out.join('\n'); };
+const PUNCT = '。，、；：？！…—）」』';
+const wrap = (t) => {
+  const c = [...t]; const out = [];
+  for (let i = 0; i < c.length; i += MAXC) out.push(c.slice(i, i + MAXC).join(''));
+  // 末行只剩标点（或极短）就并回上一行，避免"孤字成行"
+  while (out.length > 1 && out[out.length - 1].length <= 2 && PUNCT.includes(out[out.length - 1][0])) {
+    out[out.length - 2] += out.pop();
+  }
+  return out.join('\n');
+};
 // 三层套叠 = 淡墨外晕 + 浓墨描边 + 亮字
 const DRAWTEXT = (fn, y, fs2, s, e, big) => {
   const base = "fontfile='C\\:/Windows/Fonts/simkai.ttf':textfile='" + fn.replace(/:/g, '\\:') + "'" +
