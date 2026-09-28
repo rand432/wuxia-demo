@@ -75,6 +75,7 @@ for (const s of AM.sfx) {
   let ch = '[' + i + ':a]volume=' + s.vol;
   if (s.fin)    ch += ',afade=t=in:st=0:d=' + s.fin;
   if (s.foutAt) ch += ',afade=t=out:st=' + s.foutAt + ':d=' + (s.fout ?? 2);
+  if (s.af) ch += ',' + s.af;
   ch += ',adelay=' + ms(s.at) + '|' + ms(s.at) + '[x' + (k++) + ']';
   af.push(ch);
 }
@@ -90,7 +91,10 @@ if (AM.bells) {
 }
 for (const v of AM.voice) {
   const i = need(v.f);
-  af.push('[' + i + ':a]volume=' + v.vol + ',adelay=' + ms(v.at) + '|' + ms(v.at) + '[x' + (k++) + ']');
+  let vc = '[' + i + ':a]volume=' + v.vol;
+  if (v.af) vc += ',' + v.af;
+  vc += ',adelay=' + ms(v.at) + '|' + ms(v.at) + '[x' + (k++) + ']';
+  af.push(vc);
 }
 const mixLabels = Array.from({ length: k }, (_, n) => '[x' + n + ']').join('');
 af.push(mixLabels + 'amix=inputs=' + k + ':duration=longest:dropout_transition=0:normalize=0,alimiter=limit=0.78:level=false,apad=whole_dur=' + (total + 0.2).toFixed(1) + '[aout]');
