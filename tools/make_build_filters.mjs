@@ -52,6 +52,7 @@ vf = vf.replace(/;$/, '');
 fs.writeFileSync(W + '/vf.txt', vf, 'utf8');
 fs.writeFileSync(W + '/inputs.json', JSON.stringify(clips.map((c) => c.p)), 'utf8');
 fs.writeFileSync(W + '/times.json', JSON.stringify({ times, total }, null, 2), 'utf8');
+const TJ = { times, total };   // 声轨与字幕的锚点都靠它解析，必须在它们之前声明
 console.log('[生成] vf.txt  ' + vf.length + ' 字符   总长 ' + total.toFixed(2) + 's');
 
 // ---------- ② 声轨 ----------
@@ -62,13 +63,21 @@ const afIn = [];
 const idx = {};
 const need = (f) => { if (!(f in idx)) { idx[f] = afIn.length; afIn.push(A + '/' + f + '.wav'); } return idx[f]; };
 const ms = (s) => Math.round(s * 1000);
+// 声轨也走锚点：{anchor:'门外护卫', off:1.5} → 绝对秒数。剪辑表一变就自动跟着走。
+const AMISS = [];
+const at = (e) => {
+  if (e.anchor === undefined) return e.at;
+  const hit = TJ.times.find((t) => t.note.includes(e.anchor));
+  if (!hit) { AMISS.push(e.anchor + ' / ' + e.f); return e.at ?? 0; }
+  return +(hit.start + (e.off ?? 0)).toFixed(3);
+};
 let k = 0;
 for (const b of AM.beds) {
   const i = need(b.f);
   let ch = '[' + i + ':a]volume=' + b.vol;
   if (b.fin)    ch += ',afade=t=in:st=0:d=' + b.fin;
   if (b.foutAt) ch += ',afade=t=out:st=' + b.foutAt + ':d=' + (b.fout ?? 2);
-  ch += ',adelay=' + ms(b.at) + '|' + ms(b.at) + '[x' + (k++) + ']';
+  ch += ',adelay=' + ms(at(b)) + '|' + ms(at(b)) + '[x' + (k++) + ']';
   af.push(ch);
 }
 for (const s of AM.sfx) {
@@ -78,7 +87,7 @@ for (const s of AM.sfx) {
   if (s.foutAt) ch += ',afade=t=out:st=' + s.foutAt + ':d=' + (s.fout ?? 2);
   if (s.af) ch += ',' + s.af;
   if (s.dur) ch += ',atrim=0:' + s.dur;                 // 硬截断，防止长素材串到下一段
-  ch += ',adelay=' + ms(s.at) + '|' + ms(s.at) + '[x' + (k++) + ']';
+  ch += ',adelay=' + ms(at(s)) + '|' + ms(at(s)) + '[x' + (k++) + ']';
   af.push(ch);
 }
 if (AM.bells) {
@@ -88,14 +97,14 @@ if (AM.bells) {
   af.push('[' + i + ':a]asplit=' + AM.bells.n + labels.join(''));
   for (let n = 0; n < AM.bells.n; n++) {
     af.push('[bb' + n + ']volume=' + AM.bells.vol + ',afade=t=out:st=3.2:d=2,adelay=' +
-            ms(AM.bells.at + n * AM.bells.step) + '|' + ms(AM.bells.at + n * AM.bells.step) + '[x' + (k++) + ']');
+            ms(at(AM.bells) + n * AM.bells.step) + '|' + ms(at(AM.bells) + n * AM.bells.step) + '[x' + (k++) + ']');
   }
 }
 for (const v of AM.voice) {
   const i = need(v.f);
   let vc = '[' + i + ':a]volume=' + v.vol;
   if (v.af) vc += ',' + v.af;
-  vc += ',adelay=' + ms(v.at) + '|' + ms(v.at) + '[x' + (k++) + ']';
+  vc += ',adelay=' + ms(at(v)) + '|' + ms(at(v)) + '[x' + (k++) + ']';
   af.push(vc);
 }
 const mixLabels = Array.from({ length: k }, (_, n) => '[x' + n + ']').join('');
@@ -110,7 +119,6 @@ const ST = W + '/subs';
 fs.mkdirSync(ST, { recursive: true });
 const FSZ = 38, MAXC = 19;
 // 按时间轴自动定位：文字属于哪一段，就跟着那一段的起止
-const TJ = JSON.parse(fs.readFileSync(W + '/times.json', 'utf8'));
 const MISS = [];
 const seg = (kw) => {
   const hit = TJ.times.find((t) => t.note.includes(kw));
@@ -166,6 +174,7 @@ SB.black.forEach((n, i) => {
   const fn = ST + '/K' + i + '.txt'; fs.writeFileSync(fn, wrap(n.t), 'utf8');
   sf += DRAWTEXT(fn, '(h-text_h)/2', 48, s, e, true);
 });
+if (AMISS.length) { console.error('!!! 声轨锚点匹配失败: ' + AMISS.join(' / ')); process.exitCode = 3; }
 if (MISS.length) {
   const uniq = [...new Set(MISS)];
   console.error('');
