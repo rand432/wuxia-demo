@@ -24,9 +24,16 @@ const dur = (p) => {
   const k = p.split(/[\\/]/).pop();
   return M[k] ?? 5;
 };
-const clips = EDL.map((e) => ({ p: clipPath(e), d: e.dur ?? dur(clipPath(e)), note: e.note }));
+const clips = EDL.map((e) => {
+  const base = e.dur ?? dur(clipPath(e));
+  const sp = e.speed ?? 1;
+  return { p: clipPath(e), d: +(base / sp).toFixed(3), sp, note: e.note };
+});
 let norm = '';
-clips.forEach((c, i) => { norm += '[' + i + ':v]fps=25,scale=1280:720,setsar=1,format=yuv420p,settb=AVTB[n' + i + '];'; });
+clips.forEach((c, i) => {
+  const pre = c.sp !== 1 ? 'setpts=PTS/' + c.sp + ',' : '';
+  norm += '[' + i + ':v]' + pre + 'fps=25,scale=1280:720,setsar=1,format=yuv420p,settb=AVTB[n' + i + '];';
+});
 let vf = norm, prev = '[n0]', total = clips[0].d;
 const times = [{ start: 0, end: clips[0].d, note: clips[0].note }];
 for (let i = 1; i < clips.length; i++) {
@@ -103,10 +110,9 @@ const seg = (kw) => TJ.times.find((t) => t.note.includes(kw)) || { start: 0, end
 const ANCHOR = {
   '旁_01': ['墨入水', 0.6, 4.0],   '旁_02': ['荒原流民', 0.6, 6.3],  '旁_03': ['纸醉金迷', 0.6, 7.2],
   '旁_04': ['刀在膝上', 0.7, 7.1],  '旁_05': ['婚礼', 0.7, 7.2],     '旁_06': ['门外护卫', 0.8, 8.2],
-  '旁_07': ['翻杯围拢', 0.6, 4.7],  '旁_08': ['五问', 0.6, 2.0],
-  '旁_尾': ['一笔墨路', 0.3, 4.6],  '声_敌人2': ['靠树喘息', 1.4, 2.5],
+  '旁_07': ['翻杯围拢', 0.6, 4.7],    '旁_尾': ['一笔墨路', 0.3, 4.6],  '声_敌人2': ['靠树喘息', 1.4, 2.5],
   '声_我1': ['五问', 8.1, 5.7],     '声_敌人1': ['这酒', 0.3, 4.0],
-  '声_我2': ['不甘', 0.3, 1.8],     '声_我3': ['不甘', 2.0, 3.0]
+  '声_我2': ['不甘', 0.2, 1.7],     '声_我3': ['不甘', 2.6, 3.4]
 };
 const wrap = (t) => { const c = [...t]; const out = []; for (let i = 0; i < c.length; i += MAXC) out.push(c.slice(i, i + MAXC).join('')); return out.join('\n'); };
 // 三层套叠 = 淡墨外晕 + 浓墨描边 + 亮字

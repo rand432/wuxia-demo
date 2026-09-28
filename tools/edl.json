@@ -2,42 +2,50 @@
   {
     "type": "ai",
     "file": "01_墨入水.mp4",
-    "note": "墨入水"
+    "note": "墨入水",
+    "speed": 0.8
   },
   {
     "type": "ai",
     "file": "02_荒原流民.mp4",
-    "note": "荒原流民"
+    "note": "荒原流民",
+    "speed": 0.85
   },
   {
     "type": "ai",
     "file": "03_纸醉金迷.mp4",
-    "note": "纸醉金迷"
+    "note": "纸醉金迷",
+    "speed": 0.85
   },
   {
     "type": "ai",
     "file": "04_刀在膝上.mp4",
-    "note": "刀在膝上"
+    "note": "刀在膝上",
+    "speed": 0.8
   },
   {
     "type": "ai",
     "file": "05_婚礼.mp4",
-    "note": "婚礼"
+    "note": "婚礼",
+    "speed": 0.85
   },
   {
     "type": "ai",
     "file": "06_门外护卫_morph.mp4",
-    "note": "门外护卫（五官渐变主角）"
+    "note": "门外护卫（五官渐变主角）",
+    "speed": 0.85
   },
   {
     "type": "ai",
     "file": "07a_翻杯围拢.mp4",
-    "note": "翻杯围拢"
+    "note": "翻杯围拢",
+    "speed": 0.85
   },
   {
     "type": "black",
     "file": "BLACK_敌人.mp4",
-    "note": "【敌】这酒，你喝还是不喝？"
+    "note": "【敌】这酒，你喝还是不喝？",
+    "speed": 0.9
   },
   {
     "type": "ai",
@@ -52,27 +60,32 @@
   {
     "type": "ai",
     "file": "07e_被逼崖边.mp4",
-    "note": "靠树喘息"
+    "note": "靠树喘息",
+    "speed": 0.9
   },
   {
     "type": "ai",
     "file": "08_坠崖.mp4",
-    "note": "坠崖"
+    "note": "坠崖",
+    "speed": 0.9
   },
   {
     "type": "black",
     "file": "BLACK_我.mp4",
-    "note": "【我】我要死了吗？"
+    "note": "【我】我要死了吗？",
+    "speed": 0.85
   },
   {
     "type": "ai",
     "file": "07c_师傅的话.mp4",
-    "note": "师父出现"
+    "note": "师父出现",
+    "speed": 0.8
   },
   {
     "type": "ai",
     "file": "10_五问.mp4",
-    "note": "五问"
+    "note": "五问",
+    "speed": 0.9
   },
   {
     "type": "ref",
@@ -87,26 +100,31 @@
   {
     "type": "black",
     "file": "BLACK_不甘.mp4",
-    "note": "【我】我应该死了吧／不甘心"
+    "note": "【我】我应该死了吧／不甘心",
+    "speed": 0.85
   },
   {
     "type": "ai",
     "file": "09_没死.mp4",
-    "note": "没死"
+    "note": "没死",
+    "speed": 0.9
   },
   {
     "type": "ref",
     "file": "侠_酒肆.mp4",
-    "note": "◆剑意 1:31-1:40 酒肆行侠"
+    "note": "◆剑意 1:31-1:40 酒肆行侠",
+    "speed": 0.85
   },
   {
     "type": "ref",
     "file": "侠_刀光小舟.mp4",
-    "note": "◆剑意 1:43-1:54 刀光·小舟"
+    "note": "◆剑意 1:43-1:54 刀光·小舟",
+    "speed": 0.85
   },
   {
     "type": "ref",
     "file": "侠_一笔墨路.mp4",
-    "note": "◆剑意 1:21-1:26 一笔墨路（结束）"
+    "note": "◆剑意 1:21-1:26 一笔墨路（结束）",
+    "speed": 0.55
   }
 ]
