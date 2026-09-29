@@ -128,6 +128,63 @@ async function genGlm(prompt, [w, h], outBase) {
   return { file: outBase + ext, cost: '约 0.1 元' };
 }
 
+// 上传本地图到 OSS（img2img 垫图要 URL）
+async function uploadImage(filePath, cfg) {
+  const base = path.basename(filePath);
+  const ext = base.split('.').pop();
+  const sig = await liblibApi('/api/generate/upload/signature', cfg, { name: base.replace(/\.[^.]+$/, ''), extension: ext });
+  const mime = /jpe?g$/i.test(ext) ? 'image/jpeg' : 'image/png';
+  const form = new FormData();
+  form.append('x-oss-signature', sig.xOssSignature);
+  form.append('x-oss-date', sig.xOssDate);
+  form.append('x-oss-signature-version', sig.xOssSignatureVersion);
+  form.append('policy', sig.policy);
+  form.append('key', sig.key);
+  form.append('x-oss-credential', sig.xOssCredential);
+  form.append('x-oss-expires', String(sig.xOssExpires));
+  form.append('file', new Blob([fs.readFileSync(filePath)], { type: mime }), base);
+  const r = await fetch(sig.postUrl, { method: 'POST', body: form });
+  if (!r.ok) throw new Error('上传失败 [' + r.status + '] ' + (await r.text()).slice(0, 200));
+  return new URL(sig.key, sig.postUrl).toString();
+}
+
+// img2img：拿一张现成的图当底，低重绘幅度"细化/放大"（denoise 0.3~0.55 是加细节，0.6+ 会改画风）
+async function genLiblibImg(prompt, negative, [w, h], outBase, loraOverride, srcFile, denoise) {
+  if (!CONF) throw new Error('找不到 .liblib.json');
+  const cfg = JSON.parse(fs.readFileSync(CONF, 'utf8'));
+  const url = await uploadImage(srcFile, cfg);
+  const payload = {
+    templateUuid: cfg.templateUuidImg2img || cfg.templateUuid,
+    generateParams: {
+      ...(cfg.checkPointId ? { checkPointId: cfg.checkPointId } : {}),
+      prompt: prompt.slice(0, 2000),
+      negativePrompt: negative,
+      sampler: cfg.sampler, steps: cfg.steps, cfgScale: cfg.cfgScale,
+      width: w, height: h, imgCount: 1, randnSource: cfg.randnSource ?? 1, seed: -1,
+      restoreFaces: 0,
+      ...(has('nolora') ? {} : { additionalNetwork: loraOverride ? [{ modelId: loraOverride, weight: 0.8 }] : cfg.loras }),
+      sourceImage: url, resizeMode: 0, resizedWidth: w, resizedHeight: h, mode: 0,
+      denoisingStrength: denoise,
+    },
+  };
+  const sub = await liblibApi('/api/generate/webui/img2img', cfg, payload);
+  process.stdout.write('  提交 ' + sub.generateUuid + ' 等待中');
+  let pred = null;
+  for (let i = 0; i < 100; i++) {
+    await sleep(3000);
+    pred = await liblibApi('/api/generate/webui/status', cfg, { generateUuid: sub.generateUuid });
+    process.stdout.write('.');
+    if (pred.generateStatus === 5 || [6, 7].includes(pred.generateStatus)) break;
+  }
+  process.stdout.write('\n');
+  if (!pred || pred.generateStatus !== 5) throw new Error('status=' + (pred && pred.generateStatus) + ' msg=' + (pred && pred.generateMsg));
+  const img = (pred.images || [])[0];
+  const bin = Buffer.from(await (await fetch(img.imageUrl)).arrayBuffer());
+  const ext = bin[0] === 0x89 && bin[1] === 0x50 ? '.png' : '.jpg';
+  fs.writeFileSync(outBase + ext, bin);
+  return { file: outBase + ext, cost: pred.pointsCost + ' 积分（余额 ' + pred.accountBalance + '）', seed: img.seed };
+}
+
 async function genLiblib(prompt, negative, [w, h], outBase, loraOverride) {
   if (!CONF) throw new Error('找不到 .liblib.json');
   const cfg = JSON.parse(fs.readFileSync(CONF, 'utf8'));
@@ -213,9 +270,12 @@ async function main() {
       if (!force) { console.log('  跳过（已存在，--force 重出）'); continue; }
     }
     try {
-      const r = channel === 'liblib'
-        ? await genLiblib(prompt, negative, size, outBase, opt('lora', ''))
-        : await genGlm(prompt, size, outBase);
+      const srcImg = opt('img', '');
+      const r = (channel === 'liblib' && srcImg)
+        ? await genLiblibImg(prompt, negative, size, outBase, opt('lora', ''), srcImg, parseFloat(opt('denoise', '0.45')))
+        : channel === 'liblib'
+          ? await genLiblib(prompt, negative, size, outBase, opt('lora', ''))
+          : await genGlm(prompt, size, outBase);
       console.log('  ✓ ' + path.basename(r.file) + '  ' + r.cost + (r.seed ? '  seed=' + r.seed : ''));
     } catch (e) { console.log('  ✗ 失败：' + e.message); }
   }
