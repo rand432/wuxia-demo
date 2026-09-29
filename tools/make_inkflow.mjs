@@ -12,7 +12,8 @@ const FD = W + '/iframes';
 const S = 1024, OUT = 320, GAP = 10, CW = OUT * 3 + GAP * 2;
 const FPS = 25, DUR = 14;
 // 模拟分辨率（半分辨率，快）
-const SW = CW >> 1, SH = OUT >> 1;
+const SW = CW, SH = OUT;            // 满分辨率模拟（笔画才画得清）
+const VW = SW >> 1, VH = SH >> 1;   // 速度场用半分辨率算（fbm 太贵）
 
 let CRC = null;
 function crc32(b) { if (!CRC) { CRC = []; for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; CRC[n] = c >>> 0; } } let c = 0xffffffff; for (const x of b) c = CRC[(c ^ x) & 0xff] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; }
@@ -98,6 +99,28 @@ for (let gi = 0; gi < glyphs.length; gi++) {
 }
 const T = 9.2, per = T / glyphs.length;
 
+// ---------- 目标场：字形遮罩，按书写顺序逐步开放 ----------
+const TW = SW, TH = SH;
+function targetField(tt) {
+  const T = new Float32Array(SW * SH);
+  for (const J of G) {
+    const t0 = J.gi * per, pr = Math.max(0, Math.min(1, (tt - t0) / per));
+    if (pr <= 0) continue;
+    const c = J.c;
+    const ox = J.gi * (OUT + GAP);
+    for (let y = 0; y < SH; y++) for (let x = 0; x < SW; x++) {
+      const lx = x - ox;                           // 满分辨率：模拟坐标 = 输出坐标
+      const sx = Math.round((lx - (OUT - c.w * K) / 2) / K), sy = Math.round((y - (OUT - c.h * K) / 2) / K);
+      if (sx < 0 || sy < 0 || sx >= c.w || sy >= c.h) continue;
+      if (!c.m[sy * c.w + sx]) continue;
+      const lp = J.pos.get(J.lab[sy * c.w + sx]);
+      if (lp === undefined || lp > pr) continue;
+      T[y * SW + x] = 1;
+    }
+  }
+  return T;
+}
+
 // ---------- 墨流场模拟 ----------
 const dye = new Float32Array(SW * SH);
 const dye2 = new Float32Array(SW * SH);
@@ -107,6 +130,19 @@ fs.rmSync(FD, { recursive: true, force: true }); fs.mkdirSync(FD, { recursive: t
 process.stdout.write('模拟+渲染 ' + NF + ' 帧');
 for (let f = 0; f < NF; f++) {
   const tt = f / FPS;
+  // ⓪ 开局：大范围铺墨（0-2.4 秒），让纸上先有一团翻涌的墨
+  if (tt < 2.4) {
+    const kb = 1 - tt / 2.4;
+    for (let y = 0; y < SH; y++) for (let x = 0; x < SW; x++) {
+      const nx = (x - SW * 0.5) / (SW * 0.46), ny = (y - SH * 0.52) / (SH * 0.62);
+      const rd = Math.sqrt(nx * nx + ny * ny);
+      const nz = fbm(x * 1.5, y * 1.5, tt * 2.2);
+      const nz2 = fbm(x * 4.2 + 30, y * 4.2 - 20, tt * 3.1);
+      const blob = Math.max(0, 1 - rd * (0.62 + nz * 1.05));           // 边缘更不规则
+      const curl = Math.max(0, nz2 - 0.42) * 1.5;                       // 丝缕
+      dye[y * SW + x] = Math.max(dye[y * SW + x], Math.min(1.5, (blob * 1.15 + curl * 0.55) * kb));
+    }
+  }
   // ① 笔尖放墨
   for (const J of G) {
     const t0 = J.gi * per, pr = Math.max(0, Math.min(1, (tt - t0) / per));
@@ -123,16 +159,24 @@ for (let f = 0; f < NF; f++) {
     }
   }
   // ② curl noise 平流 + 扩散 + 衰减
-  const adv = 3.4, dec = 0.9955;
-  for (let y = 0; y < SH; y++) for (let x = 0; x < SW; x++) {
+  // 平流强度：收敛开始后逐步停风，否则收好的墨又被搅出去
+  const ramp = tt <= 2.4 ? 0 : Math.min(1, (tt - 2.4) / 7.0);
+  const adv = 3.4 * (1 - ramp * 0.94), dec = 0.9955;
+  // 速度场：半分辨率算一次（省 fbm），再上采样
+  const VX = new Float32Array(VW * VH), VY = new Float32Array(VW * VH);
+  for (let y = 0; y < VH; y++) for (let x = 0; x < VW; x++) {
     const e = 3.0;
-    const n1 = fbm(x, y, tt), n2 = fbm(x + 100, y + 100, tt);
-    const n1x = fbm(x + e, y, tt) - fbm(x - e, y, tt);
-    const n1y = fbm(x, y + e, tt) - fbm(x, y - e, tt);
-    const n2x = fbm(x + 100 + e, y + 100, tt) - fbm(x + 100 - e, y + 100, tt);
-    const n2y = fbm(x + 100, y + 100 + e, tt) - fbm(x + 100, y + 100 - e, tt);
-    const vx = (n2y - n1y) * adv, vy = -(n2x - n1x) * adv;      // curl
-    const sx = Math.max(0, Math.min(SW - 1, x - vx)), sy = Math.max(0, Math.min(SH - 1, y - vy));
+    const n1x = fbm(x + e, y, tt) - fbm(x - e, y, tt), n1y = fbm(x, y + e, tt) - fbm(x, y - e, tt);
+    const n2x = fbm(x + 100 + e, y + 100, tt) - fbm(x + 100 - e, y + 100, tt), n2y = fbm(x + 100, y + 100 + e, tt) - fbm(x + 100, y + 100 - e, tt);
+    VX[y * VW + x] = (n2y - n1y) * adv; VY[y * VW + x] = -(n2x - n1x) * adv;
+  }
+  const vel = (x, y) => { const fx = Math.min(VW - 1.001, Math.max(0, x / 2)), fy = Math.min(VH - 1.001, Math.max(0, y / 2));
+    const x0 = fx | 0, y0 = fy | 0, ax = fx - x0, ay = fy - y0, i00 = y0 * VW + x0, i10 = i00 + 1, i01 = i00 + VW, i11 = i01 + 1;
+    return [ (VX[i00] * (1 - ax) + VX[i10] * ax) * (1 - ay) + (VX[i01] * (1 - ax) + VX[i11] * ax) * ay,
+             (VY[i00] * (1 - ax) + VY[i10] * ax) * (1 - ay) + (VY[i01] * (1 - ax) + VY[i11] * ax) * ay ]; };
+  for (let y = 0; y < SH; y++) for (let x = 0; x < SW; x++) {
+    const v = vel(x, y);
+    const sx = Math.max(0, Math.min(SW - 1, x - v[0])), sy = Math.max(0, Math.min(SH - 1, y - v[1]));
     const x0 = sx | 0, y0 = sy | 0, x1 = Math.min(SW - 1, x0 + 1), y1 = Math.min(SH - 1, y0 + 1);
     const fx = sx - x0, fy = sy - y0;
     const a = dye[y0 * SW + x0] * (1 - fx) + dye[y0 * SW + x1] * fx;
@@ -140,11 +184,24 @@ for (let f = 0; f < NF; f++) {
     dye2[y * SW + x] = (a * (1 - fy) + b * fy) * dec;
   }
   for (let i = 0; i < SW * SH; i++) dye[i] = dye2[i];
-  // 轻微扩散（3x3）
+  // ②.5 收敛：把墨吸向字形（2.4 秒后开始，越往后吸力越强）
+  if (tt > 2.4) {
+    const T = targetField(tt);
+    const k = Math.min(0.55, Math.pow((tt - 2.4) / 5.5, 1.15) * 0.60);
+    for (let i = 0; i < SW * SH; i++) {
+      const d0 = dye[i], t0 = T[i];
+      if (t0 > 0) dye[i] = d0 + (Math.max(t0, 0.75) - d0) * k;          // 往笔画里聚
+      else dye[i] = d0 * (1 - k * 0.30);                                 // 笔画外的墨慢慢淡掉
+    }
+  }
+  // 轻微扩散（3x3）——收敛开始后要压下去，否则细笔画会被抹平
+  const dw = tt > 2.4 ? Math.max(0.02, 0.30 - (tt - 2.4) * 0.05) : 1;
   for (let y = 1; y < SH - 1; y++) for (let x = 1; x < SW - 1; x++) {
     const i = y * SW + x;
-    dye2[i] = (dye[i] * 4 + dye[i - 1] + dye[i + 1] + dye[i - SW] + dye[i + SW]) / 8;
+    const avg = (dye[i] * 4 + dye[i - 1] + dye[i + 1] + dye[i - SW] + dye[i + SW]) / 8;
+    dye2[i] = dye[i] * (1 - dw) + avg * dw;
   }
+  for (let i = 0; i < SW * SH; i++) if (i < SW || i >= SW * (SH - 1)) dye2[i] = dye[i];
   for (let i = 0; i < SW * SH; i++) dye[i] = dye2[i];
 
   // ③ 合成：干墨（字形）+ 湿墨（翻涌的墨）
@@ -164,13 +221,29 @@ for (let f = 0; f < NF; f++) {
       }
     }
     // 湿墨
-    const dx2 = x >> 1, dy2 = y >> 1;
-    const dv = dye[dy2 * SW + dx2];
-    if (dv > 0.03) a = Math.max(a, Math.min(1, dv * 0.86));
+    const dv = dye[y * SW + x];
+    if (dv > 0.02) a = Math.max(a, Math.min(1, dv * (tt > 2.4 ? 1.05 : 0.80)));
     if (a <= 0.004) continue;
     const o = (y * CW + x) * 4;
     img[o] = 0x14; img[o + 1] = 0x11; img[o + 2] = 0x0e;
     img[o + 3] = Math.round(255 * a);
+  }
+  // DIAG：量一下墨有多少落在字形里
+  {
+    const T = targetField(tt);
+    let inS = 0, outS = 0, tN = 0;
+    for (let i = 0; i < SW * SH; i++) { if (T[i] > 0) { inS += dye[i]; tN++; } else outS += dye[i]; }
+    if (f % 40 === 0) console.log('  f=' + f + ' t=' + tt.toFixed(1) + '  字形格数=' + tN + '  墨在字形内=' + inS.toFixed(0) + '  字形外=' + outS.toFixed(0) + '  比值=' + (outS > 0 ? (inS / outS).toFixed(2) : 'inf'));
+  }
+  // DIAGDUMP：把墨场本身导出来看
+  if (f === 60 || f === 140 || f === 240) {
+    const dbg = Buffer.alloc(CW * OUT * 4);
+    for (let i = 0; i < CW * OUT; i++) {
+      const v = Math.max(0, Math.min(1, dye[i]));
+      dbg[i * 4] = dbg[i * 4 + 1] = dbg[i * 4 + 2] = Math.round((1 - v) * 255);
+      dbg[i * 4 + 3] = 255;
+    }
+    writePng(W + '/dye' + f + '.png', CW, OUT, dbg);
   }
   writePng(FD + '/i' + String(f).padStart(4, '0') + '.png', CW, OUT, img);
   if (f % 25 === 0) process.stdout.write('.');
