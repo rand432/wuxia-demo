@@ -28,7 +28,7 @@ const dur = (p) => {
 const clips = EDL.map((e) => {
   const base = e.dur ?? dur(clipPath(e));
   const sp = e.speed ?? 1;
-  return { p: clipPath(e), d: +(base / sp).toFixed(3), sp, note: e.note, cut: !!e.cut };
+  return { p: clipPath(e), d: +(base / sp).toFixed(3), sp, note: e.note, cut: !!e.cut, tr: e.tr };
 });
 let norm = '';
 clips.forEach((c, i) => {
@@ -40,7 +40,7 @@ const times = [{ start: 0, end: clips[0].d, note: clips[0].note }];
 for (let i = 1; i < clips.length; i++) {
   const isBlack = clips[i].p.includes('BLACK_') || clips[i-1].p.includes('BLACK_');
   // 每段可覆盖转场：e.cut = 硬切（0.06s，几乎无重影）
-  const tr = clips[i].cut ? { t: 'fade', d: 0.06 } : (isBlack ? { t: 'fadeblack', d: 0.5 } : { t: 'fade', d: 0.6 });
+  const tr = clips[i].tr ? { t: clips[i].tr, d: 0.9 } : (clips[i].cut ? { t: 'fade', d: 0.06 } : (isBlack ? { t: 'fadeblack', d: 0.5 } : { t: 'fade', d: 0.6 }));
   const out = i === clips.length - 1 ? '[vout]' : '[v' + i + ']';
   vf += prev + '[n' + i + ']xfade=transition=' + tr.t + ':duration=' + tr.d +
         ':offset=' + (total - tr.d).toFixed(3) + out + ';';
