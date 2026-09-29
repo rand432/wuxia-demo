@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import zlib from 'node:zlib';
 const WS = 'D:/1/wuxia-demo';
 const MD = WS + '/export/_work/mask';
-const WW = 1280, HH = 720, LEAD = 90, NF = 48, FPS = 25;   // LEAD=3.6 秒黑场（等旁白说完）
+const WW = 1280, HH = 720, LEAD = 90, NF = 48, TRAIL = 260, FPS = 25;   // LEAD=3.6s 黑场，TRAIL=10.4s 全白（让下一镜一直播下去）
 
 let CRC = null;
 function crc32(b) { if (!CRC) { CRC = []; for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; CRC[n] = c >>> 0; } } let c = 0xffffffff; for (const x of b) c = CRC[(c ^ x) & 0xff] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; }
@@ -30,7 +30,7 @@ const RMAX = Math.hypot(WW, HH) * 0.62;
 const dots = [];
 for (let i = 0; i < 34; i++) dots.push([hash(i * 7 + 1, 3) * WW, hash(i * 13 + 5, 9) * HH, 0.10 + hash(i * 3 + 2, 17) * 0.34, 8 + hash(i * 11 + 4, 23) * 34]);
 fs.rmSync(MD, { recursive: true, force: true }); fs.mkdirSync(MD, { recursive: true });
-process.stdout.write('渲染 ' + (LEAD + NF) + ' 帧遮罩（前 ' + LEAD + ' 帧全黑）');
+process.stdout.write('渲染 ' + (LEAD + NF + TRAIL) + ' 帧遮罩（前 ' + LEAD + ' 黑、后 ' + TRAIL + ' 全白）');
 for (let f = 0; f < LEAD; f++) {
   const img = Buffer.alloc(WW * HH * 4);
   for (let i = 0; i < WW * HH; i++) { img[i * 4 + 3] = 255; }
@@ -62,4 +62,10 @@ for (let f = 0; f < NF; f++) {
   writePng(MD + '/m' + String(LEAD + f).padStart(4, '0') + '.png', WW, HH, img);
   if (f % 8 === 0) process.stdout.write('.');
 }
-console.log(' ✓ ' + MD);
+// 尾部全白：保证 overlay 的输入不会提前结束（否则下一镜会被冻住）
+for (let f = 0; f < TRAIL; f++) {
+  const img = Buffer.alloc(WW * HH * 4);
+  for (let i = 0; i < WW * HH; i++) { img[i * 4] = img[i * 4 + 1] = img[i * 4 + 2] = 255; img[i * 4 + 3] = 255; }
+  writePng(MD + '/m' + String(LEAD + NF + f).padStart(4, '0') + '.png', WW, HH, img);
+}
+console.log(' ✓ ' + MD + '（共 ' + (LEAD + NF + TRAIL) + ' 帧 = ' + ((LEAD + NF + TRAIL) / 25).toFixed(1) + ' 秒）');
