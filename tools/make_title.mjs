@@ -117,6 +117,71 @@ function raster(polys, dir, prog, ci, bmpInfo) {
   return img;
 }
 
+
+// ---------- 墨韵后处理：加粗 + 边缘做毛 + 墨晕 ----------
+function noise2(x, y) {
+  let v = 0, amp = 1, f = 0.035, tot = 0;
+  for (let o = 0; o < 3; o++) {
+    const xi = Math.floor(x * f), yi = Math.floor(y * f);
+    const xf = x * f - xi, yf = y * f - yi;
+    const h = (a, b) => { let n = (a * 374761393 + b * 668265263) | 0; n = (n ^ (n >> 13)) * 1274126177 | 0; return ((n ^ (n >> 16)) >>> 0) / 4294967295; };
+    const u = xf * xf * (3 - 2 * xf), w = yf * yf * (3 - 2 * yf);
+    const a = h(xi, yi), b = h(xi + 1, yi), c = h(xi, yi + 1), d = h(xi + 1, yi + 1);
+    v += ((a * (1 - u) + b * u) * (1 - w) + (c * (1 - u) + d * u) * w) * amp; tot += amp;
+    amp *= 0.5; f *= 2.3;
+  }
+  return v / tot;
+}
+function distField(a, W, H) {
+  const INF = 1e9, d = new Float32Array(W * H);
+  // 字形内=0（距离 0），字形外=INF（待传播）→ 得到【外部到字形】的距离
+  for (let i = 0; i < W * H; i++) d[i] = a[i] > 127 ? 0 : INF;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const i = y * W + x; let m = d[i];
+    if (y > 0) { m = Math.min(m, d[i - W] + 1); if (x > 0) m = Math.min(m, d[i - W - 1] + 1.414); if (x < W - 1) m = Math.min(m, d[i - W + 1] + 1.414); }
+    if (x > 0) m = Math.min(m, d[i - 1] + 1);
+    d[i] = m;
+  }
+  for (let y = H - 1; y >= 0; y--) for (let x = W - 1; x >= 0; x--) {
+    const i = y * W + x; let m = d[i];
+    if (y < H - 1) { m = Math.min(m, d[i + W] + 1); if (x < W - 1) m = Math.min(m, d[i + W + 1] + 1.414); if (x > 0) m = Math.min(m, d[i + W - 1] + 1.414); }
+    if (x < W - 1) m = Math.min(m, d[i + 1] + 1);
+    d[i] = m;
+  }
+  return d;
+}
+// 把一帧的墨迹做成毛笔写的：加粗 r0、边缘抖 rn、外围墨晕 rb
+function inkPost(img, W, H, r0, rn, rb, ends) {
+  const al = new Uint8Array(W * H);
+  for (let i = 0; i < W * H; i++) al[i] = img[i * 4 + 3];
+  const d = distField(al, W, H);
+  const out = Buffer.alloc(W * H * 4);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const i = y * W + x;
+    const nz = noise2(x, y);
+    // 提按：靠笔画两端收细（毛笔的起笔与收笔）
+    let taper = 1;
+    if (ends) {
+      let dm = 1e9;
+      for (const [ex, ey] of ends.pts) { const q = Math.hypot(x - ex, y - ey); if (q < dm) dm = q; }
+      taper = 0.42 + 0.58 * Math.min(1, dm / (ends.r || 90));
+    }
+    const core = Math.max(0.8, (r0 + (nz - 0.5) * 2 * rn) * taper);
+    const halo = core + rb * (0.6 + nz * 0.8);
+    const dd = d[i];
+    let a = 0;
+    if (dd <= core) a = 255;
+    else if (dd <= halo) a = Math.round(255 * Math.pow(1 - (dd - core) / (halo - core + 0.001), 2.2));
+    if (a <= 0) continue;
+    const o = i * 4;
+    const t = dd <= core ? 1 : 1 - (dd - core) / (halo - core + 0.001);
+    out[o] = Math.round(0x14 + (1 - t) * 70);
+    out[o + 1] = Math.round(0x11 + (1 - t) * 66);
+    out[o + 2] = Math.round(0x0e + (1 - t) * 60);
+    out[o + 3] = a;
+  }
+  return out;
+}
 // ---------- 主流程 ----------
 const chars = [];
 for (const [ch, file] of [['侠', '侠.json'], ['缘', '缘.json']]) {
@@ -152,7 +217,7 @@ for (const c of chars) {
     let dx = (ex - sx) * k, dy = (ey - sy) * k;
     const len = Math.hypot(dx, dy) || 1;
     const dir = { x0: sx * k, y0: sy * k, dx: dx / len, dy: dy / len, len: len * 1.25 };
-    plan.push({ ch: c.ch, i, ci: chars.indexOf(c), polys, dir, bmp: st.bmp, y0: st.y0, y1: st.y1, t0: +t.toFixed(3), t1: +(t + PER).toFixed(3) });
+    plan.push({ ch: c.ch, i, ci: chars.indexOf(c), polys, dir, med, bmp: st.bmp, y0: st.y0, y1: st.y1, t0: +t.toFixed(3), t1: +(t + PER).toFixed(3) });
     t += PER;
   }
   t += 0.35;                        // 字与字之间喘一口气
@@ -176,7 +241,15 @@ for (let f = 0; f < NF; f++) {
     const prog = tt >= p.t1 ? 1 : (tt - p.t0) / (p.t1 - p.t0);
     const kk = key(pi, prog >= 1 ? 1 : Math.round(prog * 8) / 8);
     let sp = cache.get(kk);
-    if (!sp) { sp = raster(p.polys, p.dir, prog >= 1 ? 1 : Math.round(prog * 8) / 8, p.ci, p.bmp ? { y0: p.y0, y1: p.y1 } : null); cache.set(kk, sp); }
+    if (!sp) {
+      let raw = raster(p.polys, p.dir, prog >= 1 ? 1 : Math.round(prog * 8) / 8, p.ci, p.bmp ? { y0: p.y0, y1: p.y1 } : null);
+      // 该笔的起止点（用于提按）
+      const k2 = OUT / SIZE;
+      const m0 = p.med && p.med[0], m1 = p.med && p.med[p.med.length - 1];
+      const ends = m0 ? { pts: [[m0[0] * k2 + p.ci * (OUT + GAP), m0[1] * k2], [m1[0] * k2 + p.ci * (OUT + GAP), m1[1] * k2]], r: 78 } : null;
+      sp = inkPost(raw, CW, OUT, 3.0, 1.5, 4.6, ends);
+      cache.set(kk, sp);
+    }
     for (let o = 0; o < img.length; o += 4) {
       const a = sp[o + 3]; if (!a) continue;
       const d = img[o + 3];
