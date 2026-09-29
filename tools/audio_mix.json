@@ -123,8 +123,8 @@
       "off": -1,
       "vol": 4.2,
       "fin": 2,
-      "foutAt": 19,
-      "fout": 4
+      "foutAt": 21,
+      "fout": 4.5
     },
     {
       "f": "乐_远",
@@ -132,8 +132,8 @@
       "off": 12.5,
       "vol": 3.2,
       "fin": 2,
-      "foutAt": 19,
-      "fout": 4
+      "foutAt": 21,
+      "fout": 4.5
     }
   ],
   "sfx": [
