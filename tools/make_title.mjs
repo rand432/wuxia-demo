@@ -57,7 +57,25 @@ function parsePath(d) {
 }
 
 // ---------- 光栅化：按 progress 沿方向裁剪 ----------
-function raster(polys, dir, prog, ci) {
+function raster(polys, dir, prog, ci, bmpInfo) {
+  if (bmpInfo) {
+    const N0 = OUT * SS, CW0 = OUT * 3 + GAP * 2;
+    const img0 = Buffer.alloc(CW0 * OUT * 4);
+    const kk = OUT / 1024;
+    const yEnd = bmpInfo.y0 + (bmpInfo.y1 - bmpInfo.y0) * Math.min(1, prog * 1.15);
+    for (let y = 0; y < OUT; y++) for (let x = 0; x < OUT; x++) {
+      let a = 0;
+      for (let dy = 0; dy < SS; dy++) for (let dx = 0; dx < SS; dx++) {
+        const sx = Math.round((x + dx / SS) / kk), sy = Math.round((y + dy / SS) / kk);
+        if (sy >= bmpInfo.y0 && sy <= yEnd && sx >= 0 && sx < 1024 && sy >= 0 && sy < 1024 && G3[(sy * 1024 + sx) * 4 + 3] > 40) a++;
+      }
+      const al = a / (SS * SS);
+      if (al <= 0) continue;
+      const ox = ci * (OUT + GAP) + x, o = (y * CW0 + ox) * 4;
+      img0[o] = 0x14; img0[o + 1] = 0x11; img0[o + 2] = 0x0e; img0[o + 3] = Math.round(al * 255);
+    }
+    return img0;
+  }
   const CW = OUT * 3 + GAP * 2;          // 画布总宽
   const CH_ = OUT;                       // 画布高
   const N = OUT * SS;
@@ -106,21 +124,16 @@ for (const [ch, file] of [['侠', '侠.json'], ['缘', '缘.json']]) {
   chars.push({ ch, strokes: j.strokes.map((d, i) => ({ d, med: j.medians[i] })) });
 }
 // 「3」不在汉字库里 —— 手工给两笔（中心线 + 宽度），转成轮廓
-function bowl(cx, cy, R, w, a0, a1) {
-  const N = 40, out = [], inn = [];
-  for (let i = 0; i <= N; i++) {
-    const t = a0 + (a1 - a0) * i / N;
-    out.push([cx + R * Math.cos(t), cy + R * Math.sin(t)]);
-    inn.push([cx + (R - w) * Math.cos(t), cy + (R - w) * Math.sin(t)]);
-  }
-  const outline = [out.concat(inn.reverse())];
-  const med = out.map(([a, b]) => [a - (R - w / 2) * 0 + 0, b]);   // 中心线取外弧即可（给方向用）
-  return { polys: outline, med: out, plain: true };
+// 「3」用 ink.ttf 渲染的字形位图（raw RGBA 1024×1024），沿中线劈成两笔
+const G3 = fs.readFileSync(WS + '/export/_work/three.raw');
+function bmp3(part) {
+  let lo = 1e9, hi = -1;
+  for (let y = 0; y < 1024; y++) for (let x = 0; x < 1024; x++) if (G3[(y * 1024 + x) * 4 + 3] > 40) { if (y < lo) lo = y; if (y > hi) hi = y; }
+  const mid = (lo + hi) / 2;
+  const y0 = part === 0 ? lo : mid, y1 = part === 0 ? mid : hi;
+  return { bmp: true, y0, y1, med: [[512, y0], [512, y1]], plain: true };
 }
-const three = [
-  bowl(345, 250, 158, 80, Math.PI * 1.14, Math.PI * 2.08),   // 上碗
-  bowl(345, 505, 175, 88, Math.PI * 0.12, Math.PI * 0.90),   // 下碗
-];
+const three = [bmp3(0), bmp3(1)];
 chars.push({ ch: '3', strokes: three });
 
 // 逐笔渲染
@@ -139,7 +152,7 @@ for (const c of chars) {
     let dx = (ex - sx) * k, dy = (ey - sy) * k;
     const len = Math.hypot(dx, dy) || 1;
     const dir = { x0: sx * k, y0: sy * k, dx: dx / len, dy: dy / len, len: len * 1.25 };
-    plan.push({ ch: c.ch, i, ci: chars.indexOf(c), polys, dir, t0: +t.toFixed(3), t1: +(t + PER).toFixed(3) });
+    plan.push({ ch: c.ch, i, ci: chars.indexOf(c), polys, dir, bmp: st.bmp, y0: st.y0, y1: st.y1, t0: +t.toFixed(3), t1: +(t + PER).toFixed(3) });
     t += PER;
   }
   t += 0.35;                        // 字与字之间喘一口气
@@ -163,7 +176,7 @@ for (let f = 0; f < NF; f++) {
     const prog = tt >= p.t1 ? 1 : (tt - p.t0) / (p.t1 - p.t0);
     const kk = key(pi, prog >= 1 ? 1 : Math.round(prog * 8) / 8);
     let sp = cache.get(kk);
-    if (!sp) { sp = raster(p.polys, p.dir, prog >= 1 ? 1 : Math.round(prog * 8) / 8, p.ci); cache.set(kk, sp); }
+    if (!sp) { sp = raster(p.polys, p.dir, prog >= 1 ? 1 : Math.round(prog * 8) / 8, p.ci, p.bmp ? { y0: p.y0, y1: p.y1 } : null); cache.set(kk, sp); }
     for (let o = 0; o < img.length; o += 4) {
       const a = sp[o + 3]; if (!a) continue;
       const d = img[o + 3];
