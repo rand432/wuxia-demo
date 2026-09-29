@@ -55,6 +55,7 @@ const Roles := preload("res://journey/data_roles.gd")   # ㊳：自带天赋的�
 const GameData := preload("res://shared/game_data.gd")  # ㊷：招式作用范围（target_reach）
 const Buffs := preload("res://shared/data_buffs.gd")   # ㊿：运签卡的封顶值（回气卡/冰心卡）
 const StickFighter := preload("res://journey/stick_fighter.gd")
+const ActorFactory := preload("res://journey/actor_factory.gd")   # Q版纸片人 / 火柴人 二选一
 
 # ㉘ 数值外置：下面这批旋钮可以从 res://tuning.cfg 或 user://tuning.cfg 覆盖
 #   （读不到＝用这里写着的默认值，行为与改之前一模一样）。
@@ -1180,7 +1181,7 @@ func _build_foes(node: Dictionary, foe: Dictionary) -> void:
 # 建头像节点：排号越后站得越远（跟站位那套一致，越后排越靠近画面中央）
 func _make_foe_node(i: int) -> void:
 	var f: Dictionary = _foes[i]
-	var n := StickFighter.new()
+	var n := ActorFactory.make_enemy()
 	var wcol: Array = f.get("color", [0.5, 0.3, 0.28])
 	if wcol.size() >= 3:
 		n.body_color = Color(float(wcol[0]), float(wcol[1]), float(wcol[2]))
@@ -1299,7 +1300,7 @@ func _compose_allies(player: Node2D, party_nodes: Array = []) -> void:
 				nd = pv
 		if nd == null and i > 0:
 			# 现开一个（并记下来：收尾时由战斗自己负责收掉）
-			nd = StickFighter.new()
+			nd = ActorFactory.make(str(_state.member_at(i).get("role_id", "player")))
 			add_child(nd)
 			nd.position = Vector2(210.0 + ALLY_ROW_DX * float(i), 950.0 + ALLY_ROW_DY * float(i))
 			if nd.has_method("set_equipment"):

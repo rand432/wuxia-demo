@@ -54,6 +54,7 @@ func _foe_elem_mark() -> String:
 const StatusChips := preload("res://shared/status_chips.gd")   # v54：负面状态的小图标
 const Tuning := preload("res://shared/tuning.gd")       # ㉘：可调参数读取口
 const StickFighter := preload("res://journey/stick_fighter.gd")
+const ActorFactory := preload("res://journey/actor_factory.gd")   # Q版纸片人 / 火柴人 二选一
 const UiKit := preload("res://shared/ui_kit.gd")
 
 const INK := Color(0.14, 0.13, 0.15)
@@ -1304,7 +1305,7 @@ func _spawn_fighters() -> void:
 	var px := size.x
 	for i in _party.size():
 		var m: Dictionary = _party[i]
-		var n = StickFighter.new()
+		var n = ActorFactory.make(str(m.get("id", "")))
 		var wid := str(m["weapon"])
 		if wid == "":
 			wid = "fist"
@@ -1332,7 +1333,7 @@ func _spawn_fighters() -> void:
 	_foe_nodes.clear()
 	for i in _foes.size():
 		var f: Dictionary = _foes[i]
-		var en = StickFighter.new()
+		var en = ActorFactory.make_enemy()
 		en.set_equipment(str(f.get("weapon", ENEMY_WEAPON)), "douli", "short")
 		var sc := maxf(0.5, float(f.get("scale", 1.0)))
 		if bool(_e().get("boss", false)) and i == 0:

@@ -20,6 +20,8 @@ const RunState := preload("res://shared/run_state.gd")
 const GameState := preload("res://shared/game_state.gd")
 const Elem := preload("res://shared/data_elem.gd")
 const UiKit := preload("res://shared/ui_kit.gd")
+const CharArt := preload("res://shared/char_art.gd")     # 立绘/头像/Q版取图口
+const ArtView := preload("res://shared/art_view.gd")     # 会动的立绘
 
 const WEAPON_CN := {"sword": "长剑", "dual": "双刀", "dagger": "匕首", "spear": "长枪", "anqi": "暗器", "fist": "拳法"}
 const GEAR_CN := {"armor": "护甲", "helm": "玉佩", "cloak": "披风"}
@@ -74,6 +76,7 @@ var _pick_btns: Array = []      # ㊿：三人成队——"看谁"的切换钮�
 var _stats_panel: Panel
 var _stat_val_lbs: Array = []
 var _stat_btn: Button = null   # v60b：［详细属性 ▸］
+var _art_btn: Button = null    # v64：［立绘 ▸］
 
 var _talent_zone: Panel = null
 var _talent_expand_btn: Button = null
@@ -129,7 +132,19 @@ func _refresh_pick_btns() -> void:
 		# ㊿：钮大了，正文也跟着加一点——带上"前/中/后"站位（正在看的那颗是 disabled 态，
 		#   本来就看得出，所以不再加符号，免得字挤出去）
 		var row_cn := "前" if i == 0 else ("中" if i == 1 else "后")
-		b.text = nm + " " + row_cn + " " + str(cur) + "/" + str(mx)
+		# v64：钮上带**头像**（人一多，光靠名字认不快）。字缩短成"名 血/血"，
+		#   让出图标那 30px——134 宽的钮才装得下（带"前/中/后"会挤爆）。
+		var face := CharArt.face(str(m.get("role_id", "")))
+		if face != null:
+			b.icon = face
+			# ⚠ 千万不要开 expand_icon：那会让图标"撑满按钮"，26 的上限就白设了
+			b.expand_icon = false
+			# 图标 20（不是 26）：134 宽的钮要同时装下"图标 + 少侠 100/100"；
+			#   ⚠ 字号千万别往下调——设计分辨率 720 到手机/PC 窗口还要再缩一次，
+			#   13 号字实际只有 8px，糊成一团（试过了）。
+			b.add_theme_constant_override("icon_max_width", 20)
+			b.add_theme_constant_override("h_separation", 4)
+		b.text = nm + " " + str(cur) + "/" + str(mx)
 		b.disabled = (i == _state.active_i)
 		b.modulate = Color.WHITE if cur > 0 else Color(0.7, 0.7, 0.7, 0.75)
 
@@ -179,6 +194,13 @@ func _build_char_panel() -> void:
 		b.visible = false
 		b.pressed.connect(_on_pick_member.bind(i))
 		_pick_btns.append(b)
+
+	# v64：［立绘 ▸］——人物立绘/头像这一页的入口。
+	#   为什么摆在这条带（y180 那一行）：面板上真的没有别处了——顶带 222~636 被三颗"看谁"钮占满，
+	#   下面每一段（属性/天赋/兵器/装备/大招/功法）都排到 876 了。这一行左边只有"天赋"两个字、
+	#   右边 x504 才是［展开］，300~500 这段是空的，塞一颗 116×34 正好，也不挡指头。
+	_art_btn = UiKit.make_button(_stats_panel, Vector2(376, 180), Vector2(116, 34), "立绘 ▸", 17)
+	_art_btn.pressed.connect(_show_ov.bind("art"))
 
 	# ---- 天赋（外面只给名字；全文进展开） ----
 	_head(_stats_panel, "天赋", Vector2(20, 178))
@@ -415,7 +437,7 @@ func _show_ov(kind: String) -> void:
 	#   原来的 880 高装不下（底部的"收起"也会被内容压住）。屏高 1280，100+980=1080 稳。
 	var panel := UiKit.make_paper_panel(ov, Rect2(20, 100, 680, 980))
 	panel.mouse_filter = Control.MOUSE_FILTER_STOP
-	var titles := {"stats": "详细属性 · 全览", "talents": "天赋 · 全览", "weapon": "兵器 · 详情", "gear": "装备 · 详情", "arts": "功法 · 详情", "ult": "大招 · 详情"}
+	var titles := {"stats": "详细属性 · 全览", "talents": "天赋 · 全览", "weapon": "兵器 · 详情", "gear": "装备 · 详情", "arts": "功法 · 详情", "ult": "大招 · 详情", "art": "人物 · 立绘"}
 	var tt := UiKit.make_label(panel, Vector2(0, 24), Vector2(680, 48), 32, UiKit.INK)
 	UiKit.set_text(tt, str(titles.get(kind, "详情")))
 	tt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -492,6 +514,49 @@ func _ov_stats(panel: Control) -> void:
 	UiKit.set_text(lb, "\n".join(PackedStringArray(lines)))
 
 
+# v64：人物 · 立绘页——左边头像＋名号，右边会动的全身立绘。
+#   图来自 assets/char/<角色id>_{face,full}.png（tools/promote_char_art.mjs 提升过来的正式资源）；
+#   缺图不崩：缺哪张就少画哪张，名字照常显示。
+func _ov_art(panel: Control) -> void:
+	var rid := str(_state.role_id)
+	var info: Dictionary = GameState.role_data(rid)
+	var face := CharArt.face(rid)
+	if face != null:
+		var fr := TextureRect.new()
+		# ⚠ 顺序要紧：expand_mode 必须**先**设。默认的 EXPAND_KEEP_SIZE 会把控件最小尺寸
+		#   顶成贴图原尺寸（407×460），先设 size 再改 expand_mode，size 已经被顶回去了 ✗
+		fr.texture = face
+		fr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		fr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		fr.position = Vector2(40, 118)
+		fr.size = Vector2(260, 276)
+		fr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		panel.add_child(fr)
+	var nm := UiKit.make_label(panel, Vector2(40, 402), Vector2(260, 44), 30, UiKit.INK)
+	UiKit.set_text(nm, str(info.get("name", rid)))
+	nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var sub := UiKit.make_label(panel, Vector2(40, 450), Vector2(260, 30), 17, Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.6))
+	UiKit.set_text(sub, str(info.get("sub", "")))
+	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var st: Dictionary = _state.stats()
+	var rows := ["气血 " + str(int(st.get("hp", 0))), "攻击 " + str(int(st.get("atk", 0))),
+		"速度 " + str(int(st.get("spd", 0))), "防御 " + str(int(st.get("def", 0)))]
+	for i in rows.size():
+		var lb := UiKit.make_label(panel, Vector2(40, 500.0 + float(i) * 34.0), Vector2(260, 30), 19, UiKit.DIM)
+		UiKit.set_text(lb, str(rows[i]))
+		lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var full := CharArt.full(rid)
+	if full != null:
+		var av = ArtView.new()
+		panel.add_child(av)
+		av.position = Vector2(330, 150)
+		av.set_art(full, 700.0)
+	else:
+		var miss := UiKit.make_label(panel, Vector2(330, 420), Vector2(320, 40), 20, UiKit.DIM)
+		UiKit.set_text(miss, "（还没有这个人的立绘图）")
+		miss.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+
+
 func _ov_fill(panel: Control, kind: String) -> void:
 	match kind:
 		"stats":
@@ -506,6 +571,8 @@ func _ov_fill(panel: Control, kind: String) -> void:
 			_ov_arts(panel)
 		"ult":
 			_ov_ult(panel)
+		"art":
+			_ov_art(panel)
 
 
 func _ov_talents(panel: Control) -> void:

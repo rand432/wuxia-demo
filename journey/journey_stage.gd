@@ -53,6 +53,7 @@ const UiKit := preload("res://shared/ui_kit.gd")
 const CreationFlow := preload("res://journey/creation_flow.gd")
 const DuelBattle := preload("res://journey/duel_battle.gd")
 const StickFighter := preload("res://journey/stick_fighter.gd")
+const ActorFactory := preload("res://journey/actor_factory.gd")   # Q版纸片人 / 火柴人 二选一
 const PetActor := preload("res://journey/pet_actor.gd")   # ㊿z11：随行宠物（只画，不参战）
 const FxLayer := preload("res://journey/fx_layer.gd")
 const GameState := preload("res://shared/game_state.gd")
@@ -276,7 +277,9 @@ func _ready() -> void:
 # ============ 构建 ============
 
 func _build() -> void:
-	_walker = StickFighter.new()
+	# ⚠ 战斗（duel_battle）会**直接复用**这个 walker 和下面的同伴节点当自己人，
+	#   所以这里必须和战斗用同一个工厂——不然一开打就变成"一个Q版 + 两个火柴人"。
+	_walker = ActorFactory.make("player")
 	_walker.position = _walk_home
 	add_child(_walker)
 	_apply_player_look()
@@ -519,6 +522,8 @@ func _apply_player_look() -> void:
 	if _walker == null or _state == null:
 		return
 	_walker.set_equipment(_state.weapon(), "douli", "short")
+	if _walker.has_method("set_role"):
+		_walker.set_role(str(_state.role_id))
 	_sync_companions()
 	_sync_pet_actor()   # ㊿z11：随行宠物跟着上/下场
 
@@ -558,7 +563,8 @@ func _sync_companions() -> void:
 		if extra != null and is_instance_valid(extra):
 			extra.queue_free()
 	while _companions.size() < want:
-		var nd = StickFighter.new()
+		var nidx := _companions.size() + 1
+		var nd = ActorFactory.make(str(_state.member_at(nidx).get("role_id", "")))
 		add_child(nd)
 		_companions.append(nd)
 	for i in _companions.size():
@@ -571,6 +577,8 @@ func _sync_companions() -> void:
 		c.scale = Vector2(sc, sc)
 		if c.has_method("set_equipment"):
 			c.set_equipment(_state.weapon_of_member(_state.member_at(idx)), "douli", "short")
+		if c.has_method("set_role"):
+			c.set_role(str(_state.member_at(idx).get("role_id", "")))
 		c.visible = _walker.visible
 
 # ㉞：回复飘在角色头上（原来走 UiKit.float_text＝飘屏幕顶上，看不出是谁回的血）

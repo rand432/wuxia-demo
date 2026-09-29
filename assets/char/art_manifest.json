@@ -1,0 +1,65 @@
+{
+  "player": {
+    "cn": "少侠",
+    "source_dir": "assets/gen/char/shaoxia",
+    "slots": {
+      "q": {
+        "file": "assets/char/player_q.png",
+        "from": "assets/gen/char/shaoxia/shaoxia_Q版_glm_anime_cut.png",
+        "bytes": 107744
+      },
+      "face": {
+        "file": "assets/char/player_face.png",
+        "from": "assets/gen/char/shaoxia/shaoxia_头像_liblib_guofeng_cut.png",
+        "bytes": 361713
+      },
+      "full": {
+        "file": "assets/char/player_full.png",
+        "from": "assets/gen/char/shaoxia/shaoxia_立绘_liblib_guofeng_cut.png",
+        "bytes": 750528
+      }
+    }
+  },
+  "chen_shi": {
+    "cn": "陈石",
+    "source_dir": "assets/gen/char/chenshi",
+    "slots": {
+      "q": {
+        "file": "assets/char/chen_shi_q.png",
+        "from": "assets/gen/char/chenshi/chenshi_Q版_glm_anime_cut.png",
+        "bytes": 140177
+      },
+      "face": {
+        "file": "assets/char/chen_shi_face.png",
+        "from": "assets/gen/char/chenshi/chenshi_头像_liblib_guofeng_cut.png",
+        "bytes": 346417
+      },
+      "full": {
+        "file": "assets/char/chen_shi_full.png",
+        "from": "assets/gen/char/chenshi/chenshi_立绘_liblib_guofeng_cut.png",
+        "bytes": 766569
+      }
+    }
+  },
+  "qingluan": {
+    "cn": "苏青鸾",
+    "source_dir": "assets/gen/char/qingluan",
+    "slots": {
+      "q": {
+        "file": "assets/char/qingluan_q.png",
+        "from": "assets/gen/char/qingluan/qingluan_Q版_glm_anime_cut.png",
+        "bytes": 145861
+      },
+      "face": {
+        "file": "assets/char/qingluan_face.png",
+        "from": "assets/gen/char/qingluan/qingluan_头像_liblib_guofeng_cut.png",
+        "bytes": 374548
+      },
+      "full": {
+        "file": "assets/char/qingluan_full.png",
+        "from": "assets/gen/char/qingluan/qingluan_立绘_liblib_guofeng_cut.png",
+        "bytes": 889891
+      }
+    }
+  }
+}
