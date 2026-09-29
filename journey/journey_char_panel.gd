@@ -21,7 +21,8 @@ const GameState := preload("res://shared/game_state.gd")
 const Elem := preload("res://shared/data_elem.gd")
 const UiKit := preload("res://shared/ui_kit.gd")
 const CharArt := preload("res://shared/char_art.gd")     # 立绘/头像/Q版取图口
-const ArtView := preload("res://shared/art_view.gd")     # 会动的立绘
+const ArtView := preload("res://shared/art_view.gd")     # 会动的立绘（程序化）
+const ArtClip := preload("res://shared/art_clip.gd")     # 立绘演出（看片版，.ogv）
 
 const WEAPON_CN := {"sword": "长剑", "dual": "双刀", "dagger": "匕首", "spear": "长枪", "anqi": "暗器", "fist": "拳法"}
 const GEAR_CN := {"armor": "护甲", "helm": "玉佩", "cloak": "披风"}
@@ -447,6 +448,16 @@ func _show_ov(kind: String) -> void:
 	_ov = ov
 
 
+# v64：人物演出——全屏播 <角色>_clip.ogv（智谱 CogVideoX 出的 5 秒片，见 tools/gen_video_zhipu.mjs）
+func _play_clip(rid: String) -> void:
+	var stream := CharArt.clip(rid)
+	if stream == null:
+		return
+	var cv = ArtClip.new()
+	_host.add_child(cv)
+	cv.play(stream, _host.size)
+
+
 func _hide_ov() -> void:
 	if _ov != null and is_instance_valid(_ov):
 		_ov.queue_free()
@@ -545,6 +556,10 @@ func _ov_art(panel: Control) -> void:
 		var lb := UiKit.make_label(panel, Vector2(40, 500.0 + float(i) * 34.0), Vector2(260, 30), 19, UiKit.DIM)
 		UiKit.set_text(lb, str(rows[i]))
 		lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	# 演出片（有才摆钮；没有就只留静态立绘）
+	if CharArt.clip(rid) != null:
+		var pb := UiKit.make_button(panel, Vector2(40, 700), Vector2(240, 56), "▶ 人物演出", 20)
+		pb.pressed.connect(_play_clip.bind(rid))
 	var full := CharArt.full(rid)
 	if full != null:
 		var av = ArtView.new()

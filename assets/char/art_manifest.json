@@ -18,6 +18,11 @@
         "from": "assets/gen/char/shaoxia/shaoxia_立绘_liblib_guofeng_cut.png",
         "bytes": 750528
       }
+    },
+    "clip": {
+      "file": "assets/clips/player_clip.ogv",
+      "from": "assets/gen/aivideo/clip_player.ogv",
+      "bytes": 2568214
     }
   },
   "chen_shi": {
@@ -39,6 +44,11 @@
         "from": "assets/gen/char/chenshi/chenshi_立绘_liblib_guofeng_cut.png",
         "bytes": 766569
       }
+    },
+    "clip": {
+      "file": "assets/clips/chen_shi_clip.ogv",
+      "from": "assets/gen/aivideo/clip_chen_shi.ogv",
+      "bytes": 4179089
     }
   },
   "qingluan": {
@@ -60,6 +70,11 @@
         "from": "assets/gen/char/qingluan/qingluan_立绘_liblib_guofeng_cut.png",
         "bytes": 889891
       }
+    },
+    "clip": {
+      "file": "assets/clips/qingluan_clip.ogv",
+      "from": "assets/gen/aivideo/clip_qingluan.ogv",
+      "bytes": 2734546
     }
   }
 }

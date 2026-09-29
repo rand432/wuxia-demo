@@ -50,8 +50,8 @@ const CHARS = {
   },
   qingluan: {
     cn: '苏青鸾', title: '弟子 · 游侠女',
-    body: '一名年轻女子，身形轻捷挺拔，墨黑长发束成高马尾并垂一条细发辫，眉眼锐利上挑，神情冷淡矜傲，肤色白皙',
-    cloth: '身着月白与青碧色窄袖劲装，外披一件短氅，腰束革带，腰后横别一对匕首，下着深色束脚长裤与轻靴，腰间另挂一柄长剑',
+    body: '一名十六七岁的少女，身姿轻盈挺拔、腰肢纤细，鹅蛋脸，柳叶细眉，杏眼锐利有神，鼻梁秀挺，唇色微红，神情冷淡矜傲，肤白如雪，墨黑长发束成高马尾并垂一条细发辫，鬓边碎发随风轻扬',
+    cloth: '身着月白与青碧色的交领窄袖劲装，衣料层次繁复、缀金属扣件与皮革束带，外披一件短氅，腰束革带、垂流苏飘带，腰后横别一对匕首，下着深色束脚长裤与轻靴，一手斜垂一柄长剑',
     pose: '侧身而立，一手轻按腰间匕首，另一手垂在身侧，衣摆与发尾随风扬起',
     qpose: '反手抽出匕首横在身前，重心前倾作起手式',
     weapon: '匕首',
@@ -62,15 +62,22 @@ const CHARS = {
 const ANIME = '，国风二次元游戏角色立绘，赛璐璐上色，线条干净利落，冷青灰色调为主，衣料带淡淡水墨晕染质感，光影柔和，画面精致，全身完整不裁切，画面中只有这一个人物，纯白背景，背景没有任何景物，画面中没有文字没有水印没有logo没有签名';
 const INK = '，中国古风水墨人物画，宣纸质感，墨色浓淡五层，笔触写意洒脱，面部用淡墨勾线、五官清秀可辨，衣纹以焦墨飞白表现，冷青灰为基调，大面积留白，全身完整不裁切，画面中只有这一个人物，纯白背景，背景没有任何景物，画面中没有文字没有水印没有logo没有签名';
 
+// 鸣潮/库洛那种二次元游戏立绘：精细线稿 + 赛璐璐与厚涂结合、服装细节繁复、风动感
+const MENGCHAO = '，高品质二次元游戏角色立绘（国产二次元手游卡面那种质感），精细线稿与通透的赛璐璐上色结合局部厚涂，服装结构繁复（交领、束带、金属扣件、皮革绑带、流苏飘带），衣摆与发丝带风动感，光影通透有层次，冷调高对比，电影感构图，全身完整不裁切，画面中只有这一个人物，纯白背景，背景没有任何景物，画面中没有文字没有水印没有logo没有签名';
 const GUOFENG = '，中国古风武侠人物插画，精致细腻的半写实国风画风，柔和厚涂与赛璐璐结合的质感，冷青灰色调，衣料纹样细致，光影柔和通透，画面干净利落，全身完整不裁切，画面中只有这一个人物，纯白背景，背景没有任何景物，画面中没有文字没有水印没有logo没有签名';
 const NEG_COMMON = '文字,汉字,书法,印章,水印,签名,logo,字幕,多个角色,两个人,重复人物,背景景物,树木,山水,建筑,房间,现代服饰,西式服装,西装,3D渲染,照片,写实照片,油画厚涂,高饱和度,艳丽俗气,日式和服,日本武士,太刀,多余的手,三只手,六指,畸形手指,断手,脸崩,崩坏,低质量,模糊,裁切,半身';
 const NEG_Q = NEG_COMMON + ',写实比例,成人比例,九头身,长腿,细长身材,狰狞';
+// 按性别分：女角色不许出男人；男角色不许出女人
+const NEG_MALE = NEG_COMMON + ',男性,男人,男子,胡子,络腮胡,粗犷,魁梧,壮汉,肌肉块';
+const NEG_FEMALE = NEG_COMMON + ',男性,男人,男子,少年,胡须,粗犷,魁梧,壮汉,肌肉块,中性';
 const NEG_BUST = NEG_COMMON.replace(',半身', '');
 
 // ---------------- 出图套（尺寸按通道给） ----------------
 const SETS = {
   '立绘': { suffix: '全身立绘站姿，完整人物全身像（含鞋靴与头顶发髻，任何部位都不得被画面边缘裁掉），人物高度约占画面的七成五，头顶留白约一成、脚下留白约一成，全身立绘站姿', glm: [1056, 1568], liblib: [928, 1664], neg: NEG_COMMON },
   '头像': { suffix: '胸像特写，半身构图，人物面部居中清晰、五官精致，眼睛看向观者，肩部完整', glm: [1024, 1024], liblib: [1024, 1024], neg: NEG_BUST },
+  // 横版角色卡面（照参考图那种：人物在右、左边留白放名字与星级）
+  '卡面': { suffix: '横版角色卡面构图：人物置于画面右侧约三分之二处，取膝上半身、四分之三侧身，微微回眸看向画外，左侧留出大片空白用于排名字与星级，画面下方留出不多的空间', glm: [1728, 960], liblib: [1664, 928], neg: NEG_BUST },
   'Q版': { suffix: 'Q版二头身萌系造型，大头小身，圆圆的脸，眼睛大而明亮，身形小巧，清晰描边，游戏战斗立绘用', glm: [1024, 1024], liblib: [1024, 1024], neg: NEG_Q },
 };
 
@@ -159,7 +166,7 @@ async function genLiblib(prompt, negative, [w, h], outBase, loraOverride) {
 function buildPrompt(charKey, setKey, styleKey) {
   const c = CHARS[charKey], s = SETS[setKey];
   if (!c || !s) throw new Error('未知角色或套：' + charKey + '/' + setKey);
-  const tail = styleKey === 'ink' ? INK : styleKey === 'guofeng' ? GUOFENG : ANIME;
+  const tail = styleKey === 'ink' ? INK : styleKey === 'guofeng' ? GUOFENG : styleKey === 'mengchao' ? MENGCHAO : ANIME;
   const poseText = setKey === 'Q版' ? c.qpose : (setKey === '头像' ? '微微侧首，神情平静' : c.pose);
   const head = setKey === 'Q版'
     ? '国风武侠角色' + (styleKey === 'ink' ? '水墨' : '') + 'Q版造型，' + c.body + '，' + c.cloth + '，' + poseText
@@ -192,10 +199,13 @@ async function main() {
     const [charKey, setKey, channel, styleKey] = job.split(':');
     const label = CHARS[charKey]?.cn + ' · ' + setKey + ' · ' + channel + ' · ' + styleKey;
     const prompt = buildPrompt(charKey, setKey, styleKey);
-    const negative = SETS[setKey]?.neg ?? NEG_COMMON;
+    var negative = SETS[setKey]?.neg ?? NEG_COMMON;
+    if (charKey === 'qingluan') negative = NEG_FEMALE;
+    else if (CHARS[charKey]) negative = NEG_MALE;
     const size = SETS[setKey]?.[channel];
     const dir = path.join(OUT_ROOT, charKey);
-    const outBase = path.join(dir, charKey + '_' + setKey + '_' + channel + '_' + styleKey);
+    const tag = opt('tag', '');
+    const outBase = path.join(dir, charKey + '_' + setKey + '_' + channel + '_' + styleKey + (tag ? '_' + tag : ''));
     console.log('──── ' + label + '  ' + size?.join('x') + ' → ' + path.relative(process.cwd(), outBase));
     if (dry) { console.log('  prompt: ' + prompt + '\n'); continue; }
     fs.mkdirSync(dir, { recursive: true });

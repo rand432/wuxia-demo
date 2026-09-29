@@ -45,6 +45,25 @@ const SLOTS = {
   full: ['_立绘_liblib_guofeng_cut.png', '_立绘_glm_ink_cut.png', '_立绘_glm_anime_cut.png'],
 };
 
+// 演出片：assets/gen/aivideo/<名>.ogv → assets/clips/<id>_clip.ogv（Godot 只认 Ogg Theora）
+const CLIPS = { player: 'clip_player', chen_shi: 'clip_chen_shi', qingluan: 'clip_qingluan' };
+const CLIP_OUT = path.resolve('assets/clips');
+
+// 出片通道给的是 1024x1536 的 mp4，底部 ~100px 是平台烧的「AI生成」水印。
+// 固定配方：裁掉水印带 → 居中切成 9:16（裁掉左右各 108）→ 缩到 720x1280 → Ogg Theora
+//   （Godot 4 只原生认 .ogv；mp4/H.264 要额外插件，APK 上更麻烦）
+function ensureOgv(name) {
+  const mp4 = path.resolve('assets/gen/aivideo', name + '.mp4');
+  const ogv = path.resolve('assets/gen/aivideo', name + '.ogv');
+  if (!fs.existsSync(mp4)) return fs.existsSync(ogv) ? ogv : '';
+  if (fs.existsSync(ogv) && fs.statSync(ogv).mtimeMs >= fs.statSync(mp4).mtimeMs) return ogv;
+  const r = spawnSync(FFMPEG, ['-y', '-loglevel', 'error', '-i', mp4,
+    '-vf', 'crop=808:1436:108:0,scale=720:1280:flags=lanczos',
+    '-c:v', 'libtheora', '-q:v', '7', '-an', ogv], { stdio: 'ignore' });
+  if (r.status !== 0) { console.log('  ⚠ ' + name + ' 转 ogv 失败'); return ''; }
+  return ogv;
+}
+
 const OUT = path.resolve('assets/char');
 fs.mkdirSync(OUT, { recursive: true });
 const manifest = {};
@@ -71,5 +90,17 @@ for (const [id, info] of Object.entries(MAP)) {
       (impState === 'no-import' ? '  （还没被 Godot 导入过，导入后再跑一次本脚本即可开 mipmap）' : '  mipmap:' + impState));
   }
 }
+// ---- 演出片 ----
+fs.mkdirSync(CLIP_OUT, { recursive: true });
+for (const [id, name] of Object.entries(CLIPS)) {
+  const src = ensureOgv(name);
+  if (!src) { console.log('  · ' + id + ' 还没有演出片（' + name + '.mp4 / .ogv）'); continue; }
+  const dst = path.join(CLIP_OUT, id + '_clip.ogv');
+  fs.copyFileSync(src, dst);
+  manifest[id].clip = { file: 'assets/clips/' + id + '_clip.ogv', from: 'assets/gen/aivideo/' + name + '.ogv',
+    bytes: fs.statSync(dst).size };
+  console.log('  ✓ ' + path.basename(dst).padEnd(18) + ' ← ' + name + '.ogv  ' + Math.round(fs.statSync(dst).size / 1024) + 'KB');
+}
+
 fs.writeFileSync(path.join(OUT, 'art_manifest.json'), JSON.stringify(manifest, null, 2));
 console.log('\n清单：assets/char/art_manifest.json');

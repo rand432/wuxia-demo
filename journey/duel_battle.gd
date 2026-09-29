@@ -56,6 +56,8 @@ const GameData := preload("res://shared/game_data.gd")  # ㊷：招式作用范�
 const Buffs := preload("res://shared/data_buffs.gd")   # ㊿：运签卡的封顶值（回气卡/冰心卡）
 const StickFighter := preload("res://journey/stick_fighter.gd")
 const ActorFactory := preload("res://journey/actor_factory.gd")   # Q版纸片人 / 火柴人 二选一
+const CharArt := preload("res://shared/char_art.gd")
+const ArtClip := preload("res://shared/art_clip.gd")
 
 # ㉘ 数值外置：下面这批旋钮可以从 res://tuning.cfg 或 user://tuning.cfg 覆盖
 #   （读不到＝用这里写着的默认值，行为与改之前一模一样）。
@@ -1312,6 +1314,23 @@ func _compose_allies(player: Node2D, party_nodes: Array = []) -> void:
 	_p_focus_on(0)
 
 # 把一名成员装成"能打的样子"（原来 run() 里那一段，改成按成员逐份跑）
+# v64：大招 cut-in——放这个人的「人物演出」片（assets/clips/<角色id>_clip.ogv）。
+#   · **非阻塞**：战斗照走，片只压在上层 2.6 秒就收（片源 5 秒，别把整场战斗糊住）
+#   · 想整段关掉：DuelBattle.ult_cutin = false（或只想改时长：ult_cutin_len）
+static var ult_cutin := true
+static var ult_cutin_len := 2.6
+
+func _ult_cutin(m: Dictionary) -> void:
+	if not ult_cutin or _fx == null:
+		return
+	var stream: VideoStream = CharArt.clip(str(m.get("role_id", "")))
+	if stream == null:
+		return
+	var cv = ArtClip.new()
+	_fx.add_child(cv)
+	cv.play(stream, _fx.size, ult_cutin_len, false)
+
+
 func _setup_ally(rid: String, nd: Node2D, idx: int) -> Dictionary:
 	var al := _blank_ally()
 	al["role_id"] = rid
@@ -3998,6 +4017,7 @@ func _strike(is_player: bool, pre_pick: Dictionary = {}) -> void:
 			pick = {"k": "normal", "sid": ""}
 		if str(pick.get("k", "normal")) == "ult":
 			_rage = 0
+			_ult_cutin(_a())      # v64：大招演出片（非阻塞；没片子/关了开关就什么都不做）
 			await _player_ult()
 			return
 	var mv := _pick_move(is_player)

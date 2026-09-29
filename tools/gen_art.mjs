@@ -49,7 +49,7 @@ if (!key) {
 const resp = await fetch('https://open.bigmodel.cn/api/paas/v4/images/generations', {
   method: 'POST',
   headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' },
-  body: JSON.stringify({ model: 'glm-image', prompt, size, n }),
+  body: JSON.stringify({ model: opt('model', 'glm-image'), prompt, size, n }),
 });
 const txt = await resp.text();
 if (!resp.ok) {

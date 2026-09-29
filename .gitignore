@@ -35,6 +35,17 @@ probe_*
 .liblib.json
 *.local.json
 
+# ---- 探针截图 / 视频合成中间图（不进版本库）----
+#   ⚠ 上一轮自动提交把 .qa/ 里的探针截图一起推上去了——这几条是补的
+.qa/
+.qa_*.png
+assets/gen/char/_vidin_*.png
+# ---- 演出片的中间产物：源 mp4 与转好的 ogv 都由 assets/clips/<id>_clip.ogv 交付 ----
+assets/gen/aivideo/clip_*.mp4
+assets/gen/aivideo/clip_*.ogv
+assets/gen/aivideo/clip_*.ogv.uid
+assets/gen/bg_*.png
+
 # ---- 临时拼图（不进版本库）----
 .res*.png
 .sheet*.png
