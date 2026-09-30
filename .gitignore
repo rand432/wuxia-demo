@@ -60,3 +60,4 @@ assets/gen/bg_*.png
 
 # Godot 导入副产物
 *.import
+.ark.json

@@ -62,6 +62,9 @@ const CHARS = {
 const ANIME = '，国风二次元游戏角色立绘，赛璐璐上色，线条干净利落，冷青灰色调为主，衣料带淡淡水墨晕染质感，光影柔和，画面精致，全身完整不裁切，画面中只有这一个人物，纯白背景，背景没有任何景物，画面中没有文字没有水印没有logo没有签名';
 const INK = '，中国古风水墨人物画，宣纸质感，墨色浓淡五层，笔触写意洒脱，面部用淡墨勾线、五官清秀可辨，衣纹以焦墨飞白表现，冷青灰为基调，大面积留白，全身完整不裁切，画面中只有这一个人物，纯白背景，背景没有任何景物，画面中没有文字没有水印没有logo没有签名';
 
+// 水墨大写意：AI 的短板（线稿不精确、细节糊成一团）在这个赛道里恰好变成"风格"
+const XIEYI = '，中国水墨大写意人物画，宣纸质感，焦墨与飞白，笔触淋漓酣畅、线条有粗细顿挫，衣纹以枯笔扫出，发丝以细笔勾扬，面部仅淡墨数笔勾出、神情清冷，墨色浓淡五到七层，画面只用水墨＋一点朱红点缀，纸面有渗墨与水痕，大面积留白，写意不写实，全身完整不裁切，画面中只有这一个人物，画面中没有文字没有印章没有水印没有logo';
+
 // 鸣潮/库洛那种二次元游戏立绘：精细线稿 + 赛璐璐与厚涂结合、服装细节繁复、风动感
 const MENGCHAO = '，高品质二次元游戏角色立绘（国产二次元手游卡面那种质感），精细线稿与通透的赛璐璐上色结合局部厚涂，服装结构繁复（交领、束带、金属扣件、皮革绑带、流苏飘带），衣摆与发丝带风动感，光影通透有层次，冷调高对比，电影感构图，全身完整不裁切，画面中只有这一个人物，纯白背景，背景没有任何景物，画面中没有文字没有水印没有logo没有签名';
 const GUOFENG = '，中国古风武侠人物插画，精致细腻的半写实国风画风，柔和厚涂与赛璐璐结合的质感，冷青灰色调，衣料纹样细致，光影柔和通透，画面干净利落，全身完整不裁切，画面中只有这一个人物，纯白背景，背景没有任何景物，画面中没有文字没有水印没有logo没有签名';
@@ -223,7 +226,7 @@ async function genLiblib(prompt, negative, [w, h], outBase, loraOverride) {
 function buildPrompt(charKey, setKey, styleKey) {
   const c = CHARS[charKey], s = SETS[setKey];
   if (!c || !s) throw new Error('未知角色或套：' + charKey + '/' + setKey);
-  const tail = styleKey === 'ink' ? INK : styleKey === 'guofeng' ? GUOFENG : styleKey === 'mengchao' ? MENGCHAO : ANIME;
+  const tail = styleKey === 'xieyi' ? XIEYI : styleKey === 'ink' ? INK : styleKey === 'guofeng' ? GUOFENG : styleKey === 'mengchao' ? MENGCHAO : ANIME;
   const poseText = setKey === 'Q版' ? c.qpose : (setKey === '头像' ? '微微侧首，神情平静' : c.pose);
   const head = setKey === 'Q版'
     ? '国风武侠角色' + (styleKey === 'ink' ? '水墨' : '') + 'Q版造型，' + c.body + '，' + c.cloth + '，' + poseText
@@ -257,7 +260,8 @@ async function main() {
     const label = CHARS[charKey]?.cn + ' · ' + setKey + ' · ' + channel + ' · ' + styleKey;
     const prompt = buildPrompt(charKey, setKey, styleKey);
     var negative = SETS[setKey]?.neg ?? NEG_COMMON;
-    if (charKey === 'qingluan') negative = NEG_FEMALE;
+    if (styleKey === 'xieyi') negative = NEG_COMMON + ',二次元,动漫,赛璐璐,彩绘,鲜艳色彩,写实照片,3D渲染,精细描线,眼睛过大,萌系,可爱,水墨之外的颜色';
+    else if (charKey === 'qingluan') negative = NEG_FEMALE;
     else if (CHARS[charKey]) negative = NEG_MALE;
     const size = SETS[setKey]?.[channel];
     const dir = path.join(OUT_ROOT, charKey);
