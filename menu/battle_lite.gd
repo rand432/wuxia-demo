@@ -59,6 +59,8 @@ const Audio := preload("res://shared/audio.gd")
 const InkTouch := preload("res://shared/ink_touch.gd")
 const FadeIn := preload("res://shared/fade_in.gd")   # v68：进场淡入 + 震动
 const UiKit := preload("res://shared/ui_kit.gd")
+const SceneArt := preload("res://shared/scene_art.gd")   # v79：战斗背景（素材水墨图）
+const CharArt := preload("res://shared/char_art.gd")   # v82：我方每行的小头像
 
 const INK := Color(0.14, 0.13, 0.15)
 const PAPER := Color(0.905, 0.878, 0.795)
@@ -543,8 +545,30 @@ func _ready() -> void:
 	_refresh_auto_ui()
 	_refresh()
 
+# v79（用户："切 UI 图集里的书法字接上去"）：素材里那三条红字书法——
+#   开场打「强敌来袭」，胜利打「任务完成」。图找不到就只出原来的文字横幅。
+func _calligraphy(which: String, hold := 0.9) -> void:
+	var tex := SceneArt.ui_txt(which)
+	if tex == null or _world == null:
+		return
+	var spr := Sprite2D.new()
+	spr.texture = tex
+	spr.position = Vector2(size.x * 0.5, size.y * 0.34)
+	var k := 320.0 / maxf(float(tex.get_width()), 1.0)
+	spr.scale = Vector2(k * 0.6, k * 0.6)
+	spr.modulate.a = 0.0
+	_world.add_child(spr)
+	var tw := spr.create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(spr, "modulate:a", 0.95, 0.18)
+	tw.tween_property(spr, "scale", Vector2(k, k), 0.28).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.chain().tween_interval(hold)
+	tw.chain().tween_property(spr, "modulate:a", 0.0, 0.30)
+	tw.chain().tween_callback(spr.queue_free)
+
 func _start_banner() -> void:
 	_center_move("开　打", INK)
+	_calligraphy("strongfoe")
 
 func _build_party() -> void:
 	for id in GameState.formation:
@@ -766,6 +790,18 @@ func _build_ui() -> void:
 	var px := size.x
 	var py := size.y
 	_ground_y = py * 0.77
+	# v79（用户："游历的背景是不是可以加一下 爬塔也是"）：**爬塔战斗铺一张水墨背景**。
+	#   ⚠ 必须加在 _world **之前**——Control 里后加的盖在上面，背景要压到最底。
+	var bgtex := SceneArt.map_redmoon()
+	if bgtex != null:
+		var btr := TextureRect.new()
+		btr.texture = bgtex
+		btr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		btr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+		btr.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		btr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		btr.modulate.a = 0.55
+		add_child(btr)
 	_world = Node2D.new()
 	add_child(_world)
 
@@ -819,10 +855,18 @@ func _build_ui() -> void:
 
 	_e_bar_w = minf(px - 140.0, 420.0)
 	var bx := (px - _e_bar_w) * 0.5
+	# v79（用户："还有血条怒气条ui"）：**先垫一层纸底墨框**，再画填充——
+	#   原来就是两根光板 ColorRect，看着像调试用的。框走 ui_kit 的纸面样式，跟全作一套。
+	var e_frame := Panel.new()
+	e_frame.position = Vector2(bx - 3.0, 163.0)
+	e_frame.size = Vector2(_e_bar_w + 6.0, 22.0)
+	e_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	e_frame.add_theme_stylebox_override("panel", UiKit.bar_box())
+	add_child(e_frame)
 	var bg := ColorRect.new()
 	bg.position = Vector2(bx, 166)
 	bg.size = Vector2(_e_bar_w, 16)
-	bg.color = Color(0.10, 0.09, 0.10, 0.20)
+	bg.color = Color(0.10, 0.09, 0.10, 0.28)
 	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(bg)
 	_e_fill = ColorRect.new()
@@ -831,6 +875,17 @@ func _build_ui() -> void:
 	_e_fill.color = Color(0.62, 0.22, 0.18, 0.85)
 	_e_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_e_fill)
+	# v82（用户："怪物也可以加"）：**敌方头像**——把敌人名经 enemy_key 映射到九个 Q版原型，
+	#   再取那张的胸像。取不到就跳过（不占位、不留空框）。
+	var eav := TextureRect.new()
+	eav.texture = CharArt.face(ActorFactory.enemy_key(str(_e().get("name", ""))))
+	if eav.texture != null:
+		eav.position = Vector2(maxf(8.0, bx - 44.0), 158.0)
+		eav.size = Vector2(36, 36)
+		eav.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		eav.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		eav.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(eav)
 	_e_hp_lb = _label("", 12, Color(0.96, 0.94, 0.90))
 	_e_hp_lb.position = Vector2(bx, 166)
 	_e_hp_lb.size = Vector2(_e_bar_w, 16)
@@ -856,14 +911,40 @@ func _build_ui() -> void:
 	_rows = []
 	for i in _party.size():
 		var y := 212.0 + float(i) * 56.0
+		# v82（用户："可以做角色面板三个主角头像"——用哩布哩布那个水墨 LoRA 出的）：
+		#   我方每一行**左边挂一张小头像**（32×32），名字往右挪一格。
+		var av := TextureRect.new()
+		av.texture = CharArt.face(str((_party[i] as Dictionary).get("id", "")))   # 队里那格叫 id
+		if av.texture != null:
+			av.position = Vector2(20, y - 2)
+			av.size = Vector2(30, 30)
+			av.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			av.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			av.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			av.modulate.a = 0.95
+			add_child(av)
 		var nm := _label("", 16, INK)
-		nm.position = Vector2(20, y)
-		nm.size = Vector2(150, 24)
+		var nx := 54.0 if av.texture != null else 20.0
+		nm.position = Vector2(nx, y)
+		nm.size = Vector2(116, 24)
 		add_child(nm)
+		# v79：血条/怒气条都加纸底墨框（怒气那条更矮，框跟着矮）
+		var hf := Panel.new()
+		hf.position = Vector2(167, y - 1)
+		hf.size = Vector2(206, 20)
+		hf.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		hf.add_theme_stylebox_override("panel", UiKit.bar_box())
+		add_child(hf)
+		var rf_frame := Panel.new()
+		rf_frame.position = Vector2(167, y + 22)
+		rf_frame.size = Vector2(206, 11)
+		rf_frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		rf_frame.add_theme_stylebox_override("panel", UiKit.bar_box())
+		add_child(rf_frame)
 		var b := ColorRect.new()
 		b.position = Vector2(170, y + 2)
 		b.size = Vector2(200, 14)
-		b.color = Color(0.10, 0.09, 0.10, 0.18)
+		b.color = Color(0.10, 0.09, 0.10, 0.26)
 		b.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		add_child(b)
 		var fill := ColorRect.new()
@@ -3341,6 +3422,8 @@ func _push(lines: Array) -> void:
 func _end(win: bool) -> void:
 	Audio.play_bgm("bgm_menu", 1.6)   # v65：打完回主界面 BGM
 	Audio.sfx("win" if win else "lose", -6.0)   # v78：胜负音
+	if win:
+		_calligraphy("done", 1.1)     # v79：胜利打书法「任务完成」（素材里的那三条红字之一）
 	if _over:
 		return
 	_over = true

@@ -195,7 +195,16 @@ func _one_house(h: Dictionary) -> void:
 	elif st == 1:
 		_frame(x, y, w, hh, roof)
 	else:
-		_ruin(x, y, w, hh)
+		# v79（用户："想看到更多建筑图"）：**废墟态也用图**了——
+		#   以前只有"建成"的房子有图，村况 1 时全村只看得见一座；
+		#   现在废墟也有水墨图，8 座房从第一天起就都是"图"，村子立刻像个地方。
+		var rtex := SceneArt.ruin()
+		if rtex != null:
+			var rth := (hh + roof) * 1.85
+			var rtw: float = rth * float(rtex.get_width()) / maxf(float(rtex.get_height()), 1.0)
+			draw_texture_rect(rtex, Rect2(x - rtw * 0.5, y - rth + 2.0, rtw, rth), false, Color(1, 1, 1, 0.92))
+		else:
+			_ruin(x, y, w, hh)
 
 # 断墙焦木：地上焦痕 + 残墙（锯牙顶）+ 斜插焦梁 + 碎砖
 func _ruin(x: float, y: float, w: float, h: float) -> void:

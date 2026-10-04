@@ -22,9 +22,12 @@ const Talents := preload("res://shared/data_talents.gd")
 const ROLES := [
 	{
 		"id": "player",
-		"name": "无名少年",
+		# v81（用户："开头剧情改一改"）：名字与来历都跟正典对齐——
+		#   《气质设定》里他不是"下山游历的少年"，是**坠崖没死的赘婿**，
+		#   而"江湖新客"正是你定的面板称谓（原话见 docs/气质设定.md）。
+		"name": "江湖新客",
 		"innate": "red_heart",
-		"note": "自山门下山，身世不详。",
+		"note": "崖底爬出来的人，身世不详。",
 	},
 	{
 		"id": "chen_shi",

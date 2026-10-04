@@ -42,6 +42,13 @@ static func q_head(role_id: String) -> Texture2D:
 
 # 立绘演出片（.ogv，Godot 原生格式）；没有就返回 null
 const CLIP_DIR := "res://assets/clips/"
+# v79：宠物图（智谱出的 Q版 白狐 / 青隼）——没有图返回 null，pet_actor 自己退回手画
+static func pet(kind: String) -> Texture2D:
+	var p := "res://assets/char/" + ("pet_falcon" if kind == "hawk" else "pet_fox") + ".png"
+	if ResourceLoader.exists(p):
+		return load(p) as Texture2D
+	return null
+
 static func clip(role_id: String) -> VideoStream:
 	var p := CLIP_DIR + role_id + "_clip.ogv"
 	if not ResourceLoader.exists(p):

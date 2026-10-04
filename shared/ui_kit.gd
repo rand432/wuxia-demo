@@ -246,6 +246,15 @@ static func add_room_bg(panel: Panel, tex: Texture2D, alpha := 0.34) -> void:
 	panel.add_child(tr)
 	panel.move_child(tr, 0)     # 压到最底：纸底之下、文字之上
 
+# v79：**条槽的纸底墨框**（血条/怒气条共用）——半透纸底 + 一道细墨边 + 圆角
+static func bar_box() -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.955, 0.937, 0.886, 0.42)
+	sb.set_corner_radius_all(5)
+	sb.border_color = Color(0.14, 0.13, 0.15, 0.45)
+	sb.set_border_width_all(1)
+	return sb
+
 static func make_veil(parent: Control, vsize: Vector2, alpha := 0.52) -> ColorRect:
 	# （下面挂 ui_open 音——v78：面板音铺开）
 	var veil := ColorRect.new()

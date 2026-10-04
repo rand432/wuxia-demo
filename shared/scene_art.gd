@@ -34,6 +34,37 @@ static func tower() -> Texture2D:
 static func inn() -> Texture2D:
 	return _tex("inn")
 
+# v79：素材 UI 图集里切出来的**书法字**（升级 / 狭路相逢 / 任务完成 / 强敌来袭 / VS）
+const UI_TXT := {
+	"levelup": "txt_levelup",
+	"meet": "txt_meet",
+	"done": "txt_done",
+	"strongfoe": "txt_strongfoe",
+	"vs": "txt_vs",
+}
+
+static func ui_txt(key: String) -> Texture2D:
+	if not UI_TXT.has(key):
+		return null
+	var p := "res://assets/ui/mat/" + str(UI_TXT[key]) + ".png"
+	if ResourceLoader.exists(p):
+		return load(p) as Texture2D
+	return null
+
+# v79：素材里的**刀光序列帧**（红/黑白两套，各 16 帧）
+static func slash_frames2(set_name := "red") -> Array:
+	var out: Array = []
+	var pre := "slash_red_" if set_name == "red" else "slash_bw_"
+	for i in 16:
+		var p := "res://assets/ui/mat/" + pre + ("%02d" % i) + ".png"
+		if ResourceLoader.exists(p):
+			out.append(load(p))
+	return out
+
+# v79：村庄**废墟态**的房子图（智谱出的正侧视水墨断墙茅顶）
+static func ruin() -> Texture2D:
+	return _tex("house_ruin")
+
 static func buildings() -> Texture2D:
 	return _tex("buildings")
 

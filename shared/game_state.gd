@@ -105,6 +105,8 @@ const IDLE_STEP := 100                # v62n：50 → 100
 const IDLE_STEP_LATE := 250           # v62n：1000 关之后每 250 关一档
 const IDLE_TIER_SWITCH := 1000        # v62n：两条斜率的交接关卡
 const IDLE_RATE_MUL := 0.7            # v62n：挂机倍率 ×0.7（在下面两条 rate 里乘）
+# v80（用户：「挂机的经验收益提高20%」）：只加经验这一条，银两/木料不动。
+const IDLE_EXP_MUL := 1.2
 
 static var idle_pool_sec := 0
 static var _idle_last_ts := 0
@@ -4106,7 +4108,8 @@ static func idle_exp_per_min() -> int:
 static func idle_exp_rate() -> float:
 	# v61（用户："经验收益降低40%"）：×Tower.EXP_INCOME_MUL（0.6），同样走浮点
 	# v62n：再挂 IDLE_RATE_MUL（0.7）——挂机倍率降低 30%
-	return float(IDLE_EXP_PER_MIN + idle_tier() * 2) * Tower.EXP_INCOME_MUL * IDLE_RATE_MUL
+	# v80：经验这条 ×1.2（用户：「挂机的经验收益提高20%」）
+	return float(IDLE_EXP_PER_MIN + idle_tier() * 2) * Tower.EXP_INCOME_MUL * IDLE_RATE_MUL * IDLE_EXP_MUL
 
 static func idle_rate_text() -> String:
 	# v62n：档位说明跟着两条斜率走（前 100 关一档 / 1000 关后 250 关一档、不封顶）

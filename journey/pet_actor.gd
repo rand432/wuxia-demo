@@ -14,6 +14,7 @@ extends Node2D
 # 用法：舞台每帧 lerp 它的 position 追主人；没随行宠物就整只不建。
 # ============================================================
 
+const CharArt := preload("res://shared/char_art.gd")   # v79：Q版宠物图（白狐/青隼）
 const PANEL_CX := 292.0     # 面板地线中心（与 pet_panel 对齐）
 const PANEL_GROUND := 150.0 # 面板地线
 
@@ -36,6 +37,15 @@ func _shadow(rx: float, ry: float) -> void:
 func _draw() -> void:
 	# 先把"面板坐标"整体搬过来：地线中心 → 本节点的原点
 	draw_set_transform(Vector2(-PANEL_CX * draw_scale, -PANEL_GROUND * draw_scale), 0.0, Vector2(draw_scale, draw_scale))
+	# v79（用户："宠物也不是q版"）：**有 Q版 图就用图**（智谱出的白狐/青隼），
+	#   没图再退回原来的程序化画法——两条路都通，缺图不会变空白。
+	var tex: Texture2D = CharArt.pet(kind)
+	if tex != null:
+		var h := 132.0
+		var w: float = h * float(tex.get_width()) / maxf(float(tex.get_height()), 1.0)
+		var bob2 := sin(t * 2.2) * 2.0
+		draw_texture_rect(tex, Rect2(PANEL_CX - w * 0.5, PANEL_GROUND - h + bob2, w, h), false, Color(1, 1, 1, 1))
+		return
 	if kind == "hawk":
 		_draw_hawk()
 	else:

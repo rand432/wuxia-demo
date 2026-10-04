@@ -51,6 +51,11 @@ const ENEMY_KEYS = [
 //   v2（多样性重制）优先：换底图 + 提高重绘幅度，让九个原型不再是同一张脸
 // v71：**明亮二次元**优先（用户定调"人物走干净整洁的二次元"）；水墨/写意那几版退成备用
 //   dogb = 恶犬专用（四足野兽版，只有 mob_dog 有这张，其他原型自动落到 anime2）
+// v79：宠物（智谱出的 Q版 白狐/青隼）
+const PETS = [
+  ['pet_fox', 'pet_fox'],
+  ['pet_falcon', 'pet_falcon'],
+];
 const ENEMY_SRC = ['_Q版_liblib_anime2_dogb_cut.png', '_Q版_liblib_anime2_anime2_cut.png', '_Q版_liblib_anime_v2_cut.png',
   '_Q版_liblib_anime_img2img_cut.png', '_Q版_liblib_anime_cut.png'];
 // 每个槽位按顺序找第一个存在的源文件（后面的是备选画风）
@@ -109,6 +114,19 @@ for (const [id, info] of Object.entries(MAP)) {
       (impState === 'no-import' ? '  （还没被 Godot 导入过，导入后再跑一次本脚本即可开 mipmap）' : '  mipmap:' + impState));
   }
 }
+// ---- 宠物（v79）→ assets/char/pet_*.png ----
+for (const [dir, out] of PETS) {
+  const d = path.resolve('assets/gen/char', dir);
+  if (!fs.existsSync(d)) { console.log('  · 宠物 ' + out + ' 还没有生成稿'); continue; }
+  const hit = fs.readdirSync(d).filter((f) => /_cut\.png$/.test(f))[0];
+  if (!hit) { console.log('  · 宠物 ' + out + ' 没抠好的图'); continue; }
+  const dst = path.join(OUT, out + '.png');
+  const rp = spawnSync(FFMPEG, ['-y', '-loglevel', 'error', '-i', path.join(d, hit), '-vf', 'scale=-1:340:flags=lanczos', dst], { stdio: 'ignore' });
+  if (rp.status !== 0) fs.copyFileSync(path.join(d, hit), dst);
+  patchImport(dst);
+  console.log('  ✓ ' + (out + '.png').padEnd(18) + ' ← ' + hit + '  ' + Math.round(fs.statSync(dst).size / 1024) + 'KB');
+}
+
 // ---- 场景（v67）：assets/gen/char/scene_*/… → assets/scenes/<名>.png ----
 const SCENES = [
   ['scene_scroll', 'village'],
@@ -175,7 +193,10 @@ for (const [dir, name] of SCENES) {
   console.log('  ✓ ' + (name + '.png').padEnd(16) + ' ← ' + path.basename(src) + '  ' + Math.round(fs.statSync(dst).size / 1024) + 'KB');
 }
 // 道具图标（items_sheet 那张图集切出来的 it_*_cut.png）→ assets/items/
-const ITEM_DIRS = [path.resolve('assets/gen/char/items_sheet'), path.resolve('assets/gen/char/gear_sheet')];
+// v79：后两个目录是智谱出的**二次元**图标（用户："装备功法图……也换成q版吧"），
+//   切好后覆盖 assets/items/ 里的同名文件——bag 那边一行代码都不用改。
+const ITEM_DIRS = [path.resolve('assets/gen/char/items_sheet'), path.resolve('assets/gen/char/gear_sheet'),
+  path.resolve('assets/items2')];
 const ITEM_DIR = ITEM_DIRS[0];
 const ITEM_OUT = path.resolve('assets/items');
 fs.mkdirSync(ITEM_OUT, { recursive: true });

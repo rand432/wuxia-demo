@@ -545,7 +545,18 @@ func _ov_art(panel: Control) -> void:
 		fr.size = Vector2(260, 276)
 		fr.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		panel.add_child(fr)
-	var nm := UiKit.make_label(panel, Vector2(40, 402), Vector2(260, 44), 30, UiKit.INK)
+	# v82（用户："角色面板记得也加头像"）：名字**左边挂一张胸像**（水墨 LoRA 出的那三张）。
+	#   取不到就退回首字（不再画框），面板照旧能用。
+	var fav := TextureRect.new()
+	fav.texture = CharArt.face(rid)
+	if fav.texture != null:
+		fav.position = Vector2(52, 396)
+		fav.size = Vector2(56, 56)
+		fav.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		fav.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		fav.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		panel.add_child(fav)
+	var nm := UiKit.make_label(panel, Vector2(40 if fav.texture == null else 116, 402), Vector2(200, 44), 30, UiKit.INK)
 	UiKit.set_text(nm, str(info.get("name", rid)))
 	nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	var sub := UiKit.make_label(panel, Vector2(40, 450), Vector2(260, 30), 17, Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.6))
@@ -554,6 +565,23 @@ func _ov_art(panel: Control) -> void:
 	var st: Dictionary = _state.stats()
 	var rows := ["气血 " + str(int(st.get("hp", 0))), "攻击 " + str(int(st.get("atk", 0))),
 		"速度 " + str(int(st.get("spd", 0))), "防御 " + str(int(st.get("def", 0)))]
+	# v80（用户："舍装签，攻击暴击好像都没生效，角色面板都没显示"）：
+	#   **加成本身是生效的**（buff_fx → fx_buff → 引擎读 atk_pct/crit_pct，链路查过没断），
+	#   但 stats_of() 故意不含卡组 fx（见 run_state 的注释：那些在战斗里才折算），
+	#   于是面板上一片空白，玩家自然以为没生效。这里把"命数/运签的即时加成"单列一行。
+	var bfx: Dictionary = _state.buff_fx(rid)
+	var bp: Array = []
+	var _pct := func(k: String, label: String) -> void:
+		var v := float(bfx.get(k, 0.0))
+		if absf(v) > 0.001:
+			bp.append(label + " " + ("+" if v > 0.0 else "") + str(int(round(v * 100.0))) + "%")
+	_pct.call("atk_pct", "攻击")
+	_pct.call("crit_pct", "暴击")
+	_pct.call("hp_pct", "气血上限")
+	_pct.call("spd_pct", "速度")
+	_pct.call("ult_dmg", "大招")
+	if bp.size() > 0:
+		rows.append("签加成 " + " · ".join(PackedStringArray(bp)))
 	for i in rows.size():
 		var lb := UiKit.make_label(panel, Vector2(40, 500.0 + float(i) * 34.0), Vector2(260, 30), 19, UiKit.DIM)
 		UiKit.set_text(lb, str(rows[i]))

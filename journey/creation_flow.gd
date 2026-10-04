@@ -16,6 +16,7 @@ signal done(talents: Array, gift_sid: String)
 const Cards := preload("res://shared/data_cards.gd")
 const Creation := preload("res://journey/data_creation.gd")
 const UiKit := preload("res://shared/ui_kit.gd")
+const Voice := preload("res://shared/voice.gd")   # v82：剧情配音
 
 var _intro_idx := 0
 var _q_idx := 0
@@ -44,7 +45,11 @@ func _show_intro() -> void:
 	panel.gui_input.connect(_on_intro_click)
 
 	var t1 := UiKit.make_label(panel, Vector2(0, 80), Vector2(640, 44), 32, UiKit.INK)
-	UiKit.set_text(t1, "山　门")
+	# v82：标题也跟着剧情改了（原来写"山门"——那是旧开场的词）
+	UiKit.set_text(t1, "崖　下")
+	# v82（用户："剧情的独白语音可以加上了"）：每一页念一句旁白。
+	#   **没录就没有**——Voice 内部对缺文件静默跳过，不会卡住开场。
+	Voice.say("narr", _intro_idx + 1)
 	t1.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
 	var body := UiKit.make_label(panel, Vector2(50, 150), Vector2(540, 156), 26, Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.92))
@@ -147,12 +152,14 @@ func _on_answer(opt: Dictionary) -> void:
 func _show_verdict() -> void:
 	_clear()
 	_intro_active = false
-	print("[游历] 到临别页（接下来按［下山］）")
+	print("[游历] 到临别页（接下来按［上路］）")
 	var veil := UiKit.make_veil(self, size, 0.52)
 	var panel := UiKit.make_paper_panel(veil, Rect2(20, 390, 680, 500))
 
 	var t1 := UiKit.make_label(panel, Vector2(0, 24), Vector2(680, 44), 32, UiKit.INK)
-	UiKit.set_text(t1, "临别 · 山门")
+	# v81（用户："开头剧情改一改"）：这一页不再是"山门临别"，是**崖下起身**——
+	#   跟《气质设定》的序章（赘婿→暗算→坠崖→没生→五问→江湖新客）对齐。
+	UiKit.set_text(t1, "崖下 · 起身")
 	t1.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
 	var body := "你的天赋：\n"
@@ -161,7 +168,7 @@ func _show_verdict() -> void:
 	else:
 		for t in _talents:
 			body += "　· " + str(t) + " —— " + str(Creation.talent_desc(str(t))) + "\n"
-	body += "\n行囊里多了三张残卡：\n"
+	body += "\n你从死人身上翻出三张残卡：\n"
 	if _gift_sid != "":
 		var names: Array = []
 		var parts: Array = Cards.parts_of(_gift_sid)
@@ -174,11 +181,11 @@ func _show_verdict() -> void:
 	UiKit.set_text(bd, body)
 	bd.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 
-	var go := UiKit.make_button(panel, Vector2(240, 400), Vector2(200, 68), "下山", 24)
+	var go := UiKit.make_button(panel, Vector2(240, 400), Vector2(200, 68), "上　路", 24)
 	go.pressed.connect(_on_go)
 
 func _on_go() -> void:
-	print("[游历] 按下［下山］，开始交棒")
+	print("[游历] 按下［上路］，开始交棒")
 	done.emit(_talents.duplicate(), _gift_sid)
 	print("[游历] 交棒信号已发出（若上面没有『创建完成』一行，说明问题在这一侧）")
 	queue_free()

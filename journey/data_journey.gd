@@ -33,7 +33,8 @@ const GameState := preload("res://shared/game_state.gd")   # v61：游历敌人�
 
 static func build_nodes() -> Array:
 	return [
-		{"t": "story", "text": "山门在身后越来越远。你背着一只空囊，沿着官道往南走——见见世面，从今天算起。"},
+		# v81（用户："开头剧情改一改"）：跟正典对齐——他是**从崖底爬出来的**，不是下山游历的少年。
+		{"t": "story", "text": "崖底的雨停了。你拄着那半截断刃往南走——京城在北，先活过这个月。"},
 		{"t": "event", "title": "枯树书册", "pool": "arts", "text": "走了半日，官道边一棵枯树横在眼前。树洞里卡着半卷书册，被雨泡烂了，只剩几页还认得出字。"},
 		{"t": "battle", "name": "恶犬", "money": [12, 18], "affixes": ["swift"], "text": "林子口窜出一条瘦骨嶙峋的恶犬，呲着牙不肯让路。",
 			"foe": {"hp": 58, "atk": 3, "spd": 105, "weapon": "fist", "hat": "none", "cape": "none", "color": [0.42, 0.32, 0.24], "scale": 0.86}},

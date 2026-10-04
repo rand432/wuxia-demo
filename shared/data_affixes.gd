@@ -203,8 +203,13 @@ static func names_text(ids: Array) -> String:
 #   ⚠ 硬池从**第 6 章**（出村第 31 关）/ **9 档**起——「点窍/吸血」这类不该早期出现。
 #   出村只到 10 章（`Tower.chapter_idx`），所以调用方把档口收到 6 就够（game_state 那边已改）。
 # ============================================================
-const POOL_EARLY := ["regen", "swift", "thorns"]
-const POOL_MID := ["rally", "poison", "shock"]
+# v80（用户：「游历词缀都带反伤。基本能活的只有陈石 改词缀随机」）：
+#   病根是**池子太小**——3~4 档原来只有 3 个词缀，其中一个就是"反伤"，
+#   每场摇 1~3 条 → 几乎必定带反伤，只有血厚的陈石扛得住。两处改：
+#     ① **反伤挪到中后期**（POOL_MID 起，难度 5+ 才出现）；
+#     ② 早期补一个不致命的（rally），池子 3→4，随机感也回来了。
+const POOL_EARLY := ["regen", "swift", "poison", "rally"]
+const POOL_MID := ["shock", "thorns", "flame"]
 const POOL_LATE := ["flame", "lockchain", "choke", "soften", "entangle"]
 const POOL_HARD := ["bomb", "berserk", "fury", "pierce", "ambush", "cutoff",
 	"armorcrack", "drainrage", "stagnant", "sealvein", "acuity", "leech", "bulwark", "echo"]

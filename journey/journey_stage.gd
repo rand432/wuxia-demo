@@ -89,6 +89,8 @@ const MENU_SCENE := "res://menu_sketch.tscn"
 static var NODE_HEAL_RATE := Tuning.num("journey", "node_heal_rate", 0.10)
 # 每节 20% 才出搜刮（原来几乎节节有）
 static var LOOT_NODE_CHANCE := Tuning.num("journey", "loot_node_chance", 0.2)
+# v80：搜刮解锁难度——正式游历**难度 3**才开（1、2 两趟不摆容器）；引子趟整趟不开
+static var LOOT_MIN_DIFF := Tuning.intv("journey", "loot_min_diff", 3)
 # 搜刮概率总封顶（翻财＋舍装＋福缘叠上去也不许超过它）
 static var LOOT_CHANCE_CAP := Tuning.num("journey", "loot_chance_cap", 0.75)
 # ㉛b：命数解锁门槛——"经历到第 FATE_UNLOCK_DIFF 档"（该档已开＝前几档走完）；改这个数即可
@@ -1056,8 +1058,22 @@ func _finish_node(kind: String) -> void:
 	_busy = false
 	UiKit.float_text(self, "路边留下了可搜的东西——点它翻找", UiKit.INK)
 
+# v80（用户："移除引子游历的搜刮功能" + "移除正式游历前两关的搜刮功能，正式游历难度3解锁"）：
+#   两条门槛**都在这里**收口——搜刮只有这一个生成点，闸在这儿，别处不会漏。
+#     ① 引子趟（mode=="intro"）：整趟不摆容器；
+#     ② 正式趟：难度 < 3 不摆（难度 1、2 是新手两趟）。
+func _loot_allowed() -> bool:
+	if str(_state.mode) == "intro":
+		return false
+	if int(_state.diff) < LOOT_MIN_DIFF:
+		return false
+	return true
+
 func _spawn_loot(kind: String) -> void:
 	_clear_loot()
+	if not _loot_allowed():
+		print("[搜刮] 本趟不开放（引子趟，或正式难度 < ", LOOT_MIN_DIFF, "）")
+		return
 	# ㉘：20% 才出——大多数节没有可搜的；㉛：舍装签 ×1.5（合计封顶 75%）
 	# ㉗：福缘深厚也加一份
 	# v62q（用户终表）：翻财签＝"**每走一节必定可搜刮**"——直接放行，不再走倍率
