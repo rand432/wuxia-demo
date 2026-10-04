@@ -37,6 +37,13 @@ static func inn() -> Texture2D:
 static func buildings() -> Texture2D:
 	return _tex("buildings")
 
+# v75：村里的房子图（用户：「我是想让村里房子也换成图」）。
+#   6 张：茅草土屋 / 竹屋 / 砖石瓦房 / 木构货栈 / 两层藏宝楼 / 牌坊山门。
+#   Build.HOUSES 有 8 座，按序号取模轮着用；缺图返回 null，调用方退化回手画。
+const HOUSE_N := 6
+static func house(i: int) -> Texture2D:
+	return _tex("house_" + str(posmod(i, HOUSE_N) + 1))
+
 # 村口记号（kind）→ 建筑图。没有对应图的返回 null，记号照旧只有牌子。
 const MARK_ART := {
 	"wa": "bld_house",      # 瓦房 → 茅草土屋

@@ -36,6 +36,7 @@ const ScrollLayer := preload("res://menu/menu_scroll.gd")
 const VillageLayer := preload("res://menu/menu_village.gd")
 const MountLayer := preload("res://menu/menu_mount.gd")
 const HudLayer := preload("res://menu/menu_hud.gd")
+const UiKit := preload("res://shared/ui_kit.gd")   # v72：设置面板用（标签/按钮/纸张面板工厂）
 const CharacterPanel := preload("res://menu/character_panel.gd")
 const WarehousePanel := preload("res://menu/warehouse_panel.gd")
 const TwitchRecorder := preload("res://shared/twitch_recorder.gd")   # v63k：抽搐取证器（B 键用）
@@ -203,6 +204,7 @@ var _scroll = null
 var _village = null
 var _mount = null
 var _hud = null
+var _settings_ov = null       # v72：设置面板（音乐/音效音量 + 主界面曲目）
 var _char_panel = null
 var _warehouse = null
 # ㊿z12（抽搐取证）：测试键 B 开的抽帧记录器（见文件末尾 TwitchRecorder）
@@ -536,7 +538,7 @@ class TopVeil extends Node2D:
 		draw_string(font, Vector2(r2.position.x + 24.0, r2.end.y - 34.0), host._story_tip(), HORIZONTAL_ALIGNMENT_CENTER, r2.size.x - 48.0, 16, Color(ink.r, ink.g, ink.b, 0.55))
 
 func _ready() -> void:
-	Audio.play_bgm("bgm_menu")   # v65：主界面 BGM
+	Audio.play_bgm(Audio.menu_track())   # v72：主界面曲目由玩家在设置里选（默认"江南"）
 	InkTouch.attach()            # v65：点击水墨扩散
 	FadeIn.attach()              # v68：进场淡入
 	GameState.load_game()   # 优化批㉒：先进游戏先读全局档（只读一次）
@@ -609,6 +611,11 @@ func _ready() -> void:
 	#     这样从门厅点进品酒/炼丹/鉴宝时，作坊面板画在门厅**上面**，
 	#     关掉作坊又能回到门厅（门厅留着不关，正是这个用处）。
 	# ============================================================
+	# v72：右上角「设置」按钮（音乐 / 音效音量 + 主界面曲目）。
+	#   放在币值条下面一点（y=58），不压到挂机牌和底部签栏。
+	var set_btn := UiKit.make_button(self, Vector2(628, 58), Vector2(76, 40), "设 置", 17)
+	set_btn.pressed.connect(_open_settings)
+
 	_craft_panel = CraftPanel.new()
 	add_child(_craft_panel)
 	_craft_panel.room_pressed.connect(_on_craft_room)
@@ -829,6 +836,96 @@ func _layout_tags() -> void:
 
 # ---- 场景标语 ----
 
+
+# ============================================================
+# v72：**设置面板**（用户：「主界面加一个设置按钮，可以调节背景音乐和音效的音量大小」）
+#   · 音乐音量 / 音效音量（0~100%，拖动即时生效、即时落盘）
+#   · 主界面曲目：6 首可选（素材包那批真曲），点了立刻换曲
+#   · 存 user://audio.cfg，跟村账存档分开
+# ============================================================
+func _open_settings() -> void:
+	if _settings_ov != null and is_instance_valid(_settings_ov):
+		return
+	Audio.ui_click()
+	var ov := Control.new()
+	ov.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	ov.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(ov)
+	_settings_ov = ov
+	var veil := UiKit.make_veil(ov, size, 0.50)
+	veil.mouse_filter = Control.MOUSE_FILTER_STOP
+	var pw := 560.0
+	var ph := 486.0
+	var px := (size.x - pw) * 0.5
+	var py := (size.y - ph) * 0.5
+	var panel := UiKit.make_paper_panel(ov, Rect2(px, py, pw, ph))
+	var ttl := UiKit.make_label(panel, Vector2(0, 16), Vector2(pw, 40), 30, UiKit.INK)
+	UiKit.set_text(ttl, "设　置")
+	ttl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var sep := ColorRect.new()
+	sep.color = Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.20)
+	sep.position = Vector2(28, 62)
+	sep.size = Vector2(pw - 56.0, 2)
+	sep.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(sep)
+	# ---- 音乐音量 ----
+	_slider_row(panel, 82.0, pw, "音　乐", Audio.bgm_volume(), func(v: float) -> void:
+		Audio.set_bgm_volume(v))
+	# ---- 音效音量 ----
+	_slider_row(panel, 148.0, pw, "音　效", Audio.sfx_volume(), func(v: float) -> void:
+		Audio.set_sfx_volume(v))
+	# ---- 主界面曲目 ----
+	var lbt := UiKit.make_label(panel, Vector2(32, 220), Vector2(pw - 64.0, 26), 19, UiKit.INK)
+	UiKit.set_text(lbt, "主界面曲目（点一下试听，自动记住）")
+	var tracks: Array = Audio.MENU_TRACKS
+	for i in tracks.size():
+		var tk: Dictionary = tracks[i]
+		var col := i % 3
+		var row := int(i / 3)
+		var bx := 32.0 + float(col) * 168.0
+		var by := 254.0 + float(row) * 52.0
+		var on := str(tk["key"]) == Audio.menu_track()
+		var tb := UiKit.make_button(panel, Vector2(bx, by), Vector2(156, 44), str(tk["name"]), 18)
+		tb.pressed.connect(_pick_menu_track.bind(str(tk["key"])))
+		if on:
+			var sb := StyleBoxFlat.new()
+			sb.bg_color = Color(0.28, 0.24, 0.20, 0.95)
+			sb.set_corner_radius_all(6)
+			tb.add_theme_stylebox_override("normal", sb)
+	# ---- 关闭 ----
+	var cb := UiKit.make_button(panel, Vector2((pw - 200.0) * 0.5, ph - 66.0), Vector2(200, 48), "关　闭", 20)
+	cb.pressed.connect(_close_settings)
+	print("[设置] 打开：音乐 ", int(Audio.bgm_volume() * 100.0), "% · 音效 ", int(Audio.sfx_volume() * 100.0), "% · 曲目 ", Audio.menu_track())
+
+# 一行「标签 + 滑条 + 百分比」
+func _slider_row(panel: Control, y: float, pw: float, title: String, val: float, cb: Callable) -> void:
+	var lb := UiKit.make_label(panel, Vector2(32, y), Vector2(110, 30), 19, UiKit.INK)
+	UiKit.set_text(lb, title)
+	var sl := HSlider.new()
+	sl.min_value = 0.0
+	sl.max_value = 1.0
+	sl.step = 0.05
+	sl.value = val
+	sl.position = Vector2(140, y + 2)
+	sl.size = Vector2(pw - 250.0, 34)
+	sl.custom_minimum_size = Vector2(pw - 250.0, 34)
+	panel.add_child(sl)
+	var pv := UiKit.make_label(panel, Vector2(pw - 96.0, y), Vector2(70, 30), 19, UiKit.INK)
+	UiKit.set_text(pv, str(int(round(val * 100.0))) + "%")
+	pv.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	sl.value_changed.connect(func(v: float) -> void:
+		UiKit.set_text(pv, str(int(round(v * 100.0))) + "%")
+		cb.call(v))
+
+func _pick_menu_track(key: String) -> void:
+	Audio.set_menu_track(key)
+	_close_settings()
+	_open_settings()     # 重开一次，把选中的高亮刷新掉
+
+func _close_settings() -> void:
+	if _settings_ov != null and is_instance_valid(_settings_ov):
+		_settings_ov.queue_free()
+	_settings_ov = null
 func _add_mark(kind: String, cx: float, wy: float, title: String, sub: String) -> void:
 	var b := Button.new()
 	b.focus_mode = Control.FOCUS_NONE

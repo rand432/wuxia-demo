@@ -1,0 +1,41 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/kit/bg/bg_1.jpg" id="1_bg"]
+[ext_resource type="Texture2D" path="res://assets/kit/build/house_cottage.png" id="2_house"]
+[ext_resource type="Texture2D" path="res://assets/kit/props/tree.png" id="3_tree"]
+
+[node name="拼场景" type="Node2D"]
+
+[node name="背景_想换图就选中它改 texture" type="Sprite2D" parent="."]
+position = Vector2(360, 640)
+scale = Vector2(4.6, 4.6)
+texture = ExtResource("1_bg")
+
+[node name="样例_草屋" type="Sprite2D" parent="."]
+position = Vector2(380, 770)
+scale = Vector2(2.4, 2.4)
+texture = ExtResource("2_house")
+
+[node name="样例_树" type="Sprite2D" parent="."]
+position = Vector2(170, 790)
+scale = Vector2(2.0, 2.0)
+texture = ExtResource("3_tree")
+
+[node name="参考线_地平线" type="Line2D" parent="."]
+points = PackedVector2Array(0, 860, 720, 860)
+width = 2.0
+default_color = Color(0.45, 0.4, 0.36, 0.5)
+
+[node name="操作说明" type="Label" parent="."]
+offset_left = 20.0
+offset_top = 16.0
+offset_right = 706.0
+offset_bottom = 250.0
+theme_override_colors/font_color = Color(0.12, 0.11, 0.13, 1)
+theme_override_font_sizes/font_size = 19
+text = "拼接场地
+1) 左侧「文件系统」→ assets/kit/ → 把图直接拖进这个 2D 视图
+2) 拖动挪位置；选中后按 Q/W/E 切换 选择/移动/缩放
+3) 右上「检查器」可精确改 position(x,y) 与 scale
+4) Ctrl+S 保存；想真接进村子就说一声，我来接
+分类：build=房子/门/墙  props=桌剑石树船  ui=书法大字  bg=背景"

@@ -236,6 +236,12 @@ static func make_veil(parent: Control, vsize: Vector2, alpha := 0.52) -> ColorRe
 	veil.position = Vector2.ZERO
 	veil.size = vsize
 	veil.mouse_filter = Control.MOUSE_FILTER_STOP
+	# v71f（用户："游历刚开始五选一的时候人物挡住了选项"）：
+	#   病根是 **Q版纸片人自己带 z_index = 5**（我给的，为了让墨弧压在别的场景元素上），
+	#   而弹窗遮罩默认 z_index 是 0 → 演员画在了遮罩和面板**之上**，把选项盖住。
+	#   火柴人时代没这毛病，是 Q版 引进来的。这里把遮罩整体抬到 120，
+	#   **全工程所有弹窗都走 make_veil**，所以一处就够。
+	veil.z_index = 120
 	parent.add_child(veil)
 	return veil
 

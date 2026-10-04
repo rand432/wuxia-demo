@@ -915,6 +915,7 @@ func _open_log() -> void:
 	veil.position = Vector2.ZERO
 	veil.size = vp
 	veil.mouse_filter = Control.MOUSE_FILTER_IGNORE   # 不挡回合：只盖住画面，不接输入
+	veil.z_index = 120   # v71f：压在演员之上（双保险）
 	add_child(veil)
 	var panel := Panel.new()
 	panel.position = Vector2(36.0, 150.0)
@@ -2813,6 +2814,15 @@ func _player_ult() -> void:
 	if _fx != null:
 		_fx.shake(10.0, 0.42)
 		_fx.flash(Color(UiKit.SEAL.r, UiKit.SEAL.g, UiKit.SEAL.b, 0.30))
+		# v74：大招的"华丽"——墨色漩涡 + 九道剑气四散 + 三重冲击波（用户：「大招也要加 更华丽一点」）
+		var uc := _player.global_position + Vector2(0.0, -80.0)
+		var udir := 1.0
+		if _foe != null and is_instance_valid(_foe):
+			udir = signf(_foe.global_position.x - _player.global_position.x)
+			if udir == 0.0:
+				udir = 1.0
+			uc = (_player.global_position + _foe.global_position) * 0.5 + Vector2(0.0, -80.0)
+		_fx.ult_storm(uc, udir)
 		_fx.big_word(un, UiKit.SEAL)
 	await get_tree().create_timer(0.12).timeout   # 顿帧：压下来的那一下要有重量
 	if uk == "hit":
@@ -3777,6 +3787,7 @@ func _show_info() -> void:
 	veil.size = vp
 	veil.mouse_filter = Control.MOUSE_FILTER_STOP
 	veil.gui_input.connect(_on_info_blank)
+	veil.z_index = 120   # v71f：压在演员之上（双保险）
 	add_child(veil)
 	_info_veil = veil
 	var panel := UiKit.make_paper_panel(veil, Rect2((vp.x - 560.0) * 0.5, 290.0, 560, 680))

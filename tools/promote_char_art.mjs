@@ -57,7 +57,9 @@ const ENEMY_SRC = ['_Q版_liblib_anime2_dogb_cut.png', '_Q版_liblib_anime2_anim
 const SLOTS = {
   // v71（用户定调）：**人物回滚彩色二次元 Q版**——"q版二次元更干净整洁、更符合大众审美"；
   //   UI/场景保持水墨。所以这里把 glm_anime 放回第一优先，ink1 退成备用。
-  q: ['_Q版_glm_anime_cut.png', '_Q版_liblib_xieyi_ink1_cut.png'],
+  //   girlImg1 = 苏青鸾重画版（用户："苏看上去男的 重画"——把女性特征写死后 img2img 出来的），
+  //   只有她有这张，其他角色自动落到下面那行
+  q: ['_Q版_liblib_anime2_girlImg1_cut.png', '_Q版_glm_anime_cut.png', '_Q版_liblib_xieyi_ink1_cut.png'],
   face: ['_头像_liblib_guofeng_cut.png', '_头像_glm_anime_cut.png'],
   full: ['_立绘_liblib_guofeng_cut.png', '_立绘_glm_ink_cut.png', '_立绘_glm_anime_cut.png'],
 };
@@ -170,18 +172,35 @@ for (const [dir, name] of SCENES) {
   console.log('  ✓ ' + (name + '.png').padEnd(16) + ' ← ' + path.basename(src) + '  ' + Math.round(fs.statSync(dst).size / 1024) + 'KB');
 }
 // 道具图标（items_sheet 那张图集切出来的 it_*_cut.png）→ assets/items/
-const ITEM_DIR = path.resolve('assets/gen/char/items_sheet');
+const ITEM_DIRS = [path.resolve('assets/gen/char/items_sheet'), path.resolve('assets/gen/char/gear_sheet')];
+const ITEM_DIR = ITEM_DIRS[0];
 const ITEM_OUT = path.resolve('assets/items');
-if (fs.existsSync(ITEM_DIR)) {
-  fs.mkdirSync(ITEM_OUT, { recursive: true });
-  for (const f of fs.readdirSync(ITEM_DIR)) {
-    const m = f.match(/^(it_[a-z]+)_cut\.png$/);
+fs.mkdirSync(ITEM_OUT, { recursive: true });
+for (const dir of ITEM_DIRS) {
+  if (!fs.existsSync(dir)) continue;
+  for (const f of fs.readdirSync(dir)) {
+    const m = f.match(/^(it_[a-z0-9]+)_cut\.png$/);   // 含数字（it_sword2 之类）
     if (!m) continue;
     const dst = path.join(ITEM_OUT, m[1] + '.png');
-    const r4 = spawnSync(FFMPEG, ['-y', '-loglevel', 'error', '-i', path.join(ITEM_DIR, f), '-vf', 'scale=-1:200:flags=lanczos', dst], { stdio: 'ignore' });
-    if (r4.status !== 0) fs.copyFileSync(path.join(ITEM_DIR, f), dst);
+    const r4 = spawnSync(FFMPEG, ['-y', '-loglevel', 'error', '-i', path.join(dir, f), '-vf', 'scale=-1:200:flags=lanczos', dst], { stdio: 'ignore' });
+    if (r4.status !== 0) fs.copyFileSync(path.join(dir, f), dst);
     patchImport(dst);
     console.log('  ✓ items/' + (m[1] + '.png').padEnd(14) + ' ← ' + f);
+  }
+}
+
+// v75：村里房子的**图**（house_side 那张侧视图集切出来的 house_N_cut.png）→ assets/scenes/
+const HOUSE_DIR = path.resolve('assets/gen/char/house_side');
+if (fs.existsSync(HOUSE_DIR)) {
+  for (const f of fs.readdirSync(HOUSE_DIR)) {
+    const m = f.match(/^(house_[1-9])_cut\.png$/);
+    if (!m) continue;
+    const dst = path.join(SCENE_OUT, m[1] + '.png');
+    const r5 = spawnSync(FFMPEG, ['-y', '-loglevel', 'error', '-i', path.join(HOUSE_DIR, f), '-vf', 'scale=-1:360:flags=lanczos', dst], { stdio: 'ignore' });
+    if (r5.status !== 0) fs.copyFileSync(path.join(HOUSE_DIR, f), dst);
+    patchImport(dst);
+    sceneManifest[m[1]] = { file: 'assets/scenes/' + m[1] + '.png', from: 'assets/gen/char/house_side/' + f, bytes: fs.statSync(dst).size };
+    console.log('  ✓ ' + (m[1] + '.png').padEnd(16) + ' ← ' + f + '  ' + Math.round(fs.statSync(dst).size / 1024) + 'KB');
   }
 }
 

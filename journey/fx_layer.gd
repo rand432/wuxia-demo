@@ -167,6 +167,10 @@ func slash_between(a: Node2D, b: Node2D, mv: String) -> void:
 	tw.tween_property(node, "scale", Vector2(1.25, 1.25), 0.20).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	tw.tween_property(node, "modulate:a", 0.0, 0.22).set_delay(0.03)
 	tw.finished.connect(node.queue_free)
+	# v74：**每一刀都自动补一道白刃刀光 + 火星**。
+	#   为什么不逐个调用点去改：全工程有 14 处 slash_between/burst，
+	#   在这里挂一次，所有攻击（普攻/武学/大招/敌人反击）一起升级。
+	blade_light(a, b, mv)
 
 func burst(pos: Vector2, mv: String) -> void:
 	var st := _mv_style(mv)
@@ -199,6 +203,206 @@ func burst(pos: Vector2, mv: String) -> void:
 	tw2.tween_property(dots, "scale", Vector2(1.3, 1.3), 0.22).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	tw2.tween_property(dots, "modulate:a", 0.0, 0.26).set_delay(0.04)
 	tw2.finished.connect(dots.queue_free)
+	# v74：命中再补一圈**白色冲击环**——「打到了」得有一记亮的东西（原来只有墨点，太静）
+	var ring := ShockRing.new()
+	ring.col = Color(minf(1.0, c.r * 0.4 + 0.86), minf(1.0, c.g * 0.4 + 0.86), minf(1.0, c.b * 0.4 + 0.88), 0.9)
+	ring.position = pos
+	ring.r1 = 42.0 + float(st.get("len", 120.0)) * 0.10
+	add_child(ring)
+
+
+# ============================================================
+# v74：**打击特效加强**（用户：「加一些打击命中特效 什么剑气啊 刀光啊…大招也要加 更华丽一点」）
+#   素材包里那批特效是 Spine 图集/plist 帧动画（2.5D 彩色），跟本作水墨二次元是两套语言，
+#   硬塞进来又是一轮违和——所以这里**照同一套水墨语言手写**：
+#     · 刀光 blade_light()——一道白刃芯 + 墨边 + 火星，压在 brush slash 之上
+#     · 剑气 sword_qi()——月牙形剑气**飞出去**（会走、会淡、会留残影）
+#     · 命中墨爆 impact()——白色冲击环 + 墨点飞溅（比原来的 burst 更响）
+#     · 大招墨漩 ult_storm()——墨色漩涡 + 多重剑气 + 冲击波
+#   所有东西都是 _draw 画的，不依赖任何外部素材。
+# ============================================================
+
+# 白刃刀光：两头尖、中间亮的一道，外加两串火星
+class BladeCore extends Node2D:
+	var col := Color(1, 1, 1, 0.95)
+	var edge := Color(0.10, 0.10, 0.12, 0.85)
+	var length := 130.0
+	var width := 9.0
+	var bow := 10.0
+	var rot_deg := -30.0
+	var sparks: Array = []      # [[pos, r], …]
+
+	func _draw() -> void:
+		var n := 16
+		var pts := PackedVector2Array()
+		for i in n + 1:
+			var t := float(i) / float(n)
+			var x := (t - 0.5) * length
+			var taper := sin(t * PI)                       # 两头收尖
+			var y := -sin(t * PI) * bow * 0.4
+			pts.append(Vector2(x, y))
+			if i == 0:
+				continue
+		# 先描墨边（粗），再压白刃（细）——一刀两笔，像毛笔写出来的
+		draw_polyline(pts, edge, width * 1.9, true)
+		draw_polyline(pts, Color(col.r, col.g, col.b, col.a * 0.55), width * 1.1, true)
+		draw_polyline(pts, col, width * 0.45, true)
+		for s in sparks:
+			draw_circle(Vector2(s[0]), float(s[1]), Color(1, 1, 1, 0.75))
+
+# 飞出去的剑气：月牙形，会走、会转、会淡
+class SwordQi extends Node2D:
+	var col := Color(0.92, 0.94, 1.0, 0.95)
+	var edge := Color(0.10, 0.10, 0.13, 0.90)
+	var radius := 46.0
+	var span := 1.7
+	var vel := Vector2(600, 0)
+	var life := 0.42
+	var spin := 0.0
+	var _t := 0.0
+
+	func _process(d: float) -> void:
+		_t += d
+		position += vel * d
+		rotation += spin * d
+		queue_redraw()
+		if _t >= life:
+			queue_free()
+
+	func _draw() -> void:
+		var k := clampf(1.0 - _t / life, 0.0, 1.0)
+		var half := span * 0.5
+		for i in 3:
+			var w := 1.0 - 0.22 * float(i)
+			draw_arc(Vector2.ZERO, radius * w, -half, half, 22, Color(col.r, col.g, col.b, 0.85 * k), 7.0 - 2.0 * float(i), true)
+		draw_arc(Vector2.ZERO, radius * 1.16, -half * 0.9, half * 0.9, 22, Color(edge.r, edge.g, edge.b, 0.75 * k), 2.6, true)
+
+# 命中墨爆：一圈白色冲击环 + 外扩墨环
+class ShockRing extends Node2D:
+	var col := Color(1, 1, 1, 0.85)
+	var ink := Color(0.11, 0.11, 0.13, 0.75)
+	var r0 := 6.0
+	var r1 := 54.0
+	var width := 5.0
+	var life := 0.24
+	var t := 0.0
+
+	func _process(d: float) -> void:
+		t += d
+		queue_redraw()
+		if t >= life:
+			queue_free()
+
+	func _draw() -> void:
+		var k := clampf(t / life, 0.0, 1.0)
+		var rr := lerpf(r0, r1, 1.0 - pow(1.0 - k, 2.0))
+		var a := 1.0 - k
+		draw_arc(Vector2.ZERO, rr, 0.0, TAU, 40, Color(col.r, col.g, col.b, col.a * a), width * (1.0 - 0.5 * k), true)
+		draw_arc(Vector2.ZERO, rr * 1.18, 0.0, TAU, 40, Color(ink.r, ink.g, ink.b, ink.a * a * 0.8), width * 0.6, true)
+
+# ---- 对外接口 ----
+
+# 刀光：压在 slash_between 之上再补一道白刃 + 火星（有它才「亮」）
+func blade_light(a: Node2D, b: Node2D, mv: String) -> void:
+	if not is_instance_valid(a) or not is_instance_valid(b):
+		return
+	var st := _mv_style(mv)
+	var node := BladeCore.new()
+	var c: Color = st["col"]
+	node.col = Color(minf(1.0, c.r * 0.35 + 0.88), minf(1.0, c.g * 0.35 + 0.88), minf(1.0, c.b * 0.35 + 0.90), 0.96)
+	node.length = float(st["len"]) * randf_range(0.95, 1.12)
+	node.width = maxf(7.0, float(st["wid"]) * 0.9)
+	node.bow = float(st["bow"])
+	node.rot_deg = float(st["rot"]) + randf_range(-4.0, 4.0)
+	for i in 5:
+		node.sparks.append([Vector2(randf_range(-0.6, 0.6), randf_range(-1.0, 1.0)) * float(st["len"]) * 0.5, randf_range(1.2, 2.6)])
+	node.position = _mid_between(a, b) + (st["off"] as Vector2)
+	node.rotation = deg_to_rad(node.rot_deg)
+	node.scale = Vector2(0.7, 0.7)
+	add_child(node)
+	var tw := node.create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(node, "scale", Vector2(1.3, 1.3), 0.16).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(node, "modulate:a", 0.0, 0.20).set_delay(0.05)
+	tw.finished.connect(node.queue_free)
+	# 顺手甩一串火星
+	var dots := InkDots.new()
+	dots.col = Color(1.0, 0.96, 0.86, 0.85)
+	for i in 7:
+		var ang := randf() * TAU
+		dots.pts.append([Vector2(cos(ang), sin(ang)) * randf_range(20.0, 58.0), randf_range(1.0, 2.4)])
+	dots.position = node.position
+	add_child(dots)
+	var tw2 := dots.create_tween()
+	tw2.set_parallel(true)
+	tw2.tween_property(dots, "scale", Vector2(1.4, 1.4), 0.24).set_trans(Tween.TRANS_QUAD)
+	tw2.tween_property(dots, "modulate:a", 0.0, 0.26).set_delay(0.03)
+	tw2.finished.connect(dots.queue_free)
+
+# 剑气：从 from 朝 to 方向飞出 count 道（武学/大招用）
+func sword_qi(from: Node2D, to: Node2D, count := 3, spread := 0.30) -> void:
+	if not is_instance_valid(from) or not is_instance_valid(to):
+		return
+	var p0 := from.global_position + Vector2(0, -70)
+	var dir := (to.global_position + Vector2(0, -70) - p0).normalized()
+	if dir == Vector2.ZERO:
+		dir = Vector2(1, 0)
+	for i in count:
+		var q := SwordQi.new()
+		var a := dir.rotated(randf_range(-spread, spread))
+		q.vel = a * randf_range(560.0, 760.0)
+		q.rotation = a.angle() + PI * 0.5
+		q.spin = randf_range(-1.2, 1.2)
+		q.radius = randf_range(30.0, 52.0)
+		q.life = randf_range(0.34, 0.5)
+		q.position = p0 + a * randf_range(0.0, 22.0)
+		add_child(q)
+
+# 命中墨爆：冲击环 + 墨点（替代原来那个偏静的 burst 手感）
+# （冲击环已并进 burst，这里只是语义别名——内部**别再调 burst**，会递归）
+func impact(pos: Vector2, mv := "chop") -> void:
+	burst(pos, mv)
+
+func _impact_old(pos: Vector2, mv := "") -> void:
+	var ring := ShockRing.new()
+	var st := _mv_style(mv) if mv != "" else {"col": Color(1, 1, 1)}
+	var c: Color = st["col"]
+	ring.col = Color(minf(1.0, c.r * 0.4 + 0.85), minf(1.0, c.g * 0.4 + 0.85), minf(1.0, c.b * 0.4 + 0.88), 0.9)
+	ring.position = pos
+	add_child(ring)
+	burst(pos, mv if mv != "" else "chop")
+
+# 大招：墨色漩涡 + 多重剑气 + 两圈冲击波
+func ult_storm(center: Vector2, dir_x := 1.0) -> void:
+	for i in 3:
+		var r := ShockRing.new()
+		r.position = center
+		r.r1 = 90.0 + 46.0 * float(i)
+		r.life = 0.30 + 0.10 * float(i)
+		r.width = 7.0 - 1.6 * float(i)
+		add_child(r)
+	for i in 9:
+		var q := SwordQi.new()
+		var a := Vector2(dir_x, 0).rotated(randf_range(-0.85, 0.85))
+		q.vel = a * randf_range(700.0, 1050.0)
+		q.rotation = a.angle() + PI * 0.5
+		q.radius = randf_range(26.0, 62.0)
+		q.life = randf_range(0.36, 0.62)
+		q.position = center + a * randf_range(0.0, 40.0)
+		q.col = Color(1.0, 0.97, 0.90, 0.95)
+		add_child(q)
+	var dots := InkDots.new()
+	dots.col = Color(0.10, 0.10, 0.12, 0.70)
+	for i in 14:
+		var ang := randf() * TAU
+		dots.pts.append([Vector2(cos(ang), sin(ang)) * randf_range(30.0, 110.0), randf_range(2.0, 5.5)])
+	dots.position = center
+	add_child(dots)
+	var tw := dots.create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(dots, "scale", Vector2(1.6, 1.6), 0.34).set_trans(Tween.TRANS_QUAD)
+	tw.tween_property(dots, "modulate:a", 0.0, 0.38).set_delay(0.05)
+	tw.finished.connect(dots.queue_free)
 
 func shake(strength: float, duration: float) -> void:
 	var t: Node2D = shake_target

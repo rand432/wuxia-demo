@@ -59,6 +59,7 @@ func _draw() -> void:
 	# v69：AI 生成的那张"村景长卷"垫图**撤掉**了（用户："AI 做的房子建筑不要了"）。
 	#   现在整屏都是本作自己的水墨笔法画的——房子、田埂、篱笆、后山、云雾，
 	#   画风统一（这是最要紧的），也不会有"贴上去的照片感"。
+	_house_seq = 0      # v75：每帧从头轮（顺序固定，房子不会闪来闪去）
 	# 由远及近
 	for it in Build.FIELDS:
 		_one_field(it)
@@ -162,6 +163,8 @@ func _one_field(f: Dictionary) -> void:
 
 # ============ 房子：三种样子 ============
 
+var _house_seq := 0      # v75：这一帧画到第几座房子（用来轮换 6 张房子图）
+
 func _one_house(h: Dictionary) -> void:
 	var x := float(h["x"])
 	var y := float(h["y"])
@@ -177,7 +180,18 @@ func _one_house(h: Dictionary) -> void:
 	elif stage >= 1 and stage == at - 1:
 		st = 1
 	if st == 2:
-		_house_done(x, y, w, hh, roof, bool(h["chim"]), float(h["ph"]), bool(h["tile"]))
+		# v75（用户：「我是想让村里房子也换成图，不再是程序化画的」）：
+		#   建成的房子改用**水墨侧视图**；废墟(_ruin)和木架(_frame)仍旧手画
+		#   —— 那两态本来就是"残缺的线条"，手画反而更贴，也省图。
+		#   尺寸照数据里的 w/h+roof 走，保证跟篱笆/田埂一个比例尺。
+		var tex := SceneArt.house(_house_seq)
+		_house_seq += 1
+		if tex != null:
+			var th := (hh + roof) * 2.05
+			var tw := th * float(tex.get_width()) / maxf(float(tex.get_height()), 1.0)
+			draw_texture_rect(tex, Rect2(x - tw * 0.5, y - th + 2.0, tw, th), false, Color(1, 1, 1, 1))
+		else:
+			_house_done(x, y, w, hh, roof, bool(h["chim"]), float(h["ph"]), bool(h["tile"]))
 	elif st == 1:
 		_frame(x, y, w, hh, roof)
 	else:

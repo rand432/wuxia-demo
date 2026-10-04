@@ -26,6 +26,7 @@ const Cards := preload("res://shared/data_cards.gd")
 const GameState := preload("res://shared/game_state.gd")   # v37：成品显示含升星的加成
 const JourneyCommon := preload("res://journey/journey_common.gd")
 const UiKit := preload("res://shared/ui_kit.gd")
+const ItemArt := preload("res://shared/item_art.gd")   # v73：按名字取水墨图
 
 # 包裹每页格数（右下角那格给翻页钮，3×3 里只看 8 格/页）。
 # 容量上限在 run_state.bag_cap()——宠物驮运加格数时只改那边。
@@ -61,6 +62,7 @@ var _bag_panel: Panel
 var _bag_title: Label
 var _cell_panels: Array = []
 var _cell_labels: Array = []
+var _cell_icons: Array = []     # v73：每格一张水墨图（道具/兵器/功法）
 var _bag_page := 0
 var _page_btn: Button = null
 var _synth_btn: Button
@@ -86,6 +88,7 @@ func _build_bag() -> void:
 
 	_cell_panels.clear()
 	_cell_labels.clear()
+	_cell_icons.clear()
 	for i in BAG_PAGE:
 		var col := i % 3
 		var row := int(i / 3)
@@ -97,6 +100,17 @@ func _build_bag() -> void:
 		cell.mouse_filter = Control.MOUSE_FILTER_STOP
 		cell.gui_input.connect(_on_bag_slot.bind(i))
 		_bag_panel.add_child(cell)
+		# v73（用户：「道具武器功法都没有图」）：格子里压一张水墨图（按名字选），
+		#   40×40 摆在正中偏上，名字仍居中压在下面，两者不打架。
+		var ic := TextureRect.new()
+		ic.position = Vector2(21, 8)
+		ic.size = Vector2(40, 40)
+		ic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		ic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		ic.modulate.a = 0.92
+		cell.add_child(ic)
+		_cell_icons.append(ic)
 		var lb := Label.new()
 		lb.position = Vector2(2, 2)
 		lb.size = Vector2(78, 78)
@@ -160,7 +174,14 @@ func _refresh_bag() -> void:
 			var is_ready := false
 			if kind == "card":
 				is_ready = synthables.has(sid)
-			UiKit.set_text(lb, _state.card_label(e))
+			var nm2: String = str(_state.card_label(e))
+			UiKit.set_text(lb, nm2)
+			if i < _cell_icons.size():
+				# 先按 id（准），配不上再按名字兜一层
+				var ic_tex := ItemArt.icon_for_set(sid)
+				if ic_tex == null:
+					ic_tex = ItemArt.icon_for_name(nm2)
+				_cell_icons[i].texture = ic_tex
 			if kind == "item":
 				lb.add_theme_color_override("font_color", UiKit.SEAL)
 			else:
@@ -168,6 +189,8 @@ func _refresh_bag() -> void:
 			cell.add_theme_stylebox_override("panel", _cell_box(kind, is_ready))
 		else:
 			UiKit.set_text(lb, "")
+			if i < _cell_icons.size():
+				_cell_icons[i].texture = null
 			cell.add_theme_stylebox_override("panel", _cell_box("", false))
 	# v2：按钮写清"合哪一套、还剩几套"——一按只合一（见 journey_synth_panel.press）
 	if synthables.is_empty():

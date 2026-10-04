@@ -41,6 +41,52 @@ static func _stream(path: String) -> AudioStream:
 	_cache[path] = s
 	return s
 
+# 真正开播：先等一帧（跳出 _ready 的调用栈），再加载、建播放器、淡入
+static func _begin_bgm(key: String, fade: float) -> void:
+	var ml := Engine.get_main_loop()
+	if not (ml is SceneTree):
+		_cur_bgm = ""
+		return
+	await (ml as SceneTree).process_frame
+	var root := (ml as SceneTree).root
+	if root == null:
+		_cur_bgm = ""
+		return
+	var s := _stream(DIR_BGM + key + ".ogg")
+	if s == null:
+		await (ml as SceneTree).process_frame      # 再给一帧机会
+		_cache.erase(DIR_BGM + key + ".ogg")       # 清掉可能缓存下来的 null
+		s = _stream(DIR_BGM + key + ".ogg")
+	if s == null:
+		_cur_bgm = ""                              # 失败就复位，下次还能再试
+		return
+	if s is AudioStreamOggVorbis:
+		(s as AudioStreamOggVorbis).loop = true
+	if _bgm_a == null:
+		_bgm_a = AudioStreamPlayer.new()
+		_bgm_a.name = "BgmA"
+		root.add_child(_bgm_a)
+	if _bgm_b == null:
+		_bgm_b = AudioStreamPlayer.new()
+		_bgm_b.name = "BgmB"
+		root.add_child(_bgm_b)
+	# ⚠ 三元表达式两边都是 AudioStreamPlayer，但 Godot 推不出类型（Variant）——
+	#   后面 create_tween() 就"无法推断 tw 的类型"直接 Parse Error，所以这里必须显式标类型
+	var old: AudioStreamPlayer = _bgm_b if _use_a else _bgm_a
+	var newp: AudioStreamPlayer = _bgm_a if _use_a else _bgm_b
+	_use_a = not _use_a
+	newp.stream = s
+	newp.volume_db = -60.0
+	newp.play()
+	_ensure_playing(newp)
+	_ensure_loaded()
+	var tw := newp.create_tween()
+	tw.tween_property(newp, "volume_db", _bgm_db + _vol_db(_bgm_vol), fade)
+	if old.playing:
+		var tw2 := old.create_tween()
+		tw2.tween_property(old, "volume_db", -60.0, fade)
+		tw2.tween_callback(old.stop)
+
 # v71d：**播放兜底**——用户问「音乐音效呢」，查出来是这个：
 #   音频设备/混音线程还没就绪时，AudioStreamPlayer.play() 会**静默失败**（不报错、playing 一直是 false）。
 #   探针实测：在 SceneTree._initialize() 里调 play_bgm → playing=false；改到 _process 里调 → playing=true。
@@ -57,43 +103,96 @@ static func _ensure_playing(p: AudioStreamPlayer) -> void:
 		if is_instance_valid(p) and not p.playing:
 			p.play()
 
+# ============================================================
+# v72：**玩家设置**（音乐音量 / 音效音量 / 主界面曲目）
+#   · 存 `user://audio.cfg`（ConfigFile）——**不动存档**（save.cfg 是村账，别混）
+#   · 音量用 0..1 线性，落到 dB 时 0 走 -80（等于静音）
+#   · 主界面曲目 = 素材包里那批真曲里挑的 6 首（见 MENU_TRACKS）
+# ============================================================
+const SETTINGS_PATH := "user://audio.cfg"
+static var _loaded := false
+static var _bgm_vol := 1.0
+static var _sfx_vol := 1.0
+static var _menu_track := "menu_jiangnan"
+
+const MENU_TRACKS := [
+	{"key": "menu_jiangnan", "name": "江 南"},
+	{"key": "menu_hejian", "name": "河 间"},
+	{"key": "menu_wudao", "name": "悟 道"},
+	{"key": "menu_shaolin", "name": "少 林"},
+	{"key": "menu_youzhou", "name": "幽 州"},
+	{"key": "menu_shushan", "name": "蜀 山"},
+]
+
+static func _ensure_loaded() -> void:
+	if _loaded:
+		return
+	_loaded = true
+	var cf := ConfigFile.new()
+	if cf.load(SETTINGS_PATH) == OK:
+		_bgm_vol = clampf(float(cf.get_value("audio", "bgm", 1.0)), 0.0, 1.0)
+		_sfx_vol = clampf(float(cf.get_value("audio", "sfx", 1.0)), 0.0, 1.0)
+		_menu_track = str(cf.get_value("audio", "menu_track", "menu_jiangnan"))
+
+static func save_settings() -> void:
+	var cf := ConfigFile.new()
+	cf.set_value("audio", "bgm", _bgm_vol)
+	cf.set_value("audio", "sfx", _sfx_vol)
+	cf.set_value("audio", "menu_track", _menu_track)
+	cf.save(SETTINGS_PATH)
+
+static func _vol_db(v: float) -> float:
+	return -80.0 if v <= 0.001 else linear_to_db(clampf(v, 0.001, 1.0))
+
+static func bgm_volume() -> float:
+	_ensure_loaded()
+	return _bgm_vol
+
+static func sfx_volume() -> float:
+	_ensure_loaded()
+	return _sfx_vol
+
+static func menu_track() -> String:
+	_ensure_loaded()
+	return _menu_track
+
+# 改音量：立刻作用到**正在播的那一路**上（不然要等下一首才生效）
+static func set_bgm_volume(v: float) -> void:
+	_ensure_loaded()
+	_bgm_vol = clampf(v, 0.0, 1.0)
+	for p in [_bgm_a, _bgm_b]:
+		if p != null and is_instance_valid(p) and p.playing:
+			p.volume_db = _bgm_db + _vol_db(_bgm_vol)
+	save_settings()
+
+static func set_sfx_volume(v: float) -> void:
+	_ensure_loaded()
+	_sfx_vol = clampf(v, 0.0, 1.0)
+	save_settings()
+	sfx("ui_click", -10.0)     # 拖完给一声，听得见效果
+
+# 换主界面曲目：存盘 + 立刻换（在播的是主界面那首才切，别打断战斗 BGM）
+static func set_menu_track(key: String) -> void:
+	_ensure_loaded()
+	_menu_track = key
+	save_settings()
+	if _cur_bgm.begins_with("menu_") or _cur_bgm == "bgm_menu":
+		_cur_bgm = ""
+		play_bgm(key, 0.8)
+
 # ---------------- BGM ----------------
 
 static func play_bgm(key: String, fade := 1.2) -> void:
 	if key == _cur_bgm:
 		return
-	var root := _root()
-	if root == null:
-		return
-	var s := _stream(DIR_BGM + key + ".ogg")
-	if s == null:
-		return
+	# v71e（用户报的「主界面没有 BGM，但游历里有声音」）：**真凶就是下面这一步的时机**。
+	#   主界面是**开场第一帧**的 _ready 里调过来的，那时候资源系统/音频设备都还没就绪：
+	#   load(ogg) 会失败（探针里直接卡住不再返回）→ 原来的代码在 s == null 处 return，
+	#   **播放器根本没建**，而 _cur_bgm 也没写上——于是主界面永远静音；
+	#   游历/战斗是后面进的场景，那时候一切都就绪，所以有声。
+	#   修法：**把开播推迟一帧**（跳出 _ready 的调用栈），并且加载失败时再等一帧重试。
 	_cur_bgm = key
-	if _bgm_a == null:
-		_bgm_a = AudioStreamPlayer.new()
-		_bgm_a.name = "BgmA"
-		root.add_child(_bgm_a)
-	if _bgm_b == null:
-		_bgm_b = AudioStreamPlayer.new()
-		_bgm_b.name = "BgmB"
-		root.add_child(_bgm_b)
-	# ⚠ 三元表达式两边都是 AudioStreamPlayer，但 Godot 推不出类型（Variant）——
-	#   后面 create_tween() 就"无法推断 tw 的类型"直接 Parse Error，所以这里必须显式标类型
-	var old: AudioStreamPlayer = _bgm_b if _use_a else _bgm_a
-	var newp: AudioStreamPlayer = _bgm_a if _use_a else _bgm_b
-	_use_a = not _use_a
-	if s is AudioStreamOggVorbis:
-		(s as AudioStreamOggVorbis).loop = true
-	newp.stream = s
-	newp.volume_db = -60.0
-	newp.play()
-	_ensure_playing(newp)     # v71d：设备没就绪时 play() 会静默失败，补一次
-	var tw := newp.create_tween()
-	tw.tween_property(newp, "volume_db", _bgm_db, fade)
-	if old.playing:
-		var tw2 := old.create_tween()
-		tw2.tween_property(old, "volume_db", -60.0, fade)
-		tw2.tween_callback(old.stop)
+	_begin_bgm(key, fade)
 
 static func stop_bgm(fade := 0.8) -> void:
 	_cur_bgm = ""
@@ -112,9 +211,10 @@ static func sfx(key: String, vol_db := -6.0, pitch := 1.0) -> void:
 	var s := _stream(DIR_SFX + key + ".ogg")
 	if s == null:
 		return
+	_ensure_loaded()
 	var p := AudioStreamPlayer.new()
 	p.stream = s
-	p.volume_db = vol_db
+	p.volume_db = vol_db + _vol_db(_sfx_vol)
 	p.pitch_scale = clampf(pitch, 0.5, 2.0)
 	root.add_child(p)
 	p.finished.connect(p.queue_free)
