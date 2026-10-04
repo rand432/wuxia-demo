@@ -57,6 +57,7 @@ const StickFighter := preload("res://journey/stick_fighter.gd")
 const ActorFactory := preload("res://journey/actor_factory.gd")   # Q版纸片人 / 火柴人 二选一
 const Audio := preload("res://shared/audio.gd")
 const InkTouch := preload("res://shared/ink_touch.gd")
+const FadeIn := preload("res://shared/fade_in.gd")   # v68：进场淡入 + 震动
 const UiKit := preload("res://shared/ui_kit.gd")
 
 const INK := Color(0.14, 0.13, 0.15)
@@ -502,6 +503,7 @@ func _front_foe() -> int:
 func _ready() -> void:
 	Audio.play_bgm("bgm_battle", 0.6)   # v65：爬塔战斗 BGM
 	InkTouch.attach()
+	FadeIn.attach()   # v68：进场淡入
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	size = get_viewport_rect().size
 	GameState.battle_live = true   # ㊿：告诉账本"屏幕上正打着"——挂机估算要避开这一关

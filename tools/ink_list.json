@@ -1,0 +1,20 @@
+[
+  {
+    "in": "素材/res_mirror/pic/fangzi.png",
+    "out": "bld_house",
+    "prompt": "中国水墨画：一间颓败的茅草顶村舍，土墙草顶，屋角残破",
+    "denoise": 0.55
+  },
+  {
+    "in": "素材/res_mirror/pic/pic_cbs_house.png",
+    "out": "bld_cottage",
+    "prompt": "中国水墨画：一间村舍茅屋，草顶木墙，屋旁一棵绿树",
+    "denoise": 0.52
+  },
+  {
+    "in": "素材/res_mirror/pic/pic_door3_close.png",
+    "out": "door_close",
+    "prompt": "中国水墨画：一座石框木门紧闭，门板完好",
+    "denoise": 0.45
+  }
+]

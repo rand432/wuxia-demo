@@ -28,6 +28,7 @@ extends Control
 const Conf := preload("res://menu/menu_conf.gd")
 const Audio := preload("res://shared/audio.gd")   # v65：BGM / 音效总管
 const InkTouch := preload("res://shared/ink_touch.gd")   # v65：点击水墨扩散
+const FadeIn := preload("res://shared/fade_in.gd")      # v68：进场淡入 + 震动
 const SceneArt := preload("res://shared/scene_art.gd")   # v67：场景/建筑图
 const Draw := preload("res://menu/menu_draw.gd")
 const Build := preload("res://menu/data_build.gd")
@@ -537,6 +538,7 @@ class TopVeil extends Node2D:
 func _ready() -> void:
 	Audio.play_bgm("bgm_menu")   # v65：主界面 BGM
 	InkTouch.attach()            # v65：点击水墨扩散
+	FadeIn.attach()              # v68：进场淡入
 	GameState.load_game()   # 优化批㉒：先进游戏先读全局档（只读一次）
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -846,25 +848,9 @@ func _add_mark(kind: String, cx: float, wy: float, title: String, sub: String) -
 	b.add_theme_stylebox_override("hover", hv)
 	b.add_theme_stylebox_override("pressed", pr)
 	b.add_theme_stylebox_override("focus", sb)
-	# v67：记号上挂"建筑图"——底边中点贴住牌子顶边，图在牌子上方（像门口挂的匾）
-	var art := SceneArt.building(kind)
-	if art != null:
-		var tr := TextureRect.new()
-		tr.texture = art
-		tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		var ph := 132.0
-		var pw := ph * float(art.get_width()) / maxf(float(art.get_height()), 1.0)
-		tr.anchor_left = 0.5
-		tr.anchor_right = 0.5
-		tr.anchor_top = 0.0
-		tr.anchor_bottom = 0.0
-		tr.offset_left = -pw * 0.5
-		tr.offset_right = pw * 0.5
-		tr.offset_top = -ph - 8.0
-		tr.offset_bottom = -8.0
-		tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		b.add_child(tr)
+	# v69（用户："AI 做的房子建筑不要了，尽量做到风格统一"）：
+	#   记号上的 AI 建筑图**撤掉**了——那批是生成图，和村里手写的水墨房子不是一套语言。
+	#   村子本身（menu_village）是水墨画的屋檐/田埂/篱笆，天然统一，也更有武侠味。
 	var tl := Label.new()
 	tl.text = title
 	tl.add_theme_font_size_override("font_size", 17)
@@ -879,8 +865,20 @@ func _add_mark(kind: String, cx: float, wy: float, title: String, sub: String) -
 	sl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	sl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	b.add_child(sl)
+	# v69：记号牌也上学 ui_kit 那套"按下缩一点"的反馈（和面板按钮同一手感）
+	b.pivot_offset = b.size * 0.5
+	b.button_down.connect(func() -> void: _mark_press(b, 0.94))
+	b.button_up.connect(func() -> void: _mark_press(b, 1.0))
+	b.mouse_exited.connect(func() -> void: _mark_press(b, 1.0))
 	_marks_root.add_child(b)
 	_mark_btns.append({"kind": kind, "cx": cx, "wy": wy, "title": title, "sub": sub, "btn": b, "tl": tl, "sl": sl, "phase": float(_mark_btns.size()) * 1.3})
+
+func _mark_press(b: Button, to: float) -> void:
+	if not is_instance_valid(b):
+		return
+	b.pivot_offset = b.size * 0.5
+	var tw := b.create_tween()
+	tw.tween_property(b, "scale", Vector2(to, to), 0.09).set_trans(Tween.TRANS_SINE)
 
 func _update_marks() -> void:
 	var can := (_story_page < 0) and not _any_panel_open()

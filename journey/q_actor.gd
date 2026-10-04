@@ -49,6 +49,57 @@ var _t := 0.0
 var _down := false
 var _arc_t := 0.0          # 出手墨迹的剩余寿命（1→0）
 var _arc_move := ""        # 这一手是哪个招式（决定墨迹形状）
+var _arc_kind := "crescent"  # 这一手的墨迹型（由招式表定）
+
+# ============================================================
+# v69：招式 → 身法 + 墨迹（"不同功法不同动作"）
+#   两张表各管一半：
+#     · 身法——起手/出手的 倾斜、起落、横向位移（以及挤压），照着这一招的性格给
+#     · 墨迹——月牙/横削/上撩/直刺/横扫/双弧/乱刃/墨团/飞线
+#   表里没有的招式按兵器给个默认（见 _style_for），绝不会没动作。
+# ============================================================
+const MOVE_STYLE := {
+	# ---- 刀剑 ----
+	"chop":         {"kind": "crescent", "wu": [-12.0, 2.0, -5.0], "st": [20.0, -6.0, 12.0]},   # 劈：沉肩后坐 → 前倾下压
+	"cut":          {"kind": "cross",    "wu": [-6.0, 0.0, -10.0], "st": [8.0, -2.0, 18.0]},   # 削：侧身横扫
+	"slice":        {"kind": "rise",     "wu": [12.0, 4.0, -4.0], "st": [-16.0, -11.0, 9.0]},  # 撩：先蹲后挑
+	"stab":         {"kind": "thrust",   "wu": [-14.0, 1.0, -11.0], "st": [16.0, -3.0, 24.0]}, # 刺：直线前冲
+	"sweep":        {"kind": "sweep",    "wu": [-4.0, 0.0, -15.0], "st": [6.0, -4.0, 20.0]},   # 扫：大转身
+	# ---- 双刀 ----
+	"dual_chop":    {"kind": "dual",     "wu": [-10.0, 2.0, -6.0], "st": [16.0, -6.0, 12.0]},
+	"dual_alt":     {"kind": "dual",     "wu": [-7.0, 1.0, -8.0], "st": [11.0, -4.0, 15.0]},
+	"dual_thrust":  {"kind": "thrust",   "wu": [-12.0, 1.0, -10.0], "st": [15.0, -3.0, 22.0]},
+	"dual_rip":     {"kind": "cross",    "wu": [6.0, 3.0, -12.0], "st": [-10.0, -8.0, 14.0]},
+	# ---- 匕首 ----
+	"dagger_slash": {"kind": "dual",     "wu": [-8.0, 1.0, -7.0], "st": [12.0, -5.0, 14.0]},
+	"dagger_stab":  {"kind": "thrust",   "wu": [-11.0, 1.0, -9.0], "st": [14.0, -3.0, 20.0]},
+	"dagger_flurry": {"kind": "flurry",  "wu": [-5.0, 0.0, -6.0], "st": [9.0, -4.0, 10.0]},
+	# ---- 枪 ----
+	"spear_thrust": {"kind": "thrust",   "wu": [-15.0, 2.0, -12.0], "st": [18.0, -3.0, 26.0]},
+	"spear_multi":  {"kind": "flurry",   "wu": [-9.0, 1.0, -8.0], "st": [13.0, -5.0, 14.0]},
+	"spear_turn":   {"kind": "sweep",    "wu": [-5.0, 0.0, -14.0], "st": [7.0, -4.0, 19.0]},
+	# ---- 暗器 ----
+	"anqi_throw":   {"kind": "darts",    "wu": [-6.0, 1.0, -8.0], "st": [10.0, -3.0, 16.0]},
+	"anqi_rain":    {"kind": "darts",    "wu": [-4.0, 0.0, -6.0], "st": [7.0, -2.0, 12.0]},
+	"anqi_kick":    {"kind": "impact",   "wu": [-8.0, 3.0, -6.0], "st": [14.0, -7.0, 11.0]},
+	# ---- 拳 ----
+	"fist_punch":   {"kind": "impact",   "wu": [-9.0, 2.0, -7.0], "st": [15.0, -5.0, 13.0]},
+	"fist_combo":   {"kind": "flurry",   "wu": [-6.0, 1.0, -6.0], "st": [10.0, -4.0, 11.0]},
+	"fist_kick":    {"kind": "impact",   "wu": [-11.0, 4.0, -5.0], "st": [17.0, -9.0, 10.0]},
+	"fist_palm":    {"kind": "cross",    "wu": [-7.0, 1.0, -9.0], "st": [9.0, -3.0, 15.0]},
+}
+
+# 招式 → 风格；表里没有就按兵器兜底
+func _style_for(move_id: String) -> Dictionary:
+	if MOVE_STYLE.has(move_id):
+		return MOVE_STYLE[move_id]
+	match weapon_type:
+		"spear": return {"kind": "thrust", "wu": [-13.0, 2.0, -10.0], "st": [16.0, -3.0, 22.0]}
+		"dagger": return {"kind": "dual", "wu": [-8.0, 1.0, -7.0], "st": [12.0, -5.0, 14.0]}
+		"fist": return {"kind": "impact", "wu": [-9.0, 2.0, -7.0], "st": [14.0, -5.0, 12.0]}
+		"anqi": return {"kind": "darts", "wu": [-6.0, 1.0, -8.0], "st": [10.0, -3.0, 15.0]}
+		"dual": return {"kind": "dual", "wu": [-10.0, 2.0, -6.0], "st": [15.0, -6.0, 12.0]}
+		_: return {"kind": "crescent", "wu": [-12.0, 2.0, -5.0], "st": [20.0, -6.0, 12.0]}
 const ARC_LIFE := 0.20
 # 每个人的"笔性"：焦墨（少侠）／湿墨厚重（陈石）／细笔轻灵（苏青鸾）／普通（杂兵）
 var ink_weight := 1.0      # 透明度倍率
@@ -296,18 +347,44 @@ func play_move(move_id: String, speed := 1.0) -> void:
 	var mt := move_time(move_id, move_speed)
 	var windup: float = maxf(float(mt["windup"]), 0.06)
 	var total: float = maxf(float(mt["total"]), windup + 0.06)
-	# 起手：沉肩后坐（音效按兵器分：暗器"嗒"、弓"弦"、拳"闷"、刀剑"挥"）
+	# 起手／出手：**照这一招的性格给身法**（v69：不同功法不同动作）
+	var st := _style_for(move_id)
+	var wu: Array = st.get("wu", [-9.0, 1.5, -5.0])
+	var sk: Array = st.get("st", [15.0, -5.0, 11.0])
+	_arc_kind = str(st.get("kind", "crescent"))
+	# 音效按兵器分：暗器"嗒"、弓"弦"、拳"闷"、刀剑"挥"
 	Audio.sfx(_sfx_swing(), -11.0, randf_range(0.94, 1.06))
-	_set_pose({CH_LEAN: -9.0 * _dir, CH_HOP: 1.5, CH_SX: 0.95, CH_SY: 1.05, CH_SWAY: -5.0 * _dir})
+	# ① 起手：沉肩后坐、身子压低（"蓄"）
+	_set_pose({CH_LEAN: float(wu[0]) * _dir, CH_HOP: float(wu[1]), CH_SX: 0.95, CH_SY: 1.05, CH_SWAY: float(wu[2]) * _dir})
 	await _wait(windup)
 	if gen != _move_gen:
 		return
-	# 出手：前倾、前冲、拉长 + 一道墨迹（v66：形状按**这一招**定，别再千人一弧）
-	_set_pose({CH_LEAN: 15.0 * _dir, CH_HOP: -5.0, CH_SX: 1.03, CH_SY: 0.97, CH_SWAY: 11.0 * _dir})
+	# ② 进身：半个身子先欺过去（"欺身"）——出手前有一小段过渡，动作才像人做的，
+	#    不是"啪"地从一个姿势跳到另一个（v70：真动作四段里的第二段）
+	var mide: float = maxf((total - windup) * 0.38, 0.05)
+	_set_pose({
+		CH_LEAN: (float(wu[0]) * 0.25 + float(sk[0]) * 0.75) * _dir,
+		CH_HOP: float(wu[1]) * 0.3 + float(sk[1]) * 0.7,
+		CH_SX: 0.99, CH_SY: 1.02,
+		CH_SWAY: (float(wu[2]) * 0.2 + float(sk[2]) * 0.8) * _dir,
+	})
+	await _wait(mide)
+	if gen != _move_gen:
+		return
+	# ③ 出手：到位 + 墨迹炸开（"发"）
+	_set_pose({CH_LEAN: float(sk[0]) * _dir, CH_HOP: float(sk[1]), CH_SX: 1.03, CH_SY: 0.97, CH_SWAY: float(sk[2]) * _dir})
 	_arc_move = move_id          # 墨迹形状读它
 	_arc_t = 1.0
 	queue_redraw()
-	await _wait(maxf(total - windup, 0.08))
+	await _wait(maxf(total - windup - mide, 0.08))
+	if gen != _move_gen:
+		return
+	# ④ 收势：先回一半（留一点"余劲"），再回站姿——比直接弹回站姿顺得多
+	_set_pose({
+		CH_LEAN: float(sk[0]) * 0.28 * _dir, CH_HOP: float(sk[1]) * 0.3,
+		CH_SX: 1.01, CH_SY: 0.99, CH_SWAY: float(sk[2]) * 0.3 * _dir,
+	})
+	await _wait(0.09)
 	if gen != _move_gen:
 		return
 	reset_pose()
@@ -382,15 +459,23 @@ func _draw() -> void:
 	#   而不是一条等宽的灰弧——第一版就是等宽灰弧，看着像 UI 进度条）
 	# v66：墨迹按**兵器**分型——刀一道月牙、枪一条直刺带枪花、匕首两道短弧、
 	#   拳一记墨团冲撞、暗器三点飞线。同一个角色换兵器，出手就不一样了。
-	match weapon_type:
-		"spear":
+	match _arc_kind:
+		"thrust":
 			_draw_thrust(c, r, s, e, life, eff)
-		"dagger":
+		"dual":
 			_draw_twin(c, r, s, e, life)
-		"fist":
+		"impact":
 			_draw_impact(c, r, life)
-		"anqi":
+		"darts":
 			_draw_darts(c, r, life, eff)
+		"cross":
+			_draw_cross(c, r, s, e, life, eff)
+		"rise":
+			_draw_rise(c, r, s, e, life, eff)
+		"sweep":
+			_draw_sweep(c, r, s, e, life)
+		"flurry":
+			_draw_flurry(c, r, life, eff)
 		_:
 			_draw_crescent(c, r, s, e, life)
 
@@ -441,6 +526,52 @@ func _draw_darts(c: Vector2, r: float, life: float, eff: float) -> void:
 		var x1 := c.x + r * (0.75 + 0.12 * float(i)) * ink_len
 		draw_line(Vector2(x0, c.y + yy) , Vector2(x0 + (x1 - x0) * eff, c.y + yy - 6.0),
 			_ink(life * 0.7), 2.6 * ink_width, true)
+
+# 削：横着的一道（上下压扁的弧），像贴着腰线横拉
+func _draw_cross(c: Vector2, r: float, _s: float, _e: float, life: float, eff: float) -> void:
+	var cc := c + Vector2(0.0, 10.0)
+	for i in 3:
+		var t := float(i)
+		var lo := deg_to_rad(-14.0 + 3.0 * t)
+		var hi := deg_to_rad(14.0 - 3.0 * t)
+		draw_arc(cc, r * ink_len * (1.15 - 0.10 * t), minf(lo, hi) , maxf(lo, hi), 20,
+			_ink(life * (0.85 - 0.22 * t)), (8.0 - 2.4 * t) * ink_width, true)
+	# 横拉的两端各带一截"飞白"
+	var a := Vector2(1.0, 0.0) * eff
+	draw_line(cc - a * r * ink_len * 1.2, cc - a * r * ink_len * 0.5, _ink(life * 0.42), 2.0 * ink_width, true)
+
+# 撩：由下往上挑的一道弧
+func _draw_rise(c: Vector2, r: float, s: float, e: float, life: float, eff: float) -> void:
+	var mid_a := (s + e) * 0.5
+	for i in 3:
+		var t := float(i)
+		var lo := lerpf(s, mid_a, 0.16 * t) - deg_to_rad(52.0)
+		var hi := lerpf(e, mid_a, 0.16 * t) - deg_to_rad(16.0)
+		draw_arc(c + Vector2(0.0, 16.0), r * ink_len * (0.95 - 0.07 * t), lo * eff if eff > 0.0 else hi * eff,
+			hi * eff if eff > 0.0 else lo * eff, 22, _ink(life * (0.86 - 0.20 * t)), (9.0 - 3.0 * t) * ink_width, true)
+
+# 扫：一大圈横弧（转到身前再兜回来）
+func _draw_sweep(c: Vector2, r: float, _s: float, _e: float, life: float) -> void:
+	for i in 3:
+		var t := float(i)
+		draw_arc(c, r * ink_len * (1.45 - 0.12 * t), deg_to_rad(-118.0 + 6.0 * t), deg_to_rad(118.0 - 6.0 * t), 40,
+			_ink(life * (0.72 - 0.18 * t)), (8.0 - 2.6 * t) * ink_width, true)
+
+# 乱刃（连击/连刺）：三四道短弧铺开，角度各不同——"一顿乱削"
+func _draw_flurry(c: Vector2, r: float, life: float, eff: float) -> void:
+	for i in 4:
+		var t := float(i)
+		var off := Vector2(r * (0.35 + 0.16 * t) * eff, -34.0 + 22.0 * t)
+		var half := deg_to_rad(20.0 + 4.0 * t)
+		var tilt := deg_to_rad(-40.0 + 26.0 * t)
+		var lo := tilt - half
+		var hi := tilt + half
+		if eff < 0.0:
+			var tmp := lo
+			lo = -hi
+			hi = -tmp
+		draw_arc(c + off, r * 0.42 * ink_len, lo, hi, 14,
+			_ink(life * (0.78 - 0.13 * t)), (6.5 - 1.0 * t) * ink_width, true)
 
 # 统一墨色：按"笔性"给透明度（少侠偏焦墨、陈石偏湿墨、苏青鸾偏细笔）
 func _ink(a: float) -> Color:

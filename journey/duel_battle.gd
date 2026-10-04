@@ -60,6 +60,7 @@ const CharArt := preload("res://shared/char_art.gd")
 const ArtClip := preload("res://shared/art_clip.gd")
 const Audio := preload("res://shared/audio.gd")
 const InkTouch := preload("res://shared/ink_touch.gd")
+const FadeIn := preload("res://shared/fade_in.gd")   # v68：进场淡入 + 震动
 
 # ㉘ 数值外置：下面这批旋钮可以从 res://tuning.cfg 或 user://tuning.cfg 覆盖
 #   （读不到＝用这里写着的默认值，行为与改之前一模一样）。
@@ -2202,6 +2203,7 @@ func run(state, player: Node2D, fx: Control, node: Dictionary, foe_first := fals
 	_fx = fx
 	Audio.play_bgm("bgm_battle", 0.6)   # v65：遭遇战 BGM
 	InkTouch.attach()
+	FadeIn.attach()   # v68：进场淡入
 
 	var foe: Dictionary = node.get("foe", {})
 	_skip_enemy = false
@@ -2789,6 +2791,7 @@ func _player_ult() -> void:
 	_banner("『" + un + "』", UiKit.SEAL)
 	# v66：大招的"分量"——顿帧 ＋ 屏震 ＋ 全屏墨红闪 ＋ 招式名大字。
 	#   以前大招只有一条 banner，打出来跟普攻一个手感（就一条字），所以这里补三样。
+	FadeIn.buzz(140)   # v68：手机上一记长振（大招的分量）
 	if _fx != null:
 		_fx.shake(10.0, 0.42)
 		_fx.flash(Color(UiKit.SEAL.r, UiKit.SEAL.g, UiKit.SEAL.b, 0.30))

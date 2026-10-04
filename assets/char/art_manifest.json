@@ -5,18 +5,18 @@
     "slots": {
       "q": {
         "file": "assets/char/player_q.png",
-        "from": "assets/gen/char/shaoxia/shaoxia_Q版_glm_anime_cut.png",
-        "bytes": 107744
+        "from": "assets/gen/char/shaoxia/shaoxia_Q版_liblib_xieyi_ink1_cut.png",
+        "bytes": 218932
       },
       "face": {
         "file": "assets/char/player_face.png",
         "from": "assets/gen/char/shaoxia/shaoxia_头像_liblib_guofeng_cut.png",
-        "bytes": 361713
+        "bytes": 370168
       },
       "full": {
         "file": "assets/char/player_full.png",
         "from": "assets/gen/char/shaoxia/shaoxia_立绘_liblib_guofeng_cut.png",
-        "bytes": 750528
+        "bytes": 761190
       }
     },
     "clip": {
@@ -31,18 +31,18 @@
     "slots": {
       "q": {
         "file": "assets/char/chen_shi_q.png",
-        "from": "assets/gen/char/chenshi/chenshi_Q版_glm_anime_cut.png",
-        "bytes": 140177
+        "from": "assets/gen/char/chenshi/chenshi_Q版_liblib_xieyi_ink1_cut.png",
+        "bytes": 238419
       },
       "face": {
         "file": "assets/char/chen_shi_face.png",
         "from": "assets/gen/char/chenshi/chenshi_头像_liblib_guofeng_cut.png",
-        "bytes": 346417
+        "bytes": 360736
       },
       "full": {
         "file": "assets/char/chen_shi_full.png",
         "from": "assets/gen/char/chenshi/chenshi_立绘_liblib_guofeng_cut.png",
-        "bytes": 766569
+        "bytes": 779338
       }
     },
     "clip": {
@@ -57,18 +57,18 @@
     "slots": {
       "q": {
         "file": "assets/char/qingluan_q.png",
-        "from": "assets/gen/char/qingluan/qingluan_Q版_glm_anime_cut.png",
-        "bytes": 145861
+        "from": "assets/gen/char/qingluan/qingluan_Q版_liblib_xieyi_ink1_cut.png",
+        "bytes": 245814
       },
       "face": {
         "file": "assets/char/qingluan_face.png",
         "from": "assets/gen/char/qingluan/qingluan_头像_liblib_guofeng_cut.png",
-        "bytes": 374548
+        "bytes": 386510
       },
       "full": {
         "file": "assets/char/qingluan_full.png",
         "from": "assets/gen/char/qingluan/qingluan_立绘_liblib_guofeng_cut.png",
-        "bytes": 889891
+        "bytes": 902847
       }
     },
     "clip": {

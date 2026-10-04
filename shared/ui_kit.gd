@@ -186,10 +186,34 @@ static func make_button(parent: Node, pos: Vector2, sz: Vector2, txt: String, fs
 	b.add_theme_font_size_override("font_size", fs)
 	style_button(b)
 	set_btn_text(b, txt)
-	# v65：点一下就出一声"水滴入墨"（跟界面上的墨扩散特效配一套）
+	# v68：点一下出声 + **按下去缩一点**（手游的"到手感"；松手弹回）。
+	#   pivot 必须设成按钮中心，不然是从左上角缩放、看着像歪了。
 	b.pressed.connect(func() -> void: Audio.ui_click())
+	b.button_down.connect(func() -> void: _press_fx(b, 0.955))
+	b.button_up.connect(func() -> void: _press_fx(b, 1.0))
+	b.mouse_exited.connect(func() -> void: _press_fx(b, 1.0))
 	parent.add_child(b)
 	return b
+
+# 按下/松开的小缩放动画
+static func _press_fx(b: Button, to: float) -> void:
+	if not is_instance_valid(b) or not b.is_inside_tree():
+		return
+	b.pivot_offset = b.size * 0.5
+	var tw := b.create_tween()
+	tw.tween_property(b, "scale", Vector2(to, to), 0.08).set_trans(Tween.TRANS_SINE)
+
+# 面板进场 v69："墨落纸上"——从 0.94 弹回 1、同时淡入（pivot 必须在中心，不然是从左上角涨开）
+static func pop_in(c: Control, dur := 0.17) -> void:
+	if not is_instance_valid(c) or not c.is_inside_tree():
+		return
+	c.pivot_offset = c.size * 0.5
+	c.scale = Vector2(0.94, 0.94)
+	c.modulate.a = 0.0
+	var tw := c.create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(c, "scale", Vector2.ONE, dur).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(c, "modulate:a", 1.0, dur * 0.7)
 
 static func make_paper_panel(parent: Node, rect: Rect2) -> Panel:
 	var p := Panel.new()
@@ -198,6 +222,12 @@ static func make_paper_panel(parent: Node, rect: Rect2) -> Panel:
 	p.mouse_filter = Control.MOUSE_FILTER_STOP
 	p.add_theme_stylebox_override("panel", paper_box(0.97))
 	parent.add_child(p)
+	# v69（用户："有的按钮 ui 要会动画，点击有反馈"）：**全工程 32 处面板都出自这里**，
+	#   所以进场动画挂在这一处就够了——创建时播一次，之后每次"由隐转显"再播一次。
+	pop_in(p)
+	p.visibility_changed.connect(func() -> void:
+		if is_instance_valid(p) and p.visible:
+			pop_in(p))
 	return p
 
 static func make_veil(parent: Control, vsize: Vector2, alpha := 0.52) -> ColorRect:

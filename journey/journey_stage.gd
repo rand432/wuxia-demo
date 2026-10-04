@@ -56,6 +56,7 @@ const StickFighter := preload("res://journey/stick_fighter.gd")
 const ActorFactory := preload("res://journey/actor_factory.gd")   # Q版纸片人 / 火柴人 二选一
 const Audio := preload("res://shared/audio.gd")   # v65：BGM / 音效总管
 const InkTouch := preload("res://shared/ink_touch.gd")   # v65：点击水墨扩散
+const FadeIn := preload("res://shared/fade_in.gd")      # v68：进场淡入 + 震动
 const PetActor := preload("res://journey/pet_actor.gd")   # ㊿z11：随行宠物（只画，不参战）
 const FxLayer := preload("res://journey/fx_layer.gd")
 const GameState := preload("res://shared/game_state.gd")
@@ -209,6 +210,7 @@ const MONEY_MUL := 1.2
 func _ready() -> void:
 	Audio.play_bgm("bgm_journey")   # v65：游历场景 BGM
 	InkTouch.attach()               # v65：点击水墨扩散
+	FadeIn.attach()                 # v68：进场淡入
 	GameState.load_game()   # ㊿l：游历场开工先读账——直跑/兜底进游历场时，写盘不再拿空白村账盖真账
 	size = get_viewport_rect().size
 	print("[游历] 舞台就绪：size=", size, " 视口=", get_viewport_rect().size)

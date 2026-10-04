@@ -17,6 +17,7 @@ extends Control
 
 const GameState := preload("res://shared/game_state.gd")
 const UiKit := preload("res://shared/ui_kit.gd")
+const ItemArt := preload("res://shared/item_art.gd")   # v70：水墨道具图
 
 signal closed
 # 门厅自己不管那三个面板——由主界面把"开门"的动作接过去
@@ -90,10 +91,12 @@ func _build() -> void:
 	_panel.add_child(sep)
 
 	# ── 三块作坊牌子（点哪块进哪间）──
+	# v70：三块牌子左边挂**水墨道具图**（酒坛 / 药草 / 令牌）——原来是颗写字圆牌，
+	#   现在字退成底衬、图压在中间，跟全作的水墨语言一致（这套图是从一张水墨道具图集里切出来的）。
 	var rooms := [
-		{"id": "wine", "name": "品 酒 坊", "icon": "酒"},
-		{"id": "alchemy", "name": "炼 丹 阁", "icon": "丹"},
-		{"id": "jianbao", "name": "鉴 宝 行", "icon": "宝"},
+		{"id": "wine", "name": "品 酒 坊", "icon": "酒", "art": "it_jar"},
+		{"id": "alchemy", "name": "炼 丹 阁", "icon": "丹", "art": "it_herb"},
+		{"id": "jianbao", "name": "鉴 宝 行", "icon": "宝", "art": "it_token"},
 	]
 	_cards = []
 	for i in rooms.size():
@@ -118,15 +121,27 @@ func _build() -> void:
 		chip.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		chip.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		chip.add_theme_font_size_override("font_size", 40)
-		chip.add_theme_color_override("font_color", Color(0.97, 0.94, 0.88))
+		chip.add_theme_color_override("font_color", Color(0.35, 0.30, 0.26, 0.30))   # 字退成浅底纹，图才是主角
 		chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		var chsb := StyleBoxFlat.new()
-		chsb.bg_color = Color(0.32, 0.27, 0.22, 0.92)
+		# v70：底衬改**纸色**——水墨图是深墨画的，压在原来的深褐圆牌上根本看不清（第一版就是）
+		chsb.bg_color = Color(0.925, 0.898, 0.822, 0.96)
 		chsb.set_corner_radius_all(44)
-		chsb.border_color = Color(GOLD.r, GOLD.g, GOLD.b, 0.55)
+		chsb.border_color = Color(GOLD.r, GOLD.g, GOLD.b, 0.65)
 		chsb.set_border_width_all(2)
 		chip.add_theme_stylebox_override("normal", chsb)
 		card.add_child(chip)
+		# 压一张水墨道具图上去（找不到图就只留字牌，不会空一块）
+		var chip_art := ItemArt.icon(str(r.get("art", "")))
+		if chip_art != null:
+			var ctr := TextureRect.new()
+			ctr.texture = chip_art
+			ctr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			ctr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			ctr.position = Vector2(24, 26)
+			ctr.size = Vector2(72, 80)
+			ctr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			card.add_child(ctr)
 		var nm := _label(str(r["name"]), 24, INK)
 		nm.position = Vector2(122, 24)
 		nm.size = Vector2(280, 32)

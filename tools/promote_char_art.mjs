@@ -53,7 +53,8 @@ const ENEMY_SRC = ['_Q版_liblib_anime_v2_cut.png', '_Q版_liblib_anime_img2img_
   '_Q版_liblib_anime_cut.png', '_Q版_liblib_anime_v2.png', '_Q版_liblib_anime_img2img.png'];
 // 每个槽位按顺序找第一个存在的源文件（后面的是备选画风）
 const SLOTS = {
-  q: ['_Q版_glm_anime_cut.png'],
+  // v68：Q版 统一到水墨（ink1 优先）——原来那套彩色二次元 Q版 和敌人/场景不是一路
+  q: ['_Q版_liblib_xieyi_ink1_cut.png', '_Q版_glm_anime_cut.png'],
   face: ['_头像_liblib_guofeng_cut.png', '_头像_glm_anime_cut.png'],
   full: ['_立绘_liblib_guofeng_cut.png', '_立绘_glm_ink_cut.png', '_立绘_glm_anime_cut.png'],
 };
@@ -165,6 +166,22 @@ for (const [dir, name] of SCENES) {
   sceneManifest[name] = { file: 'assets/scenes/' + name + '.png', from: path.relative(process.cwd(), src).replace(/\\/g, '/'), bytes: fs.statSync(dst).size };
   console.log('  ✓ ' + (name + '.png').padEnd(16) + ' ← ' + path.basename(src) + '  ' + Math.round(fs.statSync(dst).size / 1024) + 'KB');
 }
+// 道具图标（items_sheet 那张图集切出来的 it_*_cut.png）→ assets/items/
+const ITEM_DIR = path.resolve('assets/gen/char/items_sheet');
+const ITEM_OUT = path.resolve('assets/items');
+if (fs.existsSync(ITEM_DIR)) {
+  fs.mkdirSync(ITEM_OUT, { recursive: true });
+  for (const f of fs.readdirSync(ITEM_DIR)) {
+    const m = f.match(/^(it_[a-z]+)_cut\.png$/);
+    if (!m) continue;
+    const dst = path.join(ITEM_OUT, m[1] + '.png');
+    const r4 = spawnSync(FFMPEG, ['-y', '-loglevel', 'error', '-i', path.join(ITEM_DIR, f), '-vf', 'scale=-1:200:flags=lanczos', dst], { stdio: 'ignore' });
+    if (r4.status !== 0) fs.copyFileSync(path.join(ITEM_DIR, f), dst);
+    patchImport(dst);
+    console.log('  ✓ items/' + (m[1] + '.png').padEnd(14) + ' ← ' + f);
+  }
+}
+
 // 建筑切片（从 scene_buildings 那张图集里切出来的 bld_*_cut.png）
 const BLD_DIR = path.resolve('assets/gen/char/scene_buildings');
 if (fs.existsSync(BLD_DIR)) {
