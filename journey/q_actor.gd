@@ -30,6 +30,7 @@ const CH_SWAY := 4   # 横向偏移（像素）
 # 视觉参数
 var fit_height := 148.0      # 目标身高（脚底到头顶，像素）——火柴人约 140~150
 var fit_width_cap := 132.0   # 宽度上限：陈石扛着长枪的图很宽，不压一下会把旁边的人整个糊住
+var _base_scale := 0.15      # 内容 → 屏幕 的缩放（由 _relayout() 按 bbox 算）
 var role := "shaoxia"        # 角色 id → assets/gen/char/<role>/<role>_Q版_*.png
 var art_path := ""           # 显式指定图（优先于 role）
 var body_color := Color(1, 1, 1)   # 敌方用来染色（乘算 tint）
@@ -42,11 +43,17 @@ var _sprite: Sprite2D
 var _shadow: Node2D
 var _mat: ShaderMaterial
 var _tex_size := Vector2(512, 1024)
+var _bbox := Rect2()          # 贴图里真正有内容的矩形（像素，左上原点）
 var _dir := 1.0              # +1 面朝右，-1 面朝左
 var _t := 0.0
 var _down := false
-var _arc_t := 0.0          # 出手墨弧的剩余寿命（1→0）
+var _arc_t := 0.0          # 出手墨迹的剩余寿命（1→0）
+var _arc_move := ""        # 这一手是哪个招式（决定墨迹形状）
 const ARC_LIFE := 0.20
+# 每个人的"笔性"：焦墨（少侠）／湿墨厚重（陈石）／细笔轻灵（苏青鸾）／普通（杂兵）
+var ink_weight := 1.0      # 透明度倍率
+var ink_width := 1.0       # 笔宽倍率
+var ink_len := 1.0         # 弧长倍率
 
 var _last_pos := Vector2.ZERO
 var _walk_t := 0.0
@@ -101,11 +108,50 @@ func _ready() -> void:
 	_sprite.z_index = -1   # v66：墨弧画在**本节点自己身上**（父先画、子后画），贴图压到 -1 才在弧下面
 	_arc_t = 0.0
 	# 贴图锚到"脚底中心"：局部原点 = 两脚之间
-	_sprite.offset = Vector2(-_tex_size.x * 0.5, -_tex_size.y)
-	var s := fit_height / maxf(_tex_size.y, 1.0)
-	_sprite.scale = Vector2(s, s)
+	# v66：**按"内容实际边界"缩放**，不按整张贴图。
+	#   生成稿留白多少全看模型心情（敌人的图内容只占 60% 高、主角的抠完就贴边），
+	#   照贴图高度缩放会让有的人大一圈有的人小一圈。这里量一次 alpha 边界，
+	#   把内容底边中点钉在原点（脚底），再按内容高度缩到 fit_height。
+	_bbox = _measure_bbox(tex)
+	_relayout()
 	add_child(_sprite)
 	z_index = 5
+
+# 量 alpha 边界：扫一遍像素，找到 alpha > 24 的最小外包矩形。
+#   贴图最大也就 340×340 量级（提升脚本已经缩过），几万次循环，进场时算一次不心疼。
+func _measure_bbox(tex: Texture2D) -> Rect2:
+	var full := Rect2(Vector2.ZERO, tex.get_size())
+	var img := tex.get_image()
+	if img == null:
+		return full
+	var w := img.get_width()
+	var h := img.get_height()
+	var x0 := w
+	var y0 := h
+	var x1 := -1
+	var y1 := -1
+	# 隔行隔列采样（贴图小，全扫也行，但 2 步长快一倍、边界误差 ≤1px）
+	for y in range(0, h, 2):
+		for x in range(0, w, 2):
+			if img.get_pixel(x, y).a > 0.09:
+				if x < x0: x0 = x
+				if x > x1: x1 = x
+				if y < y0: y0 = y
+				if y > y1: y1 = y
+	if x1 < 0 or y1 < 0:
+		return full
+	return Rect2(Vector2(x0, y0), Vector2(x1 - x0 + 1, y1 - y0 + 1))
+
+# 把贴图按 bbox 摆好：内容底边中点 = 节点原点（脚底），高度 = fit_height（宽度另有上限）
+func _relayout() -> void:
+	if _sprite == null or _tex_size.y <= 0.0:
+		return
+	var bw: float = maxf(_bbox.size.x, 1.0)
+	var bh: float = maxf(_bbox.size.y, 1.0)
+	var base: float = fit_height / bh
+	base = minf(base, fit_width_cap / bw)
+	_sprite.offset = Vector2(-(_bbox.position.x + bw * 0.5) * base, -(_bbox.position.y + bh) * base)
+	_base_scale = base
 
 func _load_art() -> Texture2D:
 	var p := art_path
@@ -151,14 +197,48 @@ func set_weapon(w: String) -> void:
 
 func set_role(r: String) -> void:
 	role = r
+	_apply_ink_style()
+
+# 兵器 → 音效（v67：素材包里的真·游戏音效；缺 key 时 Audio.sfx 自己会静默跳过）
+func _sfx_swing() -> String:
+	match weapon_type:
+		"anqi": return "dart"
+		"fist": return "swing"
+		_: return "swing"
+
+func _sfx_hit() -> String:
+	match weapon_type:
+		"anqi": return "dart"
+		"fist": return "hit_heavy"
+		"spear": return "hit_slash2"
+		_: return "hit_slash"
+
+# 笔性表：同一个人从头到尾一个笔法，换人换笔（v66）
+func _apply_ink_style() -> void:
+	match role:
+		"player":
+			ink_weight = 1.10; ink_width = 0.95; ink_len = 1.05   # 焦墨：浓、快、锋利
+		"chen_shi":
+			ink_weight = 0.95; ink_width = 1.35; ink_len = 0.88   # 湿墨：厚重、慢、短
+		"qingluan":
+			ink_weight = 0.85; ink_width = 0.70; ink_len = 1.25   # 细笔：轻灵、细、长
+		"mob_chief", "mob_one_arm":
+			ink_weight = 1.15; ink_width = 1.25; ink_len = 1.10   # 精英：墨重、笔宽、弧长（有压迫感）
+		"mob_lou", "mob_bow":
+			ink_weight = 0.80; ink_width = 0.80; ink_len = 0.92   # 小兵：墨薄、笔细（看着就弱）
+		"mob_hook", "mob_flag":
+			ink_weight = 0.95; ink_width = 1.15; ink_len = 0.95   # 莽夫：笔粗而短
+		"mob_dog":
+			ink_weight = 1.05; ink_width = 1.30; ink_len = 0.85   # 野兽：又粗又短（扑咬）
+		_:
+			ink_weight = 1.00; ink_width = 1.00; ink_len = 1.00   # 其他：普通
 	if _sprite != null:
 		var tex := _load_art()
 		if tex != null:
 			_sprite.texture = tex
 			_tex_size = tex.get_size()
-			_sprite.offset = Vector2(-_tex_size.x * 0.5, -_tex_size.y)
-			var s := fit_height / maxf(_tex_size.y, 1.0)
-			_sprite.scale = Vector2(s, s)
+			_bbox = _measure_bbox(tex)
+			_relayout()
 
 # ============ 接口：位移（与火柴人同语义） ============
 
@@ -216,14 +296,15 @@ func play_move(move_id: String, speed := 1.0) -> void:
 	var mt := move_time(move_id, move_speed)
 	var windup: float = maxf(float(mt["windup"]), 0.06)
 	var total: float = maxf(float(mt["total"]), windup + 0.06)
-	# 起手：沉肩后坐
-	Audio.sfx("swing", -11.0, randf_range(0.94, 1.06))
+	# 起手：沉肩后坐（音效按兵器分：暗器"嗒"、弓"弦"、拳"闷"、刀剑"挥"）
+	Audio.sfx(_sfx_swing(), -11.0, randf_range(0.94, 1.06))
 	_set_pose({CH_LEAN: -9.0 * _dir, CH_HOP: 1.5, CH_SX: 0.95, CH_SY: 1.05, CH_SWAY: -5.0 * _dir})
 	await _wait(windup)
 	if gen != _move_gen:
 		return
-	# 出手：前倾、前冲、拉长 + 一道墨弧（v66）
+	# 出手：前倾、前冲、拉长 + 一道墨迹（v66：形状按**这一招**定，别再千人一弧）
 	_set_pose({CH_LEAN: 15.0 * _dir, CH_HOP: -5.0, CH_SX: 1.03, CH_SY: 0.97, CH_SWAY: 11.0 * _dir})
+	_arc_move = move_id          # 墨迹形状读它
 	_arc_t = 1.0
 	queue_redraw()
 	await _wait(maxf(total - windup, 0.08))
@@ -238,7 +319,7 @@ func play_hit() -> void:
 	_down = false
 	_move_gen += 1
 	var gen := _move_gen
-	Audio.sfx("hit_slash", -6.0, randf_range(0.95, 1.10))
+	Audio.sfx(_sfx_hit(), -6.0, randf_range(0.95, 1.10))
 	_set_pose({CH_LEAN: -16.0 * _dir, CH_HOP: 2.0, CH_SX: 1.10, CH_SY: 0.90, CH_SWAY: -9.0 * _dir})
 	_flash(0.85, 0.13)
 	await _wait(0.16)
@@ -285,23 +366,85 @@ func _draw() -> void:
 	var sgn := -1.0 if scale.x < 0.0 else 1.0
 	var eff := _dir * sgn
 	# 弧心放在胸口、半径按身高给；角度从"斜上方"扫到"斜下方"——**只朝面前那一边**（0° = 正右）
-	var c := Vector2(6.0 * eff, -fit_height * 0.54)
-	var r := fit_height * 0.56
+	# 弧心放在胸口略前、半径只到身高的 0.44——太大了会绕到头顶去（第一版就是绕头一圈）
+	# 弧心推到身前 0.55r（不是在人身子里），角度对称张开——这样那道月牙一定是"扫在面前"
+	var r := fit_height * 0.46
+	var c := Vector2(r * 0.55 * eff, -fit_height * 0.48)
 	var kk := clampf(k / 0.6, 0.0, 1.0)
-	var a0 := deg_to_rad(lerpf(-95.0, 5.0, kk))
-	var a1 := deg_to_rad(lerpf(5.0, 95.0, kk))
+	var half := deg_to_rad(lerpf(28.0, 62.0, kk))
+	var tilt := deg_to_rad(lerpf(-18.0, 8.0, kk))
+	var a0 := tilt - half
+	var a1 := tilt + half
 	var s := minf(a0, a1) * eff
 	var e := maxf(a0, a1) * eff
 	var life := 1.0 - clampf((k - 0.35) / 0.65, 0.0, 1.0)   # 前段实、后段淡出
 	# 三条叠出"月牙"：外条长而宽、内条短而浓（角度也往里收，才像一笔扫出的月牙，
 	#   而不是一条等宽的灰弧——第一版就是等宽灰弧，看着像 UI 进度条）
+	# v66：墨迹按**兵器**分型——刀一道月牙、枪一条直刺带枪花、匕首两道短弧、
+	#   拳一记墨团冲撞、暗器三点飞线。同一个角色换兵器，出手就不一样了。
+	match weapon_type:
+		"spear":
+			_draw_thrust(c, r, s, e, life, eff)
+		"dagger":
+			_draw_twin(c, r, s, e, life)
+		"fist":
+			_draw_impact(c, r, life)
+		"anqi":
+			_draw_darts(c, r, life, eff)
+		_:
+			_draw_crescent(c, r, s, e, life)
+
+# 刀/剑：一道月牙（外长内短、外淡内浓）
+func _draw_crescent(c: Vector2, r: float, s: float, e: float, life: float) -> void:
 	var mid_a := (s + e) * 0.5
 	for i in 3:
 		var t := float(i)
 		var lo := lerpf(s, mid_a, 0.14 * t)
 		var hi := lerpf(e, mid_a, 0.14 * t)
-		draw_arc(c, r * (1.0 - 0.075 * t), lo, hi, 26,
-			Color(0.07, 0.07, 0.09, life * (0.88 - 0.22 * t)), 11.0 - 3.4 * t, true)
+		draw_arc(c, r * ink_len * (1.0 - 0.075 * t), lo, hi, 26,
+			_ink(life * (0.88 - 0.22 * t)), (11.0 - 3.4 * t) * ink_width, true)
+
+# 枪：一条笔直的突刺 + 枪尖一点枪花（直线才像"扎"，弧线就成砍了）
+func _draw_thrust(c: Vector2, r: float, _s: float, _e: float, life: float, eff: float) -> void:
+	var a := Vector2(1.0, 0.0) * eff
+	var from := c - a * r * 0.35
+	var to := c + a * r * ink_len * 1.05
+	draw_line(from, to, _ink(life * 0.85), 5.0 * ink_width, true)
+	draw_line(from + Vector2(0.0, 3.0), to + Vector2(0.0, 2.0), _ink(life * 0.45), 2.5 * ink_width, true)
+	# 枪花：尖端点一个小圈
+	var tip := c + a * r * ink_len * 1.0
+	draw_arc(tip, 9.0 * ink_len, 0.0, TAU, 14, _ink(life * 0.6), 2.4 * ink_width, true)
+
+# 匕首：两道短促的交叉短弧（左右各一，快而碎）
+func _draw_twin(c: Vector2, r: float, s: float, e: float, life: float) -> void:
+	var mid_a := (s + e) * 0.5
+	for k in 2:
+		var flip := 1.0 if k == 0 else -1.0
+		var lo := lerpf(s, mid_a, 0.30)
+		var hi := lerpf(e, mid_a, 0.30)
+		draw_arc(c + Vector2(0.0, -18.0 * flip * ink_len), r * 0.62 * ink_len,
+			lo * flip, hi * flip, 18, _ink(life * (0.80 - 0.25 * float(k))), 6.0 * ink_width, true)
+
+# 拳：一记墨团冲撞（几层圆往外炸，没有弧）
+func _draw_impact(c: Vector2, r: float, life: float) -> void:
+	var t := 1.0 - life
+	for i in 4:
+		var rr := r * ink_len * (0.20 + 0.30 * float(i)) * (0.5 + 0.5 * t)
+		draw_circle(c + Vector2(r * 0.35 * ink_len, 0.0), rr, _ink(life * 0.30))
+	draw_circle(c + Vector2(r * 0.35 * ink_len, 0.0), r * 0.22 * ink_len, _ink(life * 0.75))
+
+# 暗器：三点飞线（斜着扎出去，每点带一条短尾）
+func _draw_darts(c: Vector2, r: float, life: float, eff: float) -> void:
+	for i in 3:
+		var yy := -26.0 + 26.0 * float(i)
+		var x0 := c.x + r * 0.15 * ink_len
+		var x1 := c.x + r * (0.75 + 0.12 * float(i)) * ink_len
+		draw_line(Vector2(x0, c.y + yy) , Vector2(x0 + (x1 - x0) * eff, c.y + yy - 6.0),
+			_ink(life * 0.7), 2.6 * ink_width, true)
+
+# 统一墨色：按"笔性"给透明度（少侠偏焦墨、陈石偏湿墨、苏青鸾偏细笔）
+func _ink(a: float) -> Color:
+	return Color(0.07, 0.07, 0.09, clampf(a * ink_weight, 0.0, 1.0))
 
 func _process(delta: float) -> void:
 	_t += delta
@@ -343,8 +486,7 @@ func _apply_visual() -> void:
 		sway_idle = sin(_t * 1.15) * 1.2        # 站姿微晃
 	var sx: float = _cur[CH_SX] * (1.0 - breath * 0.6)
 	var sy: float = _cur[CH_SY] * (1.0 + breath)
-	var base: float = fit_height / maxf(_tex_size.y, 1.0)
-	base = minf(base, fit_width_cap / maxf(_tex_size.x, 1.0))
+	var base: float = _base_scale
 	# 敌人是用 n.scale = Vector2(-scl, scl) 整体镜像的（见 duel_battle/battle_lite）：
 	#   节点负缩放会把朝向和倾斜**再翻一次**，所以这里按 scale.x 的符号补偿，
 	#   保证"最终朝向 = _dir"，倾斜方向也跟着对（不然敌人出手会朝反方向倒）

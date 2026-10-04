@@ -47,7 +47,10 @@ const ENEMY_KEYS = [
   ['mob_hook', '钩手'], ['mob_flag', '旗手'], ['mob_chief', '头目'], ['mob_one_arm', '独臂刀客'],
   ['mob_dog', '恶犬'],
 ];
-const ENEMY_SRC = ['_Q版_liblib_anime_img2img.png', '_Q版_liblib_anime_cut.png', '_Q版_liblib_anime.png'];
+// ⚠ 必须用**抠好的**那张：img2img 原图是白底，直接提升会在战斗里显示成白方块
+//   v2（多样性重制）优先：换底图 + 提高重绘幅度，让九个原型不再是同一张脸
+const ENEMY_SRC = ['_Q版_liblib_anime_v2_cut.png', '_Q版_liblib_anime_img2img_cut.png',
+  '_Q版_liblib_anime_cut.png', '_Q版_liblib_anime_v2.png', '_Q版_liblib_anime_img2img.png'];
 // 每个槽位按顺序找第一个存在的源文件（后面的是备选画风）
 const SLOTS = {
   q: ['_Q版_glm_anime_cut.png'],
@@ -100,6 +103,16 @@ for (const [id, info] of Object.entries(MAP)) {
       (impState === 'no-import' ? '  （还没被 Godot 导入过，导入后再跑一次本脚本即可开 mipmap）' : '  mipmap:' + impState));
   }
 }
+// ---- 场景（v67）：assets/gen/char/scene_*/… → assets/scenes/<名>.png ----
+const SCENES = [
+  ['scene_scroll', 'village'],
+  ['scene_gate', 'gate'],
+  ['scene_tower', 'tower'],
+  ['scene_inn', 'inn'],
+  ['scene_buildings', 'buildings'],
+];
+const SCENE_OUT = path.resolve('assets/scenes');
+
 // ---- 敌人 Q版（v66）----
 let enemy_n = 0;
 for (const [key, cn] of ENEMY_KEYS) {
@@ -134,6 +147,40 @@ for (const [id, name] of Object.entries(CLIPS)) {
     bytes: fs.statSync(dst).size };
   console.log('  ✓ ' + path.basename(dst).padEnd(18) + ' ← ' + name + '.ogv  ' + Math.round(fs.statSync(dst).size / 1024) + 'KB');
 }
+
+// ---- 场景（v67）----
+fs.mkdirSync(SCENE_OUT, { recursive: true });
+const sceneManifest = {};
+for (const [dir, name] of SCENES) {
+  const srcDir = path.resolve('assets/gen/char', dir);
+  if (!fs.existsSync(srcDir)) { console.log('  · 场景 ' + name + ' 还没有生成稿'); continue; }
+  // ⚠ 跳过 bld_*（那是建筑切片，另有专门的循环处理）——否则 buildings.png 会被切片顶掉
+  const hit = fs.readdirSync(srcDir).filter((f) => /\.(png|jpg)$/i.test(f) && !f.startsWith('bld_'))[0];
+  if (!hit) { console.log('  · 场景 ' + name + ' 目录是空的'); continue; }
+  const src = path.join(srcDir, hit);
+  const dst = path.join(SCENE_OUT, name + '.png');
+  const r2 = spawnSync(FFMPEG, ['-y', '-loglevel', 'error', '-i', src, '-vf', 'scale=2000:-1:flags=lanczos', dst], { stdio: 'ignore' });
+  if (r2.status !== 0) fs.copyFileSync(src, dst);
+  patchImport(dst);
+  sceneManifest[name] = { file: 'assets/scenes/' + name + '.png', from: path.relative(process.cwd(), src).replace(/\\/g, '/'), bytes: fs.statSync(dst).size };
+  console.log('  ✓ ' + (name + '.png').padEnd(16) + ' ← ' + path.basename(src) + '  ' + Math.round(fs.statSync(dst).size / 1024) + 'KB');
+}
+// 建筑切片（从 scene_buildings 那张图集里切出来的 bld_*_cut.png）
+const BLD_DIR = path.resolve('assets/gen/char/scene_buildings');
+if (fs.existsSync(BLD_DIR)) {
+  for (const f of fs.readdirSync(BLD_DIR)) {
+    const m = f.match(/^(bld_[a-z]+)_cut\.png$/);
+    if (!m) continue;
+    const dst = path.join(SCENE_OUT, m[1] + '.png');
+    const r3 = spawnSync(FFMPEG, ['-y', '-loglevel', 'error', '-i', path.join(BLD_DIR, f), '-vf', 'scale=-1:520:flags=lanczos', dst], { stdio: 'ignore' });
+    if (r3.status !== 0) fs.copyFileSync(path.join(BLD_DIR, f), dst);
+    patchImport(dst);
+    sceneManifest[m[1]] = { file: 'assets/scenes/' + m[1] + '.png', from: 'assets/gen/char/scene_buildings/' + f, bytes: fs.statSync(dst).size };
+    console.log('  ✓ ' + (m[1] + '.png').padEnd(16) + ' ← ' + f + '  ' + Math.round(fs.statSync(dst).size / 1024) + 'KB');
+  }
+}
+
+fs.writeFileSync(path.join(SCENE_OUT, 'manifest.json'), JSON.stringify(sceneManifest, null, 2));
 
 fs.writeFileSync(path.join(OUT, 'art_manifest.json'), JSON.stringify(manifest, null, 2));
 console.log('\n清单：assets/char/art_manifest.json');

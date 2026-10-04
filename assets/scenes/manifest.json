@@ -1,0 +1,57 @@
+{
+  "village": {
+    "file": "assets/scenes/village.png",
+    "from": "assets/gen/char/scene_scroll/scene_scroll_场景_liblib_xieyi_a.png",
+    "bytes": 2256003
+  },
+  "gate": {
+    "file": "assets/scenes/gate.png",
+    "from": "assets/gen/char/scene_gate/scene_gate_场景_liblib_xieyi_a.png",
+    "bytes": 2707203
+  },
+  "tower": {
+    "file": "assets/scenes/tower.png",
+    "from": "assets/gen/char/scene_tower/scene_tower_场景_liblib_xieyi_a.png",
+    "bytes": 2661423
+  },
+  "inn": {
+    "file": "assets/scenes/inn.png",
+    "from": "assets/gen/char/scene_inn/scene_inn_场景_liblib_xieyi_a.png",
+    "bytes": 2575840
+  },
+  "buildings": {
+    "file": "assets/scenes/buildings.png",
+    "from": "assets/gen/char/scene_buildings/scene_buildings_场景_liblib_xieyi_a.png",
+    "bytes": 2379303
+  },
+  "bld_bamboo": {
+    "file": "assets/scenes/bld_bamboo.png",
+    "from": "assets/gen/char/scene_buildings/bld_bamboo_cut.png",
+    "bytes": 404486
+  },
+  "bld_bridge": {
+    "file": "assets/scenes/bld_bridge.png",
+    "from": "assets/gen/char/scene_buildings/bld_bridge_cut.png",
+    "bytes": 321644
+  },
+  "bld_gate": {
+    "file": "assets/scenes/bld_gate.png",
+    "from": "assets/gen/char/scene_buildings/bld_gate_cut.png",
+    "bytes": 159429
+  },
+  "bld_house": {
+    "file": "assets/scenes/bld_house.png",
+    "from": "assets/gen/char/scene_buildings/bld_house_cut.png",
+    "bytes": 464846
+  },
+  "bld_site": {
+    "file": "assets/scenes/bld_site.png",
+    "from": "assets/gen/char/scene_buildings/bld_site_cut.png",
+    "bytes": 205908
+  },
+  "bld_table": {
+    "file": "assets/scenes/bld_table.png",
+    "from": "assets/gen/char/scene_buildings/bld_table_cut.png",
+    "bytes": 136477
+  }
+}

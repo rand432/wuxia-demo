@@ -76,5 +76,113 @@
       "from": "assets/gen/aivideo/clip_qingluan.ogv",
       "bytes": 2734546
     }
+  },
+  "mob_lou": {
+    "cn": "喽啰",
+    "kind": "enemy",
+    "source_dir": "assets/gen/char/mob_lou",
+    "slots": {
+      "q": {
+        "file": "assets/char/mob_lou_q.png",
+        "from": "assets/gen/char/mob_lou/mob_lou_Q版_liblib_anime_v2_cut.png",
+        "bytes": 230535
+      }
+    }
+  },
+  "mob_blade": {
+    "cn": "刀客",
+    "kind": "enemy",
+    "source_dir": "assets/gen/char/mob_blade",
+    "slots": {
+      "q": {
+        "file": "assets/char/mob_blade_q.png",
+        "from": "assets/gen/char/mob_blade/mob_blade_Q版_liblib_anime_v2_cut.png",
+        "bytes": 225265
+      }
+    }
+  },
+  "mob_spear": {
+    "cn": "枪手",
+    "kind": "enemy",
+    "source_dir": "assets/gen/char/mob_spear",
+    "slots": {
+      "q": {
+        "file": "assets/char/mob_spear_q.png",
+        "from": "assets/gen/char/mob_spear/mob_spear_Q版_liblib_anime_v2_cut.png",
+        "bytes": 237626
+      }
+    }
+  },
+  "mob_bow": {
+    "cn": "弩手",
+    "kind": "enemy",
+    "source_dir": "assets/gen/char/mob_bow",
+    "slots": {
+      "q": {
+        "file": "assets/char/mob_bow_q.png",
+        "from": "assets/gen/char/mob_bow/mob_bow_Q版_liblib_anime_v2_cut.png",
+        "bytes": 232816
+      }
+    }
+  },
+  "mob_hook": {
+    "cn": "钩手",
+    "kind": "enemy",
+    "source_dir": "assets/gen/char/mob_hook",
+    "slots": {
+      "q": {
+        "file": "assets/char/mob_hook_q.png",
+        "from": "assets/gen/char/mob_hook/mob_hook_Q版_liblib_anime_v2_cut.png",
+        "bytes": 212948
+      }
+    }
+  },
+  "mob_flag": {
+    "cn": "旗手",
+    "kind": "enemy",
+    "source_dir": "assets/gen/char/mob_flag",
+    "slots": {
+      "q": {
+        "file": "assets/char/mob_flag_q.png",
+        "from": "assets/gen/char/mob_flag/mob_flag_Q版_liblib_anime_v2_cut.png",
+        "bytes": 201241
+      }
+    }
+  },
+  "mob_chief": {
+    "cn": "头目",
+    "kind": "enemy",
+    "source_dir": "assets/gen/char/mob_chief",
+    "slots": {
+      "q": {
+        "file": "assets/char/mob_chief_q.png",
+        "from": "assets/gen/char/mob_chief/mob_chief_Q版_liblib_anime_v2_cut.png",
+        "bytes": 206856
+      }
+    }
+  },
+  "mob_one_arm": {
+    "cn": "独臂刀客",
+    "kind": "enemy",
+    "source_dir": "assets/gen/char/mob_one_arm",
+    "slots": {
+      "q": {
+        "file": "assets/char/mob_one_arm_q.png",
+        "from": "assets/gen/char/mob_one_arm/mob_one_arm_Q版_liblib_anime_v2_cut.png",
+        "bytes": 225590
+      }
+    }
+  },
+  "mob_dog": {
+    "cn": "恶犬",
+    "kind": "enemy",
+    "source_dir": "assets/gen/char/mob_dog",
+    "slots": {
+      "q": {
+        "file": "assets/char/mob_dog_q.png",
+        "from": "assets/gen/char/mob_dog/mob_dog_Q版_liblib_anime_img2img_cut.png",
+        "bytes": 223190
+      }
+    }
   }
 }

@@ -28,6 +28,7 @@ extends Control
 const Conf := preload("res://menu/menu_conf.gd")
 const Audio := preload("res://shared/audio.gd")   # v65：BGM / 音效总管
 const InkTouch := preload("res://shared/ink_touch.gd")   # v65：点击水墨扩散
+const SceneArt := preload("res://shared/scene_art.gd")   # v67：场景/建筑图
 const Draw := preload("res://menu/menu_draw.gd")
 const Build := preload("res://menu/data_build.gd")
 const ScrollLayer := preload("res://menu/menu_scroll.gd")
@@ -845,6 +846,25 @@ func _add_mark(kind: String, cx: float, wy: float, title: String, sub: String) -
 	b.add_theme_stylebox_override("hover", hv)
 	b.add_theme_stylebox_override("pressed", pr)
 	b.add_theme_stylebox_override("focus", sb)
+	# v67：记号上挂"建筑图"——底边中点贴住牌子顶边，图在牌子上方（像门口挂的匾）
+	var art := SceneArt.building(kind)
+	if art != null:
+		var tr := TextureRect.new()
+		tr.texture = art
+		tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		var ph := 132.0
+		var pw := ph * float(art.get_width()) / maxf(float(art.get_height()), 1.0)
+		tr.anchor_left = 0.5
+		tr.anchor_right = 0.5
+		tr.anchor_top = 0.0
+		tr.anchor_bottom = 0.0
+		tr.offset_left = -pw * 0.5
+		tr.offset_right = pw * 0.5
+		tr.offset_top = -ph - 8.0
+		tr.offset_bottom = -8.0
+		tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		b.add_child(tr)
 	var tl := Label.new()
 	tl.text = title
 	tl.add_theme_font_size_override("font_size", 17)
@@ -956,7 +976,27 @@ func _update_marks() -> void:
 		sl.position = Vector2(0, 22.0)
 		sl.size = Vector2(w, 18.0)
 
+# v67：点建筑先"推门而入"——闪一张内景图（淡入 → 停 0.75 秒 → 淡出），
+#   面板照常在它后面打开，所以看得到"门开了、里面是这个样子"的过场。
+func _enter_flash(tex: Texture2D) -> void:
+	if tex == null:
+		return
+	var tr := TextureRect.new()
+	tr.texture = tex
+	tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	tr.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tr.modulate.a = 0.0
+	add_child(tr)
+	var tw := create_tween()
+	tw.tween_property(tr, "modulate:a", 1.0, 0.22)
+	tw.tween_interval(0.75)
+	tw.tween_property(tr, "modulate:a", 0.0, 0.30)
+	tw.tween_callback(tr.queue_free)
+
 func _on_mark(kind: String) -> void:
+	_enter_flash(SceneArt.enter_scene(kind))
 	match kind:
 		"wa":
 			_show_toast("「瓦房」——村里的第一户人家，以后能进来歇脚")

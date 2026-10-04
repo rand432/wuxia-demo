@@ -105,4 +105,5 @@ static func sfx(key: String, vol_db := -6.0, pitch := 1.0) -> void:
 
 # 界面点击：统一走这一口（后面接"水滴墨扩散"特效时也挂这里）
 static func ui_click() -> void:
-	sfx("ink_drop", -10.0, randf_range(0.94, 1.08))
+	# v67：换成素材包里的真·UI 音（原来用"墨滴"充数）；要回墨滴就改回 "ink_drop"
+	sfx("ui_click", -12.0, randf_range(0.96, 1.06))

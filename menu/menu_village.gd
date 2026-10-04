@@ -21,6 +21,7 @@ extends Node2D
 const Conf := preload("res://menu/menu_conf.gd")
 const Draw := preload("res://menu/menu_draw.gd")
 const Build := preload("res://menu/data_build.gd")
+const SceneArt := preload("res://shared/scene_art.gd")   # v67：主场景·村景长卷（远景垫图层）
 
 # 建筑落点（跟 menu_sketch 里的「记号」坐标一致；已对过 data_build 的房/田/篱笆/树）
 const POS := {
@@ -55,6 +56,9 @@ var _bh_t := -1.0
 var _cv_t := -1.0
 
 func _draw() -> void:
+	# v67：先铺一层水墨村景长卷当"远景"（淡到 0.38，只提供山影/云雾/远屋的质感），
+	#   程序化画出来的房子/田/篱笆仍然是前景——两层叠着看才有纵深，也不推翻老画法。
+	_backdrop()
 	# 由远及近
 	for it in Build.FIELDS:
 		_one_field(it)
@@ -76,6 +80,25 @@ func _draw() -> void:
 	_petals()
 	_winter_dress()
 	_fog_left()
+
+# 远景垫图：底部对齐在 y=900（村子的地平线），宽度铺满整条卷轴（记号最远到 x=2490）
+func _backdrop() -> void:
+	var tex := SceneArt.village()
+	if tex == null:
+		return
+	# ⚠ 只取**上半幅**（远山/云雾/远屋顶）当背景带：整张铺满会把图里的山门放大成一堵墙
+	#   ——第一版就是这么翻车的，验过图才发现。
+	var tw := float(tex.get_width())
+	var th := float(tex.get_height())
+	var src := Rect2(0.0, 0.0, tw, th * 0.46)
+	var dst := Rect2(-60.0, 150.0, 2900.0, 620.0)
+	var a := 0.34
+	if season == 3:
+		draw_texture_rect_region(tex, dst, src, Color(0.86, 0.90, 0.96, a))
+	elif season == 2:
+		draw_texture_rect_region(tex, dst, src, Color(1.04, 0.98, 0.88, a))
+	else:
+		draw_texture_rect_region(tex, dst, src, Color(1, 1, 1, a))
 
 # ============ 田 ============
 
