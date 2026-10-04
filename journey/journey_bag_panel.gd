@@ -102,9 +102,10 @@ func _build_bag() -> void:
 		_bag_panel.add_child(cell)
 		# v73（用户：「道具武器功法都没有图」）：格子里压一张水墨图（按名字选），
 		#   40×40 摆在正中偏上，名字仍居中压在下面，两者不打架。
+		# v76（用户：「装备功法图有点不居中」）：图上、字下，各占一半，互不压
 		var ic := TextureRect.new()
-		ic.position = Vector2(21, 8)
-		ic.size = Vector2(40, 40)
+		ic.position = Vector2(22, 5)
+		ic.size = Vector2(38, 38)
 		ic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		ic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -112,8 +113,8 @@ func _build_bag() -> void:
 		cell.add_child(ic)
 		_cell_icons.append(ic)
 		var lb := Label.new()
-		lb.position = Vector2(2, 2)
-		lb.size = Vector2(78, 78)
+		lb.position = Vector2(2, 44)      # v76：名字挪到图下面
+		lb.size = Vector2(78, 36)
 		lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		lb.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -121,8 +122,8 @@ func _build_bag() -> void:
 		#   在 78 宽的框里要 3 行、需要 90 高 > 78，字会漏到格子外面（82 高），于是收到 19：
 		#   19 号下一行 4 个字（76 ≤ 78），8 字名 2 行、需要 59 ≤ 78，稳装。
 		#   max_lines_visible=3 是保险：真出现 12 字以上的名字也只截尾打省略号，不漏字。
-		lb.add_theme_font_size_override("font_size", 19)
-		lb.max_lines_visible = 3
+		lb.add_theme_font_size_override("font_size", 15)   # v76：给图让出上半格
+		lb.max_lines_visible = 2
 		lb.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		lb.add_theme_color_override("font_color", UiKit.INK)
 		lb.mouse_filter = Control.MOUSE_FILTER_IGNORE

@@ -26,6 +26,7 @@ const Appraise := preload("res://shared/data_appraise.gd")
 const Loot := preload("res://shared/data_loot.gd")
 const Ladder := preload("res://shared/data_ladder.gd")   # v58：掉落阶梯（列数规则与抽货共用一个口）
 const UiKit := preload("res://shared/ui_kit.gd")
+const SceneArt := preload("res://shared/scene_art.gd")   # v77：内景垫图
 
 signal closed
 
@@ -267,6 +268,8 @@ func _build() -> void:
 	psb.set_border_width_all(2)
 	_panel.add_theme_stylebox_override("panel", psb)
 	add_child(_panel)
+	# v77：垫一张货仓内景（鉴宝行就在仓里翻货）
+	UiKit.add_room_bg(_panel, SceneArt.store_room(), 0.34)
 
 	var title := _label("鉴 宝 行", 30, INK)
 	title.position = Vector2(28, 14)

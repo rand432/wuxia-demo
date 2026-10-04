@@ -18,6 +18,7 @@ extends Control
 const GameState := preload("res://shared/game_state.gd")
 const UiKit := preload("res://shared/ui_kit.gd")
 const ItemArt := preload("res://shared/item_art.gd")   # v70：水墨道具图
+const SceneArt := preload("res://shared/scene_art.gd")   # v77：内景垫图
 
 signal closed
 # 门厅自己不管那三个面板——由主界面把"开门"的动作接过去
@@ -72,6 +73,8 @@ func _build() -> void:
 	psb.set_border_width_all(2)
 	_panel.add_theme_stylebox_override("panel", psb)
 	add_child(_panel)
+	# v77：门厅也垫一张内景（酒肆那间），进门就有"屋子"的感觉
+	UiKit.add_room_bg(_panel, SceneArt.inn(), 0.30)
 
 	var title := _label("百 工 坊", 32, INK)
 	title.position = Vector2(28, 16)

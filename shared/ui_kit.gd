@@ -230,7 +230,24 @@ static func make_paper_panel(parent: Node, rect: Rect2) -> Panel:
 			pop_in(p))
 	return p
 
+# v77：给面板垫一张"室内图"（用户：「宝箱的 ui、品酒坊/炼丹/货仓 是不是也要换图了」）
+#   做法：面板内部铺一张 TextureRect，alpha 压低——纸底还透得出来、字照样清楚，
+#   但一眼能看出"你人在哪间屋子里"。找不到图就静默跳过（不崩界面）。
+static func add_room_bg(panel: Panel, tex: Texture2D, alpha := 0.34) -> void:
+	if panel == null or tex == null:
+		return
+	var tr := TextureRect.new()
+	tr.texture = tex
+	tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	tr.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tr.modulate.a = alpha
+	panel.add_child(tr)
+	panel.move_child(tr, 0)     # 压到最底：纸底之下、文字之上
+
 static func make_veil(parent: Control, vsize: Vector2, alpha := 0.52) -> ColorRect:
+	# （下面挂 ui_open 音——v78：面板音铺开）
 	var veil := ColorRect.new()
 	veil.color = Color(0.08, 0.07, 0.08, alpha)
 	veil.position = Vector2.ZERO
@@ -243,6 +260,7 @@ static func make_veil(parent: Control, vsize: Vector2, alpha := 0.52) -> ColorRe
 	#   **全工程所有弹窗都走 make_veil**，所以一处就够。
 	veil.z_index = 120
 	parent.add_child(veil)
+	Audio.sfx("ui_open", -14.0)   # v78：开面板统一一声
 	return veil
 
 static func float_text(host: Node, txt: String, col: Color, y := 150.0) -> void:

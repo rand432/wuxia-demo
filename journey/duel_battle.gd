@@ -2439,6 +2439,7 @@ func run(state, player: Node2D, fx: Control, node: Dictionary, foe_first := fals
 	_foe = null
 	_root.visible = false
 	Audio.play_bgm("bgm_journey", 1.2)   # v65：打完回游历 BGM
+	Audio.sfx("win", -7.0)   # v78：遭遇战胜负音
 	if _info_btn != null:
 		_info_btn.visible = false
 	if _log_btn != null:   # v63h：右上两排大钮跟血条同进同出

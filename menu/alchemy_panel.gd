@@ -27,6 +27,7 @@ extends Control
 
 const GameState := preload("res://shared/game_state.gd")
 const UiKit := preload("res://shared/ui_kit.gd")   # v61：tap_in_scroll（滚动区里可滑可点）
+const SceneArt := preload("res://shared/scene_art.gd")   # v77：内景垫图
 
 const INK := Color(0.14, 0.13, 0.15)
 const PAPER := Color(0.905, 0.878, 0.795)
@@ -149,6 +150,8 @@ func _build() -> void:
 	psb.set_border_width_all(2)
 	_panel.add_theme_stylebox_override("panel", psb)
 	add_child(_panel)
+	# v77：垫一张炼丹房内景（用户：「是不是也要换图了」）——34% 透明度，纸底还透、字照样清楚
+	UiKit.add_room_bg(_panel, SceneArt.alchemy_room(), 0.34)
 
 	var title := _label("炼丹阁", 34, INK)
 	title.position = Vector2(32, 20)

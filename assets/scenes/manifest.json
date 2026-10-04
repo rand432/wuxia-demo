@@ -24,6 +24,21 @@
     "from": "assets/gen/char/scene_buildings/scene_buildings_场景_liblib_xieyi_a.png",
     "bytes": 2379303
   },
+  "room_alchemy": {
+    "file": "assets/scenes/room_alchemy.png",
+    "from": "assets/gen/char/room_alchemy/room_alchemy_场景_liblib_xieyi_a.png",
+    "bytes": 2538233
+  },
+  "room_store": {
+    "file": "assets/scenes/room_store.png",
+    "from": "assets/gen/char/room_store/room_store_场景_liblib_xieyi_a.png",
+    "bytes": 2440033
+  },
+  "chest_open": {
+    "file": "assets/scenes/chest_open.png",
+    "from": "assets/gen/char/chest_open/chest_open_场景_liblib_xieyi_a.png",
+    "bytes": 2644690
+  },
   "house_1": {
     "file": "assets/scenes/house_1.png",
     "from": "assets/gen/char/house_side/house_1_cut.png",

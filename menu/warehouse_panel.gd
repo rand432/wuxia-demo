@@ -14,6 +14,7 @@ extends Control
 const GameState := preload("res://shared/game_state.gd")
 const Cards := preload("res://shared/data_cards.gd")
 const UiKit := preload("res://shared/ui_kit.gd")   # v61b：tap_in_scroll（格子可滑可点）
+const SceneArt := preload("res://shared/scene_art.gd")   # v77：内景垫图
 
 signal closed
 signal picked(sid: String)
@@ -114,6 +115,8 @@ func _build() -> void:
 	psb.set_border_width_all(2)
 	_panel.add_theme_stylebox_override("panel", psb)
 	add_child(_panel)
+	# v77：垫一张货仓内景（用户：「是不是也要换图了」）——34% 透明度，纸底还透、字照样清楚
+	UiKit.add_room_bg(_panel, SceneArt.store_room(), 0.34)
 
 	_title_lb = _label("仓　库", 30, INK)
 	_title_lb.position = Vector2(28, 20)

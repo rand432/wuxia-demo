@@ -10,6 +10,7 @@ extends Control
 
 const GameData := preload("res://shared/game_data.gd")
 const UiKit := preload("res://shared/ui_kit.gd")   # v58：属性徽章 + 数字排一行（两套引擎共用）
+const SceneArt := preload("res://shared/scene_art.gd")   # v78：素材里的刀光序列帧
 
 var shake_target: Node2D = null
 
@@ -171,6 +172,7 @@ func slash_between(a: Node2D, b: Node2D, mv: String) -> void:
 	#   为什么不逐个调用点去改：全工程有 14 处 slash_between/burst，
 	#   在这里挂一次，所有攻击（普攻/武学/大招/敌人反击）一起升级。
 	blade_light(a, b, mv)
+	slash_sheet(a, b)      # v78：再叠一层素材里的真刀光序列帧
 
 func burst(pos: Vector2, mv: String) -> void:
 	var st := _mv_style(mv)
@@ -301,6 +303,46 @@ class ShockRing extends Node2D:
 		draw_arc(Vector2.ZERO, rr * 1.18, 0.0, TAU, 40, Color(ink.r, ink.g, ink.b, ink.a * a * 0.8), width * 0.6, true)
 
 # ---- 对外接口 ----
+
+
+# v78：**素材里的刀光序列帧**（影之刃 Atlas_hun_daoguang2 切成 25 帧，见 SceneArt.slash_frames）
+#   用户指着图问「这个不适合做技能特效？」——适合，直接当序列帧播。
+#   贴在墨弧之上当一道真刀光：白刃芯 + 红飞溅，比纯手画的多一层质感。
+class SlashSheet extends AnimatedSprite2D:
+	var life := 0.26
+	var _t := 0.0
+	func _process(d: float) -> void:
+		_t += d
+		if _t >= life:
+			queue_free()
+
+func slash_sheet(a: Node2D, b: Node2D, scale_mul := 1.0) -> void:
+	if not is_instance_valid(a) or not is_instance_valid(b):
+		return
+	var frames := SceneArt.slash_frames()
+	if frames.is_empty():
+		return
+	var sf := SpriteFrames.new()
+	sf.remove_animation("default")
+	sf.add_animation("play")
+	sf.set_animation_speed("play", 60.0)
+	sf.set_animation_loop("play", false)
+	for t in frames:
+		sf.add_frame("play", t)
+	var s := SlashSheet.new()
+	s.sprite_frames = sf
+	s.animation = "play"
+	s.position = _mid_between(a, b)
+	# 朝向：跟着出手方向，朝右打正的、朝左翻过来
+	var dir_x := signf(b.global_position.x - a.global_position.x)
+	if dir_x == 0.0:
+		dir_x = 1.0
+	s.scale = Vector2(1.6 * scale_mul * dir_x, 1.6 * scale_mul)
+	s.modulate.a = 0.95
+	add_child(s)
+	s.play("play")
+	var tw := s.create_tween()
+	tw.tween_property(s, "modulate:a", 0.0, 0.10).set_delay(0.16)
 
 # 刀光：压在 slash_between 之上再补一道白刃 + 火星（有它才「亮」）
 func blade_light(a: Node2D, b: Node2D, mv: String) -> void:

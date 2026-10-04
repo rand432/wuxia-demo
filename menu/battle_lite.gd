@@ -3340,6 +3340,7 @@ func _push(lines: Array) -> void:
 
 func _end(win: bool) -> void:
 	Audio.play_bgm("bgm_menu", 1.6)   # v65：打完回主界面 BGM
+	Audio.sfx("win" if win else "lose", -6.0)   # v78：胜负音
 	if _over:
 		return
 	_over = true

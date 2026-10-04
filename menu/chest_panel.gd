@@ -15,6 +15,9 @@ extends Control
 
 const GameState := preload("res://shared/game_state.gd")
 const Tower := preload("res://shared/tower.gd")
+const UiKit := preload("res://shared/ui_kit.gd")   # v77：内景垫图要用
+const Audio := preload("res://shared/audio.gd")   # v78：开箱音
+const SceneArt := preload("res://shared/scene_art.gd")
 
 signal closed
 
@@ -197,6 +200,9 @@ func _build() -> void:
 	psb.set_border_width_all(2)
 	_panel.add_theme_stylebox_override("panel", psb)
 	add_child(_panel)
+	# v77：垫一张宝箱特写（用户：「是不是也要换图了」）——34% 透明度，纸底还透、字照样清楚
+	UiKit.add_room_bg(_panel, SceneArt.chest_art(), 0.34)
+	Audio.sfx("chest", -8.0)   # v78：开箱音
 
 	var title := _label("宝　箱", 30, INK)
 	title.position = Vector2(28, 16)

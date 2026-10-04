@@ -7,13 +7,31 @@ extends RefCounted
 # ============================================================
 
 const UiKit := preload("res://shared/ui_kit.gd")
+const SceneArt := preload("res://shared/scene_art.gd")   # v78：素材里的水墨城郭远景
 
 
 static func draw_all(ctrl: Control, sz: Vector2, scroll_far: float, scroll_mid: float, scroll_road: float) -> void:
 	var w: float = sz.x
 	var h: float = sz.y
 	ctrl.draw_rect(Rect2(0, 0, w, h), UiKit.PAPER)
-	_ridge(ctrl, sz, scroll_far, 766.0, 118.0, Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.055), 940.0)
+	# v78（用户："图4 不适合做游历旅途的更换场景？"）：**远景真的换成素材里那幅水墨城郭了**
+	#   （影之刃 Atlas_MainMap 切出来的月夜城郭）——视差最慢、横向无缝平铺。
+	#   找不到图就退回原来的程序化远山，功能不受影响。
+	var far_tex := SceneArt.map_night()
+	if far_tex != null:
+		# ⚠ 直接 tile=true 会看出"同一座城并排两份"（第一版就是），改**正反交替**：
+		#   一张正着画、下一张水平翻转画（负宽度即翻转），接缝处两边是镜像 → 看不出重复。
+		var th := 950.0
+		var tw: float = th * float(far_tex.get_width()) / maxf(float(far_tex.get_height()), 1.0)
+		var period := tw * 2.0
+		var x := -fposmod(scroll_far * 0.12, period)
+		var tint := Color(1, 1, 1, 0.88)
+		while x < w:
+			ctrl.draw_texture_rect(far_tex, Rect2(x, 0.0, tw, th), false, tint)
+			ctrl.draw_texture_rect(far_tex, Rect2(x + tw, 0.0, -tw, th), false, tint)
+			x += period
+	else:
+		_ridge(ctrl, sz, scroll_far, 766.0, 118.0, Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.055), 940.0)
 	_ridge(ctrl, sz, scroll_mid, 828.0, 88.0, Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.095), 720.0)
 	_props(ctrl, sz, scroll_mid * 1.35)
 	ctrl.draw_rect(Rect2(0, 950.0, w, h - 950.0), Color(0.885, 0.850, 0.775))

@@ -116,6 +116,9 @@ const SCENES = [
   ['scene_tower', 'tower'],
   ['scene_inn', 'inn'],
   ['scene_buildings', 'buildings'],
+  ['room_alchemy', 'room_alchemy'],     // v77：炼丹房内景
+  ['room_store', 'room_store'],         // v77：货仓内景
+  ['chest_open', 'chest_open'],         // v77：宝箱特写
 ];
 const SCENE_OUT = path.resolve('assets/scenes');
 

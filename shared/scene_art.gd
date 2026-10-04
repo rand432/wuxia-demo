@@ -37,6 +37,34 @@ static func inn() -> Texture2D:
 static func buildings() -> Texture2D:
 	return _tex("buildings")
 
+# v77：各作坊/货仓/宝箱的**内景图**（用户：「品酒坊/炼丹/货仓 是不是也要换图了」）
+static func alchemy_room() -> Texture2D:
+	return _tex("room_alchemy")
+
+static func store_room() -> Texture2D:
+	return _tex("room_store")
+
+static func chest_art() -> Texture2D:
+	return _tex("chest_open")
+
+# v78：**素材里那两张水墨城郭**（影之刃 Atlas_MainMap 切出来的）——
+#   用户指着图问"这个不适合做游历旅途的更换场景？"——适合，而且跟本作是一套语言。
+#   月夜那幅给游历当远景，血月那幅给爬塔/战斗。
+static func map_night() -> Texture2D:
+	return _tex("map_night")
+
+static func map_redmoon() -> Texture2D:
+	return _tex("map_redmoon")
+
+# v78：**素材里的刀光序列帧**（Atlas_hun_daoguang2 切成 25 帧）——技能特效直接用
+static func slash_frames() -> Array:
+	var out: Array = []
+	for i in 25:
+		var p := "res://assets/scenes/slash/slash_" + ("%02d" % i) + ".png"   # GDScript 没有 zfill
+		if ResourceLoader.exists(p):
+			out.append(load(p))
+	return out
+
 # v75：村里的房子图（用户：「我是想让村里房子也换成图」）。
 #   6 张：茅草土屋 / 竹屋 / 砖石瓦房 / 木构货栈 / 两层藏宝楼 / 牌坊山门。
 #   Build.HOUSES 有 8 座，按序号取模轮着用；缺图返回 null，调用方退化回手画。
