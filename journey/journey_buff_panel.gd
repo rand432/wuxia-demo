@@ -155,6 +155,18 @@ func _build_mine() -> void:
 		if not fates.is_empty():
 			txt2 += "\n命数：" + "、".join(PackedStringArray(fates))
 		UiKit.set_text(head, txt2)
+	# v84（用户：「增益卡分类…集齐3/6/9 会获得额外效果」）：
+	#   综合那行下面**单列"流派进度"**——玩家一眼看出离下一档还差几张、下一档给什么。
+	var prows: Array = Buffs.path_progress(_state.buffs)
+	var py := 168.0
+	for r_v in prows:
+		var pr: Dictionary = r_v
+		var lb := UiKit.make_label(_body, Vector2(40, py), Vector2(600, 26), 17, pr["color"])
+		var tail := "　已满阶（3/6/9 全开）"
+		if int(pr["next"]) > 0:
+			tail = "　再 " + str(int(pr["next"]) - int(pr["n"])) + " 张 → " + str(pr["next"]) + " 张：" + str(pr["next_say"])
+		UiKit.set_text(lb, "◆ " + str(pr["name"]) + " ×" + str(pr["n"]) + tail)
+		py += 26.0
 	head.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 
 	# ㊿：卡多了原来只排得下 5~6 格，剩下的只写一句"没排下"。

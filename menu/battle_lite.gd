@@ -847,7 +847,13 @@ func _build_ui() -> void:
 	_refresh_speed_btn()
 	add_child(_speed_btn)
 
-	var ename := _label(str(_e()["name"]), 24, INK)
+	# v86（用户：「爬塔800关以后加入元素怪」）：敌人带五行时，**名字后面把属性标出来**——
+	#   元素怪打你不吃防御、还能抗自己那一门，玩家看不到属性就是白挨打。
+	var enm := str(_e()["name"])
+	var eel := str(_e().get("elem", ""))
+	if eel != "":
+		enm += "　·　" + str(Cards.ELEM_CN.get(eel, eel)) + "行"
+	var ename := _label(enm, 24, INK)
 	ename.position = Vector2(px * 0.5 - 180.0, 126)
 	ename.size = Vector2(360, 34)
 	ename.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

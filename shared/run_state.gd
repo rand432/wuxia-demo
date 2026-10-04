@@ -1317,6 +1317,11 @@ func buff_fx(role_id := "") -> Dictionary:
 		var sfx: Dictionary = GameState.role_star_mech_fx(role_id)
 		for k2 in sfx.keys():
 			out[k2] = float(out.get(k2, 0.0)) + float(sfx[k2])
+	# v84：**集齐流派的额外效果**（3/6/9 档）——游历这边的汇合口就在这，
+	#   并进这一份之后，战斗引擎（_fx_buff）与角色面板都自动吃到。
+	var pb: Dictionary = Buffs.path_bonus_fx(buffs)
+	for k3 in pb.keys():
+		out[k3] = float(out.get(k3, 0.0)) + float(pb[k3])
 	return out
 
 func buff_lines() -> String:

@@ -229,7 +229,9 @@ const CHAPTER_WEAPON := {4: "anqi"}
 #     · 400 关**之前一个字不动**（老手感的物理对拼照旧）
 #   ⚠ 前 3 章（落草/流寇/黑风寨）在 400 关前早就循环过很多轮了，所以"第几章"看的是
 #     循环后的下标，不是章名表的前三项。
-const ELEM_FROM_STAGE := 400        # 第 400 关（ti=399）起
+# v86（用户：「爬塔800关以后加入元素怪」）：400 → **800**。
+#   790 关之前都是纯物理（玩家还有一段「熟悉手感」的缓冲带），800 起每章换一种五行。
+const ELEM_FROM_STAGE := 800        # 第 800 关（ti=799）起
 const CHAPTER_ELEM := ["metal", "wood", "water", "fire", "earth"]
 const FOE_OWN_RES := 30             # 对自己那一属性的抗性（百分点）
 const FOE_ELEM_DMG := 0             # 敌人不打元素增伤那一份（要狠就抬这个数）

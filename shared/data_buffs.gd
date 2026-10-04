@@ -254,6 +254,148 @@ static func roll_offers(rid: String, n := 3, party: Array = []) -> Array:
 			out.append(str(k2))
 	return out
 
+
+# ============================================================
+# v84：**增益卡流派**（用户：「游历增益卡分类 攻击流 护盾流 恢复流 生命流 等
+#   当同类型集齐3/6/9 会获得额外效果【具体可参考崩坏星穹铁道的模拟宇宙】」）
+#
+#   做法照模拟宇宙那套：**按张数**算（同一张可以重复请，所以 9 张是够得着的），
+#   每档给一条「额外效果」，走的是**引擎已经在读的 fx 键**——所以战斗那边一行都不用改。
+#   ⚠ 只加不改：原来的单卡效果一个字没动，集齐是**额外**叠上去的。
+# ============================================================
+const PATHS := {
+	"atk": {
+		"name": "攻击流", "color": [0.72, 0.24, 0.18],
+		# ⚠ 破军卡只归「大招流」——它原来两条流的名单里都有，path_of 取第一个匹配，
+		#   结果破军被算成攻击流（v85 实测发现）。一张卡只能归一条流。
+		"cards": ["ruifeng", "zhuifeng", "jinghong"],
+		# v85（用户：「指的激活的3-6-9这种」→ 要的是**机制型特殊效果**，不是单纯加数值）：
+		#   三档全部换成「有触发条件」的效果，用的都是引擎里**已经在读**的键——不用改战斗代码。
+		"tiers": {
+			3: {"atk_pct": 0.10},
+			6: {"low_hp_dmg": 0.30},
+			9: {"crit_pct": 0.25, "follow_dmg": 0.50},
+		},
+		"say": {"3": "攻击 +10%",
+			"6": "【背水】自己半血以下时，出手伤害 +30%",
+			"9": "【剑意纵横】暴击 +25%，且追击伤害 +50%"},
+	},
+	"guard": {
+		"name": "护盾流", "color": [0.30, 0.38, 0.52],
+		"cards": ["panshi", "xieshi", "pangen", "panshizhuang"],
+		"tiers": {
+			3: {"cut_add": 0.06},
+			6: {"vengeance": 0.20},
+			9: {"cut_add": 0.20, "ult_cut": 0.20, "thorn_up": 0.40},
+		},
+		"say": {"3": "受伤 -6%",
+			"6": "【以牙还牙】每次受伤后，下一次出手伤害 +20%",
+			"9": "【铁壁】受伤再 -20% · 大招期再减 20% · 反刺 +40%"},
+	},
+	"heal": {
+		"name": "恢复流", "color": [0.28, 0.50, 0.30],
+		"cards": ["shensheng", "talang", "yanghui"],
+		"tiers": {
+			3: {"hand_heal": 0.05},
+			6: {"hand_heal": 0.06, "hand_heal_every": -1.0},
+			9: {"hand_heal": 0.12, "ult_window_regen": 0.06},
+		},
+		"say": {"3": "出手回血 +5%",
+			"6": "【生生不息】回血更勤（出手回血的间隔 -1 手）",
+			"9": "【久旱逢霖】出手回血再 +12% · 大招后 3 手持续回血"},
+	},
+	"hp": {
+		"name": "生命流", "color": [0.62, 0.30, 0.34],
+		"cards": ["tiegu", "huxin"],
+		"tiers": {
+			3: {"hp_pct": 0.12},
+			6: {"hp_pct": 0.16, "pas_cut": 0.10},
+			9: {"hp_pct": 0.22, "cut_add": 0.10},
+		},
+		"say": {"3": "气血上限 +12%",
+			"6": "【皮糙肉厚】气血再 +16% · 被动减伤 +10%",
+			"9": "【气血如龙】气血再 +22% · 受伤再 -10%"},
+	},
+	"rage": {
+		"name": "怒气流", "color": [0.72, 0.52, 0.14],
+		"cards": ["xuqi", "nutao", "shouzhen", "chengsheng"],
+		"tiers": {
+			3: {"open_rage": 20.0},
+			6: {"rage_on_hit": 0.20, "rage_pct": 0.30},
+			9: {"open_rage": 40.0, "rage_pct": 0.50},
+		},
+		"say": {"3": "开场怒气 +20",
+			"6": "【怒从心起】每次受击回怒 +20% · 怒气获取 +30%",
+			"9": "【气冲斗牛】开场怒气再 +40 · 怒气获取再 +50%"},
+	},
+	"ult": {
+		"name": "大招流", "color": [0.55, 0.35, 0.62],
+		"cards": ["pojun", "jianbi", "changge", "yinhang", "bingxin"],
+		"tiers": {
+			3: {"ult_dmg": 0.12},
+			6: {"ult_dur": 1.0},
+			9: {"ult_window_regen": 0.10, "art_cd_minus": 1.0},
+		},
+		"say": {"3": "大招伤害 +12%",
+			"6": "【余韵悠长】大招的持续效果 +1 手",
+			"9": "【气贯长虹】大招后持续回血 · 功法冷却 -1"},
+	},
+}
+static func path_of(card_id: String) -> String:
+	for pk in PATHS.keys():
+		if (PATHS[pk]["cards"] as Array).has(card_id):
+			return str(pk)
+	return ""
+
+static func path_name(pk: String) -> String:
+	var d: Dictionary = PATHS.get(pk, {})
+	return str(d.get("name", pk))
+
+static func path_color(pk: String) -> Color:
+	var d: Dictionary = PATHS.get(pk, {})
+	var c: Array = d.get("color", [0.4, 0.4, 0.4])
+	return Color(float(c[0]), float(c[1]), float(c[2]))
+
+# 一份 id 列表 → 每条流各几张（重复的卡按张数算，凑 9 张够得着）
+static func count_paths(ids: Array) -> Dictionary:
+	var out: Dictionary = {}
+	for v in ids:
+		var pk := path_of(str(v))
+		if pk != "":
+			out[pk] = int(out.get(pk, 0)) + 1
+	return out
+
+# 集齐档位的**额外效果**：3/6/9 三档，达到几档就叠几档（层层加码）
+static func path_bonus_fx(ids: Array) -> Dictionary:
+	var out: Dictionary = {}
+	var cnt := count_paths(ids)
+	for pk in cnt.keys():
+		var n := int(cnt[pk])
+		var tiers: Dictionary = PATHS[pk].get("tiers", {})
+		for need in [3, 6, 9]:
+			if n >= need and tiers.has(need):
+				for k in (tiers[need] as Dictionary).keys():
+					out[k] = float(out.get(k, 0.0)) + float(tiers[need][k])
+	return out
+
+# 给 UI：这条流现在几张、下一档还要几张、下一档给什么
+static func path_progress(ids: Array) -> Array:
+	var cnt := count_paths(ids)
+	var rows: Array = []
+	for pk in PATHS.keys():
+		var n := int(cnt.get(pk, 0))
+		if n <= 0:
+			continue
+		var nxt := 0
+		for need in [3, 6, 9]:
+			if n < need:
+				nxt = need
+				break
+		var say: Dictionary = PATHS[pk].get("say", {})
+		rows.append({"path": pk, "name": path_name(pk), "n": n, "next": nxt,
+			"next_say": str(say.get(str(nxt), "")), "color": path_color(pk)})
+	return rows
+
 # fx 汇总：同一 id 只算一次；多条同键相加（数值）
 static func merge_fx(ids: Array) -> Dictionary:
 	var out: Dictionary = {}
@@ -267,4 +409,9 @@ static func merge_fx(ids: Array) -> Dictionary:
 				out[k] = out[k] + v
 			else:
 				out[k] = v
+	# v84：**集齐流派的额外效果**（3/6/9 档）也并进这一份——
+	#   这样凡是读 merge_fx 的地方（面板/战斗）都自动吃到，不用逐个改。
+	var pb := path_bonus_fx(ids)
+	for k2 in pb.keys():
+		out[k2] = float(out.get(k2, 0.0)) + float(pb[k2])
 	return out

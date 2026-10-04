@@ -213,6 +213,12 @@ static func axis4_mul(node_i: int) -> float:
 			m = float(AXIS4_PCT[k])
 	return 1.0 + m
 
+# v86：游历的元素怪门槛（用户：「游历难度25后加入元素怪」）。爬塔那边是 800 关，
+#   两边难度刻度不同，所以各留各的常量——以后要调只改这一个数。
+const ELEM_FROM_DIFF := 25
+const CHAPTER_ELEM := ["metal", "wood", "water", "fire", "earth"]
+const FOE_OWN_RES := 30             # 对自己那一属性的抗性（百分点）——与 tower 同口径
+
 static func _scale_foe(n: Dictionary, diff: int, node_i := 0) -> void:
 	var d := maxi(1, diff) - 1
 	var tier := party_tier()
@@ -231,6 +237,13 @@ static func _scale_foe(n: Dictionary, diff: int, node_i := 0) -> void:
 	atk_mul *= n3 * n4
 	f["hp"] = maxi(1, int(round(float(f.get("hp", 60)) * hp_mul)))
 	f["atk"] = maxi(1, int(round(float(f.get("atk", 8)) * atk_mul)))
+	# v86（用户：「游历难度25后加入元素怪」）：
+	#   难度 25 起敌人带五行——**跟爬塔同一套口径**（打你就是元素伤害：不吃你的防御、
+	#   走抗性、不可暴击；它自己对自己那一属性抗 30%）。按难度 + 节数轮换，不会场场同一种。
+	if maxi(1, diff) >= ELEM_FROM_DIFF:
+		var fe: String = str(CHAPTER_ELEM[(maxi(1, diff) + node_i) % CHAPTER_ELEM.size()])
+		f["elem"] = fe
+		f[fe + "_res"] = FOE_OWN_RES
 	n["foe"] = f
 
 # v61：队伍等级档——取"队里最高等级"（1~100 级＝0 档，之后每 100 级一档）

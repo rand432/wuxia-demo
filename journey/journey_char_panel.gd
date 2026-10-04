@@ -20,6 +20,7 @@ const RunState := preload("res://shared/run_state.gd")
 const GameState := preload("res://shared/game_state.gd")
 const Elem := preload("res://shared/data_elem.gd")
 const UiKit := preload("res://shared/ui_kit.gd")
+const Voice := preload("res://shared/voice.gd")   # v87：点开角色面板念一句台词
 const CharArt := preload("res://shared/char_art.gd")     # 立绘/头像/Q版取图口
 const ArtView := preload("res://shared/art_view.gd")     # 会动的立绘（程序化）
 const ArtClip := preload("res://shared/art_clip.gd")     # 立绘演出（看片版，.ogv）
@@ -532,6 +533,13 @@ func _ov_stats(panel: Control) -> void:
 #   缺图不崩：缺哪张就少画哪张，名字照常显示。
 func _ov_art(panel: Control) -> void:
 	var rid := str(_state.role_id)
+	# v87（用户：「陈石是那种憨憨的壮壮的感觉」）：**点开角色面板就念一句他的招牌台词**——
+	#   剧情对话还没接上，先给个能听见人的入口。没录音的自动跳过（Voice 内部静默）。
+	#   说话人前缀：player / chen_shi → chenshi / qingluan
+	var spk := rid
+	if rid == "chen_shi":
+		spk = "chenshi"
+	Voice.say_file(spk + "_01")
 	var info: Dictionary = GameState.role_data(rid)
 	var face := CharArt.q_head(rid)
 	if face != null:

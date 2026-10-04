@@ -788,6 +788,9 @@ const SLOT_CN := {"weapon": "兵器", "armor": "护甲", "helm": "玉佩", "cloa
 
 static var village_stage := 0
 static var first_journey_done := false
+# v83（用户："引子结束后 给玩家一个弹出起名的窗口【不起名就默认叫少侠】"）：
+#   空串＝还没起过名（＝用默认「少侠」）。起了就落盘，全工程的显示都跟着变。
+static var player_name := ""
 static var disciple_joined := false
 static var qingluan_joined := false
 static var pending_note := ""
@@ -2439,7 +2442,17 @@ static func _role_mut(id: String) -> Dictionary:
 	return {}
 
 static func role_data(id: String) -> Dictionary:
-	return _role_mut(id)
+	var d := _role_mut(id)
+	# v83：**名字只在这一处拦**——战斗、结算、角色面板、游历 HUD 全都读这一口，
+	#   所以起名之后不用去十来个地方改文案。
+	if id == "player" and player_name != "":
+		d["name"] = player_name
+	return d
+
+# 起名（空串＝回到默认「少侠」）。落盘交给调用方或下次自动存。
+static func set_player_name(n: String) -> void:
+	var t := n.strip_edges()
+	player_name = t if t != "" else ""
 
 static func capture_player(d: Dictionary) -> void:
 	var base: Dictionary = PLAYER_DEFAULT.duplicate(true)
@@ -5287,6 +5300,7 @@ static func load_game() -> void:
 	var vd := _sd(cf.get_value("world", "village", {}), {})
 	village_stage = int(vd.get("stage", village_stage))
 	first_journey_done = bool(vd.get("first_journey_done", first_journey_done))
+	player_name = str(vd.get("player_name", player_name))   # v83
 	disciple_joined = bool(vd.get("disciple_joined", disciple_joined))
 	qingluan_joined = bool(vd.get("qingluan_joined", qingluan_joined))
 	map_found = bool(vd.get("map_found", map_found))
@@ -5386,6 +5400,7 @@ static func save_game() -> void:
 	cf.set_value("save", "ver", SAVE_VER)
 	cf.set_value("world", "village", {
 		"stage": village_stage, "first_journey_done": first_journey_done,
+		"player_name": player_name,   # v83：玩家起的名字
 		"disciple_joined": disciple_joined, "qingluan_joined": qingluan_joined,
 		"map_found": map_found, "b2_built": b2_built, "cave_opened": cave_opened,
 		"winery_built": winery_built, "herbs_granted": herbs_granted, "dange_built": dange_built,

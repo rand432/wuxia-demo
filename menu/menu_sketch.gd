@@ -539,6 +539,8 @@ class TopVeil extends Node2D:
 
 func _ready() -> void:
 	Audio.play_bgm(Audio.menu_track())   # v72：主界面曲目由玩家在设置里选（默认"江南"）
+	# v83：引子走完回村时，弹一次起名（隔一帧等界面铺好；已起过名就不会再弹）
+	call_deferred("_maybe_ask_name")
 	InkTouch.attach()            # v65：点击水墨扩散
 	FadeIn.attach()              # v68：进场淡入
 	GameState.load_game()   # 优化批㉒：先进游戏先读全局档（只读一次）
@@ -843,6 +845,63 @@ func _layout_tags() -> void:
 #   · 主界面曲目：6 首可选（素材包那批真曲），点了立刻换曲
 #   · 存 user://audio.cfg，跟村账存档分开
 # ============================================================
+
+# ============================================================
+# v83：**起名弹窗**（用户：「引子结束后 给玩家一个弹出起名的窗口【不起名就默认叫少侠】」）
+#   触发：首趟（引子）走完 + 还没起过名 → 回村时弹一次。
+#   不起名也行：输入框预填「少侠」，直接点确定就是默认名。
+#   名字只写进 GameState.player_name，显示那一层由 role_data() 统一拦（见那边的注释）。
+# ============================================================
+var _name_asked := false
+var _name_ov = null
+
+func _maybe_ask_name() -> void:
+	if _name_asked or _name_ov != null:
+		return
+	if not GameState.first_journey_done or GameState.player_name != "":
+		return
+	_name_asked = true
+	var ov := Control.new()
+	ov.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	ov.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(ov)
+	_name_ov = ov
+	var veil := UiKit.make_veil(ov, size, 0.55)
+	veil.mouse_filter = Control.MOUSE_FILTER_STOP
+	var pw := 520.0
+	var ph := 300.0
+	var panel := UiKit.make_paper_panel(ov, Rect2((size.x - pw) * 0.5, (size.y - ph) * 0.5, pw, ph))
+	var t1 := UiKit.make_label(panel, Vector2(0, 26), Vector2(pw, 44), 30, UiKit.INK)
+	UiKit.set_text(t1, "报个名号")
+	t1.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var t2 := UiKit.make_label(panel, Vector2(30, 76), Vector2(pw - 60.0, 30), 17,
+		Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.62))
+	UiKit.set_text(t2, "江湖上总得有个称呼。不填，就叫「少侠」。")
+	t2.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var le := LineEdit.new()
+	le.text = "少侠"
+	le.max_length = 8
+	le.position = Vector2(70, 126)
+	le.size = Vector2(pw - 140.0, 52)
+	le.add_theme_font_size_override("font_size", 26)
+	le.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	panel.add_child(le)
+	le.grab_focus()
+	le.select_all()
+	le.text_submitted.connect(func(_t: String) -> void: _confirm_name(le.text))
+	var ok := UiKit.make_button(panel, Vector2((pw - 240.0) * 0.5, ph - 78.0), Vector2(240, 52), "就　叫　这　个", 21)
+	ok.pressed.connect(func() -> void: _confirm_name(le.text))
+	print("[起名] 弹窗（引子已走完、尚未起名）")
+
+func _confirm_name(n: String) -> void:
+	GameState.set_player_name(n)
+	GameState.save_game()
+	print("[起名] 定了：", GameState.role_data("player").get("name", "?"))
+	if _name_ov != null and is_instance_valid(_name_ov):
+		_name_ov.queue_free()
+	_name_ov = null
+	UiKit.float_text(self, "往后江湖上，你就是「" + str(GameState.role_data("player").get("name", "少侠")) + "」", UiKit.SEAL)
+
 func _open_settings() -> void:
 	if _settings_ov != null and is_instance_valid(_settings_ov):
 		return
