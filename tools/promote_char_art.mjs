@@ -38,6 +38,16 @@ const MAP = {
   chen_shi: { cn: '陈石', dir: 'chenshi' },
   qingluan: { cn: '苏青鸾', dir: 'qingluan' },
 };
+
+// ---- 敌人 Q版（v66）：目录名就是美术键，一次一批 ----
+//   生成方式特殊：不是直接文生图，而是**拿主角 Q版 当底图做 img2img（denoise≈0.62）**——
+//   这样二头身比例能带过去（liblib 直接画 Q版 会跑成半写实，见对话记录里的试片）。
+const ENEMY_KEYS = [
+  ['mob_lou', '喽啰'], ['mob_blade', '刀客'], ['mob_spear', '枪手'], ['mob_bow', '弩手'],
+  ['mob_hook', '钩手'], ['mob_flag', '旗手'], ['mob_chief', '头目'], ['mob_one_arm', '独臂刀客'],
+  ['mob_dog', '恶犬'],
+];
+const ENEMY_SRC = ['_Q版_liblib_anime_img2img.png', '_Q版_liblib_anime_cut.png', '_Q版_liblib_anime.png'];
 // 每个槽位按顺序找第一个存在的源文件（后面的是备选画风）
 const SLOTS = {
   q: ['_Q版_glm_anime_cut.png'],
@@ -90,6 +100,29 @@ for (const [id, info] of Object.entries(MAP)) {
       (impState === 'no-import' ? '  （还没被 Godot 导入过，导入后再跑一次本脚本即可开 mipmap）' : '  mipmap:' + impState));
   }
 }
+// ---- 敌人 Q版（v66）----
+let enemy_n = 0;
+for (const [key, cn] of ENEMY_KEYS) {
+  const dir = path.resolve('assets/gen/char', key);
+  let hit = '';
+  for (const c of ENEMY_SRC) {
+    const p = path.join(dir, key + c);
+    if (fs.existsSync(p)) { hit = p; break; }
+  }
+  if (!hit) { console.log('  · ' + key + '（' + cn + '）还没有生成稿'); continue; }
+  const dst = path.join(OUT, key + '_q.png');
+  const before = fs.statSync(hit).size;
+  if (!shrink(hit, dst, TARGET_H.q)) { fs.copyFileSync(hit, dst); }
+  const st = patchImport(dst);
+  manifest[key] = { cn: cn, kind: 'enemy', source_dir: 'assets/gen/char/' + key,
+    slots: { q: { file: 'assets/char/' + key + '_q.png', from: path.relative(process.cwd(), hit).replace(/\\/g, '/'), bytes: fs.statSync(dst).size } } };
+  console.log('  ✓ ' + (key + '_q.png').padEnd(20) + ' ← ' + path.basename(hit) +
+    '  ' + Math.round(before / 1024) + 'KB → ' + Math.round(fs.statSync(dst).size / 1024) + 'KB' +
+    (st === 'no-import' ? '  （导入后再跑一次开 mipmap）' : '  mipmap:' + st));
+  enemy_n++;
+}
+if (enemy_n > 0) console.log('  敌人 Q版：' + enemy_n + ' 个原型入库');
+
 // ---- 演出片 ----
 fs.mkdirSync(CLIP_OUT, { recursive: true });
 for (const [id, name] of Object.entries(CLIPS)) {

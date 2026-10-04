@@ -36,6 +36,10 @@ static func full(role_id: String) -> Texture2D:
 static func q(role_id: String) -> Texture2D:
 	return _tex(role_id + "_q")
 
+# Q版裁头（临时头像位）：立绘/头像那套先不用了，头像位先用 Q版头部顶着
+static func q_head(role_id: String) -> Texture2D:
+	return _tex(role_id + "_qhead")
+
 # 立绘演出片（.ogv，Godot 原生格式）；没有就返回 null
 const CLIP_DIR := "res://assets/clips/"
 static func clip(role_id: String) -> VideoStream:

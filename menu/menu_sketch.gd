@@ -26,6 +26,8 @@ extends Control
 # ============================================================
 
 const Conf := preload("res://menu/menu_conf.gd")
+const Audio := preload("res://shared/audio.gd")   # v65：BGM / 音效总管
+const InkTouch := preload("res://shared/ink_touch.gd")   # v65：点击水墨扩散
 const Draw := preload("res://menu/menu_draw.gd")
 const Build := preload("res://menu/data_build.gd")
 const ScrollLayer := preload("res://menu/menu_scroll.gd")
@@ -532,6 +534,8 @@ class TopVeil extends Node2D:
 		draw_string(font, Vector2(r2.position.x + 24.0, r2.end.y - 34.0), host._story_tip(), HORIZONTAL_ALIGNMENT_CENTER, r2.size.x - 48.0, 16, Color(ink.r, ink.g, ink.b, 0.55))
 
 func _ready() -> void:
+	Audio.play_bgm("bgm_menu")   # v65：主界面 BGM
+	InkTouch.attach()            # v65：点击水墨扩散
 	GameState.load_game()   # 优化批㉒：先进游戏先读全局档（只读一次）
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)

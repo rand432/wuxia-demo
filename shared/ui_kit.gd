@@ -6,6 +6,8 @@ extends RefCounted
 # v11：float_text 的浮字条从横屏坐标 (430,y) 搬到竖屏居中 (150,y)。
 # ============================================================
 
+const Audio := preload("res://shared/audio.gd")   # v65：点击音（全game 按钮都出自 make_button，一处挂全）
+
 const INK := Color(0.14, 0.13, 0.15)
 const PAPER := Color(0.93, 0.90, 0.83)
 const PAPER_DARK := Color(0.87, 0.83, 0.74)
@@ -184,6 +186,8 @@ static func make_button(parent: Node, pos: Vector2, sz: Vector2, txt: String, fs
 	b.add_theme_font_size_override("font_size", fs)
 	style_button(b)
 	set_btn_text(b, txt)
+	# v65：点一下就出一声"水滴入墨"（跟界面上的墨扩散特效配一套）
+	b.pressed.connect(func() -> void: Audio.ui_click())
 	parent.add_child(b)
 	return b
 

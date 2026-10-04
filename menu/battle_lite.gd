@@ -55,6 +55,8 @@ const StatusChips := preload("res://shared/status_chips.gd")   # v54：负面状
 const Tuning := preload("res://shared/tuning.gd")       # ㉘：可调参数读取口
 const StickFighter := preload("res://journey/stick_fighter.gd")
 const ActorFactory := preload("res://journey/actor_factory.gd")   # Q版纸片人 / 火柴人 二选一
+const Audio := preload("res://shared/audio.gd")
+const InkTouch := preload("res://shared/ink_touch.gd")
 const UiKit := preload("res://shared/ui_kit.gd")
 
 const INK := Color(0.14, 0.13, 0.15)
@@ -498,6 +500,8 @@ func _front_foe() -> int:
 	return -1
 
 func _ready() -> void:
+	Audio.play_bgm("bgm_battle", 0.6)   # v65：爬塔战斗 BGM
+	InkTouch.attach()
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	size = get_viewport_rect().size
 	GameState.battle_live = true   # ㊿：告诉账本"屏幕上正打着"——挂机估算要避开这一关
@@ -1333,7 +1337,8 @@ func _spawn_fighters() -> void:
 	_foe_nodes.clear()
 	for i in _foes.size():
 		var f: Dictionary = _foes[i]
-		var en = ActorFactory.make_enemy()
+		# v65：同上——按名字取 Q版原型键
+		var en = ActorFactory.make_enemy(ActorFactory.enemy_key(str(f.get("name", ""))))
 		en.set_equipment(str(f.get("weapon", ENEMY_WEAPON)), "douli", "short")
 		var sc := maxf(0.5, float(f.get("scale", 1.0)))
 		if bool(_e().get("boss", false)) and i == 0:
@@ -3331,6 +3336,7 @@ func _push(lines: Array) -> void:
 		_log_lb.text = "\n".join(PackedStringArray(_log))
 
 func _end(win: bool) -> void:
+	Audio.play_bgm("bgm_menu", 1.6)   # v65：打完回主界面 BGM
 	if _over:
 		return
 	_over = true

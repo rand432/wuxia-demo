@@ -6,6 +6,7 @@ extends Node2D
 # ============================================================
 
 const MoveDb := preload("res://move_db.gd")
+const Audio := preload("res://shared/audio.gd")   # v65：出手/挨打/倒地 各出一声
 
 var body_color := Color(0.36, 0.64, 0.96)
 var hat_color := Color(0.74, 0.60, 0.40)
@@ -410,6 +411,7 @@ func play_move(move_id: String, speed := 1.0) -> void:
 #   把四肢**掰回站姿**——第 2 段接着再打出去。一来一回就是"挨打抽搐"。
 #   现在只有**最后那一次**（_move_gen 还等于自己那一代号）才有资格收尾。
 func play_hit() -> void:
+	Audio.sfx("hit_slash", -7.0, randf_range(0.92, 1.08))
 	_move_gen += 1
 	var gen := _move_gen
 	spring_k = 380.0
@@ -436,6 +438,7 @@ func play_dodge() -> void:
 # ============ 倒地 ============
 
 func play_down() -> void:
+	Audio.sfx("fall_down", -5.0)
 	_move_gen += 1
 	spring_k = 320.0
 	spring_d = 36.0   # v63f2：倒地也是临界阻尼（2√320≈35.8；老 25 欠阻尼，倒下还在晃）

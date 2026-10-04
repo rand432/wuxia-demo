@@ -135,7 +135,9 @@ func _refresh_pick_btns() -> void:
 		var row_cn := "前" if i == 0 else ("中" if i == 1 else "后")
 		# v64：钮上带**头像**（人一多，光靠名字认不快）。字缩短成"名 血/血"，
 		#   让出图标那 30px——134 宽的钮才装得下（带"前/中/后"会挤爆）。
-		var face := CharArt.face(str(m.get("role_id", "")))
+		# v65（用户："现有立绘去掉，就做几个临时 Q版的"）：头像位改用**Q版裁头**顶，
+		#   半写实那套 face/full 先不进游戏（文件还在 assets/char，随时能切回来）。
+		var face := CharArt.q_head(str(m.get("role_id", "")))
 		if face != null:
 			b.icon = face
 			# ⚠ 千万不要开 expand_icon：那会让图标"撑满按钮"，26 的上限就白设了
@@ -200,7 +202,7 @@ func _build_char_panel() -> void:
 	#   为什么摆在这条带（y180 那一行）：面板上真的没有别处了——顶带 222~636 被三颗"看谁"钮占满，
 	#   下面每一段（属性/天赋/兵器/装备/大招/功法）都排到 876 了。这一行左边只有"天赋"两个字、
 	#   右边 x504 才是［展开］，300~500 这段是空的，塞一颗 116×34 正好，也不挡指头。
-	_art_btn = UiKit.make_button(_stats_panel, Vector2(376, 180), Vector2(116, 34), "立绘 ▸", 17)
+	_art_btn = UiKit.make_button(_stats_panel, Vector2(376, 180), Vector2(116, 34), "人物 ▸", 17)
 	_art_btn.pressed.connect(_show_ov.bind("art"))
 
 	# ---- 天赋（外面只给名字；全文进展开） ----
@@ -438,7 +440,7 @@ func _show_ov(kind: String) -> void:
 	#   原来的 880 高装不下（底部的"收起"也会被内容压住）。屏高 1280，100+980=1080 稳。
 	var panel := UiKit.make_paper_panel(ov, Rect2(20, 100, 680, 980))
 	panel.mouse_filter = Control.MOUSE_FILTER_STOP
-	var titles := {"stats": "详细属性 · 全览", "talents": "天赋 · 全览", "weapon": "兵器 · 详情", "gear": "装备 · 详情", "arts": "功法 · 详情", "ult": "大招 · 详情", "art": "人物 · 立绘"}
+	var titles := {"stats": "详细属性 · 全览", "talents": "天赋 · 全览", "weapon": "兵器 · 详情", "gear": "装备 · 详情", "arts": "功法 · 详情", "ult": "大招 · 详情", "art": "人物 · Q版（临时）"}
 	var tt := UiKit.make_label(panel, Vector2(0, 24), Vector2(680, 48), 32, UiKit.INK)
 	UiKit.set_text(tt, str(titles.get(kind, "详情")))
 	tt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -531,7 +533,7 @@ func _ov_stats(panel: Control) -> void:
 func _ov_art(panel: Control) -> void:
 	var rid := str(_state.role_id)
 	var info: Dictionary = GameState.role_data(rid)
-	var face := CharArt.face(rid)
+	var face := CharArt.q_head(rid)
 	if face != null:
 		var fr := TextureRect.new()
 		# ⚠ 顺序要紧：expand_mode 必须**先**设。默认的 EXPAND_KEEP_SIZE 会把控件最小尺寸
@@ -556,19 +558,19 @@ func _ov_art(panel: Control) -> void:
 		var lb := UiKit.make_label(panel, Vector2(40, 500.0 + float(i) * 34.0), Vector2(260, 30), 19, UiKit.DIM)
 		UiKit.set_text(lb, str(rows[i]))
 		lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	# 演出片（有才摆钮；没有就只留静态立绘）
-	if CharArt.clip(rid) != null:
-		var pb := UiKit.make_button(panel, Vector2(40, 700), Vector2(240, 56), "▶ 人物演出", 20)
-		pb.pressed.connect(_play_clip.bind(rid))
-	var full := CharArt.full(rid)
-	if full != null:
+	# v65：演出片（.ogv）撤掉——那几条是拿立绘去图生视频做的，风格跟"临时 Q版"这一版对不上。
+	#   代码与文件都留着（_play_clip / assets/clips），等立绘定了再开。
+	# _play_clip(rid)
+	# 右侧大图：Q版（临时）——不是立绘。会呼吸微摆的 ArtView 照样能用
+	var qtex := CharArt.q(rid)
+	if qtex != null:
 		var av = ArtView.new()
 		panel.add_child(av)
-		av.position = Vector2(330, 150)
-		av.set_art(full, 700.0)
+		av.position = Vector2(360, 260)
+		av.set_art(qtex, 560.0)
 	else:
 		var miss := UiKit.make_label(panel, Vector2(330, 420), Vector2(320, 40), 20, UiKit.DIM)
-		UiKit.set_text(miss, "（还没有这个人的立绘图）")
+		UiKit.set_text(miss, "（还没有这个人的 Q版图）")
 		miss.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
 

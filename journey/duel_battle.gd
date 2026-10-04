@@ -58,6 +58,8 @@ const StickFighter := preload("res://journey/stick_fighter.gd")
 const ActorFactory := preload("res://journey/actor_factory.gd")   # Q版纸片人 / 火柴人 二选一
 const CharArt := preload("res://shared/char_art.gd")
 const ArtClip := preload("res://shared/art_clip.gd")
+const Audio := preload("res://shared/audio.gd")
+const InkTouch := preload("res://shared/ink_touch.gd")
 
 # ㉘ 数值外置：下面这批旋钮可以从 res://tuning.cfg 或 user://tuning.cfg 覆盖
 #   （读不到＝用这里写着的默认值，行为与改之前一模一样）。
@@ -1183,7 +1185,8 @@ func _build_foes(node: Dictionary, foe: Dictionary) -> void:
 # 建头像节点：排号越后站得越远（跟站位那套一致，越后排越靠近画面中央）
 func _make_foe_node(i: int) -> void:
 	var f: Dictionary = _foes[i]
-	var n := ActorFactory.make_enemy()
+	# v65：按敌人名字取"Q版原型键"（有图就用 Q版，没图工厂自动退回火柴人）
+	var n := ActorFactory.make_enemy(ActorFactory.enemy_key(str(f.get("name", ""))))
 	var wcol: Array = f.get("color", [0.5, 0.3, 0.28])
 	if wcol.size() >= 3:
 		n.body_color = Color(float(wcol[0]), float(wcol[1]), float(wcol[2]))
@@ -1317,7 +1320,7 @@ func _compose_allies(player: Node2D, party_nodes: Array = []) -> void:
 # v64：大招 cut-in——放这个人的「人物演出」片（assets/clips/<角色id>_clip.ogv）。
 #   · **非阻塞**：战斗照走，片只压在上层 2.6 秒就收（片源 5 秒，别把整场战斗糊住）
 #   · 想整段关掉：DuelBattle.ult_cutin = false（或只想改时长：ult_cutin_len）
-static var ult_cutin := true
+static var ult_cutin := false   # v65：片源是"立绘演出"，立绘撤了就一起先关（true 可随时开回来）
 static var ult_cutin_len := 2.6
 
 func _ult_cutin(m: Dictionary) -> void:
@@ -2197,6 +2200,8 @@ func _pick_player_target(art: Dictionary) -> int:
 func run(state, player: Node2D, fx: Control, node: Dictionary, foe_first := false, party_nodes: Array = []) -> Dictionary:
 	_state = state
 	_fx = fx
+	Audio.play_bgm("bgm_battle", 0.6)   # v65：遭遇战 BGM
+	InkTouch.attach()
 
 	var foe: Dictionary = node.get("foe", {})
 	_skip_enemy = false
@@ -2412,6 +2417,7 @@ func run(state, player: Node2D, fx: Control, node: Dictionary, foe_first := fals
 	_foe_nodes.clear()
 	_foe = null
 	_root.visible = false
+	Audio.play_bgm("bgm_journey", 1.2)   # v65：打完回游历 BGM
 	if _info_btn != null:
 		_info_btn.visible = false
 	if _log_btn != null:   # v63h：右上两排大钮跟血条同进同出
@@ -2781,6 +2787,13 @@ func _player_ult() -> void:
 	var uk := str(_ult.get("kind", "hit"))
 	_cur_move = "大招『" + un + "』"   # v36：战报
 	_banner("『" + un + "』", UiKit.SEAL)
+	# v66：大招的"分量"——顿帧 ＋ 屏震 ＋ 全屏墨红闪 ＋ 招式名大字。
+	#   以前大招只有一条 banner，打出来跟普攻一个手感（就一条字），所以这里补三样。
+	if _fx != null:
+		_fx.shake(10.0, 0.42)
+		_fx.flash(Color(UiKit.SEAL.r, UiKit.SEAL.g, UiKit.SEAL.b, 0.30))
+		_fx.big_word(un, UiKit.SEAL)
+	await get_tree().create_timer(0.12).timeout   # 顿帧：压下来的那一下要有重量
 	if uk == "hit":
 		var mult := float(_ult.get("mult", 2.5)) * (1.0 + float(_fx_buff.get("ult_dmg", 0.0)))
 		var is_sweep_ult := str(_ult.get("target", "front")) == "sweep"
@@ -4141,6 +4154,10 @@ func _strike(is_player: bool, pre_pick: Dictionary = {}) -> void:
 			_fx.move_word(mv)
 	if banner_txt != "":
 		_banner(banner_txt, UiKit.SEAL)
+		# v66：武学出手加一档轻震 + 白闪（跟大招的墨红重震区分开）
+		if _fx != null:
+			_fx.shake(5.0, 0.22)
+			_fx.flash(Color(1, 1, 1, 0.18))
 
 	var dmg := 0
 	var crit := false

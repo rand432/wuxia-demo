@@ -15,6 +15,7 @@ extends Node2D
 # ============================================================
 
 const MoveDb := preload("res://move_db.gd")
+const Audio := preload("res://shared/audio.gd")   # v65：出手/挨打/倒地 各出一声
 
 const ART_DIR := "res://assets/char/"          # 正式资源目录（由 tools/promote_char_art.mjs 从生成稿提升过来）
 const ART_SUFFIX := "_q.png"                   # <角色id>_q.png
@@ -44,6 +45,9 @@ var _tex_size := Vector2(512, 1024)
 var _dir := 1.0              # +1 面朝右，-1 面朝左
 var _t := 0.0
 var _down := false
+var _arc_t := 0.0          # 出手墨弧的剩余寿命（1→0）
+const ARC_LIFE := 0.20
+
 var _last_pos := Vector2.ZERO
 var _walk_t := 0.0
 var _walk_amt := 0.0
@@ -94,6 +98,8 @@ func _ready() -> void:
 	_sprite.texture = tex
 	_sprite.centered = false
 	_sprite.material = _mat
+	_sprite.z_index = -1   # v66：墨弧画在**本节点自己身上**（父先画、子后画），贴图压到 -1 才在弧下面
+	_arc_t = 0.0
 	# 贴图锚到"脚底中心"：局部原点 = 两脚之间
 	_sprite.offset = Vector2(-_tex_size.x * 0.5, -_tex_size.y)
 	var s := fit_height / maxf(_tex_size.y, 1.0)
@@ -211,12 +217,15 @@ func play_move(move_id: String, speed := 1.0) -> void:
 	var windup: float = maxf(float(mt["windup"]), 0.06)
 	var total: float = maxf(float(mt["total"]), windup + 0.06)
 	# 起手：沉肩后坐
+	Audio.sfx("swing", -11.0, randf_range(0.94, 1.06))
 	_set_pose({CH_LEAN: -9.0 * _dir, CH_HOP: 1.5, CH_SX: 0.95, CH_SY: 1.05, CH_SWAY: -5.0 * _dir})
 	await _wait(windup)
 	if gen != _move_gen:
 		return
-	# 出手：前倾、前冲、拉长
+	# 出手：前倾、前冲、拉长 + 一道墨弧（v66）
 	_set_pose({CH_LEAN: 15.0 * _dir, CH_HOP: -5.0, CH_SX: 1.03, CH_SY: 0.97, CH_SWAY: 11.0 * _dir})
+	_arc_t = 1.0
+	queue_redraw()
 	await _wait(maxf(total - windup, 0.08))
 	if gen != _move_gen:
 		return
@@ -229,6 +238,7 @@ func play_hit() -> void:
 	_down = false
 	_move_gen += 1
 	var gen := _move_gen
+	Audio.sfx("hit_slash", -6.0, randf_range(0.95, 1.10))
 	_set_pose({CH_LEAN: -16.0 * _dir, CH_HOP: 2.0, CH_SX: 1.10, CH_SY: 0.90, CH_SWAY: -9.0 * _dir})
 	_flash(0.85, 0.13)
 	await _wait(0.16)
@@ -247,6 +257,7 @@ func play_dodge() -> void:
 	reset_pose()
 
 func play_down() -> void:
+	Audio.sfx("fall_down", -5.0)
 	_down = true
 	_move_gen += 1
 	_set_pose({CH_LEAN: 86.0 * _dir, CH_HOP: 6.0, CH_SX: 1.02, CH_SY: 0.98, CH_SWAY: 12.0 * _dir})
@@ -266,8 +277,37 @@ func _wait(sec: float) -> void:
 
 # ============ 每帧：子步积分 + 待机呼吸 ============
 
+# 出手墨弧：贴着人身从后往前扫，从浓到淡、末端飞白（三段粗细叠出毛笔味）
+func _draw() -> void:
+	if _arc_t <= 0.0 or _sprite == null:
+		return
+	var k := 1.0 - _arc_t                        # 0→1 进度
+	var sgn := -1.0 if scale.x < 0.0 else 1.0
+	var eff := _dir * sgn
+	# 弧心放在胸口、半径按身高给；角度从"斜上方"扫到"斜下方"——**只朝面前那一边**（0° = 正右）
+	var c := Vector2(6.0 * eff, -fit_height * 0.54)
+	var r := fit_height * 0.56
+	var kk := clampf(k / 0.6, 0.0, 1.0)
+	var a0 := deg_to_rad(lerpf(-95.0, 5.0, kk))
+	var a1 := deg_to_rad(lerpf(5.0, 95.0, kk))
+	var s := minf(a0, a1) * eff
+	var e := maxf(a0, a1) * eff
+	var life := 1.0 - clampf((k - 0.35) / 0.65, 0.0, 1.0)   # 前段实、后段淡出
+	# 三条叠出"月牙"：外条长而宽、内条短而浓（角度也往里收，才像一笔扫出的月牙，
+	#   而不是一条等宽的灰弧——第一版就是等宽灰弧，看着像 UI 进度条）
+	var mid_a := (s + e) * 0.5
+	for i in 3:
+		var t := float(i)
+		var lo := lerpf(s, mid_a, 0.14 * t)
+		var hi := lerpf(e, mid_a, 0.14 * t)
+		draw_arc(c, r * (1.0 - 0.075 * t), lo, hi, 26,
+			Color(0.07, 0.07, 0.09, life * (0.88 - 0.22 * t)), 11.0 - 3.4 * t, true)
+
 func _process(delta: float) -> void:
 	_t += delta
+	if _arc_t > 0.0:
+		_arc_t = maxf(0.0, _arc_t - delta / ARC_LIFE)
+		queue_redraw()
 	# 走路颠：节点位置在动就自动叠一层上下颠 + 左右微摆。
 	#   舞台上赶路、战斗里前冲/后撤都吃这一层——不然纸片人只会"滑步"。
 	var dx := absf(position.x - _last_pos.x)

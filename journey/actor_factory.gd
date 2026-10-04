@@ -33,6 +33,30 @@ static func make(role_id: String = "") -> Node2D:
 		return a
 	return StickFighter.new()
 
+# ---------------- 敌人名字 → Q版美术键（临时占位用） ----------------
+# 杂兵名会随章节换（落草/流寇/黑风/翻江/袖箭/残党/断魂/铁旗/血鹰/天王 共 50 个），
+# 但"是不是头目、拿什么兵器"这两条规律不变——所以按**关键字**归原型，比写 50 行表耐改。
+# 目前只有 mob_lou / mob_dog 两张试片（且 liblib 出的不是 Q版，见 assets/gen/char/mob_*），
+# 所以现在仍然会自动退回火柴人；等 Q版 敌人图进了 assets/char/，这里一行都不用改就会切过去。
+const ENEMY_RULES := [
+	{"kw": ["独臂", "独眼"], "key": "mob_one_arm"},
+	{"kw": ["舵主", "寨主", "堡主", "门主", "谷主", "崖主", "龙王", "魁首", "首领", "头目", "堂主", "副寨主", "死士", "悍将", "护法", "桩主", "精锐"], "key": "mob_chief"},
+	{"kw": ["犬", "狗", "狼", "兽"], "key": "mob_dog"},
+	{"kw": ["弩", "箭", "针", "镖"], "key": "mob_bow"},
+	{"kw": ["枪", "矛", "戟"], "key": "mob_spear"},
+	{"kw": ["钩"], "key": "mob_hook"},
+	{"kw": ["旗"], "key": "mob_flag"},
+	{"kw": ["刀", "刃"], "key": "mob_blade"},
+	{"kw": ["喽啰", "毛贼", "斥候", "门徒", "卒", "快手", "水鬼", "游骑", "暗手", "暗哨", "鬼影"], "key": "mob_lou"},
+]
+
+static func enemy_key(nm: String) -> String:
+	for row in ENEMY_RULES:
+		for k in (row["kw"] as Array):
+			if nm.find(str(k)) >= 0:
+				return str(row["key"])
+	return "mob_lou"
+
 # 敌方：暂时没有杂兵 Q版美术（出了自动切）
 static func make_enemy(role_id: String = "") -> Node2D:
 	if use_q_art and has_q_art(role_id):
