@@ -41,6 +41,22 @@ static func _stream(path: String) -> AudioStream:
 	_cache[path] = s
 	return s
 
+# v71d：**播放兜底**——用户问「音乐音效呢」，查出来是这个：
+#   音频设备/混音线程还没就绪时，AudioStreamPlayer.play() 会**静默失败**（不报错、playing 一直是 false）。
+#   探针实测：在 SceneTree._initialize() 里调 play_bgm → playing=false；改到 _process 里调 → playing=true。
+#   游戏里场景 _ready 一般晚于设备就绪，但**开场第一帧**这种边界不该赌，
+#   所以这里隔帧补两次：真在播就立刻返回，白等一帧的代价可以忽略。
+static func _ensure_playing(p: AudioStreamPlayer) -> void:
+	var ml := Engine.get_main_loop()
+	if not (ml is SceneTree):
+		return
+	for i in 3:
+		if not is_instance_valid(p) or p.playing:
+			return
+		await (ml as SceneTree).process_frame
+		if is_instance_valid(p) and not p.playing:
+			p.play()
+
 # ---------------- BGM ----------------
 
 static func play_bgm(key: String, fade := 1.2) -> void:
@@ -71,6 +87,7 @@ static func play_bgm(key: String, fade := 1.2) -> void:
 	newp.stream = s
 	newp.volume_db = -60.0
 	newp.play()
+	_ensure_playing(newp)     # v71d：设备没就绪时 play() 会静默失败，补一次
 	var tw := newp.create_tween()
 	tw.tween_property(newp, "volume_db", _bgm_db, fade)
 	if old.playing:
@@ -102,6 +119,7 @@ static func sfx(key: String, vol_db := -6.0, pitch := 1.0) -> void:
 	root.add_child(p)
 	p.finished.connect(p.queue_free)
 	p.play()
+	_ensure_playing(p)
 
 # 界面点击：统一走这一口（后面接"水滴墨扩散"特效时也挂这里）
 static func ui_click() -> void:

@@ -143,6 +143,38 @@ function cutout(rgba, w, h) {
       else for (const j of blobs[bi].members) rgba[j * 4 + 3] = 255;   // 连带小块也保住，只删碎屑
     }
   }
+  // v71b：**边缘颜色外扩**（治白雾）——用户："感觉像扣图"。
+  //   病根：贴着背景那圈像素，RGB 是"前景色混了白背景"，alpha 越小混得越白；
+  //   原来那步"反解"在 a 很小时是除法放大噪声，救不回来，所以最外圈还是白的。
+  //   做法：以 alpha>200 为"实体"，向外迭代 3 轮把实体颜色渗出去（**alpha 一律不动**），
+  //   于是那圈半透明像素带的是前景色，压在深色背景上不再泛白。
+  {
+    const solid = new Uint8Array(n);
+    for (let i = 0; i < n; i++) solid[i] = rgba[i * 4 + 3] > 200 ? 1 : 0;
+    for (let pass = 0; pass < 4; pass++) {
+      const fill = [];
+      for (let i = 0; i < n; i++) {
+        // ⚠ 关键：**全透明像素（a=0）也要填色**！
+        //   抠图只把 alpha 置 0、RGB 还留着原来的白背景；后面 promote 用 lanczos 缩放时，
+        //   插值会把那些"白的透明像素"混进边缘 → 白雾。第一版就是漏了这句，量了半天没变化。
+        if (solid[i]) continue;
+        const x = i % w, y = (i / w) | 0;
+        let r = 0, g = 0, b = 0, cnt = 0;
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+          const nx = x + dx, ny = y + dy;
+          if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+          const j = ny * w + nx;
+          if (!solid[j]) continue;
+          r += rgba[j * 4]; g += rgba[j * 4 + 1]; b += rgba[j * 4 + 2]; cnt++;
+        }
+        if (cnt) fill.push([i, Math.round(r / cnt), Math.round(g / cnt), Math.round(b / cnt)]);
+      }
+      for (const [i, r, g, b] of fill) {
+        rgba[i * 4] = r; rgba[i * 4 + 1] = g; rgba[i * 4 + 2] = b; solid[i] = 1;
+      }
+    }
+  }
+
   // 内容框
   let x0 = w, y0 = h, x1 = -1, y1 = -1;
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {

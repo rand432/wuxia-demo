@@ -1346,8 +1346,9 @@ func _spawn_fighters() -> void:
 		if bool(_e().get("boss", false)) and i == 0:
 			sc *= 1.15
 		en.scale = Vector2(-sc if ENEMY_FLIP else sc, sc)
+		# v71c：同 duel_battle——Q版 不套染色（保住原画配色，才跟主角一个画风）
 		var ecol: Array = f.get("color", [])
-		if ecol.size() >= 3:
+		if ecol.size() >= 3 and not bool(en.get("is_q_art")):
 			en.body_color = Color(float(ecol[0]), float(ecol[1]), float(ecol[2]))
 		var slot := _foe_slot_x(ex, i)
 		en.position = Vector2(slot + 200.0, _ground_y)

@@ -49,12 +49,15 @@ const ENEMY_KEYS = [
 ];
 // ⚠ 必须用**抠好的**那张：img2img 原图是白底，直接提升会在战斗里显示成白方块
 //   v2（多样性重制）优先：换底图 + 提高重绘幅度，让九个原型不再是同一张脸
-const ENEMY_SRC = ['_Q版_liblib_anime_v2_cut.png', '_Q版_liblib_anime_img2img_cut.png',
-  '_Q版_liblib_anime_cut.png', '_Q版_liblib_anime_v2.png', '_Q版_liblib_anime_img2img.png'];
+// v71：**明亮二次元**优先（用户定调"人物走干净整洁的二次元"）；水墨/写意那几版退成备用
+//   dogb = 恶犬专用（四足野兽版，只有 mob_dog 有这张，其他原型自动落到 anime2）
+const ENEMY_SRC = ['_Q版_liblib_anime2_dogb_cut.png', '_Q版_liblib_anime2_anime2_cut.png', '_Q版_liblib_anime_v2_cut.png',
+  '_Q版_liblib_anime_img2img_cut.png', '_Q版_liblib_anime_cut.png'];
 // 每个槽位按顺序找第一个存在的源文件（后面的是备选画风）
 const SLOTS = {
-  // v68：Q版 统一到水墨（ink1 优先）——原来那套彩色二次元 Q版 和敌人/场景不是一路
-  q: ['_Q版_liblib_xieyi_ink1_cut.png', '_Q版_glm_anime_cut.png'],
+  // v71（用户定调）：**人物回滚彩色二次元 Q版**——"q版二次元更干净整洁、更符合大众审美"；
+  //   UI/场景保持水墨。所以这里把 glm_anime 放回第一优先，ink1 退成备用。
+  q: ['_Q版_glm_anime_cut.png', '_Q版_liblib_xieyi_ink1_cut.png'],
   face: ['_头像_liblib_guofeng_cut.png', '_头像_glm_anime_cut.png'],
   full: ['_立绘_liblib_guofeng_cut.png', '_立绘_glm_ink_cut.png', '_立绘_glm_anime_cut.png'],
 };

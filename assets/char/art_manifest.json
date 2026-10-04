@@ -5,18 +5,18 @@
     "slots": {
       "q": {
         "file": "assets/char/player_q.png",
-        "from": "assets/gen/char/shaoxia/shaoxia_Q版_liblib_xieyi_ink1_cut.png",
-        "bytes": 218932
+        "from": "assets/gen/char/shaoxia/shaoxia_Q版_glm_anime_cut.png",
+        "bytes": 119378
       },
       "face": {
         "file": "assets/char/player_face.png",
         "from": "assets/gen/char/shaoxia/shaoxia_头像_liblib_guofeng_cut.png",
-        "bytes": 370168
+        "bytes": 371777
       },
       "full": {
         "file": "assets/char/player_full.png",
         "from": "assets/gen/char/shaoxia/shaoxia_立绘_liblib_guofeng_cut.png",
-        "bytes": 761190
+        "bytes": 766993
       }
     },
     "clip": {
@@ -31,18 +31,18 @@
     "slots": {
       "q": {
         "file": "assets/char/chen_shi_q.png",
-        "from": "assets/gen/char/chenshi/chenshi_Q版_liblib_xieyi_ink1_cut.png",
-        "bytes": 238419
+        "from": "assets/gen/char/chenshi/chenshi_Q版_glm_anime_cut.png",
+        "bytes": 150508
       },
       "face": {
         "file": "assets/char/chen_shi_face.png",
         "from": "assets/gen/char/chenshi/chenshi_头像_liblib_guofeng_cut.png",
-        "bytes": 360736
+        "bytes": 363770
       },
       "full": {
         "file": "assets/char/chen_shi_full.png",
         "from": "assets/gen/char/chenshi/chenshi_立绘_liblib_guofeng_cut.png",
-        "bytes": 779338
+        "bytes": 786430
       }
     },
     "clip": {
@@ -57,18 +57,18 @@
     "slots": {
       "q": {
         "file": "assets/char/qingluan_q.png",
-        "from": "assets/gen/char/qingluan/qingluan_Q版_liblib_xieyi_ink1_cut.png",
-        "bytes": 245814
+        "from": "assets/gen/char/qingluan/qingluan_Q版_glm_anime_cut.png",
+        "bytes": 154518
       },
       "face": {
         "file": "assets/char/qingluan_face.png",
         "from": "assets/gen/char/qingluan/qingluan_头像_liblib_guofeng_cut.png",
-        "bytes": 386510
+        "bytes": 388159
       },
       "full": {
         "file": "assets/char/qingluan_full.png",
         "from": "assets/gen/char/qingluan/qingluan_立绘_liblib_guofeng_cut.png",
-        "bytes": 902847
+        "bytes": 910201
       }
     },
     "clip": {
@@ -84,8 +84,8 @@
     "slots": {
       "q": {
         "file": "assets/char/mob_lou_q.png",
-        "from": "assets/gen/char/mob_lou/mob_lou_Q版_liblib_anime_v2_cut.png",
-        "bytes": 230535
+        "from": "assets/gen/char/mob_lou/mob_lou_Q版_liblib_anime2_anime2_cut.png",
+        "bytes": 178927
       }
     }
   },
@@ -96,8 +96,8 @@
     "slots": {
       "q": {
         "file": "assets/char/mob_blade_q.png",
-        "from": "assets/gen/char/mob_blade/mob_blade_Q版_liblib_anime_v2_cut.png",
-        "bytes": 225265
+        "from": "assets/gen/char/mob_blade/mob_blade_Q版_liblib_anime2_anime2_cut.png",
+        "bytes": 184764
       }
     }
   },
@@ -108,8 +108,8 @@
     "slots": {
       "q": {
         "file": "assets/char/mob_spear_q.png",
-        "from": "assets/gen/char/mob_spear/mob_spear_Q版_liblib_anime_v2_cut.png",
-        "bytes": 237626
+        "from": "assets/gen/char/mob_spear/mob_spear_Q版_liblib_anime2_anime2_cut.png",
+        "bytes": 184594
       }
     }
   },
@@ -120,8 +120,8 @@
     "slots": {
       "q": {
         "file": "assets/char/mob_bow_q.png",
-        "from": "assets/gen/char/mob_bow/mob_bow_Q版_liblib_anime_v2_cut.png",
-        "bytes": 232816
+        "from": "assets/gen/char/mob_bow/mob_bow_Q版_liblib_anime2_anime2_cut.png",
+        "bytes": 191015
       }
     }
   },
@@ -132,8 +132,8 @@
     "slots": {
       "q": {
         "file": "assets/char/mob_hook_q.png",
-        "from": "assets/gen/char/mob_hook/mob_hook_Q版_liblib_anime_v2_cut.png",
-        "bytes": 212948
+        "from": "assets/gen/char/mob_hook/mob_hook_Q版_liblib_anime2_anime2_cut.png",
+        "bytes": 214278
       }
     }
   },
@@ -144,8 +144,8 @@
     "slots": {
       "q": {
         "file": "assets/char/mob_flag_q.png",
-        "from": "assets/gen/char/mob_flag/mob_flag_Q版_liblib_anime_v2_cut.png",
-        "bytes": 201241
+        "from": "assets/gen/char/mob_flag/mob_flag_Q版_liblib_anime2_anime2_cut.png",
+        "bytes": 212926
       }
     }
   },
@@ -156,8 +156,8 @@
     "slots": {
       "q": {
         "file": "assets/char/mob_chief_q.png",
-        "from": "assets/gen/char/mob_chief/mob_chief_Q版_liblib_anime_v2_cut.png",
-        "bytes": 206856
+        "from": "assets/gen/char/mob_chief/mob_chief_Q版_liblib_anime2_anime2_cut.png",
+        "bytes": 197889
       }
     }
   },
@@ -168,8 +168,8 @@
     "slots": {
       "q": {
         "file": "assets/char/mob_one_arm_q.png",
-        "from": "assets/gen/char/mob_one_arm/mob_one_arm_Q版_liblib_anime_v2_cut.png",
-        "bytes": 225590
+        "from": "assets/gen/char/mob_one_arm/mob_one_arm_Q版_liblib_anime2_anime2_cut.png",
+        "bytes": 206231
       }
     }
   },
@@ -180,8 +180,8 @@
     "slots": {
       "q": {
         "file": "assets/char/mob_dog_q.png",
-        "from": "assets/gen/char/mob_dog/mob_dog_Q版_liblib_anime_img2img_cut.png",
-        "bytes": 223190
+        "from": "assets/gen/char/mob_dog/mob_dog_Q版_liblib_anime2_dogb_cut.png",
+        "bytes": 190635
       }
     }
   }

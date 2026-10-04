@@ -29,6 +29,7 @@ const OW := 2.0            # 武器墨边宽
 const OW_W := 1.2
 
 # 装备：sword / dual / dagger / spear / anqi(暗器，原"棍") / fist
+var is_q_art := false        # v71c：火柴人（战斗里可以套染色区分敌我）
 var weapon_type := "sword"
 var hat_type := "douli"       # douli / toujin / none
 var cape_type := "short"      # short / long / none

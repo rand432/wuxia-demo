@@ -31,6 +31,7 @@ const CH_SWAY := 4   # 横向偏移（像素）
 var fit_height := 148.0      # 目标身高（脚底到头顶，像素）——火柴人约 140~150
 var fit_width_cap := 132.0   # 宽度上限：陈石扛着长枪的图很宽，不压一下会把旁边的人整个糊住
 var _base_scale := 0.15      # 内容 → 屏幕 的缩放（由 _relayout() 按 bbox 算）
+var is_q_art := true         # v71c：我是纸片人（战斗里**不要**给我套染色——那是给火柴人区分用的）
 var role := "shaoxia"        # 角色 id → assets/gen/char/<role>/<role>_Q版_*.png
 var art_path := ""           # 显式指定图（优先于 role）
 var body_color := Color(1, 1, 1)   # 敌方用来染色（乘算 tint）
@@ -110,6 +111,34 @@ var _last_pos := Vector2.ZERO
 var _walk_t := 0.0
 var _walk_amt := 0.0
 
+# ============================================================
+# v70b：**火柴人同款公开接口**（游历的走路小人会直接写 tgt[0..8]）
+#   事故：走路小人早就换成 Q版 了，可 journey_stage._pose_one() 还在写火柴人的
+#   9 个关节 → 每帧 "Invalid access to property 'tgt'" → 一进游历就卡死。
+#   这里不再只补一个字段，而是把调用方会摸的都补齐（tgt/cur/vel/spring_*/hip/sword_drawn），
+#   并把 9 个关节**翻译成纸片人的动作**（起伏/前倾/摆），这样走路小人真的会迈步。
+# ============================================================
+const J_TORSO := 0
+const J_ARM_FU := 1
+const J_ARM_FL := 2
+const J_ARM_BU := 3
+const J_ARM_BL := 4
+const J_LEG_FU := 5
+const J_LEG_FL := 6
+const J_LEG_BU := 7
+const J_LEG_BL := 8
+# 火柴人的静止姿势（对表 stick_fighter 的待机值）——用来算"偏离多少"
+const J_REST := [86.0, -72.0, -118.0, -110.0, -95.0, -74.0, -84.0, -74.0, -84.0]
+
+var tgt: Array[float] = [86.0, -72.0, -118.0, -110.0, -95.0, -74.0, -84.0, -74.0, -84.0]
+var cur: Array[float] = [86.0, -72.0, -118.0, -110.0, -95.0, -74.0, -84.0, -74.0, -84.0]
+var vel: Array[float] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+var spring_k := 380.0
+var spring_d := 39.0
+var vel_cap := 1400.0
+var hip := Vector2(0, -68)
+var sword_drawn := false
+
 var _tgt := [0.0, 0.0, 1.0, 1.0, 0.0]
 var _cur := [0.0, 0.0, 1.0, 1.0, 0.0]
 var _vel := [0.0, 0.0, 0.0, 0.0, 0.0]
@@ -133,6 +162,22 @@ void fragment() {
 	c.a *= tint.a * alpha;
 	COLOR = c;
 }"""
+
+# 走路小人专用：把 9 关节的偏离量翻译成"起伏 + 前倾 + 侧摆"
+#   腿摆动 → 上下起伏（迈步的弹跳感）；躯干 → 前倾；手臂 → 侧摆
+func _walk_apply() -> void:
+	if _sprite == null or tgt.size() < 9:
+		return
+	var leg := (float(tgt[J_LEG_FU]) + float(tgt[J_LEG_BU])) * 0.5 - (J_REST[J_LEG_FU] + J_REST[J_LEG_BU]) * 0.5
+	var arm := (float(tgt[J_ARM_FU]) + float(tgt[J_ARM_BU])) * 0.5 - (J_REST[J_ARM_FU] + J_REST[J_ARM_BU]) * 0.5
+	var torso := float(tgt[J_TORSO]) - float(J_REST[J_TORSO])
+	# 幅度都很小（纸片人不比火柴人，摆大了像在抽）
+	_sprite.position = Vector2(0.0, -absf(leg) * 0.16)
+	_sprite.rotation = deg_to_rad(clampf(torso * 1.6 + arm * 0.10, -14.0, 14.0) * _dir)
+	# cur 也跟着写回去，方便 twitch_recorder 之类的调试口读
+	for i in 9:
+		if i < cur.size():
+			cur[i] = float(tgt[i])
 
 func _init() -> void:
 	move_db = MoveDb.build()   # 招式表：与火柴人同源（时长口径一致，战斗才不用改）
@@ -303,9 +348,20 @@ func push_move_x(to_x: float, dur: float, trans: Tween.TransitionType = Tween.TR
 	return push_move_to(Vector2(to_x, position.y), dur, trans, ease_t)
 
 func push_move_to(to_p: Vector2, dur: float, trans: Tween.TransitionType = Tween.TRANS_QUAD, ease_t: Tween.EaseType = Tween.EASE_OUT) -> Tween:
+	# ⚠ v71c（用户报的「战斗卡死 / Cannot call method 'set_trans' on a null value」）：
+	#   这是**火柴人踩过、并且在 stick_fighter 里已经修好**的老坑——
+	#   当 tween 已经跑完／已被 kill 时，tween_property() 会返回 null（Godot 先警告
+	#   "Use stop() first."），紧跟其后的链式 .set_trans(...) 就当场炸，调用方函数中断 →
+	#   游历／决斗整个卡死。我写 Q版 时把**没修的那个写法**抄了过来，所以又犯一遍。
+	#   正确写法：先拿 PropertyTweener、判空；空就重开一条 tween 再来一次。
 	if _move_tw == null or not _move_tw.is_valid():
 		_move_tw = create_tween()
-	_move_tw.tween_property(self, "position", to_p, maxf(dur, 0.01)).set_trans(trans).set_ease(ease_t)
+	var pt = _move_tw.tween_property(self, "position", to_p, maxf(dur, 0.01))
+	if pt == null:
+		_move_tw = create_tween()
+		pt = _move_tw.tween_property(self, "position", to_p, maxf(dur, 0.01))
+	if pt != null:
+		pt.set_trans(trans).set_ease(ease_t)
 	return _move_tw
 
 func stop_moves() -> void:
@@ -596,6 +652,8 @@ func _process(delta: float) -> void:
 		_integrate(h)
 		left -= h
 	_apply_visual()
+	# v70b：走路小人（游历）写的是火柴人那套 9 关节——翻译成纸片人的起伏/前倾
+	_walk_apply()
 
 func _integrate(h: float) -> void:
 	var sp := maxf(0.25, move_speed)

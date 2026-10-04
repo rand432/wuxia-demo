@@ -1188,8 +1188,10 @@ func _make_foe_node(i: int) -> void:
 	var f: Dictionary = _foes[i]
 	# v65：按敌人名字取"Q版原型键"（有图就用 Q版，没图工厂自动退回火柴人）
 	var n := ActorFactory.make_enemy(ActorFactory.enemy_key(str(f.get("name", ""))))
+	# v71c：染色只给火柴人用（那时候是没脸的线条人，靠颜色区分敌我）。
+	#   Q版 是画好的图，再乘一层色会发灰发白、跟主角不是一个画风——用户一眼就看出来了。
 	var wcol: Array = f.get("color", [0.5, 0.3, 0.28])
-	if wcol.size() >= 3:
+	if wcol.size() >= 3 and not bool(n.get("is_q_art")):
 		n.body_color = Color(float(wcol[0]), float(wcol[1]), float(wcol[2]))
 	n.set_equipment(str(f.get("weapon", "dagger")), str(f.get("hat", "toujin")), str(f.get("cape", "none")))
 	var scl := maxf(0.5, float(f.get("scale", 1.0)))
@@ -1208,9 +1210,19 @@ func _foe_slot_pos(i: int) -> Vector2:
 
 func _enter_foes() -> void:
 	var tw := create_tween()
+	var added := 0
 	for i in _foe_nodes.size():
 		var n = _foe_nodes[i]
-		tw.parallel().tween_property(n, "position", _foe_slot_pos(i), 0.55).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		if n == null or not is_instance_valid(n):
+			continue
+		# v71c：tween_property 可能返回 null（节点已释放／tween 已结束），
+		#   链式 .set_trans() 会当场炸掉整个入场流程——「战斗卡死」的来源之一
+		var pt = tw.parallel().tween_property(n, "position", _foe_slot_pos(i), 0.55)
+		if pt != null:
+			pt.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+			added += 1
+	if added == 0:
+		return   # 一条都没加上，await 会永远等下去
 	await tw.finished
 
 # 聚焦到某个敌人（所有 _foe_* 访问器都跟着它走）。
@@ -2242,13 +2254,19 @@ func run(state, player: Node2D, fx: Control, node: Dictionary, foe_first := fals
 	await _enter_foes()
 	# ㊿：我方入场——三个人各走各的位（单人时就是原来那一个，一模一样）
 	var pt := create_tween()
+	var added := 0
 	for i in _allies.size():
 		var an = _ally_nodes[i] if i < _ally_nodes.size() else null
 		if an == null or not is_instance_valid(an):
 			continue
 		var ab: Vector2 = (_allies[i] as Dictionary).get("base", _p_base)
-		pt.parallel().tween_property(an, "position", ab, 0.45).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	await pt.finished
+		# v71c：同上——判空后再链式设置，并记数，防止 await 空等
+		var ptp = pt.parallel().tween_property(an, "position", ab, 0.45)
+		if ptp != null:
+			ptp.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+			added += 1
+	if added > 0:
+		await pt.finished
 
 	_root.visible = true
 	if _info_btn != null:
