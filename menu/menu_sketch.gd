@@ -188,6 +188,7 @@ var _demo_done := false
 var _demo_clock := 0.0
 var _tag_rects: Array = []
 var _panel_open := false
+var _actors = null            # v93g：人物层（村景之上、UI 之下，等比缩放）
 var _tag_notice := -1
 var _story_kind := ""
 var _story_page := -1
@@ -562,6 +563,13 @@ func _ready() -> void:
 	_hud = HudLayer.new()
 	add_child(_scroll)
 	add_child(_village)
+	# v93g（用户："你是不是应该把画面分层？"）：**人物单独一层**。
+	#   原来骨骼是塞在村景层里的——村景层为了让画心铺满竖屏用了**非等比**缩放（sy=1.6625），
+	#   人物跟着被拉、被推，还跟面板抢 z 序。现在：村景 → **人物** → 远山 → 特效 → HUD → 记号 → 面板，
+	#   人物层等比、开面板就整层藏起来（"点其他界面他还会出现"一并解决）。
+	_actors = Node2D.new()
+	add_child(_actors)
+	_village.actor_layer = _actors
 	add_child(_mount)
 	_fx_root = Node2D.new()
 	add_child(_fx_root)
@@ -1348,6 +1356,9 @@ func _apply_layer_transforms() -> void:
 				vt = t0
 				break
 	_village.dange_tender = vt
+	_actors.position = _scroll.position
+	_actors.scale = _scroll.scale
+	_actors.visible = not _any_panel_open() and _story_page < 0   # 开面板/看剧情就整层收起
 	_fx_root.position = _scroll.position
 	_fx_root.scale = _scroll.scale
 	_mount.position = Vector2(o.x - _cam * z, o.y)

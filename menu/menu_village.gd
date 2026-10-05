@@ -54,6 +54,7 @@ var sun_joined := false    # 青隼入队没（menu_sketch 喂：GameState.pet_h
 var qingluan_joined := false   # v93：苏青鸾入队没（她也要在村里活动）
 var _vg: Array = []        # v93：村里活人的运行态（见 _villagers）
 var _rigs := {}            # v93：role_id → PaperRig（有骨骼就用骨骼，没有才用帧序列/静图）
+var actor_layer: Node2D = null   # v93g：人物层（由 menu_sketch 注入；没注入就退回画在本层）
 # 角色 → 骨骼部件前缀（目前只切了少侠那一套；其余人自动退回帧序列）
 const RIG_OF := {"player": "shaoxia", "chen_shi": "chenshi", "qingluan": "qingluan"}
 var _t_last := 0.0
@@ -1303,7 +1304,8 @@ func _villager_rig(st: Dictionary, cfg: Dictionary) -> void:
 	if not _rigs.has(rid):
 		var rg := PaperRig.new()
 		if rg.setup(pre, 92.0):
-			add_child(rg)
+			var parent: Node = actor_layer if actor_layer != null else self
+			parent.add_child(rg)
 			_rigs[rid] = rg
 		else:
 			_rigs[rid] = null

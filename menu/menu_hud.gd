@@ -83,7 +83,7 @@ func _draw_tags() -> void:
 		var txt := str(Conf.TAGN[i])
 		if i == 3:
 			txt = _pet_label()   # v7：原「设置」格——现在直画宠物字样（设置以后并进「石桌」）
-		_draw_tag(host._tag_rects[i] as Rect2, txt, i == 0, host._pressed_tag == i)
+		_draw_tag(host._tag_rects[i] as Rect2, txt, i == 0, host._pressed_tag == i, i)
 		if i == Conf.TAG_CHEST:
 			_draw_chest_badge(host._tag_rects[i] as Rect2)
 		if i == host._tag_notice:
@@ -118,25 +118,76 @@ func _draw_chest_badge(rc: Rect2) -> void:
 		draw_circle(Vector2(bx + w + 2.0, by - 1.0), 7.0, Conf.SEAL_C)
 		draw_string(font, Vector2(bx + w - 6.0, by + 3.0), str(mini(n, 99)), HORIZONTAL_ALIGNMENT_CENTER, 16.0, 12, Color(0.98, 0.95, 0.90, 0.96))
 
-func _draw_tag(rc: Rect2, txt: String, primary: bool, pressed: bool) -> void:
+# v93g（用户："底部那排按钮也要换 ui"）：**整套重画**。
+#   原来是"圆角纸片 + 一行字"，看着像网页按钮。现在按**木牌/签**来画：
+#     落影 → 牌面（上亮下暗，像有厚度） → 双线边（主格再套一道朱红内框）
+#     → 顶上一个小墨字图标（剑/人/囊/爪/箱/册） → 底下一行字。
+#   ⚠ 命中区（_tag_rects）**一个像素都没动**，只是画法变了，按钮行为不受影响。
+func _draw_tag(rc: Rect2, txt: String, primary: bool, pressed: bool, idx: int = -1) -> void:
 	var off := 3.0 if pressed else 0.0
 	var r := Rect2(rc.position + Vector2(0, off), rc.size)
-	var base := Conf.CHIP_C
-	if primary:
-		base = Conf.CHIP_P
+	var base: Color = Conf.CHIP_P if primary else Conf.CHIP_C
 	if pressed:
-		base = base.darkened(0.07)
-	draw_colored_polygon(Draw.round_poly(r, 8.0), base)
-	var bp := Draw.round_poly(r, 8.0)
+		base = base.darkened(0.08)
+	# ① 落影（按下去就收掉，才有"按进去"的手感）
+	if not pressed:
+		draw_colored_polygon(Draw.round_poly(Rect2(r.position + Vector2(0, 3.5), r.size), 10.0), Color(0.06, 0.05, 0.05, 0.20))
+	# ② 牌面：上亮下暗，做出一点厚度
+	draw_colored_polygon(Draw.round_poly(r, 10.0), base)
+	draw_colored_polygon(Draw.round_poly(Rect2(r.position + Vector2(2.0, 2.0), r.size - Vector2(4.0, 4.0)), 9.0), base.lightened(0.06))
+	draw_colored_polygon(Draw.round_poly(Rect2(r.position + Vector2(4.0, r.size.y * 0.52), Vector2(r.size.x - 8.0, r.size.y * 0.46)), 8.0), base.darkened(0.05))
+	# ③ 边线：外墨线；主格再套一道朱红细框
+	var bp := Draw.round_poly(r, 10.0)
 	bp.append(bp[0])
-	draw_polyline(bp, Color(Conf.INK.r, Conf.INK.g, Conf.INK.b, 0.35), 1.5)
-	# v63（用户："导航那排要不要也调大一点"）：要 ✓ 26/22/17 → 28/24/19
-	var fs := 28 if primary else 24
-	if txt.length() > 3:
-		fs = 19   # 宠物·幼狐 这类五六字：缩小免得顶格
-	draw_string(font, Vector2(r.position.x, r.position.y + r.size.y * 0.5 + float(fs) * 0.36), txt, HORIZONTAL_ALIGNMENT_CENTER, r.size.x, fs, Color(Conf.INK.r, Conf.INK.g, Conf.INK.b, 0.82))
+	draw_polyline(bp, Color(Conf.INK.r, Conf.INK.g, Conf.INK.b, 0.42), 1.6)
 	if primary:
-		draw_colored_polygon(Draw.round_poly(Rect2(r.end.x - 33.0, r.position.y + 11.0, 15.0, 15.0), 3.0), Color(Conf.SEAL_C.r, Conf.SEAL_C.g, Conf.SEAL_C.b, 0.80))
+		var bp2 := Draw.round_poly(Rect2(r.position + Vector2(3.5, 3.5), r.size - Vector2(7.0, 7.0)), 8.0)
+		bp2.append(bp2[0])
+		draw_polyline(bp2, Color(Conf.SEAL_C.r, Conf.SEAL_C.g, Conf.SEAL_C.b, 0.50), 1.3)
+	# ④ 图标：画在字上面
+	var ic: Color = Color(Conf.INK.r, Conf.INK.g, Conf.INK.b, 0.74)
+	if primary:
+		ic = Color(Conf.SEAL_C.r, Conf.SEAL_C.g, Conf.SEAL_C.b, 0.88)
+	var cx := r.position.x + r.size.x * 0.5
+	draw_set_transform(Vector2(cx, r.position.y + 27.0), 0.0, Vector2.ONE)
+	_draw_tag_icon(idx, Vector2.ZERO, 12.0, ic)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	# ⑤ 文字：往下压，给图标让位
+	var fs := 25 if primary else 22
+	if txt.length() > 3:
+		fs = 17     # 宠物·幼狐 这类五六字
+	draw_string(font, Vector2(r.position.x, r.position.y + r.size.y - 11.0), txt, HORIZONTAL_ALIGNMENT_CENTER, r.size.x, fs, Color(Conf.INK.r, Conf.INK.g, Conf.INK.b, 0.86))
+
+# 六个格子的图标：全部用最少的线条画，走"墨"的味道（不引美术资源，随时能改）
+func _draw_tag_icon(i: int, c: Vector2, s: float, col: Color) -> void:
+	match i:
+		0:   # 开始历练 = 剑
+			draw_line(c + Vector2(-s * 0.85, s * 0.85), c + Vector2(s * 0.62, -s * 0.72), col, 2.2)
+			draw_line(c + Vector2(-s * 0.5, s * 0.12), c + Vector2(s * 0.05, s * 0.68), col, 1.8)   # 护手
+			draw_circle(c + Vector2(-s * 0.95, s * 0.95), 2.0, col)
+		1:   # 弟子 = 人
+			draw_circle(c + Vector2(0.0, -s * 0.5), s * 0.34, col)
+			draw_arc(c + Vector2(0.0, s * 0.85), s * 0.66, PI, TAU, 18, col, 2.3)
+		2:   # 行囊 = 包袱
+			draw_arc(c + Vector2(0.0, -s * 0.22), s * 0.46, PI * 1.12, PI * 1.88, 14, col, 2.0)
+			var b := Rect2(c + Vector2(-s * 0.66, -s * 0.16), Vector2(s * 1.32, s * 0.98))
+			draw_rect(b, col, false, 2.2)
+			draw_line(c + Vector2(-s * 0.66, s * 0.22), c + Vector2(s * 0.66, s * 0.22), col, 1.5)
+		3:   # 宠物 = 爪印
+			draw_circle(c + Vector2(0.0, s * 0.28), s * 0.42, col)
+			for k in 3:
+				draw_circle(c + Vector2(-s * 0.55 + float(k) * s * 0.55, -s * 0.42), s * 0.19, col)
+		4:   # 宝箱 = 箱子
+			var bw := s * 1.7
+			var bh := s * 1.05
+			var br := Rect2(c + Vector2(-bw * 0.5, -bh * 0.5), Vector2(bw, bh))
+			draw_rect(br, col, false, 2.2)
+			draw_line(c + Vector2(-bw * 0.5, -bh * 0.5 + bh * 0.42), c + Vector2(bw * 0.5, -bh * 0.5 + bh * 0.42), col, 1.8)
+			draw_rect(Rect2(c + Vector2(-s * 0.16, -bh * 0.5 + bh * 0.34), Vector2(s * 0.32, s * 0.34)), col, true)
+		5:   # 阅历 = 卷册
+			draw_rect(Rect2(c + Vector2(-s * 0.75, -s * 0.6), Vector2(s * 1.5, s * 1.2)), col, false, 2.2)
+			draw_line(c + Vector2(-s * 0.2, -s * 0.6), c + Vector2(-s * 0.2, s * 0.6), col, 1.5)
+			draw_line(c + Vector2(s * 0.2, -s * 0.6), c + Vector2(s * 0.2, s * 0.6), col, 1.5)
 
 # 弟子小板（点按钮开，点任意处关）
 func _draw_panel() -> void:
