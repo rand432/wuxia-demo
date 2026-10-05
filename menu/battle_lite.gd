@@ -171,6 +171,7 @@ var _timer := 0.0
 var _turn := 0
 var _act_order: Array = []   # ㊿：本轮出手顺序（一轮算一次；见 _act()）
 var _over := false
+var _burst_until := 0        # v93i：爆物动画演到什么时候（结算大字要等它）
 var _win := false
 var _done_sent := false
 var _auto_t := -1.0
@@ -3443,30 +3444,66 @@ func _center_move(txt: String, col: Color) -> void:
 #   敌人倒下时，把这一场会掉的东西具象成四块小牌子：先从地上"砰"地弹开（带一点回弹），
 #   停一拍让人看清，再各自划一道弧**飞向右下角的行囊**，进包即消失。
 #   纯演出：数值结算一个字没动（照旧走 _emit_done / 村口的清缴账）。
+# v93i（用户："还有爆东西的动画没有"）：**整套重做**。
+#   原来只是四行 16px 小字、又小又淡，贴在花花的背景上根本看不见；
+#   更要命的是**胜利大字"胜"立刻压上来**，把爆物盖得严严实实（探针连拍抓到的就是这样）。
+#   现在：① 先炸一圈金光；② 六枚带纸底的"战利品签"按弧线弹起、停一下、再飞进右下角；
+#   ③ 出金币音；④ 结算大字等爆物演完再出（见 _end）。
 func _loot_burst(at: Vector2) -> void:
 	var items := [
-		{"t": "文钱", "c": Color(0.72, 0.58, 0.22)},
+		{"t": "文钱", "c": Color(0.74, 0.58, 0.20)},
 		{"t": "银两", "c": Color(0.80, 0.78, 0.72)},
-		{"t": "经验", "c": Color(0.36, 0.62, 0.44)},
+		{"t": "经验", "c": Color(0.34, 0.60, 0.42)},
+		{"t": "材料", "c": Color(0.42, 0.50, 0.62)},
+		{"t": "碎银", "c": Color(0.64, 0.60, 0.50)},
 		{"t": "道具", "c": Color(0.62, 0.36, 0.30)},
 	]
+	Audio.sfx("coin", -7.0, 1.05)
+	_fx("hit", at, GOLD, 0.45, 54.0)          # 金光炸一下
+	_burst_until = Time.get_ticks_msec() + 900
+	var vp := get_viewport_rect().size
+	var corner := Vector2(vp.x - 132.0, vp.y - 168.0)
 	for i in items.size():
 		var it: Dictionary = items[i]
-		var lb := _label(str(it["t"]), 16, it["c"])
-		lb.size = Vector2(60, 24)
-		lb.position = at
-		add_child(lb)
-		var dx := (float(i) - 1.5) * 28.0
-		var rise := 44.0 + float(i % 2) * 14.0
-		var tw := lb.create_tween()
+		var chip := _loot_chip(str(it["t"]), it["c"])
+		chip.position = at - Vector2(34.0, 14.0)
+		chip.modulate.a = 0.0
+		add_child(chip)
+		var dx := (float(i) - 2.5) * 40.0
+		var rise := 52.0 + float(i % 3) * 22.0
+		var tw := chip.create_tween()
 		tw.set_parallel(true)
-		tw.tween_property(lb, "position", at + Vector2(dx, -rise), 0.30).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-		tw.chain().tween_interval(0.24)
-		# ⚠ 本控件 size 常是 (0,0)（见 _build_card_rows 那段说明）——问视口才靠得住
-		var vp := get_viewport_rect().size
-		tw.chain().tween_property(lb, "position", Vector2(vp.x - 96.0, vp.y - 84.0), 0.44).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
-		tw.chain().tween_property(lb, "modulate:a", 0.0, 0.12)
-		tw.chain().tween_callback(lb.queue_free)
+		# 弹起（先亮、后升，BACK 有一点回弹）
+		tw.tween_property(chip, "modulate:a", 1.0, 0.12)
+		tw.tween_property(chip, "position:x", at.x + dx - 34.0, 0.34).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		tw.tween_property(chip, "position:y", at.y - rise, 0.34).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		# 停一下（这里最容易被玩家看清）
+		tw.chain().tween_interval(0.34 + 0.05 * float(i))
+		# 飞进右下角（结算/回村那一片）并淡出
+		tw.chain().tween_property(chip, "position", corner + Vector2(0.0, -float(i) * 6.0), 0.46).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
+		tw.chain().tween_property(chip, "modulate:a", 0.0, 0.18)
+		tw.chain().tween_callback(chip.queue_free)
+
+# 战利品签：纸底 + 墨框 + 彩色字（16→18 号，外加一点描边感的内衬）
+func _loot_chip(txt: String, col: Color) -> Control:
+	var box := Panel.new()
+	box.size = Vector2(68.0, 30.0)
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.945, 0.925, 0.870, 0.96)
+	sb.set_corner_radius_all(8)
+	sb.border_color = Color(0.28, 0.24, 0.20, 0.55)
+	sb.set_border_width_all(1.4)
+	sb.shadow_color = Color(0.06, 0.05, 0.05, 0.26)
+	sb.shadow_size = 3
+	box.add_theme_stylebox_override("panel", sb)
+	var lb := _label(txt, 18, col)
+	lb.size = Vector2(68.0, 30.0)
+	lb.position = Vector2(0.0, 4.0)
+	lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(lb)
+	return box
 
 func _float_at(pos: Vector2, txt: String, col: Color, fs: int, elem := "") -> void:
 	var node: Control = UiKit.elem_number_row(txt, col, elem, fs)
@@ -3489,9 +3526,17 @@ func _push(lines: Array) -> void:
 
 func _end(win: bool) -> void:
 	Audio.play_bgm("bgm_menu", 1.6)   # v65：打完回主界面 BGM
+	# v93i：**爆物还在演就别急着盖大字**——原来"胜"立刻出来，把爆物压得一点都看不见
 	Audio.sfx("win" if win else "lose", -6.0)   # v78：胜负音
+	# v93i：**爆物演完再打书法**——原来"胜"的大字（calligraphy）立刻压上来，正好盖住爆物
+	var wait_ms2 := _burst_until - Time.get_ticks_msec()
 	if win:
-		_calligraphy("done", 1.1)     # v79：胜利打书法「任务完成」（素材里的那三条红字之一）
+		if wait_ms2 > 120:
+			var ctw := create_tween()
+			ctw.tween_interval(float(wait_ms2) / 1000.0 * 0.75)
+			ctw.tween_callback(func(): _calligraphy("done", 1.1))
+		else:
+			_calligraphy("done", 1.1)     # v79：胜利打书法「任务完成」（素材里的那三条红字之一）
 	if _over:
 		return
 	_over = true
@@ -3502,7 +3547,13 @@ func _end(win: bool) -> void:
 	_close_info()
 	_result_lb.text = "胜" if win else "败"
 	_result_lb.add_theme_color_override("font_color", SEAL if win else Color(0.35, 0.33, 0.34, 0.90))
-	_result_lb.visible = true
+	var wait_ms := _burst_until - Time.get_ticks_msec()
+	if wait_ms > 120:
+		var btw := create_tween()
+		btw.tween_interval(float(wait_ms) / 1000.0)
+		btw.tween_callback(func(): _result_lb.visible = true)
+	else:
+		_result_lb.visible = true
 	if win:
 		_fx("hit", Vector2(_enemy_base_x(), _ground_y - 92.0), GOLD, 0.55, 64.0)
 		_shake(10.0)

@@ -14,6 +14,7 @@ extends Control
 
 const Buffs := preload("res://shared/data_buffs.gd")
 const UiKit := preload("res://shared/ui_kit.gd")
+const UICard := preload("res://shared/ui_card.gd")   # v93j：牌 / 签 两种卡面
 
 # ㊿：命数签页摆哪几桩。前三桩＝往日路上的特殊事件（横财/翻财/血路），
 #   后五桩是出征屏那张"选一卡"里的其余命数——两边口径现在对齐了
@@ -99,10 +100,17 @@ func _build_shop() -> void:
 		# ㊿：**点卡面＝看详情，不再直接买**。
 		#   以前整张卡就是"买"按钮，想先看看说明都不行（一碰就花钱）。
 		#   现在拆成两块：左边卡面看详情，右边［请这张］才花钱。
-		var card := UiKit.make_button(_body, Vector2(30, oy), Vector2(476, 150), txt, 21)
-		# v54：字放大之后，长一点的说明在卡面上会横着顶出去——让它自动换行（卡高 150 放得下三行）
-		card.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		# v93j（用户："卡组…需要做成牌的样子"）：**画成一张牌**（落影/纸面/内框/题名带/右下角小印）
+		var card := UICard.Card.new()
+		card.title = "『" + Buffs.title_of(bid) + "』"
+		card.desc = str(b.get("desc", ""))
+		card.tail = str(price) + "文"
+		card.accent = UiKit.SEAL if _is_excl(bid) else Color(0.36, 0.42, 0.52)
+		card.note = ("专属 · " + Buffs.owner_cn(bid) + "专用 · 每趟一张") if _is_excl(bid) else ""
+		card.position = Vector2(30, oy)
+		card.size = Vector2(476, 150)
 		card.pressed.connect(_open_detail.bind(bid))
+		_body.add_child(card)
 		var buy := UiKit.make_button(_body, Vector2(514, oy), Vector2(136, 150), "请这张\n" + str(price) + " 文", 21)
 		buy.disabled = _state.money < price
 		buy.pressed.connect(_on_buy.bind(i))
@@ -197,9 +205,15 @@ func _build_mine() -> void:
 		if int(a.get("n", 1)) > 1 and _capped(bid):
 			lbl += "（多张只算一份）"
 		lbl += "\n" + str(b.get("desc", ""))
-		var btn := UiKit.make_button(list, Vector2.ZERO, Vector2(596, 100), lbl, 20)
-		btn.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART   # v54：允许换行，长说明不再横着顶出去
-		# 进了 VBoxContainer 之后位置/尺寸由容器定，这里只报"至少多高"（跟丹方行一个写法）
+		# v93j：同样是**牌**（进 VBoxContainer 的，位置尺寸由容器定，只报最小高）
+		var btn := UICard.Card.new()
+		var ttl := "『" + Buffs.title_of(bid) + "』"
+		if int(a.get("n", 1)) > 1:
+			ttl += " ×" + str(int(a.get("n", 1)))
+		btn.title = ttl
+		btn.desc = str(b.get("desc", ""))
+		btn.tail = "×" + str(int(a.get("n", 1))) if int(a.get("n", 1)) > 1 else "已入"
+		btn.note = "多张只算一份" if (int(a.get("n", 1)) > 1 and _capped(bid)) else ""
 		btn.custom_minimum_size = Vector2(0, 100)
 		btn.pressed.connect(_open_detail.bind(bid))
 		shown += 1
@@ -244,15 +258,14 @@ func _build_fate() -> void:
 		var bid := "fate_" + fid
 		var b: Dictionary = Buffs.of(bid)
 		var nm := str(b.get("name", bid))
-		var btn := UiKit.make_button(flist, Vector2.ZERO, Vector2(600, 132), "", 21)
-		# v54：同上——命数签的说明更长，必须允许换行
-		btn.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		# v93j（用户：签需要做成签的样子）：**画成一支签**——竹木牌身 + 木纹 + 顶上红帽 + 竖排名字
+		var btn := UICard.Slip.new()
+		btn.title = nm
+		btn.desc = str(b.get("desc", ""))
 		btn.custom_minimum_size = Vector2(0, 132)
 		if _own_fate(fid):
-			UiKit.set_btn_text(btn, "『" + nm + "』　已接（本趟）\n" + str(b.get("desc", "")))
 			btn.disabled = true
 		else:
-			UiKit.set_btn_text(btn, "请『" + nm + "』\n" + str(b.get("desc", "")))
 			btn.pressed.connect(_take_fate.bind(fid))
 			left_n += 1
 

@@ -85,6 +85,15 @@ class ChestArt extends Control:
 	func shake_for(sec: float) -> void:
 		shake_t = sec
 
+	# v93k：**箱子用的品级染色**（内层类看不到外层的常量，所以这里再声明一份）
+	const CHEST_TINT := [
+		Color(1.00, 0.94, 0.84),
+		Color(0.86, 0.91, 1.00),
+		Color(1.00, 0.86, 0.46),
+		Color(0.74, 1.00, 0.86),
+		Color(1.00, 0.74, 0.62),
+	]
+
 	func tier_col() -> Color:
 		var cols: Array = [
 			Color(0.45, 0.38, 0.30), Color(0.42, 0.44, 0.50), Color(0.70, 0.55, 0.20),
@@ -108,7 +117,25 @@ class ChestArt extends Control:
 			var sh := 0.0
 			if shake_t > 0.0:
 				sh = sin(shake_t * 48.0) * 3.2
-			draw_texture_rect(tex, Rect2((w - tw) * 0.5 + sh, h - th, tw, th), false, Color(1, 1, 1, 1))
+			# v93k（用户：宝箱要做颜色分辨啊）：**箱子本身按品级染色**
+			#   ① 玉/龙档加一圈外晕；② 贴图乘品级色（墨线仍压得住）；
+			#   ③ 箱腰一道品级带；④ 正面一枚品级珠（高档会反光）。
+			var ti := clampi(tier, 0, CHEST_TINT.size() - 1)
+			var tc: Color = TIER_COL[ti]
+			var rect := Rect2((w - tw) * 0.5 + sh, h - th, tw, th)
+			if ti >= 3:
+				var pulse := 0.5 + 0.5 * sin(Time.get_ticks_msec() * 0.004)
+				draw_circle(Vector2(rect.get_center().x, rect.position.y + th * 0.62), th * 0.52,
+					Color(tc.r, tc.g, tc.b, 0.16 + 0.08 * pulse))
+			draw_texture_rect(tex, rect, false, CHEST_TINT[ti])
+			var band_y := rect.position.y + th * 0.60
+			var band_h := maxf(4.0, th * 0.055)
+			draw_rect(Rect2(rect.position.x + tw * 0.13, band_y, tw * 0.74, band_h), Color(tc.r, tc.g, tc.b, 0.92), true)
+			draw_rect(Rect2(rect.position.x + tw * 0.13, band_y, tw * 0.74, band_h), Color(0.10, 0.09, 0.10, 0.45), false, 1.0)
+			var gem := Vector2(rect.get_center().x, band_y + band_h * 0.5)
+			var gem_r := maxf(3.0, th * 0.045)
+			draw_circle(gem, gem_r, tc)
+			draw_circle(gem + Vector2(-gem_r * 0.32, -gem_r * 0.32), gem_r * 0.34, Color(1, 1, 1, 0.55 if ti >= 2 else 0.30))
 			if glow > 0.01:
 				draw_circle(Vector2(w * 0.5, h - th * 0.62), th * 0.46 * glow,
 					Color(1.0, 0.95, 0.72, 0.30 * glow))
