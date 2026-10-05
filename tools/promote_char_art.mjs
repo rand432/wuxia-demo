@@ -210,8 +210,10 @@ const CHESTS = [
 for (const [dir, name, w] of CHESTS) {
   const srcDir = path.resolve('assets/gen/char', dir);
   if (!fs.existsSync(srcDir)) { console.log('  · 宝箱 ' + name + ' 还没有生成稿'); continue; }
-  const hit = fs.readdirSync(srcDir).filter((x) => /_cut.png$/i.test(x))[0];
-  if (!hit) { console.log('  · 宝箱 ' + name + ' 目录里没有 _cut.png（先跑 cutout_art.mjs）'); continue; }
+  // v93h：**优先 AI 抠图**（tools/ai-cutout 出的 _ai.png），没有再退回泛洪的 _cut.png
+  const arr = fs.readdirSync(srcDir);
+  const hit = arr.filter((x) => /_ai\.png$/i.test(x))[0] ?? arr.filter((x) => /_cut\.png$/i.test(x))[0];
+  if (!hit) { console.log('  · 宝箱 ' + name + ' 目录里没有 _ai.png / _cut.png（先跑抠图）'); continue; }
   const src = path.join(srcDir, hit);
   const dst = path.join(SCENE_OUT, name + '.png');
   const rc = spawnSync(FFMPEG, ['-y', '-loglevel', 'error', '-i', src, '-vf', 'scale=' + w + ':-1:flags=lanczos', dst], { stdio: 'ignore' });
@@ -235,8 +237,9 @@ fs.mkdirSync(PROP_OUT, { recursive: true });
 for (const dir of PROPS) {
   const srcDir = path.resolve('assets/gen/char', dir);
   if (!fs.existsSync(srcDir)) { console.log('  · 物件 ' + dir + ' 还没有生成稿'); continue; }
-  const hit = fs.readdirSync(srcDir).filter((x) => /_cut.png$/i.test(x))[0];
-  if (!hit) { console.log('  · 物件 ' + dir + ' 目录里没有 _cut.png（先跑 cutout_art.mjs）'); continue; }
+  const arr2 = fs.readdirSync(srcDir);
+  const hit = arr2.filter((x) => /_ai\.png$/i.test(x))[0] ?? arr2.filter((x) => /_cut\.png$/i.test(x))[0];
+  if (!hit) { console.log('  · 物件 ' + dir + ' 目录里没有 _ai.png / _cut.png（先跑抠图）'); continue; }
   const src = path.join(srcDir, hit);
   const name = dir.replace(/^prop_/, '');
   const dst = path.join(PROP_OUT, name + '.png');

@@ -34,15 +34,24 @@ if (r1.status !== 0) { console.log('✗ 抽帧失败'); process.exit(1); }
 let frames = fs.readdirSync(tmp).filter((f) => f.startsWith('f_')).sort().slice(0, N);
 console.log('抽到 ' + frames.length + ' 帧');
 
-// ② 抠白底：直接调现成的抠图工具（flood 模式）
-const cut = spawnSync('node', [path.resolve('tools/cutout_art.mjs'), tmp, '--mode', 'flood', '--tol', '30', '--pad', '2'],
-  { stdio: 'inherit' });
-if (cut.status !== 0) { console.log('  ⚠ 抠图工具返回非 0，继续试'); }
+// ② 抠底：默认走 **AI 抠图**（U²-Net 蒙版，见 tools/ai-cutout/）；--flood 才用老的泛洪
+//   为什么默认换成 AI：泛洪清不掉"被身体围住"的浅色块（头发缝、腋下），老流程在那些地方留灰底。
+const useAI = !args.includes('--flood');
+if (useAI) {
+	const res = spawnSync('node', [path.resolve('tools/ai-cutout/ai_cutout.mjs'), ...frames.map((f) => path.join(tmp, f)), '--feather', '0.6'],
+		{ stdio: 'inherit', cwd: path.resolve('tools/ai-cutout') });
+	if (res.status !== 0) console.log('  ⚠ AI 抠图返回非 0，退回原帧');
+} else {
+	const cut = spawnSync('node', [path.resolve('tools/cutout_art.mjs'), tmp, '--mode', 'flood', '--tol', '30', '--pad', '2'],
+		{ stdio: 'inherit' });
+	if (cut.status !== 0) console.log('  ⚠ 抠图工具返回非 0，继续试');
+}
 
-// cutout 会把 f_001.png 变成 f_001_cut.png，优先用 cut 版
-const cuts = frames.map((f) => path.join(tmp, f.replace(/\.png$/, '_cut.png'))).filter((p) => fs.existsSync(p));
-const use = cuts.length === frames.length ? cuts : frames.map((f) => path.join(tmp, f));
-console.log('用 ' + (cuts.length === frames.length ? '抠好的' : '原') + ' 帧拼图');
+// AI 版输出 f_001_ai.png；泛洪版输出 f_001_cut.png——哪个齐用哪个
+const aiCuts = frames.map((f) => path.join(tmp, f.replace(/\.png$/, '_ai.png'))).filter((p) => fs.existsSync(p));
+const floodCuts = frames.map((f) => path.join(tmp, f.replace(/\.png$/, '_cut.png'))).filter((p) => fs.existsSync(p));
+const use = aiCuts.length === frames.length ? aiCuts : (floodCuts.length === frames.length ? floodCuts : frames.map((f) => path.join(tmp, f)));
+console.log('用 ' + (aiCuts.length === frames.length ? 'AI 抠好的' : floodCuts.length === frames.length ? '泛洪抠好的' : '原') + ' 帧拼图');
 
 // ③ 横向拼图（等宽：都缩到同一高度，按最宽的留边）
 const sheet = path.resolve('assets/char', outName + '.png');
