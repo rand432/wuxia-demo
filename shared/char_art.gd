@@ -43,11 +43,10 @@ static func q_head(role_id: String) -> Texture2D:
 # 立绘演出片（.ogv，Godot 原生格式）；没有就返回 null
 const CLIP_DIR := "res://assets/clips/"
 # v79：宠物图（智谱出的 Q版 白狐 / 青隼）——没有图返回 null，pet_actor 自己退回手画
+# v92 修：走 _tex() 的静态缓存——**在 _draw() 里现 load() 的贴图会渲染成白块**
+#   （宠物路上/面板里那个"白方块"就是这么来的，跟 draw_set_transform 无关）。
 static func pet(kind: String) -> Texture2D:
-	var p := "res://assets/char/" + ("pet_falcon" if kind == "hawk" else "pet_fox") + ".png"
-	if ResourceLoader.exists(p):
-		return load(p) as Texture2D
-	return null
+	return _tex("pet_falcon" if kind == "hawk" else "pet_fox")
 
 static func clip(role_id: String) -> VideoStream:
 	var p := CLIP_DIR + role_id + "_clip.ogv"

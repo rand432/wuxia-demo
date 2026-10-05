@@ -35,19 +35,34 @@ func _shadow(rx: float, ry: float) -> void:
 	draw_colored_polygon(pts, Color(0.12, 0.10, 0.10, 0.16))
 
 func _draw() -> void:
-	# 先把"面板坐标"整体搬过来：地线中心 → 本节点的原点
-	draw_set_transform(Vector2(-PANEL_CX * draw_scale, -PANEL_GROUND * draw_scale), 0.0, Vector2(draw_scale, draw_scale))
-	# v79（用户："宠物也不是q版"）：**有 Q版 图就用图**（智谱出的白狐/青隼），
-	#   没图再退回原来的程序化画法——两条路都通，缺图不会变空白。
-	# ⚠ v91 我把这里改成"直接画 pet_fox.png"，结果**渲染成一块白方块**（贴图本身是好的，
-	#   单独 draw_texture_rect 能正常显示；病根在 draw_set_transform 与它的相互作用，
-	#   我上下文用尽前没定位到）。**先退回原来能显示的画法**，别让玩家对着一块白方块。
-	#   要再试的话：把下面这几行换成 draw_texture_rect(CharArt.pet(kind), ...)，
-	#   并且**不要**在外面套 draw_set_transform，改成手算位置。
-	if kind == "hawk":
-		_draw_hawk()
-	else:
-		_draw_fox()
+	# v92（用户："宠物还是老样子"）：**Q版图这次真接上**。
+	#   v91 的病根是外面套了一层 draw_set_transform 再 draw_texture_rect（渲染成白方块）。
+	#   这一版**完全不套 transform**：贴图尺寸/落点全手算，底边对齐节点原点（＝脚底，
+	#   与 StickFighter 同一约定），影子单独画在地线上。
+	#   没图（CharArt.pet 返回 null）才退回原来的程序画法——两条路都通，缺图不会空白。
+	var tex := CharArt.pet(kind)
+	if tex == null:
+		draw_set_transform(Vector2(-PANEL_CX * draw_scale, -PANEL_GROUND * draw_scale), 0.0, Vector2(draw_scale, draw_scale))
+		if kind == "hawk":
+			_draw_hawk()
+		else:
+			_draw_fox()
+		return
+	var h: float = (92.0 if kind == "hawk" else 104.0) * draw_scale
+	var w: float = h * float(tex.get_width()) / maxf(float(tex.get_height()), 1.0)
+	# 青隼在半空悬着（腿不沾地），白狐四脚着地
+	var lift: float = 30.0 * draw_scale if kind == "hawk" else 0.0
+	var bob: float = (sin(t * 2.2) * 3.2 if kind == "hawk" else sin(t * 2.6) * 2.0) * draw_scale
+	_ground_shadow(w * 0.30, 6.0 * draw_scale)
+	draw_texture_rect(tex, Rect2(-w * 0.5, -h - lift - bob, w, h), false)
+
+# 脚下的淡影（Q版图那条路用；程序画法那条路仍用面板坐标的 _shadow）
+func _ground_shadow(rx: float, ry: float) -> void:
+	var pts := PackedVector2Array()
+	for i in 22:
+		var a := TAU * float(i) / 22.0
+		pts.append(Vector2(cos(a) * rx, 1.5 + sin(a) * ry))
+	draw_colored_polygon(pts, Color(0.12, 0.10, 0.10, 0.16))
 
 # ---- 白狐：站在地上，尾巴一摆一摆 ----
 func _draw_fox() -> void:

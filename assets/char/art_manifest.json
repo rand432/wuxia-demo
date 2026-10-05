@@ -57,13 +57,13 @@
     "slots": {
       "q": {
         "file": "assets/char/qingluan_q.png",
-        "from": "assets/gen/char/qingluan/qingluan_Q版_liblib_anime2_girlImg1_cut.png",
-        "bytes": 223375
+        "from": "assets/gen/char/qingluan/qingluan_Q版_glm_anime_cut.png",
+        "bytes": 150279
       },
       "face": {
         "file": "assets/char/qingluan_face.png",
-        "from": "assets/gen/char/qingluan/qingluan_头像_liblib_guofeng_cut.png",
-        "bytes": 388159
+        "from": "assets/gen/char/qingluan/qingluan_头像_glm_anime2_cut.png",
+        "bytes": 407872
       },
       "full": {
         "file": "assets/char/qingluan_full.png",

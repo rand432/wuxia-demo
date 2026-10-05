@@ -57,7 +57,11 @@ var _bh_t := -1.0
 var _cv_t := -1.0
 
 func _draw() -> void:
-	# v69：AI 生成的那张"村景长卷"垫图**撤掉**了（用户："AI 做的房子建筑不要了"）。
+	# v92（用户："画卷也要变一变啊 不是有素材吗" / "主界面依旧是程序图和图素材混合"）：
+	#   **画心远景＝素材那幅水墨山水**（assets/scenes/mat/city_hills_b.png，影之刃图集切出来的）。
+	#   ⚠ 原来这段写在 _backdrop() 里，而 _backdrop() **全工程没人调用**——是死代码，
+	#     所以"素材取得到、名字也没写错，画面就是不变"（病根就在这）。现在直接在 _draw 里喊。
+	_far_mat()
 	#   现在整屏都是本作自己的水墨笔法画的——房子、田埂、篱笆、后山、云雾，
 	#   画风统一（这是最要紧的），也不会有"贴上去的照片感"。
 	_house_seq = 0      # v75：每帧从头轮（顺序固定，房子不会闪来闪去）
@@ -83,39 +87,32 @@ func _draw() -> void:
 	_winter_dress()
 	_fog_left()
 
-# 远景垫图：底部对齐在 y=900（村子的地平线），宽度铺满整条卷轴（记号最远到 x=2490）
-func _backdrop() -> void:
-	# v91（用户："画卷也要变一变啊 不是有素材吗"）：**远景区换成素材里的水墨山水**——
-	#   原来垫的是 AI 村景（白底为主，铺上去几乎等于没有），现在垫素材那幅
-	#   「远山＋云雾＋水面」，正反交替平铺铺满整条卷轴，村子里的房子压在上面正好。
-	#   ⚠ 放在这一层（村景层）而不是 menu_scroll：那层被本层按顺序盖住，画了也看不见。
-	var mtex := SceneArt.mat("city_hills_b")
-	if mtex != null:
-		var mh := 470.0
-		var mw: float = mh * float(mtex.get_width()) / maxf(float(mtex.get_height()), 1.0)
-		var period := mw * 2.0
-		var x0 := 0.0
-		while x0 < 2900.0:
-			if Draw.vis(cam, x0, x0 + mw) or Draw.vis(cam, x0 + mw, x0 + period):
-				draw_texture_rect(mtex, Rect2(x0, 96.0, mw, mh), false, Color(1, 1, 1, 0.72))
-				draw_texture_rect(mtex, Rect2(x0 + mw, 96.0, -mw, mh), false, Color(1, 1, 1, 0.72))
-			x0 += period
-	var tex := SceneArt.village()
+# ============ 画心远景（素材） ============
+# v92：素材名 + 铺法都在这一处，换图只改 FAR_MAT 一个字符串。
+#   ⚠ 素材文件名都带 _a/_b 后缀（上下两半），写错名字就等于没图。
+const FAR_MAT := "city_hills_b"    # 水墨山水（远山/云雾/水）——画心底子
+const FAR_X0 := 620.0              # 画心左界（= Conf.GAP_L1，避开左端题跋）
+const FAR_X1 := 2670.0             # 画心右界（= Conf.GAP_R0，避开右端引首/书名）
+const FAR_TOP := 200.0             # = Conf.SCENE_TOP
+const FAR_BOT := 840.0             # = Conf.SCENE_BOT
+# 压淡到几成：素材是"夜墨"调子，全不透明会把纸白村子衬成一块黑底。
+#   0.62 ＝ 远山认得出来、纸味还在（嫌淡/嫌重只改这一个数）。
+const FAR_A := 0.62
+
+func _far_mat() -> void:
+	var tex := SceneArt.mat(FAR_MAT)
 	if tex == null:
-		return
-	# ⚠ 只取**上半幅**（远山/云雾/远屋顶）当背景带：整张铺满会把图里的山门放大成一堵墙
-	#   ——第一版就是这么翻车的，验过图才发现。
-	var tw := float(tex.get_width())
-	var th := float(tex.get_height())
-	var src := Rect2(0.0, 0.0, tw, th * 0.46)
-	var dst := Rect2(-60.0, 150.0, 2900.0, 620.0)
-	var a := 0.34
-	if season == 3:
-		draw_texture_rect_region(tex, dst, src, Color(0.86, 0.90, 0.96, a))
-	elif season == 2:
-		draw_texture_rect_region(tex, dst, src, Color(1.04, 0.98, 0.88, a))
-	else:
-		draw_texture_rect_region(tex, dst, src, Color(1, 1, 1, a))
+		return                       # 没图＝画心留白，不崩、不留垃圾
+	var h := FAR_BOT - FAR_TOP
+	var w: float = h * float(tex.get_width()) / maxf(float(tex.get_height()), 1.0)
+	var period := w * 2.0
+	# 正反交替平铺（一张正着画、下一张水平翻转）——接缝两边互为镜像，看不出重复
+	var x0 := FAR_X0
+	while x0 < FAR_X1:
+		if Draw.vis(cam, x0, x0 + period):
+			draw_texture_rect(tex, Rect2(x0, FAR_TOP, w, h), false, Color(1, 1, 1, FAR_A))
+			draw_texture_rect(tex, Rect2(x0 + w, FAR_TOP, -w, h), false, Color(1, 1, 1, FAR_A))
+		x0 += period
 
 # ============ 田 ============
 

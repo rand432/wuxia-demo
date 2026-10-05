@@ -21,7 +21,11 @@ static func draw_all(ctrl: Control, sz: Vector2, scroll_far: float, scroll_mid: 
 	if far_tex != null:
 		# ⚠ 直接 tile=true 会看出"同一座城并排两份"（第一版就是），改**正反交替**：
 		#   一张正着画、下一张水平翻转画（负宽度即翻转），接缝处两边是镜像 → 看不出重复。
-		var th := 950.0
+		# v92（用户："游历背景图依旧没有全覆盖"）：**铺满整屏**——
+		#   原来只铺到 y=950，下面那 330 像素是一条平涂的土色带（画面像被裁掉一半）。
+		#   现在贴图直接铺到屏幕底，那条"地"改成**半透明的压色带**：人还是站在 950 的地平线上，
+		#   但底下的图透得出来，整屏是一张画。
+		var th: float = h
 		var tw: float = th * float(far_tex.get_width()) / maxf(float(far_tex.get_height()), 1.0)
 		var period := tw * 2.0
 		var x := -fposmod(scroll_far * 0.12, period)
@@ -34,7 +38,8 @@ static func draw_all(ctrl: Control, sz: Vector2, scroll_far: float, scroll_mid: 
 		_ridge(ctrl, sz, scroll_far, 766.0, 118.0, Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.055), 940.0)
 	_ridge(ctrl, sz, scroll_mid, 828.0, 88.0, Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.095), 720.0)
 	_props(ctrl, sz, scroll_mid * 1.35)
-	ctrl.draw_rect(Rect2(0, 950.0, w, h - 950.0), Color(0.885, 0.850, 0.775))
+	# v92：地平线以下**不再平涂**——改成半透明压色（图透出来，人照样有"地"）
+	ctrl.draw_rect(Rect2(0, 950.0, w, h - 950.0), Color(0.885, 0.850, 0.775, 0.62))
 	ctrl.draw_line(Vector2(0, 950.0), Vector2(w, 950.0), Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.30), 2.0)
 	_road_marks(ctrl, sz, scroll_road)
 

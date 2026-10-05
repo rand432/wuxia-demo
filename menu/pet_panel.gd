@@ -30,6 +30,7 @@ const PANEL_H := 1070.0   # v61：940 → 1070（护主效果给两行大字、�
 signal closed
 
 class PetArt extends Node2D:
+	const PArt := preload("res://shared/char_art.gd")   # v92：Q版宠物图（白狐/青隼）
 	var t := 0.0
 	var stage := 0
 	var has_pet := true
@@ -45,6 +46,17 @@ class PetArt extends Node2D:
 		draw_colored_polygon(PackedVector2Array([Vector2(280, 150), Vector2(450, 46), Vector2(596, 150)]), Color(0.13, 0.11, 0.11, 0.40))
 		draw_line(Vector2(0, 150), Vector2(584, 150), Color(0.30, 0.24, 0.18, 0.50), 2.0)
 		if not has_pet:
+			return
+		# v92（用户："宠物面板也没有变化"）：**面板里的狐/隼也换成 Q版图**——
+		#   跟路上那只走的是同一个取图口（CharArt.pet），一处换图两处都变。
+		#   ⚠ 顺序：先给 Rect2 定尺寸再画，不套任何 draw_set_transform（v91 白方块的教训）。
+		var qtex := PArt.pet(kind)
+		if qtex != null:
+			var qh := 138.0 * (1.0 + 0.06 * float(stage))
+			var qw := qh * float(qtex.get_width()) / maxf(float(qtex.get_height()), 1.0)
+			var qbob := sin(t * 2.6) * 2.5
+			var qlift := 26.0 if kind == "hawk" else 0.0
+			draw_texture_rect(qtex, Rect2(292.0 - qw * 0.5, 150.0 - qh - qlift - qbob, qw, qh), false)
 			return
 		if kind == "hawk":
 			_draw_hawk()

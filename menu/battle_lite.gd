@@ -886,10 +886,14 @@ func _build_ui() -> void:
 	var eav := TextureRect.new()
 	eav.texture = CharArt.face(ActorFactory.enemy_key(str(_e().get("name", ""))))
 	if eav.texture != null:
-		eav.position = Vector2(maxf(8.0, bx - 44.0), 158.0)
-		eav.size = Vector2(36, 36)
+		# v92 修（用户："爬塔头像有问题"）：**先设 expand_mode，再设 size**。
+		#   反过来的话，TextureRect 会拿贴图原始尺寸（胸像 485×360）当最小尺寸把 size 顶回去——
+		#   于是那张 30×30 的小头像变成铺满半个屏幕的大脸，把战场和血条全糊住。
+		#   （EXPAND_IGNORE_SIZE 的最小尺寸才是 0；默认的 EXPAND_KEEP_SIZE 最小尺寸＝贴图尺寸。）
 		eav.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		eav.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		eav.position = Vector2(maxf(8.0, bx - 44.0), 158.0)
+		eav.size = Vector2(36, 36)
 		eav.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		add_child(eav)
 	_e_hp_lb = _label("", 12, Color(0.96, 0.94, 0.90))
@@ -922,10 +926,11 @@ func _build_ui() -> void:
 		var av := TextureRect.new()
 		av.texture = CharArt.face(str((_party[i] as Dictionary).get("id", "")))   # 队里那格叫 id
 		if av.texture != null:
-			av.position = Vector2(20, y - 2)
-			av.size = Vector2(30, 30)
+			# v92 修：同上方敌方头像——**先 expand_mode 再 size**（否则头像按原图尺寸铺开成大头）
 			av.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 			av.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			av.position = Vector2(20, y - 2)
+			av.size = Vector2(30, 30)
 			av.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			av.modulate.a = 0.95
 			add_child(av)
@@ -1611,8 +1616,7 @@ func _act() -> void:
 		if edead:
 			_enemy_fall_pending()
 			elines.append(str(_e()["name"]) + " 倒下了。")
-			# v92：倒下的那一刻把掉落「爆」出来（演出，不影响结算）
-			_loot_burst(Vector2(_enemy_base_x(), _ground_y - 40.0))
+			# v92：掉落爆开统一在 _enemy_fall_pending 里演（上面那行已经喊过），这里不再重复
 			_push(elines)
 			_refresh()
 			# 与 _member_act 收尾同一口径：先看敌人是不是清完了，再看我方还剩几个
@@ -1876,6 +1880,11 @@ func _enemy_fall_pending() -> void:
 		_focus_on(i)
 		_set_e_hp(0)
 		_enemy_bomb()
+		# v92 修（用户："击倒也没有爆东西的动画"）：**掉落爆开挪到这里**——
+		#   以前只有"毒/烧跳死"那条支路才喊 _loot_burst，正常一刀砍倒反而是干倒，
+		#   于是玩家几乎永远看不到爆物。这里每只只演一次（downed 标记兜底），
+		#   全灭那条路也走这里，不会重复炸。
+		_loot_burst(Vector2(_enemy_base_x(), _ground_y - 40.0))
 		var en = _enemy_node()
 		if en != null and is_instance_valid(en):
 			_fall(en, -1.0)

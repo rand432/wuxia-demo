@@ -64,8 +64,13 @@ const SLOTS = {
   //   UI/场景保持水墨。所以这里把 glm_anime 放回第一优先，ink1 退成备用。
   //   girlImg1 = 苏青鸾重画版（用户："苏看上去男的 重画"——把女性特征写死后 img2img 出来的），
   //   只有她有这张，其他角色自动落到下面那行
-  q: ['_Q版_liblib_anime2_girlImg1_cut.png', '_Q版_glm_anime_cut.png', '_Q版_liblib_xieyi_ink1_cut.png'],
-  face: ['_头像_liblib_guofeng_cut.png', '_头像_glm_anime_cut.png'],
+  // v92（用户："新的苏完全跟主角和陈石不一样"）：**智谱 glm 那版提到第一位**。
+  //   病根：苏青鸾的 girlImg1 是 liblib/Qwen 出的**半写实厚涂**，跟主角/陈石的干净二次元
+  //   不是一套；她其实早就有一张 glm 版（qingluan_Q版_glm_anime_cut.png），只是被排在后面。
+  //   现在三个人统一走 glm 那张（没有 glm 版的角色自动落到后面的备选，行为不变）。
+  q: ['_Q版_glm_anime_cut.png', '_Q版_liblib_anime2_girlImg1_cut.png', '_Q版_liblib_xieyi_ink1_cut.png'],
+  // v92：苏青鸾的 glm 版胸像提到第一位（她要跟 Q版 身体一个画风；别人没有这张，行为不变）
+  face: ['_头像_glm_anime2_cut.png', '_头像_liblib_guofeng_cut.png', '_头像_glm_anime_cut.png'],
   full: ['_立绘_liblib_guofeng_cut.png', '_立绘_glm_ink_cut.png', '_立绘_glm_anime_cut.png'],
 };
 
@@ -136,7 +141,7 @@ const SCENES = [
   ['scene_buildings', 'buildings'],
   ['room_alchemy', 'room_alchemy'],     // v77：炼丹房内景
   ['room_store', 'room_store'],         // v77：货仓内景
-  ['chest_open', 'chest_open'],         // v77：宝箱特写
+  ['chest_open', 'chest_open'],         // v77：宝箱特写（v92 起被下面的宝箱块覆盖，见 CHESTS）
 ];
 const SCENE_OUT = path.resolve('assets/scenes');
 
@@ -192,6 +197,27 @@ for (const [dir, name] of SCENES) {
   sceneManifest[name] = { file: 'assets/scenes/' + name + '.png', from: path.relative(process.cwd(), src).replace(/\\/g, '/'), bytes: fs.statSync(dst).size };
   console.log('  ✓ ' + (name + '.png').padEnd(16) + ' ← ' + path.basename(src) + '  ' + Math.round(fs.statSync(dst).size / 1024) + 'KB');
 }
+// ---- 宝箱（v92）----
+// 用户："宝箱没有扣干净"。原来的稿是**写实照片风**木箱，抠完四角还挂着白点与水印残渣；
+// 现在换成智谱出的水墨木箱（纯白底、--wm 抹过平台水印），只取**抠好的 _cut.png**，
+// 按固定宽度缩放进 assets/scenes/（不跟场景那支走 2000 宽，省体积）。
+const CHESTS = [
+  ['chest_ink', 'chest_closed', 640],
+  ['chest_ink_open', 'chest_open', 640],
+];
+for (const [dir, name, w] of CHESTS) {
+  const srcDir = path.resolve('assets/gen/char', dir);
+  if (!fs.existsSync(srcDir)) { console.log('  · 宝箱 ' + name + ' 还没有生成稿'); continue; }
+  const hit = fs.readdirSync(srcDir).filter((x) => /_cut.png$/i.test(x))[0];
+  if (!hit) { console.log('  · 宝箱 ' + name + ' 目录里没有 _cut.png（先跑 cutout_art.mjs）'); continue; }
+  const src = path.join(srcDir, hit);
+  const dst = path.join(SCENE_OUT, name + '.png');
+  const rc = spawnSync(FFMPEG, ['-y', '-loglevel', 'error', '-i', src, '-vf', 'scale=' + w + ':-1:flags=lanczos', dst], { stdio: 'ignore' });
+  if (rc.status !== 0) fs.copyFileSync(src, dst);
+  patchImport(dst);
+  console.log('  ✓ ' + (name + '.png').padEnd(16) + ' ← ' + path.basename(src) + '  ' + Math.round(fs.statSync(dst).size / 1024) + 'KB');
+}
+
 // 道具图标（items_sheet 那张图集切出来的 it_*_cut.png）→ assets/items/
 // v79：后两个目录是智谱出的**二次元**图标（用户："装备功法图……也换成q版吧"），
 //   切好后覆盖 assets/items/ 里的同名文件——bag 那边一行代码都不用改。

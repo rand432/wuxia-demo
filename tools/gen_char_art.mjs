@@ -211,6 +211,16 @@ const CHARS = {
     body: '**二次元手游道具图标（粗黑描边 + 明亮平涂 + 高饱和，像贴纸；不要水墨不要写实）**：六件道具横排成**两行三列**，间距均匀：第一行 ①一杆红缨长枪 ②一本蓝色线装秘籍 ③一只青瓷酒坛；第二行 ④一捆木料 ⑤一枚银锭 ⑥一块木质令牌；纯白背景、画面中没有人物、没有文字、没有枪械',
     cloth: '', pose: '', qpose: '', weapon: '',
   },
+  chest_ink: {
+    cn: '木箱（关）', title: '宝箱 · 合着',
+    body: '中国水墨画：一只**合着的木质宝箱**（正侧视、平视略微俯，不要等距斜视、不要立体方块感），箱体是深褐色木纹、四角包黄铜片，正面一个铜锁扣**严丝合缝扣着**，箱盖完全盖拢，底边与地面齐平，淡墨勾线、赭石略作点缀',
+    cloth: '', pose: '', qpose: '', weapon: '',
+  },
+  chest_ink_open: {
+    cn: '木箱（开）', title: '宝箱 · 敞着',
+    body: '中国水墨画：一只**敞开的木质宝箱**（正侧视、平视略微俯，不要等距斜视），箱盖向后掀开立着，箱内堆满银锭与铜钱、透出一层淡淡暖光，箱体是深褐色木纹、四角包黄铜片，底边与地面齐平，淡墨勾线、赭石略作点缀',
+    cloth: '', pose: '', qpose: '', weapon: '',
+  },
   pet_fox: {
     cn: '灵狐', title: '宠物 · 白狐',
     body: '一只**Q版二头身**的雪白灵狐（大头小身、圆脑袋、大眼睛、短腿，二次元手游萌宠造型），毛色雪白、耳尖与尾尖带淡青，眼睛大而明亮呈琥珀色，尾巴蓬松翘起，圆润可爱',
@@ -263,11 +273,16 @@ const XIEYI = '，中国水墨大写意人物画，宣纸质感，焦墨与飞�
 // 鸣潮/库洛那种二次元游戏立绘：精细线稿 + 赛璐璐与厚涂结合、服装细节繁复、风动感
 const MENGCHAO = '，高品质二次元游戏角色立绘（国产二次元手游卡面那种质感），精细线稿与通透的赛璐璐上色结合局部厚涂，服装结构繁复（交领、束带、金属扣件、皮革绑带、流苏飘带），衣摆与发丝带风动感，光影通透有层次，冷调高对比，电影感构图，全身完整不裁切，画面中只有这一个人物，纯白背景，背景没有任何景物，画面中没有文字没有水印没有logo没有签名';
 const GUOFENG = '，中国古风武侠人物插画，精致细腻的半写实国风画风，柔和厚涂与赛璐璐结合的质感，冷青灰色调，衣料纹样细致，光影柔和通透，画面干净利落，全身完整不裁切，画面中只有这一个人物，纯白背景，背景没有任何景物，画面中没有文字没有水印没有logo没有签名';
+// v92：**物件**（宝箱之类）专用尾巴——别把人物那条"全身立绘、只有这一个人物"套到箱子上
+const INK_OBJ = '，中国水墨画风，宣纸质感，淡墨勾线、赭石与花青略作点缀，笔触写意，光影柔和，纯白背景，背景没有任何景物，画面中没有文字没有印章没有水印没有logo没有签名';
 const NEG_COMMON = '文字,汉字,书法,印章,水印,签名,logo,字幕,多个角色,两个人,重复人物,背景景物,树木,山水,建筑,房间,现代服饰,西式服装,西装,3D渲染,照片,写实照片,油画厚涂,高饱和度,艳丽俗气,日式和服,日本武士,太刀,多余的手,三只手,六指,畸形手指,断手,脸崩,崩坏,低质量,模糊,裁切,半身';
 const NEG_Q = NEG_COMMON + ',写实比例,成人比例,九头身,长腿,细长身材,狰狞';
 // 按性别分：女角色不许出男人；男角色不许出女人
 const NEG_MALE = NEG_COMMON + ',男性,男人,男子,胡子,络腮胡,粗犷,魁梧,壮汉,肌肉块';
 const NEG_FEMALE = NEG_COMMON + ',男性,男人,男子,少年,胡须,粗犷,魁梧,壮汉,肌肉块,中性';
+// v92：性别那一截单独拎出来——只**追加**到套自带的排除项后面，不再整条替换（见 main 里的注）
+const GENDER_MALE = ',男性,男人,男子,胡子,络腮胡,粗犷,魁梧,壮汉,肌肉块';
+const GENDER_FEMALE = ',男性,男人,男子,少年,胡须,粗犷,魁梧,壮汉,肌肉块,中性';
 const NEG_BUST = NEG_COMMON.replace(',半身', '');
 
 // ---------------- 出图套（尺寸按通道给） ----------------
@@ -279,6 +294,8 @@ const SETS = {
   // 场景：横版概念图，无人
   '场景': { suffix: '横版场景概念图，中远景，构图讲究、留白充足，画面中没有任何人物、没有任何文字', glm: [1728, 960], liblib: [1664, 928], neg: NEG_COMMON + ',人物,人,人影,文字,印章,水印,现代建筑' },
   'Q版': { suffix: 'Q版二头身萌系造型，大头小身，圆圆的脸，眼睛大而明亮，身形小巧，清晰描边，游戏战斗立绘用', glm: [1024, 1024], liblib: [1024, 1024], neg: NEG_Q },
+  // v92：单个物件（宝箱这类）——居中、占七成、纯白底好抠
+  '物件': { suffix: '单个物件特写，居中摆放，占画面约七成，正侧视平视、底边与地面齐平，纯白背景，画面中只有这一件东西，没有任何人物、没有任何文字', glm: [1024, 1024], liblib: [1024, 1024], neg: NEG_COMMON + ',人物,人,人影,文字,印章,水印,多个物件,两个,一堆,背景景物' },
 };
 
 // ---------------- Liblib 签名 / 请求 ----------------
@@ -424,9 +441,9 @@ function buildPrompt(charKey, setKey, styleKey) {
   const c = CHARS[charKey], s = SETS[setKey];
   if (!c || !s) throw new Error('未知角色或套：' + charKey + '/' + setKey);
   const tail = styleKey === 'xieyi' ? XIEYI : styleKey === 'ink' ? INK : styleKey === 'guofeng' ? GUOFENG
-  : styleKey === 'mengchao' ? MENGCHAO : styleKey === 'anime2' ? ANIME2 : ANIME;
-  // 场景：只要 body（不含人物装扮/姿势），尾巴单独给
-  if (setKey === '场景') {
+  : styleKey === 'mengchao' ? MENGCHAO : styleKey === 'anime2' ? ANIME2 : styleKey === 'inkobj' ? INK_OBJ : ANIME;
+  // 场景 / 物件：只要 body（不含人物装扮/姿势），尾巴单独给
+  if (setKey === '场景' || setKey === '物件') {
     const sceneTail = '，中国水墨画，宣纸质感，墨分五色，笔触写意洒脱，冷青灰为基调，大面积留白，画面中没有文字没有印章没有水印没有logo';
     return (c.body + '。' + s.suffix + sceneTail).replace(/\s+/g, '');
   }
@@ -462,10 +479,16 @@ async function main() {
     const [charKey, setKey, channel, styleKey] = job.split(':');
     const label = CHARS[charKey]?.cn + ' · ' + setKey + ' · ' + channel + ' · ' + styleKey;
     const prompt = buildPrompt(charKey, setKey, styleKey);
-    var negative = SETS[setKey]?.neg ?? NEG_COMMON;
+    // v92 修：**别再拿性别尾巴顶掉套自带的排除项**。
+    //   原来写的是 negative = NEG_FEMALE / NEG_MALE —— 于是 Q版 那套的
+    //   "写实比例,成人比例,九头身,长腿,细长身材" 被整条丢掉，
+    //   苏青鸾的 Q版 就这么出成了**半写实厚涂**（跟主角/陈石的干净二次元不是一套，
+    //   用户："新的苏完全跟主角和陈石不一样"）。现在改成**追加**：套的排除项永远在。
+    const setNeg = SETS[setKey]?.neg ?? NEG_COMMON;
+    var negative = setNeg;
     if (styleKey === 'xieyi') negative = NEG_COMMON + ',二次元,动漫,赛璐璐,彩绘,鲜艳色彩,写实照片,3D渲染,精细描线,眼睛过大,萌系,可爱,水墨之外的颜色';
-    else if (charKey === 'qingluan') negative = NEG_FEMALE;
-    else if (CHARS[charKey]) negative = NEG_MALE;
+    else if (charKey === 'qingluan') negative = setNeg + GENDER_FEMALE;
+    else if (CHARS[charKey]) negative = setNeg + GENDER_MALE;
     const size = SETS[setKey]?.[channel];
     const dir = path.join(OUT_ROOT, charKey);
     const tag = opt('tag', '');

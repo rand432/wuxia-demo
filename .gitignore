@@ -61,9 +61,15 @@ assets/gen/bg_*.png
 .sk*.png
 .look*.png
 .film*.png
+.sheet*.png
+.stylecheck.png
 *.bak
 *.bak-v2
 *.damaged
+*.probe-bak
+
+# 探针截图（probe_shots.gd 的输出，工作用，不进库）
+.shots/
 
 # Godot 导入副产物
 *.import

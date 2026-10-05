@@ -570,6 +570,13 @@ func _ready() -> void:
 	_money_hud.silver = GameState.coin("silver")
 	_money_hud.yuanbao = GameState.coin("yuanbao")
 	add_child(_money_hud)
+	# v92 修（用户："设置在打开角色界面还在"）：**「设置」按钮挪到面板之前建**。
+	#   以前它建在 32 个面板**后面**（下面那行 v72 的老注释），Control 是后加的盖在上面，
+	#   于是开任何面板时它都浮在面板与遮罩之上（截图：弟子面板右上角那个"设置"）。
+	#   挪到这里＝压在所有面板与遮罩之下，面板一开就被盖住，跟挂机牌/币值条一个待遇。
+	#   ⚠ 位置照旧（628,58）：只在最外层、没有面板时才点得到。
+	var set_btn := UiKit.make_button(self, Vector2(628, 58), Vector2(76, 40), "设 置", 17)
+	set_btn.pressed.connect(_open_settings)
 	_build_idle_plaque()
 	_add_mark("wa", 898.0, 728.0, "瓦房", "")
 	_add_mark("zhu", 1215.0, 726.0, "竹屋", "行囊 · 仓库")
@@ -613,11 +620,7 @@ func _ready() -> void:
 	#     这样从门厅点进品酒/炼丹/鉴宝时，作坊面板画在门厅**上面**，
 	#     关掉作坊又能回到门厅（门厅留着不关，正是这个用处）。
 	# ============================================================
-	# v72：右上角「设置」按钮（音乐 / 音效音量 + 主界面曲目）。
-	#   放在币值条下面一点（y=58），不压到挂机牌和底部签栏。
-	var set_btn := UiKit.make_button(self, Vector2(628, 58), Vector2(76, 40), "设 置", 17)
-	set_btn.pressed.connect(_open_settings)
-
+	# v72：右上角「设置」按钮 —— v92 已挪到上面（面板之前建，好被面板盖住），此处只留位置说明。
 	_craft_panel = CraftPanel.new()
 	add_child(_craft_panel)
 	_craft_panel.room_pressed.connect(_on_craft_room)

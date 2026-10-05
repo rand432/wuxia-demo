@@ -50,22 +50,34 @@ const UI_TXT := {
 	"vs": "txt_vs",
 }
 
+static var _txt_cache := {}
+
 static func ui_txt(key: String) -> Texture2D:
 	if not UI_TXT.has(key):
 		return null
+	if _txt_cache.has(key):
+		return _txt_cache[key]
 	var p := "res://assets/ui/mat/" + str(UI_TXT[key]) + ".png"
+	var t: Texture2D = null
 	if ResourceLoader.exists(p):
-		return load(p) as Texture2D
-	return null
+		t = load(p) as Texture2D
+	_txt_cache[key] = t
+	return t
 
 # v79：素材里的**刀光序列帧**（红/黑白两套，各 16 帧）
+static var _slash2_cache := {}
+
 static func slash_frames2(set_name := "red") -> Array:
+	# v92：同 mat()——_draw 里现 load() 出来的贴图会变白块，这里也缓存一份
+	if _slash2_cache.has(set_name):
+		return _slash2_cache[set_name]
 	var out: Array = []
 	var pre := "slash_red_" if set_name == "red" else "slash_bw_"
 	for i in 16:
 		var p := "res://assets/ui/mat/" + pre + ("%02d" % i) + ".png"
 		if ResourceLoader.exists(p):
 			out.append(load(p))
+	_slash2_cache[set_name] = out
 	return out
 
 # v79：村庄**废墟态**的房子图（智谱出的正侧视水墨断墙茅顶）
@@ -97,11 +109,21 @@ static func chest_art() -> Texture2D:
 #   月夜那幅给游历当远景，血月那幅给爬塔/战斗。
 # v91（用户："画卷也要变一变啊 不是有素材吗"）：**素材背景通用口**——
 #   assets/scenes/mat/ 下那 22 幅（切自影之刃的水墨图集）按名字取，换图只改调用处的名字。
+# v92 修（**全工程级的白块病根**）：这里原来是每次调用都 load() 一遍。
+#   在 _draw() 里现 load() 的贴图，Godot 这一版会画成**一块纯白**（同帧里别的、已经
+#   缓存过的贴图却正常）——所以"素材取得到、代码也在跑，画面就是白的/看不见"
+#   （远景平铺、宠物 Q版都栽在这上面）。改成跟 _tex() 一样走静态缓存就好了。
+static var _mat_cache := {}
+
 static func mat(name: String) -> Texture2D:
+	if _mat_cache.has(name):
+		return _mat_cache[name]
 	var p := "res://assets/scenes/mat/" + name + ".png"
+	var t: Texture2D = null
 	if ResourceLoader.exists(p):
-		return load(p) as Texture2D
-	return null
+		t = load(p) as Texture2D
+	_mat_cache[name] = t
+	return t
 
 static func map_night() -> Texture2D:
 	return _tex("map_night")
@@ -110,13 +132,17 @@ static func map_redmoon() -> Texture2D:
 	return _tex("map_redmoon")
 
 # v78：**素材里的刀光序列帧**（Atlas_hun_daoguang2 切成 25 帧）——技能特效直接用
+static var _slash_cache: Array = []
+
 static func slash_frames() -> Array:
-	var out: Array = []
+	# v92：同 mat()——缓存（_draw 里现 load 会白块）
+	if not _slash_cache.is_empty():
+		return _slash_cache
 	for i in 25:
 		var p := "res://assets/scenes/slash/slash_" + ("%02d" % i) + ".png"   # GDScript 没有 zfill
 		if ResourceLoader.exists(p):
-			out.append(load(p))
-	return out
+			_slash_cache.append(load(p))
+	return _slash_cache
 
 # v75：村里的房子图（用户：「我是想让村里房子也换成图」）。
 #   6 张：茅草土屋 / 竹屋 / 砖石瓦房 / 木构货栈 / 两层藏宝楼 / 牌坊山门。
