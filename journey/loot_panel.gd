@@ -38,6 +38,7 @@ const Cards := preload("res://shared/data_cards.gd")
 const Loot := preload("res://shared/data_loot.gd")
 const GameState := preload("res://shared/game_state.gd")
 const UiKit := preload("res://shared/ui_kit.gd")
+const Icons3 := preload("res://shared/item_art.gd")   # v93r：一件东西 → 一张图
 const RunState := preload("res://shared/run_state.gd")
 
 const PANEL_RECT := Rect2(10, 316, 700, 604)
@@ -266,9 +267,19 @@ func _make_tile(e: Dictionary, w: float) -> Panel:
 	#     （高 20→25，底 107 ≤ 108）。件名加 max_lines_visible=2：长名（如血脉
 	#     "赤炎血脉（上品·纯3）"）21 号下要 3 行，会压到下面那行——现在收尾打省略号，
 	#     全名在点开的详情页里（26 号字）看得见。
-	var tag := UiKit.make_label(p, Vector2(4, 5), Vector2(w - 8, 25), 18, Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.62))
+	# v93r（用户："铺上 ItemIcons"）：这一格**顶上压一张道具图**，种类签缩到右边——
+	#   原来整格只有三行字，翻一屏全是一样的排版，认东西全靠读字。
+	var licon := TextureRect.new()
+	licon.position = Vector2(6, 2)
+	licon.size = Vector2(26, 26)
+	licon.texture = _entry_icon(e)
+	licon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	licon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	licon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	p.add_child(licon)
+	var tag := UiKit.make_label(p, Vector2(32, 5), Vector2(w - 36, 25), 17, Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.62))
 	UiKit.set_text(tag, _kind_cn(e))
-	tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var nm := UiKit.make_label(p, Vector2(4, 29), Vector2(w - 8, 52), 21, tcol if tier >= 1 else UiKit.INK)
 	UiKit.set_text(nm, str(e.get("name", "?")))
@@ -286,6 +297,22 @@ func _make_tile(e: Dictionary, w: float) -> Panel:
 	gp.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	gp.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return p
+
+# v93r：一件战利品 → 一张图（走全项目统一的口子；认不出就返回 null，只留字）
+func _entry_icon(e: Dictionary) -> Texture2D:
+	var sid := str(e.get("set", ""))
+	if sid != "":
+		var t := Icons3.icon_for_set(sid)
+		if t != null:
+			return t
+	match str(e.get("kind", "")):
+		"junk":
+			return Icons3.icon("it_ingot")
+		"mat":
+			return Icons3.icon("it_herb")
+		"pill":
+			return Icons3.icon("it_jar")
+	return Icons3.icon("it_scroll")
 
 func _kind_cn(e: Dictionary) -> String:
 	var k := str(e.get("kind", ""))

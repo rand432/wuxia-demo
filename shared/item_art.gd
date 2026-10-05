@@ -30,28 +30,23 @@ static func icon(key: String) -> Texture2D:
 #   改成走 Cards 的公开接口：is_arts() 判功法、weapon_of() 判兵器类型、by_id().pool 判护具。
 const Cards := preload("res://shared/data_cards.gd")
 
+# v93r：**整套转发到 item_icons**（用户："功法书太雷同了""素材太少了"）。
+#   这一个是全项目所有"一件东西 → 一张图"的公共口子（行囊/仓库/出征/鉴宝都在用），
+#   所以在这里换，各处一起受益：
+#     · 功法/武学 → **每一门有自己的图**（art_<id>.png），不再一律是那本蓝皮书；
+#     · 兵器/护具 → 按套 id 稳定挑图，青锋剑和霜刃剑不会再撞脸；
+#     · 材料 → 七味各有各的图。
+const Icons := preload("res://shared/item_icons.gd")
+
 static func icon_for_set(sid: String) -> Texture2D:
 	if sid == "":
 		return null
-	if Cards.is_arts(sid):
-		return icon("it_book")          # 功法/武学一律用秘籍图
-	match Cards.weapon_of(sid):
-		"sword":
-			return icon("it_sword")
-		"dual", "dagger":
-			return icon("it_blade")
-		"spear":
-			return icon("it_spear")
-		"anqi":
-			return icon("it_dart")
-	match str(Cards.by_id(sid).get("pool", "")):
-		"armor":
-			return icon("it_armor")
-		"helm":
-			return icon("it_token")
-		"cloak":
-			return icon("it_cloak")
-	return null
+	var pool := str(Cards.by_id(sid).get("pool", ""))
+	var w := Cards.weapon_of(sid)
+	var t := Icons.for_pool(pool, w, sid)
+	if t != null:
+		return t
+	return icon("it_scroll")
 
 # v73：**按卡片名字取图**（行囊/仓库里的格子用）。
 #   为什么按名字而不是按 pool：调用方手上只有 card_label(e) 出来的中文名，

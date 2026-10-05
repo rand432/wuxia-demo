@@ -18,6 +18,7 @@ const Tower := preload("res://shared/tower.gd")
 const UiKit := preload("res://shared/ui_kit.gd")   # v77：内景垫图要用
 const Audio := preload("res://shared/audio.gd")   # v78：开箱音
 const SceneArt := preload("res://shared/scene_art.gd")
+const Icons3 := preload("res://shared/item_art.gd")   # v93r：奖励飞出来时带图
 
 signal closed
 
@@ -638,15 +639,31 @@ func _pop_rewards(items: Array) -> void:
 		var it: Dictionary = items[i]
 		var kind := str(it.get("kind", ""))
 		var fs := 20 if kind == "silver" else 18
-		var lb := _label(_item_text(it), fs, _item_col(kind))
-		lb.size = Vector2(240, 26)
-		lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		# v93r（用户："换成素材"）：奖励**带图**飞出来——34px 的图 + 右边一行字，
+		#   跟战斗里的掉落一个观感（原来只有一行字，翻来覆去全靠读）
+		var box := Control.new()
+		box.size = Vector2(220, 40)
+		box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var ic := TextureRect.new()
+		ic.position = Vector2(4, 3)
+		ic.size = Vector2(34, 34)
+		ic.texture = _reward_icon(it)
+		ic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		ic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		box.add_child(ic)
+		var rlb := _label(_item_text(it), fs, _item_col(kind))
+		rlb.position = Vector2(42, 7)
+		rlb.size = Vector2(174, 26)
+		rlb.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+		box.add_child(rlb)
 		var cx := _stage_box.size.x * 0.5
-		lb.position = Vector2(cx - 120.0, 74.0)
-		lb.modulate.a = 0.0
-		lb.scale = Vector2(0.6, 0.6)
-		lb.pivot_offset = Vector2(120, 13)
-		_pop_root.add_child(lb)
+		box.position = Vector2(cx - 110.0, 74.0)
+		box.modulate.a = 0.0
+		box.scale = Vector2(0.6, 0.6)
+		box.pivot_offset = Vector2(110, 20)
+		_pop_root.add_child(box)
+		var lb := box   # 下面那些 tween 用的就是它（整块一起飞）
 		# 落点：中间偏上，左右交错，越后面的越高一点（不叠在一起）
 		var lane := float(i % 4) - 1.5
 		var tx := cx - 120.0 + lane * 74.0
@@ -659,6 +676,19 @@ func _pop_rewards(items: Array) -> void:
 		tw.tween_interval(0.55)
 		tw.tween_property(lb, "modulate:a", 0.0, 0.30)
 		tw.tween_callback(lb.queue_free)
+
+# v93r：一件奖励 → 一张图（碎片/丹药/银两/材料各有各的）
+func _reward_icon(it: Dictionary) -> Texture2D:
+	match str(it.get("kind", "")):
+		"silver":
+			return Icons3.icon("it_ingot")
+		"pill":
+			return Icons3.icon("it_jar")
+		"mat":
+			return Icons3.icon("it_herb")
+		"frag":
+			return Icons3.icon("it_token")
+	return Icons3.icon("it_scroll")
 
 func _item_text(it: Dictionary) -> String:
 	var kind := str(it.get("kind", ""))

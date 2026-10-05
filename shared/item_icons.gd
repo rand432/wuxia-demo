@@ -29,7 +29,7 @@ static func for_pool(pool: String, weapon := "", sid := "") -> Texture2D:
 			match weapon:
 				"dual":
 					cand = ["it_blade", "wpn_blade2", "wpn_blade3"]
-				"dagger":
+				"dagger", "anqi":
 					cand = ["it_dart", "wpn_blade2"]
 				"spear":
 					cand = ["it_spear", "wpn_spear2", "wpn_spear3"]

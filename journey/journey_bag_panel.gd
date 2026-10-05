@@ -27,6 +27,7 @@ const GameState := preload("res://shared/game_state.gd")   # v37：成品显示�
 const JourneyCommon := preload("res://journey/journey_common.gd")
 const UiKit := preload("res://shared/ui_kit.gd")
 const ItemArt := preload("res://shared/item_art.gd")   # v73：按名字取水墨图
+const Icons2 := preload("res://shared/item_icons.gd")  # v93r：品级色
 
 # 包裹每页格数（右下角那格给翻页钮，3×3 里只看 8 格/页）。
 # 容量上限在 run_state.bag_cap()——宠物驮运加格数时只改那边。
@@ -187,7 +188,8 @@ func _refresh_bag() -> void:
 				lb.add_theme_color_override("font_color", UiKit.SEAL)
 			else:
 				lb.add_theme_color_override("font_color", UiKit.INK)
-			cell.add_theme_stylebox_override("panel", _cell_box(kind, is_ready))
+			# v93r（用户："同时加颜色品质"）：**边框按品级上色**（凡白/良绿/上紫/极金/绝红）
+			cell.add_theme_stylebox_override("panel", _cell_box(kind, is_ready, Icons2.quality_col_of(sid)))
 		else:
 			UiKit.set_text(lb, "")
 			if i < _cell_icons.size():
@@ -221,7 +223,7 @@ func _on_bag_page_next() -> void:
 	_refresh_bag()
 
 
-func _cell_box(kind: String, is_ready: bool) -> StyleBoxFlat:
+func _cell_box(kind: String, is_ready: bool, q_col = null) -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()
 	sb.set_corner_radius_all(6)
 	if kind == "":
@@ -230,13 +232,21 @@ func _cell_box(kind: String, is_ready: bool) -> StyleBoxFlat:
 		sb.set_border_width_all(1)
 		return sb
 	sb.set_border_width_all(2)
+	if is_ready:
+		# 能合成的：金边优先（"现在就能点"的提示）
+		sb.bg_color = Color(0.96, 0.87, 0.60)
+		sb.border_color = UiKit.GOLD
+		return sb
+	# v93r（用户："同时加颜色品质"）：**边框按品级上色**（凡白/良绿/上紫/极金/绝红）
+	if q_col != null:
+		var q: Color = q_col
+		sb.set_border_width_all(3)
+		sb.border_color = Color(q.r, q.g, q.b, 0.95)
+		sb.bg_color = (Color(0.95, 0.89, 0.76) if kind == "item" else UiKit.PAPER_DARK).lerp(Color(q.r, q.g, q.b, 1.0), 0.10)
+		return sb
 	if kind == "item":
 		sb.bg_color = Color(0.95, 0.89, 0.76)
 		sb.border_color = UiKit.SEAL
-		return sb
-	if is_ready:
-		sb.bg_color = Color(0.96, 0.87, 0.60)
-		sb.border_color = UiKit.GOLD
 		return sb
 	sb.bg_color = UiKit.PAPER_DARK
 	sb.border_color = Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.40)
