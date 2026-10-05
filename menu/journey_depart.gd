@@ -1163,9 +1163,12 @@ func _ask_strip_confirm() -> void:
 	_confirm_veil = veil
 	var pend := _art_pending()   # v12：还有人没挑 → 这一页加高一点、多一行红字
 	var pw := 560.0
-	var ph := 452.0 if not pend.is_empty() else 400.0
+	# v93 修（用户："窗口字数超了"）：正文会到十几行（三个人的随身清单 + 命数），
+	#   原来面板死给 400/452、正文只给 250 —— 字直接冲出面板压到按钮上 ✗。
+	#   现在**按正文实高配面板**：先把宽度定下来量出换行后的高度，再反推面板高度与按钮位置。
+	var ph := 452.0
 	var panel := Panel.new()
-	panel.position = Vector2((vp.x - pw) * 0.5, (vp.y - ph) * 0.5)
+	panel.position = Vector2((vp.x - pw) * 0.5, 0.0)
 	panel.size = Vector2(pw, ph)
 	panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	var psb := StyleBoxFlat.new()
@@ -1184,16 +1187,25 @@ func _ask_strip_confirm() -> void:
 
 	var bd := _label(body_txt, 15, Color(INK.r, INK.g, INK.b, 0.88))
 	bd.position = Vector2(34, 72)
-	bd.size = Vector2(pw - 68.0, 250)
+	bd.size = Vector2(pw - 68.0, 60)          # 先只定宽度
 	bd.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	panel.add_child(bd)
+	# ⚠ 别指望 get_minimum_size() —— 它对自动换行的 Label 会少算好几行（实测红字压在正文上）。
+	#   最多三个人、每人两三行，实测正文最高 ~380：直接给足 400，按这个反推面板高度，稳。
+	var body_h := 400.0
+	bd.size = Vector2(pw - 68.0, body_h)
+	ph = 72.0 + body_h + 8.0 + 48.0 + 76.0 + (56.0 if not pend.is_empty() else 0.0)
+	panel.size = Vector2(pw, ph)
+	panel.position = Vector2((vp.x - pw) * 0.5, (vp.y - ph) * 0.5)
 
 	if not pend.is_empty():
 		# v12：提醒（不拦——确认出征照走；［去挑随身功法］开那一页，回来再出征）
-		var warn := _label("★ " + _art_pending_cn() + " 身上不止一门功法，还没定带哪一门——"
-			+ "不定的话默认带身上第一门。", 16, Color(0.72, 0.16, 0.12))
-		warn.position = Vector2(34, 330)
-		warn.size = Vector2(pw - 68.0, 44)
+		# v93：这句话一行装不下会被面板右缘切掉——**手动断成两行**（别指望 autowrap 在纯中文里每次都听话）
+		var warn := _label("★ " + _art_pending_cn() + " 身上不止一门功法，还没定带哪一门。
+"
+			+ "　不定的话，默认带身上第一门。", 16, Color(0.72, 0.16, 0.12))
+		warn.position = Vector2(34, 72.0 + body_h + 10.0)
+		warn.size = Vector2(pw - 68.0, 48)
 		warn.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		panel.add_child(warn)
 		var pick := Button.new()

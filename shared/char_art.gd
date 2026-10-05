@@ -48,6 +48,22 @@ const CLIP_DIR := "res://assets/clips/"
 static var _walk_meta := {}
 static var _walk_meta_loaded := false
 
+# 通用帧序列口：名字就是 assets/char/<name>.png（帧数/宽高比查同一个 walk_frames.json）
+static func sheet(nm: String) -> Texture2D:
+	return _tex(nm)
+
+static func sheet_count(nm: String) -> int:
+	var m: Dictionary = walk_meta()
+	if not m.has(nm):
+		return 0
+	return int((m[nm] as Dictionary).get("n", 0))
+
+static func sheet_aspect(nm: String) -> float:
+	var m: Dictionary = walk_meta()
+	if not m.has(nm):
+		return 0.7
+	return float((m[nm] as Dictionary).get("aw", 0.7))
+
 static func walk_sheet(role_id: String) -> Texture2D:
 	return _tex(role_id + "_walk")
 

@@ -29,15 +29,61 @@ const PANEL_H := 1070.0   # v61：940 → 1070（护主效果给两行大字、�
 
 signal closed
 
-class PetArt extends Node2D:
+# v93（用户："宠物界面我也想有待机啊 卖萌 睡觉等等动作" / "点击它提示 被你摸摸头 然后会叫的音效"）：
+#   ① 从 Node2D 换成 **Control**——Node2D 收不到点击，摸头得有 gui_input；
+#   ② 三套帧序列（智谱图生视频 → tools/bake_walk.mjs）：pet_idle / pet_cute / pet_sleep；
+#   ③ 摸头：切"卖萌"动作 + 铃铛声 + 叫声 + 飘一行"被你摸摸头～"；长时间没人理 → 自己睡。
+class PetArt extends Control:
 	const PArt := preload("res://shared/char_art.gd")   # v92：Q版宠物图（白狐/青隼）
+	const Audio := preload("res://shared/audio.gd")
 	var t := 0.0
 	var stage := 0
 	var has_pet := true
 	var kind := "fox"
+	var act := "idle"        # idle / cute / sleep
+	var act_t := 0.0         # 当前动作还剩多久（<=0 就回 idle）
+	var quiet := 0.0         # 多久没被摸（超过 IDLE_SLEEP 就睡）
+	var pets := 0            # 被摸过几次
+	var say := ""            # 飘字
+	var say_t := 0.0
+	const SLEEP_AFTER := 24.0
+
+	func _ready() -> void:
+		size = Vector2(584.0, 170.0)
+		mouse_filter = Control.MOUSE_FILTER_STOP
+		mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+		gui_input.connect(_on_gui)
+
+	func _on_gui(ev: InputEvent) -> void:
+		if ev is InputEventMouseButton and (ev as InputEventMouseButton).pressed 				and (ev as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
+			pet_head()
+
+	# 摸头（面板里点它）
+	func pet_head() -> void:
+		if not has_pet:
+			return
+		pets += 1
+		quiet = 0.0
+		act = "cute"
+		act_t = 2.6
+		say = "被你摸摸头～" if pets % 3 != 0 else "它把头往你手心里拱了拱～"
+		say_t = 2.2
+		Audio.sfx("bell", -5.0, 1.12)               # 脖子上的铃铛
+		Audio.sfx("pet_chirp" + ("1" if pets % 2 == 1 else "2"), -9.0, 1.15)   # 叫一声
+		queue_redraw()
 
 	func _process(delta: float) -> void:
 		t += delta
+		quiet += delta
+		if act_t > 0.0:
+			act_t -= delta
+			if act_t <= 0.0:
+				act = "idle"
+		if say_t > 0.0:
+			say_t -= delta
+		# 没人理它 → 自己蜷起来睡（一被摸就醒）
+		if act == "idle" and quiet > SLEEP_AFTER:
+			act = "sleep"
 		queue_redraw()
 
 	func _draw() -> void:
@@ -50,6 +96,42 @@ class PetArt extends Node2D:
 		# v92（用户："宠物面板也没有变化"）：**面板里的狐/隼也换成 Q版图**——
 		#   跟路上那只走的是同一个取图口（CharArt.pet），一处换图两处都变。
 		#   ⚠ 顺序：先给 Rect2 定尺寸再画，不套任何 draw_set_transform（v91 白方块的教训）。
+		# v93：**帧序列优先**（待机/卖萌/睡觉三套），没有帧序列才退回单张静图
+		var anim := "pet_" + ("idle" if kind == "fox" else "hawk_idle")
+		if act == "cute":
+			anim = "pet_cute"
+		elif act == "sleep":
+			anim = "pet_sleep"
+		if kind != "fox":
+			anim = "pet_" + act if act != "idle" else "pet_hawk_idle"
+		var sheet := PArt.sheet(anim)
+		var nfr := PArt.sheet_count(anim)
+		if sheet != null and nfr > 0:
+			var aw := PArt.sheet_aspect(anim)
+			var fh := float(sheet.get_height())
+			var fw := fh * aw
+			# 待机/卖萌/睡觉 各自不同的播放速度（睡觉最慢）
+			var spd := 9.0
+			if act == "sleep":
+				spd = 3.0
+			elif act == "cute":
+				spd = 12.0
+			var fi := int(floor(t * spd)) % nfr
+			var dh := 138.0 * (1.0 + 0.06 * float(stage))
+			var dw := dh * aw
+			draw_texture_rect_region(sheet, Rect2(292.0 - dw * 0.5, 150.0 - dh, dw, dh),
+				Rect2(float(fi) * fw, 0.0, fw, fh), Color(1, 1, 1, 1))
+			if act == "sleep":
+				var zz := 0.8 + 0.2 * sin(t * 1.6)
+				draw_string(ThemeDB.fallback_font, Vector2(360.0, 56.0 - sin(t * 1.6) * 3.0), "Zzz…",
+					HORIZONTAL_ALIGNMENT_LEFT, 120.0, 20, Color(0.35, 0.32, 0.30, 0.55 * zz))
+			if say_t > 0.0 and say != "":
+				# 飘字画在**画框里面**（上方 y<0 会被同层的其它标签盖住）
+				var a := clampf(say_t / 0.5, 0.0, 1.0)
+				var yy: float = 46.0 - (2.2 - say_t) * 9.0
+				draw_string(ThemeDB.fallback_font, Vector2(292.0 - 150.0, maxf(20.0, yy)),
+					say, HORIZONTAL_ALIGNMENT_CENTER, 300.0, 21, Color(0.72, 0.16, 0.12, a))
+			return
 		var qtex := PArt.pet(kind)
 		if qtex != null:
 			var qh := 138.0 * (1.0 + 0.06 * float(stage))

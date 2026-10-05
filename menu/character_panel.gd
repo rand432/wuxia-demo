@@ -25,6 +25,7 @@ const UiKit := preload("res://shared/ui_kit.gd")
 const Elem := preload("res://shared/data_elem.gd")   # v58：五行真源（键名/中文/配色/通道口径）
 const Bonds := preload("res://shared/data_bonds.gd")   # ㊽：上阵羁绊（纯数据）
 const PillPopup := preload("res://menu/pill_popup.gd")
+const Voice := preload("res://shared/voice.gd")   # v93：开面板/换页签念一句（用户："语音包点击没听到"）
 
 const PANEL_W := 640.0
 # ㊿：面板加高 1212 → 1250，把省下来的高度全给"天赋"框（见下面那段说明）
@@ -129,6 +130,8 @@ var _panel: Panel
 var _deploy_btn: Button
 var _tabs: Array = []
 var _name_lb: Label
+var _avatar: TextureRect          # v93：圆形头像（照用户草图）
+var _avatar_rid := ""
 var _star_btn: Button
 var _break_btn: Button            # v36：［突破］（境界：每 25 级一道关，吃一颗突破丹）
 var _sub_lb: Label
@@ -267,13 +270,40 @@ func _build() -> void:
 	sep.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_panel.add_child(sep)
 
+	# v93（用户："角色面板你没有看我上次的草图"）：**左上角一个圆形头像**——
+	#   草图上就是"圆圈头像 ＋ 名字/星级 ＋〔切换角色〕＋ 经验条"。
+	#   圆圈用一个 6 行的 canvas_item 着色器裁（不引外部素材、不增加节点层级）。
+	_avatar = TextureRect.new()
+	_avatar.position = Vector2(28, 82)
+	_avatar.size = Vector2(86, 86)
+	_avatar.expand_mode = TextureRect.EXPAND_IGNORE_SIZE     # ⚠ 先设 expand 再设 size
+	_avatar.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	_avatar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var av_sh := Shader.new()
+	av_sh.code = "shader_type canvas_item;
+uniform vec4 ring_col : source_color = vec4(0.32,0.27,0.22,0.60);
+void fragment(){
+	vec4 c = texture(TEXTURE, UV);
+	float d = distance(UV, vec2(0.5));
+	float a = smoothstep(0.5, 0.47, d);
+	float ring = smoothstep(0.5, 0.47, d) - smoothstep(0.45, 0.42, d);
+	c.rgb = mix(c.rgb, ring_col.rgb, ring * ring_col.a);
+	c.a = max(c.a * a, ring * ring_col.a);
+	COLOR = c;
+}
+"
+	var av_mat := ShaderMaterial.new()
+	av_mat.shader = av_sh
+	_avatar.material = av_mat
+	_panel.add_child(_avatar)
+
 	_name_lb = _label("", 32, INK)
-	_name_lb.position = Vector2(28, 82)
-	_name_lb.size = Vector2(420, 38)
+	_name_lb.position = Vector2(132, 82)
+	_name_lb.size = Vector2(320, 38)
 	_panel.add_child(_name_lb)
 	_sub_lb = _label("", 15, Color(INK.r, INK.g, INK.b, 0.60))
-	_sub_lb.position = Vector2(28, 124)
-	_sub_lb.size = Vector2(460, 22)
+	_sub_lb.position = Vector2(132, 130)
+	_sub_lb.size = Vector2(360, 22)
 	_sub_lb.mouse_filter = Control.MOUSE_FILTER_STOP
 	_sub_lb.gui_input.connect(_press_gui.bind(_sub_lb, "profile", -1))
 	_panel.add_child(_sub_lb)
@@ -941,6 +971,13 @@ func _refresh() -> void:
 	var exp := int(role.get("exp", 0))
 	var avail := GameState.levels_available(rid)
 	_name_lb.text = str(role.get("name", "?")) + _star_suffix(rid)
+	# v93：换人就把圆形头像一起换（胸像优先，没有就退回 Q版）
+	if _avatar != null and _avatar_rid != rid:
+		_avatar_rid = rid
+		var atex := CharArt.face(rid)
+		if atex == null:
+			atex = CharArt.q(rid)
+		_avatar.texture = atex
 	var cap := GameState.level_cap(rid)      # v36：上限随境界走（25×(境界+1)）
 	var realm := GameState.role_realm(rid)
 	_sub_lb.text = (str(role.get("sub", "")) + "　·　" + GameState.realm_name(realm) + " · " + str(lv) + "/" + str(cap) + " 级")
@@ -1617,11 +1654,18 @@ func _on_deploy() -> void:
 
 # ---- 开合 ----
 
+# v93：说话人前缀——"chen_shi" 的文件名是 chenshi_01（跟游历那边同一套口径）
+func _voice_say() -> void:
+	var rid := str(ROLE_IDS[_sel])
+	var spk := "chenshi" if rid == "chen_shi" else rid
+	Voice.say_file(spk + "_01")
+
 func open() -> void:
 	_sel = 0
 	if _sel == 0 and not GameState.disciple_joined:
 		_sel = 1
 	_refresh()
+	_voice_say()
 	_set_msg("")   # v62x：底部的常驻提示去掉——开屏不再摆 DEFAULT_HINT（要提示看长按）
 	visible = true
 
@@ -1645,6 +1689,7 @@ func _on_tab(idx: int) -> void:
 		return
 	_sel = idx
 	_refresh()
+	_voice_say()      # v93：换谁就念谁那一句（没录音的静默跳过）
 
 func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:

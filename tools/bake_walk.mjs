@@ -12,12 +12,16 @@ import { spawnSync } from 'node:child_process';
 
 const FFMPEG = process.env.FFMPEG || 'C:\\Users\\zq300\\ffmpeg\\bin\\ffmpeg.exe';
 const args = process.argv.slice(2);
+const optOf = (f, d) => { const i = args.indexOf('--' + f); return i >= 0 && args[i + 1] ? args[i + 1] : d; };
 const id = args[0];
 const N = parseInt(args[1] || '10', 10);
 const H = parseInt(args[2] || '190', 10);
-if (!id) { console.log('用法：node tools/bake_walk.mjs <id> [帧数] [高度]'); process.exit(1); }
+if (!id) { console.log('用法：node tools/bake_walk.mjs <id|xx.mp4> [帧数] [高度] [--out 名字]'); process.exit(1); }
 
-const mp4 = path.resolve('assets/gen/aivideo', 'walk_' + id + '.mp4');
+// 允许直接给 mp4 路径（宠物/敌人那些不叫 walk_<id> 的片子），输出名用 --out 指定
+const isPath = /\.mp4$/i.test(id);
+const mp4 = isPath ? path.resolve(id) : path.resolve('assets/gen/aivideo', 'walk_' + id + '.mp4');
+const outName = optOf('out', isPath ? path.basename(id).replace(/\.mp4$/i, '') : id);
 if (!fs.existsSync(mp4)) { console.log('✗ 没有视频：' + mp4); process.exit(1); }
 const tmp = path.join(os.tmpdir(), 'walkbake_' + id + '_' + Date.now());
 fs.mkdirSync(tmp, { recursive: true });
@@ -41,10 +45,20 @@ const use = cuts.length === frames.length ? cuts : frames.map((f) => path.join(t
 console.log('用 ' + (cuts.length === frames.length ? '抠好的' : '原') + ' 帧拼图');
 
 // ③ 横向拼图（等宽：都缩到同一高度，按最宽的留边）
-const sheet = path.resolve('assets/char', id + '_walk.png');
+const sheet = path.resolve('assets/char', outName + '.png');
 const inputs = use.flatMap((p) => ['-i', p]);
 const n = use.length;
-const parts = use.map((_, i) => '[' + i + ':v]scale=-1:' + H + ',pad=iw:ih:0:0:color=0x00000000[s' + i + ']').join(';');
+// ⚠ 各帧抠完底之后**宽度不一样**（裁到内容框了）——必须统一补边到同宽，
+//   否则横向拼出来的"序列图"每帧宽度不同，游戏里按等宽切片就会串帧（宠物那次就是两个头）。
+const FFROBE = 'C:\\Users\\zq300\\ffmpeg\\bin\\ffprobe.exe';
+let maxW = 0;
+for (const p of use) {
+	const rr = spawnSync(FFROBE, ['-v', 'error', '-show_entries', 'stream=width,height', '-of', 'csv=p=0', p], { encoding: 'utf8' });
+	const w = parseInt(String(rr.stdout).trim().split(',')[0], 10);
+	if (w > maxW) maxW = w;
+}
+// ⚠ hstack 要求每路**尺寸完全一致**：先等比缩到"不超过 maxW×H"，再补边到正好 maxW×H
+const parts = use.map((_, i) => '[' + i + ':v]scale=' + maxW + ':' + H + ':force_original_aspect_ratio=decrease,pad=' + maxW + ':' + H + ':(ow-iw)/2:(oh-ih)/2:color=0x00000000[s' + i + ']').join(';');
 const stack = use.map((_, i) => '[s' + i + ']').join('') + 'hstack=inputs=' + n;
 const r3 = spawnSync(FFMPEG, ['-y', '-loglevel', 'error', ...inputs, '-filter_complex', parts + ';' + stack, '-frames:v', '1', sheet], { stdio: 'inherit' });
 if (r3.status !== 0) { console.log('✗ 拼图失败'); process.exit(1); }
@@ -59,7 +73,7 @@ const fw = (() => {
 	const [w, h] = String(r.stdout).trim().split(',').map(Number);
 	return w && h ? (w / n) / h : 0.63;
 })();
-m[id] = { n, aw: Math.round(fw * 1000) / 1000 };
+m[outName] = { n, aw: Math.round(fw * 1000) / 1000 };
 fs.writeFileSync(man, JSON.stringify(m, null, 1));
-console.log('✓ 清单 ' + man + ' → ' + JSON.stringify(m[id]));
+console.log('✓ 清单 ' + man + ' → ' + JSON.stringify(m[outName]));
 fs.rmSync(tmp, { recursive: true, force: true });

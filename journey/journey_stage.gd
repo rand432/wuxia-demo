@@ -552,6 +552,9 @@ func _sync_pet_actor() -> void:
 	_pet_offset = Vector2(52.0, -150.0) if kind == "hawk" else Vector2(58.0, 4.0)
 	if _pet_actor == null or not is_instance_valid(_pet_actor):
 		_pet_actor = PetActor.new()
+		# v93 修（用户："宠物挡住了"）：**摆到队伍后面**——原来 add_child 在主人/同伴之后，
+		#   画在最上层，站在脚边时正好糊在队友身上。z_index=-1 让它压在人和场景之下。
+		_pet_actor.z_index = -1
 		add_child(_pet_actor)
 	_pet_actor.kind = kind
 	_pet_actor.position = _walker.position + _pet_offset
