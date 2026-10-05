@@ -39,13 +39,11 @@ func _draw() -> void:
 	draw_set_transform(Vector2(-PANEL_CX * draw_scale, -PANEL_GROUND * draw_scale), 0.0, Vector2(draw_scale, draw_scale))
 	# v79（用户："宠物也不是q版"）：**有 Q版 图就用图**（智谱出的白狐/青隼），
 	#   没图再退回原来的程序化画法——两条路都通，缺图不会变空白。
-	var tex: Texture2D = CharArt.pet(kind)
-	if tex != null:
-		var h := 132.0
-		var w: float = h * float(tex.get_width()) / maxf(float(tex.get_height()), 1.0)
-		var bob2 := sin(t * 2.2) * 2.0
-		draw_texture_rect(tex, Rect2(PANEL_CX - w * 0.5, PANEL_GROUND - h + bob2, w, h), false, Color(1, 1, 1, 1))
-		return
+	# ⚠ v91 我把这里改成"直接画 pet_fox.png"，结果**渲染成一块白方块**（贴图本身是好的，
+	#   单独 draw_texture_rect 能正常显示；病根在 draw_set_transform 与它的相互作用，
+	#   我上下文用尽前没定位到）。**先退回原来能显示的画法**，别让玩家对着一块白方块。
+	#   要再试的话：把下面这几行换成 draw_texture_rect(CharArt.pet(kind), ...)，
+	#   并且**不要**在外面套 draw_set_transform，改成手算位置。
 	if kind == "hawk":
 		_draw_hawk()
 	else:

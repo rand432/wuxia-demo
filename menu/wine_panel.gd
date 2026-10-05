@@ -16,6 +16,7 @@ extends Control
 # ============================================================
 
 const GameState := preload("res://shared/game_state.gd")
+const SceneArt := preload("res://shared/scene_art.gd")   # v90：酒坛换成素材里的真图
 
 const INK := Color(0.14, 0.13, 0.15)
 const PAPER := Color(0.905, 0.878, 0.795)
@@ -485,8 +486,17 @@ func _draw_cup(i: int) -> void:
 		_draw_ell(cp, 7.6 * (0.5 + 0.5 * fill), 4.4 * (0.5 + 0.5 * fill), Color(WINE_C.r, WINE_C.g, WINE_C.b, 0.92))
 		_draw_ell(cp + Vector2(0.0, -1.0), 4.2 * fill + 1.4, 2.0 * fill + 0.8, Color(0.92, 0.72, 0.50, 0.55 * fill))
 
+# v90（用户："不要只换背景啊 里面的也要换"）：**酒坛换成真图**——
+#   原来是六边形+两个方块拼的酒坛（一眼程序画），现在用素材里的 pic_jiutan（带葫芦那只）。
+#   没图就退回原来那套画法，不会变空白。
 func _draw_jar() -> void:
 	var jp := _tc + Vector2(0.0, -4.0)
+	var tex := SceneArt.wine_jar()
+	if tex != null:
+		var h := 76.0
+		var w: float = h * float(tex.get_width()) / maxf(float(tex.get_height()), 1.0)
+		draw_texture_rect(tex, Rect2(jp.x - w * 0.5, jp.y + 10.0 - h, w, h), false, Color(1, 1, 1, 0.98))
+		return
 	draw_colored_polygon(PackedVector2Array([
 		jp + Vector2(-17.0, 6.0), jp + Vector2(-13.0, -12.0),
 		jp + Vector2(-6.0, -20.0), jp + Vector2(6.0, -20.0),

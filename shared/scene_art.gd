@@ -34,6 +34,13 @@ static func tower() -> Texture2D:
 static func inn() -> Texture2D:
 	return _tex("inn")
 
+# v90：素材里的**酒坛 / 酒桌**（品酒坊用；pic_jiutan / pic_table 抠底后入库）
+static func wine_jar() -> Texture2D:
+	return _tex("props/wine_jar_cut")
+
+static func wine_table() -> Texture2D:
+	return _tex("props/wine_table_cut")
+
 # v79：素材 UI 图集里切出来的**书法字**（升级 / 狭路相逢 / 任务完成 / 强敌来袭 / VS）
 const UI_TXT := {
 	"levelup": "txt_levelup",
@@ -75,12 +82,27 @@ static func alchemy_room() -> Texture2D:
 static func store_room() -> Texture2D:
 	return _tex("room_store")
 
+# v90：宝箱**开/关两张真图**（智谱出的水墨木箱 + 原来那张装满银锭的）
+static func chest_closed() -> Texture2D:
+	return _tex("chest_closed")
+
+static func chest_open() -> Texture2D:
+	return _tex("chest_open")
+
 static func chest_art() -> Texture2D:
 	return _tex("chest_open")
 
 # v78：**素材里那两张水墨城郭**（影之刃 Atlas_MainMap 切出来的）——
 #   用户指着图问"这个不适合做游历旅途的更换场景？"——适合，而且跟本作是一套语言。
 #   月夜那幅给游历当远景，血月那幅给爬塔/战斗。
+# v91（用户："画卷也要变一变啊 不是有素材吗"）：**素材背景通用口**——
+#   assets/scenes/mat/ 下那 22 幅（切自影之刃的水墨图集）按名字取，换图只改调用处的名字。
+static func mat(name: String) -> Texture2D:
+	var p := "res://assets/scenes/mat/" + name + ".png"
+	if ResourceLoader.exists(p):
+		return load(p) as Texture2D
+	return null
+
 static func map_night() -> Texture2D:
 	return _tex("map_night")
 

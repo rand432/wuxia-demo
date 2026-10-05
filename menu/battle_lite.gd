@@ -1611,6 +1611,8 @@ func _act() -> void:
 		if edead:
 			_enemy_fall_pending()
 			elines.append(str(_e()["name"]) + " 倒下了。")
+			# v92：倒下的那一刻把掉落「爆」出来（演出，不影响结算）
+			_loot_burst(Vector2(_enemy_base_x(), _ground_y - 40.0))
 			_push(elines)
 			_refresh()
 			# 与 _member_act 收尾同一口径：先看敌人是不是清完了，再看我方还剩几个
@@ -1637,6 +1639,22 @@ func _act() -> void:
 #   走 GameState.elem_of_card（表里写死的功法元素优先 → 兵器的随机元素 → 物理）。
 func _member_elem(m: Dictionary) -> String:
 	return GameState.elem_of_card(str(m.get("weapon_id", "")))
+
+# v88（用户规则：「元素类上品/极品/绝品功法才会触发元素特有效果；良品/凡品没有元素功法；
+#   如果没有元素功法，元素武器只有元素伤害」）：
+#   查这个人身上有没有**元素功法**（上品及以上、且带元素的那几门）——
+#   有 → 这一手才给印记（燃烧/湿身/镀金…）；没有 → 手里那把元素武器只走元素伤害。
+#   两套引擎同一口径（游历那边见 duel_battle._elem_from_high_art）。
+func _elem_art_of(m: Dictionary) -> String:
+	for sid_v in (m.get("arts", []) as Array):
+		var sid := str(sid_v)
+		var fe := GameState.elem_of_card(sid)
+		if fe == "":
+			continue
+		var q := Cards.quality_of(sid)
+		if q == "上品" or q == "极品" or q == "绝品":
+			return fe
+	return ""
 
 # v58：这一手还要补多少增伤（百分点）——`atk` 里已经含**全伤害**，这里只补另一半：
 #   物理＝物理伤害%；元素＝该元素伤害%。两者相加再乘，不重复计全伤害那一份。
@@ -2698,10 +2716,15 @@ func _e_take(raw: int, src: Dictionary = {}) -> int:
 	# v58（用户第 5 条）：**元素攻击按属性给印记**——火水打首领、金木土叠自己。
 	#   加成记进印记条目（用户："燃烧【吃火属性加成】"），之后掉血与爆发都按它放大。
 	#   ⚠ 每一次伤害结算都会调一次（连击/群攻各算一次）——这正是"叠层"的来源。
-	if not src.is_empty() and Elem.is_elem_attack(mel) and _e_hp() > 0:
-		var eb := 1.0 + _elem_bonus_pt(src, mel) / 100.0
-		eb *= 1.0 + St.elem_gain(src, mel) / 100.0
-		var mr: Dictionary = St.apply_elem_mark(src, _e(), mel, eb)
+	# v88：印记只认**元素功法**给的元素；手里的元素武器只算伤害通道（用户规则）。
+	#   敌人自带的元素照给（塔 800 关起 / 游历难度 25 起才有，那是敌人的本事）。
+	var emark := _elem_art_of(src)
+	if emark == "" and str(src.get("elem", "")) == mel:
+		emark = mel
+	if not src.is_empty() and emark != "" and _e_hp() > 0:
+		var eb := 1.0 + _elem_bonus_pt(src, emark) / 100.0
+		eb *= 1.0 + St.elem_gain(src, emark) / 100.0
+		var mr: Dictionary = St.apply_elem_mark(src, _e(), emark, eb)
 		if not mr.is_empty():
 			var mmsg := str(mr.get("msg", ""))
 			lines_ok(mmsg)
@@ -3406,6 +3429,36 @@ func _center_move(txt: String, col: Color) -> void:
 # v58（用户："伤害弹出记得标注是什么类型伤害"）：加一个可选 `elem`——
 #   有元素时在数字左边挂一枚属性徽章（UiKit.elem_number_row，与游历同一处口径）；
 #   空串＝物理/真实，维持老样子（只有数字）。
+# v92（用户："还有击败后什么文钱 银两 道具 经验 类似爆装备一样地上爆一下的动画
+#   然后朝着包裹移动这种"）：**掉落实体化**——
+#   敌人倒下时，把这一场会掉的东西具象成四块小牌子：先从地上"砰"地弹开（带一点回弹），
+#   停一拍让人看清，再各自划一道弧**飞向右下角的行囊**，进包即消失。
+#   纯演出：数值结算一个字没动（照旧走 _emit_done / 村口的清缴账）。
+func _loot_burst(at: Vector2) -> void:
+	var items := [
+		{"t": "文钱", "c": Color(0.72, 0.58, 0.22)},
+		{"t": "银两", "c": Color(0.80, 0.78, 0.72)},
+		{"t": "经验", "c": Color(0.36, 0.62, 0.44)},
+		{"t": "道具", "c": Color(0.62, 0.36, 0.30)},
+	]
+	for i in items.size():
+		var it: Dictionary = items[i]
+		var lb := _label(str(it["t"]), 16, it["c"])
+		lb.size = Vector2(60, 24)
+		lb.position = at
+		add_child(lb)
+		var dx := (float(i) - 1.5) * 28.0
+		var rise := 44.0 + float(i % 2) * 14.0
+		var tw := lb.create_tween()
+		tw.set_parallel(true)
+		tw.tween_property(lb, "position", at + Vector2(dx, -rise), 0.30).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		tw.chain().tween_interval(0.24)
+		# ⚠ 本控件 size 常是 (0,0)（见 _build_card_rows 那段说明）——问视口才靠得住
+		var vp := get_viewport_rect().size
+		tw.chain().tween_property(lb, "position", Vector2(vp.x - 96.0, vp.y - 84.0), 0.44).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
+		tw.chain().tween_property(lb, "modulate:a", 0.0, 0.12)
+		tw.chain().tween_callback(lb.queue_free)
+
 func _float_at(pos: Vector2, txt: String, col: Color, fs: int, elem := "") -> void:
 	var node: Control = UiKit.elem_number_row(txt, col, elem, fs)
 	var w: float = node.custom_minimum_size.x

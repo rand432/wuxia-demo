@@ -20,6 +20,7 @@ extends Node2D
 
 const Conf := preload("res://menu/menu_conf.gd")
 const Draw := preload("res://menu/menu_draw.gd")
+const CharArt := preload("res://shared/char_art.gd")   # v91：村里的弟子用 Q版立绘
 const Build := preload("res://menu/data_build.gd")
 const SceneArt := preload("res://shared/scene_art.gd")   # v67：主场景·村景长卷（远景垫图层）
 
@@ -84,6 +85,21 @@ func _draw() -> void:
 
 # 远景垫图：底部对齐在 y=900（村子的地平线），宽度铺满整条卷轴（记号最远到 x=2490）
 func _backdrop() -> void:
+	# v91（用户："画卷也要变一变啊 不是有素材吗"）：**远景区换成素材里的水墨山水**——
+	#   原来垫的是 AI 村景（白底为主，铺上去几乎等于没有），现在垫素材那幅
+	#   「远山＋云雾＋水面」，正反交替平铺铺满整条卷轴，村子里的房子压在上面正好。
+	#   ⚠ 放在这一层（村景层）而不是 menu_scroll：那层被本层按顺序盖住，画了也看不见。
+	var mtex := SceneArt.mat("city_hills_b")
+	if mtex != null:
+		var mh := 470.0
+		var mw: float = mh * float(mtex.get_width()) / maxf(float(mtex.get_height()), 1.0)
+		var period := mw * 2.0
+		var x0 := 0.0
+		while x0 < 2900.0:
+			if Draw.vis(cam, x0, x0 + mw) or Draw.vis(cam, x0 + mw, x0 + period):
+				draw_texture_rect(mtex, Rect2(x0, 96.0, mw, mh), false, Color(1, 1, 1, 0.72))
+				draw_texture_rect(mtex, Rect2(x0 + mw, 96.0, -mw, mh), false, Color(1, 1, 1, 0.72))
+			x0 += period
 	var tex := SceneArt.village()
 	if tex == null:
 		return
@@ -1069,4 +1085,13 @@ func _disciple() -> void:
 		return
 	var bob := sin(t * 1.1) * 0.7
 	var look := sin(t * 0.23) * 1.6
+	# v91（用户："程序的画和图都堆在一起 不违和吗？程序做的图可以全部替换掉"）：
+	#   村里站着的这个小人是**火柴人**（Draw.mini_person）——旁边就是 AI 的房子，落差太大。
+	#   改成用**Q版立绘**（跟游历/战斗里的是同一张），呼吸起伏照旧。
+	var qtex := CharArt.q("player")
+	if qtex != null:
+		var hh := 92.0
+		var ww: float = hh * float(qtex.get_width()) / maxf(float(qtex.get_height()), 1.0)
+		draw_texture_rect(qtex, Rect2(x + look - ww * 0.5, y - hh + bob, ww, hh), false, Color(1, 1, 1, 1))
+		return
 	Draw.mini_person(self, x + look, y, -1.0, 1.0 + bob * 0.15, bob, false)

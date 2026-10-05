@@ -1690,27 +1690,43 @@ func _build_card_rows(rows: Array, interactive: bool) -> void:
 		var acted := bool(rd.get("acted", false))
 		var own_col: Color = rd.get("col", UiKit.INK)
 		# 左边那一列：谁 · 哪一排（这轮已经出过手就打灰＋写明）
-		var lb := UiKit.make_label(row, Vector2(6, ry + 26.0), Vector2(CARD_LABEL_W - 10.0, 60), 17, own_col)
-		var ltxt := str(rd.get("who", "")) + "\n" + str(rd.get("row_cn", "")) + "排"
-		if acted:
-			ltxt += "\n已出手"
-		UiKit.set_text(lb, ltxt)
-		lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		if acted:
-			lb.modulate = Color(1, 1, 1, 0.45)
+		# v89b：**一手牌不画这一列**——牌都混在一起了，"谁·哪一排"没有意义，
+		#   主人信息改标在每张牌的角上（见下面 own_nm 那几行）。
+		if not bool(rd.get("hand", false)):
+			var lb := UiKit.make_label(row, Vector2(6, ry + 26.0), Vector2(CARD_LABEL_W - 10.0, 60), 17, own_col)
+			var ltxt := str(rd.get("who", "")) + "\n" + str(rd.get("row_cn", "")) + "排"
+			if acted:
+				ltxt += "\n已出手"
+			UiKit.set_text(lb, ltxt)
+			lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			if acted:
+				lb.modulate = Color(1, 1, 1, 0.45)
 		var cards: Array = rd.get("cards", [])
 		var n := cards.size()
+		# v89b：一手牌（hand=true）时**居中 + 重叠**排；一人一排的老路子照旧。
+		var is_hand := bool(rd.get("hand", false))
+		var step := cw + CARD_GAP
+		var x0 := CARD_LABEL_W
+		if is_hand:
+			var avail := vw - 48.0
+			if float(n) * step > avail:
+				# 重叠：牌多就挤紧一点，最少留 40 像素露头（够看清名字的第一个字 + 主人色）
+				step = maxf(40.0, (avail - cw) / maxf(1.0, float(n - 1)))
+			x0 = (vw - (cw + float(n - 1) * step)) * 0.5
 		for i in n:
 			var c: Dictionary = cards[i]
 			# ㊿：**按张判**能不能出——技能冷却好了就能出（一整排可能出好几张）
 			var spent := _card_used(c)
 			var usable := interactive and not spent
 			var card := Panel.new()
-			card.position = Vector2(CARD_LABEL_W + float(i) * (cw + CARD_GAP), ry)
+			card.position = Vector2(x0 + float(i) * step, ry)
 			card.size = Vector2(cw, ch)
 			card.pivot_offset = Vector2(cw * 0.5, ch)
-			# 一点点扇形味道（纯装饰，不参与排版）：整排左右各偏 4° 以内
-			card.rotation = deg_to_rad((float(i) - float(n - 1) * 0.5) * 2.0)
+			# v89（用户草图里三张是散开的）：扇形角度 2.0 → **3.4 度/张**，
+			#   并且中间那张略微抬高一点——像一把摊开的手牌，不再是整齐一排。
+			var fk := float(i) - float(n - 1) * 0.5
+			card.rotation = deg_to_rad(fk * 3.4)
+			card.position.y += absf(fk) * 4.0
 			card.mouse_filter = Control.MOUSE_FILTER_STOP if usable else Control.MOUSE_FILTER_IGNORE
 			var sb := StyleBoxFlat.new()
 			sb.bg_color = Color(0.93, 0.91, 0.85, 0.97) if usable else Color(0.80, 0.78, 0.74, 0.85)
@@ -1723,14 +1739,22 @@ func _build_card_rows(rows: Array, interactive: bool) -> void:
 			_card_meta.append(c)
 			_card_panels.append(card)
 			_card_base.append({"pos": card.position, "rot": card.rotation, "lift": 26.0})
-			# v54（玩家反馈："选卡字体还是太小了"）：牌面 15/10/10 → 17/13/12
-			var t1 := UiKit.make_label(card, Vector2(5, 4), Vector2(cw - 10.0, 26), 17, c.get("col", UiKit.INK))
+			# v89（用户给的草图：「点击或者长按可以完全显示，不长按只显示名字」）：
+			#   **牌面只留名字**——原来那张 26 字的缩略效果整块撤掉（牌一下子清爽了），
+			#   效果全文挪到点击/长按弹的放大窗里（见 _show_card_zoom）。
+			#   名字跟着放大、牌面竖直居中，远看就是一叠牌。
+			# v89b：混排的一手牌里，**牌角标主人名字**（跟边框同色）——一眼看出这张是谁的
+			var own_nm := str(c.get("own_nm", ""))
+			if own_nm != "":
+				var to := UiKit.make_label(card, Vector2(5, 3), Vector2(cw - 10.0, 18), 12,
+					Color(own_col.r, own_col.g, own_col.b, 0.80))
+				UiKit.set_text(to, own_nm)
+				to.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			var t1 := UiKit.make_label(card, Vector2(6, 20.0 if own_nm != "" else 0.0), Vector2(cw - 12.0, ch - 50.0 if own_nm != "" else ch - 30.0), 23, c.get("col", UiKit.INK))
 			UiKit.set_text(t1, str(c.get("name", "?")))
 			t1.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			var t2 := UiKit.make_label(card, Vector2(5, 32), Vector2(cw - 10.0, 54), 13, UiKit.DIM)
-			UiKit.set_text(t2, _card_face_sub(str(c.get("sub", ""))))
-			t2.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			t2.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			t1.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+			t1.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 			var t3 := UiKit.make_label(card, Vector2(5, 87), Vector2(cw - 10.0, 24), 12, UiKit.DIM)
 			if spent:
 				UiKit.set_text(t3, "已出")
@@ -1769,21 +1793,36 @@ func _row_of_cards(ai: int, cards: Array, acted: bool) -> Dictionary:
 # ㊿：全队手牌——每个活着的人一排（含这轮已经出过的那几张，打灰但看得见）
 #   row["acted"] 只在**这一排的牌全出完了**时才为真（左边那列好写"已出手"）
 func _team_rows() -> Array:
+	# v89b（用户：「所有牌都在上面哦 不是三个人分开哦…之所以扇形就保证有充足空间占手牌」）：
+	#   **合成一手牌** —— 三个人的牌混在**同一排**扇形摊开。
+	#   原来是一人一排（三排叠着），牌多的时候又挤又占屏幕；
+	#   改成一手之后靠**扇形重叠**省地方：十几张也放得下，而且一眼看全"这一轮能出什么"。
+	#   每张牌自己带主人（own_col 描边 + 牌面小名字 + meta 里的 ai），所以混排不会认错人。
 	var rows: Array = []
 	if _state == null:
 		return rows
 	var keep := _p_focus
+	var hand: Array = []
 	for i in _allies.size():
 		if not _ally_alive(i):
 			continue
 		_state.use_member(i)                 # 武学冷却/功法是按成员存的，得先切过去
-		var cards := _cards_for(i)
-		var gone := 0
-		for c_v in cards:
-			if _card_used(c_v):
-				gone += 1
-		rows.append(_row_of_cards(i, cards, gone >= cards.size() and not cards.is_empty()))
+		var al := ally_at(i)
+		var rcol: Color = ROLE_CARD_COL.get(str(al.get("role_id", "")), UiKit.INK)
+		var own := str(al.get("name", "我"))
+		for c_v in _cards_for(i):
+			var c: Dictionary = c_v
+			c["ai"] = i                      # 这张牌是谁的（出牌/放大窗都要用）
+			c["own_col"] = rcol              # 主人配色（牌框 + 名字）
+			c["own_nm"] = own                # 主人名字（牌面角上一行小字）
+			hand.append(c)
 	_state.use_member(keep)                  # 还原聚焦，别让别人读到他的功法
+	if hand.is_empty():
+		return rows
+	rows.append({
+		"ai": _p_focus, "who": "手牌", "row_cn": "", "col": UiKit.INK,
+		"acted": false, "hand": true, "cards": hand,
+	})
 	return rows
 
 # ㊿：提示行文案——选没选中不一样；倒计时由 _paint_card_tip 统一拼上去
@@ -1875,10 +1914,16 @@ func _show_card_zoom(i: int) -> void:
 	var head := UiKit.make_label(panel, Vector2(0, 18), Vector2(600, 30), 17, own_col)
 	UiKit.set_text(head, str(c.get("who", "")) + " · " + str(c.get("row_cn", "")) + "排　·　" + str(c.get("kind_cn", "")))
 	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	var nm := UiKit.make_label(panel, Vector2(0, 56), Vector2(600, 46), 32, c.get("col", UiKit.INK))
-	UiKit.set_text(nm, "『" + str(c.get("name", "?")) + "』")
+	# v89（用户草图：放大后是「大招；长风破浪」+「效果；xxxxxx」）：
+	#   名字那行改成 **「种类 · 名字」**（原来种类挤在顶栏小字里，一眼扫不到）。
+	var nm := UiKit.make_label(panel, Vector2(0, 54), Vector2(600, 48), 32, c.get("col", UiKit.INK))
+	var kcn := str(c.get("kind_cn", ""))
+	UiKit.set_text(nm, (kcn + " ·　" if kcn != "" else "") + str(c.get("name", "?")))
 	nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	var bd := UiKit.make_label(panel, Vector2(40, 118), Vector2(520, 250), 19, Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.92))
+	# 「效果」小标题——草图上就是这个格式
+	var eh := UiKit.make_label(panel, Vector2(40, 112), Vector2(520, 26), 15, Color(UiKit.SEAL.r, UiKit.SEAL.g, UiKit.SEAL.b, 0.85))
+	UiKit.set_text(eh, "效　果")
+	var bd := UiKit.make_label(panel, Vector2(40, 142), Vector2(520, 226), 19, Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.92))
 	UiKit.set_text(bd, _card_zoom_text(c))
 	bd.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	var tip := UiKit.make_label(panel, Vector2(0, 386), Vector2(600, 30), 16, UiKit.SEAL)
@@ -2561,12 +2606,22 @@ func _ex_ult_cut() -> float:
 #   ③ 都没有＝物理（空串）
 #   ⚠ 敌人这一侧返回空：塔/游历的敌人 `weapon` 字段记的是**类型**（sword/dual/…），
 #     不是件名，没有元素可查。要给怪上五行（比如袖箭门给水、铁旗堡给金）得再定一版数据。
+# v88（用户规则：「元素类上品/极品/绝品功法才会触发元素特有效果；良品/凡品没有元素功法；
+#   如果没有元素功法，元素武器只有元素伤害」）：
+#   这一手的元素**来自哪里**决定了要不要给印记——来自**上品及以上的功法**才给（见 _apply_elem_mark_on_hit）。
+#   武器带的元素只算"伤害通道"（不吃防御、不可暴击），不给燃烧/湿身那一类特有效果。
+var _elem_from_high_art := false
+
 func _atk_elem(art: Dictionary, is_player: bool) -> String:
 	var sid := str(art.get("_sid", ""))
 	if sid != "":
 		var fe := GameState.elem_of_card(sid)
 		if fe != "":
+			# v88：只有上品及以上才算"元素功法"（良品/凡品本来也摇不到元素，双保险）
+			var q := Cards.quality_of(sid)
+			_elem_from_high_art = (q == "上品" or q == "极品" or q == "绝品")
 			return fe
+	_elem_from_high_art = false
 	if is_player and _state != null:
 		return GameState.elem_of_card(_state.weapon_id_of_member(_p_focus))
 	# v58：敌人的属性写在它自己的字典上（塔那边第 400 关起由 tower.gd 给；
@@ -2581,6 +2636,13 @@ func _atk_elem(art: Dictionary, is_player: bool) -> String:
 func _apply_elem_mark_on_hit() -> void:
 	if not Elem.is_elem_attack(_cur_elem):
 		return
+	# v88（用户规则）：**没有元素功法，元素武器就只有元素伤害**——印记是"特有效果"，
+	#   只由上品及以上的元素功法给。武器摇出来的元素不触发。
+	var fmark := str(_cur().get("elem", ""))
+	if not _elem_from_high_art:
+		# 例外：敌人自带的元素（塔 800 关起 / 游历难度 25 起）仍然照给——那是敌人的本事
+		if fmark == "" or fmark != _cur_elem:
+			return
 	if _state == null or _foe_hp() <= 0:
 		return
 	var eb := _elem_eb_for(_a(), _cur_elem)

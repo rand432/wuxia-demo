@@ -96,6 +96,23 @@ class ChestArt extends Control:
 		var h := size.y
 		if w <= 1.0 or h <= 1.0:
 			return
+		# v90（用户：「把宝箱…动画就好了啊」）：**换成真图开合**——
+		#   关着 / 开着两张水墨木箱；盖子过了 45% 就换那张开着的，
+		#   抖动（开箱时）与"嘴里透出的光"照旧由这里画，所以动画一点没少，
+		#   只是箱子本身从"几十行 draw_* 拼的线条"变成了真图。
+		#   取不到图就退回下面那套老画法，页面不会开天窗。
+		var tex: Texture2D = SceneArt.chest_open() if lid > 0.45 else SceneArt.chest_closed()
+		if tex != null:
+			var tw := w * 1.04
+			var th: float = tw * float(tex.get_height()) / maxf(float(tex.get_width()), 1.0)
+			var sh := 0.0
+			if shake_t > 0.0:
+				sh = sin(shake_t * 48.0) * 3.2
+			draw_texture_rect(tex, Rect2((w - tw) * 0.5 + sh, h - th, tw, th), false, Color(1, 1, 1, 1))
+			if glow > 0.01:
+				draw_circle(Vector2(w * 0.5, h - th * 0.62), th * 0.46 * glow,
+					Color(1.0, 0.95, 0.72, 0.30 * glow))
+			return
 		var base := tier_col()
 		var wood_d := base.darkened(0.35)
 		var wood_l := base.lightened(0.16)
@@ -201,7 +218,10 @@ func _build() -> void:
 	_panel.add_theme_stylebox_override("panel", psb)
 	add_child(_panel)
 	# v77：垫一张宝箱特写（用户：「是不是也要换图了」）——34% 透明度，纸底还透、字照样清楚
-	UiKit.add_room_bg(_panel, SceneArt.chest_art(), 0.34)
+	# v90（用户：「有些根本不需要换背景【比如宝箱背景和炼丹背景】把宝箱和炼丹动画就好了啊」）：
+	#   **宝箱页不要垫图** ✗ —— 这一页的主角是那只箱子本身，垫一张画反而把它压糊了。
+	#   要的是**开箱动画**（见下面的 ChestArt：真图开合 + 光柱 + 抖）。
+	#   （原来那一行 add_room_bg 已删）
 	Audio.sfx("chest", -8.0)   # v78：开箱音
 
 	var title := _label("宝　箱", 30, INK)

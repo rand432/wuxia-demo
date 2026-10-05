@@ -13,6 +13,7 @@ extends Node2D
 
 const Conf := preload("res://menu/menu_conf.gd")
 const Draw := preload("res://menu/menu_draw.gd")
+const SceneArt := preload("res://shared/scene_art.gd")   # v91：画卷远景用素材
 
 var t := 0.0
 var cam := 0.0
@@ -43,7 +44,11 @@ func _draw() -> void:
 		if Draw.vis(cam, v2.x, v2.x):
 			draw_circle(Vector2(v2.x, v2.y), v2.z, Color(0.30, 0.24, 0.17, v2.w))
 	# 由远及近
-	_mountains()
+	# v91（用户："画卷也要变一变啊 不是有素材吗"）：**远景换成素材里的水墨山水**——
+	#   原来这一层是程序画的远山＋日＋云带（三块灰面），跟村子里的 AI 房子放一起很违和。
+	#   现在铺素材（正反交替平铺，接缝看不出），上面压一层淡纸色，房子照样读得清。
+	#   想换别的：改 SCROLL_FAR 那个名字（assets/scenes/mat/ 里挑）。
+	# v91：远景**改到 menu_village._backdrop 里画**（这一层被村景层盖住，画了看不见）
 	_sun()
 	_cloud_band()
 	_water()
@@ -68,6 +73,31 @@ func _draw() -> void:
 	_season_air()
 
 # ============ 远景 ============
+
+# v91：画卷远景＝素材水墨山水（正反交替平铺 + 淡纸色罩一层）
+# ⚠ 素材文件名都带 _a/_b 后缀（上下两半），写错就等于没图（v91 第一次就是漏了这个）
+const SCROLL_FAR := "city_hills_b"   # 水墨山水（远山/云雾/水面）——画卷底子
+
+func _scroll_far() -> void:
+	var tex := SceneArt.mat(SCROLL_FAR)
+	if tex == null:
+		print("[画卷] 素材 ", SCROLL_FAR, " 取不到，退回程序远山")
+		_mountains()          # 没图就退回程序画的远山，画卷不会空
+		return
+	var top := Conf.SCENE_TOP
+	var h := 330.0
+	var tw: float = h * float(tex.get_width()) / maxf(float(tex.get_height()), 1.0)
+	var period := tw * 2.0
+	# ⚠ 这一层用的是**绝对世界坐标**（跟 _mountains 一样：直接写 660/620 那种），
+	#   第一版我按屏幕坐标减了 cam，结果整片画到屏幕外——画卷一点没变。
+	var tint := Color(1, 1, 1, 0.88)     # 压淡一点点，别抢村子里的房子
+	var x0 := 0.0
+	while x0 < Conf.STRIP_W:
+		var x1 := x0 + tw
+		if Draw.vis(cam, x0, x1) or Draw.vis(cam, x1, x1 + tw):
+			draw_texture_rect(tex, Rect2(x0, top, tw, h), false, tint)
+			draw_texture_rect(tex, Rect2(x1, top, -tw, h), false, tint)
+		x0 += period
 
 func _mountains() -> void:
 	if Draw.vis(cam, 600.0, 1300.0):

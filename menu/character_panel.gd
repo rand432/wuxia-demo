@@ -63,6 +63,7 @@ const SLOTS := [
 const SLOT_CN := {"weapon": "兵器", "armor": "护甲", "helm": "玉佩", "cloak": "披风"}
 const ROLE_IDS := ["chen_shi", "player", "qingluan"]
 const WEAPON_CN := {"sword": "长剑", "dual": "双刀", "dagger": "匕首", "spear": "长枪", "anqi": "暗器", "fist": "拳法"}
+const CharArt := preload("res://shared/char_art.gd")   # v90：页签头像
 
 const STAT_ROWS := [
 	{"k": "atk", "label": "攻击"},
@@ -246,6 +247,14 @@ func _build() -> void:
 		btn.position = Vector2(300.0 + float(i) * 112.0, 18)
 		btn.size = Vector2(104, 48)
 		btn.add_theme_font_size_override("font_size", 18)
+		# v90（用户："还有弟子面板的头像呢"）：**页签上挂头像**——
+		#   原来四个页签只有名字，点谁全靠读字；现在左边一张小头像（水墨 LoRA 出的那三张），
+		#   一眼认出是谁。取不到图就照旧只有字，不会变空按钮。
+		var ft := CharArt.face(str(ROLE_IDS[i]))
+		if ft != null:
+			btn.icon = ft
+			btn.add_theme_constant_override("icon_max_width", 34)
+			btn.add_theme_font_size_override("font_size", 16)
 		btn.focus_mode = Control.FOCUS_NONE
 		btn.pressed.connect(_on_tab.bind(i))
 		_panel.add_child(btn)

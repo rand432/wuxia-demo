@@ -151,7 +151,8 @@ func _build() -> void:
 	_panel.add_theme_stylebox_override("panel", psb)
 	add_child(_panel)
 	# v77：垫一张炼丹房内景（用户：「是不是也要换图了」）——34% 透明度，纸底还透、字照样清楚
-	UiKit.add_room_bg(_panel, SceneArt.alchemy_room(), 0.34)
+	# v90（用户：「炼丹背景」也不需要）——**炼丹页不垫图** ✗，
+	#   要的是**炉子动起来**（见下面 _draw_furnace：炉火跳动 + 药气上升 + 丹纹流转）。
 
 	var title := _label("炼丹阁", 34, INK)
 	title.position = Vector2(32, 20)
