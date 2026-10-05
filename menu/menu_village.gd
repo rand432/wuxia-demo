@@ -1312,9 +1312,16 @@ func _villager_rig(st: Dictionary, cfg: Dictionary) -> void:
 	if rig == null:
 		return
 	var p: Vector2 = st["pos"]
-	rig.visible = Draw.vis(cam, p.x - 70.0, p.x + 70.0)
+	rig.visible = true      # v93f 修：**别再拿 Draw.vis 判可见**——那套是"画卷内的屏幕范围"，
+	#   跟村景层的世界坐标不是一套口径，判出来常常是 false，人就时有时无（用户："头怎么不见了 手脚也不见了"）。
+	#   离屏的交给引擎自己剔（层变换已经把节点摆到屏幕坐标上了）。
 	rig.position = p
-	rig.scale = Vector2(float(st["face"]), 1.0)
+	# ⚠⚠ v93f **重大修正**（用户："头怎么不见了 手脚也不见了"）：
+	#   村景层的坐标变换是**非等比**的——scale = (z, z * sy)，sy = 1.6625（画心比场景高 66%）。
+	#   骨骼是"用 offset 把枢轴挪到关节上"的画法，offset 会被父级 Y 缩放**放大 1.66 倍**，
+	#   于是头/手/脚各自被推离身体，看起来就是"头没了、手脚没了"。
+	#   解法：给骨骼自己一个 1/sy 的 Y 缩放把这一层抵消掉，回到等比 → 部件归位，比例也正常。
+	rig.scale = Vector2(float(st["face"]), 1.0 / Draw.sy())
 	if str(st["state"]) == "walk":
 		rig.set_gait(float(st["gait"]))            # gait 本身就是 0~1 的循环相位（按距离推进）
 	else:

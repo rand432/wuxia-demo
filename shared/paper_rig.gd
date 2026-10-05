@@ -86,6 +86,11 @@ func setup(rig_key: String, target_h: float) -> bool:
 	k = target_h / float(cfg["src_h"])
 	var hip := Node2D.new()
 	hip.name = "hip"
+	# ⚠⚠ v93f **真正的大坑**（用户："头怎么不见了 手脚也不见了"）：
+	#   原来我给**每个部件**都设了 scale=k，而 head/arm 是 **torso 的子节点** →
+	#   全局缩放变成 k×k ≈ 1/11，头和手臂小到看不见（腿和躯干是 hip 的直接子节点，所以看着正常）。
+	#   正确做法：**缩放只放在 hip 上**，各部件保持 1.0；关节坐标则写"源图单位"，由 hip 的缩放统一带。
+	hip.scale = Vector2(k, k)
 	# ⚠ 原点＝脚底：髋部在脚底**上方** (脚底y - 髋y) 像素处（第一版忘了这个，整个人跑到屏幕外）
 	# ⚠ **x 不加偏移**：节点原点＝角色脚下那一点（中线），髋部的源图 x 只是"图里身体在哪"，
 	#   把它当偏移会让整个人往右飘半个身位（苏青鸾因此直接飘出屏幕）。
@@ -100,7 +105,7 @@ func setup(rig_key: String, target_h: float) -> bool:
 		sp.name = str(nm)
 		sp.texture = texs[nm]
 		sp.centered = false
-		sp.scale = Vector2(k, k)
+		sp.scale = Vector2.ONE          # 缩放交给 hip，部件自己不再缩（见上面那段注释）
 		sp.z_index = int(d["z"])
 		# ⚠ 两件事分开：**枢轴**用 offset 挪（贴图以源图像素记，不乘 k——节点 scale=k 会自己缩），
 		#   **关节**用 position 摆（相对父节点原点；父节点原点＝父的枢轴）。第一版把这两个揉成一个，
@@ -108,7 +113,7 @@ func setup(rig_key: String, target_h: float) -> bool:
 		var pivot: Vector2 = d["pivot"]
 		var joint: Vector2 = d["joint"]
 		sp.offset = -pivot
-		sp.position = joint * k
+		sp.position = joint            # 源图单位——hip 的 scale=k 会把它换成像素
 		_nodes[nm] = sp
 		_pivots[nm] = pivot
 		_base[nm] = sp.position

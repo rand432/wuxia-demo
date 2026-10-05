@@ -45,6 +45,7 @@ class PetArt extends Control:
 	var quiet := 0.0         # 多久没被摸（超过 IDLE_SLEEP 就睡）
 	var pets := 0            # 被摸过几次
 	var say := ""            # 飘字
+	var _last_pet := 0        # 上次摸头的时间戳（去抖用）
 	var say_t := 0.0
 	const SLEEP_AFTER := 24.0
 
@@ -59,9 +60,14 @@ class PetArt extends Control:
 			pet_head()
 
 	# 摸头（面板里点它）
+	#   v93f 修（用户："宠物摸头动画点一下出了好几次"）：**去抖**——
+	#   同一次落点可能被上层面板与画框各转发一遍，0.35 秒内的重复调用直接丢掉。
 	func pet_head() -> void:
 		if not has_pet:
 			return
+		if _last_pet > 0.0 and (Time.get_ticks_msec() - _last_pet) < 350:
+			return
+		_last_pet = Time.get_ticks_msec()
 		pets += 1
 		quiet = 0.0
 		act = "cute"

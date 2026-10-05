@@ -974,7 +974,11 @@ func _refresh() -> void:
 	# v93：换人就把圆形头像一起换（胸像优先，没有就退回 Q版）
 	if _avatar != null and _avatar_rid != rid:
 		_avatar_rid = rid
-		var atex := CharArt.face(rid)
+		# v93f 修（用户："怎么你给个了身体 头只有一半"）：**要头就用头的图**——
+		#   face() 是胸像，圆形遮罩按 KEEP_ASPECT_COVERED 居中一裁，正好把头切掉半截。
+		var atex := CharArt.q_head(rid)
+		if atex == null:
+			atex = CharArt.face(rid)
 		if atex == null:
 			atex = CharArt.q(rid)
 		_avatar.texture = atex
