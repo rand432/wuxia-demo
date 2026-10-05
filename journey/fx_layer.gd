@@ -147,7 +147,10 @@ func _add_seal(parent: Control, pos: Vector2, s: float) -> void:
 		ch.add_theme_font_override("font", _ink_font)
 	seal.add_child(ch)
 
-func slash_between(a: Node2D, b: Node2D, mv: String) -> void:
+# v92（用户："攻击剑气特效乱飞"）：多一个 heavy——
+#   普通一刀＝墨笔刀光＋白刃两道；**素材那套红刀光只在 heavy（大招）时叠一层**。
+#   原来每一刀都叠三套、同一手还可能叠两次（见 duel_battle 里那两处调用），满屏乱飞。
+func slash_between(a: Node2D, b: Node2D, mv: String, heavy := false) -> void:
 	if not is_instance_valid(a) or not is_instance_valid(b):
 		return
 	var st := _mv_style(mv)
@@ -172,7 +175,8 @@ func slash_between(a: Node2D, b: Node2D, mv: String) -> void:
 	#   为什么不逐个调用点去改：全工程有 14 处 slash_between/burst，
 	#   在这里挂一次，所有攻击（普攻/武学/大招/敌人反击）一起升级。
 	blade_light(a, b, mv)
-	slash_sheet(a, b)      # v78：再叠一层素材里的真刀光序列帧
+	if heavy:
+		slash_sheet(a, b, 1.9)   # v78/v92：素材里的真刀光序列帧——只留给大招
 
 func burst(pos: Vector2, mv: String) -> void:
 	var st := _mv_style(mv)
@@ -423,14 +427,18 @@ func ult_storm(center: Vector2, dir_x := 1.0) -> void:
 		r.life = 0.30 + 0.10 * float(i)
 		r.width = 7.0 - 1.6 * float(i)
 		add_child(r)
-	for i in 9:
+	# v92（用户："攻击剑气特效乱飞"）：**九道改成五道、扇面收窄、速度与存活都往下压**。
+	#   原来是 ±0.85 弧度（≈±49°）＋最高 1050 速度 ＋ 0.62 秒存活 ＝ 最远飞 650 像素，
+	#   越过血条和按钮那边去了，看着就是"乱飞"。现在最远 ≈ 780*0.46 ≈ 360 像素，
+	#   扇面 ±0.42 弧度——散得开、但都在"出手方向"那一侧。
+	for i in 5:
 		var q := SwordQi.new()
-		var a := Vector2(dir_x, 0).rotated(randf_range(-0.85, 0.85))
-		q.vel = a * randf_range(700.0, 1050.0)
+		var a := Vector2(dir_x, 0).rotated(randf_range(-0.42, 0.42))
+		q.vel = a * randf_range(520.0, 780.0)
 		q.rotation = a.angle() + PI * 0.5
-		q.radius = randf_range(26.0, 62.0)
-		q.life = randf_range(0.36, 0.62)
-		q.position = center + a * randf_range(0.0, 40.0)
+		q.radius = randf_range(26.0, 58.0)
+		q.life = randf_range(0.30, 0.46)
+		q.position = center + a * randf_range(0.0, 32.0)
 		q.col = Color(1.0, 0.97, 0.90, 0.95)
 		add_child(q)
 	var dots := InkDots.new()

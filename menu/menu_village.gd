@@ -95,11 +95,31 @@ const FAR_X0 := 620.0              # 画心左界（= Conf.GAP_L1，避开左端
 const FAR_X1 := 2670.0             # 画心右界（= Conf.GAP_R0，避开右端引首/书名）
 const FAR_TOP := 200.0             # = Conf.SCENE_TOP
 const FAR_BOT := 840.0             # = Conf.SCENE_BOT
-# 压淡到几成：素材是"夜墨"调子，全不透明会把纸白村子衬成一块黑底。
-#   0.62 ＝ 远山认得出来、纸味还在（嫌淡/嫌重只改这一个数）。
-const FAR_A := 0.62
+# 压淡到几成 + 提亮多少：素材是"夜墨"调子，原样铺会把纸白村子衬成一块黑底。
+#   FAR_A＝不透明度、FAR_LIFT＝整体提亮（>1 变亮，乘法）。两个数配合着调：
+#   v92 第一版 0.62 太黑（房子和物件都糊在背景里），现在改成"提亮 + 更淡"＝一层远山淡影。
+const FAR_A := 0.28
+const FAR_LIFT := 1.60
+
+# ============ 村景小物件（素材图） ============
+# v92（用户："主界面依旧是程序图和图素材混合 全换成图素材"）：
+#   松/桃/栅栏/石桌/草堆/山石 全换成真图（智谱水墨稿，取图口 SceneArt.prop）。
+#   统一口径：**底边对齐 (x, y)**、按 h 定高、宽按图比例；**取不到图返回 false**，
+#   调用方原样退回程序画法——缺任何一张都不会开天窗。
+func _prop(nm: String, x: float, y: float, h: float, tint := Color(1, 1, 1, 1), sway := 0.0) -> bool:
+	var tex := SceneArt.prop(nm)
+	if tex == null:
+		return false
+	var w: float = h * float(tex.get_width()) / maxf(float(tex.get_height()), 1.0)
+	draw_texture_rect(tex, Rect2(x - w * 0.5 + sway, y - h, w, h), false, tint)
+	return true
 
 func _far_mat() -> void:
+	# ⚠ **先铺一层不透明的纸**：画卷层（menu_scroll）那些程序画的云/水/树/竹都在这层下面，
+	#   只压半透明素材的话它们会"透"上来，看着就是用户说的"程序图和图素材混在一起"。
+	#   铺一层实纸把它们挡掉，再把素材当**淡彩**压上去——画心从此是一张干净的画。
+	draw_rect(Rect2(FAR_X0, FAR_TOP, FAR_X1 - FAR_X0, FAR_BOT - FAR_TOP),
+		Color(Conf.PAPER.r, Conf.PAPER.g, Conf.PAPER.b, 1.0))
 	var tex := SceneArt.mat(FAR_MAT)
 	if tex == null:
 		return                       # 没图＝画心留白，不崩、不留垃圾
@@ -110,8 +130,8 @@ func _far_mat() -> void:
 	var x0 := FAR_X0
 	while x0 < FAR_X1:
 		if Draw.vis(cam, x0, x0 + period):
-			draw_texture_rect(tex, Rect2(x0, FAR_TOP, w, h), false, Color(1, 1, 1, FAR_A))
-			draw_texture_rect(tex, Rect2(x0 + w, FAR_TOP, -w, h), false, Color(1, 1, 1, FAR_A))
+			draw_texture_rect(tex, Rect2(x0, FAR_TOP, w, h), false, Color(FAR_LIFT, FAR_LIFT, FAR_LIFT, FAR_A))
+			draw_texture_rect(tex, Rect2(x0 + w, FAR_TOP, -w, h), false, Color(FAR_LIFT, FAR_LIFT, FAR_LIFT, FAR_A))
 		x0 += period
 
 # ============ 田 ============
@@ -132,6 +152,20 @@ func _one_field(f: Dictionary) -> void:
 		return
 	var y0 := float(f["y0"])
 	var y1 := float(f["y1"])
+	# v92：**素材田**优先——只取图中间那条横带（原图是带透视的田，整张压扁会糊），
+	#   湿田偏青、没长成的压淡一点。取不到图就往下走程序画法。
+	var ftex := SceneArt.prop("field")
+	if ftex != null:
+		var fh: float = maxf(y1 - y0, 10.0) * 1.55
+		var tint := Color(1, 1, 1, 0.92)
+		if stage >= int(f["at"]):
+			if bool(f["wet"]):
+				tint = Color(0.84, 0.95, 1.0, 0.95)
+		else:
+			tint = Color(0.93, 0.93, 0.89, 0.70)
+		var src := Rect2(0.0, float(ftex.get_height()) * 0.22, float(ftex.get_width()), float(ftex.get_height()) * 0.34)
+		draw_texture_rect_region(ftex, Rect2(x0, y1 - fh, x1 - x0, fh), src, tint)
+		return
 	var inset := 7.0
 	var pts := PackedVector2Array([
 		Vector2(x0, y0), Vector2(x1, y0),
@@ -206,7 +240,9 @@ func _one_house(h: Dictionary) -> void:
 		else:
 			_house_done(x, y, w, hh, roof, bool(h["chim"]), float(h["ph"]), bool(h["tile"]))
 	elif st == 1:
-		_frame(x, y, w, hh, roof)
+		# v92：**素材木架**（盖到一半的屋架）优先——这是村里最后一块"程序画的建筑"
+		if not _prop("frame", x, y + 2.0, (hh + roof) * 2.05):
+			_frame(x, y, w, hh, roof)
 	else:
 		# v79（用户："想看到更多建筑图"）：**废墟态也用图**了——
 		#   以前只有"建成"的房子有图，村况 1 时全村只看得见一座；
@@ -397,6 +433,19 @@ func _one_fence(f: Dictionary) -> void:
 		return
 	var y := float(f["y"])
 	if stage >= int(f["at"]):
+		# v92：**素材栅栏**——从 x0 往 x1 一段段平铺（最后一段横向裁切，不会探出篱笆头）
+		var ftex := SceneArt.prop("fence")
+		if ftex != null:
+			var fh := 30.0
+			var fw: float = fh * float(ftex.get_width()) / maxf(float(ftex.get_height()), 1.0)
+			var fx := x0
+			while fx < x1 - 1.0:
+				var seg: float = minf(fw, x1 - fx)
+				var sr: float = float(ftex.get_width()) * seg / fw
+				draw_texture_rect_region(ftex, Rect2(fx, y - fh, seg, fh),
+					Rect2(0.0, 0.0, sr, float(ftex.get_height())), Color(1, 1, 1, 1))
+				fx += seg
+			return
 		var col := Color(Conf.INK.r, Conf.INK.g, Conf.INK.b, 0.34)
 		draw_line(Vector2(x0, y - 12.0), Vector2(x1, y - 12.0), col, 1.6, true)
 		draw_line(Vector2(x0, y - 4.0), Vector2(x1, y - 4.0), col, 1.4, true)
@@ -419,6 +468,14 @@ func _yard() -> void:
 	if not Draw.vis(cam, x - 120.0, x + 120.0):
 		return
 	if stage >= int(Build.YARD["at"]):
+		# v92：**素材打谷场**（石沿＋谷子＋耙子那张）；取不到图才退回程序画的土场
+		if _prop("yard", x, y + 6.0, 82.0, Color(1, 1, 1, 0.88)):
+			for k in 5:
+				var ph2 := fposmod(t * 0.09 + float(k) * 0.21, 1.0)
+				var cx2 := x - 40.0 + float(k) * 19.0 + sin(ph2 * 5.0 + float(k)) * 6.0
+				var cy2 := y - 8.0 - ph2 * 26.0
+				draw_circle(Vector2(cx2, cy2), 1.1 * (1.0 - ph2) + 0.3, Color(0.62, 0.54, 0.34, 0.35 * (1.0 - ph2)))
+			return
 		Draw.ellipse(self, Vector2(x, y), 84.0, 22.0 / Draw.sy(), Color(0.80, 0.755, 0.660, 0.40))
 		Draw.ellipse(self, Vector2(x, y), 60.0, 15.0 / Draw.sy(), Color(0.78, 0.735, 0.640, 0.28))
 		_hay(x - 48.0, y - 6.0, 1.0)
@@ -435,6 +492,9 @@ func _yard() -> void:
 			Draw.stroke(self, [Vector2(x - 40.0 + float(k) * 26.0, y - 4.0), Vector2(x - 38.0 + float(k) * 26.0, y - 12.0)], 1.6, 0.8, Color(0.14, 0.12, 0.11, 0.34))
 
 func _hay(x: float, y: float, s: float) -> void:
+	# v92：**素材草堆**
+	if _prop("hay", x, y, 36.0 * s):
+		return
 	var pts := PackedVector2Array([Vector2(x - 15.0 * s, y), Vector2(x, y - 28.0 * s), Vector2(x + 15.0 * s, y)])
 	draw_colored_polygon(pts, Color(0.72, 0.63, 0.42, 0.52))
 	var bp := pts
@@ -453,6 +513,9 @@ func _stone_table() -> void:
 		return
 	var col := Color(Conf.INK.r, Conf.INK.g, Conf.INK.b, 0.50)
 	Draw.ellipse(self, Vector2(x, y + 2.0), 27.0, 4.2 / Draw.sy(), Color(Conf.INK.r, Conf.INK.g, Conf.INK.b, 0.08))
+	# v92：**素材石桌石凳**（图里自带茶壶茶盏）；只留地上那圈影
+	if _prop("table", x, y, 42.0):
+		return
 	Draw.stroke(self, [Vector2(x - 4.0, y), Vector2(x - 4.0, y - 13.0)], 5.0, 4.0, col)
 	draw_rect(Rect2(x - 16.0, y - 18.0, 32.0, 6.0), Color(0.62, 0.60, 0.56, 0.95))
 	draw_rect(Rect2(x - 16.0, y - 18.0, 32.0, 6.0), col, false, 1.2)
@@ -521,6 +584,9 @@ func _backhill() -> void:
 		var nx := x - 120.0 + float(k) * 118.0 + sin(phn * 7.0 + float(k)) * 10.0
 		var ny := 660.0 + phn * 96.0
 		Draw.stroke(self, [Vector2(nx, ny), Vector2(nx + 2.6, ny + 3.6)], 1.3, 0.5, Color(0.30, 0.36, 0.26, 0.30))
+	# v92：山脚两块**素材山石**（左一块大的、右一块小的）
+	_prop("rock", x - 184.0, 772.0, 38.0)
+	_prop("rock", x + 198.0, 774.0, 26.0)
 	# 草窝（白狐的老家）
 	_nest(x + 176.0, 764.0)
 	# 青隼（白狐跟定你之后，才落在最高的那棵松上）
@@ -528,6 +594,9 @@ func _backhill() -> void:
 
 func _pine_on(x: float, base: float, s: float, i: int) -> void:
 	var sw := sin(t * Conf.WIND_RATE + float(i) * 1.9) * 2.0
+	# v92：**素材松树**（冬天压一层淡蓝白＝积雪）。取不到图就往下走程序画法。
+	if _prop("pine", x, base, 104.0 * s, (Color(0.90, 0.94, 1.0) if season == 3 else Color(1, 1, 1)), sw * 0.8):
+		return
 	var col := Color(Conf.INK.r, Conf.INK.g, Conf.INK.b, 0.52)
 	Draw.stroke(self, [Vector2(x, base), Vector2(x + sw * 0.7, base - 70.0 * s)], 3.4 * s, 1.6 * s, col)
 	draw_colored_polygon(PackedVector2Array([
@@ -673,7 +742,9 @@ func _winery() -> void:
 	var y := POS["winery"].y
 	if not Draw.vis(cam, x - 128.0, x + 128.0):
 		return
-	_house_done(x, y, 84.0, 46.0, 26.0, false, 0.0, true)
+	# v92：**素材酒肆**（挂着"美酒"幌子的那间）；取不到图才退回程序画的房子
+	if not _prop("house_winery", x, y + 2.0, 102.0):
+		_house_done(x, y, 84.0, 46.0, 26.0, false, 0.0, true)
 	# 门前酒案：案板 + 两条腿 + 案上（酒提、两盏）
 	var tx := x + 18.0
 	var ty := y + 6.0
@@ -728,7 +799,9 @@ func _shop() -> void:
 	var y := POS["shop"].y
 	if not Draw.vis(cam, x - 128.0, x + 128.0):
 		return
-	_house_done(x, y - 6.0, 88.0, 44.0, 24.0, false, 0.0, false)
+	# v92：**素材货栈**（门口堆着木箱麻袋的那间）
+	if not _prop("house_shop", x, y - 4.0, 104.0):
+		_house_done(x, y - 6.0, 88.0, 44.0, 24.0, false, 0.0, false)
 	# 雨棚：两色条纹 + 波浪边
 	var a0 := Vector2(x - 66.0, y - 12.0)
 	var b0 := Vector2(x - 20.0, y - 12.0)
@@ -804,7 +877,9 @@ func _dange() -> void:
 	var y := POS["dange"].y
 	if not Draw.vis(cam, x - 132.0, x + 132.0):
 		return
-	_house_done(x, y - 8.0, 92.0, 48.0, 28.0, false, 0.0, true)
+	# v92：**素材丹房**（屋顶烟囱冒烟、门边一只丹炉）
+	if not _prop("house_dange", x, y - 6.0, 100.0):
+		_house_done(x, y - 8.0, 92.0, 48.0, 28.0, false, 0.0, true)
 	var fx := x - 64.0
 	var fy := y + 2.0
 	# 炉：石座 + 砖身 + 炉沿 + 炉顶烟囱
@@ -852,7 +927,15 @@ func _dange() -> void:
 		var ty2 := fy - 1.0
 		var step := sin(t * 5.4) * 0.9
 		var bob2 := sin(t * 1.5) * 0.6
-		Draw.mini_person(self, tx2, ty2, 1.0, step, bob2, false)
+		# v92（延续 v91 那条"火柴人退场"）：看火人也换成 **Q版立绘**——按账本里的
+		#   看火人 id 取图（陈石/少侠/苏青鸾各自的脸），取不到才退回火柴人。
+		var ttex := CharArt.q(dange_tender)
+		if ttex != null:
+			var th2 := 62.0
+			var tw2: float = th2 * float(ttex.get_width()) / maxf(float(ttex.get_height()), 1.0)
+			draw_texture_rect(ttex, Rect2(tx2 - tw2 * 0.5, ty2 - th2 + bob2, tw2, th2), false, Color(1, 1, 1, 1))
+		else:
+			Draw.mini_person(self, tx2, ty2, 1.0, step, bob2, false)
 		var fw := sin(t * 5.4) * 2.6
 		Draw.stroke(self, [Vector2(tx2 + 7.0, ty2 - 30.0), Vector2(tx2 + 17.0, ty2 - 34.0 + fw)], 1.8, 1.0, Color(0.44, 0.32, 0.20, 0.85))
 
@@ -865,7 +948,9 @@ func _treasure() -> void:
 	var y := POS["treasure"].y
 	if not Draw.vis(cam, x - 116.0, x + 116.0):
 		return
-	_house_done(x, y, 76.0, 42.0, 24.0, false, 0.0, false)
+	# v92：**素材藏宝楼**（两层、二层带栏杆）
+	if not _prop("house_treasure", x, y + 2.0, 110.0):
+		_house_done(x, y, 76.0, 42.0, 24.0, false, 0.0, false)
 	# 台阶
 	draw_rect(Rect2(x - 26.0, y + 1.0, 52.0, 4.0), Color(0.62, 0.60, 0.56, 0.88))
 	draw_line(Vector2(x - 26.0, y + 1.0), Vector2(x + 26.0, y + 1.0), Color(Conf.INK.r, Conf.INK.g, Conf.INK.b, 0.22), 0.9, true)
@@ -899,6 +984,16 @@ func _treasure() -> void:
 
 # ============ 桃 / 鸡 / 花瓣 ============
 
+# 桃树四季染色（素材图是"满树粉花"那张，其余季节靠染色近似）
+func _peach_tint() -> Color:
+	if season == 1:
+		return Color(0.80, 0.98, 0.80)     # 夏：叶绿
+	if season == 2:
+		return Color(1.08, 0.90, 0.64)     # 秋：赭黄
+	if season == 3:
+		return Color(0.92, 0.95, 1.04)     # 冬：雪白
+	return Color(1, 1, 1)                  # 春：原样（粉花）
+
 func _peach_all() -> void:
 	for it in Build.PEACHES:
 		_peach_one(it)
@@ -912,8 +1007,11 @@ func _peach_one(p: Dictionary) -> void:
 		return
 	var h := 84.0 * s
 	var sw := sin(t * Conf.WIND_RATE + ph) * Conf.WIND_AMP * 0.9
-	draw_set_transform_matrix(Draw.bend_xf(Vector2(x, y), sw / h))
+	# v92：**素材桃树**（长成了才贴图；四季用染色近似——春粉/夏绿/秋赭/冬雪）
 	var done := stage >= int(p["at"])
+	if done and _prop("peach", x, y, 112.0 * s, _peach_tint(), sw * 0.8):
+		return
+	draw_set_transform_matrix(Draw.bend_xf(Vector2(x, y), sw / h))
 	var br := Color(Conf.INK.r, Conf.INK.g, Conf.INK.b, 0.50 if done else 0.44)
 	Draw.ellipse(self, Vector2(x, y + 2.0), 22.0 * s, 4.0 * s / Draw.sy(), Color(Conf.INK.r, Conf.INK.g, Conf.INK.b, 0.06))
 	Draw.stroke(self, [Vector2(x, y), Vector2(x - 2.0 * s, y - h * 0.50), Vector2(x + 3.0 * s, y - h * 0.92)], 4.6 * s, 1.8 * s, br)

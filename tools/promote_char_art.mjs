@@ -218,6 +218,32 @@ for (const [dir, name, w] of CHESTS) {
   console.log('  ✓ ' + (name + '.png').padEnd(16) + ' ← ' + path.basename(src) + '  ' + Math.round(fs.statSync(dst).size / 1024) + 'KB');
 }
 
+// ---- 村景小物件（v92）----
+// 用户："主界面依旧是程序图和图素材混合 全换成图素材"。松/桃/栅栏/石桌/草堆/山石
+// 都改成智谱出的水墨图（物件套、纯白底、--wm 抹过平台水印），落在 assets/scenes/props/。
+// ⚠ 只取 **抠好的 _cut.png**（原图带底，直接提升会在村里显示成白方块）。
+// v92 补充：四个作坊的房子（品酒坊/货栈/炼丹阁/藏宝阁）也走这条——它们原来是
+//   _house_done() **程序画的房子**，主界面上剩下最大块的"程序图"。
+const PROPS = ['prop_pine', 'prop_fence', 'prop_table', 'prop_hay', 'prop_peach', 'prop_rock',
+  'prop_house_winery', 'prop_house_shop', 'prop_house_dange', 'prop_house_treasure',
+  'prop_field', 'prop_yard', 'prop_frame'];
+const PROP_OUT = path.resolve('assets/scenes/props');
+const PROP_H = 320;   // 游戏里最大也就显示 ~100px，320 够 3 倍余量、又省体积
+fs.mkdirSync(PROP_OUT, { recursive: true });
+for (const dir of PROPS) {
+  const srcDir = path.resolve('assets/gen/char', dir);
+  if (!fs.existsSync(srcDir)) { console.log('  · 物件 ' + dir + ' 还没有生成稿'); continue; }
+  const hit = fs.readdirSync(srcDir).filter((x) => /_cut.png$/i.test(x))[0];
+  if (!hit) { console.log('  · 物件 ' + dir + ' 目录里没有 _cut.png（先跑 cutout_art.mjs）'); continue; }
+  const src = path.join(srcDir, hit);
+  const name = dir.replace(/^prop_/, '');
+  const dst = path.join(PROP_OUT, name + '.png');
+  const rc = spawnSync(FFMPEG, ['-y', '-loglevel', 'error', '-i', src, '-vf', 'scale=-1:' + PROP_H + ':flags=lanczos', dst], { stdio: 'ignore' });
+  if (rc.status !== 0) fs.copyFileSync(src, dst);
+  patchImport(dst);
+  console.log('  ✓ props/' + (name + '.png').padEnd(12) + ' ← ' + path.basename(src) + '  ' + Math.round(fs.statSync(dst).size / 1024) + 'KB');
+}
+
 // 道具图标（items_sheet 那张图集切出来的 it_*_cut.png）→ assets/items/
 // v79：后两个目录是智谱出的**二次元**图标（用户："装备功法图……也换成q版吧"），
 //   切好后覆盖 assets/items/ 里的同名文件——bag 那边一行代码都不用改。

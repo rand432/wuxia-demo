@@ -2886,6 +2886,9 @@ func _player_ult() -> void:
 				udir = 1.0
 			uc = (_player.global_position + _foe.global_position) * 0.5 + Vector2(0.0, -80.0)
 		_fx.ult_storm(uc, udir)
+		# v92：素材红刀光挪到**大招这一下**（普攻不再叠，见 fx_layer.slash_between 的注）
+		if _foe != null and is_instance_valid(_foe):
+			_fx.slash_between(_player, _foe, "cut", true)
 		_fx.big_word(un, UiKit.SEAL)
 	await get_tree().create_timer(0.12).timeout   # 顿帧：压下来的那一下要有重量
 	if uk == "hit":
@@ -4243,6 +4246,7 @@ func _strike(is_player: bool, pre_pick: Dictionary = {}) -> void:
 	if not (is_instance_valid(atk) and is_instance_valid(dfd)):
 		return
 
+	var slashed_node: Node = dfd
 	if _fx != null:
 		_fx.slash_between(atk, dfd, mv)
 		if art.is_empty():
@@ -4265,7 +4269,9 @@ func _strike(is_player: bool, pre_pick: Dictionary = {}) -> void:
 		dfd = _foe
 		if not (dfd != null and is_instance_valid(dfd)):
 			return
-		if _fx != null:
+		# v92：目标没换就**不再补第二道**——原来这里不看目标是否相同，
+		#   普攻最常见的情况就是"同一对人放两遍刀光"，叠在一起看着就是乱。
+		if _fx != null and dfd != slashed_node:
 			_fx.slash_between(atk, dfd, mv)
 		var is_sweep := (not art.is_empty()) and str(art.get("target", "front")) == "sweep"
 		var mult := 1.0

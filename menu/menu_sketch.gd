@@ -37,6 +37,7 @@ const VillageLayer := preload("res://menu/menu_village.gd")
 const MountLayer := preload("res://menu/menu_mount.gd")
 const HudLayer := preload("res://menu/menu_hud.gd")
 const UiKit := preload("res://shared/ui_kit.gd")   # v72：设置面板用（标签/按钮/纸张面板工厂）
+const CharArt := preload("res://shared/char_art.gd")   # v92：村里的同伴/看火人用 Q版立绘（原来画火柴人）
 const CharacterPanel := preload("res://menu/character_panel.gd")
 const WarehousePanel := preload("res://menu/warehouse_panel.gd")
 const TwitchRecorder := preload("res://shared/twitch_recorder.gd")   # v63k：抽搐取证器（B 键用）
@@ -390,7 +391,18 @@ class TopVeil extends Node2D:
 	func _process(_delta: float) -> void:
 		queue_redraw()
 
-	func _person(sx: float, gy: float, col: Color, spear: bool, bob: float, arm: float) -> void:
+		# v92（用户："程序的画和图都堆在一起"）：**村里的同伴改成 Q版立绘**。
+	#   这里原来是 Draw/_person 画的火柴人——旁边就是 AI 出的水墨房子，落差太大。
+	#   缺图返回 false，调用方原样退回火柴人（不会开天窗）。
+	func _q_figure(rid: String, cx: float, gy: float, bob: float, h: float) -> bool:
+		var tex := CharArt.q(rid)
+		if tex == null:
+			return false
+		var w: float = h * float(tex.get_width()) / maxf(float(tex.get_height()), 1.0)
+		draw_texture_rect(tex, Rect2(cx - w * 0.5, gy - h - bob, w, h), false, Color(1, 1, 1, 1))
+		return true
+
+func _person(sx: float, gy: float, col: Color, spear: bool, bob: float, arm: float) -> void:
 		draw_circle(Vector2(sx, gy - 86.0 - bob), 9.0, col)
 		draw_line(Vector2(sx, gy - 77.0 - bob), Vector2(sx, gy - 40.0 - bob * 0.5), col, 3.0)
 		draw_line(Vector2(sx, gy - 40.0 - bob * 0.5), Vector2(sx - 12.0, gy), col, 3.0)
@@ -499,7 +511,8 @@ class TopVeil extends Node2D:
 					var arm := sin(tt * 2.2 + 1.1) * 0.6
 					var csx := 1668.0 - float(host._cam) + pace
 					if csx > -80.0 and csx < 800.0:
-						_person(csx, host._sy(790.0), Color(0.16, 0.15, 0.17, 0.72), true, bob, arm)
+						if not _q_figure("chen_shi", csx, host._sy(790.0), bob, 92.0):
+							_person(csx, host._sy(790.0), Color(0.16, 0.15, 0.17, 0.72), true, bob, arm)
 						draw_string(font, Vector2(csx - 40.0, host._sy(790.0) - 106.0 - bob), "陈石", HORIZONTAL_ALIGNMENT_CENTER, 80.0, 13, Color(ink2.r, ink2.g, ink2.b, 0.70))
 				if host._qingluan_visible():
 					var tt2 := float(host._t)
@@ -508,8 +521,10 @@ class TopVeil extends Node2D:
 					var qx := 1520.0 - float(host._cam) + sin(tt2 * 0.30) * 12.0
 					if qx > -80.0 and qx < 800.0:
 						var gy2: float = float(host._sy(792.0))
-						_person(qx, gy2, Color(0.22, 0.17, 0.24, 0.74), false, bob2, arm2)
-						draw_line(Vector2(qx - 24.0 + arm2 * 3.0, gy2 - 92.0 - bob2), Vector2(qx + 20.0, gy2 - 18.0), Color(0.22, 0.17, 0.24, 0.74), 2.4)
+						# v92：Q版立绘（她那张图里自带剑，所以不再补那条剑线）
+						if not _q_figure("qingluan", qx, gy2, bob2, 92.0):
+							_person(qx, gy2, Color(0.22, 0.17, 0.24, 0.74), false, bob2, arm2)
+							draw_line(Vector2(qx - 24.0 + arm2 * 3.0, gy2 - 92.0 - bob2), Vector2(qx + 20.0, gy2 - 18.0), Color(0.22, 0.17, 0.24, 0.74), 2.4)
 						draw_string(font, Vector2(qx - 40.0, gy2 - 106.0 - bob2), "苏青鸾", HORIZONTAL_ALIGNMENT_CENTER, 80.0, 13, Color(ink2.r, ink2.g, ink2.b, 0.70))
 				var hsx := float(host._scroll.fig_x()) - float(host._cam)
 				if hsx > -60.0 and hsx < 780.0:

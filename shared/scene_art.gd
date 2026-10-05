@@ -64,6 +64,20 @@ static func ui_txt(key: String) -> Texture2D:
 	_txt_cache[key] = t
 	return t
 
+# v92：**村景小物件**（松/桃/栅栏/石桌/草堆/山石）——智谱水墨稿，抠好落在 assets/scenes/props/
+#   一次提升一批，见 tools/promote_char_art.mjs 的 PROPS。找不到返回 null，调用方退回程序画法。
+static var _prop_cache := {}
+
+static func prop(name: String) -> Texture2D:
+	if _prop_cache.has(name):
+		return _prop_cache[name]
+	var p := "res://assets/scenes/props/" + name + ".png"
+	var t: Texture2D = null
+	if ResourceLoader.exists(p):
+		t = load(p) as Texture2D
+	_prop_cache[name] = t
+	return t
+
 # v79：素材里的**刀光序列帧**（红/黑白两套，各 16 帧）
 static var _slash2_cache := {}
 
