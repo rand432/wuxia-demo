@@ -15,6 +15,7 @@ extends Control
 const Buffs := preload("res://shared/data_buffs.gd")
 const UiKit := preload("res://shared/ui_kit.gd")
 const UICard := preload("res://shared/ui_card.gd")   # v93j：牌 / 签 两种卡面
+const DataIcons := preload("res://shared/data_icons.gd")   # v93l：命数字牌图标
 
 # ㊿：命数签页摆哪几桩。前三桩＝往日路上的特殊事件（横财/翻财/血路），
 #   后五桩是出征屏那张"选一卡"里的其余命数——两边口径现在对齐了
@@ -262,6 +263,7 @@ func _build_fate() -> void:
 		var btn := UICard.Slip.new()
 		btn.title = nm
 		btn.desc = str(b.get("desc", ""))
+		btn.icon = DataIcons.fate(fid)      # 命数那一枚字牌（横财/血战/毒…）
 		btn.custom_minimum_size = Vector2(0, 132)
 		if _own_fate(fid):
 			btn.disabled = true

@@ -25,7 +25,8 @@ const UiKit := preload("res://shared/ui_kit.gd")
 const Elem := preload("res://shared/data_elem.gd")   # v58：五行真源（键名/中文/配色/通道口径）
 const Bonds := preload("res://shared/data_bonds.gd")   # ㊽：上阵羁绊（纯数据）
 const PillPopup := preload("res://menu/pill_popup.gd")
-const Voice := preload("res://shared/voice.gd")   # v93：开面板/换页签念一句（用户："语音包点击没听到"）
+const Voice := preload("res://shared/voice.gd")
+const DataIcons := preload("res://shared/data_icons.gd")   # v93l：武学/命数图标（素材图集切出来的）   # v93：开面板/换页签念一句（用户："语音包点击没听到"）
 
 const PANEL_W := 640.0
 # ㊿：面板加高 1212 → 1250，把省下来的高度全给"天赋"框（见下面那段说明）
@@ -154,6 +155,7 @@ var _equip_cells: Array = []
 var _equip_vals: Array = []
 var _equip_un_btns: Array = []
 var _art_cells: Array = []
+var _art_icons: Array = []   # v93l：武学格右上角的小图标（取自素材图集 icon_skill）
 var _skill_vals: Array = []
 var _art_tag_lbs: Array = []
 var _art_un_btns: Array = []
@@ -530,6 +532,15 @@ void fragment(){
 		_panel.add_child(cell2)
 		_art_cells.append(cell2)
 		_skill_vals.append(cell2.get_meta("value_label"))
+		# v93l（用户："武学…图标也换成图集里的"）：格右上角挂一枚**武学图标**
+		var ic := TextureRect.new()
+		ic.position = Vector2(284.0 - 46.0, 6.0)
+		ic.size = Vector2(34, 34)
+		ic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		ic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		cell2.add_child(ic)
+		_art_icons.append(ic)
 		var tag := _label("", 13, Color(INK.r, INK.g, INK.b, 0.50))   # v61（手游）：12 → 13 号
 		tag.position = Vector2(16, 60)
 		tag.size = Vector2(252, 22)
@@ -1103,20 +1114,24 @@ func _refresh() -> void:
 	for j in _skill_vals.size():
 		var sv: Label = _skill_vals[j]
 		var tag: Label = _art_tag_lbs[j]
+		var ic2: TextureRect = _art_icons[j]
 		if j < FREE_SLOTS:
 			tag.text = "可从仓库取用"
 			if j < sk.size():
 				sv.text = str(Cards.name_of(str(sk[j]))) + GameState.star_marks(str(sk[j]))
 				sv.add_theme_color_override("font_color", INK)
+				ic2.texture = DataIcons.art(str(sk[j]))      # 装了哪本就画哪本的图标
 			else:
 				sv.text = "—"
 				sv.add_theme_color_override("font_color", Color(INK.r, INK.g, INK.b, 0.40))
+				ic2.texture = null
 			var ub2: Button = _art_un_btns[j]
 			ub2.visible = j < sk.size()
 		else:
 			sv.text = str(ult.get("name", "—"))
 			sv.add_theme_color_override("font_color", SEAL)
 			tag.text = "怒气满时自动放（游历已接入）"
+			ic2.texture = DataIcons.art("art_ult")           # 大招格：一枚固定的"绝招"图标
 	_fill_talent_box(role)
 	if not passive.is_empty():
 		_passive_lb.text = "【被动】" + str(passive.get("name", "")) + "：" + str(passive.get("desc", ""))

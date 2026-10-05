@@ -12,6 +12,7 @@ extends Control
 # ============================================================
 
 const GameState := preload("res://shared/game_state.gd")
+const ItemIcons := preload("res://shared/item_icons.gd")   # v93o：一件东西 → 一张图
 const Cards := preload("res://shared/data_cards.gd")
 const UiKit := preload("res://shared/ui_kit.gd")   # v61b：tap_in_scroll（格子可滑可点）
 const SceneArt := preload("res://shared/scene_art.gd")   # v77：内景垫图
@@ -274,19 +275,28 @@ func _ensure_cells(n: int) -> void:
 		#   才算点中物品。手滑一下只滚列表，不会误开详情。
 		UiKit.tap_in_scroll(cell, _click_cell.bind(k))
 		_grid.add_child(cell)
+		# v93o（用户："仓库怎么还是字啊"）：格子里**加一张图标**——
+		#   图在上、名在中、类型与数量在底下一行；取不到图就只留字，不会开天窗。
+		var ic := TextureRect.new()
+		ic.position = Vector2(CELL * 0.5 - 25.0, 6.0)
+		ic.size = Vector2(50, 50)
+		ic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		ic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		cell.add_child(ic)
 		var nm := _label("", 11, Color(INK.r, INK.g, INK.b, 0.55))
-		nm.position = Vector2(3, 6)
-		nm.size = Vector2(CELL - 6.0, 16)
-		nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		nm.position = Vector2(3, CELL - 22.0)
+		nm.size = Vector2(CELL * 0.6, 16)
+		nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 		cell.add_child(nm)
 		# v60：名字这行**可换行**（丹药名"突破丹（凡品）"7 个字，88 宽的老格子是要溢出的）
-		var pt := _label("", 18, INK)
-		pt.position = Vector2(4, 26)
-		pt.size = Vector2(CELL - 8.0, CELL - 50.0)
+		var pt := _label("", 16, INK)
+		pt.position = Vector2(4, 58)
+		pt.size = Vector2(CELL - 8.0, CELL - 80.0)
 		pt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		pt.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		pt.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		pt.max_lines_visible = 3
+		pt.max_lines_visible = 2
 		pt.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		cell.add_child(pt)
 		var ct := _label("", 12, Color(SEAL.r, SEAL.g, SEAL.b, 0.90))
@@ -294,7 +304,7 @@ func _ensure_cells(n: int) -> void:
 		ct.size = Vector2(CELL - 6.0, 18)
 		ct.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		cell.add_child(ct)
-		_cells.append({"panel": cell, "name": nm, "part": pt, "count": ct})
+		_cells.append({"panel": cell, "name": nm, "part": pt, "count": ct, "icon": ic})
 
 func _flat(bg: Color) -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()
@@ -326,7 +336,7 @@ func _style_tab(btn: Button, selected: bool) -> void:
 
 # ㊿：ready＝"这一套凑齐了、现在就能合成"——给个金边提示，
 #   不然玩家得自己数六个格子里哪几个是同一套的哪几页。
-func _cell_box(kind: String, ready := false) -> StyleBoxFlat:
+func _cell_box(kind: String, ready := false, q_col = null) -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()
 	sb.set_corner_radius_all(8)
 	sb.set_border_width_all(1)
@@ -336,8 +346,16 @@ func _cell_box(kind: String, ready := false) -> StyleBoxFlat:
 		return sb
 	sb.bg_color = Color(0.96, 0.93, 0.86, 1.0)
 	if ready:
+		# 能合成的：金边优先（这是"现在就能点一下"的提示，盖过品级色）
 		sb.border_color = Color(0.78, 0.60, 0.16, 1.0)
 		sb.set_border_width_all(3)
+	elif q_col != null:
+		# v93p（用户："同时加颜色品质"）：**边框按品级上色**——凡白/良绿/上紫/极金/绝红
+		var q: Color = q_col
+		sb.border_color = Color(q.r, q.g, q.b, 0.95)
+		sb.set_border_width_all(3)
+		# 再垫一层极淡的同色底，格子里一眼能分出高低
+		sb.bg_color = Color(0.96, 0.93, 0.86, 1.0).lerp(Color(q.r, q.g, q.b, 1.0), 0.10)
 	elif kind == "item" or kind == "pill":
 		sb.border_color = Color(0.72, 0.58, 0.25, 0.70)
 	else:
@@ -421,7 +439,7 @@ func _stacks() -> Array:
 				continue
 			var ni := GameState.vault_item_count(sid)
 			if ni > 0:
-				out.append({"kind": "item", "sid": sid, "set_name": str(GEAR_CN.get(pool, s.get("name", sid))), "title": Cards.item_name(sid), "part_name": Cards.item_name(sid), "count": ni})
+				out.append({"kind": "item", "sid": sid, "pool": pool, "weapon": str(s.get("weapon", "")), "set_name": str(GEAR_CN.get(pool, s.get("name", sid))), "title": Cards.item_name(sid), "part_name": Cards.item_name(sid), "count": ni})
 			continue
 		if not _in_cat(s, str(TABS[_tab]["id"])):
 			continue
@@ -430,10 +448,10 @@ func _stacks() -> Array:
 			var n := GameState.vault_count(sid, p)
 			if n > 0:
 				var pn := str(parts[p]) if p < parts.size() else "?"
-				out.append({"kind": "card", "sid": sid, "set_name": str(s.get("name", sid)), "title": str(s.get("name", sid)) + "·" + pn, "part_name": pn, "part_idx": p, "count": n})
+				out.append({"kind": "card", "sid": sid, "pool": pool, "weapon": str(s.get("weapon", "")), "set_name": str(s.get("name", sid)), "title": str(s.get("name", sid)) + "·" + pn, "part_name": pn, "part_idx": p, "count": n})
 		var ni2 := GameState.vault_item_count(sid)
 		if ni2 > 0:
-			out.append({"kind": "item", "sid": sid, "set_name": str(GEAR_CN.get(pool, s.get("name", sid))), "title": Cards.item_name(sid), "part_name": Cards.item_name(sid), "count": ni2})
+			out.append({"kind": "item", "sid": sid, "pool": pool, "weapon": str(s.get("weapon", "")), "set_name": str(GEAR_CN.get(pool, s.get("name", sid))), "title": Cards.item_name(sid), "part_name": Cards.item_name(sid), "count": ni2})
 	return out
 
 # 丹药页：把包裹里（GameState.pills）现有的丹逐种列出来
@@ -535,6 +553,7 @@ func refresh() -> void:
 		var nm: Label = cd["name"]
 		var pt: Label = cd["part"]
 		var ct: Label = cd["count"]
+		var ic2: TextureRect = cd["icon"]
 		if k < stacks.size():
 			var st: Dictionary = stacks[k]
 			nm.text = str(st.get("set_name", ""))
@@ -564,12 +583,28 @@ func refresh() -> void:
 				ct.text = "×" + str(n)
 				ct.add_theme_color_override("font_color", Color(SEAL.r, SEAL.g, SEAL.b, 0.90))
 			ct.visible = (n > 1) or can
-			cell.add_theme_stylebox_override("panel", _cell_box(str(st["kind"]), can))
+			# v93o：这一件的图标（材料按材料键、丹药用丹盒、装备按 pool 挑图）
+			var kd := str(st.get("kind", ""))
+			var sid2 := str(st.get("sid", ""))
+			if kd == "mat":
+				ic2.texture = ItemIcons.for_mat(sid2)
+			elif kd == "pill":
+				ic2.texture = ItemIcons.for_pill()
+			elif kd == "item" or kd == "card":
+				ic2.texture = ItemIcons.for_pool(str(st.get("pool", "")), str(st.get("weapon", "")), sid2)
+			else:
+				ic2.texture = ItemIcons.fallback()
+			# 品级色：装备/功法按套的品级；丹药按丹的品级；材料不标
+			var qc = null
+			if kd == "item" or kd == "card" or kd == "pill":
+				qc = ItemIcons.quality_col_of(sid2)
+			cell.add_theme_stylebox_override("panel", _cell_box(str(st["kind"]), can, qc))
 		else:
 			nm.text = ""
 			pt.text = ""
 			ct.text = ""
 			ct.visible = false
+			ic2.texture = null
 			cell.add_theme_stylebox_override("panel", _cell_box(""))
 	var empty := stacks.is_empty()
 	if picking and empty:

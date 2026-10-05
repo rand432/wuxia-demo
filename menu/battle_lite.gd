@@ -60,6 +60,16 @@ const InkTouch := preload("res://shared/ink_touch.gd")
 const FadeIn := preload("res://shared/fade_in.gd")   # v68：进场淡入 + 震动
 const UiKit := preload("res://shared/ui_kit.gd")
 const SceneArt := preload("res://shared/scene_art.gd")   # v79：战斗背景（素材水墨图）
+const Tower := preload("res://shared/tower.gd")          # v93m：这一关给什么箱子（爆物按这个来）
+const UIBar := preload("res://shared/ui_bar.gd")         # v93q：血条 / 怒气条（渐变 + 拖尾 + 刻度）
+# v93m：箱子按品级染色（跟 menu/chest_panel.gd 那一套同色：木/银/金/玉/龙）
+const CHEST_TINT := [
+	Color(1.00, 0.94, 0.84),
+	Color(0.86, 0.91, 1.00),
+	Color(1.00, 0.86, 0.46),
+	Color(0.74, 1.00, 0.86),
+	Color(1.00, 0.74, 0.62),
+]
 const CharArt := preload("res://shared/char_art.gd")   # v82：我方每行的小头像
 
 const INK := Color(0.14, 0.13, 0.15)
@@ -195,7 +205,7 @@ var _log_lb: Label
 var _e_hp_lb: Label
 var _e_st_lb: Label          # v52：首领身上那一行负面状态
 var _e_chips = null          # v54：首领身上那排小图标
-var _e_fill: ColorRect
+var _e_fill: Control
 var _e_bar_w := 420.0
 var _rows: Array = []
 var _result_lb: Label
@@ -876,10 +886,13 @@ func _build_ui() -> void:
 	bg.color = Color(0.10, 0.09, 0.10, 0.28)
 	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(bg)
-	_e_fill = ColorRect.new()
+	# v93q：敌方血条＝渐变 + 掉血拖尾 + 刻度（原来是光板 ColorRect）
+	_e_fill = UIBar.Bar.new()
 	_e_fill.position = Vector2(bx, 166)
 	_e_fill.size = Vector2(_e_bar_w, 16)
-	_e_fill.color = Color(0.62, 0.22, 0.18, 0.85)
+	_e_fill.col_a = Color(0.74, 0.24, 0.20)
+	_e_fill.col_b = Color(0.44, 0.09, 0.10)
+	_e_fill.ticks = 4
 	_e_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_e_fill)
 	# v82（用户："怪物也可以加"）：**敌方头像**——把敌人名经 enemy_key 映射到九个 Q版原型，
@@ -959,10 +972,14 @@ func _build_ui() -> void:
 		b.color = Color(0.10, 0.09, 0.10, 0.26)
 		b.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		add_child(b)
-		var fill := ColorRect.new()
+		# v93q：我方血条＝绿色渐变 + 掉血拖尾 + 刻度 + 低血脉动
+		var fill := UIBar.Bar.new()
 		fill.position = Vector2(170, y + 2)
 		fill.size = Vector2(200, 14)
-		fill.color = GREEN
+		fill.col_a = Color(0.42, 0.72, 0.40)
+		fill.col_b = Color(0.22, 0.48, 0.26)
+		fill.ticks = 4
+		fill.low_warn = true
 		fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		add_child(fill)
 		var rb := ColorRect.new()
@@ -971,10 +988,15 @@ func _build_ui() -> void:
 		rb.color = Color(0.10, 0.09, 0.10, 0.15)
 		rb.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		add_child(rb)
-		var rf := ColorRect.new()
+		# v93q：怒气条＝金色渐变 + 满格扫光（满怒一眼看得出）
+		var rf := UIBar.Bar.new()
 		rf.position = Vector2(170, y + 24)
-		rf.size = Vector2(0, 5)
-		rf.color = Color(GOLD.r, GOLD.g, GOLD.b, 0.9)
+		rf.size = Vector2(200, 7)
+		rf.col_a = Color(0.92, 0.76, 0.34)
+		rf.col_b = Color(0.70, 0.50, 0.16)
+		rf.ghost_col = Color(1.0, 0.95, 0.80, 0.35)
+		rf.ticks = 4
+		rf.shine = true
 		rf.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		add_child(rf)
 		var hpt := _label("", 13, Color(INK.r, INK.g, INK.b, 0.80))
@@ -3450,59 +3472,92 @@ func _center_move(txt: String, col: Color) -> void:
 #   现在：① 先炸一圈金光；② 六枚带纸底的"战利品签"按弧线弹起、停一下、再飞进右下角；
 #   ③ 出金币音；④ 结算大字等爆物演完再出（见 _end）。
 func _loot_burst(at: Vector2) -> void:
-	var items := [
-		{"t": "文钱", "c": Color(0.74, 0.58, 0.20)},
-		{"t": "银两", "c": Color(0.80, 0.78, 0.72)},
-		{"t": "经验", "c": Color(0.34, 0.60, 0.42)},
-		{"t": "材料", "c": Color(0.42, 0.50, 0.62)},
-		{"t": "碎银", "c": Color(0.64, 0.60, 0.50)},
-		{"t": "道具", "c": Color(0.62, 0.36, 0.30)},
-	]
+	# v93m（用户：「不需要战利品签 换成素材 以及那一关爆什么东西就爆什么素材」）：
+	#   ① 不再是文字签，**直接爆素材图**（宝箱/银两/经验，都是 assets/items 里那批图）；
+	#   ② 爆什么**看这一关真实给什么**——银两取 stage_silver、经验取 stage_exp_gain、
+	#      箱子取 Tower.chest_for_stage 并按品级染色（木/银/金/玉/龙）。
+	var items: Array = []
+	var si := clampi(stage_i, 0, 999)
+	# ① 这一关的宝箱（按品级染色，跟宝箱页一个色）
+	var cid := Tower.chest_for_stage(si)
+	var cdef: Dictionary = Tower.chest_def(cid)
+	if not cdef.is_empty():
+		items.append({"tex": SceneArt.chest_closed(), "name": str(cdef.get("name", "箱")),
+			"tint": CHEST_TINT[clampi(int(cdef.get("grad", 0)), 0, CHEST_TINT.size() - 1)]})
+	# ② 银两 / 经验（数字也跟着报，飘在图标下面）
+	var sv := GameState.stage_silver(si)
+	if sv > 0:
+		items.append({"tex": _loot_tex("loot_silver"), "name": "银两 " + str(sv), "tint": Color(1, 1, 1)})
+	var ev2 := GameState.stage_exp_gain(si)
+	if ev2 > 0:
+		items.append({"tex": _loot_tex("loot_exp"), "name": "经验 " + str(ev2), "tint": Color(1, 1, 1)})
+	if items.is_empty():
+		items.append({"tex": _loot_tex("loot_silver"), "name": "银两", "tint": Color(1, 1, 1)})
 	Audio.sfx("coin", -7.0, 1.05)
 	_fx("hit", at, GOLD, 0.45, 54.0)          # 金光炸一下
 	_burst_until = Time.get_ticks_msec() + 900
 	var vp := get_viewport_rect().size
 	var corner := Vector2(vp.x - 132.0, vp.y - 168.0)
+	var mid := (float(items.size()) - 1.0) * 0.5
 	for i in items.size():
 		var it: Dictionary = items[i]
-		var chip := _loot_chip(str(it["t"]), it["c"])
-		chip.position = at - Vector2(34.0, 14.0)
+		var chip := _loot_chip(it)
+		chip.position = at - Vector2(36.0, 18.0)
 		chip.modulate.a = 0.0
 		add_child(chip)
-		var dx := (float(i) - 2.5) * 40.0
-		var rise := 52.0 + float(i % 3) * 22.0
+		var dx := (float(i) - mid) * 52.0
+		var rise := 58.0 + float(i % 3) * 20.0
 		var tw := chip.create_tween()
 		tw.set_parallel(true)
 		# 弹起（先亮、后升，BACK 有一点回弹）
 		tw.tween_property(chip, "modulate:a", 1.0, 0.12)
-		tw.tween_property(chip, "position:x", at.x + dx - 34.0, 0.34).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		tw.tween_property(chip, "position:x", at.x + dx - 36.0, 0.34).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 		tw.tween_property(chip, "position:y", at.y - rise, 0.34).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 		# 停一下（这里最容易被玩家看清）
-		tw.chain().tween_interval(0.34 + 0.05 * float(i))
+		tw.chain().tween_interval(0.40 + 0.06 * float(i))
 		# 飞进右下角（结算/回村那一片）并淡出
 		tw.chain().tween_property(chip, "position", corner + Vector2(0.0, -float(i) * 6.0), 0.46).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
 		tw.chain().tween_property(chip, "modulate:a", 0.0, 0.18)
 		tw.chain().tween_callback(chip.queue_free)
 
-# 战利品签：纸底 + 墨框 + 彩色字（16→18 号，外加一点描边感的内衬）
-func _loot_chip(txt: String, col: Color) -> Control:
-	var box := Panel.new()
-	box.size = Vector2(68.0, 30.0)
+const LOOT_DIR := "res://assets/items/"
+
+# 取一张掉落素材图（取不到返回 null，调用方会自动跳过这一件）
+func _loot_tex(nm: String) -> Texture2D:
+	var p := LOOT_DIR + nm + ".png"
+	return load(p) if ResourceLoader.exists(p) else null
+
+# 掉落件：**一枚素材图**（不再用文字签）——图标 + 底下小字写数量
+func _loot_chip(it: Dictionary) -> Control:
+	var box := Control.new()
+	box.size = Vector2(72.0, 72.0)
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.945, 0.925, 0.870, 0.96)
-	sb.set_corner_radius_all(8)
-	sb.border_color = Color(0.28, 0.24, 0.20, 0.55)
-	sb.set_border_width_all(1.4)
-	sb.shadow_color = Color(0.06, 0.05, 0.05, 0.26)
-	sb.shadow_size = 3
-	box.add_theme_stylebox_override("panel", sb)
-	var lb := _label(txt, 18, col)
-	lb.size = Vector2(68.0, 30.0)
-	lb.position = Vector2(0.0, 4.0)
-	lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	lb.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	box.add_child(lb)
+	var tex: Texture2D = it.get("tex")
+	var ir := TextureRect.new()
+	ir.position = Vector2(4.0, 0.0)
+	ir.size = Vector2(64.0, 56.0)
+	ir.texture = tex
+	ir.modulate = it.get("tint", Color(1, 1, 1))
+	ir.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	ir.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	ir.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(ir)
+	# 素材底下垫一层淡淡的光，压在花花的战斗背景上也看得清
+	var halo := TextureRect.new()
+	halo.position = Vector2(-6.0, -10.0)
+	halo.size = Vector2(84.0, 76.0)
+	halo.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var nm := str(it.get("name", ""))
+	if nm != "":
+		var lb := _label(nm, 15, Color(0.98, 0.96, 0.90))
+		lb.position = Vector2(0.0, 54.0)
+		lb.size = Vector2(72.0, 20.0)
+		lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		lb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		lb.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.75))
+		lb.add_theme_constant_override("shadow_offset_x", 1)
+		lb.add_theme_constant_override("shadow_offset_y", 2)
+		box.add_child(lb)
 	return box
 
 func _float_at(pos: Vector2, txt: String, col: Color, fs: int, elem := "") -> void:
@@ -3574,7 +3629,7 @@ func _refresh() -> void:
 	if _e_hp_lb == null:
 		return
 	_e_hp_lb.text = str(_e_hp()) + " / " + str(_e_max())
-	_e_fill.size.x = _e_bar_w * clampf(float(_e_hp()) / float(maxi(1, _e_max())), 0.0, 1.0)
+	_e_fill.set_ratio(clampf(float(_e_hp()) / float(maxi(1, _e_max())), 0.0, 1.0))
 	# v52：首领身上那一行状态（没有＝空串）
 	if _e_st_lb != null:
 		var eln := _st_line(_e())
@@ -3589,8 +3644,8 @@ func _refresh() -> void:
 		var m: Dictionary = _party[i]
 		var nm: Label = r["name"]
 		var ht: Label = r["hp_txt"]
-		var hf: ColorRect = r["hp_fill"]
-		var rf: ColorRect = r["rage_fill"]
+		var hf = r["hp_fill"]
+		var rf = r["rage_fill"]
 		# ㉝：名字后面缀上排位——让"站位"在场上看得见（越前排的能力交给怪那边表达）
 		# ⚠ 取下标要用 String 显式标注：["前","中","后"][i] 在 GDScript 里被当成
 		#   Variant，:= 推不出类型会报 "Cannot infer the type"
@@ -3598,9 +3653,15 @@ func _refresh() -> void:
 		var row_cn: String = str(row_names[clampi(int(m.get("row", 0)), 0, 2)])
 		nm.text = str(m["name"]) + "〔" + row_cn + "排〕"
 		ht.text = str(m["hp"]) + " / " + str(m["max"])
-		hf.size.x = 200.0 * clampf(float(m["hp"]) / float(maxi(1, int(m["max"]))), 0.0, 1.0)
-		hf.color = GREEN if int(m["hp"]) > 0 else Color(0.55, 0.52, 0.50, 0.60)
-		rf.size.x = 200.0 * clampf(float(m["rage"]) / 100.0, 0.0, 1.0)
+		hf.set_ratio(clampf(float(m["hp"]) / float(maxi(1, int(m["max"]))), 0.0, 1.0))
+		# 倒下的人：条压灰（原来是整根换色，现在换渐变色，跟新控件对齐）
+		if int(m["hp"]) <= 0:
+			hf.col_a = Color(0.55, 0.52, 0.50)
+			hf.col_b = Color(0.38, 0.36, 0.35)
+		else:
+			hf.col_a = Color(0.42, 0.72, 0.40)
+			hf.col_b = Color(0.22, 0.48, 0.26)
+		rf.set_ratio(clampf(float(m["rage"]) / 100.0, 0.0, 1.0))
 		# v52：状态那一行（颜色跟着第一条状态走；没有就隐藏）
 		var stq: Label = r.get("st", null)
 		if stq != null:

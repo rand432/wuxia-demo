@@ -29,6 +29,7 @@ class Card extends Control:
 	var note := ""              # 小字（专属/限一次之类）
 	var accent := Color(0.42, 0.40, 0.52)
 	var tail := ""              # 右下角那枚小印里的字（价格/张数）
+	var icon: Texture2D = null  # v93l：卡面图标（取自素材图集）
 	var disabled := false
 	var _hover := false
 
@@ -60,7 +61,13 @@ class Card extends Control:
 		var col := accent if not disabled else accent.lerp(Color(0.55, 0.55, 0.55), 0.6)
 		draw_colored_polygon(_round(band, 7.0), Color(col.r, col.g, col.b, 0.90))
 		var font := ThemeDB.fallback_font
-		draw_string(font, band.position + Vector2(10.0, 24.0), title, HORIZONTAL_ALIGNMENT_LEFT, band.size.x - 20.0, 20, Color(0.98, 0.96, 0.92))
+		var tleft := 10.0
+		if icon != null:
+			# 图标贴在题名带左端，题名往右让位
+			var ih := band.size.y - 6.0
+			draw_texture_rect(icon, Rect2(band.position + Vector2(5.0, 3.0), Vector2(ih, ih)), false, Color(1, 1, 1, 1))
+			tleft = ih + 12.0
+		draw_string(font, band.position + Vector2(tleft, 24.0), title, HORIZONTAL_ALIGNMENT_LEFT, band.size.x - tleft - 10.0, 20, Color(0.98, 0.96, 0.92))
 		# ⑤ 说明
 		var ty := band.position.y + 34.0 + 22.0
 		draw_multiline_string(font, Vector2(r.position.x + 12.0, ty), desc, HORIZONTAL_ALIGNMENT_LEFT,
@@ -105,6 +112,7 @@ class Slip extends Control:
 	signal pressed
 	var title := ""
 	var desc := ""
+	var icon: Texture2D = null   # v93l：命数签的字牌图标
 	var disabled := false
 
 	func _ready() -> void:
@@ -128,6 +136,8 @@ class Slip extends Control:
 		draw_colored_polygon(Card._round(paper, 8.0), PAPER if not disabled else Color(0.90, 0.885, 0.85))
 		draw_polyline(Card._closed(Card._round(paper, 8.0)), Color(INK.r, INK.g, INK.b, 0.35), 1.4)
 		var ty := paper.position.y + 30.0
+		if icon != null:
+			draw_texture_rect(icon, Rect2(paper.position + Vector2(paper.size.x - 46.0, 6.0), Vector2(36, 36)), false, Color(1, 1, 1, 1))
 		draw_string(font, Vector2(paper.position.x + 14.0, ty), ("『" + title + "』" + ("　已接" if disabled else "　可接")),
 			HORIZONTAL_ALIGNMENT_LEFT, paper.size.x - 28.0, 21, SEAL if not disabled else Color(0.45, 0.43, 0.45))
 		draw_multiline_string(font, Vector2(paper.position.x + 14.0, ty + 24.0), desc, HORIZONTAL_ALIGNMENT_LEFT,
