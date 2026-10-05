@@ -504,31 +504,23 @@ class TopVeil extends Node2D:
 					draw_string(font, Vector2(r.position.x, r.position.y + 128.0), "村", HORIZONTAL_ALIGNMENT_CENTER, r.size.x, 36, ink_o)
 			if font != null:
 				var ink2 := Color(0.14, 0.13, 0.15)
+				# v93：**人交给村景层画**（那边有走/待机/干活的状态机，还会跟着卷轴缩放）；
+				#   这里只剩名字标签，位置每帧问图层要（villager_pos 返回世界坐标）。
 				if host._chen_visible():
-					var tt := float(host._t)
-					var pace := sin(tt * 0.35) * 18.0
-					var bob := sin(tt * 2.2) * 2.2
-					var arm := sin(tt * 2.2 + 1.1) * 0.6
-					var csx := 1668.0 - float(host._cam) + pace
-					if csx > -80.0 and csx < 800.0:
-						if not _q_figure("chen_shi", csx, host._sy(790.0), bob, 92.0):
-							_person(csx, host._sy(790.0), Color(0.16, 0.15, 0.17, 0.72), true, bob, arm)
-						draw_string(font, Vector2(csx - 40.0, host._sy(790.0) - 106.0 - bob), "陈石", HORIZONTAL_ALIGNMENT_CENTER, 80.0, 13, Color(ink2.r, ink2.g, ink2.b, 0.70))
+					var vp: Vector2 = host._village.villager_pos("chen_shi")
+					var csx: float = vp.x - float(host._cam)
+					if vp.x > 0.0 and csx > -80.0 and csx < 800.0:
+						draw_string(font, Vector2(csx - 40.0, host._sy(vp.y) - 100.0), "陈石", HORIZONTAL_ALIGNMENT_CENTER, 80.0, 13, Color(ink2.r, ink2.g, ink2.b, 0.70))
 				if host._qingluan_visible():
-					var tt2 := float(host._t)
-					var bob2 := sin(tt2 * 2.0 + 0.7) * 2.0
-					var arm2 := sin(tt2 * 2.0 + 1.8) * 0.5
-					var qx := 1520.0 - float(host._cam) + sin(tt2 * 0.30) * 12.0
-					if qx > -80.0 and qx < 800.0:
-						var gy2: float = float(host._sy(792.0))
-						# v92：Q版立绘（她那张图里自带剑，所以不再补那条剑线）
-						if not _q_figure("qingluan", qx, gy2, bob2, 92.0):
-							_person(qx, gy2, Color(0.22, 0.17, 0.24, 0.74), false, bob2, arm2)
-							draw_line(Vector2(qx - 24.0 + arm2 * 3.0, gy2 - 92.0 - bob2), Vector2(qx + 20.0, gy2 - 18.0), Color(0.22, 0.17, 0.24, 0.74), 2.4)
-						draw_string(font, Vector2(qx - 40.0, gy2 - 106.0 - bob2), "苏青鸾", HORIZONTAL_ALIGNMENT_CENTER, 80.0, 13, Color(ink2.r, ink2.g, ink2.b, 0.70))
-				var hsx := float(host._scroll.fig_x()) - float(host._cam)
-				if hsx > -60.0 and hsx < 780.0:
-					draw_string(font, Vector2(hsx - 40.0, host._sy(700.0)), "少侠", HORIZONTAL_ALIGNMENT_CENTER, 80.0, 13, Color(ink2.r, ink2.g, ink2.b, 0.60))
+					var vq: Vector2 = host._village.villager_pos("qingluan")
+					var qx: float = vq.x - float(host._cam)
+					if vq.x > 0.0 and qx > -80.0 and qx < 800.0:
+						draw_string(font, Vector2(qx - 40.0, host._sy(vq.y) - 100.0), "苏青鸾", HORIZONTAL_ALIGNMENT_CENTER, 80.0, 13, Color(ink2.r, ink2.g, ink2.b, 0.70))
+				# v93：主角（少侠）现在由村景层的 NPC 系统画——他会在石桌/路口之间走动
+				var vh: Vector2 = host._village.villager_pos("player")
+				var hsx: float = vh.x - float(host._cam)
+				if vh.x > 0.0 and hsx > -60.0 and hsx < 780.0:
+					draw_string(font, Vector2(hsx - 40.0, host._sy(vh.y) - 100.0), "少侠", HORIZONTAL_ALIGNMENT_CENTER, 80.0, 13, Color(ink2.r, ink2.g, ink2.b, 0.60))
 		if not host._disciple_ready() and not panel_open and story < 0:
 			var rc: Rect2 = host._tag_rects[1]
 			draw_rect(rc, Color(0.09, 0.07, 0.06, 0.40))
@@ -1339,6 +1331,7 @@ func _apply_layer_transforms() -> void:
 	_village.show_shop = GameState.first_journey_done or GameState.stage_progress >= 1
 	_village.show_treasure = GameState.b2_built
 	_village.disciple_joined = GameState.disciple_joined
+	_village.qingluan_joined = GameState.qingluan_joined   # v93：她也要在村里活动
 	_village.backhill_open = GameState.village_stage >= 1
 	_village.pet_joined = GameState.pet_id != ""
 	_village.sun_joined = GameState.pet_has("qing_sun")

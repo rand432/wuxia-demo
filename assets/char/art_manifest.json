@@ -57,8 +57,8 @@
     "slots": {
       "q": {
         "file": "assets/char/qingluan_q.png",
-        "from": "assets/gen/char/qingluan/qingluan_Q版_glm_anime_cut.png",
-        "bytes": 150279
+        "from": "assets/gen/char/qingluan/qingluan_Q版_glm_anime2_v93a_cut.png",
+        "bytes": 201745
       },
       "face": {
         "file": "assets/char/qingluan_face.png",

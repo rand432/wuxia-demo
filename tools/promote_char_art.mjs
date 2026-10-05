@@ -68,7 +68,9 @@ const SLOTS = {
   //   病根：苏青鸾的 girlImg1 是 liblib/Qwen 出的**半写实厚涂**，跟主角/陈石的干净二次元
   //   不是一套；她其实早就有一张 glm 版（qingluan_Q版_glm_anime_cut.png），只是被排在后面。
   //   现在三个人统一走 glm 那张（没有 glm 版的角色自动落到后面的备选，行为不变）。
-  q: ['_Q版_glm_anime_cut.png', '_Q版_liblib_anime2_girlImg1_cut.png', '_Q版_liblib_xieyi_ink1_cut.png'],
+  // v93（用户："苏太像男的了"）：**她那版重画的女性化 Q版（anime2 + 双发髻）优先**——
+  //   原来的 glm_anime 那张二头身比例对，但五官太英气，被认成男的。
+  q: ['_Q版_glm_anime2_v93a_cut.png', '_Q版_glm_anime_cut.png', '_Q版_liblib_anime2_girlImg1_cut.png', '_Q版_liblib_xieyi_ink1_cut.png'],
   // v92：苏青鸾的 glm 版胸像提到第一位（她要跟 Q版 身体一个画风；别人没有这张，行为不变）
   face: ['_头像_glm_anime2_cut.png', '_头像_liblib_guofeng_cut.png', '_头像_glm_anime_cut.png'],
   full: ['_立绘_liblib_guofeng_cut.png', '_立绘_glm_ink_cut.png', '_立绘_glm_anime_cut.png'],

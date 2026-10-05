@@ -43,6 +43,41 @@ static func q_head(role_id: String) -> Texture2D:
 # 立绘演出片（.ogv，Godot 原生格式）；没有就返回 null
 const CLIP_DIR := "res://assets/clips/"
 # v79：宠物图（智谱出的 Q版 白狐 / 青隼）——没有图返回 null，pet_actor 自己退回手画
+# ---- v93：走路帧序列（智谱图生视频 → tools/bake_walk.mjs 抽帧拼图）----
+#   assets/char/<id>_walk.png ＝ 横向帧序列图；帧数与单帧宽高比见 assets/char/walk_frames.json
+static var _walk_meta := {}
+static var _walk_meta_loaded := false
+
+static func walk_sheet(role_id: String) -> Texture2D:
+	return _tex(role_id + "_walk")
+
+static func walk_meta() -> Dictionary:
+	if _walk_meta_loaded:
+		return _walk_meta
+	_walk_meta_loaded = true
+	var p := DIR + "walk_frames.json"
+	if ResourceLoader.exists(p) or FileAccess.file_exists(p):
+		var f := FileAccess.open(p, FileAccess.READ)
+		if f != null:
+			var txt := f.get_as_text()
+			f.close()
+			var parsed = JSON.parse_string(txt)
+			if parsed is Dictionary:
+				_walk_meta = parsed
+	return _walk_meta
+
+static func walk_count(role_id: String) -> int:
+	var m: Dictionary = walk_meta()
+	if not m.has(role_id):
+		return 0
+	return int((m[role_id] as Dictionary).get("n", 0))
+
+static func walk_aspect(role_id: String) -> float:
+	var m: Dictionary = walk_meta()
+	if not m.has(role_id):
+		return 0.63
+	return float((m[role_id] as Dictionary).get("aw", 0.63))
+
 # v92 修：走 _tex() 的静态缓存——**在 _draw() 里现 load() 的贴图会渲染成白块**
 #   （宠物路上/面板里那个"白方块"就是这么来的，跟 draw_set_transform 无关）。
 static func pet(kind: String) -> Texture2D:

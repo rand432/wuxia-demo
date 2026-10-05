@@ -50,6 +50,9 @@ var dange_tender := ""     # 看火的人（"" = 没人）
 var backhill_open := false # 后山解锁（村况 ≥ 1）
 var pet_joined := false    # 白狐入队没
 var sun_joined := false    # 青隼入队没（menu_sketch 喂：GameState.pet_has("qing_sun")）
+var qingluan_joined := false   # v93：苏青鸾入队没（她也要在村里活动）
+var _vg: Array = []        # v93：村里活人的运行态（见 _villagers）
+var _t_last := 0.0
 var season := 0            # 0春 1夏 2秋 3冬（menu_sketch 喂）
 
 # 云开的过渡时刻（-1 = 没开；≥0 = 解开的那一帧的 t）
@@ -65,32 +68,42 @@ func _draw() -> void:
 	#   现在整屏都是本作自己的水墨笔法画的——房子、田埂、篱笆、后山、云雾，
 	#   画风统一（这是最要紧的），也不会有"贴上去的照片感"。
 	_house_seq = 0      # v75：每帧从头轮（顺序固定，房子不会闪来闪去）
-	# 由远及近
-	for it in Build.FIELDS:
-		_one_field(it)
-	for it in Build.HOUSES:
-		_one_house(it)
-	for it in Build.FENCES:
-		_one_fence(it)
-	_yard()
-	_stone_table()
-	_backhill()
-	_cave()
+	# v93b：整幅村景画里已经有房子/田/篱笆/打谷场/后山了——这一整段让位（要回去改 USE_PAINTED_VILLAGE）
+	if not USE_PAINTED_VILLAGE:
+		for it in Build.FIELDS:
+			_one_field(it)
+		for it in Build.HOUSES:
+			_one_house(it)
+		for it in Build.FENCES:
+			_one_fence(it)
+		_yard()
+		_stone_table()
+		_backhill()
+		_cave()
 	_winery()
 	_shop()
 	_dange()
 	_treasure()
 	_disciple()
+	# v93（用户："房屋有点点炊烟啊 有鸟在天上飞啊…得活起来"）：
+	#   环境先画（炊烟、飞鸟）——它们在房子与树后面一层。
+	_ambient()
 	_peach_all()
 	_chickens()
 	_petals()
 	_winter_dress()
 	_fog_left()
+	# v93：**人最后画**——要压在桃树、篱笆、房子上面（不然树会盖住脸）。
+	_villagers()
 
 # ============ 画心远景（素材） ============
 # v92：素材名 + 铺法都在这一处，换图只改 FAR_MAT 一个字符串。
 #   ⚠ 素材文件名都带 _a/_b 后缀（上下两半），写错名字就等于没图。
-const FAR_MAT := "city_hills_b"    # 水墨山水（远山/云雾/水）——画心底子
+# v93（用户："主界面图背景和主界面不搭 你可以生成一个跟它搭的"）：
+#   **不用素材那批夜景了**（影之刃的夜墨调，硬贴上去跟纸白村子两套语言），
+#   改成拿 gen_char_art.mjs 的 scene_village_far 专门出的**青绿浅绛山野**——
+#   同一支画笔（智谱水墨）、同一个明度区间，铺上去是"一张画"而不是"贴上去的底图"。
+const FAR_MAT := "village_far"     # assets/scenes/mat/village_far.png（1728×770，生成稿裁掉水印条）
 const FAR_X0 := 620.0              # 画心左界（= Conf.GAP_L1，避开左端题跋）
 const FAR_X1 := 2670.0             # 画心右界（= Conf.GAP_R0，避开右端引首/书名）
 const FAR_TOP := 200.0             # = Conf.SCENE_TOP
@@ -98,8 +111,15 @@ const FAR_BOT := 840.0             # = Conf.SCENE_BOT
 # 压淡到几成 + 提亮多少：素材是"夜墨"调子，原样铺会把纸白村子衬成一块黑底。
 #   FAR_A＝不透明度、FAR_LIFT＝整体提亮（>1 变亮，乘法）。两个数配合着调：
 #   v92 第一版 0.62 太黑（房子和物件都糊在背景里），现在改成"提亮 + 更淡"＝一层远山淡影。
-const FAR_A := 0.28
-const FAR_LIFT := 1.60
+const FAR_A := 0.62
+const FAR_LIFT := 1.06
+# v93b（用户："很多都感觉像是拼接的很是违和""主界面一看就粗制滥造"）：
+#   **整幅村景画优先**——两张智谱出的村景长卷（village_a / village_b）接起来铺满画心：
+#   画里已经有房子、田畦、篱笆、土路、石桥、溪流、桃树、竹林、远山。
+#   代码这边只叠：玩家建的作坊、UI 记号、走动的人、炊烟飞鸟——层数一少，拼凑感就没了。
+#   想回退成"单件拼装"：把 USE_PAINTED_VILLAGE 改 false 即可（下面那些单件还在）。
+const VILLAGE_ART := ["village_a", "village_b"]
+const USE_PAINTED_VILLAGE := true
 
 # ============ 村景小物件（素材图） ============
 # v92（用户："主界面依旧是程序图和图素材混合 全换成图素材"）：
@@ -120,6 +140,27 @@ func _far_mat() -> void:
 	#   铺一层实纸把它们挡掉，再把素材当**淡彩**压上去——画心从此是一张干净的画。
 	draw_rect(Rect2(FAR_X0, FAR_TOP, FAR_X1 - FAR_X0, FAR_BOT - FAR_TOP),
 		Color(Conf.PAPER.r, Conf.PAPER.g, Conf.PAPER.b, 1.0))
+	# 整幅村景：两张接起来（第一张从左界开始，第二张接着排；画心右端自然裁掉）
+	if USE_PAINTED_VILLAGE:
+		var px := FAR_X0
+		var ph := FAR_BOT - FAR_TOP
+		for nm in VILLAGE_ART:
+			var pt := SceneArt.mat(str(nm))
+			if pt == null:
+				continue
+			var pw: float = ph * float(pt.get_width()) / maxf(float(pt.get_height()), 1.0)
+			draw_texture_rect(pt, Rect2(px, FAR_TOP, pw, ph), false, Color(1, 1, 1, 1))
+			# 接缝处压一条**雾带**：两幅画的明度/色调不完全一样，硬接会看出竖缝；
+			# 用几团半透明纸色椭圆盖住，既藏缝又像山间起雾（本来的画风就吃这一套）。
+			if px > FAR_X0 + 10.0:
+				var seam := px
+				for k in 7:
+					var sy2 := FAR_TOP + 40.0 + float(k) * (ph - 80.0) / 6.0
+					var sx2 := seam + sin(float(k) * 1.9) * 26.0
+					Draw.ellipse(self, Vector2(sx2, sy2), 96.0 + float(k % 3) * 22.0,
+						(58.0 + float(k % 2) * 18.0) / Draw.sy(), Color(Conf.PAPER.r, Conf.PAPER.g, Conf.PAPER.b, 0.52))
+			px += pw - 2.0            # 两幅之间压 2 像素，免得露出缝
+		return
 	var tex := SceneArt.mat(FAR_MAT)
 	if tex == null:
 		return                       # 没图＝画心留白，不崩、不留垃圾
@@ -1168,6 +1209,183 @@ func _fog_patch(x: float, open: bool, span: float, open_t: float) -> void:
 		Draw.ellipse(self, Vector2(cx, cy), rx, (rx * 0.40) / Draw.sy(), Color(Conf.PAPER.r, Conf.PAPER.g, Conf.PAPER.b, a))
 		Draw.ellipse(self, Vector2(cx + rx * 0.30, cy - 7.0), rx * 0.52, (rx * 0.24) / Draw.sy(), Color(Conf.PAPER.r, Conf.PAPER.g, Conf.PAPER.b, a * 0.80))
 
+# ============ 环境活起来（v93） ============
+# 用户："房屋有点点炊烟啊 有鸟在天上飞啊 等等 得活起来"
+#   炊烟：每座建成的房子/作坊一缕（图里的烟囱位置各家不同，统一取屋脊偏左一点）；
+#   飞鸟：五只，横穿画心，翅膀扇动 + 高低错落。都在**世界坐标**里，跟房子一个坐标系。
+func _ambient() -> void:
+	var i := 0
+	for h in Build.HOUSES:
+		var hx := float(h["x"])
+		var hy := float(h["y"])
+		if stage >= int(h["at"]):
+			var top := hy + 2.0 - (float(h["h"]) + float(h["roof"])) * 2.05
+			if Draw.vis(cam, hx - 60.0, hx + 60.0):
+				_smoke(hx + 12.0, top + 16.0, fposmod(float(i) * 0.37, 1.0))
+		i += 1
+	# 作坊三家：丹房（烟囱在图里，冒得旺一点）、货栈、品酒坊
+	if show_dange and Draw.vis(cam, POS["dange"].x - 60.0, POS["dange"].x + 60.0):
+		_smoke(POS["dange"].x + 14.0, POS["dange"].y - 96.0, 0.13)
+	if show_winery and Draw.vis(cam, POS["winery"].x - 60.0, POS["winery"].x + 60.0):
+		_smoke(POS["winery"].x - 10.0, POS["winery"].y - 92.0, 0.51)
+	if show_shop and Draw.vis(cam, POS["shop"].x - 60.0, POS["shop"].x + 60.0):
+		_smoke(POS["shop"].x + 16.0, POS["shop"].y - 98.0, 0.77)
+	# 飞鸟：五只，横穿画心（左→右），翅膀一扇一扇
+	for k in 5:
+		var spd := 24.0 + float(k % 3) * 10.0
+		var bx := 360.0 + fposmod(t * spd + float(k) * 437.0, 2460.0)
+		var by := 296.0 + float(k % 3) * 44.0 + sin(t * 0.53 + float(k) * 1.7) * 13.0
+		if not Draw.vis(cam, bx - 44.0, bx + 44.0):
+			continue
+		var flap := sin(t * 5.6 + float(k) * 1.3) * 7.0
+		var bc := Color(Conf.INK.r, Conf.INK.g, Conf.INK.b, 0.40)
+		Draw.stroke(self, [Vector2(bx - 12.0, by + flap * 0.42), Vector2(bx, by), Vector2(bx + 12.0, by - flap * 0.42)], 2.2, 0.9, bc)
+
+# ============ 村里的活人（v93） ============
+# 用户："你要真想在主界面加入人物他得会动 会走 会待机 比如陈石跑到主界面田地干活等等 动起来"
+#   每人一台小状态机：**待机 → 走 → 干活 → 走 → …**，spots 是他会去的地方（按顺序轮），
+#   job 不为空的那个点在到了之后要干一会儿活（陈石＝锄地）。全部世界坐标。
+const VILLAGERS := [
+	{"id": "player", "label": "少侠", "spd": 27.0, "job": "",
+		"spots": [Vector2(1392.0, 792.0), Vector2(1256.0, 806.0), Vector2(1520.0, 788.0)]},
+	{"id": "chen_shi", "label": "陈石", "spd": 21.0, "job": "field",
+		"spots": [Vector2(1150.0, 826.0), Vector2(1035.0, 828.0), Vector2(1668.0, 776.0)]},
+	{"id": "qingluan", "label": "苏青鸾", "spd": 25.0, "job": "",
+		"spots": [Vector2(1520.0, 790.0), Vector2(1706.0, 780.0), Vector2(1330.0, 800.0)]},
+]
+
+func _villagers_init() -> void:
+	if not _vg.is_empty():
+		return
+	for i in VILLAGERS.size():
+		var v: Dictionary = VILLAGERS[i]
+		var s0: Vector2 = (v["spots"] as Array)[0]
+		_vg.append({"i": i, "pos": s0, "next": 1, "state": "idle", "tm": 0.8 + float(i) * 0.9,
+			"face": -1.0, "ph": float(i) * 1.7, "gait": 0.0})
+
+# 给 TopVeil 用：这个人现在在世界坐标的哪儿（没这个人时返回 -1）
+func villager_pos(rid: String) -> Vector2:
+	for st in _vg:
+		if str((VILLAGERS[int(st["i"])] as Dictionary)["id"]) == rid:
+			return st["pos"]
+	return Vector2(-1.0, -1.0)
+
+func _villager_alive(rid: String) -> bool:
+	if rid == "chen_shi":
+		return disciple_joined
+	if rid == "qingluan":
+		return qingluan_joined
+	return true          # 主角一直在
+
+func _villagers() -> void:
+	_villagers_init()
+	var d: float = clampf(t - _t_last, 0.0, 0.1)
+	_t_last = t
+	for st in _vg:
+		var cfg: Dictionary = VILLAGERS[int(st["i"])]
+		if not _villager_alive(str(cfg["id"])):
+			continue
+		_villager_step(st, cfg, d)
+		_villager_draw(st, cfg)
+
+func _villager_step(st: Dictionary, cfg: Dictionary, d: float) -> void:
+	var spots: Array = cfg["spots"]
+	var state := str(st["state"])
+	if state == "walk":
+		var to: Vector2 = spots[int(st["next"]) % spots.size()]
+		var p: Vector2 = st["pos"]
+		var dir := (to - p)
+		var dist := dir.length()
+		var step: float = float(cfg["spd"]) * d
+		st["gait"] = float(st["gait"]) + d * 6.4
+		if dist <= step:
+			st["pos"] = to
+			st["next"] = (int(st["next"]) + 1) % spots.size()
+			st["state"] = "work" if str(cfg["job"]) != "" and (int(st["next"]) == 1) else "idle"
+			st["tm"] = 5.0 + fposmod(float(st["i"]) * 1.7, 3.0)
+		else:
+			st["pos"] = p + dir / dist * step
+			st["face"] = signf(dir.x) if absf(dir.x) > 0.5 else float(st["face"])
+	elif state == "work":
+		st["tm"] = float(st["tm"]) - d
+		st["gait"] = float(st["gait"]) + d * 3.2
+		if float(st["tm"]) <= 0.0:
+			st["state"] = "idle"
+			st["tm"] = 1.6 + fposmod(float(st["i"]) * 2.3, 2.0)
+	else:
+		st["tm"] = float(st["tm"]) - d
+		if float(st["tm"]) <= 0.0:
+			st["state"] = "walk"
+
+func _villager_draw(st: Dictionary, cfg: Dictionary) -> void:
+	var rid := str(cfg["id"])
+	var tex := CharArt.q(rid)
+	var p: Vector2 = st["pos"]
+	if not Draw.vis(cam, p.x - 70.0, p.x + 70.0):
+		return
+	var state := str(st["state"])
+	var walking := state == "walk"
+	var working := state == "work"
+	var ph := float(st["ph"])
+	var hh := 92.0
+	var bob := sin(t * 1.3 + ph) * 0.9
+	var lean := 0.0
+	if walking:
+		bob = absf(sin(float(st["gait"]) * PI)) * 3.4
+		lean = 0.09 * float(st["face"])
+	elif working:
+		bob = absf(sin(float(st["gait"]) * 1.6)) * 2.2 - 1.0
+		lean = 0.13 * float(st["face"])
+	# 影子（跟房子同一个落点：脚底）
+	Draw.ellipse(self, Vector2(p.x, p.y + 1.5), hh * 0.20, 4.2 / Draw.sy(), Color(Conf.INK.r, Conf.INK.g, Conf.INK.b, 0.15))
+	# v93：**走路帧序列优先**（智谱图生视频 → tools/bake_walk.mjs 抽帧拼图）——
+	#   走路时逐帧轮播（步频跟 gait 走），待机/干活时回到第 0 帧（配呼吸起伏）。
+	var sheet := CharArt.walk_sheet(rid)
+	var nfr := CharArt.walk_count(rid)
+	if sheet != null and nfr > 0:
+		var aw := CharArt.walk_aspect(rid)
+		var fh := float(sheet.get_height())
+		var fw := fh * aw
+		var fi := 0
+		if walking:
+			fi = int(floor(float(st["gait"]) * 1.6)) % nfr
+		var fww := hh * aw
+		var frx: float = p.x - fww * 0.5
+		var frw: float = fww
+		if float(st["face"]) < 0.0:
+			frx = p.x + fww * 0.5
+			frw = -fww
+		draw_set_transform_matrix(Draw.bend_xf(Vector2(p.x, p.y), lean))
+		draw_texture_rect_region(sheet, Rect2(frx, p.y - hh + bob, frw, hh),
+			Rect2(float(fi) * fw, 0.0, fw, fh), Color(1, 1, 1, 1))
+		draw_set_transform_matrix(Transform2D.IDENTITY)
+	elif tex == null:
+		# 真没图才退回火柴人（正常不会走到这儿）
+		Draw.mini_person(self, p.x, p.y, float(st["face"]), 1.0 + bob * 0.2, bob, false)
+	else:
+		var ww: float = hh * float(tex.get_width()) / maxf(float(tex.get_height()), 1.0)
+		var rx: float = p.x - ww * 0.5
+		var rw: float = ww
+		if float(st["face"]) < 0.0:
+			rx = p.x + ww * 0.5
+			rw = -ww
+		draw_set_transform_matrix(Draw.bend_xf(Vector2(p.x, p.y), lean))
+		draw_texture_rect(tex, Rect2(rx, p.y - hh + bob, rw, hh), false, Color(1, 1, 1, 1))
+		draw_set_transform_matrix(Transform2D.IDENTITY)
+	# 干活：锄头一上一下 + 脚边土花（只有陈石那个点到田里才干）
+	if working:
+		var sw := sin(float(st["gait"]) * 1.6)
+		var hx := p.x + 15.0 * float(st["face"])
+		var hy := p.y - 40.0 + bob
+		draw_line(Vector2(hx, hy), Vector2(hx + 26.0 * float(st["face"]) * (0.5 + 0.5 * sw), p.y - 2.0),
+			Color(0.46, 0.35, 0.23, 0.92), 2.2, true)
+		draw_line(Vector2(hx + 26.0 * float(st["face"]) * (0.5 + 0.5 * sw) - 6.0, p.y - 4.0),
+			Vector2(hx + 26.0 * float(st["face"]) * (0.5 + 0.5 * sw) + 6.0, p.y - 4.0),
+			Color(0.34, 0.30, 0.26, 0.85), 3.0, true)
+		for k in 3:
+			var pk := fposmod(float(st["gait"]) * 0.35 + float(k) * 0.33, 1.0)
+			draw_circle(Vector2(p.x + 22.0 * float(st["face"]) + float(k) * 3.0, p.y - 6.0 - pk * 16.0),
+				1.4 * (1.0 - pk) + 0.4, Color(0.42, 0.34, 0.22, 0.30 * (1.0 - pk)))
 # ============ 门外的弟子 ============
 
 func _disciple() -> void:
