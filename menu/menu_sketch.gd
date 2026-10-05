@@ -402,7 +402,7 @@ class TopVeil extends Node2D:
 		draw_texture_rect(tex, Rect2(cx - w * 0.5, gy - h - bob, w, h), false, Color(1, 1, 1, 1))
 		return true
 
-func _person(sx: float, gy: float, col: Color, spear: bool, bob: float, arm: float) -> void:
+	func _person(sx: float, gy: float, col: Color, spear: bool, bob: float, arm: float) -> void:
 		draw_circle(Vector2(sx, gy - 86.0 - bob), 9.0, col)
 		draw_line(Vector2(sx, gy - 77.0 - bob), Vector2(sx, gy - 40.0 - bob * 0.5), col, 3.0)
 		draw_line(Vector2(sx, gy - 40.0 - bob * 0.5), Vector2(sx - 12.0, gy), col, 3.0)
