@@ -15,6 +15,7 @@ extends Node2D
 # ============================================================
 
 const MoveDb := preload("res://move_db.gd")
+const PaperRig := preload("res://shared/paper_rig.gd")   # v93：有切件的角色走骨骼
 const Audio := preload("res://shared/audio.gd")   # v65：出手/挨打/倒地 各出一声
 
 const ART_DIR := "res://assets/char/"          # 正式资源目录（由 tools/promote_char_art.mjs 从生成稿提升过来）
@@ -39,6 +40,15 @@ var weapon_type := "sword"
 var hat_type := "toujin"
 var cape_type := "none"
 var move_speed := 1.0
+
+# ---- v93：骨骼模式（shared/paper_rig.gd）----
+#   有手工切件的角色（少侠/陈石/苏青鸾）用**骨骼**画：腿真的迈、能按距离调步频。
+#   整图仍是后备（敌人、还没切件的角色照旧）。
+var _rig: Node2D = null
+var _rig_on := false
+var _rig_gait := 0.0        # 0~1 循环相位（按走的距离推进）
+var _rig_act := ""          # "" / "attack" / "hit" / "down"
+var _rig_act_t := 0.0       # 动作剩余时间
 
 var _sprite: Sprite2D
 var _shadow: Node2D
@@ -218,6 +228,7 @@ func _ready() -> void:
 	#   而 Godot 的 z_index 是**相对父节点**的，面板挂在遮罩下 → 自动也在 120 之上 ✔
 	#   所以这里恢复 5：压在风景之上、弹窗之下，两边都对。
 	z_index = 5
+	use_rig(true)      # v93：有切件就用骨骼（没有就保持整图，什么都不影响）
 
 # 量 alpha 边界：扫一遍像素，找到 alpha > 24 的最小外包矩形。
 #   贴图最大也就 340×340 量级（提升脚本已经缩过），几万次循环，进场时算一次不心疼。
@@ -342,6 +353,59 @@ func _apply_ink_style() -> void:
 			_bbox = _measure_bbox(tex)
 			_relayout()
 
+# ============ v93：骨骼模式 ============
+
+# 角色 id → 骨骼前缀（与 menu/menu_village.gd 的 RIG_OF 同一套口径）
+func _rig_key() -> String:
+	match role:
+		"player", "shaoxia":
+			return "shaoxia"
+		"chen_shi", "chenshi":
+			return "chenshi"
+		"qingluan":
+			return "qingluan"
+	return ""
+
+# 开关骨骼显示。开不起来（没切件）就保持整图，什么都不影响。
+func use_rig(on: bool) -> void:
+	if on and _rig == null:
+		var key := _rig_key()
+		if key != "":
+			var r: Node2D = PaperRig.new()
+			if r.setup(key, fit_height):
+				add_child(r)
+				r.z_index = -1          # 与 _sprite 同层：压在地面之上、墨弧之下
+				_rig = r
+	_rig_on = on and _rig != null
+	if _sprite != null:
+		_sprite.visible = not _rig_on
+	if _rig != null:
+		_rig.visible = _rig_on
+
+func _rig_step(delta: float) -> void:
+	if not _rig_on or _rig == null:
+		return
+	# 走路相位按**位移**推进（不是按时间）——速度一变步频跟着变，不滑步
+	var dx := absf(position.x - _last_pos.x)
+	_rig_gait = fposmod(_rig_gait + dx * 0.055, 1.0)
+	if _rig_act_t > 0.0:
+		_rig_act_t = maxf(0.0, _rig_act_t - delta)
+	var k := 0.0 if _rig_act_t <= 0.0 else _rig_act_t
+	match _rig_act:
+		"attack":
+			_rig.set_attack(1.0 - clampf(_rig_act_t / 0.45, 0.0, 1.0))
+		"hit":
+			_rig.set_hit(clampf(_rig_act_t / 0.30, 0.0, 1.0))
+		"down":
+			_rig.set_down()
+		_:
+			if dx * 12.0 > 0.35 or _walk_amt > 0.25:
+				_rig.set_run(_rig_gait)
+			else:
+				_rig.set_idle(_t)
+	# 朝向：与整图同口径（_dir 已含镜像补偿）
+	_rig.scale = Vector2(_dir, 1.0)
+
 # ============ 接口：位移（与火柴人同语义） ============
 
 func move_seq() -> Tween:
@@ -397,12 +461,17 @@ func _set_pose(d: Dictionary) -> void:
 # ⚠ 倒地之后**也要能扶起来**（战斗收尾/复活会调 reset_pose），所以这里必须清 _down
 func reset_pose() -> void:
 	_down = false
+	_rig_act = ""
+	_rig_act_t = 0.0
 	if _mat != null:
 		_mat.set_shader_parameter("alpha", 1.0)
 	_set_pose({CH_LEAN: 0.0, CH_HOP: 0.0, CH_SX: 1.0, CH_SY: 1.0, CH_SWAY: 0.0})
 
 func play_move(move_id: String, speed := 1.0) -> void:
 	_down = false
+	# v93：骨骼也出一手（整图那套四段照旧，两套互不干扰）
+	_rig_act = "attack"
+	_rig_act_t = 0.45
 	move_speed = maxf(0.25, speed)
 	_move_gen += 1
 	var gen := _move_gen
@@ -456,6 +525,8 @@ func play_move(move_id: String, speed := 1.0) -> void:
 
 func play_hit() -> void:
 	_down = false
+	_rig_act = "hit"
+	_rig_act_t = 0.30
 	_move_gen += 1
 	var gen := _move_gen
 	Audio.sfx(_sfx_hit(), -6.0, randf_range(0.95, 1.10))
@@ -479,12 +550,25 @@ func play_dodge() -> void:
 func play_down() -> void:
 	Audio.sfx("fall_down", -5.0)
 	_down = true
+	_rig_act = "down"
+	_rig_act_t = 999.0        # 一直躺着，直到 reset_pose
 	_move_gen += 1
 	_set_pose({CH_LEAN: 86.0 * _dir, CH_HOP: 6.0, CH_SX: 1.02, CH_SY: 0.98, CH_SWAY: 12.0 * _dir})
 	if _mat != null:
 		_mat.set_shader_parameter("alpha", 0.92)
 
+# 骨骼模式下没有着色器，闪光用**部件提亮**顶一下（挨打要看得见）
+func _rig_flash(v: float) -> void:
+	if _rig == null:
+		return
+	for ch in _rig.get_children():
+		var hip: Node2D = ch
+		for c2 in hip.get_children():
+			if c2 is CanvasItem:
+				(c2 as CanvasItem).modulate = Color(1.0 + v * 0.9, 1.0 + v * 0.5, 1.0 + v * 0.5, 1.0)
+
 func _flash(v: float, dur: float) -> void:
+	_rig_flash(v)
 	if _mat == null:
 		return
 	_mat.set_shader_parameter("flash", v)
@@ -660,6 +744,7 @@ func _process(delta: float) -> void:
 	_apply_visual()
 	# v70b：走路小人（游历）写的是火柴人那套 9 关节——翻译成纸片人的起伏/前倾
 	_walk_apply()
+	_rig_step(delta)
 
 func _integrate(h: float) -> void:
 	var sp := maxf(0.25, move_speed)

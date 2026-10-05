@@ -21,6 +21,7 @@ extends Node2D
 const Conf := preload("res://menu/menu_conf.gd")
 const Draw := preload("res://menu/menu_draw.gd")
 const CharArt := preload("res://shared/char_art.gd")   # v91：村里的弟子用 Q版立绘
+const PaperRig := preload("res://shared/paper_rig.gd")   # v93：手工切件搭的骨骼（先给少侠用）
 const Build := preload("res://menu/data_build.gd")
 const SceneArt := preload("res://shared/scene_art.gd")   # v67：主场景·村景长卷（远景垫图层）
 
@@ -52,6 +53,9 @@ var pet_joined := false    # 白狐入队没
 var sun_joined := false    # 青隼入队没（menu_sketch 喂：GameState.pet_has("qing_sun")）
 var qingluan_joined := false   # v93：苏青鸾入队没（她也要在村里活动）
 var _vg: Array = []        # v93：村里活人的运行态（见 _villagers）
+var _rigs := {}            # v93：role_id → PaperRig（有骨骼就用骨骼，没有才用帧序列/静图）
+# 角色 → 骨骼部件前缀（目前只切了少侠那一套；其余人自动退回帧序列）
+const RIG_OF := {"player": "shaoxia", "chen_shi": "chenshi", "qingluan": "qingluan"}
 var _t_last := 0.0
 var season := 0            # 0春 1夏 2秋 3冬（menu_sketch 喂）
 
@@ -1286,7 +1290,35 @@ func _villagers() -> void:
 		if not _villager_alive(str(cfg["id"])):
 			continue
 		_villager_step(st, cfg, d)
-		_villager_draw(st, cfg)
+		_villager_rig(st, cfg)      # v93：有骨骼的走骨骼（腿真的在迈、步频跟速度走）
+		if not _rigs.has(str(cfg["id"])) or _rigs[str(cfg["id"])] == null:
+			_villager_draw(st, cfg)  # 没骨骼才画帧序列/静图
+
+# v93：给这个村民挂一副骨骼（只建一次），并按状态摆姿势
+func _villager_rig(st: Dictionary, cfg: Dictionary) -> void:
+	var rid := str(cfg["id"])
+	var pre := str(RIG_OF.get(rid, ""))
+	if pre == "":
+		return
+	if not _rigs.has(rid):
+		var rg := PaperRig.new()
+		if rg.setup(pre, 92.0):
+			add_child(rg)
+			_rigs[rid] = rg
+		else:
+			_rigs[rid] = null
+			return
+	var rig = _rigs[rid]
+	if rig == null:
+		return
+	var p: Vector2 = st["pos"]
+	rig.visible = Draw.vis(cam, p.x - 70.0, p.x + 70.0)
+	rig.position = p
+	rig.scale = Vector2(float(st["face"]), 1.0)
+	if str(st["state"]) == "walk":
+		rig.set_gait(float(st["gait"]))            # gait 本身就是 0~1 的循环相位（按距离推进）
+	else:
+		rig.set_idle(t + float(st["ph"]))
 
 func _villager_step(st: Dictionary, cfg: Dictionary, d: float) -> void:
 	var spots: Array = cfg["spots"]
@@ -1297,7 +1329,8 @@ func _villager_step(st: Dictionary, cfg: Dictionary, d: float) -> void:
 		var dir := (to - p)
 		var dist := dir.length()
 		var step: float = float(cfg["spd"]) * d
-		st["gait"] = float(st["gait"]) + d * 6.4
+		# v93：步态按**走的距离**推进（不是按时间）——步频自动跟着速度走，所以不滑步
+		st["gait"] = float(st["gait"]) + d * float(cfg["spd"]) * 0.26
 		if dist <= step:
 			st["pos"] = to
 			st["next"] = (int(st["next"]) + 1) % spots.size()
