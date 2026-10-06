@@ -1,0 +1,104 @@
+{
+  "pieces": [
+    {
+      "alpha": 0.45,
+      "h": 300.0,
+      "name": "f01",
+      "rot": 0.0,
+      "scale": 0.492,
+      "tex": "res://assets/scenes/ink/far/f01.png",
+      "x": 232.0,
+      "y": 742.0,
+      "z": -20
+    },
+    {
+      "alpha": 0.38,
+      "h": 232.0,
+      "name": "f05",
+      "rot": 0.0,
+      "scale": 0.586,
+      "tex": "res://assets/scenes/ink/far/f05.png",
+      "x": 566.0,
+      "y": 764.0,
+      "z": -19
+    },
+    {
+      "alpha": 1.0,
+      "h": 178.0,
+      "name": "h101",
+      "rot": 0.0,
+      "scale": 0.372,
+      "tex": "res://assets/scenes/ink/house/h101.png",
+      "x": 236.0,
+      "y": 1006.0,
+      "z": 0
+    },
+    {
+      "alpha": 1.0,
+      "h": 128.0,
+      "name": "h137",
+      "rot": 0.0,
+      "scale": 0.274,
+      "tex": "res://assets/scenes/ink/house/h137.png",
+      "x": 552.0,
+      "y": 986.0,
+      "z": 1
+    },
+    {
+      "alpha": 1.0,
+      "h": 118.0,
+      "name": "h158",
+      "rot": 0.0,
+      "scale": 0.169,
+      "tex": "res://assets/scenes/ink/house/h158.png",
+      "x": 404.0,
+      "y": 1078.0,
+      "z": 2
+    },
+    {
+      "alpha": 0.92,
+      "h": 150.0,
+      "name": "h131",
+      "rot": 0.0,
+      "scale": 0.214,
+      "tex": "res://assets/scenes/ink/house/h131.png",
+      "x": 656.0,
+      "y": 918.0,
+      "z": 3
+    },
+    {
+      "alpha": 1.0,
+      "h": 236.0,
+      "name": "t01",
+      "rot": 0.0,
+      "scale": 0.408,
+      "tex": "res://assets/scenes/ink/tree/t01.png",
+      "x": 66.0,
+      "y": 1148.0,
+      "z": 4
+    },
+    {
+      "alpha": 1.0,
+      "h": 268.0,
+      "name": "t04",
+      "rot": 0.0,
+      "scale": 0.383,
+      "tex": "res://assets/scenes/ink/tree/t04.png",
+      "x": 682.0,
+      "y": 1196.0,
+      "z": 5
+    },
+    {
+      "alpha": 1.0,
+      "h": 104.0,
+      "name": "w01",
+      "rot": 0.0,
+      "scale": 0.31,
+      "tex": "res://assets/scenes/ink/water/w01.png",
+      "x": 340.0,
+      "y": 1186.0,
+      "z": 6
+    }
+  ],
+  "version": 1
+}

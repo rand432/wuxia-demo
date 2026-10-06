@@ -27,6 +27,9 @@ static func _walk(n: Node, out: Array) -> void:
 		out.append({
 			"name": str(s.name),
 			"tex": s.texture.resource_path,
+			# 同时记下"现在多高"（h）——你摆完存盘，我看到的就是"这栋房子 168 像素高"，
+			# 比 0.0837 这种倍数好读得多
+			"h": snappedf(float(s.texture.get_height()) * s.scale.y, 1.0),
 			"x": snappedf(s.position.x, 0.5),
 			"y": snappedf(s.position.y, 0.5),
 			"scale": snappedf(s.scale.x, 0.001),
@@ -81,7 +84,12 @@ static func build(parent: Node2D, pieces: Array, name_prefix := "p") -> int:
 		# 统一"锚在脚下中间"：贴图左上角 = 位置 - (宽/2, 高)
 		s.offset = Vector2(-float(t.get_width()) * 0.5, -float(t.get_height()))
 		s.position = Vector2(float(it.get("x", 0.0)), float(it.get("y", 0.0)))
+		# 支持两种写法：给 scale（倍数）或给 h（**目标高度像素**）。
+		# 后者更符合"摆景"的直觉——"这栋房子在画面上大概 170 像素高"，
+		# 而且不会像第一版起手布局那样：2000×2000 的原图乘 0.8 直接铺满整屏。
 		var sc := float(it.get("scale", 1.0))
+		if it.has("h"):
+			sc = float(it["h"]) / maxf(1.0, float(t.get_height()))
 		s.scale = Vector2(sc, sc)
 		s.rotation = float(it.get("rot", 0.0))
 		s.z_index = int(it.get("z", 0))

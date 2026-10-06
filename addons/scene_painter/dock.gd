@@ -22,6 +22,10 @@ var _status: Label = null
 var _cat := ""
 var _cats: Array = []
 var _horizon: Node2D = null
+var _size_btn: OptionButton = null
+# 放进来时的**目标高度**（像素）——比"缩放 0.0837"直观得多；
+# 大中小三档覆盖：小件（花草）/ 中件（房子、树）/ 大件（整幅背景、牌坊）
+const SIZES := [{"cn": "小 90", "h": 90.0}, {"cn": "中 180", "h": 180.0}, {"cn": "大 320", "h": 320.0}, {"cn": "很大 520", "h": 520.0}]
 
 func _ready() -> void:
 	_build_ui()
@@ -47,9 +51,9 @@ func _build_ui() -> void:
 
 	var cats := HBoxContainer.new()
 	root.add_child(cats)
-	for c in ["house", "tree", "water", "far"]:
+	for c in ["house", "tree", "water", "far", "bg"]:
 		var b := Button.new()
-		b.text = {"house": "房", "tree": "树", "water": "水", "far": "山"}.get(c, c)
+		b.text = {"house": "房", "tree": "树", "water": "水", "far": "山", "bg": "整"}.get(c, c)
 		b.toggle_mode = true
 		b.custom_minimum_size = Vector2(52, 28)
 		b.pressed.connect(_on_cat.bind(c))
@@ -65,6 +69,18 @@ func _build_ui() -> void:
 	_grid.add_theme_constant_override("h_separation", 4)
 	_grid.add_theme_constant_override("v_separation", 4)
 	sc.add_child(_grid)
+
+	var size_row := HBoxContainer.new()
+	root.add_child(size_row)
+	var sl := Label.new()
+	sl.text = "放进来的大小"
+	sl.add_theme_font_size_override("font_size", 11)
+	size_row.add_child(sl)
+	_size_btn = OptionButton.new()
+	for s in SIZES:
+		_size_btn.add_item(str(s["cn"]))
+	_size_btn.selected = 1
+	size_row.add_child(_size_btn)
 
 	var save_btn := Button.new()
 	save_btn.text = "保存布局 JSON"
@@ -106,7 +122,7 @@ func _scan_cats() -> void:
 func _on_cat(c: String) -> void:
 	_cat = c
 	for i in _cat_btns.size():
-		(_cat_btns[i] as Button).button_pressed = (str((_cat_btns[i] as Button).text) == {"house": "房", "tree": "树", "water": "水", "far": "山"}.get(c, c))
+		(_cat_btns[i] as Button).button_pressed = (str((_cat_btns[i] as Button).text) == {"house": "房", "tree": "树", "water": "水", "far": "山", "bg": "整"}.get(c, c))
 	for ch in _grid.get_children():
 		ch.queue_free()
 	var dir := ART_ROOT + "/" + c
@@ -157,6 +173,12 @@ func _on_piece(path: String) -> void:
 	s.texture = t
 	s.centered = false
 	s.offset = Vector2(-float(t.get_width()) * 0.5, -float(t.get_height()))   # 锚在脚下中间
+	# 按"目标高度"自动定缩放（否则 2000×2000 的原图一放进来就铺满整屏）
+	var want_h := 180.0
+	if _size_btn != null and _size_btn.selected >= 0 and _size_btn.selected < SIZES.size():
+		want_h = float(SIZES[_size_btn.selected]["h"])
+	var kk := want_h / maxf(1.0, float(t.get_height()))
+	s.scale = Vector2(kk, kk)
 	var c := _view_center()
 	s.position = Vector2(snappedf(c.x, 1.0), snappedf(c.y, 1.0))
 	s.name = str(path.get_file().get_basename())
