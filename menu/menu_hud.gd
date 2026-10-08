@@ -30,6 +30,9 @@ func _draw() -> void:
 	draw_string(font, Vector2(0.0, 1260.0), "主界面 v7 · 村况 " + str(int(host._stage)) + "/" + str(Build.STAGE_MAX) + "·" + str(st["name"]) + " · 卷 " + str(int(host._cam)) + "/" + str(int(Conf.CAM_MAX)), HORIZONTAL_ALIGNMENT_RIGHT, Conf.DW - 18.0, 15, Color(Conf.INK.r, Conf.INK.g, Conf.INK.b, 0.32))
 
 func _draw_hint() -> void:
+	# v97：镜头钉死（PIN_CAM）＝不再有"拖开画卷"这回事，提示语一并撤掉
+	if host.PIN_CAM:
+		return
 	if host._hint_a <= 0.02 or host._toast_t > 0.0:
 		return
 	var a: float = host._hint_a * (0.65 + 0.35 * sin(t * 2.2))

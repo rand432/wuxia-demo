@@ -35,9 +35,18 @@ const Build := preload("res://menu/data_build.gd")
 const ScrollLayer := preload("res://menu/menu_scroll.gd")
 const VillageLayer := preload("res://menu/menu_village.gd")
 const InkScene := preload("res://menu/menu_ink_scene.gd")   # v96：水墨村景层（摆景器那套）
+const PlaqueLayer := preload("res://menu/menu_plaque.gd")   # v97：主界面牌子层（用户标注的 11 处锚点）
 # 两个开关：村景层开着、纸偶演员关掉（用户 2026-10-08："三个移动小人就不要了"）
 const USE_INK_SCENE := true
 const USE_PAPER_ACTORS := false
+# v97（用户："让村景层铺满全屏" / 交接 §12.7 第 1 条「收旧画心」）：
+#   水墨村景层当底之后，旧的**「少年游」画心长卷**（menu_scroll）与**程序画的村景**
+#   （menu_village）就是压在它上面的两层"旧画"——整条画卷还占着屏幕中央，村景只在
+#   下面露一条。开关打开＝这两层连同远山层、旧特效层一起收起（**只隐藏、不删**，改 false 就回退）。
+const INK_ONLY := true
+# v97：既然只剩一屏村景（用户标注的 11 处锚点全在一屏之内），**横向拖动看画**就没意义了，
+#   镜头钉死在开场位。留着 _cam 变量与拖动代码，只是不再让它动。
+const PIN_CAM := true
 const MountLayer := preload("res://menu/menu_mount.gd")
 const HudLayer := preload("res://menu/menu_hud.gd")
 const UiKit := preload("res://shared/ui_kit.gd")   # v72：设置面板用（标签/按钮/纸张面板工厂）
@@ -194,6 +203,8 @@ var _tag_rects: Array = []
 var _panel_open := false
 var _actors = null            # v93g：人物层（村景之上、UI 之下，等比缩放）
 var _ink = null               # v96：水墨村景层（最底，读 village_layout.json）
+var _plaques = null           # v97：牌子层（竖排木牌/六边形徽标/头像；位置＝占屏比例）
+var _set_btn = null           # v97：旧的右上角「设置」按钮（牌子层接管后收起来，代码留着）
 var _tag_notice := -1
 var _story_kind := ""
 var _story_page := -1
@@ -586,6 +597,12 @@ func _ready() -> void:
 	_fx_root = Node2D.new()
 	add_child(_fx_root)
 	add_child(_hud)
+	# v97：收起旧的两层画（见文件头 INK_ONLY 的注）
+	if INK_ONLY:
+		_scroll.visible = false
+		_village.visible = false
+		_mount.visible = false
+		_fx_root.visible = false
 	_mount.font = _font
 	_hud.font = _font
 	_hud.host = self
@@ -604,7 +621,15 @@ func _ready() -> void:
 	#   ⚠ 位置照旧（628,58）：只在最外层、没有面板时才点得到。
 	var set_btn := UiKit.make_button(self, Vector2(628, 58), Vector2(76, 40), "设 置", 17)
 	set_btn.pressed.connect(_open_settings)
+	_set_btn = set_btn
 	_build_idle_plaque()
+	# v97：牌子层（用户标注的 11 处锚点）。建在**面板之前**——一开面板就被盖住，
+	#   跟旧的记号牌/挂机牌一个待遇（v92 那条"设置浮在角色界面上"的教训）。
+	_build_plaques()
+	if INK_ONLY:
+		# 旧的挂机牌与「设置」按钮由牌子层接管（**只隐藏，不删**：改回 false 原样回来）
+		_idle_btn.visible = false
+		_set_btn.visible = false
 	_add_mark("wa", 898.0, 728.0, "瓦房", "")
 	_add_mark("zhu", 1215.0, 726.0, "竹屋", "行囊 · 仓库")
 	_add_mark("stone", 1393.0, 778.0, "石桌", "")
@@ -778,6 +803,90 @@ func _build_idle_plaque() -> void:
 	_idle_act_lb.size = Vector2(88, 24)
 	_idle_btn.add_child(_idle_act_lb)
 
+# ============================================================
+# v97：主界面牌子层（用户 2026-10-08 标注的 11 处锚点 + 两处原有功能）
+#
+#   位置全部写成**占屏比例**（0~1），跟 docs/主界面布局_用户标注.md 那张表一行对一行。
+#   每个牌子都接到**原来那个函数**上——牌子只是换了样子与位置，功能一个不丢：
+#     头像/名号 → 角色面板 · 挂机 → 收菜 · 建设 → 修村 · 设置 → 设置面板 · 商店 → 货栈
+#     山洞 → 山洞 · 后山 → 后山 · 出村 → 出村面板 · 百工坊 → 门厅 · 溪畔 → 拾柴 · 藏宝阁 → 藏宝阁
+#   「江湖」那块用户已明确：**只显示玩家 ID**，不要题头（见标注文档"已定"一节）。
+# ============================================================
+func _build_plaques() -> void:
+	_plaques = PlaqueLayer.new()
+	_plaques.font = _font
+	add_child(_plaques)
+	var pn := _player_tag()
+	_plaques.add_disc("avatar", 0.090, 0.060, "", _open_char_panel)
+	_plaques.add_txt("name", 0.345, 0.066, pn, _open_char_panel, "江湖新客")
+	_plaques.add_hang("idle", 0.230, 0.185, "挂机", _on_idle_collect)
+	_plaques.add_hang("build", 0.335, 0.185, "建设", _build_once)
+	_plaques.add_ribbon("settings", 0.950, 0.030, "设置", _open_settings)
+	_plaques.add_hex("shop", 0.950, 0.240, "商店", _open_shop)
+	_plaques.add_hang("out", 0.050, 0.595, "出村", _open_out)
+	_plaques.add_hang("cave", 0.915, 0.565, "山洞", _click_cave)
+	_plaques.add_hang("hill", 0.355, 0.705, "后山", _click_hill)
+	_plaques.add_hang("brook", 0.250, 0.795, "溪畔", _gather_wood)
+	_plaques.add_slip("pid", 0.545, 0.880, pn, _show_player_tag)
+	_plaques.add_hang("treasure", 0.700, 0.700, "藏宝阁", _click_treasure)
+	_plaques.add_hang("craft", 0.895, 0.820, "百工坊", _click_craft)
+	print("[主界面] 牌子层：", _plaques.items.size(), " 块（用户标注 11 处 + 溪畔/藏宝阁两处原有功能）")
+
+func _player_tag() -> String:
+	var n := str(GameState.player_name)
+	if n == "":
+		n = str(GameState.role_data("player").get("name", "少侠"))
+	return n
+
+func _open_char_panel() -> void:
+	_clear_toast()
+	_char_panel.open()
+
+func _show_player_tag() -> void:
+	_show_toast("名号「" + _player_tag() + "」——头像：点开角色面板")
+
+# 牌子的"出现时机"与"副标题"原来写在 _update_marks() 里，这里原样搬过来（判据一个字没改）
+func _refresh_plaques() -> void:
+	if _plaques == null:
+		return
+	_plaques.visible = (_story_page < 0) and not _any_panel_open()
+	if not _plaques.visible:
+		return
+	_plaques.set_vis("hill", GameState.village_stage >= 1)
+	_plaques.set_vis("treasure", GameState.map_found)
+	_plaques.set_vis("cave", GameState.b2_built and not GameState.cave_opened)
+	_plaques.set_vis("craft", GameState.cave_opened)
+	_plaques.set_vis("shop", GameState.first_journey_done or GameState.stage_progress >= 1)
+	var wood := GameState.material_count("wood")
+	if _stage >= Build.STAGE_MAX:
+		_plaques.set_sub("build", "修满了")
+	elif BUILD_COST > 0:
+		_plaques.set_sub("build", "村况 " + str(_stage) + "/" + str(Build.STAGE_MAX) + "\n木料 " + str(wood))
+	else:
+		_plaques.set_sub("build", "村况 " + str(_stage) + "/" + str(Build.STAGE_MAX) + "\n免费重修")
+	_plaques.set_sub("brook", "点我拾柴\n木料 " + str(wood))
+	if not GameState.pet_has("fox"):
+		_plaques.set_sub("hill", "山里有动静")
+	elif not GameState.pet_has("qing_sun"):
+		_plaques.set_sub("hill", "松梢落了只隼")
+	else:
+		_plaques.set_sub("hill", "白狐的老家")
+	if GameState.b2_built:
+		_plaques.set_sub("treasure", "图收在里头")
+	else:
+		_plaques.set_sub("treasure", "照图起一间\n木料 " + str(wood) + "/" + str(B2_COST))
+	_plaques.set_sub("cave", "木料 " + str(wood) + "/" + str(CAVE_COST))
+	var rooms: Array = ["品酒"]
+	if GameState.dange_built:
+		rooms.append("炼丹")
+	if GameState.jianbao_ok():
+		rooms.append("鉴宝")
+	_plaques.set_sub("craft", "点我进屋\n" + "/".join(PackedStringArray(rooms)))
+	_plaques.set_sub("shop", "银两换材料")
+	_plaques.set_sub("out", "历练去")
+	# ⚠ 「挂机」那一块的副标题（攒了多久/收不收）由 _refresh_idle_btn 每 0.5 秒喂，
+	#   这里**不要**碰它——每帧清一次的话，那行字根本显示不出来。
+
 func _fmt_min_tight(m: int) -> String:
 	if m >= 60:
 		var h := m / 60
@@ -812,6 +921,11 @@ func _refresh_idle_btn() -> void:
 		_idle_btn.warm = 0.92
 		_idle_btn.gold = 0.55 if blink else 0.18
 	_idle_btn.queue_redraw()
+	# v97：同一份状态喂给牌子层的「挂机」木牌（老的 IdlePlaque 收起来了，随时能切回）
+	if _plaques != null:
+		_plaques.set_sub("idle", _idle_time_lb.text)
+		_plaques.set_act("idle", _idle_act_lb.text)
+		_plaques.set_warm("idle", _idle_btn.warm, _idle_btn.gold)
 	_idle_btn.tooltip_text = "挂机（第 " + str(GameState.idle_tier() + 1) + " 档）——点木牌收取\n" + GameState.idle_rate_text() + "\n8 小时封顶；在线离线都往池里攒"
 
 # ---- 四季 ----
@@ -1068,7 +1182,7 @@ func _mark_press(b: Button, to: float) -> void:
 
 func _update_marks() -> void:
 	var can := (_story_page < 0) and not _any_panel_open()
-	_marks_root.visible = can
+	_marks_root.visible = can and not INK_ONLY   # v97：记号牌的位置改由牌子层接管（代码保留）
 	if not can:
 		return
 	for e in _mark_btns:
@@ -1330,6 +1444,8 @@ func _click_dange() -> void:
 
 # 各层的位置与缩放
 func _apply_layer_transforms() -> void:
+	if PIN_CAM:
+		_cam = Conf.OPEN_CAM      # v97：一屏村景，不再横向拖卷（拖动代码留着，随时能放开）
 	var z := _zoom()
 	var o := _origin()
 	var sy := Draw.sy()
@@ -1386,6 +1502,10 @@ func _apply_layer_transforms() -> void:
 	_veil.scale = Vector2(z, z)
 	_marks_root.position = Vector2(o.x, o.y)
 	_marks_root.scale = Vector2(z, z)
+	if _plaques != null:
+		_plaques.position = Vector2(o.x, o.y)
+		_plaques.scale = Vector2(z, z)
+		_refresh_plaques()
 	if _money_hud != null:
 		_money_hud.position = Vector2(o.x, o.y)
 		_money_hud.scale = Vector2(z, z)
@@ -1965,6 +2085,12 @@ func _story_next() -> void:
 
 # ---- 底：桌子 ----
 func _draw() -> void:
+	# v97：只留村景层时，**桌面那套（深底＋木纹＋卷轴压影）不再画**——
+	#   它会把村景层自己的"纸底"（z=-100）整个盖住，整屏发灰发褐（村景看着像蒙了层土）。
+	#   这里改铺一张宣纸，村景就落在纸上了。
+	if INK_ONLY:
+		draw_rect(Rect2(Vector2.ZERO, size), Conf.PAPER)
+		return
 	draw_rect(Rect2(Vector2.ZERO, size), Conf.BG_C)
 	draw_set_transform(_origin(), 0.0, Vector2(_zoom(), _zoom()))
 	draw_rect(Rect2(0, 0, Conf.DW, Conf.DH), Conf.DESK_C)
