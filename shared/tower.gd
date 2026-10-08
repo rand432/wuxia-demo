@@ -399,41 +399,52 @@ const CHESTS := [
 	#   ⚠ 改动这三条只动下面每个箱子的那两行（chance 与 [_n]）；池子由 chest_card_pool 现算。
 	#
 	# v134（用户："突破丹炼丹材料增加 爆率降低"）：**少而厚**——出现的几率降下来，一次给的量抬上去。
-	#   · 突破丹：几率**砍半上下**（3/5.5/8/14/24% → 1.5/2.8/4/6/10%），一次给 `pill_n` 里的颗数
-	#     （原来恒 ×1，现在 2~5 颗）→ 总期望 **+25%~+67%**（越高的箱子涨得越多）；
+	#   · 突破丹：几率**砍半上下**（3/5.5/8/14/24% → 1.5/2.8/4/6/10%）；
+	#     ⚠ **v137 再改（用户："宝箱突破丹 一次也只给一颗"）**：`pill_n` 全部锁成 **[1, 1]**——
+	#       现在一箱命中就一颗（原来 2~5 颗）。几率**不再动**（还是 v134 砍过的那几个数），
+	#       所以突破丹的每箱期望回到 **0.015/0.028/0.04/0.06/0.10 颗**（比 v134 低约 60~75%）。
+	#       嫌太干就把 `pill_chance` 抬回去（只动这一列）；
 	#   · 炼丹材料：每一掷的命中率 `mat_chance` 45% → **30%**（少了三分之一），
 	#     但一次给 `mat_n` 翻倍（如龙箱 3~7 → 6~12）→ 总期望 **+20%~+33%**。
 	#   ⚠ 两条都是"单次更厚、出现更少"：手感上从"每箱都掉一点"变成"隔几箱掉一堆"。
+	# v137（用户："宝箱残页再次降低80% 一次最多一页"）：三条残卡线的几率**再 ×0.2**（再降 80%），
+	#   且 `*_n` 一律锁成 **[1, 1]**（一次最多一页）。
+	#   改前 → 改后（残页 / 残兵 / 残装备）：
+	#     木 2.0/1.5/1.5% → **0.4/0.3/0.3%**　银 3.2/2.4/2.4% → **0.64/0.48/0.48%**
+	#     金 5.0/3.8/3.8% → **1.0/0.8/0.8%**　玉 9.0/6.8/6.8% → **1.8/1.4/1.4%**
+	#     龙 16/12/12% → **3.2/2.4/2.4%**
+	#   ⚠ 这么一来残卡只剩"细水长流"——**整品的主路是追剿的 boss 赏与爬塔首领赏**，
+	#     宝箱这条线是补充。嫌太稀就把这六个数一起抬（都是同一把尺）。
 	{"id": "wood", "name": "木箱", "grad": 0, "rolls": 2, "silver_mul": 0.6,
 		"frag_chance": 0.03, "frag": [1, 2], "mat_chance": 0.30, "mat_n": [2, 4],
-		"pill_chance": 0.015, "pill_n": [2, 3], "pills": ["tupo_fan"],
-		"page_chance": 0.020, "page_n": [1, 2],
-		"blade_chance": 0.015, "blade_n": [1, 1],
-		"gear_chance": 0.015, "gear_n": [1, 1]},
+		"pill_chance": 0.015, "pill_n": [1, 1], "pills": ["tupo_fan"],
+		"page_chance": 0.004, "page_n": [1, 1],
+		"blade_chance": 0.003, "blade_n": [1, 1],
+		"gear_chance": 0.003, "gear_n": [1, 1]},
 	{"id": "iron", "name": "银箱", "grad": 1, "rolls": 3, "silver_mul": 1.0,
 		"frag_chance": 0.05, "frag": [2, 3], "mat_chance": 0.30, "mat_n": [3, 5],
-		"pill_chance": 0.028, "pill_n": [2, 3], "pills": ["tupo_fan", "tupo_liang"],
-		"page_chance": 0.032, "page_n": [1, 2],
-		"blade_chance": 0.024, "blade_n": [1, 2],
-		"gear_chance": 0.024, "gear_n": [1, 1]},
+		"pill_chance": 0.028, "pill_n": [1, 1], "pills": ["tupo_fan", "tupo_liang"],
+		"page_chance": 0.0064, "page_n": [1, 1],
+		"blade_chance": 0.0048, "blade_n": [1, 1],
+		"gear_chance": 0.0048, "gear_n": [1, 1]},
 	{"id": "gold", "name": "金箱", "grad": 2, "rolls": 4, "silver_mul": 1.6,
 		"frag_chance": 0.08, "frag": [3, 5], "mat_chance": 0.30, "mat_n": [4, 7],
-		"pill_chance": 0.040, "pill_n": [2, 3], "pills": ["tupo_fan", "tupo_liang", "tupo_shang"],
-		"page_chance": 0.050, "page_n": [2, 3],
-		"blade_chance": 0.038, "blade_n": [1, 2],
-		"gear_chance": 0.038, "gear_n": [1, 2]},
+		"pill_chance": 0.040, "pill_n": [1, 1], "pills": ["tupo_fan", "tupo_liang", "tupo_shang"],
+		"page_chance": 0.010, "page_n": [1, 1],
+		"blade_chance": 0.008, "blade_n": [1, 1],
+		"gear_chance": 0.008, "gear_n": [1, 1]},
 	{"id": "jade", "name": "玉箱", "grad": 3, "rolls": 5, "silver_mul": 2.4,
 		"frag_chance": 0.14, "frag": [5, 9], "mat_chance": 0.30, "mat_n": [5, 9],
-		"pill_chance": 0.060, "pill_n": [3, 4], "pills": ["tupo_liang", "tupo_shang", "tupo_ji"],
-		"page_chance": 0.090, "page_n": [2, 4],
-		"blade_chance": 0.068, "blade_n": [2, 3],
-		"gear_chance": 0.068, "gear_n": [2, 3]},
+		"pill_chance": 0.060, "pill_n": [1, 1], "pills": ["tupo_liang", "tupo_shang", "tupo_ji"],
+		"page_chance": 0.018, "page_n": [1, 1],
+		"blade_chance": 0.014, "blade_n": [1, 1],
+		"gear_chance": 0.014, "gear_n": [1, 1]},
 	{"id": "dragon", "name": "龙箱", "grad": 4, "rolls": 6, "silver_mul": 3.5,
 		"frag_chance": 0.25, "frag": [8, 16], "mat_chance": 0.30, "mat_n": [6, 12],
-		"pill_chance": 0.100, "pill_n": [3, 5], "pills": ["tupo_shang", "tupo_ji", "tupo_jue"],
-		"page_chance": 0.160, "page_n": [3, 5],
-		"blade_chance": 0.120, "blade_n": [2, 4],
-		"gear_chance": 0.120, "gear_n": [2, 4]},
+		"pill_chance": 0.100, "pill_n": [1, 1], "pills": ["tupo_shang", "tupo_ji", "tupo_jue"],
+		"page_chance": 0.032, "page_n": [1, 1],
+		"blade_chance": 0.024, "blade_n": [1, 1],
+		"gear_chance": 0.024, "gear_n": [1, 1]},
 ]
 
 # v133：宝箱那三条残卡线各取哪个池（"gear" 是三池合一）
@@ -441,8 +452,9 @@ const CHEST_CARD_POOLS := {"arts": ["arts"], "weapon": ["weapon"], "gear": ["arm
 
 # v133：这一档箱子的残卡池——**按品级现算**（grad 就是品级下标），专武不进池。
 #   返回一套的 id 数组；空数组＝这一档这一类没内容（调用方跳过）。
-#   ⚠ 空档回退：**装备没有绝品**（护甲/玉佩/披风封顶极品）——龙箱要"绝品残装"就一门都取不到，
-#     所以这一档取不到就**往下退一档**再取（退到有货为止）。功法/兵器五档都有货，退不到。
+#   ⚠ 空档回退：某一档若一门都没有，就**往下退一档**再取（退到有货为止）。
+#     v137 起护甲/玉佩/披风也有绝品了（龙鳞宝甲/混元玉璧/流云飞氅），所以龙箱的残装备
+#     拿的就是"绝品残片"；这条回退留着当保险（以后哪一档空了也不会白掷）。
 static func chest_card_pool(kind: String, grad: int) -> Array:
 	var pools: Array = CHEST_CARD_POOLS.get(kind, [])
 	var q := clampi(grad, 0, Cards.QUALITY_ORDER.size() - 1)
@@ -478,16 +490,35 @@ static func chest_name(cid: String) -> String:
 	return str(d.get("name", cid)) if not d.is_empty() else cid
 
 # 这一关给什么箱子
+#
+# v139（用户："玉宝箱爆率大幅降低 而龙宝箱只有爬塔和追缴的boss关才会爆"）：
+#   · **玉箱大幅降低**：里程碑 85%→**30%**、首领关 20%→**10%**（金箱接走那部分）；
+#   · **龙箱只在首领关出**：里程碑 15% 保留，另外**每个首领关**加一条 2% 的小口
+#     （以前只有"首领＋精英"那种里程碑关才有龙箱）——精英关/杂兵关永远不出龙。
+#   实测（每 50 关的期望）：玉 1.25 → **0.50** 个（−60%）；龙 0.15 → **0.19** 个（且只从首领关出）。
 static func chest_for_stage(i: int) -> String:
 	var boss := is_boss(i)
 	var elite := is_elite(i)
 	if boss and elite:
-		# 里程碑：玉箱打底，小概率升龙箱
-		return "dragon" if randf() < 0.15 else "jade"
+		# 里程碑（每 50 关）：龙 15% · 玉 30% · 金 55%
+		var r := randf()
+		if r < 0.15:
+			return "dragon"
+		if r < 0.45:
+			return "jade"
+		return "gold"
 	if boss:
-		return "jade" if randf() < 0.20 else "gold"
+		# 首领关（每 25 关）：龙 2% · 玉 10% · 金 88%
+		var r2 := randf()
+		if r2 < 0.02:
+			return "dragon"
+		if r2 < 0.12:
+			return "jade"
+		return "gold"
 	if elite:
-		return "gold" if randf() < 0.20 else "iron"
+		# 精英关（每 10 关）：金 10% · 银 90%（原来 20% 金）
+		return "gold" if randf() < 0.10 else "iron"
+	# 杂兵关：银 15% · 木 85%（没动）
 	return "iron" if randf() < 0.15 else "wood"
 
 # 一个箱子里的银两总额（按"那一关的赏格 × 品质系数"，掷 rolls 次就乘 rolls）

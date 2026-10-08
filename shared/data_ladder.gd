@@ -724,7 +724,8 @@ static func _pick_of_q(pool: String, q: int, rng: RandomNumberGenerator) -> Stri
 # v59（用户："开局五选一 · 给的完整"）：按"**单池** ＋ 品阶"抽一件**成品** id。
 #   与 _pick_of_q 的区别：那个把护甲/玉佩/披风合成一个"装备"池（货仓抽货用），
 #   开局那五张牌要分得清是哪一格，所以这里按单池抽。
-#   本阶没货就**往下借**（装备没有绝品 → 绝品难度下装备仍给极品）；一阶都没有＝空串。
+#   本阶没货就**往下借**（某一池某一档空了就借低一档）；一阶都没有＝空串。
+#   v137：护甲/玉佩/披风也有绝品了 → 越阶红（q=4）现在真能给到那三件，不再借回极品。
 static func pick_of_q(pool: String, q: int, rng: RandomNumberGenerator = null) -> String:
 	var top := clampi(q, 0, Cards.QUALITY_ORDER.size() - 1)
 	for qq in range(top, -1, -1):

@@ -2466,8 +2466,9 @@ func _on_chase_battle_done(win: bool, i: int) -> void:
 	_battle = null
 	if win:
 		GameState.chase_clear(i)
+		# v136：赏格播报（银两/经验/箱子，boss 关那件整品）——账本把这一行攒好了
 		_show_toast("追剿清关：第 " + str(i + 1) + "/" + str(Chase.STAGE_MAX) + " 关 · " + Chase.enemy_name(i)
-			+ "（奖励暂未开放）——进度 " + str(GameState.chase_progress), 3.2)
+			+ "｜" + GameState.last_chase_line + "｜进度 " + str(GameState.chase_progress), 3.6)
 		# 连打开着就接着下一关（追剿的开关是 chase_auto，与爬塔的 auto_climb 分开）
 		if GameState.chase_auto and GameState.chase_progress < Chase.STAGE_MAX and not _any_panel_open():
 			await get_tree().create_timer(0.5).timeout

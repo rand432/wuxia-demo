@@ -481,9 +481,8 @@ func refresh() -> void:
 	var q_cn := str(Cards.QUALITY_ORDER[clampi(_sel_grad(), 0, Cards.QUALITY_ORDER.size() - 1)])
 	# v134：把"这一档成堆给什么"也写在台面上（突破丹一次几颗、材料一次几件）
 	var sd: Dictionary = Tower.chest_def(_sel)
-	var pn2: Array = sd.get("pill_n", [1, 1])
-	var mn2: Array = sd.get("mat_n", [1, 1])
-	var stack_txt := "　｜　丹 ×" + str(int(pn2[0])) + "~" + str(int(pn2[1])) + " · 材料 ×" + str(int(mn2[0])) + "~" + str(int(mn2[1]))
+	# ⚠ v137：突破丹锁成"一次一颗"之后，别写成"×1~1"——同一个数就只写一个
+	var stack_txt := "　｜　丹 " + _stack_cn(sd.get("pill_n", [1, 1])) + " · 材料 " + _stack_cn(sd.get("mat_n", [1, 1]))
 	if sel_n > 0:
 		_stage_lb.text = Tower.chest_name(_sel) + " ×" + str(sel_n) + "（" + q_cn + "残卡）" + stack_txt
 	else:
@@ -503,6 +502,17 @@ func refresh() -> void:
 		_note_lb.text = "开出来的东西会列在这儿。银两与材料直接进村账，角色碎片进碎片账（升星用），残页/残兵/残装备进仓库（凑齐了合成整件），突破丹进丹药包裹（突破用）。\n突破丹与材料都是成堆给的：出现的几率低，一次给一堆。"
 	else:
 		_note_lb.text = "刚开出来：" + "、".join(PackedStringArray(notes))
+
+# v137：一次给几件/几颗——[min,max] 相同时只写一个数（"×3"），不同才写区间（"×2~4"）
+func _stack_cn(rng) -> String:
+	var a: Array = rng
+	if a.size() < 2:
+		return "×1"
+	var lo := int(a[0])
+	var hi := int(a[1])
+	if lo == hi:
+		return "×" + str(lo)
+	return "×" + str(lo) + "~" + str(hi)
 
 func _sel_grad() -> int:
 	for c_v in Tower.CHESTS:

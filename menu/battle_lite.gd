@@ -189,7 +189,12 @@ const HAND_WAIT := 20.0          # 等牌上限（秒）
 const HAND_CARD_W := 112.0
 const HAND_CARD_H := 96.0
 const HAND_STEP := 122.0
-const HAND_Y_OFF := 272.0        # 牌底离屏幕底多少（在日志那一条之上）
+# 手牌摆在哪：**要避开三个会互相压的东西**——
+#   · 底部日志那一条（py-150 起）与右下［撤退］（py-104）；
+#   · 我方三人（站在 _ground_y=985，身高约 110）与对面那几只。
+#   所以把整块手牌抬到"人头上方那条空带"：牌顶 py-520、牌底 py-424（＝760~856），
+#   提示行再往上 40。这一带只有浮字会路过，不压任何固定件。
+const HAND_Y_OFF := 520.0
 const HAND_COL_NORMAL := Color(0.42, 0.40, 0.44)
 const HAND_COL_ART := Color(0.68, 0.15, 0.12)
 const HAND_COL_ULT := Color(0.78, 0.58, 0.16)
@@ -197,6 +202,14 @@ const HAND_COL_ULT := Color(0.78, 0.58, 0.16)
 var _traits: Array = []          # 本场 boss 的特性 id（杂兵关是空）
 var _trait_lines: Array = []     # 特性的长文案（开战报 + 敌情面板）
 var _owner_i := -1               # 带特性的那一只（＝boss 本体）；随从不继承特性
+# v141（用户："增加 boss追缴有独立大招和被动"）：**boss 专属被动**——
+#   数据在 data_chase.PASSIVES / BOSS_PASSIVE（25 个 boss 25 条，绝不重复）；
+#   这里只认那几种键（stat/affix/shield/ward/rage/tick/on_hit/low_hp/execute/immune）。
+var _passive: Dictionary = {}
+var _passive_id := ""
+var _passive_healed := false     # 「背水」那一口只回一次
+var _passive_lowhp := false      # 已经进过背水状态
+var _passive_rallied := 0        # 「战鼓」叠了几层
 var _phase_done := false         # 「换招」只换一次
 var _summon_n := 0               # 「号令」已经召了几个随从
 
@@ -459,6 +472,12 @@ func _build_foes(stage_i_arg: int) -> void:
 	_owner_i = -1
 	_phase_done = false
 	_summon_n = 0
+	# v141：专属被动（"出场那一刻就生效"的那几样在 _apply_passive_at_build 里做）
+	_passive_id = str(base.get("passive_id", ""))
+	_passive = (base.get("passive", {}) as Dictionary).duplicate(true)
+	_passive_healed = false
+	_passive_lowhp = false
+	_passive_rallied = 0
 	var boss := bool(base.get("boss", false))
 	var elite := bool(base.get("elite", false))
 	var n := 1
@@ -542,6 +561,8 @@ func _build_foes(stage_i_arg: int) -> void:
 		})
 		if is_main:
 			_owner_i = _foes.size() - 1
+	# v141：被动里"出场那一刻就生效"的那几样（身板/词缀/护盾/怒气/五行抗）
+	_apply_passive_at_build(base)
 	# 这一关的阵容说清楚：谁在前面、谁在打伤害——不然"打谁先"全靠猜
 	#   （文案先攒着，等 _ready 里"对手：…"那行之后一起进战报）
 	_foe_lineup_note = ""
@@ -612,9 +633,13 @@ func _ready() -> void:
 	if chase:
 		_log.append("追剿 · 第 " + str(stage_i + 1) + "/" + str(Chase.STAGE_MAX) + " 关（第 "
 			+ str(Chase.round_of(stage_i)) + " 剿 · 第 " + str(Chase.wave_in_round(stage_i)) + "/" + str(Chase.BOSS_EVERY) + " 关）"
-			+ "——奖励暂未开放，这一趟只为清剿")
+			+ "　赏：" + Chase.reward_line(stage_i) + "　档：" + Chase.tier_line(stage_i)
+			+ "　" + Chase.diff_line(stage_i))
 		for tl in _trait_lines:
 			_log.append("特性 " + str(tl))
+		# v141：这一门 boss 的专属被动（一直在身上，跟"每几手来一次"的特性并列写）
+		if _has_passive():
+			_log.append("被动 " + Chase.passive_line(stage_i))
 	# v46：多人关把"谁站前面、谁打得疼"写进战报（文案在 _build_foes 里攒好）
 	if _foe_lineup_note != "":
 		for ln in _foe_lineup_note.split("\n"):
@@ -1907,16 +1932,25 @@ func _open_hand(m: Dictionary) -> void:
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(root)
 	_hand_root = root
-	# 提示行（谁出手 · 还有几秒）
+	# 提示行（谁出手 · 还有几秒）——垫一条深色底：这一带是场景画，白字直接写上去看不清
+	var bar := Panel.new()
+	bar.position = Vector2(20, py - HAND_Y_OFF - 42.0)
+	bar.size = Vector2(px - 232.0, 40)
+	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var bsb := StyleBoxFlat.new()
+	bsb.bg_color = Color(0.12, 0.11, 0.13, 0.66)
+	bsb.set_corner_radius_all(8)
+	bar.add_theme_stylebox_override("panel", bsb)
+	root.add_child(bar)
 	_hand_lb = _label("", 16, Color(0.96, 0.93, 0.87))
-	_hand_lb.position = Vector2(24, py - HAND_Y_OFF - 34.0)
+	_hand_lb.position = Vector2(34, py - HAND_Y_OFF - 36.0)
 	_hand_lb.size = Vector2(px - 260.0, 30)
 	root.add_child(_hand_lb)
 	# ［自动挑一张］——等牌时的退路（点一下立刻按自动挑打出去）
 	var ab := Button.new()
 	ab.text = "自动挑一张"
-	ab.position = Vector2(px - 200.0, py - HAND_Y_OFF - 36.0)
-	ab.size = Vector2(176, 34)
+	ab.position = Vector2(px - 202.0, py - HAND_Y_OFF - 44.0)
+	ab.size = Vector2(178, 44)
 	ab.add_theme_font_size_override("font_size", 15)
 	ab.focus_mode = Control.FOCUS_NONE
 	ab.pressed.connect(_hand_give_up)
@@ -2876,6 +2910,11 @@ func _st_hit(u: Dictionary, spec: Dictionary, lines: Array, at_x: float, who: St
 	var sid := str(spec.get("id", ""))
 	if sid == "" or St.def_of(sid).is_empty():
 		return false
+	# v141：boss 专属被动「铁意」——控制类负面挂不上去（想给它上的那一行照样报）
+	if is_foe and _passive_immune(sid):
+		_float_at(Vector2(at_x, _ground_y - 196.0), "铁意·免控", Color(0.62, 0.58, 0.42), 20)
+		lines.append(who + " 想上「" + St.name_of(sid) + "」——被「铁意」挡了。")
+		return false
 	var ch := float(spec.get("chance", 1.0))
 	if ch < 1.0 and randf() >= ch:
 		_float_at(Vector2(at_x, _ground_y - 196.0), "「" + St.name_of(sid) + "」未中", Color(0.55, 0.53, 0.52), 18)
@@ -3341,6 +3380,11 @@ func _enemy_hit_member(target: Dictionary, raw: int, tx: float) -> int:
 	var raw2 := raw
 	if _e_affixes().has("ambush") and int(target.get("row", 0)) > 0:
 		raw2 = maxi(1, int(round(float(raw) * 1.5)))
+	# v141：被动「处决」——对手气血不足三成，这一下更重
+	var ex := float(_passive.get("execute", 0.0))
+	if ex > 0.0 and int(target.get("hp", 0)) > 0 and int(target.get("hp", 0)) * 10 <= int(target.get("max", 1)) * 3:
+		raw2 = maxi(1, int(round(float(raw2) * (1.0 + ex))))
+		_float_at(Vector2(tx, _ground_y - 196.0), "处决！", SEAL, 22)
 	var dmg := _member_take_cut(target, raw2)
 	if int(target.get("guard_turns", 0)) > 0:
 		target["guard_turns"] = int(target["guard_turns"]) - 1
@@ -3352,6 +3396,18 @@ func _enemy_hit_member(target: Dictionary, raw: int, tx: float) -> int:
 	_knock(target["node"], tx, 20.0)
 	_shake(9.0)
 	_float_at(Vector2(tx, _ground_y - 158.0), "-" + str(dmg), SEAL, 26)
+	# v141：被动 on_hit——打中就回自己一口血 / 打掉对手的怒气
+	var oh: Dictionary = _passive.get("on_hit", {})
+	if not oh.is_empty() and _e_hp() > 0:
+		var hp_pct := float(oh.get("heal_pct", 0.0))
+		if hp_pct > 0.0 and _e_hp() < _e_max():
+			var hh := maxi(1, int(round(float(_e_max()) * hp_pct)))
+			_set_e_hp(mini(_e_max(), _e_hp() + hh))
+			_float_at(Vector2(_enemy_base_x(), _ground_y - 186.0), "摄魂 +" + str(hh), GREEN, 20)
+		var rc := int(oh.get("rage_cut", 0))
+		if rc > 0:
+			target["rage"] = maxi(0, int(target.get("rage", 0)) - rc)
+			_float_at(Vector2(tx, _ground_y - 196.0), "怒气 −" + str(rc), Color(0.58, 0.54, 0.66), 18)
 	# ㊿y：角色星「蓄势」——挨了打，下一击更重（与运签卡的"回气"同一条口径：
 	#   同一手只算一次、取较大的那个；next_mult 在出手时用掉并清零）
 	if float(target.get("star_veng", 0.0)) > 0.0 and int(target["hp"]) > 0:
@@ -3575,6 +3631,15 @@ func _show_info() -> void:
 ".join(PackedStringArray(_trait_lines)))
 		lt.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		y += 104.0
+	# v141：**专属被动**——与特性并列（特性＝每几手来一次的大动作；被动＝一直在身上的底子）
+	if _has_passive():
+		var pd: Dictionary = _passive
+		var lp := UiKit.make_label(panel, Vector2(34, y), Vector2(492, 96), 15, Color(0.42, 0.34, 0.60))
+		UiKit.set_text(lp, "被动「" + str(pd.get("name", "")) + "」" + str(pd.get("desc", ""))
+			+ "
+　　针对：" + str(pd.get("counter", "")))
+		lp.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		y += 104.0
 	# v129：招数**认首领本体**——原来这里读的是"当前盯着的那只"，而 _focus 开场指向前排副手，
 	#   副手本来就没招（招数是首领的成名技），于是 boss 关的敌情写着"寻常货色"，
 	#   玩家根本看不到它会什么。现在改成：本体的招数一定列出来（盯谁看都一样）。
@@ -3637,6 +3702,145 @@ func _close_info() -> void:
 #   ⚠ 一律在**它自己出手的开头**结算，结算完把聚焦还回去
 #     （不还的话这一手会按别人的身板打出去）；随从不继承特性（_owner_i 只指本体）。
 # ============================================================
+# ============================================================
+# v141：boss 专属被动（引擎侧）
+#   · 出场那一下：stat / affix / shield / ward / rage（_apply_passive_at_build）
+#   · 它自己出手时：tick（每 N 手一次）＋ low_hp（背水，进状态那一下）
+#   · 它打中人时：execute（对手残血更重）＋ on_hit（回自己血 / 打掉对手怒气）
+#   · 上负面时：immune（铁意）
+#   ⚠ 随从**不继承**被动（只认 _owner_i 那一只），与特性同一条规矩。
+# ============================================================
+func _has_passive() -> bool:
+	return not _passive.is_empty()
+
+func _passive_immune(sid: String) -> bool:
+	var im: Array = _passive.get("immune", [])
+	return im.has(sid)
+
+func _apply_passive_at_build(base: Dictionary) -> void:
+	if _passive.is_empty() or _owner_i < 0:
+		return
+	# ① 身板（hp/atk/def/spd 倍数）——整组一起吃
+	var st: Dictionary = _passive.get("stat", {})
+	if not st.is_empty():
+		for f_v in _foes:
+			var f: Dictionary = f_v
+			if int(f.get("hp", 0)) <= 0:
+				continue
+			var mx := maxi(1, int(round(float(f.get("hp_max", 1)) * float(st.get("hp", 1.0)))))
+			f["hp_max"] = mx
+			f["hp"] = mx
+			f["atk"] = maxi(1, int(round(float(f.get("atk", 1)) * float(st.get("atk", 1.0)))))
+			f["def"] = maxi(0, int(round(float(f.get("def", 0)) * float(st.get("def", 1.0)))))
+			f["spd"] = maxi(1, int(round(float(f.get("spd", 10)) * float(st.get("spd", 1.0)))))
+	# ② 挂词缀（all=true 连随从一起挂）
+	var af: Dictionary = _passive.get("affix", {})
+	if not af.is_empty():
+		var aid := str(af.get("id", ""))
+		var to_all := bool(af.get("all", false))
+		for i in _foes.size():
+			if not to_all and i != _owner_i:
+				continue
+			var arr: Array = ((_foes[i] as Dictionary).get("affixes", []) as Array).duplicate()
+			if not arr.has(aid):
+				arr.append(aid)
+			(_foes[i] as Dictionary)["affixes"] = arr
+	# ③ 开局护盾
+	var sh := float(_passive.get("shield", 0.0))
+	if sh > 0.0:
+		for i2 in _foes.size():
+			var f2: Dictionary = _foes[i2]
+			if int(f2.get("hp", 0)) > 0:
+				St.shield_add(f2, int(f2.get("hp_max", 1)), sh)
+	# ④ 五行护体（对自己那一行再 +N 点抗）
+	var wd := int(_passive.get("ward", 0))
+	if wd > 0:
+		var fe := str(base.get("elem", ""))
+		if fe != "":
+			for i3 in _foes.size():
+				var f3: Dictionary = _foes[i3]
+				f3[fe + "_res"] = int(f3.get(fe + "_res", 0)) + wd
+	# ⑤ 怒气（大招来得更勤）
+	var rg := float(_passive.get("rage", 0.0))
+	if rg > 0.0:
+		for i4 in _foes.size():
+			var f4: Dictionary = _foes[i4]
+			f4["rage_mul"] = float(f4.get("rage_mul", 1.0)) * rg
+
+# 它自己出手时结算的那几样（在 _trait_tick 之后调）
+func _passive_tick() -> void:
+	if _passive.is_empty() or _focus != _owner_i or not _foe_alive(_owner_i):
+		return
+	var tk: Dictionary = _passive.get("tick", {})
+	if not tk.is_empty() and _e_acts() % maxi(1, int(tk.get("every", 3))) == 0:
+		var kind := str(tk.get("kind", ""))
+		if kind == "heal":
+			var hp_n := maxi(1, int(round(float(_e_max()) * float(tk.get("pct", 0.08)))))
+			_set_e_hp(mini(_e_max(), _e_hp() + hp_n))
+			_fx("heal", Vector2(_enemy_base_x(), _ground_y - 8.0), GREEN, 0.8, 48.0)
+			_float_at(Vector2(_enemy_base_x(), _ground_y - 186.0), "吐纳 +" + str(hp_n), GREEN, 22)
+			_push([str(_e()["name"]) + " 吐纳回气 +" + str(hp_n)])
+		elif kind == "poison":
+			var n := 0
+			for m_v in _party:
+				var m: Dictionary = m_v
+				if int(m.get("hp", 0)) <= 0:
+					continue
+				m["poison"] = mini(Affixes.POISON_MAX() + (2 if _traits.has("venom") else 0), int(m.get("poison", 0)) + 1)
+				n += 1
+			if n > 0:
+				_fx("hit", Vector2(_enemy_base_x(), _ground_y - 92.0), Color(0.42, 0.62, 0.30), 0.5, 60.0)
+				_push([str(_e()["name"]) + " 毒雾漫开——全队各叠 1 层毒"])
+		elif kind == "sealvein":
+			var best: Dictionary = {}
+			for m_v2 in _party:
+				var m2: Dictionary = m_v2
+				if int(m2.get("hp", 0)) <= 0:
+					continue
+				if best.is_empty() or int(m2.get("row", 0)) < int(best.get("row", 9)):
+					best = m2
+			if not best.is_empty():
+				St.apply(best, "healseal", 2, 1)
+				_float_at(Vector2(float(best.get("base_x", 0.0)), _ground_y - 158.0), "封脉", St.col_of("healseal"), 22)
+				_push([str(_e()["name"]) + " 一指点在 " + str(best.get("name", "")) + " 脉门上——「封脉」两手"])
+		elif kind == "rally":
+			if _passive_rallied < 5:
+				_passive_rallied += 1
+				for f5_v in _foes:
+					var f5: Dictionary = f5_v
+					f5["atk"] = maxi(1, int(round(float(f5.get("atk", 1)) * 1.08)))
+				_fx("guard", Vector2(_enemy_base_x(), _ground_y - 62.0), GOLD, 0.6, 46.0)
+				_push([str(_e()["name"]) + " 战鼓一响——全队攻 +8%（第 " + str(_passive_rallied) + " 层）"])
+		elif kind == "guard":
+			_set_e_guard_turns(2)
+			_set_e_guard_cut(float(tk.get("pct", 0.70)))
+			_fx("guard", Vector2(_enemy_base_x(), _ground_y - 62.0), ART_GUARD_COL, 0.7, 46.0)
+			_push([str(_e()["name"]) + " 横练石壁——此后两手挨打减伤 " + str(int(round((1.0 - float(tk.get("pct", 0.7))) * 100.0))) + "%"])
+		elif kind == "guard_all":
+			for i5 in _foes.size():
+				var f6: Dictionary = _foes[i5]
+				if int(f6.get("hp", 0)) <= 0:
+					continue
+				f6["guard_turns"] = maxi(int(f6.get("guard_turns", 0)), 2)
+				f6["guard_cut"] = float(tk.get("pct", 0.55))
+			_center_move("『军令』", ART_GUARD_COL)
+			_push([str(_e()["name"]) + " 一声军令——全队护体两手"])
+	# 背水（气血过低那一下，只触发一次）
+	var lh: Dictionary = _passive.get("low_hp", {})
+	if not lh.is_empty() and not _passive_lowhp and _e_hp() * 1.0 <= float(_e_max()) * float(lh.get("pct", 0.3)):
+		_passive_lowhp = true
+		_e()["atk"] = maxi(1, int(round(float(_e()["atk"]) * float(lh.get("atk", 1.5)))))
+		_center_move("『背水』", SEAL)
+		var tail := ""
+		if not _passive_healed and float(lh.get("heal", 0.0)) > 0.0:
+			_passive_healed = true
+			var h2 := maxi(1, int(round(float(_e_max()) * float(lh.get("heal", 0.0)))))
+			_set_e_hp(mini(_e_max(), _e_hp() + h2))
+			_fx("heal", Vector2(_enemy_base_x(), _ground_y - 8.0), GREEN, 0.9, 56.0)
+			tail = "，并回了一口血 +" + str(h2)
+		_push([str(_e()["name"]) + " 退无可退——背水：攻击 +" + str(int(round((float(lh.get("atk", 1.5)) - 1.0) * 100.0))) + "%" + tail])
+		_refresh()
+
 func _trait_tick() -> void:
 	if _traits.is_empty() or _owner_i < 0 or _focus != _owner_i:
 		return
@@ -3770,6 +3974,8 @@ func _enemy_act() -> void:
 	_set_e_acts(_e_acts() + (1))
 	# v129：追剿 boss 的特性（号令/列阵/锁招/换招）——在它自己这一手的开头结算
 	_trait_tick()
+	# v141：专属被动里"按手数来"的那条（毒雾/断脉/吐纳/战鼓/石壁）＋ 背水
+	_passive_tick()
 	# v9 词缀：回春（回气）／鼓舞（士气叠加）
 	# v53：「封脉」把回春压到三成；「挫锐」让怒气只剩四成
 	# v13（用户："回春词缀改为 10%恢复 两手恢复一次"）：**改成每两手回一次**
@@ -3782,7 +3988,8 @@ func _enemy_act() -> void:
 	if _e_affixes().has("rally"):
 		_set_e_stack(minf(Affixes.RALLY_CAP(), _e_stack() + Affixes.RALLY_STEP()))
 	# v8：首领带招——怒气满先放大招；技能按冷却轮转；都没有＝寻常出手
-	_set_e_rage(_e_rage() + (int(round(RAGE_GAIN * RAGE_MUL * St.rage_mul(_e())))))
+	# v141：被动「怒气奔腾」——rage_mul 只加在首领自己身上（随从没有）
+	_set_e_rage(_e_rage() + (int(round(RAGE_GAIN * RAGE_MUL * St.rage_mul(_e()) * float(_e().get("rage_mul", 1.0))))))
 	if _e_rage() >= 100 and not _e_ult().is_empty():
 		_set_e_rage(0)
 		# ㊱：大招打哪几排也写在它自己身上（不写＝只打前排）
@@ -4106,7 +4313,11 @@ func _end(win: bool) -> void:
 			if int(m["hp"]) <= 0:
 				_fall(m["node"], -1.0)
 	if chase:
-		_push(["——" + ("追杀队退了这一阵。" if win else "退回去再整备。")])
+		if win:
+			# v136：把这一关的赏格写在胜利这一行（实际入账在村里的结算里，数值同源）
+			_push(["——追杀队退了这一阵。赏：" + Chase.reward_line(stage_i)])
+		else:
+			_push(["——退回去再整备。"])
 	else:
 		_push(["——" + ("清缴了这关。" if win else "退回去再整备。")])
 	if _auto_on():

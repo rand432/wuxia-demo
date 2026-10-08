@@ -64,6 +64,19 @@ const SETS := [
 	{"id": "helm_liu", "name": "琉璃佩", "pool": "helm", "weapon": "any", "parts": ["身", "结", "穗", "铭", "纹"], "item": "琉璃佩", "quality": "极品", "item_stats": {"crit": 7, "hp": 290, "def": 12, "crit_dmg": 6, "wood_res": 10, "fire_res": 8, "water_res": 5}},
 	{"id": "cloak_xuanhu", "name": "玄狐披风", "pool": "cloak", "weapon": "any", "parts": ["领", "面", "扣", "里"], "item": "玄狐披风", "quality": "上品", "item_stats": {"dodge": 16, "spd": 8, "hp": 140, "water_res": 7, "earth_res": 5}},
 	{"id": "cloak_tian", "name": "天蚕披风", "pool": "cloak", "weapon": "any", "parts": ["领", "面", "扣", "里", "纹"], "item": "天蚕披风", "quality": "极品", "item_stats": {"spd": 13, "dodge": 13, "hp": 230, "water_res": 10, "earth_res": 8, "metal_res": 5}},
+	# ============================================================
+	# v137（用户："同时增加绝品装备"）：护甲 / 玉佩 / 披风各补**一件绝品**。
+	#   装备线原来封顶极品（`pool_gear` 的品级闸也只开到极品），绝品这一格一直空着——
+	#   于是"龙箱的绝品残装备"根本没货可发（只能退一档到极品）。
+	#   这一批补上之后，绝品装备**只从两条路出**：
+	#     · 龙箱的**绝品残片**（凑齐了在仓库合成）；
+	#     · 搜刮的**越阶红池**（ladder_phase 到极品时 lo=hi=4 → 正好是这三件）。
+	#   ⚠ 正路池子（`pool_gear`／村货栈／事件三选一）**仍封顶极品**——绝品是"越阶/龙箱"的彩头。
+	#   数值尺子：在极品那件的基础上再抬约三成（气血 +30% · 防 +27% · 闪/速 +30% · 抗性 +2~3）。
+	# ============================================================
+	{"id": "armor_long", "name": "龙鳞宝甲", "pool": "armor", "weapon": "any", "parts": ["片", "衬", "扣", "环", "纹", "鳞"], "item": "龙鳞宝甲", "quality": "绝品", "item_stats": {"hp": 780, "def": 19, "dodge": 9, "earth_res": 12, "metal_res": 10, "water_res": 7}},
+	{"id": "helm_hunyuan", "name": "混元玉璧", "pool": "helm", "weapon": "any", "parts": ["身", "结", "穗", "铭", "纹", "魂"], "item": "混元玉璧", "quality": "绝品", "item_stats": {"crit": 9, "hp": 380, "def": 15, "crit_dmg": 8, "wood_res": 12, "fire_res": 10, "water_res": 7}},
+	{"id": "cloak_yun", "name": "流云飞氅", "pool": "cloak", "weapon": "any", "parts": ["领", "面", "扣", "里", "纹", "羽"], "item": "流云飞氅", "quality": "绝品", "item_stats": {"spd": 17, "dodge": 17, "hp": 300, "water_res": 12, "earth_res": 10, "metal_res": 7}},
 	{"id": "art_wind", "name": "疾风剑法", "pool": "arts", "weapon": "sword", "parts": ["卷上", "卷中", "卷下"], "item": "疾风剑法",
 		# ㊿z2：补上 off_mult——它是**唯一一门"指定了兵器却没写打折"的武学**（别的 sword/dual
 		#   武学都写了 off_mult），空着就等于"拿枪也使出全套剑法"，跟别的武学口径不一致。

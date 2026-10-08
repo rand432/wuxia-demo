@@ -1622,15 +1622,38 @@ static func chase_enemy_at(i: int) -> Dictionary:
 			out["affixes"] = affixes
 	return out
 
-# 清一关：只推进度（**不给奖励**）——i 必须是当前该打的那一关
+# v136（用户："追剿给宝箱和大量银两【也不要太多】和大量经验【也不要太多】
+#   boss关给一本完整功法或者武器装备 每80关提升一个档次 最高极品"）：
+#   清一关＝**银两 ＋ 经验 ＋ 一个宝箱**；boss 关（每 5 关）再加**一件完整的东西**。
+#   档位与数量都在 data_chase 那六个常数里（每 80 关升一档、封顶极品）。
+static var last_chase_line := ""     # 最近一次清关的收益播报（战斗结算/面板读它）
+
 static func chase_clear(i: int) -> bool:
 	if i != chase_progress:
 		return false
 	if i >= Chase.STAGE_MAX:
 		return false
+	var silver := Chase.reward_silver(i)
+	var exp := Chase.reward_exp(i)
+	var chests: Array = Chase.reward_chests(i)      # v139：每关 2 个（boss 关＝升一档＋同档）
+	var item := Chase.reward_item(i)
 	chase_progress += 1
+	add_coin("silver", silver)
+	exp_pool += exp
+	for c_v in chests:
+		chest_add(str(c_v))
+	# 开箱的赏格按"最后清掉的那一关"算（与爬塔同一条口径）
+	chest_set_stage_hint(i)
+	var got: Array = []
+	got.append("银两 +" + str(silver))
+	got.append("经验 +" + str(exp))
+	got.append(Chase.chest_summary(chests))
+	if item != "":
+		vault_add_item(item, 1)
+		got.append("整件「" + Cards.item_name(item) + "」（" + Cards.quality_of(item) + "）已入仓库")
+	last_chase_line = "、".join(PackedStringArray(got))
 	save_game()
-	print("[账本] 追剿清关：第 ", i + 1, " 关（", Chase.enemy_name(i), "）——进度 ", chase_progress, "/", Chase.STAGE_MAX)
+	print("[账本] 追剿清关：第 ", i + 1, " 关（", Chase.enemy_name(i), "）——", last_chase_line, "｜进度 ", chase_progress, "/", Chase.STAGE_MAX)
 	return true
 
 # ---- 品酒坊 ----
@@ -4782,7 +4805,8 @@ static func pool_active(pool: String) -> Array:
 	return Cards.ladder_sets(pool, ladder_swaps(pool))
 
 # ㊽：装备池——护甲/玉佩/披风三池合一。装备不上阶梯，品级闸借 ladder_phase：
-# 阶段 0 只出凡品（皮甲/青玉佩/旧披风）；首通越多开越高，封顶极品（装备没有绝品）
+# 阶段 0 只出凡品（皮甲/青玉佩/旧披风）；首通越多开越高，**封顶极品**
+#   （v137 起装备也有绝品了，但那三件只从"龙箱绝品残片 / 搜刮越阶红"出，正路池子不开）
 static func pool_gear() -> Array:
 	var top: int = mini(ladder_phase(), 3)
 	var out: Array = []

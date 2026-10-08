@@ -394,7 +394,14 @@ func _refresh_chase() -> void:
 		var tail := ""
 		if Chase.is_boss(p):
 			tail = "　" + Chase.trait_names(Chase.boss_traits_of(p))
-		_chase_sub.text = "第 " + str(Chase.wave_in_round(p)) + "/" + str(Chase.BOSS_EVERY) + " 关 ｜ " + Chase.panel_line(p) + tail
+		# v136：把"这一档给什么品级"写在小字里（每 80 关升一档，封顶极品）
+		# v141：boss 关把**专属被动**的名字也带上（"这一关该针对什么"一眼看到）
+		if Chase.is_boss(p):
+			var pd2: Dictionary = Chase.passive_def(Chase.passive_of(p))
+			if not pd2.is_empty():
+				tail += "　被动「" + str(pd2.get("name", "")) + "」"
+		var sub_txt := "第 " + str(Chase.wave_in_round(p)) + "/" + str(Chase.BOSS_EVERY) + " 关 ｜ " + Chase.panel_line(p) + tail
+		_chase_sub.text = sub_txt + "（" + Chase.reward_q_cn(p) + "档）"
 	var can := on and p < Chase.STAGE_MAX
 	_chase_m_btn.disabled = not can
 	_chase_a_btn.disabled = not can
