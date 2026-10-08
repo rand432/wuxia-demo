@@ -154,10 +154,18 @@ const REST_FLAVOR := [
 	"渡口茶摊挨着货郎担，就在江风里歇一歇。",
 ]
 
+# v105（用户："上品有事件后 增加新节点 目前最高不是41节嘛 加到56节"）：
+#   轮数改成**按品级那张表**（品级→内部难度 1/3/6/8）：
+#     凡品 4 轮 ＝ 21 节 · 良品 6 轮 ＝ 31 节 · 上品 8 轮 ＝ 41 节 · **极品 11 轮 ＝ 56 节**
+#   （上品/极品还会往里插"事件卡"节点——那是下一步，见 docs/事件卡与善恶_设计稿.md）
+const CYCLES_BY_DIFF := {1: 4, 3: 6, 6: 8, 8: 11}
+
 static func formal_cycles(diff: int) -> int:
-	# v63（用户："游历得加关卡了"）：2+档（9 封顶）→ 3+档（8 封顶）——每档多一轮，
-	#   档 1 从 16 节 → 21 节，高档 46 → 41（新四轴到 40 关封顶，正好够踩到底）。
-	return mini(3 + maxi(1, int(diff)), 8)
+	var d := maxi(1, int(diff))
+	if CYCLES_BY_DIFF.has(d):
+		return int(CYCLES_BY_DIFF[d])
+	# 表外的档（老存档/测试）按老式子兜底，封顶 11 轮
+	return mini(3 + d, 11)
 
 static func formal_node_count(diff: int) -> int:
 	return formal_cycles(int(diff)) * 5 + 1

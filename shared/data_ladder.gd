@@ -35,7 +35,8 @@ const COLOR_CN := {"blue": "蓝", "purple": "紫", "gold": "金", "red": "红"}
 const COLOR_QUALITY_CN := {"blue": "良品", "purple": "上品", "gold": "极品", "red": "绝品"}
 
 # 成色偏移（相对"游历难度品阶"）：红＝+1~+2（两个值随机取）、金＝0、紫＝−1、蓝＝−2
-const COLOR_OFFSET := {"red": [1, 2], "gold": [0, 0], "purple": [-1, -1], "blue": [-2, -2]}
+# v101（用户："越阶红只越一阶"）：红原来是 +1~+2，现在**只 +1**。
+const COLOR_OFFSET := {"red": [1, 1], "gold": [0, 0], "purple": [-1, -1], "blue": [-2, -2]}
 
 # 四个尺寸
 const SIZES := ["rare", "small", "mid", "big"]

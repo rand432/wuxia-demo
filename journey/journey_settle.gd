@@ -34,7 +34,9 @@ static func open(st: RunState, veil: ColorRect, on_restart: Callable, on_return:
 	# v24：首通那一弹，记档前/后各看一眼两池的现役窗——差集就是给玩家的换代交代
 	var first_line := ""
 	if str(st.mode) == "formal":
-		var d: int = int(st.diff)
+		# v101：记档用**品级×4＋模式＋1**（出征屏交下来的编号）——老的 1~10 档已经不是主轴了。
+		#   没有编号（老存档/引子趟）就退回老口径，按难度档记。
+		var d: int = GameState.deploy_code if GameState.deploy_code > 0 else int(st.diff)
 		var was_new: bool = not GameState.diff_is_cleared(d)
 		var w0: int = GameState.ladder_swaps("weapon")
 		var a0: int = GameState.ladder_swaps("arts")
@@ -50,6 +52,9 @@ static func open(st: RunState, veil: ColorRect, on_restart: Callable, on_return:
 			if not segs.is_empty():
 				first_line = "首通此档，货源换代——" + "；".join(PackedStringArray(segs))
 				print("[游历] ", first_line)
+		else:
+			# v103（用户："游历每个难度只能通关一次"）：同一个难度再打＝复刷，不再算首通
+			first_line = "此档本周已通关过——本趟按复刷结算（首通换代只给一次）"
 	var dep: int = GameState.vault_deposit(st.count_cards())
 	if dep > 0:
 		print("[游历] 入仓库：本趟 ", dep, " 张；库里共 ", GameState.vault_total(), " 张")
@@ -160,7 +165,10 @@ static func open(st: RunState, veil: ColorRect, on_restart: Callable, on_return:
 static func _insight_of_run(st: RunState) -> int:
 	if str(st.mode) != "formal":
 		return 0
-	return 20 + maxi(1, int(st.diff)) * 8
+	# v104（用户："现在档位变成4档 原来根据游历奖励也要划分四档了"）：
+	#   老的"20 ＋ 难度×8"（10 档 28~100）改成**按四品级分档**：
+	#   凡品 28 · 良品 52 · 上品 76 · 极品 100（老档 1/3/6/8 的位置取齐）
+	return [28, 52, 76, 100][GameState.deploy_phase()]
 
 # 殒命：全丢——不入仓库、不登记收集册、不记难度、不动村况；盘缠就地作废。
 # 舞台已做完：_busy/_run_dead 置位、抹档、清容器、关幕布、造幕布（veil）。

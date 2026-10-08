@@ -4484,10 +4484,14 @@ static func ladder_clears() -> int:
 
 # 当前阶段品级：0=未通(凡池) 1=良 2=上 3=极 4=绝（每 8 手升一段）
 static func ladder_phase() -> int:
-	var c := ladder_clears()
-	if c <= 0:
-		return 0
-	return clampi(1 + (c - 1) / 8, 1, Cards.QUALITY_ORDER.size() - 1)
+	# v101：品级＝主轴——返回**最高已解锁的那一品**（0 凡 / 1 良 / 2 上 / 3 极）。
+	#   绝品（4）不再是"一档"，只作越阶红的落点（见 data_ladder.COLOR_OFFSET）。
+	_diff_sync()
+	var top := 0
+	for i in PHASES.size():
+		if phase_unlocked(i):
+			top = i
+	return top
 
 static func ladder_swaps(pool: String) -> int:
 	var c := ladder_clears()
@@ -4571,6 +4575,55 @@ static func pool_red_line(pool: String) -> String:
 # ---- 游历难度（R1 · 存 journey.cfg 的 "diff" 段）----
 # 状态：cleared 已清 / open 可打 / locked 未开。规矩：D1 恒开；前一档清了才开下一档；
 # 输了不改状态（可重试）；已清的档出征屏不再列。
+# ============================================================
+# v101（用户："如果击败普通模式 即可解锁下一个品级 比如凡品普通过关 即可解锁良品难度
+#   移除最高的绝品难度【最高极品】… 档位整体难度 按照凡品 良品 上品 极品 进行依次划分"）：
+#   **品级＝难度主轴**（四档，绝品不再是一档）：凡品 → 良品 → 上品 → 极品，
+#   每一品级下再分 简单/普通/困难（＝爆率与怪物那一档的倍率，在出征屏选）。
+#   解锁：**通关上一品级的「普通」** 才开下一品级。
+#   记档用 code = 品级×4 ＋ 模式 ＋ 1（所以 diff_cleared 里存的是这种编号，不再是老档 1~10）。
+const PHASES := [
+	{"name": "凡品", "diff": 1},   # 路程 21 节 · boss 852/32
+	{"name": "良品", "diff": 3},   # 31 节 · 1515/53
+	{"name": "上品", "diff": 6},   # 41 节 · 3115/102
+	{"name": "极品", "diff": 8},   # 41 节 · 3582/114
+]
+const MODE_NORMAL := 1
+static var deploy_code := 0        # 这一趟的品级×4＋模式＋1（结算按它记档）
+
+static func phase_code(pi: int, mi: int) -> int:
+	return clampi(pi, 0, PHASES.size() - 1) * 4 + clampi(mi, 0, 2) + 1
+
+# 这一趟出征选的品级 / 模式（出征时交下来的编号里取）
+static func deploy_phase() -> int:
+	if deploy_code <= 0:
+		return 0
+	return clampi((deploy_code - 1) / 4, 0, PHASES.size() - 1)
+
+static func deploy_mode() -> int:
+	if deploy_code <= 0:
+		return MODE_NORMAL
+	return clampi((deploy_code - 1) % 4, 0, 2)
+
+static func phase_name(pi: int) -> String:
+	return str((PHASES[clampi(pi, 0, PHASES.size() - 1)] as Dictionary)["name"])
+
+static func mode_name(mi: int) -> String:
+	return ["简单", "普通", "困难"][clampi(mi, 0, 2)]
+
+static func phase_unlocked(pi: int) -> bool:
+	_diff_sync()
+	if pi <= 0:
+		return true
+	if pi >= PHASES.size():
+		return false
+	# ① 永久保留的"打到过"（跨周也在）② 本周刚通关的上一品级「普通」
+	return pi <= best_phase or diff_cleared.has(phase_code(pi - 1, MODE_NORMAL))
+
+static func phase_cleared(pi: int, mi: int) -> bool:
+	_diff_sync()
+	return diff_cleared.has(phase_code(pi, mi))
+
 const DIFF_MAX := 10
 # 十档名字（改字只动这张表；整表空着则显示"第 N 程"）
 # v62（用户："游历不用设置名称了 就当前游历难度1 然后打过了就2 以此类推 节省空间"）：
@@ -4579,7 +4632,16 @@ const DIFF_MAX := 10
 #   （原来那十个名字：风平浪静/山雨欲来/风起云涌/暗流涌动/刀光剑影/群凶环伺/龙潭虎穴/血雨腥风/九死一生/十死无生）
 const DIFF_NAMES := []
 static var diff_cleared := {}
+# v103（用户："每周重置 如果打到三档上品 下次可以直接从三档开始【当然前面的关卡也能挑战】"）：
+#   · **每周重置**：新的一周把"本周已通关"清空（首通奖励可以再拿一遍）；
+#   · **最高品级永久留着**（best_phase）——下周直接从上品起挑，前面的品级照样能打。
+static var diff_week := 0
+static var best_phase := 0
 static var _diff_loaded := false
+
+# 周编号（Unix 时间 / 一周秒数）——不看时区，够用
+static func _week_now() -> int:
+	return int(Time.get_unix_time_from_system() / 604800.0)
 
 static func _diff_sync() -> void:
 	if _diff_loaded:
@@ -4590,11 +4652,24 @@ static func _diff_sync() -> void:
 		var d: Variant = cf.get_value("diff", "cleared", {})
 		if typeof(d) == TYPE_DICTIONARY:
 			diff_cleared = d
+		diff_week = int(cf.get_value("diff", "week", 0))
+		best_phase = clampi(int(cf.get_value("diff", "best_phase", 0)), 0, PHASES.size() - 1)
+	# v103：跨周了——清掉"本周已通关"，但最高品级留着
+	var now := _week_now()
+	if diff_week != now:
+		if not diff_cleared.is_empty():
+			print("[账本] 新的一周：游历通关记录重置（上周 ", diff_cleared.size(), " 档）；最高品级仍是「",
+				str((PHASES[best_phase] as Dictionary)["name"]), "」")
+		diff_cleared = {}
+		diff_week = now
+		_diff_save()
 
 static func _diff_save() -> void:
 	var cf := ConfigFile.new()
 	cf.load(JOURNEY_CFG)
 	cf.set_value("diff", "cleared", diff_cleared)
+	cf.set_value("diff", "week", diff_week)
+	cf.set_value("diff", "best_phase", best_phase)
 	cf.save(JOURNEY_CFG)
 
 static func diff_name(d: int) -> String:
@@ -4619,14 +4694,24 @@ static func diff_is_cleared(d: int) -> bool:
 
 static func diff_clear(d: int) -> void:
 	_diff_sync()
-	if d <= 0 or d > DIFF_MAX:
+	# v103：d 现在可能是"品级×4＋模式＋1"的编号（最大 16），不再只到 DIFF_MAX
+	if d <= 0 or d > PHASES.size() * 4:
 		return
-	if not diff_cleared.has(d):
-		diff_cleared[d] = true
-		_diff_save()
-		print("[账本] 难度已清：", diff_name(d), "（共 ", diff_cleared.size(), " 档）")
-		print("[账本] 卡池换手：", pool_line("weapon"))
-		print("[账本] 　　　　　：", pool_line("arts"))
+	# v103：**每个难度只记一次首通**（用户："游历每个难度只能通关一次"）——
+	#   已记过就直接返回，不重复记、也不再给首通换代那一弹。
+	if diff_cleared.has(d):
+		return
+	diff_cleared[d] = true
+	# 通关某品级的「普通」＝ 解锁下一品级——把它记进**永久**的最高品级里
+	var mi: int = (int(d) - 1) % 4
+	var pi: int = (int(d) - 1) / 4
+	if mi == MODE_NORMAL and pi + 1 < PHASES.size():
+		best_phase = maxi(best_phase, pi + 1)
+	_diff_save()
+	print("[账本] 通关已记：", diff_name(d), "（本周共 ", diff_cleared.size(), " 档 · 最高品级 ",
+		str((PHASES[clampi(best_phase, 0, PHASES.size() - 1)] as Dictionary)["name"]), "）")
+	print("[账本] 卡池换手：", pool_line("weapon"))
+	print("[账本] 　　　　　：", pool_line("arts"))
 
 static func diff_cleared_count() -> int:
 	_diff_sync()
@@ -4736,9 +4821,10 @@ static var deploy_drop_mul := 1.0
 # ㊿：整队出征。rids 可以是字符串（单人，老调用点照旧）或数组（1~3 人）。
 #   deploy_role 记领队——存档里的 role_id 与"默认对谁操作"都用它。
 # v62r（用户："开局命数可多选"）：fate 现在可以是字符串或**数组**（多选）。
-static func deploy_set(rids, d: int, fate: Variant = "", foe_mul := 1.0, drop_mul := 1.0) -> void:
+static func deploy_set(rids, d: int, fate: Variant = "", foe_mul := 1.0, drop_mul := 1.0, code := 0) -> void:
 	deploy_foe_mul = maxf(0.0, float(foe_mul))
 	deploy_drop_mul = maxf(0.0, float(drop_mul))
+	deploy_code = int(code)
 	var list: Array = []
 	if typeof(rids) == TYPE_ARRAY:
 		for v in (rids as Array):

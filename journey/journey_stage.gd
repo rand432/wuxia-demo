@@ -719,7 +719,7 @@ func _start_formal_run() -> void:
 	_told_card = true
 	_just_synth = false
 	_refresh_all()
-	UiKit.float_text(self, "出征 · " + GameState.diff_name(_state.diff) + "　盘缠 " + str(_state.money) + " 文", UiKit.GOLD)
+	UiKit.float_text(self, "出征 · " + GameState.phase_name(GameState.deploy_phase()) + "·" + GameState.mode_name(GameState.deploy_mode()) + "　盘缠 " + str(_state.money) + " 文", UiKit.GOLD)
 	_enter_node()
 	# v35（用户："进入游历第一节 根据当前难度 给予五个选项…五选一"）：第一节摆开局行装
 	if not _state.kit_taken:
@@ -1072,9 +1072,8 @@ func _finish_node(kind: String) -> void:
 func _loot_allowed() -> bool:
 	if str(_state.mode) == "intro":
 		return false
-	if int(_state.diff) < LOOT_MIN_DIFF:
-		return false
-	return true
+	# v104（用户："通关凡品难度 解锁搜刮"）：老的"难度 ≥ 3"改成**通关凡品**（凡品的「普通」）
+	return GameState.phase_cleared(0, GameState.MODE_NORMAL)
 
 func _spawn_loot(kind: String) -> void:
 	_clear_loot()
@@ -1250,7 +1249,8 @@ func _confirm_leave_loot() -> void:
 
 # ㉛b：命数已解锁？——"经历到第 FATE_UNLOCK_DIFF 档"：该档已开（前几档走完）
 func _fate_unlocked() -> bool:
-	return GameState.diff_state(FATE_UNLOCK_DIFF) != "locked"
+	# v104（用户："通关良品难度 解锁命数"）：老的"到第 5 档"改成**通关良品**（良品的「普通」）
+	return GameState.phase_cleared(1, GameState.MODE_NORMAL)
 
 func _has_fate(id: String) -> bool:
 	return _state != null and _state.buffs.has(id)
@@ -1463,7 +1463,8 @@ func _open_start_kit() -> void:
 	var t1 := UiKit.make_label(panel, Vector2(0, 16), Vector2(604, 38), 28, UiKit.INK)
 	UiKit.set_text(t1, "开局行装 · 五选一")
 	t1.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	var q: int = Ladder.q_of_diff(int(_state.diff))
+	# v104（用户："原来根据游历奖励也要划分四档"）：行装品阶跟**品级**走（凡/良/上/极）
+	var q: int = GameState.deploy_phase()
 	var qn := str(Cards.QUALITY_ORDER[clampi(q, 0, Cards.QUALITY_ORDER.size() - 1)])
 	var t2 := UiKit.make_label(panel, Vector2(22, 56), Vector2(560, 56), 17,
 		Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.72))
@@ -1511,7 +1512,8 @@ func _q_cn(sid: String) -> String:
 
 # 五张牌的内容——摆出来的那一刻就摇定
 func _kit_make_offers() -> Array:
-	var q: int = Ladder.q_of_diff(int(_state.diff))
+	# v104（用户："原来根据游历奖励也要划分四档"）：行装品阶跟**品级**走（凡/良/上/极）
+	var q: int = GameState.deploy_phase()
 	var qn := str(Cards.QUALITY_ORDER[clampi(q, 0, Cards.QUALITY_ORDER.size() - 1)])
 	var out: Array = []
 	var slots := [["armor", "护甲"], ["helm", "玉佩"], ["cloak", "披风"]]

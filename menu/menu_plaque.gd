@@ -95,7 +95,7 @@ func add_beam(id: String, x0: float, x1: float, y: float, nails: Array) -> void:
 
 # 箭头（出村）：dir = -1 向左 / 1 向右
 func add_arrow(id: String, rx: float, ry: float, text: String, fn: Callable, dir := -1, cfg := {}) -> void:
-	_push(id, "arrow", rx, ry, 84.0, 84.0, text, fn, "", "", cfg)
+	_push(id, "arrow", rx, ry, 124.0, 68.0, text, fn, "", "", cfg)   # v102：箭头放大，命中盒跟着
 	(items[items.size() - 1] as Dictionary)["dir"] = dir
 
 func _push(id: String, kind: String, rx: float, ry: float, w: float, h: float, text: String, fn: Callable, sub: String, act: String, cfg: Dictionary) -> void:
@@ -483,23 +483,48 @@ func _draw_txt(it: Dictionary, s: float) -> void:
 	if sub != "":
 		draw_string(font, Vector2(cx - w * 0.5, cy + 34.0), sub, HORIZONTAL_ALIGNMENT_CENTER, w, 14, Color(INK.r, INK.g, INK.b, 0.60))
 
-# 箭头（出村）：一笔墨箭头 + 底下一行小字
+# 箭头（出村）——v102（用户："改成白色再大一点 字体也一点 放在箭头里面更显目一些"）：
+#   **白底墨边的实心箭头**，字写在箭杆里（比原来"墨线箭头＋底下一行小字"醒目得多）。
 func _draw_arrow(it: Dictionary, s: float) -> void:
 	var cx := float(it["cx"]) - s
 	var cy := float(it["cy"])
-	var d := float(it["dir"])
-	var col := Color(0.16, 0.15, 0.17, 0.80)
+	var d := float(it["dir"])          # -1 向左 / 1 向右
+	var L := 120.0                     # 总长
+	var HH := 31.0                     # 箭头半高
+	var SH := 16.0                     # 箭杆半高
+	var HEAD := 48.0                   # 箭头那一段的长度
+	var tip := cx + d * L * 0.5
+	var tail := cx - d * L * 0.5
+	var neck := tip - d * HEAD
+	var pts := PackedVector2Array([
+		Vector2(tip, cy),
+		Vector2(neck, cy - HH),
+		Vector2(neck, cy - SH),
+		Vector2(tail, cy - SH),
+		Vector2(tail, cy + SH),
+		Vector2(neck, cy + SH),
+		Vector2(neck, cy + HH),
+	])
+	var fill := Color(0.99, 0.982, 0.955, 0.97)
+	var edge := Color(0.20, 0.18, 0.21, 0.88)
 	if _hover == int(it["idx"]):
-		col = Color(0.72, 0.20, 0.15, 0.92)
+		fill = Color(1.0, 0.995, 0.97, 1.0)
+		edge = Color(SEAL.r, SEAL.g, SEAL.b, 0.95)
 	if _down == int(it["idx"]):
-		col = Color(0.55, 0.16, 0.12, 0.95)
-	var len := 30.0
-	var hh := 17.0
-	# 杆
-	draw_line(Vector2(cx - d * len * 0.15, cy), Vector2(cx + d * len, cy), col, 5.0, true)
-	# 头
-	draw_line(Vector2(cx + d * len, cy), Vector2(cx + d * (len - hh), cy - hh * 0.72), col, 5.0, true)
-	draw_line(Vector2(cx + d * len, cy), Vector2(cx + d * (len - hh), cy + hh * 0.72), col, 5.0, true)
+		fill = Color(0.95, 0.93, 0.89, 1.0)
+		edge = Color(SEAL.r, SEAL.g, SEAL.b, 1.0)
+	# 落影 → 白面 → 墨边
+	var sh := PackedVector2Array()
+	for p in pts:
+		sh.append(p + Vector2(2.5, 4.0))
+	draw_colored_polygon(sh, Color(0.06, 0.05, 0.05, 0.20))
+	draw_colored_polygon(pts, fill)
+	var outline := PackedVector2Array(pts)
+	outline.append(outline[0])
+	draw_polyline(outline, edge, 2.4, true)
+	# 字写在箭杆里
 	var txt := str(it["text"])
 	if txt != "":
-		draw_string(font, Vector2(cx - 34.0, cy + 44.0), txt, HORIZONTAL_ALIGNMENT_CENTER, 68.0, 15, Color(INK.r, INK.g, INK.b, 0.62))
+		var sx := minf(neck, tail)
+		var sw := absf(tail - neck)
+		draw_string(font, Vector2(sx, cy + 9.0), txt, HORIZONTAL_ALIGNMENT_CENTER, sw, 22, Color(INK.r, INK.g, INK.b, 0.92))

@@ -916,7 +916,7 @@ func _build_plaques() -> void:
 	# v98（用户："其他竖牌功能牌就白色就好了"）：这一组全是**白纸牌**
 	var V := {"page": "village", "white": true}
 	# v98（用户："出村改为向左的箭头"）
-	_plaques.add_arrow("out", 0.066, 0.595, "出村", _open_out, -1, V)
+	_plaques.add_arrow("out", 0.104, 0.595, "出村", _open_out, -1, V)   # v102：白箭头变长，中心右移一点，别顶出左边缘
 	_plaques.add_hang("cave", 0.915, 0.565, "山洞", _click_cave, "", "", V)
 	_plaques.add_hang("hill", 0.355, 0.705, "后山", _click_hill, "", "", V)
 	_plaques.add_hang("brook", 0.600, 0.775, "溪畔", _gather_wood, "", "", V)   # 桥右侧的水边（桥左那块地是画里四个小人的站位，别压住他们）
