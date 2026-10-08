@@ -739,6 +739,8 @@ func _ready() -> void:
 	_out_panel.config_pressed.connect(_on_out_config)
 	_out_panel.chase_manual.connect(_on_chase_manual)   # v129：追剿·手牌模式（kushou）
 	_out_panel.chase_auto.connect(_on_chase_auto)       # v129：追剿·自动战斗（battle_lite）
+	_out_panel.chase_bg_off.connect(_on_chase_bg_off)   # v143：在村里把"后台推进"停掉
+	_out_panel.chase_challenge.connect(_on_chase_challenge)   # v144：追剿关卡列表里的［挑战］
 	# v36：宝箱面板——出村屏右上角［宝箱］开它；v4.2 底排第 5 格也开它
 	_chest_panel = ChestPanel.new()
 	add_child(_chest_panel)
@@ -2443,6 +2445,23 @@ func _on_chase_auto() -> void:
 		return
 	_start_chase_stage(GameState.chase_progress)
 
+# v144：追剿关卡列表里点［挑战］——只有"当前该打的那一关"能真打，别的关先提示
+func _on_chase_challenge(i: int) -> void:
+	_out_panel.close()
+	if not GameState.chase_unlocked():
+		_show_toast("追剿还没开——爬塔到第 " + str(Chase.UNLOCK_STAGE) + " 关（还差 " + str(GameState.chase_gap()) + " 关）", 3.0)
+		_out_panel.open()
+		return
+	if i != GameState.chase_progress:
+		_show_toast("追剿要从第 " + str(GameState.chase_progress + 1) + " 关往下打——前面那几关已经清过了", 3.0)
+		_out_panel.open()
+		return
+	_start_chase_stage(i)
+
+# v143：村里点［停推］——把追剿的连打与后台推进一起收
+func _on_chase_bg_off() -> void:
+	_show_toast("追剿：连打与后台推进都停了（想继续就再点［自动］）", 3.0)
+
 func _start_chase_stage(i: int, manual := false) -> void:
 	if i != GameState.chase_progress:
 		_show_toast("追剿进度对不上（要打第 " + str(GameState.chase_progress + 1) + " 关）")
@@ -2454,6 +2473,8 @@ func _start_chase_stage(i: int, manual := false) -> void:
 	b.manual = manual          # v135：true ＝ 手动出牌（游历那套手牌）
 	b.stage_i = i
 	b.done.connect(_on_chase_battle_done.bind(i))
+	# v143：追剿也能"人先回村、后台接着推"了——left 信号跟上（与爬塔同一条路）
+	b.left.connect(_on_chase_battle_left)
 	_battle = b
 	add_child(b)
 	print("[主界面] 追剿·", "手牌" if manual else "自动", "：第 ", i + 1, "/", Chase.STAGE_MAX, " 关 · ", Chase.enemy_name(i), " 特性=", Chase.boss_traits_of(i))
@@ -2469,6 +2490,11 @@ func _on_chase_battle_done(win: bool, i: int) -> void:
 		# v136：赏格播报（银两/经验/箱子，boss 关那件整品）——账本把这一行攒好了
 		_show_toast("追剿清关：第 " + str(i + 1) + "/" + str(Chase.STAGE_MAX) + " 关 · " + Chase.enemy_name(i)
 			+ "｜" + GameState.last_chase_line + "｜进度 " + str(GameState.chase_progress), 3.6)
+		# v143：人已经回村（chase_bg）——这一胜之后不再自动开下一场，改后台估算接手
+		if GameState.chase_bg:
+			_show_toast("追剿：已转后台——每 20 秒按估算推一关（不想推就在出村面板把［自动］关掉）", 3.4)
+			_out_panel.open()
+			return
 		# 连打开着就接着下一关（追剿的开关是 chase_auto，与爬塔的 auto_climb 分开）
 		if GameState.chase_auto and GameState.chase_progress < Chase.STAGE_MAX and not _any_panel_open():
 			await get_tree().create_timer(0.5).timeout
@@ -2483,6 +2509,17 @@ func _on_chase_battle_done(win: bool, i: int) -> void:
 		else:
 			_show_toast("追剿败退——回去整备，再来", 2.6)
 		_out_panel.open()
+
+# v143：追剿的［回村·后台继续］——与爬塔那条同一口径：
+#   这一场既不算赢也不算败，追剿停在**当前这一关**，交给 _idle_chase 每 20 秒重判一次。
+func _on_chase_battle_left() -> void:
+	if _battle != null and is_instance_valid(_battle):
+		_battle.queue_free()
+	_battle = null
+	GameState.chase_bg = true
+	print("[主界面] 追剿半路回村：第 ", GameState.chase_progress + 1, " 关交给后台估算（连打仍开）")
+	_show_toast("回村了——追剿没停：刚那关交给后台估算（每 20 秒推一关，推完在村里报）", 3.4)
+	_out_panel.open()
 
 func _on_form_ok(i: int) -> void:
 	_start_stage(i)

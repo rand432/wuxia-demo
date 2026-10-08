@@ -3173,6 +3173,8 @@ func _passive_unmask(al: Dictionary) -> void:
 # ⚠ is_foe：立刻效果（挫锐打怒气 / 滞涩推后当前冷却）要落在"挨打那一侧"的字段上，
 #   而两边的存法不同（我方在 _allies[i]，敌方在 _cur()，冷却还在 _state.art_cd 里），所以传进来。
 func _st_hit(u: Dictionary, spec: Dictionary, who: String, is_foe := false) -> bool:
+	# v142：负面/控制**按谁放的折算**（is_foe=true ＝ 玩家放的 → 削弱版；false ＝ 怪放的 → 增强版）
+	spec = St.tune(spec, is_foe)
 	if u.is_empty() or spec.is_empty():
 		return false
 	var sid := str(spec.get("id", ""))

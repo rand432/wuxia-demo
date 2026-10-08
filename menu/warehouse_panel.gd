@@ -16,6 +16,7 @@ const ItemIcons := preload("res://shared/item_icons.gd")   # v93o：一件东西
 const Cards := preload("res://shared/data_cards.gd")
 const UiKit := preload("res://shared/ui_kit.gd")   # v61b：tap_in_scroll（格子可滑可点）
 const SceneArt := preload("res://shared/scene_art.gd")   # v77：内景垫图
+const GameData := preload("res://shared/game_data.gd")   # v142：招式说明走 move_desc（负面/控制那行）
 
 signal closed
 signal picked(sid: String)
@@ -807,7 +808,9 @@ func _open_equip_win(sid: String) -> void:
 		if cl != "":
 			lines.append(cl)
 		var ad: Dictionary = Cards.by_id(sid).get("art", {})
-		var adesc := str(ad.get("desc", ""))
+		# v142：走 GameData.move_desc —— 会补上"几段/打哪几排"，以及负面/控制那一行
+		#   （写玩家手上的实际值，并括注"怪手上是几手"）
+		var adesc := str(GameData.move_desc(ad))
 		if adesc != "":
 			lines.append("招式：" + adesc)
 	lines.append("升星 ×" + str(snappedf(GameState.star_mul(sid), 0.1)) + "（去［升 星］合星——星记在这件上）")

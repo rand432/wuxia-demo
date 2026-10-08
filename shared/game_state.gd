@@ -1628,11 +1628,12 @@ static func chase_enemy_at(i: int) -> Dictionary:
 #   档位与数量都在 data_chase 那六个常数里（每 80 关升一档、封顶极品）。
 static var last_chase_line := ""     # 最近一次清关的收益播报（战斗结算/面板读它）
 
-static func chase_clear(i: int) -> bool:
+static func chase_clear(i: int, save_now := true) -> bool:
 	if i != chase_progress:
 		return false
 	if i >= Chase.STAGE_MAX:
 		return false
+	chase_last_gift = ""
 	var silver := Chase.reward_silver(i)
 	var exp := Chase.reward_exp(i)
 	var chests: Array = Chase.reward_chests(i)      # v139：每关 2 个（boss 关＝升一档＋同档）
@@ -1650,9 +1651,12 @@ static func chase_clear(i: int) -> bool:
 	got.append(Chase.chest_summary(chests))
 	if item != "":
 		vault_add_item(item, 1)
+		chase_last_gift = item          # v143：后台推进的汇总要数它（别再掷第二次）
 		got.append("整件「" + Cards.item_name(item) + "」（" + Cards.quality_of(item) + "）已入仓库")
 	last_chase_line = "、".join(PackedStringArray(got))
-	save_game()
+	# v143：后台批量推进时由调用方统一落盘一次（save_now=false），别一关一次
+	if save_now:
+		save_game()
 	print("[账本] 追剿清关：第 ", i + 1, " 关（", Chase.enemy_name(i), "）——", last_chase_line, "｜进度 ", chase_progress, "/", Chase.STAGE_MAX)
 	return true
 
@@ -4330,6 +4334,78 @@ static func formation_dps_est() -> Dictionary:
 		"def": maxf(0.0, front_def), "dodge": maxf(0.0, front_dodge), "atk": maxf(0.0, front_atk),
 	}
 
+# ============================================================
+# v143：**追剿的后台 / 离线推进**（用户："追缴无法离线和后台"）
+#
+#   爬塔那条路早就有（_idle_climb → run_offline_climb）；追剿从 v129 起是**故意藏着**的
+#   （battle_lite 的［回村·后台继续］在追剿里根本不显示）。这一版按同一套口径补齐：
+#     · 触发：`chase_auto` 开着 · 人不在战斗里（battle_live / _battle_seen）· 还有下一关；
+#       节奏跟爬塔同一条闸（`CLIMB_MIN_SEC`＝每 20 秒一拍）；
+#     · 判定：走 `Tower.run_offline`（与塔共用"血池 / 输出 / 每关耗时"那一套估算），
+#       倍率默认 **1.0（与爬塔同口径）**。`CHASE_BG_HAIRCUT` 是留给"想让它保守一点"的旋钮：
+#       调 0.9 之类的话，**boss 关会卡住**（实测：一支刚够打的队伍在 0.9 下正好卡在每个 boss 关，
+#       于是后台每推 4 关就要你回来打一口）——想挂着刷就别动它。
+#       ⚠ 估算看不到 boss 的特性＋专属被动（号令/背水/护体罡气…），所以后台推 boss 关偏乐观；
+#         这是"挂机估算"这条线一贯的粗法（爬塔那边同理）。
+#     · 清关仍走 `chase_clear()`：银两 / 经验 / 2 个宝箱 / boss 关那件整品照发；
+#     · 汇总那一行并进 `offline_note`——回村时与挂机那条一起报（同一个 toast）。
+# ============================================================
+const CHASE_BG_HAIRCUT := 1.0       # 估算倍率（1.0＝与爬塔同口径；调小会让 boss 关卡住）
+static var chase_bg := false        # 人在村里、追剿连打交给后台估算（与塔的 auto_bg 对称）
+static var chase_last_gift := ""    # 上一次 chase_clear 给的整品（后台汇总用）
+
+# 后台估算最远推到哪一关之前（追剿现在没有"必须真打"的关卡——以后加剧情就返回它前一关）
+static func chase_gate() -> int:
+	return Chase.STAGE_MAX
+
+static func _idle_chase(elapsed: int) -> void:
+	if elapsed < CLIMB_MIN_SEC or chase_progress >= Chase.STAGE_MAX:
+		return
+	if not chase_auto:
+		return
+	if battle_live or _battle_seen:
+		return
+	if chase_progress >= chase_gate():
+		return
+	run_offline_chase(float(elapsed))
+
+# 跑一次追剿的后台推进（在线挂机与离线开局走的是同一条路）。返回结果字典。
+static func run_offline_chase(seconds: float) -> Dictionary:
+	if seconds <= 0.0 or chase_progress >= Chase.STAGE_MAX:
+		return {}
+	var est := formation_dps_est()
+	var clear_one := func(i: int) -> Variant:
+		var before := chase_progress
+		if not chase_clear(i, false):
+			return null
+		if chase_progress == before:
+			return null
+		return {
+			"silver": Chase.reward_silver(i),
+			"exp": Chase.reward_exp(i),
+			"gift": chase_last_gift != "",
+		}
+	var r: Dictionary = Tower.run_offline(chase_progress, seconds,
+		float(est["dps"]) * CHASE_BG_HAIRCUT, float(est["hp"]) * CHASE_BG_HAIRCUT, float(est["cut"]),
+		clear_one, func(i: int) -> Dictionary: return chase_enemy_at(i), chase_gate(),
+		float(est.get("def", 0.0)), float(est.get("dodge", 0.0)), float(est.get("atk", 0.0)))
+	if r.is_empty():
+		return {}
+	var n := int(r.get("cleared", 0))
+	if n <= 0:
+		return r
+	var line := "追剿（后台）：推进 " + str(n) + " 关，到第 " + str(int(r.get("stage", 0)) + 1) + " 关"
+	if int(r.get("gifts", 0)) > 0:
+		line += "（boss 赏 " + str(int(r.get("gifts", 0))) + " 件）"
+	if bool(r.get("stuck", false)):
+		line += "——这一关估算过不去，回来自己打"
+	elif int(r.get("stage", 0)) >= Chase.STAGE_MAX:
+		line += "——追剿清净了"
+	offline_note = (offline_note + "｜" + line) if offline_note != "" else line
+	save_game()
+	print("[挂机] 追剿后台推进：", r)
+	return r
+
 # 跑一次离线爬塔。返回结果字典（无进展时 cleared=0）。
 static func run_offline_climb(seconds: float) -> Dictionary:
 	if seconds <= 0.0 or stage_progress >= STAGE_MAX:
@@ -4365,6 +4441,8 @@ static func idle_sync() -> void:
 	_idle_save()
 	# ㊼：在线挂机也推塔（与离线同一条路）——菜单每 20 秒一拍会调到这里
 	_idle_climb(elapsed)
+	# v143：追剿那条线同理（用户："追缴无法离线和后台"）
+	_idle_chase(elapsed)
 
 static func idle_display_sec() -> int:
 	var extra := maxi(0, _idle_now() - _idle_last_ts)

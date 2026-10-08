@@ -24,6 +24,7 @@ const Voice := preload("res://shared/voice.gd")   # v87：点开角色面板念�
 const CharArt := preload("res://shared/char_art.gd")     # 立绘/头像/Q版取图口
 const ArtView := preload("res://shared/art_view.gd")     # 会动的立绘（程序化）
 const ArtClip := preload("res://shared/art_clip.gd")     # 立绘演出（看片版，.ogv）
+const GameData := preload("res://shared/game_data.gd")   # v142：招式说明走 move_desc（负面/控制那行）
 
 const WEAPON_CN := {"sword": "长剑", "dual": "双刀", "dagger": "匕首", "spear": "长枪", "anqi": "暗器", "fist": "拳法"}
 const GEAR_CN := {"armor": "护甲", "helm": "玉佩", "cloak": "披风"}
@@ -750,7 +751,7 @@ func _ov_arts(panel: Control) -> void:
 		var m_lb := UiKit.make_label(panel, Vector2(40, 354), Vector2(600, 30), 18, UiKit.DIM)
 		UiKit.set_text(m_lb, "归类：" + (Cards.cat_name(Cards.cat_of(sid2)) if Cards.cat_of(sid2) != "" else "—") + "　·　招式：" + str(art.get("move", "—")))
 		var d_lb := UiKit.make_label(panel, Vector2(40, 384), Vector2(600, 84), 18, Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.85))
-		UiKit.set_text(d_lb, str(art.get("desc", "—")))
+		UiKit.set_text(d_lb, GameData.move_desc(art))
 		d_lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		var s_lb := UiKit.make_label(panel, Vector2(40, 478), Vector2(600, 28), 17, UiKit.SEAL if cd <= 0 else UiKit.DIM)
 		if cd <= 0:

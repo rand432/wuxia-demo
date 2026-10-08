@@ -66,6 +66,7 @@ const SLOT_CN := {"weapon": "兵器", "armor": "护甲", "helm": "玉佩", "cloa
 const ROLE_IDS := ["chen_shi", "player", "qingluan"]
 const WEAPON_CN := {"sword": "长剑", "dual": "双刀", "dagger": "匕首", "spear": "长枪", "anqi": "暗器", "fist": "拳法"}
 const CharArt := preload("res://shared/char_art.gd")   # v90：页签头像
+const GameData := preload("res://shared/game_data.gd")   # v142：招式说明走 move_desc（负面/控制那行）
 
 const STAT_ROWS := [
 	{"k": "atk", "label": "攻击"},
@@ -1495,7 +1496,7 @@ func _tip_for(kind: String, idx: int) -> Dictionary:
 		var art: Dictionary = Cards.art_of(aid)
 		return {
 			"title": "『" + Cards.name_of(aid) + "』· " + GameState.grade_of(aid),
-			"body": "归类：" + (Cards.cat_name(Cards.cat_of(aid)) if Cards.cat_of(aid) != "" else "—") + "\n招式：" + str(art.get("move", "—")) + "\n" + str(art.get("desc", "—")) + "\n出村战斗：按冷却自动放（冷却 " + str(Cards.art_cd(aid)) + " 次行动）\n星级：" + str(GameState.star_of(aid)) + " / " + str(GameState.STAR_MAX) + "（去［升 星］合星——星记在这门功法上，换谁拿都算）",
+			"body": "归类：" + (Cards.cat_name(Cards.cat_of(aid)) if Cards.cat_of(aid) != "" else "—") + "\n招式：" + str(art.get("move", "—")) + "\n" + GameData.move_desc(art) + "\n出村战斗：按冷却自动放（冷却 " + str(Cards.art_cd(aid)) + " 次行动）\n星级：" + str(GameState.star_of(aid)) + " / " + str(GameState.STAR_MAX) + "（去［升 星］合星——星记在这门功法上，换谁拿都算）",
 		}
 	if kind == "ult":
 		var ult: Dictionary = role.get("ult", {})

@@ -16,6 +16,14 @@ signal config_pressed
 signal chest_pressed   # v6：宝箱（爬塔宝箱机制）
 signal chase_manual    # v129：追剿·手牌模式（kushou）
 signal chase_auto      # v129：追剿·自动战斗（battle_lite）
+signal chase_bg_off    # v143：把"后台推进"关掉（人已经在村里，不用再进战斗）
+signal chase_challenge(i: int)   # v144：在追剿关卡列表里点［挑战］（这一关真打一场）
+
+# v144（用户："出战界面你把追剿那一行换成[开关] 点击切换为追剿的挑战关卡不就好了？"）：
+#   那一行**整行可点**＝在［爬塔关卡］与［追剿关卡］之间切换；切过去以后，
+#   上面那五行就变成追剿的五关（含 boss 行的特性/被动提示），一关一个［挑战］。
+var _chase_view := false
+var _chase_page := 0
 signal closed
 
 const INK := Color(0.14, 0.13, 0.15)
@@ -43,6 +51,7 @@ var _row_name: Array = []
 var _row_status: Array = []
 var _row_btn: Array = []
 # v129：追剿那张卡上的三件
+var _chase_switch: Button   # v144：整行可点的切换钮（爬塔关卡 ↔ 追剿关卡）
 var _chase_lb: Label
 var _chase_sub: Label
 var _chase_m_btn: Button
@@ -193,15 +202,31 @@ func _build() -> void:
 	ccard.add_theme_stylebox_override("panel", csb)
 	_panel.add_child(ccard)
 
+	# v144：整行可点——透明钮压在字上，点它就是"切到追剿关卡列表"
+	_chase_switch = Button.new()
+	_chase_switch.position = Vector2(6, 3)
+	_chase_switch.size = Vector2(338, 66)
+	_chase_switch.flat = true
+	_chase_switch.focus_mode = Control.FOCUS_NONE
+	_chase_switch.tooltip_text = "点这一行：在［爬塔关卡］与［追剿关卡］之间切换"
+	_chase_switch.add_theme_stylebox_override("normal", _flat(Color(0, 0, 0, 0)))
+	_chase_switch.add_theme_stylebox_override("hover", _flat(Color(SEAL.r, SEAL.g, SEAL.b, 0.10)))
+	_chase_switch.add_theme_stylebox_override("pressed", _flat(Color(SEAL.r, SEAL.g, SEAL.b, 0.18)))
+	_chase_switch.add_theme_stylebox_override("focus", _flat(Color(0, 0, 0, 0)))
+	_chase_switch.pressed.connect(_on_chase_switch)
+	ccard.add_child(_chase_switch)
+
 	_chase_lb = _label("", 17, INK)
 	_chase_lb.position = Vector2(18, 6)
 	_chase_lb.size = Vector2(340, 24)
+	_chase_lb.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	ccard.add_child(_chase_lb)
 
 	_chase_sub = _label("", 12, Color(INK.r, INK.g, INK.b, 0.62))
 	_chase_sub.position = Vector2(18, 32)
 	_chase_sub.size = Vector2(340, 34)
 	_chase_sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_chase_sub.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	ccard.add_child(_chase_sub)
 
 	_chase_m_btn = Button.new()
@@ -222,7 +247,7 @@ func _build() -> void:
 	_chase_a_btn.add_theme_font_size_override("font_size", 15)
 	_chase_a_btn.focus_mode = Control.FOCUS_NONE
 	_chase_a_btn.tooltip_text = "自动战斗：跟爬塔一样，看着它一场一场打（可开自动连打）"
-	_chase_a_btn.pressed.connect(_on_chase_auto)
+	_chase_a_btn.pressed.connect(_on_chase_auto_click)
 	_style_challenge(_chase_a_btn)
 	ccard.add_child(_chase_a_btn)
 
@@ -319,7 +344,11 @@ func refresh() -> void:
 		_team_lb.text = "出战：还没安排——先去整备"
 	else:
 		_team_lb.text = "出战（前→后）：" + "、".join(PackedStringArray(tn)) + " ｜ 要改阵容：左下［出战配置］"
-		_page = clampi(_page, 0, _pages() - 1)
+		# v144：切到追剿视图时，上面这五行改画追剿的五关（其余固定件照旧）
+	if _chase_view and GameState.chase_unlocked():
+		_refresh_chase_page()
+		return
+	_page = clampi(_page, 0, _pages() - 1)
 	var a := _page * PER_PAGE
 	_chap_lb.text = "第 " + str(_page + 1) + " 章 · " + GameState.chapter_of(a) + "（第 " + str(a + 1) + "–" + str(a + PER_PAGE) + " 关）"
 	var p := GameState.stage_progress
@@ -375,7 +404,64 @@ func refresh() -> void:
 		else:
 			_hint_lb.text = "自动挑战：开——清完一关自动接下一关；撤退/败退自停。\n战斗画面右下角还有［回村·后台继续］：人先回村，塔改后台估算接着推（这个钮不用关）。"
 	else:
-		_hint_lb.text = "清关得银两；经验进经验池（弟子面板分配）｜首领关另赏一件装备/兵器/功法：凡品给整套，良品起给残页（同一件凑齐才算到手）｜第一关打完可开［自动挑战］（开了才会连打、也才会挂机推塔）"
+		_hint_lb.text = "清关得银两；经验进经验池（弟子面板分配）｜首领关另赏一件装备/兵器/功法：凡品给整套，良品起给残页（同一件凑齐才算到手）｜第一关打完可开［自动挑战］（开了才会连打、也才会挂机推塔）\n底下那一行是［追剿］——点它就把这个列表换成追剿的五关（再点一下切回来）。"
+
+# v144：追剿视图下，上面那五行画的是**追剿的五关**（一页一剿）
+#   · 抬头＝第几剿 / 共几剿 / 这几关的关号区间
+#   · 每行＝关号 + 敌名（首领标出来）+ 赏格；首领行把小字换成"特性/被动"
+#   · 按钮＝［挑战］（当前那一关）/ 已清 / 锁定
+func _refresh_chase_page() -> void:
+	_chase_page = clampi(_chase_page, 0, Chase.rounds() - 1)
+	var base := Chase.stage_of_round(_chase_page + 1)
+	var p := GameState.chase_progress
+	var head := "追剿 · 第 " + str(_chase_page + 1) + "/" + str(Chase.rounds()) + " 剿（第 " + str(base + 1) + "–" + str(mini(base + Chase.BOSS_EVERY, Chase.STAGE_MAX)) + " 关）"
+	_chap_lb.text = head
+	for k in PER_PAGE:
+		var idx := base + k
+		var nm: Label = _row_name[k]
+		var stt: Label = _row_status[k]
+		var btn: Button = _row_btn[k]
+		if idx >= Chase.STAGE_MAX:
+			nm.text = "—"
+			stt.text = "追剿清净了"
+			btn.text = "—"
+			btn.disabled = true
+			btn.tooltip_text = ""
+			continue
+		var e: Dictionary = GameState.chase_enemy_at(idx)
+		var boss := Chase.is_boss(idx)
+		nm.text = "第 " + str(idx + 1) + " 关 · " + str(e["name"]) + ("（首领）" if boss else "")
+		if boss:
+			# 首领行：小字写"怎么打"（特性 + 专属被动 + 针对），比赏格重要
+			var tip := Chase.trait_lines(Chase.boss_traits_of(idx))
+			var pd: Dictionary = Chase.passive_def(Chase.passive_of(idx))
+			var seg := ""
+			for tp in tip:
+				seg += ("" if seg == "" else "　") + str(tp)
+			if not pd.is_empty():
+				seg += "　被动「" + str(pd.get("name", "")) + "」" + str(pd.get("counter", ""))
+			stt.text = seg
+			btn.tooltip_text = "赏：" + Chase.reward_line(idx) + "\n" + Chase.passive_line(idx)
+		else:
+			stt.text = "赏：" + Chase.reward_line(idx)
+			btn.tooltip_text = ""
+		if idx < p:
+			stt.text = "已清缴"
+			btn.text = "已清"
+			btn.disabled = true
+		elif idx == p:
+			btn.text = "挑战"
+			btn.disabled = false
+		else:
+			# 还没解锁的关：**首领行照样把特性/被动摊出来**——"下一剿要打谁、怎么克"
+			#   本来就是这一页最该看的东西（杂兵行就只写未解锁）
+			if not boss:
+				stt.text = "未解锁——先清前一关"
+			btn.text = "锁定"
+			btn.disabled = true
+	# 底部那颗［自动挑战］是爬塔的口径——追剿视图里收起来（追剿的开关在那一行上）
+	_auto_btn.visible = false
+	_hint_lb.text = "追剿关卡：点［挑战］真打这一关（进战斗后右上那颗钮可在［手动出牌／自动］之间切）。\n这一趟是公主府的追杀队——首领关记得看它的特性与被动，挑克制的阵容上。点上面那一行可切回爬塔。"
 
 # v129：追剿那条卡——进度 / 下一战 / 特性名；没解锁就写清"还差多少关"
 func _refresh_chase() -> void:
@@ -387,10 +473,14 @@ func _refresh_chase() -> void:
 		_chase_lb.text = "追剿 · 未解锁"
 		_chase_sub.text = "爬塔到第 " + str(Chase.UNLOCK_STAGE) + " 关才开 · 还差 " + str(GameState.chase_gap()) + " 关（现在第 " + str(GameState.stage_progress) + " 关）"
 	elif p >= Chase.STAGE_MAX:
-		_chase_lb.text = "追剿 · 500/500（已清）"
+		_chase_lb.text = "追剿 · " + str(Chase.STAGE_MAX) + "/" + str(Chase.STAGE_MAX) + "（已清）"
 		_chase_sub.text = "公主府的追杀队一个不剩——村口安静了。"
 	else:
-		_chase_lb.text = "追剿 · 第 " + str(p + 1) + "/" + str(Chase.STAGE_MAX) + " 关（第 " + str(Chase.round_of(p)) + " 剿）"
+		# v144：这一行现在是"关卡列表切换开关"——标题上带个箭头，让人知道能点
+		if _chase_view:
+			_chase_lb.text = "◂ 回爬塔（追剿 · 第 " + str(p + 1) + "/" + str(Chase.STAGE_MAX) + " 关）"
+		else:
+			_chase_lb.text = "▸ 追剿 · 第 " + str(p + 1) + "/" + str(Chase.STAGE_MAX) + " 关（第 " + str(Chase.round_of(p)) + " 剿）"
 		var tail := ""
 		if Chase.is_boss(p):
 			tail = "　" + Chase.trait_names(Chase.boss_traits_of(p))
@@ -401,12 +491,28 @@ func _refresh_chase() -> void:
 			if not pd2.is_empty():
 				tail += "　被动「" + str(pd2.get("name", "")) + "」"
 		var sub_txt := "第 " + str(Chase.wave_in_round(p)) + "/" + str(Chase.BOSS_EVERY) + " 关 ｜ " + Chase.panel_line(p) + tail
+		# v143：连打开着 + 人在村里 ＝ 后台估算正在推——标出来（与爬塔那条一样的写法）
+		if GameState.chase_auto and GameState.chase_bg:
+			sub_txt += "　·　后台推进中"
 		_chase_sub.text = sub_txt + "（" + Chase.reward_q_cn(p) + "档）"
 	var can := on and p < Chase.STAGE_MAX
 	_chase_m_btn.disabled = not can
 	_chase_a_btn.disabled = not can
 	_chase_m_btn.text = "手牌" if can else "未开"
-	_chase_a_btn.text = "自动" if can else "未开"
+	if GameState.chase_auto and GameState.chase_bg:
+		_chase_a_btn.text = "停推" if can else "未开"
+	else:
+		_chase_a_btn.text = "自动" if can else "未开"
+
+# v144：那一行整行可点——在［爬塔关卡］与［追剿关卡］之间切换
+func _on_chase_switch() -> void:
+	if not GameState.chase_unlocked():
+		return
+	_chase_view = not _chase_view
+	if _chase_view:
+		# 切过去时默认停在"当前这一剿"，省得从头翻
+		_chase_page = clampi(Chase.round_of(GameState.chase_progress) - 1, 0, Chase.rounds() - 1)
+	refresh()
 
 func _on_chase_manual() -> void:
 	if _chase_m_btn.disabled:
@@ -419,6 +525,10 @@ func _on_chase_auto() -> void:
 	chase_auto.emit()
 
 func _on_row(i: int) -> void:
+	# v144：追剿视图里，这一行的［挑战］打的是追剿那一关
+	if _chase_view:
+		chase_challenge.emit(Chase.stage_of_round(_chase_page + 1) + i)
+		return
 	challenge.emit(_page * PER_PAGE + i)
 
 func _on_config() -> void:
@@ -426,6 +536,20 @@ func _on_config() -> void:
 
 func _on_chest() -> void:
 	chest_pressed.emit()
+
+# v143：追剿的［自动］开关——关掉时把"后台推进"那面旗一起收（与爬塔的 auto_bg 同规矩）
+func _on_chase_auto_click() -> void:
+	if _chase_a_btn.disabled:
+		return
+	# v143：后台正在推的时候，这颗钮是"停推"——不想让它自己走了就点它
+	#   （否则玩家一旦按了［回村·后台继续］，村里就没有关掉它的地方了）
+	if GameState.chase_auto and GameState.chase_bg:
+		GameState.chase_auto = false
+		GameState.chase_bg = false
+		chase_bg_off.emit()
+		refresh()
+		return
+	chase_auto.emit()
 
 func _on_auto() -> void:
 	GameState.auto_climb = not GameState.auto_climb
@@ -435,11 +559,19 @@ func _on_auto() -> void:
 	refresh()
 
 func _on_page(d: int) -> void:
+	# v144：追剿视图里，这两颗钮翻的是"剿"（一剿＝五关），不是塔的章
+	if _chase_view:
+		_chase_page = clampi(_chase_page + d, 0, Chase.rounds() - 1)
+		refresh()
+		return
 	_page = clampi(_page + d, 0, _pages() - 1)
 	refresh()
 
 func open() -> void:
 	_page = clampi(GameState.stage_progress / PER_PAGE, 0, _pages() - 1)
+	# v144：开着追剿视图再打开面板时，追剿那一页也跟着进度走
+	if _chase_view:
+		_chase_page = clampi(Chase.round_of(GameState.chase_progress) - 1, 0, Chase.rounds() - 1)
 	refresh()
 	visible = true
 

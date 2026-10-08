@@ -725,7 +725,10 @@ static func enemy_at(i: int) -> Dictionary:
 	# 五行（v140 改口径）：基准关是固定 500，取不到塔那边的 elem 了，
 	#   于是按**追剿自己的进度**给——第 301 关起（＝旧口径里"等价关过 800"那一档），
 	#   每 25 关换一种五行（与塔"一章一属"的节奏同一把尺）。
-	if ti + 1 >= ELEM_FROM:
+	# ⚠ v141：带「五行护体」（金甲校尉）的那一门**提前给五行**——
+	#   它的被动就是"自己那一行抗性 +40"，若等到第 301 关才有五行，前两轮的它等于没被动。
+	var ward_boss := boss and passive_of_arch(str(arch.get("id", ""))) == "p_ward"
+	if ti + 1 >= ELEM_FROM or ward_boss:
 		var fe := str(Tower.CHAPTER_ELEM[(ti / DIFF_STEP) % Tower.CHAPTER_ELEM.size()])
 		out["elem"] = fe
 		out[fe + "_res"] = 30

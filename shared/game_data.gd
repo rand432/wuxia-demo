@@ -6,6 +6,7 @@ extends Node
 # ============================================================
 
 const Tuning := preload("res://shared/tuning.gd")   # ㊿：攻速规则的旋钮
+const St := preload("res://shared/data_status.gd")  # v142：招式说明里补那一行"负面/控制"（玩家版）
 
 const MAX_HP_DEFAULT := 80
 
@@ -341,6 +342,11 @@ static func move_desc(a: Dictionary) -> String:
 	var hs := clampi(int(a.get("hits", 1)), 1, 3)
 	if hs >= 2:
 		base += "｜" + str(hs) + " 段，每段 ×" + str(a.get("mult", 1.0))
+	# v142：负面/控制那一行——写**玩家手上**的实际值，并括注"怪手上是几手"
+	#   （口径见 data_status 顶部那段：玩家削弱版 · 怪增强版）
+	var note := St.apply_note(a.get("apply", {}))
+	if note != "":
+		base += "｜" + note
 	var t := str(a.get("target", "front"))
 	if t == "front" or t == "":
 		return base

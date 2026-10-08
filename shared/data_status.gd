@@ -169,6 +169,79 @@ static func _mark_fired(u: Dictionary, id: String) -> void:
 const PER_BAD_TAKEN := 0.04
 const BAD_TAKEN_CAP := 0.20
 
+# ============================================================
+# v142（用户："功法中 负面和控制功法削弱【对于玩家削弱 怪拿到的是增强版】"）
+#
+#   **只有"负面"（bad=true）打折；正面（鎏金/寄生/岩甲…）两边一模一样，谁放都不折。**
+#     · 玩家放的 → **削弱版**：时长 ×0.5（向上取整、至少 1 手）· 控制类层数锁 1 · 几率 ×0.85
+#     · 怪放的   → **增强版**：时长 **+1 手**（不按倍率——长条负面翻倍会压死人）· 几率 ×1.2（封顶 100%）
+#   例：一门"中者「缴械」两手"的功法——玩家手上 **1 手**，怪手上 **3 手**；
+#       "「破防」三手" 那种——玩家 **2 手**，怪 **4 手**。
+#   钩子只有一处：两套引擎的 `_st_hit()` 里 `spec = St.tune(spec, 是玩家放的)`，
+#   于是"武学 / 大招 / 词缀 / 特性 / 被动"所有上负面的路都走同一把尺。
+#   ⚠ 想让某一条特殊（比如"毒"不算控制、别折太多），在 PASS_IDS 里点名豁免。
+# ============================================================
+const CTRL_KEYS := ["skip", "block_plain", "block_arts", "block_ult"]
+const NERF_TURNS := 0.5          # 玩家：时长倍率
+const NERF_CHANCE := 0.85        # 玩家：几率倍率
+const FOE_EXTRA_TURNS := 1       # 怪：时长 **+N 手**（不按倍率——3 手 ×1.5 会变 5 手，太狠）
+const FOE_CHANCE := 1.2          # 怪：几率倍率
+const PASS_IDS: Array = []       # 豁免名单（点名的那几条两边同数）
+
+static func is_ctrl(id: String) -> bool:
+	var d: Dictionary = def_of(id)
+	for k in CTRL_KEYS:
+		if bool(d.get(k, false)):
+			return true
+	return false
+
+# 把一份 apply 规格折成"这一侧该给的值"
+static func tune(spec: Dictionary, by_player: bool) -> Dictionary:
+	if spec.is_empty():
+		return spec
+	var sid := str(spec.get("id", ""))
+	if sid == "" or def_of(sid).is_empty():
+		return spec
+	if not is_bad(sid) or PASS_IDS.has(sid):
+		return spec                      # 正面 / 豁免：原样
+	var d: Dictionary = def_of(sid)
+	var out := spec.duplicate()
+	var raw := int(spec.get("turns", 0))
+	var base_t := raw if raw > 0 else int(d.get("turns", 2))
+	var t := base_t
+	var ch := float(spec.get("chance", 1.0))
+	if by_player:
+		t = maxi(1, int(ceil(float(base_t) * NERF_TURNS)))
+		if is_ctrl(sid):
+			out["stacks"] = 1
+		if ch < 1.0:
+			out["chance"] = snappedf(ch * NERF_CHANCE, 0.01)
+	else:
+		t = base_t + FOE_EXTRA_TURNS
+		if ch < 1.0:
+			out["chance"] = minf(1.0, snappedf(ch * FOE_CHANCE, 0.01))
+	out["turns"] = t
+	return out
+
+# 面板上那一行（写**玩家手上**的值，括注敌人手上那一版）
+static func apply_note(spec: Dictionary) -> String:
+	if spec.is_empty():
+		return ""
+	var sid := str(spec.get("id", ""))
+	if sid == "" or not is_bad(sid) or def_of(sid).is_empty():
+		return ""
+	var mine: Dictionary = tune(spec, true)
+	var foe: Dictionary = tune(spec, false)
+	var seg := name_of(sid) + " " + str(int(mine.get("turns", 0))) + " 手"
+	if int(mine.get("stacks", 1)) > 1:
+		seg += " ×" + str(int(mine.get("stacks", 1))) + " 层"
+	if float(mine.get("chance", 1.0)) < 1.0:
+		seg += "（" + str(int(round(float(mine.get("chance", 1.0)) * 100.0))) + "% 中）"
+	var tail := "敌手上 " + str(int(foe.get("turns", 0))) + " 手"
+	if int(foe.get("stacks", 1)) != int(mine.get("stacks", 1)):
+		tail += " ×" + str(int(foe.get("stacks", 1))) + " 层"
+	return "▸ 中者「" + seg + "」（" + tail + "）"
+
 static func def_of(id: String) -> Dictionary:
 	return S.get(id, {})
 

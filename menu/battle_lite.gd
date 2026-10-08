@@ -223,6 +223,7 @@ func _set_auto(v: bool) -> void:
 	GameState.auto_climb = v
 	if not v:
 		GameState.auto_bg = false
+	GameState.chase_bg = false   # v143：屏幕里真打＝后台估算让位（与爬塔同一条规矩）
 
 # ============================================================
 # ㊸ 敌阵容：上多人（跟游历 duel_battle 同一套写法）
@@ -528,6 +529,16 @@ func _build_foes(stage_i_arg: int) -> void:
 		var hp := maxi(1, int(round(bhp * float(pl.get("hp", 1.0)) * float(solo.get("hp", 1.0)))))
 		var fatk := maxi(1, int(round(batk * float(pl.get("atk", 1.0)) * float(solo.get("atk", 1.0)))))
 		var fdef := maxi(0, int(round(float(bdef) * float(pl.get("def", 1.0)) * float(solo.get("def", 1.0)))))
+		# v141（顺手修的老毛病·v58 起就哑着）：**五行一直没被抄进战斗**——
+		#   `base` 里明明有 `elem` 与 `{属}_res`，但这份敌字典从来没抄过它们，
+		#   于是 `_foe_elem()` 恒为空串：塔第 400 关往后的"元素怪"打的其实是物理，
+		#   玩家的元素伤害也不吃它的抗性。修好之后"五行"那一条线才真的成立
+		#   （追剿的「五行护体」被动、第 301 关起的五行怪都靠它）。
+		var foe_elem: Dictionary = {}
+		for ek in ["elem", "wood_res", "fire_res", "earth_res", "metal_res", "water_res",
+				"wood_dmg", "fire_dmg", "earth_dmg", "metal_dmg", "water_dmg"]:
+			if base.has(ek):
+				foe_elem[ek] = base[ek]
 		_foes.append({
 			"name": str(d.get("name", bname)),
 			"weapon": str(d.get("weapon", ENEMY_WEAPON)),
@@ -559,6 +570,9 @@ func _build_foes(stage_i_arg: int) -> void:
 			"phase_arts": (base.get("phase_arts", []) as Array).duplicate(true) if (is_main and base.has("phase_arts")) else [],
 			"phase_ult": (base.get("phase_ult", {}) as Dictionary).duplicate(true) if (is_main and base.has("phase_ult")) else {},
 		})
+		# v141：五行那几个键（elem / 五抗 / 五伤）逐个补进刚建好的这一只
+		for ek2 in foe_elem.keys():
+			(_foes[_foes.size() - 1] as Dictionary)[str(ek2)] = foe_elem[ek2]
 		if is_main:
 			_owner_i = _foes.size() - 1
 	# v141：被动里"出场那一刻就生效"的那几样（身板/词缀/护盾/怒气/五行抗）
@@ -1234,9 +1248,10 @@ func _refresh_auto_ui() -> void:
 		_style_btn(_auto_btn, Color(0.21, 0.19, 0.20))
 	# ㊿q：只在"自动开着、还没交出结果"时给［回村·后台继续］
 	#   ⚠ 败了就不给：败退这一趟自动就到头了（村里会把自动关掉），留着这颗钮只会误导
-	#   v129：追剿**没有"后台推塔"这回事**（那是爬塔的挂机估算）——这颗钮在追剿里一直藏着
+	#   v143（用户："追缴无法离线和后台"）：追剿**也有后台推进了**（GameState._idle_chase），
+	#     所以这颗钮在追剿里同样给——人先回村，追剿交给每 20 秒一拍的估算接着推。
 	if _bg_btn != null:
-		var bg_ok := on and not chase and not _done_sent and (not _over or _win)
+		var bg_ok := on and not _done_sent and (not _over or _win)
 		_bg_btn.visible = bg_ok
 		_bg_btn.disabled = not bg_ok
 
@@ -1332,7 +1347,10 @@ func _on_act() -> void:
 func _on_bg_leave() -> void:
 	if _done_sent:
 		return
-	GameState.auto_bg = true
+	if chase:
+		GameState.chase_bg = true     # v143：追剿这条线交给 _idle_chase
+	else:
+		GameState.auto_bg = true
 	GameState.battle_live = false   # 屏幕这场撤了——后台估算可以接手这一关
 	GameState._battle_seen = false  # 这一拍没有"接着要开的真仗"了，别让估算白等一拍
 	print("[出村战斗] 回村·后台继续：打完没过=", _over, " 第 ", stage_i + 1, " 关 · 自动挑战留开")
@@ -2907,6 +2925,8 @@ func _passive_unmask(u: Dictionary) -> void:
 func _st_hit(u: Dictionary, spec: Dictionary, lines: Array, at_x: float, who: String, is_foe := false) -> bool:
 	if u.is_empty() or spec.is_empty():
 		return false
+	# v142：负面/控制**按谁放的折算**（is_foe=true ＝ 玩家放的 → 削弱版；false ＝ 怪放的 → 增强版）
+	spec = St.tune(spec, is_foe)
 	var sid := str(spec.get("id", ""))
 	if sid == "" or St.def_of(sid).is_empty():
 		return false
