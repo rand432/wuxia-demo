@@ -66,8 +66,21 @@ static func read_layout(path: String) -> Array:
 		return (parsed as Dictionary)["pieces"]
 	return []
 
-# ---- 把 JSON 摆成一个 Node2D 子树（游戏里直接用；编辑器里也能"按 JSON 重摆"）----
-static func build(parent: Node2D, pieces: Array, name_prefix := "p") -> int:
+# ---- 「画框」：一个 720×1280 的 Control，**开启裁剪** ----
+#   用户（2026-10-08）："超出画布的去掉" —— 素材摆出去的部分不该露出来。
+#   Node2D 自己没有裁剪能力（没有矩形），所以用一个 Control 当画框：
+#     clip_contents = true → 超出 720×1280 的部分自动切掉。
+static func make_frame(parent: Node, w := 720.0, h := 1280.0) -> Control:
+	var frame := Control.new()
+	frame.name = "画框"
+	frame.size = Vector2(w, h)
+	frame.clip_contents = true
+	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(frame)
+	return frame
+
+# ---- 把 JSON 摆成一个子树（游戏里直接用；编辑器里也能"按 JSON 重摆"）----
+static func build(parent: Node, pieces: Array, name_prefix := "p") -> int:
 	var n := 0
 	for i in pieces.size():
 		var it: Dictionary = pieces[i]

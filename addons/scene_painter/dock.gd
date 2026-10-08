@@ -23,6 +23,7 @@ var _cat := ""
 var _cats: Array = []
 var _horizon: Node2D = null
 var _size_btn: OptionButton = null
+var _horizon_on := false      # 供「项目 → 工具」菜单里的那一项同步开关状态
 # 放进来时的**目标高度**（像素）——比"缩放 0.0837"直观得多；
 # 大中小三档覆盖：小件（花草）/ 中件（房子、树）/ 大件（整幅背景、牌坊）
 const SIZES := [{"cn": "小 90", "h": 90.0}, {"cn": "中 180", "h": 180.0}, {"cn": "大 320", "h": 320.0}, {"cn": "很大 520", "h": 520.0}]
@@ -231,7 +232,7 @@ func _on_save() -> void:
 		_say("没有打开的场景")
 		return
 	var n := Layout.save_layout(root, LAYOUT_PATH)
-	_say("存了 " + str(n) + " 件 → village_layout.json")
+	_say("存了 " + str(n) + " 件（含挂在别人底下的）→ village_layout.json")
 
 func _on_reload() -> void:
 	var root := EditorInterface.get_edited_scene_root()
@@ -241,18 +242,34 @@ func _on_reload() -> void:
 	if pieces.is_empty():
 		_say("还没有 village_layout.json")
 		return
-	# 先清掉旧件（只清带 owner 的 Sprite2D，别动参考线）
-	for c in root.get_children():
-		if c is Sprite2D and c.owner == root:
-			c.queue_free()
-	var n := Layout.build(root, pieces, "p")
-	for c2 in root.get_children():
-		if c2 is Sprite2D:
-			c2.owner = root
-	_say("按 JSON 重摆了 " + str(n) + " 件")
+	# 先清掉旧件：**递归清**（你手工摆的时候很可能把素材挂成了父子，
+	#   只清第一层会漏掉挂在别人底下的那些 → 重摆之后新旧叠在一起）
+	for c in _all_sprites(root):
+		c.queue_free()
+	# 摆进「画框」：一个 720×1280 的 Control，clip_contents 开着
+	#   —— 用户（2026-10-08）："超出画布的去掉"。素材探出画布的部分从此看不见。
+	var frame := root.get_node_or_null("画框") as Control
+	if frame == null:
+		frame = Layout.make_frame(root)
+		frame.owner = root
+	var n := Layout.build(frame, pieces, "p")
+	for c2 in _all_sprites(root):
+		c2.owner = root
+	EditorInterface.mark_scene_as_unsaved()
+	_say("按 JSON 重摆了 " + str(n) + " 件（旧的已清 · 画框裁剪已开）")
+
+# 递归收出这棵场景里所有的 Sprite2D（含挂在别人底下的）
+func _all_sprites(n: Node) -> Array:
+	var out: Array = []
+	for c in n.get_children():
+		if c is Sprite2D:
+			out.append(c)
+		out.append_array(_all_sprites(c))
+	return out
 
 # ---------------- 参考线（不存盘）----------------
 func _on_horizon(on: bool) -> void:
+	_horizon_on = on
 	var root := EditorInterface.get_edited_scene_root()
 	if root == null:
 		return
