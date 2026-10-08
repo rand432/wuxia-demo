@@ -160,6 +160,22 @@ const REST_FLAVOR := [
 #   （上品/极品还会往里插"事件卡"节点——那是下一步，见 docs/事件卡与善恶_设计稿.md）
 const CYCLES_BY_DIFF := {1: 4, 3: 6, 6: 8, 8: 11}
 
+# v111（用户："命数后续可以加在增加的节点里 击败敌人后的节点中 当然如果节点不够用可以再加一些"）：
+#   **每到"击败敌人之后"插一个命数节点**（沿用路上那套签摊弹窗：接这注／不收这注）。
+#   开局只能带一张（用户定过），路上再捡的就往上累加——这是"命数"从一次性选择变成 build 的那一步。
+#   fid 留空＝**开节点时**从"还没接过的"里随机挑一个（避免摆出已经拿过的签，白跑一趟）。
+#   ⚠ 节点数因此变长：上品 41 → 49 · 极品 56 → 67（用户："节点不够用可以再加一些"）。
+const FATE_IDS := ["fate_greed", "fate_scavenge", "fate_bloodpath", "fate_shortrope",
+	"fate_fullbag", "fate_noarmor", "fate_endure", "fate_iron", "fate_allin",
+	"fate_venom", "fate_sharpen"]
+
+static func fate_nodes_on() -> bool:
+	# 命数解锁（通关良品）之后的路，才有"战后签摊"
+	return GameState.phase_cleared(1, GameState.MODE_NORMAL)
+
+static func _formal_fate() -> Dictionary:
+	return {"t": "fate", "fid": ""}
+
 static func formal_cycles(diff: int) -> int:
 	var d := maxi(1, int(diff))
 	if CYCLES_BY_DIFF.has(d):
@@ -168,16 +184,30 @@ static func formal_cycles(diff: int) -> int:
 	return mini(3 + d, 11)
 
 static func formal_node_count(diff: int) -> int:
-	return formal_cycles(int(diff)) * 5 + 1
+	# v111：命数节点也要算进去（不然出征屏的"路程 N 节"与失败完成度都会对不上）
+	var c := formal_cycles(int(diff))
+	return c * 5 + 1 + (c if fate_nodes_on() else 0)
 
 static func build_nodes_formal(diff := 1) -> Array:
 	var out: Array = []
 	var cyc := formal_cycles(int(diff))
+	# v107（用户："上品有事件后 增加新节点"）：**上品/极品**每轮插一张"事件卡"——位置在轮首，
+	#   总长不变（把这一轮的第 2 张残页事件顶掉，见下面那句 pop）——凡品/良品一个卡都不插。
+	# v110（用户："事件是通关上品解锁"）：闸从"这一趟是上品/极品"改成**全局解锁**——
+	#   通关上品（其「普通」）之后，往后每一趟都可能碰上事件卡（与搜刮/命数同一种口径）。
+	#   所以第一次见到卡，是在**极品**那一趟。
+	var with_card: bool = GameState.event_unlocked()
+	var fate_on: bool = fate_nodes_on()   # v111：命数节点（通关良品之后）
 	for c in cyc:
+		if with_card:
+			out.append({"t": "choice"})
 		out.append({"t": "event", "title": "武学残页", "pool": "arts", "text": _flavor(ARTS_FLAVOR, c)})
 		out.append({"t": "event", "title": "兵器残卡", "pool": "weapon", "text": _flavor(WEAPON_FLAVOR, c)})
-		out.append({"t": "event", "title": "装备残片", "pool": "gear", "text": _flavor(GEAR_FLAVOR, c)})
+		if not with_card:
+			out.append({"t": "event", "title": "装备残片", "pool": "gear", "text": _flavor(GEAR_FLAVOR, c)})
 		out.append(_formal_battle(c))
+		if fate_on:
+			out.append(_formal_fate())   # v111：击败敌人之后的节点——签摊
 		out.append({"t": "rest_shop", "text": _flavor(REST_FLAVOR, c)})
 	out.append(_formal_boss())
 	var ni := 0
@@ -223,7 +253,11 @@ static func axis4_mul(node_i: int) -> float:
 
 # v86：游历的元素怪门槛（用户：「游历难度25后加入元素怪」）。爬塔那边是 800 关，
 #   两边难度刻度不同，所以各留各的常量——以后要调只改这一个数。
-const ELEM_FROM_DIFF := 25
+# v113（用户："同时增加元素词缀和元素怪 和元素技能"）：
+#   原来写的是"难度 25 起"——四品级制的内部难度只有 1/3/6/8，**永远到不了** ✗。
+#   现在改成 **6 ＝ 上品起**：上品/极品的敌人带五行（elem 一格），它出手就按五行通道算
+#   （吃抗性、暴击规则不同、有增伤聚合）＝"元素怪 ＋ 元素技能"一起到位。
+const ELEM_FROM_DIFF := 6
 const CHAPTER_ELEM := ["metal", "wood", "water", "fire", "earth"]
 const FOE_OWN_RES := 30             # 对自己那一属性的抗性（百分点）——与 tower 同口径
 
@@ -231,6 +265,10 @@ static func _scale_foe(n: Dictionary, diff: int, node_i := 0) -> void:
 	# v99（出征屏三档：简单 0.5 / 普通 1.0 / 困难 2.0）：出征屏选的那一档，先乘在血/攻上。
 	#   引子趟不设（deploy 默认 1.0）——新手第一趟照旧。
 	var tier_mul: float = maxf(0.0, GameState.deploy_foe_mul)
+	# v113（用户："上品之后【包括上品】游历整体难度提升50%"）：上品/极品这一挡整体 ×1.5。
+	#   与"模式倍率"（简单 0.5 / 普通 1 / 困难 2）相乘，所以上品困难 ＝ ×3.0。
+	if GameState.deploy_phase() >= 2:
+		tier_mul *= 1.5
 	var d := maxi(1, diff) - 1
 	var tier := party_tier()
 	var f: Dictionary = n.get("foe", {})

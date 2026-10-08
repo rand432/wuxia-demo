@@ -911,7 +911,8 @@ func _build_plaques() -> void:
 	_plaques.add_hang("build", 0.335, 0.0, "建设", _build_once, "", "", {"hang_y": 112.0})
 	_plaques.add_ribbon("settings", 0.933, 0.040, "设置", _open_settings)
 	# v98（用户："商店固定"）：一直挂在那儿——不随风摆，也不再随剧情忽隐忽现
-	_plaques.add_hex("shop", 0.950, 0.240, "商店", _open_shop)
+	# v115：徽标换成铺子——铺子比六边形宽（104 vs 78），中心从 0.950 挪到 0.905 才不被屏幕切掉
+	_plaques.add_shop("shop", 0.905, 0.232, "商店", _open_shop)
 	# ===== 村景页（跟着画卷左右滑）=====
 	# v98（用户："其他竖牌功能牌就白色就好了"）：这一组全是**白纸牌**
 	var V := {"page": "village", "white": true}

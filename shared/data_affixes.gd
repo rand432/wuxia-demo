@@ -34,6 +34,10 @@ const LIST := {
 	#   这里只写"哪条词缀、打中之后给对方挂什么"（两套引擎都读 ON_HIT 那一张）。
 	# ============================================================
 	"flame":   {"name": "火魔", "desc": "击中就上火：「燃烧」1 层——对手此后每手掉 5% 气血上限（可叠 2 层、只烧 2 手）"},
+	# v113（用户："增加元素词缀"）：五行词缀凑齐金/水/火——木/土那两条是**正面**状态，
+	#   而 ON_HIT 那一套是"给对手挂"，挂不上去，所以不做。三条都在上品起进池。
+	"metalcut": {"name": "裂金", "desc": "击中就上「破防」——金气入体，对手此后 3 手挨打受伤 +30%（可叠 2 层）"},
+	"coldwater": {"name": "寒水", "desc": "击中就上「水浸」——对手此后每手掉 4% 气血上限，回血也只剩七成（可叠 2 层、3 手）"},
 	"lockchain": {"name": "铁锁", "desc": "击中四成几率「缴械」——对手此后 2 手不能普攻（武学与大招照放）"},
 	# ============================================================
 	# v55（用户："新词缀 也可以加上了"）：词缀从 14 条涨到 25 条。
@@ -61,6 +65,8 @@ const ON_HIT := {
 	"lockchain": {"id": "disarm", "turns": 2, "stacks": 1, "chance": 0.4},
 	"choke": {"id": "silence", "turns": 2, "stacks": 1, "chance": 0.35},
 	"soften": {"id": "weak", "turns": 3, "stacks": 1, "chance": 1.0},
+	"metalcut": {"id": "sunder", "turns": 3, "stacks": 1, "chance": 1.0},
+	"coldwater": {"id": "soak", "turns": 3, "stacks": 1, "chance": 1.0},
 	"entangle": {"id": "slow", "turns": 3, "stacks": 1, "chance": 1.0},
 	"armorcrack": {"id": "sunder", "turns": 3, "stacks": 1, "chance": 1.0},
 	"drainrage": {"id": "ragecut", "turns": 3, "stacks": 1, "chance": 0.5},
@@ -209,7 +215,7 @@ static func names_text(ids: Array) -> String:
 #     ① **反伤挪到中后期**（POOL_MID 起，难度 5+ 才出现）；
 #     ② 早期补一个不致命的（rally），池子 3→4，随机感也回来了。
 const POOL_EARLY := ["regen", "swift", "poison", "rally"]
-const POOL_MID := ["shock", "thorns", "flame"]
+const POOL_MID := ["shock", "thorns", "flame", "metalcut", "coldwater"]   # v113：上品起带三条五行词缀
 const POOL_LATE := ["flame", "lockchain", "choke", "soften", "entangle"]
 const POOL_HARD := ["bomb", "berserk", "fury", "pierce", "ambush", "cutoff",
 	"armorcrack", "drainrage", "stagnant", "sealvein", "acuity", "leech", "bulwark", "echo"]

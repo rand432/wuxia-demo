@@ -64,8 +64,9 @@ func add_hang(id: String, rx: float, ry: float, text: String, fn: Callable, sub 
 	_push(id, "hang", rx, ry, 64.0, 0.0, text, fn, sub, act, cfg)   # 高度由 _hang_h 现算
 	_relayout(items[items.size() - 1])
 
-func add_hex(id: String, rx: float, ry: float, text: String, fn: Callable, sub := "", cfg := {}) -> void:
-	_push(id, "hex", rx, ry, 78.0, 78.0, text, fn, sub, "", cfg)
+# v115（用户："商店按钮换成商店的ui"）：六边形徽标 → **一间铺子**（雨棚＋铺面＋门窗＋招牌字）
+func add_shop(id: String, rx: float, ry: float, text: String, fn: Callable, sub := "", cfg := {}) -> void:
+	_push(id, "shop", rx, ry, 116.0, 104.0, text, fn, sub, "", cfg)
 
 func add_ribbon(id: String, rx: float, ry: float, text: String, fn: Callable, sub := "", cfg := {}) -> void:
 	_push(id, "ribbon", rx, ry, 68.0, 34.0, text, fn, sub, "", cfg)
@@ -263,8 +264,8 @@ func _draw() -> void:
 				_draw_beam(it)
 			"hang":
 				_draw_hang(it, s)
-			"hex":
-				_draw_hex(it, s)
+			"shop":
+				_draw_shop(it, s)
 			"ribbon":
 				_draw_ribbon(it, s)
 			"slip":
@@ -378,7 +379,53 @@ func _draw_hang(it: Dictionary, s: float) -> void:
 			draw_string(font, Vector2(x, sy), str(ln), HORIZONTAL_ALIGNMENT_CENTER, w, 13, Color(INK.r, INK.g, INK.b, 0.72))
 			sy += 19.0
 
-# 六边形徽标（商店）
+# v115（用户："商店按钮换成商店的ui"）：**画一间铺子**——雨棚（斜纹）＋白底铺面＋门窗＋招牌字。
+#   笔法与出村箭头同一套：白面 ＋ 墨边 ＋ 落影；悬停/按下时边线转朱红。
+func _draw_shop(it: Dictionary, s: float) -> void:
+	var cx := float(it["cx"]) - s
+	var cy := float(it["cy"])
+	var down: bool = _down == int(it["idx"])
+	var paper := Color(0.985, 0.975, 0.95, 0.97)
+	var edge := Color(0.20, 0.18, 0.21, 0.88)
+	if _hover == int(it["idx"]):
+		edge = Color(SEAL.r, SEAL.g, SEAL.b, 0.95)
+	if down:
+		paper = Color(0.95, 0.93, 0.89, 1.0)
+		edge = Color(SEAL.r, SEAL.g, SEAL.b, 1.0)
+	# ① 铺面：白底墨边（落下时不留影，像是按进去了）
+	var body := Rect2(cx - 44.0, cy - 20.0, 88.0, 58.0)
+	if not down:
+		draw_rect(Rect2(body.position + Vector2(2.5, 4.0), body.size), Color(0.06, 0.05, 0.05, 0.18))
+	draw_rect(body, paper)
+	draw_rect(body, edge, false, 2.2)
+	# ② 雨棚：梯形 ＋ 四条斜纹
+	var awn := PackedVector2Array([
+		Vector2(cx - 52.0, cy - 20.0), Vector2(cx + 52.0, cy - 20.0),
+		Vector2(cx + 44.0, cy - 46.0), Vector2(cx - 44.0, cy - 46.0)])
+	draw_colored_polygon(awn, paper)
+	var ao := PackedVector2Array(awn)
+	ao.append(awn[0])
+	draw_polyline(ao, edge, 2.2, true)
+	for i in 4:
+		var t := 0.18 + float(i) * 0.21
+		draw_line(Vector2(lerpf(cx - 44.0, cx + 44.0, t), cy - 46.0),
+			Vector2(lerpf(cx - 52.0, cx + 52.0, t), cy - 20.0),
+			Color(edge.r, edge.g, edge.b, 0.5), 3.0, true)
+	# ③ 门与两扇窗
+	var door := Rect2(cx - 13.0, cy + 8.0, 26.0, 30.0)
+	draw_rect(door, Color(INK.r, INK.g, INK.b, 0.32))
+	draw_rect(door, edge, false, 1.8)
+	for wx in [cx - 36.0, cx + 20.0]:
+		var win := Rect2(float(wx), cy - 6.0, 16.0, 16.0)
+		draw_rect(win, Color(INK.r, INK.g, INK.b, 0.16))
+		draw_rect(win, edge, false, 1.6)
+	# ④ 招牌字写在雨棚上；有副题就写在铺子下面
+	draw_string(font, Vector2(cx - 44.0, cy - 28.0), str(it["text"]), HORIZONTAL_ALIGNMENT_CENTER, 88.0, 17, Color(INK.r, INK.g, INK.b, 0.92))
+	var sub := str(it["sub"])
+	if sub != "":
+		draw_string(font, Vector2(cx - 58.0, cy + 58.0), sub, HORIZONTAL_ALIGNMENT_CENTER, 116.0, 12, Color(INK.r, INK.g, INK.b, 0.62))
+
+# 六边形徽标（v115 起商店不用它了；留着——以后要别的徽标还能用）
 func _draw_hex(it: Dictionary, s: float) -> void:
 	var cx := float(it["cx"]) - s
 	var cy := float(it["cy"])

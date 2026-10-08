@@ -938,13 +938,32 @@ static func shop_item_of(k: String) -> Dictionary:
 			return it
 	return {}
 
+# v112（用户："商店的档位也同时更改 如果是凡品档就出凡品 极品档就出极品【随着档位增加限购减少】"）：
+#   货栈的**残卡那一行**不再写死凡品/良品两档——按玩家当下的品级（ladder_phase）动态出：
+#     凡品档 → 凡品残卡（每日限购 10）· 良品 → 5 · 上品 → 3 · **极品 → 2**
+#   于是"档位越高，货越好、量越少"。价不用管——面板按 q 走 shop_card_price 那一口。
+#   ⚠ 良品那三行（key 以 _l 结尾）撤掉，否则同一件货会摆两遍。
+const SHOP_CARD_LIMIT := [10, 5, 3, 2]
+
 static func shop_items_of(cat: String) -> Array:
 	var out: Array = []
+	var ph := clampi(ladder_phase(), 0, SHOP_CARD_LIMIT.size() - 1)
 	for it in SHOP_ITEMS:
 		if str(it.get("cat", "")) != cat:
 			continue
 		# ㊿：上架闸——没解锁的那几样不摆出来（面板直接读这个口，所以一处就够）
 		if not shop_need_met(it):
+			continue
+		if str(it.get("kind", "")) == "card":
+			if str(it.get("key", "")).ends_with("_l"):
+				continue   # v112：良品那一套行撤掉——档位改由品级动态决定
+			var row: Dictionary = (it as Dictionary).duplicate()
+			var qn := str(Cards.QUALITY_ORDER[ph])
+			row["q"] = ph
+			row["limit"] = int(SHOP_CARD_LIMIT[ph])
+			row["name"] = qn + String(row["name"]).replace("基础", "")
+			row["desc"] = qn + "残卡一张——补仓库最缺的那张（本档每日 " + str(int(SHOP_CARD_LIMIT[ph])) + " 张）"
+			out.append(row)
 			continue
 		out.append(it)
 	return out
@@ -1280,9 +1299,9 @@ static func _appraise_drop_retired_offers() -> void:
 static func appraise_ensure_offers() -> void:
 	if not jianbao_unlocked:
 		return
-	Appraise.sync_phase(ladder_phase())      # v59：先把手里的货色相位交给鉴宝行（价与闸都看它）
+	Appraise.sync_phase(hold_phase())        # v59：先把手里的货色相位交给鉴宝行（价与闸都看它）· v110：夹到 2~3
 	while appraise_offers.size() < Appraise.OFFER_N:
-		var o: Dictionary = _appraise_new_offer(Appraise.roll_hold_id(ladder_phase()))
+		var o: Dictionary = _appraise_new_offer(Appraise.roll_hold_id(hold_phase()))   # v110：货仓档位同上品/极品
 		if o.is_empty():
 			return
 		appraise_offers.append(o)
@@ -4161,7 +4180,11 @@ static func idle_collect() -> Dictionary:
 
 # 每分多少阅历——**吃挂机档位**（用户点名）：0 档 1/分，每高一档 +0.5
 static func insight_rate() -> float:
-	return 1.0 + float(idle_tier()) * 0.5
+	# v109（用户："可"——采纳"挂机系数 0.5 → 0.8"）：
+	#   老兵一句：挂机从 1/分 涨到 24/分要 **10,000 关**，而阅历线后段一组就要 6,660 ✗
+	#   两条曲线不匹配（早段靠游历扛得住，后段只能干挂）。0.5 → 0.8 让挂机跟上成长：
+	#     10 档（1000 关）6 → **9/分** · 26 档（5000 关）14 → **21.8/分**
+	return 1.0 + float(idle_tier()) * 0.8
 
 static func insight_add(n: int) -> void:
 	if n > 0:
@@ -4605,6 +4628,18 @@ static func deploy_mode() -> int:
 		return MODE_NORMAL
 	return clampi((deploy_code - 1) % 4, 0, 2)
 
+# v110（用户："货仓 档位从上品开始 当玩家打过上品到极品就按照极品档位算即可"）：
+#   货仓（鉴宝行那些木箱/漆箱/铜锁/银扣/金匮）**只在两个档位之间走**：
+#     没通关上品 → 按**上品**（phase 2，银扣仓露面）
+#     通关上品了 → 按**极品**（phase 3，金匮仓露面）
+#   也就是把进度相位夹到 [2, 3]——货仓不再有凡品/良品那两档。
+static func hold_phase() -> int:
+	return clampi(ladder_phase(), 2, 3)
+
+# v110（用户："事件是通关上品解锁"）：事件卡系统的闸——**通关上品的「普通」**才开
+static func event_unlocked() -> bool:
+	return phase_cleared(2, MODE_NORMAL)
+
 static func phase_name(pi: int) -> String:
 	return str((PHASES[clampi(pi, 0, PHASES.size() - 1)] as Dictionary)["name"])
 
@@ -4642,6 +4677,59 @@ static var _diff_loaded := false
 # 周编号（Unix 时间 / 一周秒数）——不看时区，够用
 static func _week_now() -> int:
 	return int(Time.get_unix_time_from_system() / 604800.0)
+
+# ============================================================
+# v108（用户："玩家失败给阅历要加点限制…同一档反复失败：100% → 50% → 25% → 0（每天重置）"）：
+#   失败阅历的**递减**——同一品级今天第 1 / 2 / 3 / 4+ 次殒命 → ×1.0 / ×0.5 / ×0.25 / ×0
+#   （真正的"按完成度给"在 journey_settle.open_death 里算，这里只管次数）
+# ============================================================
+static var fail_day := 0
+static var fail_count: Dictionary = {}      # 品级 → 今天失败了几次
+static var _fail_loaded := false
+
+static func _day_now() -> int:
+	return int(Time.get_unix_time_from_system() / 86400.0)
+
+static func _fail_sync() -> void:
+	if _fail_loaded:
+		return
+	_fail_loaded = true
+	var cf := ConfigFile.new()
+	if cf.load(JOURNEY_CFG) == OK:
+		fail_day = int(cf.get_value("fail", "day", 0))
+		var d: Variant = cf.get_value("fail", "count", {})
+		if typeof(d) == TYPE_DICTIONARY:
+			fail_count = d
+	var now := _day_now()
+	if fail_day != now:
+		fail_count = {}
+		fail_day = now
+		_fail_save()
+
+static func _fail_save() -> void:
+	var cf := ConfigFile.new()
+	cf.load(JOURNEY_CFG)
+	cf.set_value("fail", "day", fail_day)
+	cf.set_value("fail", "count", fail_count)
+	cf.save(JOURNEY_CFG)
+
+# 今天这一品级再失败一次，能拿几成（1.0 / 0.5 / 0.25 / 0）
+static func fail_mul(pi: int) -> float:
+	_fail_sync()
+	var c := int(fail_count.get(clampi(pi, 0, PHASES.size() - 1), 0))
+	if c <= 0:
+		return 1.0
+	if c == 1:
+		return 0.5
+	if c == 2:
+		return 0.25
+	return 0.0
+
+static func fail_note(pi: int) -> void:
+	_fail_sync()
+	var k := clampi(pi, 0, PHASES.size() - 1)
+	fail_count[k] = int(fail_count.get(k, 0)) + 1
+	_fail_save()
 
 static func _diff_sync() -> void:
 	if _diff_loaded:

@@ -31,6 +31,7 @@ const Cards := preload("res://shared/data_cards.gd")
 const Roles := preload("res://journey/data_roles.gd")
 const Talents := preload("res://shared/data_talents.gd")
 const GameState := preload("res://shared/game_state.gd")
+const Ladder := preload("res://shared/data_ladder.gd")   # v112：货摊按品级取件（pick_of_q）
 const Loot := preload("res://shared/data_loot.gd")
 const Buffs := preload("res://shared/data_buffs.gd")
 const Bonds := preload("res://shared/data_bonds.gd")   # ㊽：上阵羁绊（纯数据，无循环）
@@ -71,6 +72,19 @@ var last_foe: Dictionary = {}      # 最近一场敌阵容（{name, foe, money}�
 # ---- R1 出征底座 ----
 var mode := "intro"          # "intro" 五问引子趟 / "formal" 出征屏正式趟
 var diff := 0                # 正式趟的难度档（1~10；引子趟恒 0）
+# ---- v107：事件卡与支线（**善恶只限这一趟**，用户 2026-10-08 定）----
+#   karma     ：−100 ~ +100，开局 0；五档被动（恶贯满盈/恶名/中立/侠名/大侠）
+#   ev_lines  ：线 id → 已走到第几步（走上一步就 +1）
+#   ev_flags  ：这趟的标记（"letter"/"debt_book"/"nameplate"…）
+#   ev_seen   ：见过的卡 id（同趟不重复出）
+#   ev_pending：下一步指定要出的卡（连锁 / 线的下一步）
+#   ev_done   ：走完的线 id（结局看它）
+var karma := 0
+var ev_lines: Dictionary = {}
+var ev_flags: Array = []
+var ev_seen: Array = []
+var ev_pending: String = ""
+var ev_done: Array = []
 # ---- 优化批㉓：出征屏买的"临时扩仓"（只顶这一趟） ----
 var run_expand := 0                  # 本趟额外格数（bag_cap 里叠；结算即失效）
 # ---- 优化批㉔：卡组（增益；只在这趟生效，带不出去） ----
@@ -832,9 +846,13 @@ func item_sell_price(sid := "") -> int:
 
 func price_of(e: Dictionary) -> int:
 	var sid := str(e.get("set", ""))
+	var p := 0
 	if str(e.get("kind", "")) == "item":
-		return item_sell_price(sid)
-	return sell_price(sid)
+		p = item_sell_price(sid)
+	else:
+		p = sell_price(sid)
+	# v107：侠名/大侠——货郎给的价更好（−10% / −20%）
+	return maxi(1, int(round(float(p) * karma_shop_mul())))
 
 # 卖价区间文案（货郎提示行）：随天赋卖价、随品级系数表自动跟。
 func sell_range_text() -> String:
@@ -1164,7 +1182,8 @@ func alert_max() -> float:
 	return ALERT_MAX + float(GameState.pet_fx().get("alert_cap", 0))
 
 func alert_mul() -> float:
-	return maxf(0.1, 1.0 + float(GameState.pet_fx().get("alert_rate", 0)) / 100.0)
+	# v107：恶名/恶贯满盈——警戒涨得快（遭遇变多）
+	return maxf(0.1, 1.0 + float(GameState.pet_fx().get("alert_rate", 0)) / 100.0) * karma_alert_mul()
 
 # 积攒走宠物乘率（开容器 / 揭晓 / 拿取由舞台调用）
 func alert_gain(base: float) -> void:
@@ -1179,6 +1198,41 @@ func alert_reset() -> void:
 
 func alert_full() -> bool:
 	return alert >= alert_max()
+
+# ============================================================
+# v107：善恶五档——**只限这一趟**（出村清零，不进村账）
+#   恶贯满盈 文钱+30% 攻+10% 警戒+50% ｜ 恶名 文钱+15% 警戒+20%
+#   中立 无 ｜ 侠名 商店−10% 每 3 节回 3% 血 ｜ 大侠 商店−20% 每 3 节回 6% 血（＋"仗义"选项）
+# ============================================================
+func karma_band() -> int:
+	var k := int(karma)
+	if k <= -60:
+		return 0
+	if k <= -20:
+		return 1
+	if k >= 60:
+		return 4
+	if k >= 20:
+		return 3
+	return 2
+
+func karma_band_name() -> String:
+	return ["恶贯满盈", "恶名", "中立", "侠名", "大侠"][karma_band()]
+
+func karma_money_mul() -> float:
+	return [1.30, 1.15, 1.0, 1.0, 1.0][karma_band()]
+
+func karma_alert_mul() -> float:
+	return [1.50, 1.20, 1.0, 1.0, 1.0][karma_band()]
+
+func karma_shop_mul() -> float:
+	return [1.0, 1.0, 1.0, 0.90, 0.80][karma_band()]
+
+func karma_heal_pct() -> float:
+	return [0.0, 0.0, 0.0, 3.0, 6.0][karma_band()]
+
+func karma_atk_mul() -> float:
+	return [1.10, 1.0, 1.0, 1.0, 1.0][karma_band()]
 
 func alert_ratio() -> float:
 	return clampf(alert / maxf(1.0, alert_max()), 0.0, 1.0)
@@ -1224,9 +1278,10 @@ func fate_atk_mul() -> float:
 	#   去掉原来那个 30% 下限 ✗ —— 一路叠下去，过了 50 节系数就归 0（再往下是负数，
 	#   由调用处 `maxf(1.0, atk × 系数)` 兜住，攻击最低降到 1，不会崩也不会反向加血）。
 	#   ⚠ 也就是说：短绳签**走得越远越软**，长趟必须靠别的手段补攻击。
-	if not buffs.has("fate_shortrope"):
-		return 1.0
-	return 1.0 - 0.02 * float(fate_node_passed)
+	var base := 1.0
+	if buffs.has("fate_shortrope"):
+		base = 1.0 - 0.02 * float(fate_node_passed)
+	return base * karma_atk_mul()   # v107：恶贯满盈出手更狠（×1.10）
 
 # ---- 商店 ----
 
@@ -1254,22 +1309,47 @@ func _arr_has_part(arr: Array, sid: String, part: int) -> bool:
 
 func make_shop_offers(node_idx: int) -> Array:
 	# R4：货摊只摆现役卡池（随难度换届的 8 槽窗）——旧组退场、新组进窗
+	# v112（用户："商店的档位也同时更改 如果是凡品档就出凡品 极品档就出极品"）：
+	#   货郎担的货**按这一趟选的品级**出（老路子看"全局进度到哪一档"，与出征屏选的对不上）。
+	#   仍是 2 兵器 + 1 武学 + 1 装备，只是件件换成这一档的；这一档取不到就退回现役池。
+	var q := GameState.deploy_phase()
+	var picks: Array = []
+	for pool_v in ["weapon", "weapon", "arts"]:
+		var sid := Ladder.pick_of_q(str(pool_v), q)
+		if sid != "" and not picks.has(sid):
+			picks.append(sid)
 	var ws: Array = GameState.pool_active("weapon")
 	ws.shuffle()
 	var ar: Array = GameState.pool_active("arts")
 	ar.shuffle()
-	var picks: Array = []
+	# 兜底也要**同档**（不然极品档的摊上会冒出凡品货——探针抓到过一件 33 文的匕首）
 	for i in mini(2, ws.size()):
-		picks.append(str(ws[i]))
+		if picks.size() >= 3:
+			break
+		if not picks.has(str(ws[i])) and Cards.q_idx(str(ws[i])) == q:
+			picks.append(str(ws[i]))
 	for i in mini(1, ar.size()):
-		picks.append(str(ar[i]))
+		if picks.size() >= 3:
+			break
+		if not picks.has(str(ar[i])) and Cards.q_idx(str(ar[i])) == q:
+			picks.append(str(ar[i]))
 	# ㊳/㊽：第 4 格＝装备残卡——三池合一、随阶段开品级（阶段 0 仍是凡品那三件；
 	# 首通越多开越高，封顶极品。首片闸在下面统一过）
+	# v112：第 4 格（装备）也按这一趟的品级取；取不到再退回现役池
+	var gsid := Ladder.pick_of_q("armor", q)
 	var gr: Array = GameState.pool_gear()
 	if gr.is_empty():
 		gr = ["armor_pi", "helm_bu", "cloak_bu"]
 	gr.shuffle()
-	picks.append(str(gr[0]))
+	if gsid != "" and not picks.has(gsid):
+		picks.append(gsid)
+	else:
+		for s_v in gr:
+			if not picks.has(str(s_v)) and Cards.q_idx(str(s_v)) == q:
+				picks.append(str(s_v))
+				break
+		if picks.size() < 4:
+			picks.append(str(gr[0]))   # 真没有同档的（装备无绝品那种）——宁可借一件也不空着
 	var offers: Array = []
 	for sid in picks:
 		var parts: Array = Cards.parts_of(str(sid))

@@ -20,6 +20,9 @@ extends RefCounted
 const Cards := preload("res://shared/data_cards.gd")
 const GameState := preload("res://shared/game_state.gd")
 const RunState := preload("res://shared/run_state.gd")
+const DataEvents := preload("res://journey/data_events.gd")   # v107：结局判定要看走完了哪些线
+const Ladder := preload("res://shared/data_ladder.gd")        # v107：结局奖励取件
+const JourneyData := preload("res://journey/data_journey.gd")   # v108：失败阅历要按"这档一共几节"算完成度
 const UiKit := preload("res://shared/ui_kit.gd")
 const JourneyCommon := preload("res://journey/journey_common.gd")
 
@@ -93,9 +96,35 @@ static func open(st: RunState, veil: ColorRect, on_restart: Callable, on_return:
 	UiKit.set_text(title, "行囊清点")
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
+	# v107（用户："善恶相当于各种支线任务…更有不同的结局"）：这一趟的**心境与结局**
+	var mood_line := ""
+	if str(st.mode) == "formal":
+		var k := int(st.karma)
+		var end_name := _ending_of(st)
+		mood_line = "心境：" + str(st.karma_band_name()) + "（善恶 " + ("+" if k > 0 else "") + str(k) + "）　·　结局：【" + end_name + "】"
+		# 结局只给这一趟能带走的东西（残件进村仓库／盘缠折银）
+		match end_name:
+			"侠客行":
+				mood_line += "　——一门功法残页已入村仓库"
+				_bonus_card(st, "arts")
+			"恶客录":
+				mood_line += "　——一笔厚盘缠已折银入村"
+				GameState.vault_add_item(Ladder.pick_of_q("weapon", GameState.deploy_phase()), 1)
+			"一世浮名":
+				mood_line += "　——一件装备残片已入村仓库"
+				_bonus_card(st, "gear")
+			_:
+				pass
+		if st.ev_done.size() > 0:
+			var names: Array = []
+			for lid_v in st.ev_done:
+				names.append(DataEvents.line_name(str(lid_v)))
+			mood_line += "\n本趟走完的支线：" + "、".join(PackedStringArray(names))
 	var lines := ""
 	if first_line != "":
 		lines += first_line + "\n\n"
+	if mood_line != "":
+		lines += mood_line + "\n\n"
 	# ㊿：三人成队——"谁带回了什么"按人头各列一段。
 	#   单人时就是原来那几行（天赋/自带/兵器/随身装备/功法），一字不差。
 	if st.member_count() > 1:
@@ -162,13 +191,47 @@ static func open(st: RunState, veil: ColorRect, on_restart: Callable, on_return:
 	vb.pressed.connect(on_return)
 
 # v5b：这一趟能给多少阅历——按难度算（难度 1 → 28 点；难度 10 → 100 点）
+# v107：结局判定（设计稿 9.4）——善恶档 × 走完了哪些线
+static func _ending_of(st: RunState) -> String:
+	var k := int(st.karma)
+	var long_good := false
+	var long_evil := false
+	var shorts := 0
+	for lid_v in st.ev_done:
+		var L: Dictionary = DataEvents.LINES.get(str(lid_v), {})
+		var is_long := str(L.get("len", "")) == "long"
+		if is_long and str(L.get("align", "")) == "good":
+			long_good = true
+		elif is_long and str(L.get("align", "")) == "evil":
+			long_evil = true
+		elif not is_long:
+			shorts += 1
+	if k >= 60 and long_good:
+		return "侠客行"
+	if k <= -60 and long_evil:
+		return "恶客录"
+	if shorts >= 3:
+		return "一世浮名"
+	return "无名过客"
+
+# 结局小奖励：往村仓库塞一件残件（走现成的入账口，不另开管道）
+static func _bonus_card(st: RunState, pool: String) -> void:
+	var got: Array = Cards.random_offer_from(GameState.pick_pool(pool), 1)
+	if got.is_empty():
+		return
+	var o: Dictionary = got[0]
+	GameState.vault_deposit({str(o.get("set_id", "")): {int(o.get("part", 0)): 1}})
+
 static func _insight_of_run(st: RunState) -> int:
 	if str(st.mode) != "formal":
 		return 0
 	# v104（用户："现在档位变成4档 原来根据游历奖励也要划分四档了"）：
 	#   老的"20 ＋ 难度×8"（10 档 28~100）改成**按四品级分档**：
 	#   凡品 28 · 良品 52 · 上品 76 · 极品 100（老档 1/3/6/8 的位置取齐）
-	return [28, 52, 76, 100][GameState.deploy_phase()]
+	# v109（用户："可"——采纳"游历通关改成更陡的品级曲线"）：
+	#   老的 28/52/76/100 是**线性**的，高品级通关不值当（满线 71,280 要 713 趟极品 ✗）。
+	#   现在 凡 28 · 良 60 · 上 120 · 极 **240**——越往上翻倍，鼓励打上去。
+	return [28, 60, 120, 240][GameState.deploy_phase()]
 
 # 殒命：全丢——不入仓库、不登记收集册、不记难度、不动村况；盘缠就地作废。
 # 舞台已做完：_busy/_run_dead 置位、抹档、清容器、关幕布、造幕布（veil）。
@@ -204,11 +267,28 @@ static func open_death(st: RunState, veil: ColorRect, on_restart: Callable, on_r
 	lines += "　残卡 " + str(cards_n) + " 张 · 随身成品 " + str(items_n) + " 件 · 临时仓库 " + str(loot_n) + " 件\n"
 	lines += "未入村仓库，也未登记收集册。\n"
 	lines += "盘缠 " + str(st.money) + " 文，一并埋在了路边。"
-	# v5b：阅历线——东西全丢，但"走过一遭"这件事留得住：给三成
-	var ins_lost := int(float(_insight_of_run(st)) * 0.3)
+	# ============================================================
+	# v108（用户："按完成度给"＋"同一档反复失败 100%→50%→25%→0（每天重置）"）：
+	#   失败阅历 ＝ 全额 × **完成度** × 0.3 × **递减**
+	#     · 完成度 ＝ 这一趟走过几节 / 这档一共几节（走进场就死 ≈ 0 点，刷不动）
+	#     · 递减   ＝ 同一品级今天第 1/2/3/4+ 次殒命 → 1.0 / 0.5 / 0.25 / 0
+	#   以前的"无脑三成"是**极品档送死一分钟 60 点**的漏洞（正常打十几分钟才 100 点）。
+	# ============================================================
+	var full := _insight_of_run(st)
+	var total := maxi(1, JourneyData.formal_node_count(int(st.diff)))
+	var done := clampi(int(st.fate_node_passed), 0, total)
+	var pi := GameState.deploy_phase()
+	var mul := GameState.fail_mul(pi)
+	var ins_lost := int(floor(float(full) * float(done) / float(total) * 0.3 * mul))
+	GameState.fail_note(pi)
 	if ins_lost > 0:
 		GameState.insight_add(ins_lost)
-		lines += "\n\n只有见识留住了：阅历 +" + str(ins_lost) + "（三成——去底排［阅历］点线）"
+		lines += "\n\n只有见识留住了：阅历 +" + str(ins_lost)
+		lines += "（本档 " + str(done) + "/" + str(total) + " 节 · 三成 " + ("×" + str(mul) if mul < 1.0 else "") + "）"
+	elif mul <= 0.0:
+		lines += "\n\n这一档今天已经栽过三回——再走一趟，见识也长不了了。"
+	else:
+		lines += "\n\n走进场就倒下，什么也没见着——这趟没有阅历。"
 
 	var body := UiKit.make_label(panel, Vector2(40, 86), Vector2(520, 250), 18, Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.92))
 	UiKit.set_text(body, lines)

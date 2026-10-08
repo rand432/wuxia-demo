@@ -60,6 +60,8 @@ const FadeIn := preload("res://shared/fade_in.gd")      # v68：进场淡入 + �
 const PetActor := preload("res://journey/pet_actor.gd")   # ㊿z11：随行宠物（只画，不参战）
 const FxLayer := preload("res://journey/fx_layer.gd")
 const GameState := preload("res://shared/game_state.gd")
+const DataEvents := preload("res://journey/data_events.gd")          # v107：事件卡内容表
+const ChoiceFlow := preload("res://journey/journey_choice_flow.gd")   # v107：抉择卡那一页
 const Loot := preload("res://shared/data_loot.gd")
 const LootPanel := preload("res://journey/loot_panel.gd")
 const JourneyCommon := preload("res://journey/journey_common.gd")
@@ -116,6 +118,11 @@ var _char = null       # journey_char_panel.gd
 var _bag = null        # journey_bag_panel.gd
 var _event = null      # journey_event_flow.gd
 var _shop = null       # journey_shop_panel.gd
+# ---- v107：事件卡与支线 ----
+var _choice = null                  # journey_choice_flow.gd
+var _choice_cur: Dictionary = {}    # 眼下这张卡（结算支线时要用它的 id）
+var _choice_pending_advance := false
+var _karma_label: Label = null      # v107：右上角"心境 ＋ 支线进度"那一行
 var _synth = null      # journey_synth_panel.gd
 
 var _phase := "creation"
@@ -222,6 +229,8 @@ func _ready() -> void:
 	if not _fate_unlocked():
 		_nodes = _nodes.filter(func(n): return str(n.get("t", "")) != "fate")
 	# 拆件批：四件接线（件只认舞台注入的引用；舞台是唯一驱动方）
+	_choice = ChoiceFlow.new()          # v107：事件卡（上品/极品）
+	_choice.setup(self)
 	_char = CharPanel.new()
 	_char.setup(self)
 	_bag = BagPanel.new()
@@ -301,6 +310,9 @@ func _build() -> void:
 	# v63（用户："最上方的文字重叠"）：原来在 (400,18) 宽 300——战斗中【战报/敌情】按钮
 	#   就压在它上面 ✗（按钮 x440 起、标签 x400~700）。挪到按钮左边（318~438），不再叠。
 	_node_label = UiKit.make_label(self, Vector2(306, 18), Vector2(132, 34), 20, Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.72))
+	# v107：善恶 + 支线跟踪（右上角一行小字；没有就整块隐形）
+	_karma_label = UiKit.make_label(self, Vector2(330, 54), Vector2(380, 26), 17, UiKit.SEAL)
+	_karma_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_node_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
 	# 优化批⑩（#15）：退出游历——右上角小钮（防误触：先弹确认页）
@@ -786,7 +798,117 @@ func _start_run() -> void:
 	if _state.mode == "formal" and not _state.kit_taken:
 		_open_start_kit()
 
+
+# ============================================================
+# v107：事件卡与支线——舞台这一侧的接口（页在 journey_choice_flow.gd）
+#   善恶只限这一趟（用户定），所以全写进 _state，不碰 GameState。
+# ============================================================
+func _open_choice() -> void:
+	var cid := str(_state.ev_pending)
+	_state.ev_pending = ""
+	var c: Dictionary = DataEvents.card(cid) if cid != "" else {}
+	if c.is_empty():
+		c = DataEvents.pick_next(_state, GameState.ladder_phase())   # v110：按"已解锁到哪一品"过滤
+	if c.is_empty():
+		_advance()   # 卡用完了（都见过）——不卡节点
+		return
+	_choice_cur = c
+	_choice.open(c)
+
+# 卡选完 → 这一节办完，继续走路
+func _choice_finish() -> void:
+	_choice_line_maybe_done(str(_choice_cur.get("id", "")))
+	_choice_cur = {}
+	_busy = false
+	_close_overlay()
+	_advance()
+
+# 气血按百分比增减（三个人一起；正的＝回血）
+func _choice_hp(pct: float) -> void:
+	for r_v in _state.party_role_ids():
+		var rid := str(r_v)
+		var st: Dictionary = GameState.effective_stats(rid)
+		var hp_max := int(st.get("hp", 1))
+		var cur := int(_state.hp_of(rid))
+		var d := int(round(float(hp_max) * pct / 100.0))
+		_state.set_hp(rid, clampi(cur + d, 1, hp_max))
+	_refresh_all()
+
+func _choice_alert(v: float) -> void:
+	_state.alert = clampf(float(_state.alert) + v, 0.0, _state.alert_max())
+
+# 残件（残卡 / 装备残片 / 功法残页）
+func _choice_loot(kind: String) -> void:
+	var pool := "arts"
+	if kind == "gear":
+		pool = "gear"
+	elif kind == "art":
+		pool = "arts"
+	var got: Array = Cards.random_offer_from(GameState.pick_pool(pool), 1)
+	if got.is_empty():
+		return
+	var o: Dictionary = got[0]
+	if _state.add_card(str(o.get("set_id", "")), int(o.get("part", 0))):
+		UiKit.float_text(self, "得 " + str(Cards.card_name(str(o.get("set_id", "")), int(o.get("part", 0)))), UiKit.INK)
+
+# **整件**（大线走完才给）：放包裹，自己穿
+func _choice_item(kind: String) -> void:
+	var pool := "arts"
+	if kind == "weapon":
+		pool = "weapon"
+	elif kind == "gear":
+		pool = "armor"
+	var sid := Ladder.pick_of_q(pool, GameState.deploy_phase())
+	if sid == "":
+		return
+	if _state.add_item(sid):
+		UiKit.float_text(self, "得一整件：" + str(Cards.item_name(sid)), UiKit.GOLD)
+	else:
+		UiKit.float_text(self, _state.place_item_for(0, sid, "equip"), UiKit.GOLD)
+
+func _choice_buff(bid: String) -> void:
+	if not _state.buffs.has(bid):
+		_state.buffs.append(bid)
+
+func _choice_battle(kind: String) -> void:
+	# 打完接着走这一节（把当前节点当成战斗节点重开一场，打完 _advance 照旧）
+	var n: Dictionary = {"t": "battle", "elite": kind == "elite", "text": "路上遇上的"}
+	_choice_pending_advance = true
+	_begin_fight(n)
+
+func _note_line(t: String) -> void:
+	UiKit.float_text(self, t, UiKit.GOLD)
+	print("[支线] ", t)
+
+# 善恶档名（页上那行小字用）
+func _karma_band_name() -> String:
+	var k := int(_state.karma)
+	if k <= -60:
+		return "恶贯满盈"
+	if k <= -20:
+		return "恶名"
+	if k >= 60:
+		return "大侠"
+	if k >= 20:
+		return "侠名"
+	return "中立"
+
+# 线的最后一步点完 → 发终奖
+func _choice_line_maybe_done(cid: String) -> void:
+	var lid := DataEvents.line_of(cid)
+	if lid == "":
+		return
+	var steps: Array = (DataEvents.LINES.get(lid, {}) as Dictionary).get("steps", [])
+	var at := int(_state.ev_lines.get(lid, 0))
+	if steps.size() > 0 and at >= steps.size():
+		var msg := DataEvents.finish_line(_state, lid)
+		if msg != "":
+			UiKit.float_text(self, msg, UiKit.GOLD)
+			print("[支线] ", msg)
+
 func _enter_node() -> void:
+	_karma_tick()   # v107：侠名/大侠——每 3 节回一点血
+	_refresh_karma_hud()
 	_walk_delay = -1.0
 	_busy = false
 	_walking = true
@@ -876,6 +998,8 @@ func _continue() -> void:
 			_advance()
 		"event":
 			_event._open_event(_cur_node)
+		"choice":
+			_open_choice()   # v107：事件卡（上品/极品才有）
 		"battle":
 			_begin_fight(_cur_node)
 		"shop":
@@ -979,6 +1103,39 @@ func _input(event: InputEvent) -> void:
 			_char._press_tip_hide()
 
 # ============ R3 搜刮 / 临时仓库 ============
+
+# v107（设计稿 9.8）：侠名/大侠——**每 3 节回一点血**（善恶唯一的续航来源）
+# v107：右上角那一行——"侠名 · 善恶 +34 ｜ 旧债 · 恶 3/7"（没有线就只报心境，中立且无线时隐形）
+func _refresh_karma_hud() -> void:
+	if _karma_label == null or not is_instance_valid(_karma_label):
+		return
+	if _state == null:
+		return
+	var segs: Array = []
+	var k := int(_state.karma)
+	if k != 0 or _state.karma_band() != 2:
+		segs.append(str(_state.karma_band_name()) + " · 善恶 " + ("+" if k > 0 else "") + str(k))
+	for lid_v in _state.ev_lines.keys():
+		var lid := str(lid_v)
+		var at := int(_state.ev_lines[lid])
+		var total: int = (DataEvents.LINES.get(lid, {}) as Dictionary).get("steps", []).size()
+		var align := str((DataEvents.LINES.get(lid, {}) as Dictionary).get("align", ""))
+		segs.append(DataEvents.line_name(lid) + " · " + ("善" if align == "good" else "恶") + " " + str(at) + "/" + str(total))
+	if segs.is_empty():
+		_karma_label.text = ""
+		return
+	_karma_label.text = "　".join(PackedStringArray(segs))
+
+func _karma_tick() -> void:
+	if _state == null:
+		return
+	var pct := float(_state.karma_heal_pct())
+	if pct <= 0.0:
+		return
+	if int(_node) % 3 != 0:
+		return
+	_choice_hp(pct)
+	UiKit.float_text(self, "侠名 · 调息（气血 +" + str(int(pct)) + "%）", UiKit.GREEN)
 
 func _reset_run_hud() -> void:
 	_clear_loot()
@@ -1271,11 +1428,33 @@ func _money_gain(g: int) -> int:
 	# v36：阅历线·财富「财路」段——本趟文钱收益 +N%（同样相乘）
 	if _state != null:
 		k *= 1.0 + float(GameState.insight_fx().get("money_pct", 0.0))
+	# v107：善恶——恶贯满盈 +30% · 恶名 +15%（同样相乘）
+	if _state != null:
+		k *= _state.karma_money_mul()
 	return maxi(1, int(round(float(g) * k)))
 
 func _open_fate(node: Dictionary) -> void:
 	if _busy or _loot_panel_open:
 		return
+	# v111（用户："命数…加在击败敌人后的节点中"）：正式趟的战后签摊 fid 留空——
+	#   到这一节才从"**还没接过的**"里随机挑一张摆出来（不摆已经拿过的，白跑一趟最没意思）。
+	if str(node.get("fid", "")) == "":
+		var pool: Array = []
+		for fid_v in JourneyData.FATE_IDS:
+			var f := str(fid_v)
+			if not _has_fate(f):
+				pool.append(f)
+		if pool.is_empty():
+			UiKit.float_text(self, "天下的签都接遍了——照旧赶路", UiKit.DIM)
+			_advance()
+			return
+		var pick := str(pool[randi() % pool.size()])
+		var d: Dictionary = Buffs.of(pick)
+		node = {"t": "fate", "fid": pick,
+			"title": str(d.get("name", pick)),
+			"text": str(d.get("desc", "")),
+			"pick": "接这注：好处与代价都归这一趟（再捡一张就叠一张）"}
+		_cur_node = node
 	# ㉛：出征屏已选过同一张命数——这回不重复摆摊，直接过
 	if _has_fate("fate_" + str(node.get("fid", ""))):
 		UiKit.float_text(self, "这桩命数你已经接过了——照旧赶路", UiKit.DIM)
@@ -1457,8 +1636,12 @@ func _open_start_kit() -> void:
 	_close_overlay()
 	var veil := _make_popup_veil(true)
 	veil.mouse_filter = Control.MOUSE_FILTER_STOP
-	var row_h := 92.0
-	var ph := 156.0 + float(offers.size()) * (row_h + 8.0)
+	# v114（用户草图："游历开局五选一可以这样"）：竖排五行 → **上 2 下 3** 的卡片阵。
+	#   卡片同尺寸（176×224），两排各自居中；行高从 92 的小条变成能看全 desc 的卡片。
+	var cw := 176.0
+	var chh := 224.0
+	var gap := 16.0
+	var ph := 122.0 + chh + 18.0 + chh + 34.0
 	var panel := UiKit.make_paper_panel(veil, Rect2(58, POPUP_TOP, 604, ph))
 	var t1 := UiKit.make_label(panel, Vector2(0, 16), Vector2(604, 38), 28, UiKit.INK)
 	UiKit.set_text(t1, "开局行装 · 五选一")
@@ -1472,28 +1655,36 @@ func _open_start_kit() -> void:
 		+ "」成品——挑一样带走，白拿。路上捡的、这里拿的，都得活着走出游历才算你的。")
 	t2.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	t2.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	var ry := 122.0
-	for i in offers.size():
-		_kit_row(panel, i, offers[i], ry, row_h)
-		ry += row_h + 8.0
+	# 上排 2 张 · 下排 3 张（各自居中）——草图就是这个阵
+	var top_n: int = mini(2, offers.size())
+	var bot_n: int = maxi(0, offers.size() - top_n)
+	var x0 := (604.0 - (float(top_n) * cw + float(maxi(top_n - 1, 0)) * gap)) * 0.5
+	for i in top_n:
+		_kit_card(panel, i, offers[i], x0 + float(i) * (cw + gap), 122.0, cw, chh)
+	if bot_n > 0:
+		var x1 := (604.0 - (float(bot_n) * cw + float(maxi(bot_n - 1, 0)) * gap)) * 0.5
+		for i in bot_n:
+			_kit_card(panel, top_n + i, offers[top_n + i], x1 + float(i) * (cw + gap), 122.0 + chh + 18.0, cw, chh)
 	print("[游历] 开局行装：摆出 ", offers.size(), " 张（难度 ", _state.diff, " · 品阶 ", qn, "）")
 
-func _kit_row(panel: Control, i: int, o: Dictionary, y: float, h: float) -> void:
-	var row := Panel.new()
-	row.position = Vector2(24, y)
-	row.size = Vector2(556, h)
-	row.mouse_filter = Control.MOUSE_FILTER_STOP
+# v114：一张**卡**（草图里那种竖长方框）——标题在上、说明在下，点整张即选
+func _kit_card(panel: Control, i: int, o: Dictionary, x: float, y: float, w: float, h: float) -> void:
+	var card := Panel.new()
+	card.position = Vector2(x, y)
+	card.size = Vector2(w, h)
+	card.mouse_filter = Control.MOUSE_FILTER_STOP
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(0.96, 0.93, 0.86, 1.0)
 	sb.set_corner_radius_all(8)
-	sb.border_color = Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.45)
+	sb.border_color = Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.55)
 	sb.set_border_width_all(2)
-	row.add_theme_stylebox_override("panel", sb)
-	row.gui_input.connect(_on_kit_row_input.bind(i))
-	panel.add_child(row)
-	var ttl := UiKit.make_label(row, Vector2(16, 8), Vector2(524, 32), 21, UiKit.INK)
+	card.add_theme_stylebox_override("panel", sb)
+	card.gui_input.connect(_on_kit_row_input.bind(i))
+	panel.add_child(card)
+	var ttl := UiKit.make_label(card, Vector2(10, 10), Vector2(w - 20.0, 76), 19, UiKit.INK)
 	UiKit.set_text(ttl, str(o.get("title", "?")))
-	var ds := UiKit.make_label(row, Vector2(16, 42), Vector2(524, h - 50.0), 17,
+	ttl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	var ds := UiKit.make_label(card, Vector2(10, 92), Vector2(w - 20.0, h - 102.0), 15,
 		Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.82))
 	UiKit.set_text(ds, str(o.get("sub", "")))
 	ds.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
