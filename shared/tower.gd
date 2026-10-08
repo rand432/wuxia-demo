@@ -389,19 +389,19 @@ const CHESTS := [
 	#   宝箱只是它的补充来路（主路是炼丹阁自己炼）——所以只轻轻收一点，别把闸门焊死。
 	{"id": "wood", "name": "木箱", "grad": 0, "rolls": 2, "silver_mul": 0.6,
 		"frag_chance": 0.03, "frag": [1, 2], "mat_n": [1, 2],
-		"pill_chance": 0.03, "pills": ["tupo_fan"]},
+		"pill_chance": 0.018, "pills": ["tupo_fan"]},
 	{"id": "iron", "name": "银箱", "grad": 1, "rolls": 3, "silver_mul": 1.0,
 		"frag_chance": 0.05, "frag": [2, 3], "mat_n": [1, 3],
-		"pill_chance": 0.055, "pills": ["tupo_fan", "tupo_liang"]},
+		"pill_chance": 0.033, "pills": ["tupo_fan", "tupo_liang"]},
 	{"id": "gold", "name": "金箱", "grad": 2, "rolls": 4, "silver_mul": 1.6,
 		"frag_chance": 0.08, "frag": [3, 5], "mat_n": [2, 4],
-		"pill_chance": 0.08, "pills": ["tupo_fan", "tupo_liang", "tupo_shang"]},
+		"pill_chance": 0.048, "pills": ["tupo_fan", "tupo_liang", "tupo_shang"]},
 	{"id": "jade", "name": "玉箱", "grad": 3, "rolls": 5, "silver_mul": 2.4,
 		"frag_chance": 0.14, "frag": [5, 9], "mat_n": [2, 5],
-		"pill_chance": 0.14, "pills": ["tupo_liang", "tupo_shang", "tupo_ji"]},
+		"pill_chance": 0.084, "pills": ["tupo_liang", "tupo_shang", "tupo_ji"]},
 	{"id": "dragon", "name": "龙箱", "grad": 4, "rolls": 6, "silver_mul": 3.5,
 		"frag_chance": 0.25, "frag": [8, 16], "mat_n": [3, 7],
-		"pill_chance": 0.24, "pills": ["tupo_shang", "tupo_ji", "tupo_jue"]},
+		"pill_chance": 0.144, "pills": ["tupo_shang", "tupo_ji", "tupo_jue"]},
 ]
 # 材料权重（开箱那几掷在这个池子里挑；键＝game_state.MAT_CN 的键）
 const CHEST_MATS := {"wood": 30, "zhi": 20, "guo": 20, "shen": 15, "bone": 10, "rice": 5, "jin": 3}

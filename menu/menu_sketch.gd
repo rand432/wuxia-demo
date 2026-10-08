@@ -918,12 +918,14 @@ func _build_plaques() -> void:
 	var V := {"page": "village", "white": true}
 	# v98（用户："出村改为向左的箭头"）
 	_plaques.add_arrow("out", 0.104, 0.595, "出村", _open_out, -1, V)   # v102：白箭头变长，中心右移一点，别顶出左边缘
-	_plaques.add_hang("cave", 0.915, 0.565, "山洞", _click_cave, "", "", V)
-	_plaques.add_hang("hill", 0.355, 0.705, "后山", _click_hill, "", "", V)
+	# v118（用户："都改"）：山洞/后山也换成素材图标牌
+	_plaques.add_icon("cave", 0.915, 0.565, "山洞", PlaqueLayer.CAVE_TEX, _click_cave, "", V)
+	_plaques.add_icon("hill", 0.355, 0.705, "后山", PlaqueLayer.HILL_TEX, _click_hill, "", V)
 	_plaques.add_hang("brook", 0.600, 0.775, "溪畔", _gather_wood, "", "", V)   # 桥右侧的水边（桥左那块地是画里四个小人的站位，别压住他们）
 	# v98（用户："藏宝阁往右边挪一点"）：0.700 → 0.760
-	_plaques.add_hang("treasure", 0.760, 0.700, "藏宝阁", _click_treasure, "", "", V)
-	_plaques.add_hang("craft", 0.895, 0.820, "百工坊", _click_craft, "", "", V)
+	# v116（用户："可"）：藏宝阁/百工坊也换成素材图标牌（图集里抠的酒坛架 / 工坊案几）
+	_plaques.add_icon("treasure", 0.760, 0.700, "藏宝阁", PlaqueLayer.TREASURE_TEX, _click_treasure, "", V)
+	_plaques.add_icon("craft", 0.895, 0.820, "百工坊", PlaqueLayer.CRAFT_TEX, _click_craft, "", V)
 	_plaques.add_slip("pid", 0.545, 0.842, pn, _show_player_tag, "", V)
 	print("[主界面] 牌子层：", _plaques.items.size(), " 块（用户标注 11 处 + 溪畔/藏宝阁两处原有功能）")
 

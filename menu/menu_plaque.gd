@@ -66,7 +66,7 @@ func add_hang(id: String, rx: float, ry: float, text: String, fn: Callable, sub 
 
 # v115（用户："商店按钮换成商店的ui"）：六边形徽标 → **一间铺子**（雨棚＋铺面＋门窗＋招牌字）
 func add_shop(id: String, rx: float, ry: float, text: String, fn: Callable, sub := "", cfg := {}) -> void:
-	_push(id, "shop", rx, ry, 116.0, 104.0, text, fn, sub, "", cfg)
+	_push(id, "shop", rx, ry, 116.0, 128.0, text, fn, sub, "", cfg)
 
 func add_ribbon(id: String, rx: float, ry: float, text: String, fn: Callable, sub := "", cfg := {}) -> void:
 	_push(id, "ribbon", rx, ry, 68.0, 34.0, text, fn, sub, "", cfg)
@@ -109,6 +109,7 @@ func _push(id: String, kind: String, rx: float, ry: float, w: float, h: float, t
 		"page": str(cfg.get("page", "ui")),
 		"hang_y": float(cfg.get("hang_y", -1.0)),
 		"nails": [], "x0": 0.0, "x1": 0.0, "dir": -1,
+		"tex": cfg.get("tex", null),
 	}
 	items.append(it)
 	if bool(cfg.get("no_hit", false)):
@@ -264,8 +265,8 @@ func _draw() -> void:
 				_draw_beam(it)
 			"hang":
 				_draw_hang(it, s)
-			"shop":
-				_draw_shop(it, s)
+			"shop", "icon":
+				_draw_icon(it, s)
 			"ribbon":
 				_draw_ribbon(it, s)
 			"slip":
@@ -379,9 +380,17 @@ func _draw_hang(it: Dictionary, s: float) -> void:
 			draw_string(font, Vector2(x, sy), str(ln), HORIZONTAL_ALIGNMENT_CENTER, w, 13, Color(INK.r, INK.g, INK.b, 0.72))
 			sy += 19.0
 
-# v115（用户："商店按钮换成商店的ui"）：**画一间铺子**——雨棚（斜纹）＋白底铺面＋门窗＋招牌字。
+# v116（用户："可"——采纳"别的牌子也换成素材"）：**图标牌**——纸卡＋一张素材图＋两行字。
+#   商店/藏宝阁/百工坊共用这一个（贴图走 cfg 传进来，see add_icon）。
+func add_icon(id: String, rx: float, ry: float, text: String, tex: Texture2D, fn: Callable, sub := "", cfg := {}) -> void:
+	var c := cfg.duplicate()
+	c["tex"] = tex
+	_push(id, "icon", rx, ry, 116.0, 128.0, text, fn, sub, "", c)
+
+# v115b（用户："商店不是有素材ui吗？换成素材"）：**用素材**——从集市图集里抠出的茶摊（assets/ui/shop_stall.png）。
+#   素材自带白底，所以垫一张**纸卡**（把白底一起吃掉）＋墨边，字写在卡片下沿。
 #   笔法与出村箭头同一套：白面 ＋ 墨边 ＋ 落影；悬停/按下时边线转朱红。
-func _draw_shop(it: Dictionary, s: float) -> void:
+func _draw_icon(it: Dictionary, s: float) -> void:
 	var cx := float(it["cx"]) - s
 	var cy := float(it["cy"])
 	var down: bool = _down == int(it["idx"])
@@ -392,38 +401,42 @@ func _draw_shop(it: Dictionary, s: float) -> void:
 	if down:
 		paper = Color(0.95, 0.93, 0.89, 1.0)
 		edge = Color(SEAL.r, SEAL.g, SEAL.b, 1.0)
-	# ① 铺面：白底墨边（落下时不留影，像是按进去了）
-	var body := Rect2(cx - 44.0, cy - 20.0, 88.0, 58.0)
+	var W := 108.0
+	var H := 128.0
+	var y0 := cy - H * 0.5 + (2.0 if down else 0.0)
+	# ① 纸卡（素材的白底就吃在这张卡里）
+	var card := Rect2(cx - W * 0.5, y0, W, H)
 	if not down:
-		draw_rect(Rect2(body.position + Vector2(2.5, 4.0), body.size), Color(0.06, 0.05, 0.05, 0.18))
-	draw_rect(body, paper)
-	draw_rect(body, edge, false, 2.2)
-	# ② 雨棚：梯形 ＋ 四条斜纹
-	var awn := PackedVector2Array([
-		Vector2(cx - 52.0, cy - 20.0), Vector2(cx + 52.0, cy - 20.0),
-		Vector2(cx + 44.0, cy - 46.0), Vector2(cx - 44.0, cy - 46.0)])
-	draw_colored_polygon(awn, paper)
-	var ao := PackedVector2Array(awn)
-	ao.append(awn[0])
-	draw_polyline(ao, edge, 2.2, true)
-	for i in 4:
-		var t := 0.18 + float(i) * 0.21
-		draw_line(Vector2(lerpf(cx - 44.0, cx + 44.0, t), cy - 46.0),
-			Vector2(lerpf(cx - 52.0, cx + 52.0, t), cy - 20.0),
-			Color(edge.r, edge.g, edge.b, 0.5), 3.0, true)
-	# ③ 门与两扇窗
-	var door := Rect2(cx - 13.0, cy + 8.0, 26.0, 30.0)
-	draw_rect(door, Color(INK.r, INK.g, INK.b, 0.32))
-	draw_rect(door, edge, false, 1.8)
-	for wx in [cx - 36.0, cx + 20.0]:
-		var win := Rect2(float(wx), cy - 6.0, 16.0, 16.0)
-		draw_rect(win, Color(INK.r, INK.g, INK.b, 0.16))
-		draw_rect(win, edge, false, 1.6)
-	# ④ 招牌字写在雨棚上；有副题就写在铺子下面
-	draw_string(font, Vector2(cx - 44.0, cy - 28.0), str(it["text"]), HORIZONTAL_ALIGNMENT_CENTER, 88.0, 17, Color(INK.r, INK.g, INK.b, 0.92))
+		draw_colored_polygon(Draw.round_poly(Rect2(card.position + Vector2(2.5, 4.0), card.size), 10.0), Color(0.06, 0.05, 0.05, 0.18))
+	draw_colored_polygon(Draw.round_poly(card, 10.0), paper)
+	var bp := Draw.round_poly(card, 10.0)
+	bp.append(bp[0])
+	draw_polyline(bp, edge, 2.2, true)
+	# ② 素材：按比例缩进卡片里（下面留一行写字）
+	var tex: Texture2D = SHOP_TEX
+	if it.get("tex", null) != null:
+		tex = it["tex"]
+	# ③ 文字块：副题**可能是多行**（后山/百工坊的副题带 \n）——先分行量好，再往上给素材留地方。
+	#    v119：原来是把整个 sub 丢给一次 draw_string（不认换行 → 全挤一行），而且**画了两遍**
+	#    （卡片里一遍、卡片外 cy+58 又一遍，老商店代码的残留）→ 就是用户说的"字数重合"。
 	var sub := str(it["sub"])
+	var lines: Array = []
 	if sub != "":
-		draw_string(font, Vector2(cx - 58.0, cy + 58.0), sub, HORIZONTAL_ALIGNMENT_CENTER, 116.0, 12, Color(INK.r, INK.g, INK.b, 0.62))
+		for ln in sub.split("\n"):
+			lines.append(str(ln))
+	var n := lines.size()
+	var lh := 14.0
+	var title_y := y0 + H - 10.0 - float(n) * lh
+	var th := maxf(24.0, (title_y - 22.0) - (y0 + 5.0))
+	var tw := th * float(tex.get_width()) / maxf(1.0, float(tex.get_height()))
+	if tw > W - 12.0:
+		tw = W - 12.0
+		th = tw * float(tex.get_height()) / maxf(1.0, float(tex.get_width()))
+	draw_texture_rect(tex, Rect2(cx - tw * 0.5, y0 + 5.0, tw, th), false)
+	draw_string(font, Vector2(cx - W * 0.5, title_y), str(it["text"]), HORIZONTAL_ALIGNMENT_CENTER, W, 17, Color(INK.r, INK.g, INK.b, 0.92))
+	for i in n:
+		draw_string(font, Vector2(cx - W * 0.5, title_y + 18.0 + float(i) * lh), str(lines[i]),
+			HORIZONTAL_ALIGNMENT_CENTER, W, 12, Color(INK.r, INK.g, INK.b, 0.62))
 
 # 六边形徽标（v115 起商店不用它了；留着——以后要别的徽标还能用）
 func _draw_hex(it: Dictionary, s: float) -> void:
@@ -529,6 +542,13 @@ func _draw_txt(it: Dictionary, s: float) -> void:
 	var sub := str(it["sub"])
 	if sub != "":
 		draw_string(font, Vector2(cx - w * 0.5, cy + 34.0), sub, HORIZONTAL_ALIGNMENT_CENTER, w, 14, Color(INK.r, INK.g, INK.b, 0.60))
+
+# v115b：商店那张素材（集市图集里抠出的茶摊；见 assets/ui/shop_stall.png）
+const SHOP_TEX := preload("res://assets/ui/shop_stall.png")
+const TREASURE_TEX := preload("res://assets/ui/treasure_shelf.png")   # v116：藏宝阁（酒坛架）
+const CRAFT_TEX := preload("res://assets/ui/craft_bench.png")         # v116：百工坊（晾布架＋案几＋火盆）
+const HILL_TEX := preload("res://assets/ui/hill_rock.png")            # v118：后山（崖石）
+const CAVE_TEX := preload("res://assets/ui/cave_mouth.png")           # v118：山洞（冰窟首帧）
 
 # 箭头（出村）——v102（用户："改成白色再大一点 字体也一点 放在箭头里面更显目一些"）：
 #   **白底墨边的实心箭头**，字写在箭杆里（比原来"墨线箭头＋底下一行小字"醒目得多）。

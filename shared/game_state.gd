@@ -119,8 +119,11 @@ static var _idle_last_ts := 0
 # 于是境界＝突破次数（0~39）：境界 n 的上限是 25×(n+1) 级。
 #   ⚠ 突破丹分五品：每 8 个境界换一品（凡 → 良 → 上 → 极 → 绝，正好 40 档）。
 const LEVEL_MAX := 1000
-const BREAK_STEP := 25            # 每 25 级一道关
-const BREAK_MAX := LEVEL_MAX / BREAK_STEP - 1   # 39：突破满 39 次就能到 1000 级
+# v117（用户："突破改为一百级突破一次【总加成一致】突破材料增多 突破丹爆率降低 且突破有几率失败"）：
+#   **每 100 级一道关**（原 25 级）→ 满级 1000 共 **10 重**（境界 0~9）；单次给的加成 ×4，**总量不变**；
+#   单次吃的丹也 ×4（材料增多），丹的掉落率在 tower.gd 那一列整体下调，并且**突破可能失败**。
+const BREAK_STEP := 100           # 每 100 级一道关（原 25）
+const BREAK_MAX := LEVEL_MAX / BREAK_STEP - 1   # 9：突破满 9 次就能到 1000 级
 # 突破一次的"基础属性数值增幅"——直接加进 role.stats 的底子上。
 # v61（用户："突破 气血+10 攻击+1 防御+1"）：
 #   原来 {hp 60, atk 12, def 2, dodge 2} → 现在 **{hp 10, atk 1, def 1}**（闪避那条整条去掉）。
@@ -136,12 +139,23 @@ const BREAK_ATK_PER_GENGU := 30.0
 const BREAK_HP_PER_GENGU := 6.0
 const BREAK_DEF_PER_GENGU := 40.0
 
+# v117：40 重 → 10 重，所以**单次 ×4**（总加成与老版一模一样）。
+const BREAK_GAIN_MUL := 4.0
+
+const LEGACY_BREAK_MAX := 39     # 老版 39 重（BREAK_STEP 25 那会儿）
+
 static func break_gain(role_id: String) -> Dictionary:
 	var g := int(_role_mut(role_id).get("gengu", 0))
+	# v117：**按"老版 39 重的单次量 × 39 ÷ 9"摊**——直接拿 g/常数×4 的话，
+	#   防御那一项会因取整掉三成（老版 round(62/40)=2 → 39×2=78；新版 round(6.2)=6 → 9×6=54 ✗）。
+	var oa := int(round(float(g) / BREAK_ATK_PER_GENGU))
+	var oh := int(round(float(g) / BREAK_HP_PER_GENGU))
+	var od := int(round(float(g) / BREAK_DEF_PER_GENGU))
+	var k := float(LEGACY_BREAK_MAX) / float(BREAK_MAX)
 	return {
-		"atk": int(round(float(g) / BREAK_ATK_PER_GENGU)),
-		"hp": int(round(float(g) / BREAK_HP_PER_GENGU)),
-		"def": int(round(float(g) / BREAK_DEF_PER_GENGU)),
+		"atk": maxi(1, int(round(float(oa) * k))),
+		"hp": maxi(1, int(round(float(oh) * k))),
+		"def": maxi(1, int(round(float(od) * k))),
 	}
 # v36b（用户："角色突破需要消耗银两"）：**突破还要银两**，按品级抬（吃"妙手"折扣）。
 #   每一次的银两＝下表[品级] × player_talent_cost_mul()。
@@ -154,11 +168,13 @@ static func break_gain(role_id: String) -> Dictionary:
 #     满突破 = **106,440 两/人** ≈ 一趟爬塔的总收入：
 #     银两仍然紧（三个人凑不齐），但"攒够一个人的突破钱"是够得着的目标 ✓
 #   嫌贵嫌便宜只改这一行。
-const BREAK_SILVER := [170, 500, 1500, 4500, 13500]
+# v117：单次 ×4（10 重 × 4 ＝ 老的 40 重总量）——"突破材料增多"落在这一行与 break_pill_need 上。
+const BREAK_SILVER := [680, 2000, 6000, 18000, 54000]
+const BREAK_MAT_MUL := 4        # 单次吃丹数 ×4
 # 突破丹五品（id 与 DAN_RECIPES 里那几条一致）；境界 1~8 用凡品、9~16 良品……33~40 绝品
 const BREAK_PILLS := ["tupo_fan", "tupo_liang", "tupo_shang", "tupo_ji", "tupo_jue"]
 const BREAK_PILL_CN := ["凡品", "良品", "上品", "极品", "绝品"]
-const BREAK_PER_TIER := 8      # ⚠ 只给"突破银两"分档用（v62 起丹药消耗另有一套：见 BREAK_PILL_SLOTS）
+const BREAK_PER_TIER := 2      # ⚠ 只给"突破银两"分档用（v117：10 重 ÷ 5 品 ＝ 每档 2 次）
 
 # 四十重境界名（每 25 级一重）。前 10 个沿用旧表，往后按"越走越玄"接着排。
 #   境界由**突破**推进（不是按等级自动跳），等级只是它的上限表现。
@@ -2528,8 +2544,10 @@ static func level_cap(role_id: String) -> int:
 #     · **档内消耗按 1/2/4/8/16/32 递增，第 7、8 次封顶在 32**（BREAK_PILL_SEQ 最后一个值）
 #     · 于是 39 次共 **603 颗/人**（每档 127 颗，最后一档 95 颗）
 #   嫌重/嫌轻只改两个数：BREAK_PILL_SLOTS（每档几次）与 BREAK_PILL_SEQ（档内序列）。
-const BREAK_PILL_SLOTS := 8                          # 每档管几次突破
-const BREAK_PILL_SEQ := [1, 2, 4, 8, 16, 32]         # 档内第 1~6 次的消耗；再多就取末值（封顶 32）
+# v117：每档管 **2** 次（5 档 × 2 ＝ 10 重），单次消耗 [32, 128]——
+#   每人满突破总量 635 → **800** 颗（"突破材料增多"），而单次要的丹是老的十几倍。
+const BREAK_PILL_SLOTS := 2                          # 每档管几次突破
+const BREAK_PILL_SEQ := [32, 128]                    # 档内两次的消耗
 
 # 第 n 次突破（1 起）在第几档、档内第几格
 static func break_tier_of(n: int) -> int:
@@ -2539,6 +2557,15 @@ static func break_slot_of(n: int) -> int:
 	return (maxi(1, n) - 1) % BREAK_PILL_SLOTS
 
 # 第 n 次突破要吃几颗（v62：不再是"一律 1 颗"）
+# v117（用户："且突破有几率失败"）：品级越高越险——失败＝**丹与银两照样没**，境界不动（可以再试）。
+const BREAK_FAIL_P := [0.0, 0.06, 0.12, 0.20, 0.30]
+
+static func break_fail_p(role_id: String) -> float:
+	var n := role_realm(role_id) + 1
+	if n < 1 or n > BREAK_MAX:
+		return 0.0
+	return float(BREAK_FAIL_P[break_tier_of(n)])
+
 static func break_need_of(n: int) -> int:
 	if n < 1 or n > BREAK_MAX:
 		return 0
@@ -2619,6 +2646,13 @@ static func break_do(role_id: String) -> String:
 	var need := break_pill_need(role_id)     # v62：这一次吃几颗（档内递增）
 	pills[pid] = pill_count(pid) - need
 	add_coin("silver", -sp)          # v36b：突破也吃银两
+	# v117：**先掷失败**——失败了丹与银两照样没，境界不动（上面的消耗已经扣掉了）
+	var nm0 := str(role.get("name", role_id))
+	if randf() < break_fail_p(role_id):
+		var fmsg := nm0 + " 突破失败——气机逆转，丹药与银两都白费了（境界仍是 " + str(cur) + " 重，可再试）"
+		fmsg += "｜损耗：「突破丹（" + break_pill_cn(role_id) + "）」×" + str(need) + " · 银两 -" + str(sp)
+		print("[账本] 突破失败：", fmsg)
+		return fmsg
 	role["realm"] = cur + 1
 	var st: Dictionary = role.get("stats", {})
 	var gained: Array = []
