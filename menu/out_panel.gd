@@ -350,6 +350,7 @@ func refresh() -> void:
 		return
 	_page = clampi(_page, 0, _pages() - 1)
 	var a := _page * PER_PAGE
+	_chap_lb.add_theme_font_size_override("font_size", 17)   # v144b：从追剿视图切回来要把字号还原
 	_chap_lb.text = "第 " + str(_page + 1) + " 章 · " + GameState.chapter_of(a) + "（第 " + str(a + 1) + "–" + str(a + PER_PAGE) + " 关）"
 	var p := GameState.stage_progress
 	for k in PER_PAGE:
@@ -414,7 +415,11 @@ func _refresh_chase_page() -> void:
 	_chase_page = clampi(_chase_page, 0, Chase.rounds() - 1)
 	var base := Chase.stage_of_round(_chase_page + 1)
 	var p := GameState.chase_progress
-	var head := "追剿 · 第 " + str(_chase_page + 1) + "/" + str(Chase.rounds()) + " 剿（第 " + str(base + 1) + "–" + str(mini(base + Chase.BOSS_EVERY, Chase.STAGE_MAX)) + " 关）"
+	# v144b（用户："可以"）：抬头右边补一个"当前进度"的小标——不然只看得见剿号
+	#   字号从 17 收到 14，才塞得下"剿号 + 关号区间 + 进度"三段（爬塔视图会还原成 17）
+	var head := "追剿　第 " + str(_chase_page + 1) + "/" + str(Chase.rounds()) + " 剿（" + str(base + 1) + "–" + str(mini(base + Chase.BOSS_EVERY, Chase.STAGE_MAX)) + " 关）"
+	head += "　｜　进度 " + str(p) + "/" + str(Chase.STAGE_MAX)
+	_chap_lb.add_theme_font_size_override("font_size", 14)
 	_chap_lb.text = head
 	for k in PER_PAGE:
 		var idx := base + k
