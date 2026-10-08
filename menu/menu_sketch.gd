@@ -44,6 +44,12 @@ const USE_PAPER_ACTORS := false
 #   （menu_village）就是压在它上面的两层"旧画"——整条画卷还占着屏幕中央，村景只在
 #   下面露一条。开关打开＝这两层连同远山层、旧特效层一起收起（**只隐藏、不删**，改 false 就回退）。
 const INK_ONLY := true
+# v99（用户："用这个吧 把豆包ai p掉"）：主场景改用豆包出的那支 **10 秒动态画**（720×1124，
+#   水墨村落：云在飘、鸟在飞、水在动、船在划）。水印已用 tools/spine-bake/wm_clean.mjs 逐帧补掉，
+#   成品在 assets/video/village_loop.ogv（Godot 的 VideoStreamPlayer 只吃 Ogg Theora，所以转成 ogv）。
+#   关掉这个开关＝回到摆景器那一版（10 件 + 动效），两套随时可切。
+const USE_VIDEO_SCENE := true
+const VIDEO_SCENE := "res://assets/video/village_loop.ogv"
 # v98（用户："之前画卷不是可以滑动吗 把这个画卷形式保留 就保留图前面这个少年游这个封卷封面即可"）：
 #   画卷**回来了**，但只有两页：右边一页＝《少年游》封卷封面（装裱层的引首），左边一页＝新村景。
 #   开屏停在封面页，**向右拖**＝展卷到村景（跟老版一个手感，见 _sc）。
@@ -210,6 +216,7 @@ var _plaques = null           # v97：牌子层（竖排木牌/六边形徽标/�
 var _cover_win = null         # v98：封面页窗口（一张与画心同高的纸；引首由装裱层画在上面）
 var _ink_clip = null          # v98：画心——村景页裁到装裱以内那一条（y 26~1150）
 var _desk_bg = null           # v98：桌面（画卷之外那一圈底色）
+var _video = null             # v99：动态画（VideoStreamPlayer；村景页现在放的是它）
 var _sc := 720.0              # v98：画卷偏移。0=村景页铺满 · 720=封面页铺满（向右拖＝展开到村景）
 var _hint_used := false       # v98：玩家拖过一次就不再多嘴"按住画卷"
 var _set_btn = null           # v97：旧的右上角「设置」按钮（牌子层接管后收起来，代码留着）
@@ -611,9 +618,22 @@ func _ready() -> void:
 			_ink_clip.z_index = -100
 			_ink_clip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			add_child(_ink_clip)
-			_ink = InkScene.new()
-			_ink_clip.add_child(_ink)
-			_ink.position = Vector2(0.0, -Conf.BAND_TOP)
+			if USE_VIDEO_SCENE:
+				# 动态画铺满整条画心（视频本来就是 720×1124，跟画心一比一）
+				_video = VideoStreamPlayer.new()
+				_video.name = "动态画"
+				_video.stream = load(VIDEO_SCENE)
+				_video.expand = true
+				_video.loop = true
+				_video.size = Vector2(Conf.DW, Conf.BAND_H)
+				_video.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				_ink_clip.add_child(_video)
+				_video.play()
+				print("[主界面] 动态画：", VIDEO_SCENE, " 载入=", _video.stream != null)
+			else:
+				_ink = InkScene.new()
+				_ink_clip.add_child(_ink)
+				_ink.position = Vector2(0.0, -Conf.BAND_TOP)
 			# 封面页：一张与画心同高的纸（引首/隔水/包边由装裱层画在上面）
 			_cover_win = Control.new()
 			_cover_win.name = "封面页"
