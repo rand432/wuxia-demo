@@ -538,10 +538,24 @@ func _draw_txt(it: Dictionary, s: float) -> void:
 	var txt := str(it["text"])
 	if _hover == int(it["idx"]):
 		draw_colored_polygon(Draw.round_poly(Rect2(cx - w * 0.5, cy - 22.0, w, 44.0), 8.0), Color(1.0, 0.97, 0.90, 0.45))
-	draw_string(font, Vector2(cx - w * 0.5, cy + 9.0), txt, HORIZONTAL_ALIGNMENT_CENTER, w, 27, Color(0.12, 0.11, 0.13, 0.92))
+	# v123（用户："称号…炫酷一点 整体头像框+名字+称号可以再放大一些 头像框可以不用放大了"）：
+	#   名号 27 → **34**；称号从"一行灰小字"改成**描金墨牌**（斜切角 + 金线 + 金字）。头像框没动。
+	draw_string(font, Vector2(cx - w * 0.5, cy + 12.0), txt, HORIZONTAL_ALIGNMENT_CENTER, w, 34, Color(0.12, 0.11, 0.13, 0.94))
 	var sub := str(it["sub"])
 	if sub != "":
-		draw_string(font, Vector2(cx - w * 0.5, cy + 34.0), sub, HORIZONTAL_ALIGNMENT_CENTER, w, 14, Color(INK.r, INK.g, INK.b, 0.60))
+		var tw := maxf(104.0, float(sub.length()) * 20.0 + 36.0)
+		var th := 32.0
+		var tx := cx - tw * 0.5
+		var ty := cy + 22.0
+		var cut := 10.0
+		var plate := PackedVector2Array([Vector2(tx + cut, ty), Vector2(tx + tw - cut, ty),
+			Vector2(tx + tw, ty + th * 0.5), Vector2(tx + tw - cut, ty + th),
+			Vector2(tx + cut, ty + th), Vector2(tx, ty + th * 0.5)])
+		draw_colored_polygon(plate, Color(0.16, 0.14, 0.17, 0.92))
+		var po := PackedVector2Array(plate)
+		po.append(plate[0])
+		draw_polyline(po, Color(0.84, 0.70, 0.34, 0.95), 1.8, true)
+		draw_string(font, Vector2(tx, ty + th * 0.5 + 8.0), sub, HORIZONTAL_ALIGNMENT_CENTER, tw, 19, Color(0.98, 0.90, 0.66, 0.98))
 
 # v115b：商店那张素材（集市图集里抠出的茶摊；见 assets/ui/shop_stall.png）
 const SHOP_TEX := preload("res://assets/ui/shop_stall.png")

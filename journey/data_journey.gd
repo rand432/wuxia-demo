@@ -1,4 +1,5 @@
 extends RefCounted
+const Realm := preload("res://shared/data_realm.gd")   # v121：境界压制
 const DataAffixes := preload("res://shared/data_affixes.gd")
 const GameState := preload("res://shared/game_state.gd")   # v61：游历敌人按队伍等级档放大要用它
 # ============================================================
@@ -239,7 +240,8 @@ static func build_nodes_formal(diff := 1) -> Array:
 #   **轴四＝品质线**：8 节起 +20% → 16 节 +40% → 24 节 +80% → 32 节 +160%（40 节到顶，封住）。
 # v63b（用户："游历每节难度 8%→1.5%（只在当前游历难度这刀生效）· 游历整体难度降低 25%"）：
 #   FOE_MUL 1.56 → **1.17**（×0.75）；AXIS3_PER 0.08 → **0.015**。
-const FOE_MUL := 1.17
+# v128（用户："爬塔和游历整体难度提升15%"）：1.17 → **1.35**（≈ +15%）
+const FOE_MUL := 1.35
 const AXIS3_PER := 0.015              # 每过一节：难度 +1.5%（原 8% → 用户下调）
 const AXIS4_STEPS := [8, 16, 24, 32]  # 品质线：良品/上品/极品/绝品
 const AXIS4_PCT := [0.20, 0.40, 0.80, 1.60]
@@ -287,6 +289,14 @@ static func _scale_foe(n: Dictionary, diff: int, node_i := 0) -> void:
 	# v99：出征屏那一档（简单 0.5 / 普通 1.0 / 困难 2.0）
 	hp_mul *= tier_mul
 	atk_mul *= tier_mul
+	# v121（用户："还有境界压制【怪也可以有境界压制】"）：
+	#   怪的境界跟着这一档走（凡/良/上/极 → 2/6/12/16 境），再按 (我方境界 − 怪境界) 折算血攻——
+	#   高境界的怪碾压你，低境界的怪被你压制。同一个尺子在 GameState.advance / data_realm。
+	var foe_realm := clampi(int(diff) * 2, 0, 17)
+	f["realm"] = foe_realm
+	var sup := Realm.suppress_mul(int(GameState.advance_lv), foe_realm)
+	hp_mul *= sup
+	atk_mul *= sup
 	f["hp"] = maxi(1, int(round(float(f.get("hp", 60)) * hp_mul)))
 	f["atk"] = maxi(1, int(round(float(f.get("atk", 8)) * atk_mul)))
 	# v86（用户：「游历难度25后加入元素怪」）：

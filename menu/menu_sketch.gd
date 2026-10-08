@@ -36,6 +36,8 @@ const ScrollLayer := preload("res://menu/menu_scroll.gd")
 const VillageLayer := preload("res://menu/menu_village.gd")
 const InkScene := preload("res://menu/menu_ink_scene.gd")   # v96：水墨村景层（摆景器那套）
 const PlaqueLayer := preload("res://menu/menu_plaque.gd")   # v97：主界面牌子层（用户标注的 11 处锚点）
+const Realm := preload("res://shared/data_realm.gd")        # v122：进阶（主界面那颗按钮）
+var _adv_veil: ColorRect = null                             # v122：进阶页的幕布
 # 两个开关：村景层开着、纸偶演员关掉（用户 2026-10-08："三个移动小人就不要了"）
 const USE_INK_SCENE := true
 const USE_PAPER_ACTORS := false
@@ -903,12 +905,16 @@ func _build_plaques() -> void:
 	# ===== 常驻 UI（不随画卷滑走）=====
 	_plaques.add_disc("avatar", 0.090, 0.060, "", _open_char_panel)
 	# v98（用户："头像和名字靠近一点"）：名号从 0.345 挪到 0.268，紧挨头像
-	_plaques.add_txt("name", 0.268, 0.062, pn, _open_char_panel, "江湖新客")
+	# v121（用户："具体境界在主界面角色头像名字那里显示"）：名号下面那行＝**进阶境界**
+	_plaques.add_txt("name", 0.268, 0.062, pn, _open_char_panel, GameState.advance_name())
+	# v122（用户："主界面头像名字旁边加这个按钮"）：名号右边一颗**进阶**白纸牌（点开进阶页）
+	_plaques.add_slip("advance", 0.470, 0.062, "进阶", _open_advance, _advance_hint())
 	# v98（用户："底下那一条横线我的本意是横线就是挂着下面两个挂机和建筑的"）：
 	#   名号底下那条线现在是一根**横梁**，挂机/建设就从梁上吊下来（两块牌顶齐平）。
-	_plaques.add_beam("beam", 128.0, 292.0, 112.0, [165.6, 241.2])   # 装饰件：没有命中盒，不挡拖卷
-	_plaques.add_hang("idle", 0.230, 0.0, "挂机", _on_idle_collect, "", "", {"hang_y": 112.0})
-	_plaques.add_hang("build", 0.335, 0.0, "建设", _build_once, "", "", {"hang_y": 112.0})
+	# v123：横梁往下让 36 像素——名号底下现在是**称号牌**（32 高），原来梁心 112 会压在牌上。
+	_plaques.add_beam("beam", 128.0, 292.0, 148.0, [165.6, 241.2])   # 装饰件：没有命中盒，不挡拖卷
+	_plaques.add_hang("idle", 0.230, 0.0, "挂机", _on_idle_collect, "", "", {"hang_y": 148.0})
+	_plaques.add_hang("build", 0.335, 0.0, "建设", _build_once, "", "", {"hang_y": 148.0})
 	_plaques.add_ribbon("settings", 0.933, 0.040, "设置", _open_settings)
 	# v98（用户："商店固定"）：一直挂在那儿——不随风摆，也不再随剧情忽隐忽现
 	# v115：徽标换成铺子——铺子比六边形宽（104 vs 78），中心从 0.950 挪到 0.905 才不被屏幕切掉
@@ -918,14 +924,13 @@ func _build_plaques() -> void:
 	var V := {"page": "village", "white": true}
 	# v98（用户："出村改为向左的箭头"）
 	_plaques.add_arrow("out", 0.104, 0.595, "出村", _open_out, -1, V)   # v102：白箭头变长，中心右移一点，别顶出左边缘
-	# v118（用户："都改"）：山洞/后山也换成素材图标牌
-	_plaques.add_icon("cave", 0.915, 0.565, "山洞", PlaqueLayer.CAVE_TEX, _click_cave, "", V)
-	_plaques.add_icon("hill", 0.355, 0.705, "后山", PlaqueLayer.HILL_TEX, _click_hill, "", V)
+	_plaques.add_hang("cave", 0.915, 0.565, "山洞", _click_cave, "", "", V)
+	_plaques.add_hang("hill", 0.355, 0.705, "后山", _click_hill, "", "", V)
 	_plaques.add_hang("brook", 0.600, 0.775, "溪畔", _gather_wood, "", "", V)   # 桥右侧的水边（桥左那块地是画里四个小人的站位，别压住他们）
 	# v98（用户："藏宝阁往右边挪一点"）：0.700 → 0.760
-	# v116（用户："可"）：藏宝阁/百工坊也换成素材图标牌（图集里抠的酒坛架 / 工坊案几）
-	_plaques.add_icon("treasure", 0.760, 0.700, "藏宝阁", PlaqueLayer.TREASURE_TEX, _click_treasure, "", V)
-	_plaques.add_icon("craft", 0.895, 0.820, "百工坊", PlaqueLayer.CRAFT_TEX, _click_craft, "", V)
+	# v127（用户："后山藏宝阁百工坊都不用加图素材了"）：换回木牌（素材文件留在 assets/ui 里备用）
+	_plaques.add_hang("treasure", 0.760, 0.700, "藏宝阁", _click_treasure, "", "", V)
+	_plaques.add_hang("craft", 0.895, 0.820, "百工坊", _click_craft, "", "", V)
 	_plaques.add_slip("pid", 0.545, 0.842, pn, _show_player_tag, "", V)
 	print("[主界面] 牌子层：", _plaques.items.size(), " 块（用户标注 11 处 + 溪畔/藏宝阁两处原有功能）")
 
@@ -2517,6 +2522,96 @@ func _on_battle_done(win: bool, i: int) -> void:
 		else:
 			_show_toast("败退——回去整备，再来")
 
+# ============================================================
+# v122（用户："主界面头像名字旁边加这个按钮"）：进阶页——主界面那颗"进阶"牌点开的
+# ============================================================
+func _advance_hint() -> String:
+	if GameState.advance_lv >= Realm.MAX_LV:
+		return "已至化境之巅"
+	return "→ " + Realm.name_of(GameState.advance_lv + 1)
+
+func _open_advance() -> void:
+	if _adv_veil != null and is_instance_valid(_adv_veil):
+		return
+	_adv_veil = ColorRect.new()
+	_adv_veil.color = Color(0, 0, 0, 0.45)
+	_adv_veil.size = get_viewport_rect().size
+	_adv_veil.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(_adv_veil)
+	_refresh_advance_panel()
+
+func _close_advance() -> void:
+	if _adv_veil != null and is_instance_valid(_adv_veil):
+		_adv_veil.queue_free()
+	_adv_veil = null
+
+func _refresh_advance_panel() -> void:
+	if _adv_veil == null or not is_instance_valid(_adv_veil):
+		return
+	for c in _adv_veil.get_children():
+		c.queue_free()
+	var vp := get_viewport_rect().size
+	var pw := 600.0
+	var ph := 468.0
+	var panel := Panel.new()
+	panel.position = Vector2((vp.x - pw) * 0.5, (vp.y - ph) * 0.5)
+	panel.size = Vector2(pw, ph)
+	var psb := StyleBoxFlat.new()
+	psb.bg_color = Color(0.955, 0.937, 0.886, 0.99)
+	psb.set_corner_radius_all(14)
+	psb.border_color = Color(0.32, 0.27, 0.22, 0.55)
+	psb.set_border_width_all(2)
+	panel.add_theme_stylebox_override("panel", psb)
+	_adv_veil.add_child(panel)
+	var top := clampi(GameState.advance_lv, 0, Realm.MAX_LV)
+	var t1 := UiKit.make_label(panel, Vector2(0, 16), Vector2(pw, 40), 28, UiKit.INK)
+	UiKit.set_text(t1, "进阶 · " + GameState.advance_name())
+	t1.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var body := ""
+	body += "当前境界：" + GameState.advance_name() + "（全体属性 +" + str(int(GameState.advance_pct() * 100.0)) + "%）\n"
+	if top >= Realm.MAX_LV:
+		body += "已是最高境界。\n"
+	else:
+		var nx: Dictionary = Realm.at(top + 1)
+		body += "下一境界：" + str(nx.get("name", "")) + "（全体 +" + str(int(float(nx.get("pct", 0.0)) * 100.0)) + "%）\n"
+		body += "关卡门槛：第 " + str(int(nx.get("stage_need", 0))) + " 关（现在 " + str(GameState.stage_progress) + "）\n"
+		body += "成功率：" + str(int(float(nx.get("rate", 1.0)) * 100.0)) + "%　·　失败材料与银两尽毁\n\n"
+		var cost := GameState.advance_cost()
+		for k in cost.keys():
+			var have := GameState.material_count(str(k))
+			var need := int(cost[k])
+			body += ("✔ " if have >= need else "✘ ") + str(GameState.MAT_CN.get(str(k), k)) + "　" + str(have) + " / " + str(need) + "\n"
+		var sil := GameState.advance_silver()
+		var have_s := GameState.coin("silver")
+		body += ("✔ " if have_s >= sil else "✘ ") + "银两　" + str(have_s) + " / " + str(sil) + "\n"
+	var lb := UiKit.make_label(panel, Vector2(36, 64), Vector2(pw - 72.0, 250), 18, Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.88))
+	UiKit.set_text(lb, body)
+	lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	var chk := GameState.advance_can()
+	var tip := UiKit.make_label(panel, Vector2(36, ph - 152.0), Vector2(pw - 72.0, 44), 15, UiKit.SEAL)
+	UiKit.set_text(tip, str(chk.get("msg", "")))
+	tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	var go := UiKit.make_button(panel, Vector2(36, ph - 76.0), Vector2(pw - 72.0, 56), "冲一冲", 21)
+	go.disabled = not bool(chk.get("ok", false))
+	go.pressed.connect(_on_advance_go)
+	var no := Button.new()
+	no.text = "再想想"
+	no.position = Vector2(pw - 150.0, 12)
+	no.size = Vector2(120, 34)
+	no.add_theme_font_size_override("font_size", 16)
+	no.focus_mode = Control.FOCUS_NONE
+	no.pressed.connect(_close_advance)
+	panel.add_child(no)
+
+func _on_advance_go() -> void:
+	var r := GameState.advance_try()
+	_show_toast(str(r.get("msg", "")), 2.6)
+	_plaques.set_sub("name", GameState.advance_name())
+	_plaques.set_sub("advance", _advance_hint())
+	if not bool(r.get("ok", false)):
+		_refresh_advance_panel()   # 失败/不够：页面留在原地，材料数已变
+	else:
+		_close_advance()
 func _show_toast(s: String, t := 1.9) -> void:
 	_toast = s
 	_toast_t = t

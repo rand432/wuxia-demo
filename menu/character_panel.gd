@@ -995,7 +995,7 @@ func _refresh() -> void:
 		_avatar.texture = atex
 	var cap := GameState.level_cap(rid)      # v36：上限随境界走（25×(境界+1)）
 	var realm := GameState.role_realm(rid)
-	_sub_lb.text = (str(role.get("sub", "")) + "　·　" + GameState.realm_name(realm) + " · " + str(lv) + "/" + str(cap) + " 级")
+	_sub_lb.text = (str(role.get("sub", "")) + "　·　" + str(lv) + "/" + str(cap) + " 级")
 	# v44：根骨独立成可按的牌（点开成长页）——副标题里不再重复写
 	if _gengu_chip != null:
 		_gengu_chip.text = "根骨 " + str(gengu) + " ▾"
@@ -1003,8 +1003,9 @@ func _refresh() -> void:
 		_gengu_chip.add_theme_color_override("font_color", Color(0.97, 0.95, 0.90))
 	if _growth_panel != null and _growth_panel.visible:
 		_fill_growth()   # 开着就跟着刷新——刚喂完洗髓丹那笔补课立刻能看见
-	# v36：这一格＝境界等级（原来显示的是按根骨分的"评价"）
-	_eval_chip.text = "境界 " + str(realm) + "/" + str(GameState.realm_max())
+	# v121（用户："去掉原先角色的境界标识"）：这一格改成显示**进阶境界**（全队共享那条新轴）；
+	#   每人一个的"突破次数境界"不再露面（等级上限照旧按它走，只是不显示）。
+	_eval_chip.text = "进阶 " + GameState.advance_name() + " · 全体 +" + str(int(GameState.advance_pct() * 100.0)) + "%"
 	_eval_chip.add_theme_stylebox_override("normal", _eval_sb(GameState.eval_of(gengu)))
 	_eval_chip.add_theme_color_override("font_color", Color(0.97, 0.95, 0.90))
 	# ［突破］：到顶才亮（要一颗对应品级的突破丹）

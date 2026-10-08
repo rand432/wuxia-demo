@@ -49,6 +49,7 @@ const GameState := preload("res://shared/game_state.gd")
 const Affixes := preload("res://shared/data_affixes.gd")
 const St := preload("res://shared/data_status.gd")   # v52：负面状态（表＋API，与出村共用同一份）
 const Elem := preload("res://shared/data_elem.gd")   # v58：五行（通道口径/抗性/增伤聚合）
+const Realm := preload("res://shared/data_realm.gd")  # v125：敌情显示境界
 const StatusChips := preload("res://shared/status_chips.gd")   # v54：负面状态的小图标
 const Tuning := preload("res://shared/tuning.gd")   # ㉘：可调参数读取口
 const Roles := preload("res://journey/data_roles.gd")   # ㊳：自带天赋的兵器条件判定
@@ -1016,8 +1017,14 @@ func _foe_spd() -> int:
 	#   要整体调游历敌人的快慢，改 tuning 的 journey/foe_spd_div 即可。
 	return maxi(1, int(round(float(int(_cur().get("spd", 95))) / JOURNEY_FOE_SPD_DIV)))
 
+# v125（用户："游历和爬塔的敌情要显示敌人的境界"）：名字后面缀上境界
+#   （怪的 realm 由 data_journey._scale_foe 按出征档给：凡/良/上/极 → 2/6/12/16 境）
 func _foe_name() -> String:
-	return str(_cur().get("name", "敌人"))
+	var nm := str(_cur().get("name", "敌人"))
+	var rl := int(_cur().get("realm", -1))
+	if rl >= 0:
+		return nm + " · " + Realm.name_of(rl)
+	return nm
 
 func _foe_weapon() -> String:
 	return str(_cur().get("weapon", "dagger"))

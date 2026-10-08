@@ -33,6 +33,7 @@ extends Control
 const GameState := preload("res://shared/game_state.gd")
 const Roles := preload("res://journey/data_roles.gd")   # ㉖：自带天赋（按角色 id 查）
 const Cards := preload("res://shared/data_cards.gd")
+const Realm := preload("res://shared/data_realm.gd")   # v125：敌情显示境界
 const GameData := preload("res://shared/game_data.gd")  # ㉝：兵器距离（站位用）
 const Affixes := preload("res://shared/data_affixes.gd")
 const St := preload("res://shared/data_status.gd")      # v52：负面状态（表＋API，游历那边共用同一份）
@@ -473,7 +474,10 @@ func _build_foes(stage_i_arg: int) -> void:
 		var who: Array = []
 		for i2 in _foes.size():
 			var f2: Dictionary = _foes[i2]
-			who.append(GameData.foe_row_cn(i2) + "：" + str(f2["name"])
+			# v125（用户："…爬塔的敌情要显示敌人的境界"）：名字后面缀境界
+			var rl := int(f2.get("realm", -1))
+			var rtxt := (" · " + Realm.name_of(rl)) if rl >= 0 else ""
+			who.append(GameData.foe_row_cn(i2) + "：" + str(f2["name"]) + rtxt
 				+ "（气 " + str(f2["hp"]) + " · 攻 " + str(f2["atk"]) + "）")
 		_foe_lineup_note = ("对手站位——" + "　".join(PackedStringArray(who))
 			+ "\n站位型：" + GameData.foe_archetype_cn(arch) + "｜前排挡刀、后排打得疼，普通攻击只打最前排")
