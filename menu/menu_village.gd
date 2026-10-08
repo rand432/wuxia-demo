@@ -139,7 +139,15 @@ func _prop(nm: String, x: float, y: float, h: float, tint := Color(1, 1, 1, 1), 
 	draw_texture_rect(tex, Rect2(x - w * 0.5 + sway, y - h, w, h), false, tint)
 	return true
 
+# v96（用户：主界面改用摆景器排的那一版）：
+#   关掉"两张 AI 长卷"这条老路——村景现在由 menu/menu_ink_scene.gd 那层负责
+#   （读 village_layout.json：远山渐隐 + 柳竹船水 + 烟鸟动效 + 画框裁剪）。
+#   保留代码、用一个常量开关，随时可以切回老画。
+const USE_PAINTED_PANORAMA := false
+
 func _far_mat() -> void:
+	if not USE_PAINTED_PANORAMA:
+		return
 	# ⚠ **先铺一层不透明的纸**：画卷层（menu_scroll）那些程序画的云/水/树/竹都在这层下面，
 	#   只压半透明素材的话它们会"透"上来，看着就是用户说的"程序图和图素材混在一起"。
 	#   铺一层实纸把它们挡掉，再把素材当**淡彩**压上去——画心从此是一张干净的画。

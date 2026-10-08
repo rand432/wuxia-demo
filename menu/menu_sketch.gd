@@ -34,6 +34,10 @@ const Draw := preload("res://menu/menu_draw.gd")
 const Build := preload("res://menu/data_build.gd")
 const ScrollLayer := preload("res://menu/menu_scroll.gd")
 const VillageLayer := preload("res://menu/menu_village.gd")
+const InkScene := preload("res://menu/menu_ink_scene.gd")   # v96：水墨村景层（摆景器那套）
+# 两个开关：村景层开着、纸偶演员关掉（用户 2026-10-08："三个移动小人就不要了"）
+const USE_INK_SCENE := true
+const USE_PAPER_ACTORS := false
 const MountLayer := preload("res://menu/menu_mount.gd")
 const HudLayer := preload("res://menu/menu_hud.gd")
 const UiKit := preload("res://shared/ui_kit.gd")   # v72：设置面板用（标签/按钮/纸张面板工厂）
@@ -189,6 +193,7 @@ var _demo_clock := 0.0
 var _tag_rects: Array = []
 var _panel_open := false
 var _actors = null            # v93g：人物层（村景之上、UI 之下，等比缩放）
+var _ink = null               # v96：水墨村景层（最底，读 village_layout.json）
 var _tag_notice := -1
 var _story_kind := ""
 var _story_page := -1
@@ -561,15 +566,22 @@ func _ready() -> void:
 	_village = VillageLayer.new()
 	_mount = MountLayer.new()
 	_hud = HudLayer.new()
+	# v96（用户：主界面改用摆景器排的那一版 + "之前原场景三个移动小人就不要了"）：
+	#   ① 最底先铺**水墨村景层**（读 village_layout.json；自带动效与画框裁剪）；
+	#   ② 纸偶演员层用一个开关关掉（代码保留，随时切回）。
+	if USE_INK_SCENE:
+		_ink = InkScene.new()
+		add_child(_ink)
 	add_child(_scroll)
 	add_child(_village)
 	# v93g（用户："你是不是应该把画面分层？"）：**人物单独一层**。
 	#   原来骨骼是塞在村景层里的——村景层为了让画心铺满竖屏用了**非等比**缩放（sy=1.6625），
 	#   人物跟着被拉、被推，还跟面板抢 z 序。现在：村景 → **人物** → 远山 → 特效 → HUD → 记号 → 面板，
 	#   人物层等比、开面板就整层藏起来（"点其他界面他还会出现"一并解决）。
-	_actors = Node2D.new()
-	add_child(_actors)
-	_village.actor_layer = _actors
+	if USE_PAPER_ACTORS:
+		_actors = Node2D.new()
+		add_child(_actors)
+		_village.actor_layer = _actors
 	add_child(_mount)
 	_fx_root = Node2D.new()
 	add_child(_fx_root)
@@ -1356,9 +1368,11 @@ func _apply_layer_transforms() -> void:
 				vt = t0
 				break
 	_village.dange_tender = vt
-	_actors.position = _scroll.position
-	_actors.scale = _scroll.scale
-	_actors.visible = not _any_panel_open() and _story_page < 0   # 开面板/看剧情就整层收起
+	# v96：纸偶演员层关掉时 _actors 是 null —— 这里必须先判空（否则每帧刷报错）
+	if _actors != null:
+		_actors.position = _scroll.position
+		_actors.scale = _scroll.scale
+		_actors.visible = not _any_panel_open() and _story_page < 0   # 开面板/看剧情就整层收起
 	_fx_root.position = _scroll.position
 	_fx_root.scale = _scroll.scale
 	_mount.position = Vector2(o.x - _cam * z, o.y)
