@@ -125,23 +125,6 @@
       "z": 52.0
     },
     {
-      "alpha": 1.0,
-      "anim": {
-        "amp": 0.05,
-        "phase": 3.1,
-        "speed": 1.7,
-        "type": "sway"
-      },
-      "h": 50.0,
-      "name": "@Sprite2D@29730",
-      "rot": -0.262,
-      "scale": 0.076,
-      "tex": "res://assets/scenes/ink/tree/t06.png",
-      "x": 671.0,
-      "y": 1037.0,
-      "z": 53.0
-    },
-    {
       "alpha": 0.95,
       "anim": {
         "dx": 7.0,
@@ -174,39 +157,7 @@
       "x": 236.0,
       "y": 964.0,
       "z": 35.0
-    },
-    {
-      "alpha": 1.0,
-      "anim": {
-        "amp": 0.03,
-        "phase": 0.6,
-        "speed": 1.0,
-        "type": "sway"
-      },
-      "name": "树_柳枝",
-      "rot": 0.0,
-      "scale": 1.082,
-      "tex": "res://assets/scenes/ink/tree/liu01.png",
-      "x": 457.0,
-      "y": 965.0,
-      "z": 32
-    },
-    {
-      "alpha": 1.0,
-      "anim": {
-        "amp": 0.05,
-        "phase": 2.0,
-        "speed": 2.4,
-        "type": "sway"
-      },
-      "name": "树_竹丛",
-      "rot": 0.0,
-      "scale": 1.082,
-      "tex": "res://assets/scenes/ink/tree/zhu01.png",
-      "x": 236.0,
-      "y": 942.0,
-      "z": 32
     }
   ],
-  "version": 1
+  "version": 1.0
 }

@@ -22,11 +22,20 @@ func _ready() -> void:
 	if font == null:
 		font = ThemeDB.fallback_font
 
+# v98：两页画卷的总长只有 1440（封面页 + 村景页），不是老的 3000 长卷——
+#   所以卷口大小改由外面喂 roll_ratio（0=村景页铺满 · 1=封面页铺满）。不喂就照老规矩看 cam。
+var roll_ratio := -1.0
+
+func _ratio() -> float:
+	if roll_ratio >= 0.0:
+		return clampf(roll_ratio, 0.0, 1.0)
+	return cam / Conf.CAM_MAX
+
 func roll_l() -> float:
-	return Conf.ROLL_MAX * sqrt(cam / Conf.CAM_MAX)
+	return Conf.ROLL_MAX * sqrt(_ratio())
 
 func roll_r() -> float:
-	return Conf.ROLL_MAX * sqrt(clampf(1.0 - cam / Conf.CAM_MAX, 0.0, 1.0))
+	return Conf.ROLL_MAX * sqrt(clampf(1.0 - _ratio(), 0.0, 1.0))
 
 func _draw() -> void:
 	if font == null:
@@ -63,24 +72,37 @@ func _yinshou() -> void:
 	_seal(Vector2(cx, y0 + float(n) * 112.0 + 49.0), 56.0, "无名")
 	draw_string(font, Vector2(cx - 110.0, 881.0), "一 卷 山 水", HORIZONTAL_ALIGNMENT_CENTER, 220.0, 21, Color(Conf.INK.r, Conf.INK.g, Conf.INK.b, 0.35))
 
-# 题跋（左端）：默认整段不画——那块"封面"（绢面）也不再画。
+# 题跋（卷首那段题记）：六列竖排 + 两方印 + 卷末一句。
+#   v98b：改成**按 weiba_x / weiba_w 摆**——默认还是老位置（卷最左端 0~590），
+#   新主界面把它挪到"封面页的左半边"（2280~2670，正好在隔水与《少年游》引首的左边），
+#   省得那半边留一张空纸（用户："这左半边是干嘛的"）。
+var weiba_x := 0.0
+var weiba_w := 590.0
+
 func _weiba() -> void:
 	if not show_weiba:
 		return
-	if not Draw.vis(cam, 0.0, Conf.WEIBA_X1):
+	if not Draw.vis(cam, weiba_x, weiba_x + weiba_w):
 		return
-	draw_rect(Rect2(0, Conf.CONTENT_TOP, Conf.WEIBA_X1, Conf.CONTENT_BOT - Conf.CONTENT_TOP), Conf.WEI_C)
-	draw_line(Vector2(Conf.WEIBA_X1, Conf.CONTENT_TOP), Vector2(Conf.WEIBA_X1, Conf.CONTENT_BOT), Color(0.25, 0.18, 0.12, 0.25), 1.5)
-	_vtext("此卷记一少年", 470.0, 418.0, 29.0)
-	_vtext("自山门而下", 400.0, 418.0, 29.0)
-	_vtext("斩贼于野", 330.0, 430.0, 29.0)
-	_vtext("至" + Conf.VILLAGE_NAME, 260.0, 430.0, 29.0)
-	_vtext("村破·与村人共修", 190.0, 430.0, 27.0)
+	draw_rect(Rect2(weiba_x, Conf.CONTENT_TOP, weiba_w, Conf.CONTENT_BOT - Conf.CONTENT_TOP), Conf.WEI_C)
+	draw_line(Vector2(weiba_x, Conf.CONTENT_TOP), Vector2(weiba_x, Conf.CONTENT_BOT), Color(0.25, 0.18, 0.12, 0.25), 1.5)
+	draw_line(Vector2(weiba_x + weiba_w, Conf.CONTENT_TOP), Vector2(weiba_x + weiba_w, Conf.CONTENT_BOT), Color(0.25, 0.18, 0.12, 0.25), 1.5)
 	var dn := Conf.DISCIPLE_NAME
-	_vtext("得一徒" + ("·" + dn if dn != "" else ""), 120.0, 442.0, 27.0)
-	_seal(Vector2(470.0, 806.0), 42.0, "记")
-	_seal(Vector2(120.0, 806.0), 46.0, "无名")
-	draw_string(font, Vector2(0.0, 869.0), "—— 未完 · 待续 ——", HORIZONTAL_ALIGNMENT_CENTER, Conf.WEIBA_X1, 21, Color(Conf.INK.r, Conf.INK.g, Conf.INK.b, 0.40))
+	var cols: Array = [
+		["此卷记一少年", 418.0, 29.0],
+		["自山门而下", 418.0, 29.0],
+		["斩贼于野", 430.0, 29.0],
+		["至" + Conf.VILLAGE_NAME, 430.0, 29.0],
+		["村破·与村人共修", 430.0, 27.0],
+		["得一徒" + ("·" + dn if dn != "" else ""), 442.0, 27.0],
+	]
+	var step := (weiba_w - 92.0) / float(cols.size() - 1)
+	for i in cols.size():
+		var c: Array = cols[i]
+		_vtext(str(c[0]), weiba_x + weiba_w - 46.0 - float(i) * step, float(c[1]), float(c[2]))
+	_seal(Vector2(weiba_x + weiba_w - 46.0, 806.0), 42.0, "记")
+	_seal(Vector2(weiba_x + 46.0, 806.0), 46.0, "无名")
+	draw_string(font, Vector2(weiba_x, 869.0), "—— 未完 · 待续 ——", HORIZONTAL_ALIGNMENT_CENTER, weiba_w, 21, Color(Conf.INK.r, Conf.INK.g, Conf.INK.b, 0.40))
 
 func _gap_rect(x0: float, x1: float) -> void:
 	if not Draw.vis(cam, x0, x1):

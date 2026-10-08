@@ -26,6 +26,7 @@ extends Control
 const Conf := preload("res://menu/menu_conf.gd")
 const Draw := preload("res://menu/menu_draw.gd")
 const CharArt := preload("res://shared/char_art.gd")
+const Audio := preload("res://shared/audio.gd")   # v98：点击反馈音（用户点名要）
 
 const DW := 720.0
 const DH := 1280.0
@@ -144,6 +145,7 @@ func _on_hit(ev: InputEvent, idx: int) -> void:
 		return
 	if mb.pressed:
 		_down = idx
+		_click_sfx(idx)
 		queue_redraw()
 	else:
 		var was := _down
@@ -154,6 +156,17 @@ func _on_hit(ev: InputEvent, idx: int) -> void:
 			var f: Callable = it["fn"]
 			if bool(it["vis"]) and f.is_valid():
 				f.call()
+
+# v98（用户："点击需要有一点反馈的音效"）：**按下**就响，不等抬手——
+#   木牌/徽标给沉一点的音（pitch 0.92），纸牌/箭头/窄签给脆一点的（1.04），跟画面对得上。
+func _click_sfx(idx: int) -> void:
+	if idx < 0 or idx >= items.size():
+		return
+	var it: Dictionary = items[idx]
+	if not bool(it["vis"]):
+		return
+	var wooden := (not bool(it["white"])) and (str(it["kind"]) != "arrow")
+	Audio.sfx("ui_click", -11.0, randf_range(0.90, 0.95) if wooden else randf_range(1.02, 1.08))
 
 # ---------------- 给主界面改状态 ----------------
 func find_i(id: String) -> int:

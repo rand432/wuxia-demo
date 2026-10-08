@@ -207,7 +207,9 @@ var _panel_open := false
 var _actors = null            # v93g：人物层（村景之上、UI 之下，等比缩放）
 var _ink = null               # v96：水墨村景层（最底，读 village_layout.json）
 var _plaques = null           # v97：牌子层（竖排木牌/六边形徽标/头像；位置＝占屏比例）
-var _cover_win = null         # v98：封面页窗口（引首《少年游》那一整页，会随卷滑动）
+var _cover_win = null         # v98：封面页窗口（一张与画心同高的纸；引首由装裱层画在上面）
+var _ink_clip = null          # v98：画心——村景页裁到装裱以内那一条（y 26~1150）
+var _desk_bg = null           # v98：桌面（画卷之外那一圈底色）
 var _sc := 720.0              # v98：画卷偏移。0=村景页铺满 · 720=封面页铺满（向右拖＝展开到村景）
 var _hint_used := false       # v98：玩家拖过一次就不再多嘴"按住画卷"
 var _set_btn = null           # v97：旧的右上角「设置」按钮（牌子层接管后收起来，代码留着）
@@ -589,29 +591,47 @@ func _ready() -> void:
 	#   ① 最底先铺**水墨村景层**（读 village_layout.json；自带动效与画框裁剪）；
 	#   ② 纸偶演员层用一个开关关掉（代码保留，随时切回）。
 	if USE_INK_SCENE:
-		_ink = InkScene.new()
 		if INK_ONLY:
-			# v97：**整层压到 UI 之下**。村景的每一件都是 z=5~53（摆景器那套分层），
-			#   而面板/牌子/底排都在 z=0——不减这一刀，开面板时村景会从面板里**透出来**
-			#   （角色面板那张取证截图就是这毛病：字都看得见，画也看得见，糊成一片）。
-			#   减到 -100 后：件落在 -95~-47，面板的遮罩能把它们压暗 ✓
-			_ink.z_index = -100
-		add_child(_ink)
-		if INK_ONLY:
-			# v98：封面页——装裱层的"引首"（竖排《少年游》＋无名印＋一卷山水）单独裁成一页，
-			#   整页随卷左右滑（clip_contents 保证它滑出去的部分不会糊到村景页上）。
+			# v98（用户："画卷怎么没把主场景装进去"）——**村景页现在也装进画卷里了**：
+			#   ① 桌面：画卷之外那一圈底色（老主界面也是这么铺的）；
+			#   ② 画心：村景页**裁到装裱以内那一条**（y 26~1150），纸外露出桌面；
+			#   ③ 装裱（包边/木轴/卷口/隔水/引首）由 menu_mount 画在上面（见下面 _mount）。
+			_desk_bg = ColorRect.new()
+			_desk_bg.name = "桌面"
+			_desk_bg.color = Conf.DESK_C
+			_desk_bg.size = Vector2(Conf.DW, Conf.DH)
+			_desk_bg.z_index = -200
+			_desk_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			add_child(_desk_bg)
+			_ink_clip = Control.new()
+			_ink_clip.name = "画心"
+			_ink_clip.clip_contents = true
+			_ink_clip.position = Vector2(0.0, Conf.BAND_TOP)
+			_ink_clip.size = Vector2(Conf.DW, Conf.BAND_H)
+			_ink_clip.z_index = -100
+			_ink_clip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			add_child(_ink_clip)
+			_ink = InkScene.new()
+			_ink_clip.add_child(_ink)
+			_ink.position = Vector2(0.0, -Conf.BAND_TOP)
+			# 封面页：一张与画心同高的纸（引首/隔水/包边由装裱层画在上面）
 			_cover_win = Control.new()
 			_cover_win.name = "封面页"
 			_cover_win.clip_contents = true
 			_cover_win.size = Vector2(Conf.DW, Conf.DH)
+			_cover_win.z_index = -100
 			_cover_win.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			add_child(_cover_win)
 			var cbg := ColorRect.new()
 			cbg.name = "封面纸底"
 			cbg.color = Conf.PAPER
-			cbg.size = Vector2(Conf.DW, Conf.DH)
+			cbg.position = Vector2(0.0, Conf.BAND_TOP)
+			cbg.size = Vector2(Conf.DW, Conf.BAND_H)
 			cbg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			_cover_win.add_child(cbg)
+		else:
+			_ink = InkScene.new()
+			add_child(_ink)
 	add_child(_scroll)
 	add_child(_village)
 	# v93g（用户："你是不是应该把画面分层？"）：**人物单独一层**。
@@ -622,11 +642,18 @@ func _ready() -> void:
 		_actors = Node2D.new()
 		add_child(_actors)
 		_village.actor_layer = _actors
-	if INK_ONLY and _cover_win != null:
-		# 装裱层塞进封面页窗口：窗口局部坐标 = 卷内坐标 - OPEN_CAM（引首正好落在窗口右侧）
-		_mount.position = Vector2(-Conf.OPEN_CAM, 0.0)
-		_mount.cam = Conf.OPEN_CAM
-		_cover_win.add_child(_mount)
+	if INK_ONLY:
+		# v98：装裱层现在**横跨整幅画卷**（两页都在它里面）——包边/木轴/卷口/隔水/引首全归它画，
+		#   位置跟"卷位 V"走（见 _apply_layer_transforms）。
+		#   z=-40：压在画心与封面纸之上（村景的件是 -95~-47），又在所有 UI（z=0）之下。
+		_mount.z_index = -40
+		# v98b：封面页的左半边＝**卷首题记**（六列竖排＋两方印），右边接隔水与《少年游》引首。
+		#   老版这里放的是"村子尾巴"，村景换成摆景器那一版之后就成了空纸——现在补上题记。
+		_mount.show_weiba = true
+		# ⚠ 左边留 60 像素：封面页左边是**卷口**（roll_l≈54px），题记压在那儿会被卷纸盖掉
+		_mount.weiba_x = Conf.OPEN_CAM + 60.0               # 2340
+		_mount.weiba_w = Conf.YINSHOU_X0 - 30.0 - _mount.weiba_x   # 到隔水为止（2670-2340=330）
+		add_child(_mount)
 	else:
 		add_child(_mount)
 	_fx_root = Node2D.new()
@@ -1554,17 +1581,25 @@ func _apply_layer_transforms() -> void:
 		_plaques.scale = Vector2(z, z)
 		_plaques.set_slide(_sc)          # v98：村里的牌子跟着画卷一起滑
 		_refresh_plaques()
-	# v98：两页画卷——村景页（_ink）与封面页（_cover_win）一左一右，_sc 是卷轴位置
-	if _ink != null:
-		_ink.position = Vector2(o.x - _sc * z, o.y)
-		_ink.scale = Vector2(z, z)
+	# v98：两页画卷——村景页（画心 _ink_clip）与封面页（_cover_win）一左一右，_sc 是卷轴位置。
+	#   V＝"卷位"（画卷在长卷坐标里的位置）：村景页 1560 · 封面页 2280——装裱层按 V 画包边/木轴/引首。
+	var V := Conf.OPEN_CAM - (Conf.DW - _sc)
+	if _ink_clip != null:
+		_ink_clip.position = Vector2(o.x, o.y + Conf.BAND_TOP * z)
+		_ink_clip.scale = Vector2(z, z)
+		if _ink != null:
+			_ink.size = Vector2(Conf.DW, Conf.DH)          # ⚠ 画心比它矮，别让锚点把它压扁
+			_ink.position = Vector2(-_sc, -Conf.BAND_TOP)  # 村景跟着卷走
 	if _cover_win != null:
 		_cover_win.position = Vector2(o.x + (Conf.DW - _sc) * z, o.y)
 		_cover_win.scale = Vector2(z, z)
 		_cover_win.visible = _sc > 0.5
-		if _mount != null:
-			_mount.cam = Conf.OPEN_CAM
-			_mount.queue_redraw()
+	if _mount != null and INK_ONLY:
+		_mount.position = Vector2(o.x - V * z, o.y)
+		_mount.scale = Vector2(z, z)
+		_mount.cam = V
+		_mount.roll_ratio = _sc / Conf.DW     # 卷口：村景页时右边卷着，封面页时左边卷着
+		_mount.queue_redraw()
 	if _money_hud != null:
 		_money_hud.position = Vector2(o.x, o.y)
 		_money_hud.scale = Vector2(z, z)
@@ -2008,6 +2043,7 @@ func _on_idle_collect() -> void:
 		_show_toast("挂机还不到 1 分钟——再等等（在线离线都往池里攒）")
 		_refresh_idle_btn()
 		return
+	Audio.sfx("coin", -7.0, randf_range(1.0, 1.08))   # v98：收着钱了给一声
 	var parts: Array = ["银两 +" + str(int(r["silver"]))]
 	if int(r["wood"]) > 0:
 		parts.append("木料 +" + str(int(r["wood"])))
@@ -2105,6 +2141,7 @@ func _story_tip() -> String:
 	return "轻点——收下他" if last else "轻点继续"
 
 func _story_next() -> void:
+	Audio.sfx("paper", -21.0, randf_range(0.98, 1.06))   # v98：翻一页一声纸响（很轻，别盖过配音）
 	_story_page += 1
 	if _story_page < _story_pages().size():
 		return
@@ -2194,6 +2231,8 @@ func _gui_input(ev: InputEvent) -> void:
 			if p.y > Conf.BAND_TOP - 60.0 and p.y < Conf.TAG_Y - 8.0:
 				_mode = "scroll"
 				_dragging = true
+				if INK_ONLY:
+					Audio.sfx("paper", -20.0, randf_range(0.96, 1.04))   # v98：展卷一声纸响（很轻）
 			else:
 				for i in _tag_rects.size():
 					if (_tag_rects[i] as Rect2).has_point(p):
@@ -2283,6 +2322,7 @@ func _build_once() -> void:
 		_show_toast("后山那头的路通了——去林子看看（往左看）")
 
 func _tag_fire(i: int) -> void:
+	Audio.ui_click()      # v98：底排页签原来一声都没有（用户："点击需要有一点反馈的音效"）
 	match i:
 		0:
 			# R4 ④b：有没走完的趟——先问一句（继续／重新开始）
