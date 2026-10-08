@@ -4729,11 +4729,16 @@ static var deploy_diff := 0
 static var deploy_fate := ""   # ㉛：出征屏选的命数 id（"" = 空手走）——第一张（老读法兼容）
 static var deploy_fates: Array = []   # v62r（用户："开局命数可多选"）：这一趟带的**全部**命数
 static var deploy_party: Array = []   # ㊿：这趟同行的人（1~DEPLOY_MAX 个；第一个是领队）
+# v99（出征屏三档：简单 0.5 / 普通 1.0 / 困难 2.0）：这一趟的怪物倍率与爆率倍率
+static var deploy_foe_mul := 1.0
+static var deploy_drop_mul := 1.0
 
 # ㊿：整队出征。rids 可以是字符串（单人，老调用点照旧）或数组（1~3 人）。
 #   deploy_role 记领队——存档里的 role_id 与"默认对谁操作"都用它。
 # v62r（用户："开局命数可多选"）：fate 现在可以是字符串或**数组**（多选）。
-static func deploy_set(rids, d: int, fate: Variant = "") -> void:
+static func deploy_set(rids, d: int, fate: Variant = "", foe_mul := 1.0, drop_mul := 1.0) -> void:
+	deploy_foe_mul = maxf(0.0, float(foe_mul))
+	deploy_drop_mul = maxf(0.0, float(drop_mul))
 	var list: Array = []
 	if typeof(rids) == TYPE_ARRAY:
 		for v in (rids as Array):

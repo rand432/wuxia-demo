@@ -220,6 +220,9 @@ const CHAPTER_ELEM := ["metal", "wood", "water", "fire", "earth"]
 const FOE_OWN_RES := 30             # 对自己那一属性的抗性（百分点）——与 tower 同口径
 
 static func _scale_foe(n: Dictionary, diff: int, node_i := 0) -> void:
+	# v99（出征屏三档：简单 0.5 / 普通 1.0 / 困难 2.0）：出征屏选的那一档，先乘在血/攻上。
+	#   引子趟不设（deploy 默认 1.0）——新手第一趟照旧。
+	var tier_mul: float = maxf(0.0, GameState.deploy_foe_mul)
 	var d := maxi(1, diff) - 1
 	var tier := party_tier()
 	var f: Dictionary = n.get("foe", {})
@@ -235,6 +238,9 @@ static func _scale_foe(n: Dictionary, diff: int, node_i := 0) -> void:
 	var n4 := axis4_mul(int(node_i))
 	hp_mul *= n3 * n4
 	atk_mul *= n3 * n4
+	# v99：出征屏那一档（简单 0.5 / 普通 1.0 / 困难 2.0）
+	hp_mul *= tier_mul
+	atk_mul *= tier_mul
 	f["hp"] = maxi(1, int(round(float(f.get("hp", 60)) * hp_mul)))
 	f["atk"] = maxi(1, int(round(float(f.get("atk", 8)) * atk_mul)))
 	# v86（用户：「游历难度25后加入元素怪」）：

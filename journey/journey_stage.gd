@@ -699,6 +699,8 @@ func _show_ui_all() -> void:
 # 出征交接有货时走这里：不走五问，账上拍完快照直接上路。
 func _start_formal_run() -> void:
 	_phase = "journey"
+	# v99（出征屏三档）：这一趟的爆率倍率交给 data_ladder（红/金两条放大；收尾复位）
+	Ladder.run_rate_mul = maxf(0.0, GameState.deploy_drop_mul)
 	# ㊿b：正式趟按档排新表（五节一轮×轮数，boss 收尾；引子趟照旧吃老表——新手游历不改）
 	_nodes = JourneyData.build_nodes_formal(int(_state.diff))
 	_show_ui_all()
@@ -750,6 +752,8 @@ func _on_created(talents: Array, gift_sid: String) -> void:
 
 func _start_run() -> void:
 	if _state.mode == "formal":
+		# v99：重开一趟也照这一档的爆率倍率来
+		Ladder.run_rate_mul = maxf(0.0, GameState.deploy_drop_mul)
 		# ㊿：重开一趟——节点表重摇（词缀"随机"跟着换手）；血路签的险路照旧补上
 		_nodes = JourneyData.build_nodes_formal(int(_state.diff))
 		if _has_fate("fate_bloodpath"):
@@ -2272,6 +2276,7 @@ func on_shop_drop(bag_index: int) -> void:
 
 func _open_settle() -> void:
 	_busy = true
+	Ladder.run_rate_mul = 1.0    # v99：这一趟完了，爆率倍率复位（别漏到村里/爬塔）
 	# ㊿c4b：进结算页＝引子走通——先记账落盘，再抹续行档（这一页怎么关都不亏）
 	if _state != null and str(_state.mode) == "intro" and not GameState.first_journey_done:
 		_snapshot_player()
@@ -2284,6 +2289,7 @@ func _open_settle() -> void:
 
 func _open_settle_death() -> void:
 	_busy = true
+	Ladder.run_rate_mul = 1.0    # v99：同上，殒命也复位
 	_run_dead = true
 	JourneySave.erase()   # ④b：这趟完了（殒命）——档抹掉
 	_clear_loot()

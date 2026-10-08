@@ -560,6 +560,12 @@ const RED_GUARANTEE := [
 	{"n": 3, "sizes": ["small", "mid", "big"]},    # 5 档（金匮 23500）：保底 3 红 · 小·中·大
 ]
 
+# v99（出征屏三档）：**这一趟的爆率倍率**——简单 0.5 / 普通 1.0 / 困难 2.0。
+#   放在这里当静态变量（而不是去 preload GameState）是为了**不制造循环依赖**：
+#   game_state 已经 preload 了本文件，本文件反过来读 game_state 会绕回去。
+#   游历开局时由 journey_stage 从 GameState.deploy_drop_mul 抄进来，收尾时复位 1.0。
+static var run_rate_mul := 1.0
+
 static func _pick_color(row: String, tier_i: int, luck: float,
 		rng: RandomNumberGenerator = null, rate_mul := 1.0) -> String:
 	var ti := clampi(tier_i, 0, TIER_CAP.size() - 1)
@@ -596,8 +602,11 @@ static func _pick_color(row: String, tier_i: int, luck: float,
 		#   （原 1.50%），正好是用户要的"×2.5"；金/紫/蓝几乎不动（各让出一点点）。
 		#   ⚠ 于是"爆率 +150%"＝**红件出货率 ×2.5**，这才是那张签的实际口径。
 		# ============================================================
-		if cc == "red" and not is_equal_approx(rate_mul, 1.0):
-			w *= maxf(0.0, rate_mul)
+		# v99：红与金两条一起受"这一趟的爆率"影响（困难 ×2 → 红 3%、金 20%）；
+		#   紫/蓝照旧吃剩下的（加权抽取，不能三条一起乘，见上面那段）。
+		var mult := maxf(0.0, rate_mul) * maxf(0.0, run_rate_mul)
+		if (cc == "red" or cc == "gold") and not is_equal_approx(mult, 1.0):
+			w *= mult
 		wt.append(w)
 	if cand.is_empty():
 		return ""

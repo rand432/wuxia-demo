@@ -47,6 +47,21 @@ const INK := Color(0.14, 0.13, 0.15)
 const PAPER := Color(0.905, 0.878, 0.795)
 const SEAL := Color(0.68, 0.15, 0.12)
 
+const CharArt := preload("res://shared/char_art.gd")   # v99：出战位/宠物位要头像
+
+# v99b（用户："老版本难度保留 但是 1-8 总和 按照简单 普通 困难拆分 路程也是"）：
+#   老十档的**数值一个字没动**——三档只是把 **1~8 档那段"三等分"**：
+#     简单 ＝ 老档 1（21 节 · 血 ×1.00 · 攻 ×1.00）
+#     普通 ＝ 老档 4（36 节 · 血 ×1.36 · 攻 ×1.24）
+#     困难 ＝ 老档 8（41 节 · 血 ×1.84 · 攻 ×1.56）
+#   敌人倍率全部由老档自己带（deploy_foe_mul 保持 1.0，不再另乘），所以"以前多硬，现在还多硬"。
+#   **爆率**是老模型里没有的新轴（按草图那张）——简单 ×0.5 · 普通 ×1 · 困难 ×2，接在 data_ladder。
+const TIERS := [
+	{"name": "简单", "foe": 1.0, "drop": 0.5, "diff": 1},
+	{"name": "普通", "foe": 1.0, "drop": 1.0, "diff": 4},
+	{"name": "困难", "foe": 1.0, "drop": 2.0, "diff": 8},
+]
+
 const PANEL_W := 640.0
 # ㊿：面板加高（752 → 1000）。原来那套排法把下半屏挤成一团：
 #   · "随身一行"三个人各一条、还自动换行 —— 却只给了 36px，字直接压到下面几行上；
@@ -84,6 +99,19 @@ const FATE_PANEL_H_BASE := 148.0     # 标题＋说明＋底部"空手走"＋留
 
 var _panel: Panel
 var _role_btns: Array = []
+# v99：新布局的控件
+var _slot_btns: Array = []        # 三个出战位（前/中/后排）
+var _slot_art: Array = []         # 位上的 Q版头像
+var _slot_lb: Array = []          # 位下的名字/等级/攻血
+var _pet_btn: Button = null
+var _pet_art: TextureRect = null
+var _tier_btns: Array = []
+var _tier_name_lb: Array = []
+var _tier_info_lb: Array = []
+var _phase_lb: Label = null
+var _phase_note: Label = null
+var _pick_tier := 0               # 0 简单 / 1 普通 / 2 困难
+var _pool_choice := -1            # 货源品阶：-1＝跟进度自动（ladder_phase）
 # v62c：难度只剩一行字（原来是十格按钮），_diff_btns 已退休——留着空字典只为兼容老调用
 var _diff_btns: Dictionary = {}
 var _sel_lb: Label
@@ -143,19 +171,26 @@ func _build() -> void:
 	_panel.add_theme_stylebox_override("panel", psb)
 	add_child(_panel)
 
-	var title := _label("出　征", 30, INK)
-	title.position = Vector2(28, 20)
-	title.size = Vector2(420, 44)
+	# ============================================================
+	# v99（用户手绘草图："先改这个"）：出征屏**重排**——
+	#   ① 三个**头像位**（前排/中排/后排）：点头像选人，不再是一排名字钮＋一行阵型字
+	#   ② 一个**大宠物位**（椭圆）：点头像选宠
+	#   ③ **游历难度三档**（简单/普通/困难，各写怪物难度与爆率）＋ 货源**品阶步进器**（◀ 凡品 ▶）
+	#   ④ 右列三个小盒：临时仓库 / 命数 / 随身功法；底部 出发 / 暂不
+	# ============================================================
+	var title := _label("出征配置", 30, INK)
+	title.position = Vector2(28, 18)
+	title.size = Vector2(300, 42)
 	_panel.add_child(title)
 
-	var sub := _label("选一名弟子，挑一档路——路上轻重，全看这趟", 18, Color(INK.r, INK.g, INK.b, 0.55))   # v54：15 → 18
+	var sub := _label("点头像选人 · 挑一档路——路上轻重，全看这趟", 16, Color(INK.r, INK.g, INK.b, 0.55))
 	sub.position = Vector2(30, 60)
-	sub.size = Vector2(560, 22)
+	sub.size = Vector2(420, 22)
 	_panel.add_child(sub)
 
-	_pool_lb = _label("", 16, Color(INK.r, INK.g, INK.b, 0.60))   # v54：13 → 16
-	_pool_lb.position = Vector2(280, 32)
-	_pool_lb.size = Vector2(332, 24)
+	_pool_lb = _label("", 15, Color(INK.r, INK.g, INK.b, 0.60))
+	_pool_lb.position = Vector2(300, 30)
+	_pool_lb.size = Vector2(312, 22)
 	_pool_lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_panel.add_child(_pool_lb)
 
@@ -166,119 +201,221 @@ func _build() -> void:
 	sep.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_panel.add_child(sep)
 
-	var s1 := _label("一 · 选人（入队的都在列；最多三人）", 18, Color(INK.r, INK.g, INK.b, 0.72))   # v54：15 → 18
+	# ---- 一 · 出战角色（三个头像位）----
+	var s1 := _label("点击头像选择出战角色", 17, Color(INK.r, INK.g, INK.b, 0.72))
 	s1.position = Vector2(28, 98)
-	s1.size = Vector2(560, 24)
+	s1.size = Vector2(300, 22)
 	_panel.add_child(s1)
-
-	# v63（用户："游历那个也挺麻烦——在选人这里直接加一个出战配置的按钮"）：
-	#   → 打开与爬塔**同一份**整备面板（formation_panel），保存后这边自动跟上。
 	var cfg := Button.new()
-	cfg.text = "出战配置 ▸"
-	cfg.position = Vector2(500, 92)
-	cfg.size = Vector2(116, 38)
-	cfg.add_theme_font_size_override("font_size", 16)
+	cfg.text = "整备 ▸"
+	cfg.position = Vector2(514, 94)
+	cfg.size = Vector2(98, 30)
+	cfg.add_theme_font_size_override("font_size", 15)
 	cfg.focus_mode = Control.FOCUS_NONE
 	cfg.pressed.connect(_open_formation)
-	_style_dark_button(cfg)
+	_style_light_button(cfg)
 	_panel.add_child(cfg)
 
-	# ㊿：羁绊一行——"点谁上阵"最该看见的东西：谁和谁同时在阵里才有加成。
-	#   以前这一屏**完全不显示羁绊**，玩家选了三个人也不知道白拿了多少。
-	# v62c（用户："点击谁上阵之后的那个一长串的说明 其实没必要 就告诉玩家在前谁在后谁在中就好了"）：
-	#   这一行原来是**羁绊说明**（三条羁绊各一行，最多三行 62px）——它顶到 y222，
-	#   而上面那排选人钮正好到 y232 → **压字**（用户说的"字数重合"就是这儿）。
-	#   现在只写**阵型一行**（前/中/后），框 62 → 26、位置 222 → 238：一行、不压、够看。
-	_bond_lb = _label("", 18, Color(SEAL.r, SEAL.g, SEAL.b, 0.95))
-	_bond_lb.position = Vector2(28, 238)
-	_bond_lb.size = Vector2(584, 26)
-	_panel.add_child(_bond_lb)
+	var row_cn := ["前排", "中排", "后排"]
+	var sw := 186.0
+	for i in 3:
+		var x := 28.0 + float(i) * (sw + 13.0)
+		var cap := _label(row_cn[i], 16, Color(INK.r, INK.g, INK.b, 0.62))
+		cap.position = Vector2(x, 124)
+		cap.size = Vector2(sw, 20)
+		cap.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_panel.add_child(cap)
+		var b := Button.new()
+		b.text = ""
+		b.position = Vector2(x, 146)
+		b.size = Vector2(sw, 146)
+		b.focus_mode = Control.FOCUS_NONE
+		b.pressed.connect(_ask_slot.bind(i))
+		_style_pick(b, false)
+		_panel.add_child(b)
+		_slot_btns.append(b)
+		# 圆纸底 + Q版头像
+		var disc := Panel.new()
+		disc.position = Vector2(sw * 0.5 - 38.0, 8.0)
+		disc.size = Vector2(76, 76)
+		disc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var dsb := StyleBoxFlat.new()
+		dsb.bg_color = Color(0.955, 0.937, 0.886, 0.96)
+		dsb.set_corner_radius_all(38)
+		dsb.border_color = Color(0.30, 0.25, 0.21, 0.60)
+		dsb.set_border_width_all(2)
+		disc.add_theme_stylebox_override("panel", dsb)
+		b.add_child(disc)
+		var tr := TextureRect.new()
+		tr.position = Vector2(6, 6)
+		tr.size = Vector2(64, 64)
+		tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		disc.add_child(tr)
+		_slot_art.append(tr)
+		var lb := _label("", 15, INK)
+		lb.position = Vector2(4, 92)
+		lb.size = Vector2(sw - 8.0, 50)
+		lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		b.add_child(lb)
+		_slot_lb.append(lb)
 
-	var s2 := _label("二 · 游历难度（从 1 起，通关就 +1）", 17, Color(INK.r, INK.g, INK.b, 0.55))
-	s2.position = Vector2(28, 284)
-	s2.size = Vector2(590, 22)
+	# ---- 二 · 出战宠物 ----
+	var s2 := _label("点击头像选择出战宠物", 17, Color(INK.r, INK.g, INK.b, 0.72))
+	s2.position = Vector2(28, 300)
+	s2.size = Vector2(300, 22)
 	_panel.add_child(s2)
 
-	# v62c：难度只留一行字（见 _rebuild_diffs）——一大一小两号，扫一眼就知道走到哪了
-	_diff_lb = _label("", 22, INK)
-	_diff_lb.position = Vector2(28, 308)
-	_diff_lb.size = Vector2(400, 30)
-	_panel.add_child(_diff_lb)
+	_pet_btn = Button.new()
+	_pet_btn.text = ""
+	_pet_btn.position = Vector2(28, 324)
+	_pet_btn.size = Vector2(584, 104)
+	_pet_btn.focus_mode = Control.FOCUS_NONE
+	_pet_btn.pressed.connect(_ask_pet)
+	_style_light_button(_pet_btn)
+	_panel.add_child(_pet_btn)
+	# 大椭圆（草图里就是这么一个圈）＋ 头像 ＋ 一行字
+	var oval := Panel.new()
+	oval.position = Vector2(12, 12)
+	oval.size = Vector2(140, 80)
+	oval.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var osb := StyleBoxFlat.new()
+	osb.bg_color = Color(0.955, 0.937, 0.886, 0.96)
+	osb.set_corner_radius_all(40)
+	osb.border_color = Color(0.30, 0.25, 0.21, 0.55)
+	osb.set_border_width_all(2)
+	oval.add_theme_stylebox_override("panel", osb)
+	_pet_btn.add_child(oval)
+	_pet_art = TextureRect.new()
+	_pet_art.position = Vector2(14, 8)
+	_pet_art.size = Vector2(112, 64)
+	_pet_art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_pet_art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_pet_art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	oval.add_child(_pet_art)
+	_pet_lb = _label("", 17, INK)
+	_pet_lb.position = Vector2(166, 30)
+	_pet_lb.size = Vector2(400, 46)
+	_pet_lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_pet_btn.add_child(_pet_lb)
 
-	_sel_lb = _label("", 19, INK)   # v54：16 → 19
-	_sel_lb.position = Vector2(28, 348)   # v62c：难度只剩一行，整段再上移
-	_sel_lb.size = Vector2(590, 28)
-	_panel.add_child(_sel_lb)
-
-	var s3 := _label("三 · 携宠（只能带一只；换宠去［宠物］面板）", 17, Color(INK.r, INK.g, INK.b, 0.55))
-	s3.position = Vector2(28, 396)
-	s3.size = Vector2(590, 22)
+	# ---- 三 · 游历难度（三档）＋ 货源品阶 ----
+	var s3 := _label("游历难度", 17, Color(INK.r, INK.g, INK.b, 0.72))
+	s3.position = Vector2(28, 440)
+	s3.size = Vector2(300, 22)
 	_panel.add_child(s3)
 
-	_pet_lb = _label("", 16, INK)
-	_pet_lb.position = Vector2(28, 422)
-	_pet_lb.size = Vector2(590, 26)
-	_panel.add_child(_pet_lb)
+	for i in TIERS.size():
+		var t: Dictionary = TIERS[i]
+		var b := Button.new()
+		b.text = ""
+		b.position = Vector2(28.0 + float(i) * 132.0, 462)
+		b.size = Vector2(124, 104)
+		b.focus_mode = Control.FOCUS_NONE
+		b.clip_text = true
+		b.pressed.connect(_on_tier.bind(i))
+		_panel.add_child(b)
+		_tier_btns.append(b)
+		var t1 := _label("", 20, INK)
+		t1.position = Vector2(0, 10)
+		t1.size = Vector2(124, 26)
+		t1.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		b.add_child(t1)
+		var t2 := _label("", 12, Color(INK.r, INK.g, INK.b, 0.72))
+		t2.position = Vector2(0, 34)
+		t2.size = Vector2(124, 66)
+		t2.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		t2.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		b.add_child(t2)
+		_tier_name_lb.append(t1)
+		_tier_info_lb.append(t2)
 
-	var s4 := _label("四 · 临时仓库（仓格在下面买——买几格顶几格；容量＝包裹＋仓格）", 17, Color(INK.r, INK.g, INK.b, 0.55))   # v54：13 → 17
-	s4.position = Vector2(28, 456)
-	s4.size = Vector2(590, 22)
-	_panel.add_child(s4)
+	_sel_lb = _label("", 15, Color(INK.r, INK.g, INK.b, 0.62))
+	_sel_lb.position = Vector2(28, 570)
+	_sel_lb.size = Vector2(414, 22)
+	_panel.add_child(_sel_lb)
 
-	# ㉓~㉗：临时仓库——每趟 6 格底；买一格 50 两、下一格贵 50（只顶下一趟）
+	# 货源品阶步进器（◀ 凡品 ▶）
+	var ph_l := Button.new()
+	ph_l.text = "◀"
+	ph_l.position = Vector2(28, 590)
+	ph_l.size = Vector2(46, 38)
+	ph_l.add_theme_font_size_override("font_size", 18)
+	ph_l.focus_mode = Control.FOCUS_NONE
+	ph_l.pressed.connect(_on_phase.bind(-1))
+	_style_light_button(ph_l)
+	_panel.add_child(ph_l)
+	_phase_lb = _label("", 18, INK)
+	_phase_lb.position = Vector2(80, 590)
+	_phase_lb.size = Vector2(190, 38)
+	_phase_lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_panel.add_child(_phase_lb)
+	var ph_r := Button.new()
+	ph_r.text = "▶"
+	ph_r.position = Vector2(276, 590)
+	ph_r.size = Vector2(46, 38)
+	ph_r.add_theme_font_size_override("font_size", 18)
+	ph_r.focus_mode = Control.FOCUS_NONE
+	ph_r.pressed.connect(_on_phase.bind(1))
+	_style_light_button(ph_r)
+	_panel.add_child(ph_r)
+	_phase_note = _label("货源品阶：选哪一档，路上出的货就从哪一档起", 13, Color(INK.r, INK.g, INK.b, 0.50))
+	_phase_note.position = Vector2(28, 632)
+	_phase_note.size = Vector2(414, 20)
+	_panel.add_child(_phase_note)
+
+	# ---- 右列三个小盒：临时仓库 / 命数 / 随身功法 ----
+	var bx := 430.0
+	var bw := PANEL_W - 28.0 - bx
 	_expand_btn = Button.new()
-	_expand_btn.text = "临时仓库"
-	_expand_btn.position = Vector2(28, 480)
-	_expand_btn.size = Vector2(584, 50)
-	_expand_btn.add_theme_font_size_override("font_size", 19)   # v54：15 → 19
+	_expand_btn.position = Vector2(bx, 440)
+	_expand_btn.size = Vector2(bw, 74)
+	_expand_btn.add_theme_font_size_override("font_size", 15)
 	_expand_btn.focus_mode = Control.FOCUS_NONE
 	_expand_btn.pressed.connect(_on_expand)
 	_style_light_button(_expand_btn)
 	_panel.add_child(_expand_btn)
 
-	# ㉛：命数——出征前挑一张带上（负面换好处；只顶这一趟；也可以空手走）
-	# v11：这一行**一分为二**（命数 ＋ 随身功法）——面板已经排满，见缝插针只能拆行：
-	#   上面「四·临时仓库」那颗钮到 584 为止，随身清单从 590 起、三个人时正好占满，
-	#   插不进第三行。两张半宽钮的文案跟着收短（详情都在各自的挑卡页里）。
 	_fate_btn = Button.new()
-	_fate_btn.text = "命数"
-	_fate_btn.position = Vector2(28, 536)
-	_fate_btn.size = Vector2(282, 48)
-	_fate_btn.add_theme_font_size_override("font_size", 19)   # v54：15 → 19
+	_fate_btn.position = Vector2(bx, 522)
+	_fate_btn.size = Vector2(bw, 74)
+	_fate_btn.add_theme_font_size_override("font_size", 16)
 	_fate_btn.focus_mode = Control.FOCUS_NONE
 	_fate_btn.pressed.connect(_ask_fate_pick)
 	_style_light_button(_fate_btn)
 	_panel.add_child(_fate_btn)
 
-	# v11：随身功法——出征前给每个人挑一门带进游历（只一门；兵器照旧随身）
 	_art_btn = Button.new()
-	_art_btn.text = "随身功法"
-	_art_btn.position = Vector2(322, 536)
-	_art_btn.size = Vector2(290, 48)
-	_art_btn.add_theme_font_size_override("font_size", 19)
+	_art_btn.position = Vector2(bx, 604)
+	_art_btn.size = Vector2(bw, 74)
+	_art_btn.add_theme_font_size_override("font_size", 16)
 	_art_btn.focus_mode = Control.FOCUS_NONE
 	_art_btn.pressed.connect(_ask_art_pick)
 	_style_light_button(_art_btn)
 	_panel.add_child(_art_btn)
 
-	# v5：随身一行——出征将自动卸下的清单（预告；真卸在确认之后）
-	# ㊿：高度按"三个人各两行"留（12 号字 × 6 行 ≈ 100）——原来只给 36，
-	#   一上三个人就压到下面的脚注/报错/按钮上，就是"字数重叠"的来源。
-	_carry_lb = _label("", 15, Color(INK.r, INK.g, INK.b, 0.70))   # v54：12 → 15
-	_carry_lb.position = Vector2(28, 590)
-	_carry_lb.size = Vector2(584, 220)   # v62c：难度只剩一行，再让给「随身」   # 15 号字 × 6 行 ≈ 120；再高就会压到下面的脚注
+	# ---- 随身清单 ----
+	var s4 := _label("随身（出征前自动卸下；回来照这份穿回去）", 15, Color(INK.r, INK.g, INK.b, 0.55))
+	s4.position = Vector2(28, 662)
+	s4.size = Vector2(584, 20)
+	_panel.add_child(s4)
+	_carry_lb = _label("", 14, Color(INK.r, INK.g, INK.b, 0.72))
+	_carry_lb.position = Vector2(28, 686)
+	_carry_lb.size = Vector2(584, 128)
 	_carry_lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_panel.add_child(_carry_lb)
 
-	_foot_lb = _label("", 15, Color(INK.r, INK.g, INK.b, 0.55))   # v54：12 → 15
-	_foot_lb.position = Vector2(28, 814)
-	_foot_lb.size = Vector2(584, 46)
+	_foot_lb = _label("", 14, Color(INK.r, INK.g, INK.b, 0.55))
+	_foot_lb.position = Vector2(28, 820)
+	_foot_lb.size = Vector2(584, 36)
 	_foot_lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_panel.add_child(_foot_lb)
 
-	_msg_lb = _label("", 17, Color(SEAL.r, SEAL.g, SEAL.b, 0.85))   # v54：14 → 17
-	_msg_lb.position = Vector2(28, 862)
-	_msg_lb.size = Vector2(584, 44)
+	_msg_lb = _label("", 15, Color(SEAL.r, SEAL.g, SEAL.b, 0.85))
+	_msg_lb.position = Vector2(28, 858)
+	_msg_lb.size = Vector2(584, 40)
 	_msg_lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_panel.add_child(_msg_lb)
 
@@ -301,6 +438,8 @@ func _build() -> void:
 	close_btn.pressed.connect(close)
 	_style_light_button(close_btn)
 	_panel.add_child(close_btn)
+
+	_paint_tiers()
 
 func _label(text: String, font_size: int, col: Color) -> Label:
 	var lb := Label.new()
@@ -355,32 +494,211 @@ func _style_pick(btn: Button, on: bool) -> void:
 	btn.add_theme_stylebox_override("focus", _flat(Color(0, 0, 0, 0)))
 
 func _rebuild_roles() -> void:
-	for b in _role_btns:
-		if is_instance_valid(b):
-			b.queue_free()
-	_role_btns.clear()
-	var ids: Array = GameState.disciple_ids()
-	var n := ids.size()
-	if n <= 0:
+	# v99：选人改成"三个头像位"（用户草图）——这里只把三位刷新一遍，不再生成一排名字钮
+	_paint_slots()
+
+# v99：三个出战位——位 i 站的是 _pick_roles[i]（名册顺序＝前排→中排→后排）
+func _paint_slots() -> void:
+	for i in 3:
+		if i >= _slot_btns.size():
+			break
+		var b: Button = _slot_btns[i]
+		if b == null or not is_instance_valid(b):
+			continue
+		var rid := str(_pick_roles[i]) if i < _pick_roles.size() else ""
+		var tr: TextureRect = _slot_art[i]
+		var lb: Label = _slot_lb[i]
+		if rid == "":
+			tr.texture = null
+			lb.text = "空位\n点头像选人"
+			_style_pick(b, false)
+			continue
+		var d: Dictionary = GameState.role_data(rid)
+		var st: Dictionary = GameState.effective_stats(rid)
+		tr.texture = CharArt.q_head(rid)
+		lb.text = str(d.get("name", rid)) + "  lv" + str(int(d.get("lv", 1))) + "\n攻 " + str(int(st.get("atk", 0))) + " · 气血 " + str(int(st.get("hp", 0)))
+		_style_pick(b, true)
+
+# v99：点头像位 → 选谁站这一排（弹层列出名册）
+func _ask_slot(slot: int) -> void:
+	if _row_veil != null and is_instance_valid(_row_veil):
 		return
-	var w := (584.0 - 12.0 * float(maxi(n - 1, 0))) / float(n)
-	for i in n:
-		var rid := str(ids[i])
+	var ids: Array = GameState.disciple_ids()
+	var row_cn := ["前排", "中排", "后排"]
+	var vp := get_viewport_rect().size
+	var veil := ColorRect.new()
+	veil.color = Color(0, 0, 0, 0.42)
+	veil.size = vp
+	veil.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(veil)
+	_row_veil = veil
+	var pw := 520.0
+	var ph := 96.0 + float(ids.size()) * 56.0 + 56.0
+	var panel := Panel.new()
+	panel.position = Vector2((vp.x - pw) * 0.5, (vp.y - ph) * 0.5)
+	panel.size = Vector2(pw, ph)
+	panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	var psb := StyleBoxFlat.new()
+	psb.bg_color = Color(PAPER.r, PAPER.g, PAPER.b, 0.99)
+	psb.set_corner_radius_all(14)
+	psb.border_color = Color(0.32, 0.27, 0.22, 0.55)
+	psb.set_border_width_all(2)
+	panel.add_theme_stylebox_override("panel", psb)
+	veil.add_child(panel)
+	var tt := _label("谁站" + row_cn[clampi(slot, 0, 2)] + "？", 24, INK)
+	tt.position = Vector2(0, 16)
+	tt.size = Vector2(pw, 34)
+	tt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	panel.add_child(tt)
+	var sub := _label("前排先挨打，后排躲着输出；位子会顺次让开", 13, Color(INK.r, INK.g, INK.b, 0.62))
+	sub.position = Vector2(0, 54)
+	sub.size = Vector2(pw, 22)
+	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	panel.add_child(sub)
+	var y := 84.0
+	for r_v in ids:
+		var rid := str(r_v)
+		var d: Dictionary = GameState.role_data(rid)
+		var st: Dictionary = GameState.effective_stats(rid)
 		var b := Button.new()
-		b.position = Vector2(28.0 + float(i) * (w + 12.0), 126.0)
-		b.size = Vector2(w, 106.0)
-		b.text = ""   # 文案由 _paint_role_texts() 统一写（要带站位）
-		# v61：18 → **17**。三人一排时每颗只有 186 宽，最长的组合
-		#   （三字名 ＋ lv1000 ＋ 未上阵）在 18 号下要 179 ＋内边距 → 按钮被 Godot 撑到 200，
-		#   顶出 584 的内容区；17 号下同一条只要 169 ✓ 稳稳在框里。
-		#   `clip_text` 是保险：真再长出框也只裁字，绝不让按钮去挤邻居。
+		b.position = Vector2(24, y)
+		b.size = Vector2(pw - 48.0, 48)
+		var where := _row_cn_of(rid)
+		b.text = str(d.get("name", rid)) + "　lv" + str(int(d.get("lv", 1))) + "　攻 " + str(int(st.get("atk", 0))) + " · 气血 " + str(int(st.get("hp", 0))) + ("　（现：" + where + "）" if where != "" else "")
 		b.add_theme_font_size_override("font_size", 17)
-		b.clip_text = true
 		b.focus_mode = Control.FOCUS_NONE
-		b.pressed.connect(_on_role.bind(rid))
-		_panel.add_child(b)
-		_role_btns.append(b)
-	_paint_role_texts()
+		b.pressed.connect(_on_row_pick.bind(rid, slot))
+		_style_pick(b, where == row_cn[clampi(slot, 0, 2)])
+		panel.add_child(b)
+		y += 56.0
+	var off := Button.new()
+	off.position = Vector2(24, y + 2.0)
+	off.size = Vector2(pw - 48.0, 42)
+	off.text = "把这一位空出来"
+	off.add_theme_font_size_override("font_size", 16)
+	off.focus_mode = Control.FOCUS_NONE
+	off.pressed.connect(_on_slot_clear.bind(slot))
+	_style_light_button(off)
+	panel.add_child(off)
+	veil.gui_input.connect(_on_row_blank)
+
+func _on_slot_clear(slot: int) -> void:
+	if slot < _pick_roles.size():
+		_pick_roles.remove_at(slot)
+		if _pick_roles.is_empty():
+			var ids: Array = GameState.disciple_ids()
+			if ids.size() > 0:
+				_pick_roles.append(str(ids[0]))
+	_close_row()
+	_paint()
+
+# v99：宠物位——点头像换宠（草图里那个大椭圆）
+func _ask_pet() -> void:
+	if _row_veil != null and is_instance_valid(_row_veil):
+		return
+	var roster: Dictionary = GameState.pet_roster
+	var vp := get_viewport_rect().size
+	var veil := ColorRect.new()
+	veil.color = Color(0, 0, 0, 0.42)
+	veil.size = vp
+	veil.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(veil)
+	_row_veil = veil
+	var keys: Array = roster.keys()
+	var pw := 520.0
+	var ph := 96.0 + float(maxi(keys.size(), 1)) * 60.0 + 56.0
+	var panel := Panel.new()
+	panel.position = Vector2((vp.x - pw) * 0.5, (vp.y - ph) * 0.5)
+	panel.size = Vector2(pw, ph)
+	panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	var psb := StyleBoxFlat.new()
+	psb.bg_color = Color(PAPER.r, PAPER.g, PAPER.b, 0.99)
+	psb.set_corner_radius_all(14)
+	psb.border_color = Color(0.32, 0.27, 0.22, 0.55)
+	psb.set_border_width_all(2)
+	panel.add_theme_stylebox_override("panel", psb)
+	veil.add_child(panel)
+	var tt := _label("带哪只宠物？", 24, INK)
+	tt.position = Vector2(0, 16)
+	tt.size = Vector2(pw, 34)
+	tt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	panel.add_child(tt)
+	var sub := _label("只能带一只；进阶/喂丹去［宠物］面板", 13, Color(INK.r, INK.g, INK.b, 0.62))
+	sub.position = Vector2(0, 54)
+	sub.size = Vector2(pw, 22)
+	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	panel.add_child(sub)
+	var y := 84.0
+	if keys.is_empty():
+		var none := _label("还没有宠物——先去历练，山下会有人等你", 17, Color(INK.r, INK.g, INK.b, 0.62))
+		none.position = Vector2(0, y + 8.0)
+		none.size = Vector2(pw, 30)
+		none.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		panel.add_child(none)
+		y += 60.0
+	for k in keys:
+		var pid := str(k)
+		var b := Button.new()
+		b.position = Vector2(24, y)
+		b.size = Vector2(pw - 48.0, 52)
+		b.text = GameState.pet_name_of(pid) + "　" + GameState.pet_stage_name_of(pid) + ("　（随行中）" if GameState.pet_follow == pid else "")
+		b.add_theme_font_size_override("font_size", 18)
+		b.focus_mode = Control.FOCUS_NONE
+		b.pressed.connect(_on_pet_pick.bind(pid))
+		_style_pick(b, GameState.pet_follow == pid)
+		panel.add_child(b)
+		y += 60.0
+	var off := Button.new()
+	off.position = Vector2(24, y + 2.0)
+	off.size = Vector2(pw - 48.0, 44)
+	off.text = "不带宠物"
+	off.add_theme_font_size_override("font_size", 17)
+	off.focus_mode = Control.FOCUS_NONE
+	off.pressed.connect(_on_pet_pick.bind(""))
+	_style_light_button(off)
+	panel.add_child(off)
+	veil.gui_input.connect(_on_row_blank)
+
+func _on_pet_pick(pid: String) -> void:
+	if pid == "":
+		GameState.pet_follow = ""
+	else:
+		GameState.pet_select(pid)
+		GameState.pet_follow = pid
+	_close_row()
+	_paint()
+
+# v99：难度三档（草图）——每档写清怪物难度与爆率；随便挑，通关的标「已通关」
+func _paint_tiers() -> void:
+	for i in TIERS.size():
+		if i >= _tier_btns.size():
+			break
+		var t: Dictionary = TIERS[i]
+		var done: bool = GameState.diff_is_cleared(int(t["diff"]))
+		var on: bool = (i == _pick_tier)
+		_tier_name_lb[i].text = str(t["name"]) + ("（已通关）" if done else "")
+		# 怪物那一行写**老档的实际倍率**（血 / 攻各自一条尺子），不写虚的百分比
+		var d_i: int = maxi(1, int(t["diff"]))
+		var hp_pct := int(round((1.0 + 0.12 * float(d_i - 1)) * 100.0))
+		var atk_pct := int(round((1.0 + 0.08 * float(d_i - 1)) * 100.0))
+		_tier_info_lb[i].text = "怪物 血" + str(hp_pct) + "%·攻" + str(atk_pct) + "%\n爆率 " + str(int(round(float(t["drop"]) * 100.0))) + "%"
+		# ⚠ 子标签要跟着选中态换色——深底上写深字，等于没有（第一版就是这样）
+		_tier_name_lb[i].add_theme_color_override("font_color", PAPER if on else INK)
+		_tier_info_lb[i].add_theme_color_override("font_color", Color(PAPER.r, PAPER.g, PAPER.b, 0.86) if on else Color(INK.r, INK.g, INK.b, 0.72))
+		_style_pick(_tier_btns[i], on)
+
+func _on_tier(i: int) -> void:
+	_pick_tier = clampi(i, 0, TIERS.size() - 1)
+	_pick_diff = int((TIERS[_pick_tier] as Dictionary)["diff"])
+	_paint_tiers()
+	_paint()
+
+# v99：货源品阶步进器（◀ 凡品 ▶）——只能在**已解锁的档次**里挑（封顶＝进度给的那一档）
+func _on_phase(d: int) -> void:
+	var top: int = GameState.ladder_phase()
+	var cur: int = _pool_choice if _pool_choice >= 0 else top
+	_pool_choice = clampi(cur + d, 0, top)
+	_paint()
 
 # ㊿：名册钮上**直接写清站位**——"谁前谁后"以前只藏在"点的顺序"里，玩家看不见。
 #   上阵的写「前排／中排／后排」，没上阵的写「未上阵」，一眼分明。
@@ -419,17 +737,12 @@ func _rebuild_diffs() -> void:
 		if is_instance_valid(b):
 			b.queue_free()
 	_diff_btns.clear()
-	_pick_diff = 0
-	for d in range(1, GameState.DIFF_MAX + 1):
-		if GameState.diff_state(d) == "open":
-			_pick_diff = d
-			break
-	if _diff_lb == null:
-		return
-	if _pick_diff > 0:
-		_diff_lb.text = "当前游历难度 " + str(_pick_diff)
-	else:
-		_diff_lb.text = "所有难度都走通了（新路在后面的版本里）"
+	# v99：难度改由三档驱动（TIERS）——这里只保证 _pick_diff 与 _pick_tier 对上
+	_pick_tier = clampi(_pick_tier, 0, TIERS.size() - 1)
+	_pick_diff = int((TIERS[_pick_tier] as Dictionary)["diff"])
+	_paint_tiers()
+	if _diff_lb != null:
+		_diff_lb.text = ""
 #（此处不留——整段删掉；背包改由临时仓库，不再有换装入口）
 # v6：临时扩仓——买了会扣银两；出发时 run_state 自动取走
 func _on_expand() -> void:
@@ -626,14 +939,10 @@ func _on_formation_saved() -> void:
 
 func _paint() -> void:
 	if _expand_btn != null:
-		var price: int = GameState.run_expand_price()
-		_expand_btn.text = "临时仓库 " + str(GameState.run_expand_slots()) + " 格：买一格 ＝ " + str(price) + " 两（下一格 " + str(GameState.run_expand_price_after()) + " 两 · 只顶下一趟）"
-	var ids: Array = GameState.disciple_ids()
-	for i in _role_btns.size():
-		var b: Button = _role_btns[i]
-		# ㊿：勾中的都亮起来（不是只亮一个）
-		_style_pick(b, i < ids.size() and _pick_roles.has(str(ids[i])))
-	_paint_role_texts()   # ㊿：站位就写在钮上——换排之后要立刻跟着变
+		# v99：这一块改成右列小盒（草图）——文案压成三行
+		_expand_btn.text = "临时仓库\n" + str(GameState.run_expand_slots()) + " 格 · 买一格 " + str(GameState.run_expand_price()) + " 两\n（下一格 " + str(GameState.run_expand_price_after()) + " 两 · 只顶一趟）"
+	_paint_slots()        # v99：三个出战位
+	_paint_tiers()        # v99：难度三档
 	if _pick_diff > 0:
 		# v62c：难度已有自己那一行，这里不再重复——只报路程与同行人数
 		_sel_lb.text = "路程 " + str(_nodes_of(_pick_diff)) + " 节 · 最多带 " + str(GameState.DEPLOY_MAX) + " 人"
@@ -650,9 +959,20 @@ func _paint() -> void:
 	_pool_lb.text = "货源：" + _pool_stage_cn() + "段 · 兵器已换 " + str(sw) + " 手／武学已换 " + str(sa) + " 手"
 	var pd: Dictionary = GameState.pet_follow_data()
 	if pd.is_empty():
-		_pet_lb.text = "未携宠（去［宠物］面板点［随行］）"
+		_pet_lb.text = "未携宠——点这个椭圆挑一只\n（进阶/喂丹去［宠物］面板）"
+		_pet_art.texture = null
 	else:
-		_pet_lb.text = str(pd.get("name", "宠物")) + " · " + str(GameState.pet_follow_stage_name()) + "　随行中"
+		_pet_lb.text = str(pd.get("name", "宠物")) + " · " + str(GameState.pet_follow_stage_name()) + "\n随行中——点一下可换"
+		_pet_art.texture = CharArt.pet(str(GameState.pet_follow))
+	# v99：货源品阶那一行（步进器 ＋ 右上角货源提示）
+	if _phase_lb != null:
+		var top: int = GameState.ladder_phase()
+		if _pool_choice < 0 or _pool_choice > top:
+			_pool_choice = top
+		var qa: Array = Cards.QUALITY_ORDER
+		_phase_lb.text = "货源 " + str(qa[clampi(_pool_choice, 0, qa.size() - 1)]) + "（封顶 " + str(qa[clampi(top, 0, qa.size() - 1)]) + "）"
+	if _phase_note != null:
+		_phase_note.text = "货源品阶：跟着进度解锁；◀ ▶ 在已解锁的档次里挑（这一趟出的货看它）"
 	_paint_carry()
 	_paint_bonds()
 	_foot_lb.text = "本趟残卡到结算收进仓库；盘缠不带出；随身装备与功法出征前已自动卸回仓库。"
@@ -666,21 +986,26 @@ func _paint() -> void:
 
 # ㉛b：命数已解锁？——"经历到第 FATE_MIN_DIFF 档"：该档已开（前几档走完）
 func _fate_open() -> bool:
-	return GameState.diff_state(FATE_MIN_DIFF) != "locked"
+	# v99：难度改成三档之后，老的"第 5 档才解锁命数"永远到不了（只到 3 档）——
+	#   改成**通关任意一档**就解锁（最先是简单）。
+	for i in TIERS.size():
+		if GameState.diff_is_cleared(int((TIERS[i] as Dictionary)["diff"])):
+			return true
+	return false
 
 func _paint_fate_btn() -> void:
 	if _fate_btn == null:
 		return
 	# v11：这一行现在只占半宽（另一半是随身功法）——文案收短，详情在挑卡页里
 	if not _fate_open():
-		_fate_btn.text = "命数：未解锁（" + str(GameState.diff_cleared_count()) + "/" + str(FATE_MIN_DIFF - 1) + " 档）"
+		_fate_btn.text = "命数\n未解锁（先通关一档）"
 		_fate_btn.disabled = true
 		return
 	_fate_btn.disabled = false
 	if _pick_fates.is_empty():
-		_fate_btn.text = "命数：空手走 ▸"
+		_fate_btn.text = "命数\n空手走 ▸"
 	else:
-		_fate_btn.text = "命数：已选 " + str(_pick_fates.size()) + " 张 ▸"
+		_fate_btn.text = "命数\n已选 " + str(_pick_fates.size()) + " 张 ▸"
 
 func _ask_fate_pick() -> void:
 	if not _fate_open():
@@ -881,7 +1206,7 @@ func _paint_art_btn() -> void:
 	var pend := _art_pending()
 	# v12：有"待挑"的人就把这颗钮写成报警的样子（红字），点了就进挑功法页
 	if not pend.is_empty():
-		_art_btn.text = "随身功法：★ " + str(pend.size()) + " 人待挑 ▸"
+		_art_btn.text = "随身功法\n★ " + str(pend.size()) + " 人待挑 ▸"
 		var seal := Color(0.72, 0.16, 0.12)
 		_art_btn.add_theme_color_override("font_color", seal)
 		_art_btn.add_theme_color_override("font_hover_color", seal)
@@ -900,11 +1225,11 @@ func _paint_art_btn() -> void:
 			continue
 		names.append(str(GameState.role_data(rid).get("name", rid)) + "·" + str(Cards.name_of(sid)))
 	if names.size() == 0:
-		_art_btn.text = "随身功法：空手走 ▸"
+		_art_btn.text = "随身功法\n空手走 ▸"
 	elif names.size() == 1:
-		_art_btn.text = "随身功法：" + str(names[0]) + " ▸"
+		_art_btn.text = "随身功法\n" + str(names[0]) + " ▸"
 	else:
-		_art_btn.text = "随身功法：已挑 " + str(names.size()) + " 门 ▸"
+		_art_btn.text = "随身功法\n已挑 " + str(names.size()) + " 门 ▸"
 
 # 挑功法页——每人一段：身上那几门各一行＋一行"这趟不带"（再点已选的那条＝不带）。
 #   与挑命数同一套手感（点整行即生效、重画立刻反映 ✔）。
@@ -1073,31 +1398,17 @@ func _carry_line(rid: String) -> String:
 	if not rest_arts.is_empty():
 		art_seg += "　卸下 " + str(rest_arts.size()) + " 门：" + "、".join(PackedStringArray(rest_arts))
 	segs.append(art_seg)
+	# v99（新布局把这块压到 128 像素高）：**一人一行**——
+	#   原来一人两行、三个人就六七行，直接压到下面的脚注上（截图里那团糊字）。
+	#   现在只报三件事：带什么走 · 卸几件 · 称号（大招/被动只在有位置时点一下）。
 	var gear: Dictionary = rd.get("gear", {})
-	var gsegs: Array = []
+	var gcnt := 0
 	for slot_v in ["armor", "helm", "cloak"]:
-		var slot := str(slot_v)
-		var cn := "护甲"
-		if slot == "helm":
-			cn = "玉佩"
-		elif slot == "cloak":
-			cn = "披风"
-		var gsid := str(gear.get(slot, ""))
-		gsegs.append(cn + " " + ("—" if gsid == "" else str(Cards.item_name(gsid))))
-	segs.append("｜".join(PackedStringArray(gsegs)))
-	var tail := ""
-	var ult: Dictionary = rd.get("ult", {})
-	var pas: Dictionary = rd.get("passive", {})
-	if not ult.is_empty():
-		tail = "大招「" + str(ult.get("name", "")) + "」"
-	if not pas.is_empty():
-		if tail != "":
-			tail += " · "
-		tail += "被动「" + str(pas.get("name", "")) + "」"
-	# ㊿：这一行原来写得又长又绕，三个人就换到六七行、压住下面几行字。
-	#   现在只留必要信息，句尾收成一句短的：三人大约各两行。
-	var note := "　（随身不变" + ("：" + tail if tail != "" else "") + "）"
-	return who + "｜卸下：" + " · ".join(PackedStringArray(segs)) + note
+		if str(gear.get(str(slot_v), "")) != "":
+			gcnt += 1
+	var keep := "空手" if wsid == "" else str(Cards.item_name(wsid))
+	var art := "不带功法" if keep_art == "" else str(Cards.name_of(keep_art))
+	return who + "：带「" + keep + "」＋「" + art + "」｜卸下 护具 " + str(gcnt) + " 件 · 功法 " + str(rest_arts.size()) + " 门"
 
 func _nodes_of(d: int) -> int:
 	# ㊿c：正式趟按档——与 data_journey.formal_cycles 同式：轮数＝min(3＋档, 8)，五节一轮，boss 收尾
@@ -1360,7 +1671,8 @@ func _do_depart() -> void:
 	_close_strip_confirm()
 	# ㊿：把**整车**交给出征交接——游历那边是从 deploy_take() 取名单的（信号只负责切场景）。
 	#   deploy_set 内部会把第一个记成领队（存档的 role_id 也记他）。
-	GameState.deploy_set(rids, _pick_diff, _pick_fates)   # v62r：命数**整批**交出去（多选）
+	var t: Dictionary = TIERS[_pick_tier]
+	GameState.deploy_set(rids, _pick_diff, _pick_fates, float(t["foe"]), float(t["drop"]))   # v62r：命数整批；v99：再带上三档的怪/爆率倍率
 	print("[出征] 出发：队伍=", rids, " 难度=", _pick_diff, " 命数=", _pick_fates,
 		" 随身功法=", _pick_arts, "（兵器与这一门功法随身，其余自动卸回仓库；临时扩仓 ", GameState.run_expand_slots(), " 格随行）")
 	deploy_started.emit(rids, _pick_diff)
