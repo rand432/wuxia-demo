@@ -26,12 +26,24 @@ func _draw() -> void:
 	_draw_hint()
 	_draw_toast()
 	_draw_tags()
+	# v97：这行是开发用的读数（村况/卷轴位置）。镜头钉死之后"卷 2280/2280"没意义了，
+	#   而且它正好压在底排按钮下沿上——新模式下不再画（老模式照旧）。
+	if host.PIN_CAM:
+		return
 	var st: Dictionary = Build.STAGES[int(host._stage)]
 	draw_string(font, Vector2(0.0, 1260.0), "主界面 v7 · 村况 " + str(int(host._stage)) + "/" + str(Build.STAGE_MAX) + "·" + str(st["name"]) + " · 卷 " + str(int(host._cam)) + "/" + str(int(Conf.CAM_MAX)), HORIZONTAL_ALIGNMENT_RIGHT, Conf.DW - 18.0, 15, Color(Conf.INK.r, Conf.INK.g, Conf.INK.b, 0.32))
 
 func _draw_hint() -> void:
-	# v97：镜头钉死（PIN_CAM）＝不再有"拖开画卷"这回事，提示语一并撤掉
 	if host.PIN_CAM:
+		# v98：画卷回来了（封面页 ↔ 村景页）——**只有停在封面页时才提示怎么展卷**
+		if host._sc <= 600.0 or host._hint_used or host._toast_t > 0.0:
+			return
+		var a2: float = 0.65 + 0.35 * sin(t * 2.2)
+		draw_string(font, Vector2(0, Conf.HINT_Y), "按住画卷 · 向右拖开", HORIZONTAL_ALIGNMENT_CENTER, Conf.DW, 20, Color(Conf.INK.r, Conf.INK.g, Conf.INK.b, 0.55 * a2))
+		var bx := Conf.DW * 0.5 + 104.0 + fposmod(t * 50.0, 36.0) - 18.0
+		draw_line(Vector2(bx, Conf.HINT_Y - 7.0), Vector2(bx + 16.0, Conf.HINT_Y - 7.0), Color(Conf.INK.r, Conf.INK.g, Conf.INK.b, 0.60 * a2), 3.0)
+		draw_line(Vector2(bx + 16.0, Conf.HINT_Y - 7.0), Vector2(bx + 9.0, Conf.HINT_Y - 12.0), Color(Conf.INK.r, Conf.INK.g, Conf.INK.b, 0.60 * a2), 3.0)
+		draw_line(Vector2(bx + 16.0, Conf.HINT_Y - 7.0), Vector2(bx + 9.0, Conf.HINT_Y - 2.0), Color(Conf.INK.r, Conf.INK.g, Conf.INK.b, 0.60 * a2), 3.0)
 		return
 	if host._hint_a <= 0.02 or host._toast_t > 0.0:
 		return

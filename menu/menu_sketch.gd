@@ -44,8 +44,11 @@ const USE_PAPER_ACTORS := false
 #   （menu_village）就是压在它上面的两层"旧画"——整条画卷还占着屏幕中央，村景只在
 #   下面露一条。开关打开＝这两层连同远山层、旧特效层一起收起（**只隐藏、不删**，改 false 就回退）。
 const INK_ONLY := true
-# v97：既然只剩一屏村景（用户标注的 11 处锚点全在一屏之内），**横向拖动看画**就没意义了，
-#   镜头钉死在开场位。留着 _cam 变量与拖动代码，只是不再让它动。
+# v98（用户："之前画卷不是可以滑动吗 把这个画卷形式保留 就保留图前面这个少年游这个封卷封面即可"）：
+#   画卷**回来了**，但只有两页：右边一页＝《少年游》封卷封面（装裱层的引首），左边一页＝新村景。
+#   开屏停在封面页，**向右拖**＝展卷到村景（跟老版一个手感，见 _sc）。
+#   PIN_CAM 仍为 true：老那套 3000 像素的横向长卷（_cam）不再用，镜头钉死；
+#   现在的"拖"改由 _sc 驱动。想回老长卷：INK_ONLY=false + PIN_CAM=false。
 const PIN_CAM := true
 const MountLayer := preload("res://menu/menu_mount.gd")
 const HudLayer := preload("res://menu/menu_hud.gd")
@@ -204,6 +207,9 @@ var _panel_open := false
 var _actors = null            # v93g：人物层（村景之上、UI 之下，等比缩放）
 var _ink = null               # v96：水墨村景层（最底，读 village_layout.json）
 var _plaques = null           # v97：牌子层（竖排木牌/六边形徽标/头像；位置＝占屏比例）
+var _cover_win = null         # v98：封面页窗口（引首《少年游》那一整页，会随卷滑动）
+var _sc := 720.0              # v98：画卷偏移。0=村景页铺满 · 720=封面页铺满（向右拖＝展开到村景）
+var _hint_used := false       # v98：玩家拖过一次就不再多嘴"按住画卷"
 var _set_btn = null           # v97：旧的右上角「设置」按钮（牌子层接管后收起来，代码留着）
 var _tag_notice := -1
 var _story_kind := ""
@@ -292,14 +298,16 @@ class MoneyHud extends Node2D:
 			_sb2.set_corner_radius_all(10)
 			_sb2.border_color = Color(0.72, 0.58, 0.25, 0.55)
 			_sb2.set_border_width_all(1)
-		var r1 := Rect2(430, 8, 136, 34)
+		# v97：整排往左挪 96 像素——用户标注把「设置」钉在**右上角**（x 0.91~1.00），
+		#   原来元宝那条正好压在那儿（576~706）。挪完两条落在 334~610，正好在头像与设置之间。
+		var r1 := Rect2(334, 8, 136, 34)
 		draw_style_box(_sb1, r1)
-		_coin(Vector2(454, 25))
-		draw_string(font, Vector2(474, 31), str(silver), HORIZONTAL_ALIGNMENT_LEFT, 86, 17, Color(0.14, 0.13, 0.15, 0.92))
-		var r2 := Rect2(576, 8, 130, 34)
+		_coin(Vector2(358, 25))
+		draw_string(font, Vector2(378, 31), str(silver), HORIZONTAL_ALIGNMENT_LEFT, 86, 17, Color(0.14, 0.13, 0.15, 0.92))
+		var r2 := Rect2(480, 8, 130, 34)
 		draw_style_box(_sb2, r2)
-		_ingot(Vector2(600, 26))
-		draw_string(font, Vector2(622, 31), str(yuanbao), HORIZONTAL_ALIGNMENT_LEFT, 78, 17, Color(0.14, 0.13, 0.15, 0.92))
+		_ingot(Vector2(504, 26))
+		draw_string(font, Vector2(526, 31), str(yuanbao), HORIZONTAL_ALIGNMENT_LEFT, 78, 17, Color(0.14, 0.13, 0.15, 0.92))
 
 # ---- 挂机木牌：吊绳 + 尖尾（自绘按钮） ----
 class IdlePlaque extends Button:
@@ -582,7 +590,28 @@ func _ready() -> void:
 	#   ② 纸偶演员层用一个开关关掉（代码保留，随时切回）。
 	if USE_INK_SCENE:
 		_ink = InkScene.new()
+		if INK_ONLY:
+			# v97：**整层压到 UI 之下**。村景的每一件都是 z=5~53（摆景器那套分层），
+			#   而面板/牌子/底排都在 z=0——不减这一刀，开面板时村景会从面板里**透出来**
+			#   （角色面板那张取证截图就是这毛病：字都看得见，画也看得见，糊成一片）。
+			#   减到 -100 后：件落在 -95~-47，面板的遮罩能把它们压暗 ✓
+			_ink.z_index = -100
 		add_child(_ink)
+		if INK_ONLY:
+			# v98：封面页——装裱层的"引首"（竖排《少年游》＋无名印＋一卷山水）单独裁成一页，
+			#   整页随卷左右滑（clip_contents 保证它滑出去的部分不会糊到村景页上）。
+			_cover_win = Control.new()
+			_cover_win.name = "封面页"
+			_cover_win.clip_contents = true
+			_cover_win.size = Vector2(Conf.DW, Conf.DH)
+			_cover_win.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			add_child(_cover_win)
+			var cbg := ColorRect.new()
+			cbg.name = "封面纸底"
+			cbg.color = Conf.PAPER
+			cbg.size = Vector2(Conf.DW, Conf.DH)
+			cbg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			_cover_win.add_child(cbg)
 	add_child(_scroll)
 	add_child(_village)
 	# v93g（用户："你是不是应该把画面分层？"）：**人物单独一层**。
@@ -593,7 +622,13 @@ func _ready() -> void:
 		_actors = Node2D.new()
 		add_child(_actors)
 		_village.actor_layer = _actors
-	add_child(_mount)
+	if INK_ONLY and _cover_win != null:
+		# 装裱层塞进封面页窗口：窗口局部坐标 = 卷内坐标 - OPEN_CAM（引首正好落在窗口右侧）
+		_mount.position = Vector2(-Conf.OPEN_CAM, 0.0)
+		_mount.cam = Conf.OPEN_CAM
+		_cover_win.add_child(_mount)
+	else:
+		add_child(_mount)
 	_fx_root = Node2D.new()
 	add_child(_fx_root)
 	add_child(_hud)
@@ -601,8 +636,8 @@ func _ready() -> void:
 	if INK_ONLY:
 		_scroll.visible = false
 		_village.visible = false
-		_mount.visible = false
 		_fx_root.visible = false
+		# ⚠ _mount 不在这儿收：v98 起它是"封面页"的主角（已挂进 _cover_win）
 	_mount.font = _font
 	_hud.font = _font
 	_hud.host = self
@@ -716,7 +751,8 @@ func _ready() -> void:
 		_story_page = 0
 	var added := GameState.idle_load()
 	if added >= 60:
-		var im := "挂机池 +" + _fmt_min(added / 60) + "——点左上角木牌收取"
+		# v97：木牌挪到头像下方了（用户标注 x 0.23），措辞跟着改，别再写"左上角"
+		var im := "挂机池 +" + _fmt_min(added / 60) + "——点「挂机」木牌收取"
 		print("[主界面] 挂机：补入 ", added, " 秒，池内 ", GameState.idle_pool_min(), " 分")
 		if _story_page < 0:
 			_show_toast(im, 3.0)
@@ -817,19 +853,30 @@ func _build_plaques() -> void:
 	_plaques.font = _font
 	add_child(_plaques)
 	var pn := _player_tag()
+	# ===== 常驻 UI（不随画卷滑走）=====
 	_plaques.add_disc("avatar", 0.090, 0.060, "", _open_char_panel)
-	_plaques.add_txt("name", 0.345, 0.066, pn, _open_char_panel, "江湖新客")
-	_plaques.add_hang("idle", 0.230, 0.185, "挂机", _on_idle_collect)
-	_plaques.add_hang("build", 0.335, 0.185, "建设", _build_once)
-	_plaques.add_ribbon("settings", 0.950, 0.030, "设置", _open_settings)
+	# v98（用户："头像和名字靠近一点"）：名号从 0.345 挪到 0.268，紧挨头像
+	_plaques.add_txt("name", 0.268, 0.062, pn, _open_char_panel, "江湖新客")
+	# v98（用户："底下那一条横线我的本意是横线就是挂着下面两个挂机和建筑的"）：
+	#   名号底下那条线现在是一根**横梁**，挂机/建设就从梁上吊下来（两块牌顶齐平）。
+	_plaques.add_beam("beam", 128.0, 292.0, 112.0, [165.6, 241.2])   # 装饰件：没有命中盒，不挡拖卷
+	_plaques.add_hang("idle", 0.230, 0.0, "挂机", _on_idle_collect, "", "", {"hang_y": 112.0})
+	_plaques.add_hang("build", 0.335, 0.0, "建设", _build_once, "", "", {"hang_y": 112.0})
+	_plaques.add_ribbon("settings", 0.933, 0.040, "设置", _open_settings)
+	# v98（用户："商店固定"）：一直挂在那儿——不随风摆，也不再随剧情忽隐忽现
 	_plaques.add_hex("shop", 0.950, 0.240, "商店", _open_shop)
-	_plaques.add_hang("out", 0.050, 0.595, "出村", _open_out)
-	_plaques.add_hang("cave", 0.915, 0.565, "山洞", _click_cave)
-	_plaques.add_hang("hill", 0.355, 0.705, "后山", _click_hill)
-	_plaques.add_hang("brook", 0.250, 0.795, "溪畔", _gather_wood)
-	_plaques.add_slip("pid", 0.545, 0.880, pn, _show_player_tag)
-	_plaques.add_hang("treasure", 0.700, 0.700, "藏宝阁", _click_treasure)
-	_plaques.add_hang("craft", 0.895, 0.820, "百工坊", _click_craft)
+	# ===== 村景页（跟着画卷左右滑）=====
+	# v98（用户："其他竖牌功能牌就白色就好了"）：这一组全是**白纸牌**
+	var V := {"page": "village", "white": true}
+	# v98（用户："出村改为向左的箭头"）
+	_plaques.add_arrow("out", 0.066, 0.595, "出村", _open_out, -1, V)
+	_plaques.add_hang("cave", 0.915, 0.565, "山洞", _click_cave, "", "", V)
+	_plaques.add_hang("hill", 0.355, 0.705, "后山", _click_hill, "", "", V)
+	_plaques.add_hang("brook", 0.600, 0.775, "溪畔", _gather_wood, "", "", V)   # 桥右侧的水边（桥左那块地是画里四个小人的站位，别压住他们）
+	# v98（用户："藏宝阁往右边挪一点"）：0.700 → 0.760
+	_plaques.add_hang("treasure", 0.760, 0.700, "藏宝阁", _click_treasure, "", "", V)
+	_plaques.add_hang("craft", 0.895, 0.820, "百工坊", _click_craft, "", "", V)
+	_plaques.add_slip("pid", 0.545, 0.842, pn, _show_player_tag, "", V)
 	print("[主界面] 牌子层：", _plaques.items.size(), " 块（用户标注 11 处 + 溪畔/藏宝阁两处原有功能）")
 
 func _player_tag() -> String:
@@ -856,7 +903,7 @@ func _refresh_plaques() -> void:
 	_plaques.set_vis("treasure", GameState.map_found)
 	_plaques.set_vis("cave", GameState.b2_built and not GameState.cave_opened)
 	_plaques.set_vis("craft", GameState.cave_opened)
-	_plaques.set_vis("shop", GameState.first_journey_done or GameState.stage_progress >= 1)
+	# v98：商店**固定**（用户点名）——不再按剧情显隐，也不随风摆
 	var wood := GameState.material_count("wood")
 	if _stage >= Build.STAGE_MAX:
 		_plaques.set_sub("build", "修满了")
@@ -882,7 +929,7 @@ func _refresh_plaques() -> void:
 	if GameState.jianbao_ok():
 		rooms.append("鉴宝")
 	_plaques.set_sub("craft", "点我进屋\n" + "/".join(PackedStringArray(rooms)))
-	_plaques.set_sub("shop", "银两换材料")
+	_plaques.set_sub("shop", "换材料")   # ⚠ 六边形徽标靠右沿（x 0.95），副标题太长会被屏幕切掉
 	_plaques.set_sub("out", "历练去")
 	# ⚠ 「挂机」那一块的副标题（攒了多久/收不收）由 _refresh_idle_btn 每 0.5 秒喂，
 	#   这里**不要**碰它——每帧清一次的话，那行字根本显示不出来。
@@ -1505,7 +1552,19 @@ func _apply_layer_transforms() -> void:
 	if _plaques != null:
 		_plaques.position = Vector2(o.x, o.y)
 		_plaques.scale = Vector2(z, z)
+		_plaques.set_slide(_sc)          # v98：村里的牌子跟着画卷一起滑
 		_refresh_plaques()
+	# v98：两页画卷——村景页（_ink）与封面页（_cover_win）一左一右，_sc 是卷轴位置
+	if _ink != null:
+		_ink.position = Vector2(o.x - _sc * z, o.y)
+		_ink.scale = Vector2(z, z)
+	if _cover_win != null:
+		_cover_win.position = Vector2(o.x + (Conf.DW - _sc) * z, o.y)
+		_cover_win.scale = Vector2(z, z)
+		_cover_win.visible = _sc > 0.5
+		if _mount != null:
+			_mount.cam = Conf.OPEN_CAM
+			_mount.queue_redraw()
 	if _money_hud != null:
 		_money_hud.position = Vector2(o.x, o.y)
 		_money_hud.scale = Vector2(z, z)
@@ -1612,7 +1671,7 @@ func _unhandled_input(ev: InputEvent) -> void:
 	if ke.keycode == KEY_Y:
 		GameState.idle_debug_add(GameState.IDLE_CAP_SEC)
 		_refresh_idle_btn()
-		_show_toast("[测试] 挂机池灌满（" + _fmt_min(GameState.idle_pool_min()) + "）——点左上角木牌收取")
+		_show_toast("[测试] 挂机池灌满（" + _fmt_min(GameState.idle_pool_min()) + "）——点「挂机」木牌收取")
 		print("[主界面][测试] 挂机池灌满，现 ", GameState.idle_pool_min(), " 分")
 		return
 	if ke.keycode == KEY_G:
@@ -1834,8 +1893,12 @@ func _process(delta: float) -> void:
 		if p >= 1.0:
 			_demo_done = true
 			_cam = Conf.OPEN_CAM
+			if INK_ONLY:
+				_sc = Conf.DW
 		elif p > 0.0:
 			_cam = Conf.OPEN_CAM - 60.0 * sin(PI * p)
+			if INK_ONLY:
+				_sc = Conf.DW - 60.0 * sin(PI * p)   # 开屏"展一下卷"，再停在封面页
 	_apply_layer_transforms()
 	queue_redraw()
 
@@ -2089,7 +2152,8 @@ func _draw() -> void:
 	#   它会把村景层自己的"纸底"（z=-100）整个盖住，整屏发灰发褐（村景看着像蒙了层土）。
 	#   这里改铺一张宣纸，村景就落在纸上了。
 	if INK_ONLY:
-		draw_rect(Rect2(Vector2.ZERO, size), Conf.PAPER)
+		# ⚠ 这里**一笔都不画**：村景层的"纸底"（z=-100 相对 → 生效 -200）已经在最底下铺好，
+		#   而本函数是 z=0——一画就把整层村景盖住（"远山看不见"的老坑就是这个）。
 		return
 	draw_rect(Rect2(Vector2.ZERO, size), Conf.BG_C)
 	draw_set_transform(_origin(), 0.0, Vector2(_zoom(), _zoom()))
@@ -2151,12 +2215,19 @@ func _gui_input(ev: InputEvent) -> void:
 	elif ev is InputEventMouseMotion and _dragging:
 		var mm := ev as InputEventMouseMotion
 		_moved += absf(mm.relative.x) + absf(mm.relative.y) * 0.4
-		_cam = clampf(_cam - mm.relative.x / _zoom(), Conf.CAM_MIN, Conf.CAM_MAX)
+		if INK_ONLY:
+			# v98：向右拖＝展卷（封面页 → 村景页），跟老版一个方向
+			_sc = clampf(_sc - mm.relative.x / _zoom(), 0.0, Conf.DW)
+			_hint_used = true
+		else:
+			_cam = clampf(_cam - mm.relative.x / _zoom(), Conf.CAM_MIN, Conf.CAM_MAX)
 		if _moved > 24.0:
 			_hint_a = maxf(0.0, _hint_a - 0.05)
 		accept_event()
 
 func _tap_at(p: Vector2) -> void:
+	if PIN_CAM:
+		return      # v98：一屏村景＋牌子，点的判定全在牌子层里；老那套世界坐标点景作废（代码留着）
 	if p.y < Conf.CONTENT_TOP or p.y > Conf.CONTENT_BOT:
 		return
 	if _out_vis() and p.x <= 150.0 and p.y > 500.0 and p.y < 790.0:

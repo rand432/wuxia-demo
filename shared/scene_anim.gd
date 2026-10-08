@@ -80,6 +80,12 @@ func _process(d: float) -> void:
 				s.rotation = float(e["base"]) + sin(t * spd * 1.3 + ph) * amp
 			"flow":
 				s.position = Vector2(float(e["bx"]) + sin(t * spd + ph) * float(a.get("dx", 6.0)), float(e["by"]))
+			"idle":
+				# v97（用户："村子里的'人'用画里的人，慢慢动就行"）：**极慢**的呼吸式微动。
+				#   amp 是"原图像素"，站着的件绕**脚下**轻晃 + 上下浮，一轮十几秒，肉眼只觉得"活着"。
+				var ip := t * spd + ph
+				s.position = Vector2(float(e["bx"]) + sin(ip * 0.7) * amp * 0.5, float(e["by"]) + sin(ip) * amp)
+				s.rotation = float(e["base"]) + sin(ip * 0.5) * 0.02
 	if _overlay != null:
 		_overlay.queue_redraw()
 
