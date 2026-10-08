@@ -245,6 +245,8 @@ func _preview_card(card: Dictionary) -> void:
 	if is_arts:
 		var art: Dictionary = Cards.art_of(sid)
 		body += "加成：" + str(Cards.bonus_text(Cards.card_bonus(sid))) + "（合成后可装备）\n"
+		if Cards.cat_of(sid) != "":
+			body += "归类：" + Cards.cat_name(Cards.cat_of(sid)) + "\n"
 		body += "功法效果：" + str(art.get("desc", "—")) + "\n"
 		body += "招式：『" + str(Cards.name_of(sid)) + "』" + str(art.get("move", "")) + "\n"
 	else:

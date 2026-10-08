@@ -1495,7 +1495,7 @@ func _tip_for(kind: String, idx: int) -> Dictionary:
 		var art: Dictionary = Cards.art_of(aid)
 		return {
 			"title": "『" + Cards.name_of(aid) + "』· " + GameState.grade_of(aid),
-			"body": "招式：" + str(art.get("move", "—")) + "\n" + str(art.get("desc", "—")) + "\n出村战斗：按冷却自动放（冷却 " + str(Cards.art_cd(aid)) + " 次行动）\n星级：" + str(GameState.star_of(aid)) + " / " + str(GameState.STAR_MAX) + "（去［升 星］合星——星记在这门功法上，换谁拿都算）",
+			"body": "归类：" + (Cards.cat_name(Cards.cat_of(aid)) if Cards.cat_of(aid) != "" else "—") + "\n招式：" + str(art.get("move", "—")) + "\n" + str(art.get("desc", "—")) + "\n出村战斗：按冷却自动放（冷却 " + str(Cards.art_cd(aid)) + " 次行动）\n星级：" + str(GameState.star_of(aid)) + " / " + str(GameState.STAR_MAX) + "（去［升 星］合星——星记在这门功法上，换谁拿都算）",
 		}
 	if kind == "ult":
 		var ult: Dictionary = role.get("ult", {})

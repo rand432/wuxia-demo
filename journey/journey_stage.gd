@@ -1725,7 +1725,8 @@ func _kit_make_offers() -> Array:
 	if asid != "":
 		out.append({
 			"kind": "arts", "sid": asid,
-			"title": "功法 · " + str(Cards.item_name(asid)) + "（" + _q_cn(asid) + "）",
+			"title": "功法 · " + str(Cards.item_name(asid)) + "（" + _q_cn(asid) + "）"
+				+ ("　" + Cards.cat_tag(asid) if Cards.cat_of(asid) != "" else ""),
 			"sub": str(Cards.art_of(asid).get("desc", "—")) + "——拿了放包裹里，自己装",
 		})
 	out.append({

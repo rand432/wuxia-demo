@@ -362,6 +362,8 @@ func _show_card_detail(i: int) -> void:
 		if Cards.is_arts(sid):
 			var art: Dictionary = Cards.art_of(sid)
 			lines += "合成后：" + str(Cards.bonus_text(GameState.starred_stats(sid))) + "，可装功法栏\n"
+			if Cards.cat_of(sid) != "":
+				lines += "归类：" + Cards.cat_name(Cards.cat_of(sid)) + "\n"
 			lines += "功法效果：" + str(art.get("desc", "—")) + "\n"
 			lines += "招式：" + str(Cards.name_of(sid)) + " · " + str(art.get("move", "")) + "\n"
 		else:
@@ -381,6 +383,8 @@ func _show_card_detail(i: int) -> void:
 	else:
 		if Cards.is_arts(sid):
 			var art2: Dictionary = Cards.art_of(sid)
+			if Cards.cat_of(sid) != "":
+				lines += "归类：" + Cards.cat_name(Cards.cat_of(sid)) + "\n"
 			lines += "功法效果：" + str(art2.get("desc", "—")) + "\n"
 			lines += "招式：" + str(Cards.name_of(sid)) + "\n"
 			if _state.arts.has(sid):

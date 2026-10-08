@@ -62,6 +62,7 @@ const FadeIn := preload("res://shared/fade_in.gd")   # v68：进场淡入 + 震�
 const UiKit := preload("res://shared/ui_kit.gd")
 const SceneArt := preload("res://shared/scene_art.gd")   # v79：战斗背景（素材水墨图）
 const Tower := preload("res://shared/tower.gd")          # v93m：这一关给什么箱子（爆物按这个来）
+const Chase := preload("res://shared/data_chase.gd")      # v129：追剿（精英爬塔）——关卡/boss/特性
 const UIBar := preload("res://shared/ui_bar.gd")         # v93q：血条 / 怒气条（渐变 + 拖尾 + 刻度）
 # v93m：箱子按品级染色（跟 menu/chest_panel.gd 那一套同色：木/银/金/玉/龙）
 const CHEST_TINT := [
@@ -157,6 +158,60 @@ signal left()
 var stage_i := 0
 
 # ============================================================
+# v129：追剿模式（chase = true）
+#
+#   · 敌人从 GameState.chase_enemy_at 取（**每 5 关一个 boss**，boss 带"特性"）；
+#   · 打完**不走爬塔那套结算**：不推进 stage_progress、不爆箱子/银两/经验
+#     （用户："奖励暂时不给 做好再设置"）；
+#   · 自动连打用**自己的开关** GameState.chase_auto——爬塔的 auto_climb 还管着
+#     "挂机后台推塔"（_idle_climb），蹭上去两头都会乱。
+# ============================================================
+var chase := false
+
+# ============================================================
+# v135（用户："追剿 的手牌说的是游历的那种出牌 直接加在战斗里设置即可"）：
+#   **手牌模式**——把游历决斗那套"出牌"搬进这场战斗：
+#     · 轮到我方某人出手时，把他这一手**能用的东西**摊成几张牌（普攻 / 冷却好了的武学 / 怒气满了的大招）；
+#     · 点一张牌＝用那一张（牌面写清是谁的、哪一排，边框按人配色）；
+#     · 等牌有上限（HAND_WAIT 秒），超时按"自动挑一张"打出去——**绝不卡死**；
+#     · 战斗中右上那颗［出手：手动/自动］随时能来回切（追剿的［手牌］入口就是把它默认拨到手动）。
+#   ⚠ 手动这条路**不改平衡**：牌从同一份数据里现算（冷却没好、怒气不满的根本不摊出来），
+#     挑出来的那一张走的还是 _member_act 原来那三支（大招/武学/普攻）。
+# ============================================================
+var manual := false              # true ＝ 玩家点牌出手
+var _hand_root: Control = null
+var _hand_open := false
+var _hand_pick: Dictionary = {}
+var _hand_t := 0.0
+var _hand_lb: Label = null
+var _hand_m: Dictionary = {}     # 这一手是谁的（摊牌时记下；提示行/探针都要用）
+const HAND_WAIT := 20.0          # 等牌上限（秒）
+const HAND_CARD_W := 112.0
+const HAND_CARD_H := 96.0
+const HAND_STEP := 122.0
+const HAND_Y_OFF := 272.0        # 牌底离屏幕底多少（在日志那一条之上）
+const HAND_COL_NORMAL := Color(0.42, 0.40, 0.44)
+const HAND_COL_ART := Color(0.68, 0.15, 0.12)
+const HAND_COL_ULT := Color(0.78, 0.58, 0.16)
+
+var _traits: Array = []          # 本场 boss 的特性 id（杂兵关是空）
+var _trait_lines: Array = []     # 特性的长文案（开战报 + 敌情面板）
+var _owner_i := -1               # 带特性的那一只（＝boss 本体）；随从不继承特性
+var _phase_done := false         # 「换招」只换一次
+var _summon_n := 0               # 「号令」已经召了几个随从
+
+func _auto_on() -> bool:
+	return GameState.chase_auto if chase else GameState.auto_climb
+
+func _set_auto(v: bool) -> void:
+	if chase:
+		GameState.chase_auto = v
+		return
+	GameState.auto_climb = v
+	if not v:
+		GameState.auto_bg = false
+
+# ============================================================
 # ㊸ 敌阵容：上多人（跟游历 duel_battle 同一套写法）
 #
 # 以前敌人是"一个字典 + 一堆散装变量"（_e / _e_hp / _e_max / _e_arts / _e_rage …）。
@@ -192,6 +247,7 @@ var _info_open := false
 var _info_veil: Control = null
 var _info_btn: Button = null
 var _speed_btn: Button = null   # v38：［快进 ×1/×2/×4］
+var _manual_btn: Button = null  # v135：［出手：手动/自动］
 
 var _world: Node2D
 var _shake_amp := 0.0
@@ -396,7 +452,13 @@ func _enemy_node() -> Node:
 
 func _build_foes(stage_i_arg: int) -> void:
 	_foes.clear()
-	var base: Dictionary = GameState.enemy_at(stage_i_arg)
+	# v129：追剿走自己的敌人表（每 5 关一个 boss、boss 带特性）；爬塔照旧
+	var base: Dictionary = GameState.chase_enemy_at(stage_i_arg) if chase else GameState.enemy_at(stage_i_arg)
+	_traits = (base.get("traits", []) as Array).duplicate()
+	_trait_lines = Chase.trait_lines(_traits)
+	_owner_i = -1
+	_phase_done = false
+	_summon_n = 0
 	var boss := bool(base.get("boss", false))
 	var elite := bool(base.get("elite", false))
 	var n := 1
@@ -429,6 +491,8 @@ func _build_foes(stage_i_arg: int) -> void:
 	for i in n:
 		var le: Dictionary = layout[i]
 		var is_main := bool(le.get("main", true))
+		# v129：追剿的"特性"只挂在本体身上（副手不继承——不然随从也会召随从）
+		var who: Array = (base.get("traits", []) as Array).duplicate() if is_main else []
 		var row := int(le.get("row", 0))
 		var pl: Dictionary = plan[i]
 		var d: Dictionary = base.duplicate(true)
@@ -457,6 +521,11 @@ func _build_foes(stage_i_arg: int) -> void:
 			"color": d.get("color", [0.5, 0.3, 0.28]),
 			"scale": float(d.get("scale", 1.0)),
 			"chapter": str(d.get("chapter", "")),
+			# v129 修：这两个键原来**没往敌字典里存**——于是 v125 的"敌情显示境界"、
+			#   _ready 里那句"这关是首领"、以及 boss 的 1.15 体型，三条路一起哑了。
+			#   存进来就都活了（对爬塔同样是修好，不是改难度）。
+			"boss": boss,
+			"realm": int(base.get("realm", -1)),
 			"arts": (d.get("arts", []) as Array).duplicate(true),
 			"ult": (d.get("ult", {}) as Dictionary).duplicate(true),
 			"affixes": (d.get("affixes", []) as Array).duplicate(),
@@ -466,7 +535,13 @@ func _build_foes(stage_i_arg: int) -> void:
 			"art_i": 0, "art_cd": 0, "rage": 0,
 			"guard_turns": 0, "guard_cut": 0.0, "next_mult": 1.0,
 			"stack": 0.0, "acts": 0,
+			# v129：追剿——特性只挂在本体身上（随从是空数组，不会"随从再召随从"）
+			"traits": who,
+			"phase_arts": (base.get("phase_arts", []) as Array).duplicate(true) if (is_main and base.has("phase_arts")) else [],
+			"phase_ult": (base.get("phase_ult", {}) as Dictionary).duplicate(true) if (is_main and base.has("phase_ult")) else {},
 		})
+		if is_main:
+			_owner_i = _foes.size() - 1
 	# 这一关的阵容说清楚：谁在前面、谁在打伤害——不然"打谁先"全靠猜
 	#   （文案先攒着，等 _ready 里"对手：…"那行之后一起进战报）
 	_foe_lineup_note = ""
@@ -525,7 +600,7 @@ func _ready() -> void:
 	size = get_viewport_rect().size
 	GameState.battle_live = true   # ㊿：告诉账本"屏幕上正打着"——挂机估算要避开这一关
 	GameState._battle_seen = true  # ㊿：这一拍打过真仗（连打时估算整拍让位）
-	stage_i = clampi(stage_i, 0, GameState.STAGE_MAX - 1)
+	stage_i = clampi(stage_i, 0, (Chase.STAGE_MAX if chase else GameState.STAGE_MAX) - 1)
 	# ㊸：敌阵容——普通 1 / 精英 2 / 首领 3；数据都在 _foes 里
 	_build_foes(stage_i)
 	_focus_on(0)
@@ -533,6 +608,13 @@ func _ready() -> void:
 	_build_ui()
 	_spawn_fighters()
 	_log.append("对手：" + str(_e()["name"]) + "（" + str(_e()["chapter"]) + "）")
+	# v129：追剿——先把这一关在追剿里的位置、boss 的特性摊在战报上（"可以针对"要写在明处）
+	if chase:
+		_log.append("追剿 · 第 " + str(stage_i + 1) + "/" + str(Chase.STAGE_MAX) + " 关（第 "
+			+ str(Chase.round_of(stage_i)) + " 剿 · 第 " + str(Chase.wave_in_round(stage_i)) + "/" + str(Chase.BOSS_EVERY) + " 关）"
+			+ "——奖励暂未开放，这一趟只为清剿")
+		for tl in _trait_lines:
+			_log.append("特性 " + str(tl))
 	# v46：多人关把"谁站前面、谁打得疼"写进战报（文案在 _build_foes 里攒好）
 	if _foe_lineup_note != "":
 		for ln in _foe_lineup_note.split("\n"):
@@ -543,8 +625,13 @@ func _ready() -> void:
 		_log.append("首领带招——点右上［敌情］看招数")
 	if not _e_affixes().is_empty():
 		_log.append("此怪带词缀：" + Affixes.names_text(_e_affixes()) + "——点右上［敌情］看门道")
-	if GameState.auto_climb:
-		_log.append("自动挑战：开——清完接下一关；想回村点右下［回村·后台继续］")
+	if manual:
+		_log.append("出手：手动出牌——轮到你的人，点一张牌出手（右上那颗钮随时能切回自动）")
+	if _auto_on():
+		if chase:
+			_log.append("自动连打：开——清完这一关自动接下一关；想停就点右上那颗钮")
+		else:
+			_log.append("自动挑战：开——清完接下一关；想回村点右下［回村·后台继续］")
 	else:
 		_log.append("自动开打——想走按［撤退］")
 	if GameState.pet_passive_pct() > 0:
@@ -556,7 +643,7 @@ func _ready() -> void:
 	var tw := create_tween()
 	tw.tween_interval(0.7)
 	tw.tween_callback(_start_banner)
-	print("[出村战斗] 第 ", stage_i + 1, " 关：", _e()["name"], " 我方=", GameState.formation, " 自动挑战=", GameState.auto_climb)
+	print("[出村战斗]", "[追剿] " if chase else " ", "第 ", stage_i + 1, " 关：", _e()["name"], " 我方=", GameState.formation, " 自动=", _auto_on(), " 特性=", _traits)
 	_refresh_auto_ui()
 	_refresh()
 
@@ -820,7 +907,11 @@ func _build_ui() -> void:
 	_world = Node2D.new()
 	add_child(_world)
 
-	var title := _label("第 " + str(stage_i + 1) + " 关 · " + str(_e()["name"]), 18, INK)
+	# v129：追剿的抬头写清"在哪一剿的第几关"（爬塔照旧）
+	var title_txt := "第 " + str(stage_i + 1) + " 关 · " + str(_e()["name"])
+	if chase:
+		title_txt = "追剿 第 " + str(stage_i + 1) + "/" + str(Chase.STAGE_MAX) + " 关（第 " + str(Chase.round_of(stage_i)) + " 剿）· " + str(_e()["name"])
+	var title := _label(title_txt, 18, INK)
 	title.position = Vector2(20, 18)
 	title.size = Vector2(380, 28)
 	add_child(title)
@@ -848,6 +939,19 @@ func _build_ui() -> void:
 	_info_btn.pressed.connect(_show_info)
 	_style_btn(_info_btn, Color(0.21, 0.19, 0.20))
 	add_child(_info_btn)
+
+	# v135：［出手：手动/自动］——游历那套出牌的开关（用户："直接加在战斗里设置即可"）。
+	#   手动＝轮到我方点牌出手；自动＝照旧 AI 挑。追剿的［手牌］入口就是把它默认拨到手动。
+	#   位置：快进钮左边那块空处（抬头只到 y46，这一行 64~114 是空的）。
+	_manual_btn = Button.new()
+	_manual_btn.focus_mode = Control.FOCUS_NONE
+	_manual_btn.add_theme_font_size_override("font_size", 16)
+	_manual_btn.position = Vector2(px - 500.0, 64.0)
+	_manual_btn.size = Vector2(170, 50)
+	_manual_btn.pressed.connect(_on_manual_toggle)
+	_style_btn(_manual_btn, Color(0.21, 0.19, 0.20))
+	_refresh_manual_btn()
+	add_child(_manual_btn)
 
 	# v38：［快进］——前期一路清关用（×1 / ×2 / ×4）。只压出手间隔，不动平衡。
 	_speed_btn = Button.new()
@@ -1095,17 +1199,19 @@ func _style_btn(btn: Button, base: Color) -> void:
 func _refresh_auto_ui() -> void:
 	if _auto_btn == null:
 		return
-	if GameState.auto_climb:
+	var on := _auto_on()
+	if on:
 		var n := int(Time.get_ticks_msec() / 350) % 4
-		_auto_btn.text = "自动挑战中" + "·".repeat(n + 1) + "（点我关）"
+		_auto_btn.text = ("追剿·连打中" if chase else "自动挑战中") + "·".repeat(n + 1) + "（点我关）"
 		_style_btn(_auto_btn, GREEN)
 	else:
-		_auto_btn.text = "自动挑战：关（点我开）"
+		_auto_btn.text = ("追剿·连打：关（点我开）" if chase else "自动挑战：关（点我开）")
 		_style_btn(_auto_btn, Color(0.21, 0.19, 0.20))
 	# ㊿q：只在"自动开着、还没交出结果"时给［回村·后台继续］
 	#   ⚠ 败了就不给：败退这一趟自动就到头了（村里会把自动关掉），留着这颗钮只会误导
+	#   v129：追剿**没有"后台推塔"这回事**（那是爬塔的挂机估算）——这颗钮在追剿里一直藏着
 	if _bg_btn != null:
-		var bg_ok := GameState.auto_climb and not _done_sent and (not _over or _win)
+		var bg_ok := on and not chase and not _done_sent and (not _over or _win)
 		_bg_btn.visible = bg_ok
 		_bg_btn.disabled = not bg_ok
 
@@ -1118,7 +1224,7 @@ func _refresh_auto_msg() -> void:
 	_auto_lb.visible = true
 	var sec := int(ceil(_auto_t))
 	var tail := "自动回村"
-	if _win and stage_i + 1 < GameState.STAGE_MAX:
+	if _win and stage_i + 1 < (Chase.STAGE_MAX if chase else GameState.STAGE_MAX):
 		tail = "自动前往第 " + str(stage_i + 2) + " 关"
 	_auto_lb.text = "自动中…… " + str(sec) + " 秒后" + tail + "（点［停下］中断）"
 
@@ -1138,6 +1244,21 @@ func _on_speed_toggle() -> void:
 		var base := AUTO_DELAY_WIN if _win else AUTO_DELAY_LOSE
 		_auto_t = minf(_auto_t, base / maxf(1.0, SPEED))
 
+# v135：出手方式的钮（手动＝点牌 · 自动＝AI 挑）
+func _refresh_manual_btn() -> void:
+	if _manual_btn == null:
+		return
+	_manual_btn.text = "出手：手动出牌" if manual else "出手：自动"
+	_style_btn(_manual_btn, GREEN if manual else Color(0.21, 0.19, 0.20))
+
+func _on_manual_toggle() -> void:
+	manual = not manual
+	_close_hand()
+	_refresh_manual_btn()
+	_center_move("出手方式：" + ("手动出牌（点牌）" if manual else "自动"), GOLD)
+	_push(["出手方式改成「" + ("手动出牌——轮到你的人时点一张牌" if manual else "自动——照旧由 AI 挑") + "」"])
+	print("[出村战斗] 出手方式 = ", "手动" if manual else "自动")
+
 func _refresh_speed_btn() -> void:
 	if _speed_btn == null:
 		return
@@ -1145,13 +1266,11 @@ func _refresh_speed_btn() -> void:
 	_style_btn(_speed_btn, GREEN if SPEED > 1.0 else Color(0.21, 0.19, 0.20))
 
 func _on_auto_toggle() -> void:
-	GameState.auto_climb = not GameState.auto_climb
-	if not GameState.auto_climb:
-		GameState.auto_bg = false   # ㊿q：关了就两种形态一起收
-	print("[出村战斗] 自动挑战 = ", GameState.auto_climb)
+	_set_auto(not _auto_on())
+	print("[出村战斗] 自动 = ", _auto_on(), "（追剿=", chase, "）")
 	_refresh_auto_ui()
 	if _over and not _done_sent:
-		if GameState.auto_climb:
+		if _auto_on():
 			_start_countdown()
 		else:
 			_auto_t = -1.0
@@ -1168,9 +1287,8 @@ func _emit_done(w: bool) -> void:
 func _on_act() -> void:
 	if _over:
 		if _auto_t >= 0.0:
-			GameState.auto_climb = false
-			GameState.auto_bg = false
-			print("[出村战斗] 点「停下」——自动挑战关")
+			_set_auto(false)
+			print("[出村战斗] 点「停下」——自动关")
 			_refresh_auto_ui()
 		_emit_done(_win)
 	else:
@@ -1512,6 +1630,8 @@ func _process(delta: float) -> void:
 			_refresh_auto_ui()
 	if _info_open:
 		return   # v8：看招面板开着——不走回合
+	if _hand_open:
+		return   # v135：手牌摊着等玩家点——回合停在这儿（倒计时在等牌那个循环里走）
 	if _over:
 		if _auto_t >= 0.0:
 			_auto_t -= delta
@@ -1629,7 +1749,13 @@ func _act() -> void:
 			return
 		if not mlines.is_empty():
 			_push(mlines)
-		_member_act(m)
+		# v135：手牌模式——轮到我方出手，先摊牌等玩家点（超时/交回自动 → 按自动挑一张）
+		var pick: Dictionary = {}
+		if manual and not _over:
+			pick = await _wait_hand(m)
+		if _over:
+			return
+		_member_act(m, pick)
 		_tick_bless(m)   # ㊿：加持按"自己的手"计数——本人出手完再减 1
 	else:
 		var fi := int(key.substr(1))
@@ -1725,7 +1851,164 @@ func _crit_mul(m: Dictionary) -> float:
 func _foe_below_half() -> bool:
 	return _e_hp() * 2 <= _e_max()
 
-func _member_act(m: Dictionary) -> void:
+# ============================================================
+# v135：手牌（游历那套出牌）
+# ============================================================
+
+# 这个人这一手能用的牌：普攻（永远有）· 武学（冷却好了的各一张）· 大招（怒气满了才有）
+#   ⚠ 与游历同口径：被封住的东西**根本不摊出来**（沉默→没有武学牌、封招→没有大招牌），
+#     所以"牌面上有的就是能放的"，点下去不会白点。
+func _cards_of(m: Dictionary) -> Array:
+	var out: Array = []
+	var w := str(m.get("weapon_id", ""))
+	var wname := "空手" if w == "" else str(Cards.name_of(w))
+	out.append({"k": "normal", "sid": "", "name": "普攻", "sub": wname, "col": HAND_COL_NORMAL, "kind_cn": "普攻"})
+	if int(m.get("art_cd", 0)) <= 0 and not St.blocks_arts(m):
+		for sid_v in (m.get("arts", []) as Array):
+			var sid := str(sid_v)
+			if sid == "":
+				continue
+			var art: Dictionary = Cards.art_of(sid)
+			if art.is_empty():
+				continue
+			var is_bless := str(art.get("kind", "")) == "bless"
+			out.append({"k": "art", "sid": sid, "name": str(Cards.name_of(sid)),
+				"sub": str(GameData.move_desc(art)), "col": HAND_COL_ART,
+				"kind_cn": ("加持" if is_bless else "武学")})
+	if int(m.get("rage", 0)) >= 100 and not St.blocks_ult(m) and str(m.get("ult", "")) != "":
+		out.append({"k": "ult", "sid": "", "name": str(m["ult"]), "sub": "怒气已满",
+			"col": HAND_COL_ULT, "kind_cn": "大招"})
+	return out
+
+# 自动挑哪一张（超时、点［自动挑一张］、切回自动都走这一口——与原来那套三支一致）
+func _auto_pick(m: Dictionary, cards: Array) -> Dictionary:
+	for c_v in cards:
+		if str((c_v as Dictionary).get("k", "")) == "ult":
+			return {"k": "ult", "sid": ""}
+	if int(m.get("art_cd", 0)) <= 0 and not St.blocks_arts(m):
+		for c_v2 in cards:
+			var c2: Dictionary = c_v2
+			if str(c2.get("k", "")) == "art":
+				return {"k": "art", "sid": str(c2.get("sid", ""))}
+	return {"k": "normal", "sid": ""}
+
+func _open_hand(m: Dictionary) -> void:
+	_close_hand()
+	var cards := _cards_of(m)
+	_hand_pick = {}
+	_hand_open = true
+	_hand_m = m
+	_hand_t = HAND_WAIT
+	var px := size.x
+	var py := size.y
+	var root := Control.new()
+	root.position = Vector2.ZERO
+	root.size = Vector2(px, py)
+	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(root)
+	_hand_root = root
+	# 提示行（谁出手 · 还有几秒）
+	_hand_lb = _label("", 16, Color(0.96, 0.93, 0.87))
+	_hand_lb.position = Vector2(24, py - HAND_Y_OFF - 34.0)
+	_hand_lb.size = Vector2(px - 260.0, 30)
+	root.add_child(_hand_lb)
+	# ［自动挑一张］——等牌时的退路（点一下立刻按自动挑打出去）
+	var ab := Button.new()
+	ab.text = "自动挑一张"
+	ab.position = Vector2(px - 200.0, py - HAND_Y_OFF - 36.0)
+	ab.size = Vector2(176, 34)
+	ab.add_theme_font_size_override("font_size", 15)
+	ab.focus_mode = Control.FOCUS_NONE
+	ab.pressed.connect(_hand_give_up)
+	_style_btn(ab, Color(0.21, 0.19, 0.20))
+	root.add_child(ab)
+	# 牌
+	var cy := py - HAND_Y_OFF
+	for i in cards.size():
+		var c: Dictionary = cards[i]
+		var card := Panel.new()
+		card.position = Vector2(24.0 + float(i) * HAND_STEP, cy)
+		card.size = Vector2(HAND_CARD_W, HAND_CARD_H)
+		card.mouse_filter = Control.MOUSE_FILTER_STOP
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.93, 0.91, 0.85, 0.97)
+		sb.set_corner_radius_all(9)
+		sb.border_color = c.get("col", HAND_COL_NORMAL)
+		sb.set_border_width_all(3)
+		card.add_theme_stylebox_override("panel", sb)
+		card.gui_input.connect(_on_hand_card.bind(i, cards))
+		root.add_child(card)
+		var nm := _label(str(c.get("name", "?")), 20, c.get("col", INK))
+		nm.position = Vector2(6, 12)
+		nm.size = Vector2(HAND_CARD_W - 12.0, 48)
+		nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		nm.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		nm.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		card.add_child(nm)
+		var kd := _label(str(c.get("kind_cn", "普攻")), 12, Color(INK.r, INK.g, INK.b, 0.62))
+		kd.position = Vector2(5, HAND_CARD_H - 26.0)
+		kd.size = Vector2(HAND_CARD_W - 10.0, 20)
+		kd.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		card.add_child(kd)
+	_update_hand_tip(m)
+
+func _update_hand_tip(m: Dictionary) -> void:
+	if _hand_lb == null:
+		return
+	_hand_lb.text = "『" + str(m.get("name", "")) + "』出手——点一张牌（" + str(int(ceil(maxf(0.0, _hand_t)))) + " 秒后自动挑）"
+
+func _on_hand_card(_ev: InputEvent, i: int, cards: Array) -> void:
+	if _ev is InputEventMouseButton:
+		var mb := _ev as InputEventMouseButton
+		if mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
+			if i >= 0 and i < cards.size():
+				_hand_pick = (cards[i] as Dictionary).duplicate()
+				_hand_open = false
+	elif _ev is InputEventScreenTouch:
+		var st := _ev as InputEventScreenTouch
+		if st.pressed and i >= 0 and i < cards.size():
+			_hand_pick = (cards[i] as Dictionary).duplicate()
+			_hand_open = false
+
+func _hand_give_up() -> void:
+	_hand_pick = {}
+	_hand_open = false
+
+func _close_hand() -> void:
+	if _hand_root != null and is_instance_valid(_hand_root):
+		_hand_root.queue_free()
+	_hand_root = null
+	_hand_lb = null
+	_hand_open = false
+	_hand_m = {}
+
+# 摊牌 → 等玩家点（超时＝自动挑一张）→ 收牌，返回挑的那张
+func _wait_hand(m: Dictionary) -> Dictionary:
+	_open_hand(m)
+	_timer = 0.0
+	while _hand_open and _hand_t > 0.0 and not _over:
+		await get_tree().process_frame
+		_hand_t -= get_process_delta_time()
+		_update_hand_tip(m)
+	var cards := _cards_of(m)
+	var pick: Dictionary = _hand_pick
+	if pick.is_empty():
+		pick = _auto_pick(m, cards)      # 超时 / 点了［自动挑一张］
+	if not pick.is_empty():
+		_push(["出手：" + str(m.get("name", "")) + " 用" + _pick_cn(pick, cards)])
+	_close_hand()
+	_timer = 0.0
+	return pick
+
+func _pick_cn(pick: Dictionary, cards: Array) -> String:
+	var k := str(pick.get("k", "normal"))
+	for c_v in cards:
+		var c: Dictionary = c_v
+		if str(c.get("k", "")) == k and str(c.get("sid", "")) == str(pick.get("sid", "")):
+			return "「" + str(c.get("name", "")) + "」"
+	return "「普攻」"
+
+func _member_act(m: Dictionary, force: Dictionary = {}) -> void:
 	var n = m["node"]
 	var bx := float(m["base_x"])
 	# ㊸：先按"打哪儿"定目标——普攻只打最前排；带 row_prio="back" 的自打后排。
@@ -1750,7 +2033,8 @@ func _member_act(m: Dictionary) -> void:
 		return
 	# v9：中毒（词缀·毒刃）——每手先掉血
 	if int(m.get("poison", 0)) > 0:
-		var pdd := maxi(1, int(round(float(m["max"]) * Affixes.POISON_PCT() * float(m["poison"]))))
+		# v129：追剿「淬毒」——毒伤翻倍（跟它耗是耗不过的，得速杀）
+		var pdd := maxi(1, int(round(float(m["max"]) * Affixes.POISON_PCT() * float(m["poison"]) * (2.0 if _traits.has("venom") else 1.0))))
 		m["hp"] = maxi(0, int(m["hp"]) - pdd)
 		_fx("hit", Vector2(bx, _ground_y - 92.0), Color(0.42, 0.62, 0.30), 0.4, 34.0)
 		_float_at(Vector2(bx, _ground_y - 150.0), "毒 -" + str(pdd), Color(0.42, 0.62, 0.30), 20)
@@ -1792,11 +2076,36 @@ func _member_act(m: Dictionary) -> void:
 	#   · 封招（block_ult）→ 怒气留着但放大招那一支跳过，往下走武学/普攻
 	#   · 沉默（block_arts）→ 武学那一支跳过，往下走自带技/普攻
 	#   · 缴械（block_plain）→ 见下面那一支：普攻改成格挡
-	if int(m["rage"]) >= 100 and not St.blocks_ult(m):
+	# ============================================================
+	# v135：**手牌挑的那一张**（force）优先；force 空着＝照旧自动挑。
+	#   ⚠ 每条都要**再验一遍**：玩家点牌到真正出手之间，状态可能已经变了
+	#     （被缴械/封招/沉默、冷却被推后、怒气被打掉）——验不过就退回自动挑，绝不空过一手。
+	# ============================================================
+	var fk := str(force.get("k", ""))
+	var can_ult := int(m["rage"]) >= 100 and not St.blocks_ult(m)
+	var can_art := arts.size() > 0 and int(m.get("art_cd", 0)) <= 0 and not St.blocks_arts(m)
+	var do_ult := false
+	var do_art := ""
+	if fk == "ult" and can_ult:
+		do_ult = true
+	elif fk == "art":
+		var fsid := str(force.get("sid", ""))
+		if can_art and fsid != "" and arts.has(fsid):
+			do_art = fsid
+		elif can_art:
+			do_art = str(arts[0])          # 那一门这一手放不了（被沉默/冷却）→ 换一门能放的
+	elif fk == "normal":
+		pass                               # 玩家就要普攻——不抢大招
+	else:
+		if can_ult:
+			do_ult = true
+		elif can_art:
+			do_art = str(arts[0])
+	if do_ult:
 		m["rage"] = 0
 		_member_ult(m, n, bx, ex, col, lines)
-	elif arts.size() > 0 and int(m.get("art_cd", 0)) <= 0 and not St.blocks_arts(m):
-		_use_art(m, arts, n, bx, ex, col, lines)
+	elif do_art != "":
+		_use_art(m, [do_art], n, bx, ex, col, lines)
 	elif int(m["acts"]) % TECH_EVERY == 0:
 		var heal2 := maxi(1, int(round(float(m["max"]) * TECH_HEAL * St.heal_mul(m))))
 		m["hp"] = mini(int(m["max"]), int(m["hp"]) + heal2)
@@ -2740,6 +3049,13 @@ func _e_take(raw: int, src: Dictionary = {}) -> int:
 		var def_foe := float(_e().get("def", 0))
 		if atk_src > 0.0 and def_foe > 0.0:
 			dmg = GameData.after_def(float(dmg), atk_src, def_foe)
+	# v129（追剿）：**「破防」能撕开护体**——这是给「铁壁旗手」留的那条针对路：
+	#   它一开「列阵」，带破防的武学/词缀打上去，护体当场散（不减伤，也不消耗层数）。
+	if _e_guard_turns() > 0 and chase and St.has(_e(), "sunder"):
+		_set_e_guard_turns(0)
+		_set_e_guard_cut(0.0)
+		_float_at(Vector2(_enemy_base_x(), _ground_y - 186.0), "破防！护体散", St.col_of("sunder"), 22)
+		_push([str(_e()["name"]) + " 的护体被「破防」撕开了。"])
 	if _e_guard_turns() > 0:
 		_set_e_guard_turns(_e_guard_turns() - (1))
 		# v48：护体改为**按折后的数**乘（以前写的是 raw）——
@@ -3046,7 +3362,7 @@ func _enemy_hit_member(target: Dictionary, raw: int, tx: float) -> int:
 		target["rage"] = mini(100, int(target.get("rage", 0))
 			+ int(round(100.0 * float(target.get("star_rage_hit", 0.0)) * St.rage_mul(target))))
 	if _e_affixes().has("poison") and int(target["hp"]) > 0:
-		target["poison"] = mini(Affixes.POISON_MAX(), int(target.get("poison", 0)) + 1)
+		target["poison"] = mini(Affixes.POISON_MAX() + (2 if _traits.has("venom") else 0), int(target.get("poison", 0)) + 1)   # v129：追剿「淬毒」毒层上限 +2
 		_float_at(Vector2(tx, _ground_y - 176.0), "中毒 +1", Color(0.42, 0.62, 0.30), 18)
 	# v52：词缀·火魔/铁锁（怪招路同样兑现——与毒刃一样两条路都写）
 	var stl: Array = []
@@ -3214,7 +3530,10 @@ func _show_info() -> void:
 	veil.gui_input.connect(_on_info_blank)
 	add_child(veil)
 	_info_veil = veil
-	var panel := UiKit.make_paper_panel(veil, Rect2(80, 300, 560, 680))
+	# v129：追剿的敌情要多写一段"特性 + 针对办法"，面板给高一点（680 → 860）
+	var ph := 860.0 if chase else 680.0
+	var py := 150.0 if chase else 300.0
+	var panel := UiKit.make_paper_panel(veil, Rect2(80, py, 560, ph))
 	panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	var tt := UiKit.make_label(panel, Vector2(0, 18), Vector2(560, 40), 26, UiKit.INK)
 	UiKit.set_text(tt, "敌情 · " + str(_e()["name"]))
@@ -3225,7 +3544,7 @@ func _show_info() -> void:
 	if pos_txt == "":
 		pos_txt = GameData.foe_row_cn(_focus)
 	UiKit.set_text(l0, "气血 " + str(_e_hp()) + " / " + str(_e_max()) + "　·　攻 " + str(_e()["atk"])
-		+ "　·　" + pos_txt + "　·　第 " + str(stage_i + 1) + " 关"
+		+ "　·　" + pos_txt + "　·　" + ("追剿 第 " + str(stage_i + 1) + "/" + str(Chase.STAGE_MAX) + " 关" if chase else "第 " + str(stage_i + 1) + " 关")
 		# v52：它身上挂着的负面状态也写在这儿（战场血条下面那一行的完整版）
 		+ ("" if _st_line(_e()) == "" else "　·　负：" + _st_line(_e())))
 	var y := 104.0
@@ -3248,22 +3567,48 @@ func _show_info() -> void:
 		UiKit.set_text(la, "词缀：" + "\n".join(PackedStringArray(seg)))
 		la.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		y += 104.0
-	if _e_arts().is_empty() and _e_ult().is_empty():
+	# v129：追剿 boss 的**特性**——写清"它怎么打"与"你怎么克"，这是这一门 boss 的题眼
+	if not _trait_lines.is_empty():
+		var lt := UiKit.make_label(panel, Vector2(34, y), Vector2(492, 96), 15, Color(0.66, 0.26, 0.22))
+		UiKit.set_text(lt, "特性（可以针对）：
+" + "
+".join(PackedStringArray(_trait_lines)))
+		lt.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		y += 104.0
+	# v129：招数**认首领本体**——原来这里读的是"当前盯着的那只"，而 _focus 开场指向前排副手，
+	#   副手本来就没招（招数是首领的成名技），于是 boss 关的敌情写着"寻常货色"，
+	#   玩家根本看不到它会什么。现在改成：本体的招数一定列出来（盯谁看都一样）。
+	var mi := -1
+	for i4 in _foes.size():
+		if bool((_foes[i4] as Dictionary).get("is_main", false)):
+			mi = i4
+			break
+	var arts_show: Array = _e_arts()
+	var ult_show: Dictionary = _e_ult()
+	if mi >= 0 and mi != _focus:
+		arts_show = (_foes[mi] as Dictionary).get("arts", [])
+		ult_show = (_foes[mi] as Dictionary).get("ult", {})
+	if arts_show.is_empty() and ult_show.is_empty():
 		var ln := UiKit.make_label(panel, Vector2(34, y), Vector2(492, 60), 17, Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.85))
 		UiKit.set_text(ln, "寻常货色——没有成名招数。\n（首领关会带 1~2 招和一门大招）")
 		ln.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	for a_v in _e_arts():
+	elif mi >= 0 and mi != _focus:
+		var lh := UiKit.make_label(panel, Vector2(34, y), Vector2(492, 26), 14, Color(0.24, 0.34, 0.52))
+		UiKit.set_text(lh, "首领本体「" + str((_foes[mi] as Dictionary).get("name", "")) + "」的招数（副手没有招）：")
+		lh.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		y += 30.0
+	for a_v in arts_show:
 		var a: Dictionary = a_v
 		var l1 := UiKit.make_label(panel, Vector2(34, y), Vector2(492, 84), 16, Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.92))
 		# ㊱：说明用 GameData.move_desc 拼——非"只打前排"的招式会自动缀上打哪几排
 		UiKit.set_text(l1, "「" + str(a.get("name", "?")) + "」　每 " + str(int(a.get("cd", 3))) + " 手一转\n　" + GameData.move_desc(a))
 		l1.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		y += 92.0
-	if not _e_ult().is_empty():
+	if not ult_show.is_empty():
 		var lu := UiKit.make_label(panel, Vector2(34, y), Vector2(492, 84), 17, UiKit.SEAL)
-		UiKit.set_text(lu, "大招「" + str(_e_ult().get("name", "?")) + "」　怒气满自动放\n　" + GameData.move_desc(_e_ult()))
+		UiKit.set_text(lu, "大招「" + str(ult_show.get("name", "?")) + "」　怒气满自动放\n　" + GameData.move_desc(ult_show))
 		lu.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	var cb := UiKit.make_button(panel, Vector2(210, 606), Vector2(140, 52), "知道了", 20)
+	var cb := UiKit.make_button(panel, Vector2(210, ph - 74.0), Vector2(140, 52), "知道了", 20)
 	cb.pressed.connect(_close_info)
 
 func _on_info_blank(ev: InputEvent) -> void:
@@ -3279,6 +3624,141 @@ func _close_info() -> void:
 	_info_veil = null
 	_info_open = false
 
+# ============================================================
+# v129：追剿 boss 的「特性」引擎
+#
+#   特性 id 与文案在 shared/data_chase.gd（那是真源）；这里只兑现五条机制：
+#     号令 summon   每三手召一名随从补位（最多两名）
+#     列阵 guard_all 每四手给全队上护体（**破防能撕开**，见 _e_take）
+#     锁招 seal_ult  每三手锁我方怒气最高的那个人：两手放不出大招
+#     淬毒 venom     毒层上限 +2、毒伤翻倍（两处：_enemy_act 上毒 / _member_act 结算）
+#     换招 phase     气血过半换一套更凶的招，并且**当场接一次大招**
+#
+#   ⚠ 一律在**它自己出手的开头**结算，结算完把聚焦还回去
+#     （不还的话这一手会按别人的身板打出去）；随从不继承特性（_owner_i 只指本体）。
+# ============================================================
+func _trait_tick() -> void:
+	if _traits.is_empty() or _owner_i < 0 or _focus != _owner_i:
+		return
+	if not _foe_alive(_owner_i):
+		return
+	# 优先级：换招 > 列阵 > 号令 > 锁招（一只手只触发一条，免得一回合里叠成一锅）
+	if _traits.has("phase") and not _phase_done and _e_hp() * 2 <= _e_max():
+		_phase_shift()
+	elif _traits.has("guard_all") and _e_acts() % 4 == 0:
+		_guard_all()
+	elif _traits.has("summon") and _e_acts() % 3 == 0 and _summon_n < 2:
+		_summon_minion()
+	elif _traits.has("seal_ult") and _e_acts() % 3 == 0:
+		_seal_ult()
+
+# 「号令」：召一名随从补位（血＝本体上限的两成、攻＝本体现攻的四成半）
+func _summon_minion() -> void:
+	var keep := _focus
+	_summon_n += 1
+	var cn := ["甲", "乙", "丙"]
+	var hp := maxi(1, int(round(float(_e_max()) * 0.20)))
+	var atk := maxi(1, int(round(_e_atk_eff() * 0.45)))
+	var d := {
+		"name": "亲随" + str(cn[clampi(_summon_n - 1, 0, cn.size() - 1)]),
+		"weapon": str(_e().get("weapon", ENEMY_WEAPON)),
+		"hp": hp, "hp_max": hp, "atk": atk,
+		"spd": int(_e().get("spd", 100)) - 12,
+		"def": maxi(0, int(round(float(_e().get("def", 0)) * 0.6))),
+		"color": _e().get("color", [0.5, 0.3, 0.28]),
+		"scale": maxf(0.5, float(_e().get("scale", 1.0)) * 0.82),
+		"chapter": str(_e().get("chapter", "")),
+		"arts": [], "ult": {}, "affixes": [], "traits": [],
+		"row": 1, "is_main": false, "solo_cn": "",
+		"art_i": 0, "art_cd": 0, "rage": 0,
+		"guard_turns": 0, "guard_cut": 0.0, "next_mult": 1.0,
+		"stack": 0.0, "acts": 0,
+		"phase_arts": [], "phase_ult": {},
+	}
+	_foes.append(d)
+	_spawn_one_foe_node(_foes.size() - 1)
+	_center_move("『号令』", SEAL)
+	_focus_on(keep)
+	_float_at(Vector2(_enemy_base_x(), _ground_y - 196.0), "号令！亲随补位", SEAL, 22)
+	_push([str(_e()["name"]) + " 一声号令——「" + str(d["name"]) + "」补位（气 " + str(hp) + " · 攻 " + str(atk) + "）"])
+	_refresh()
+
+# 「列阵」：全队护体（挨打两次，各减伤 45%）
+func _guard_all() -> void:
+	var keep := _focus
+	var n := 0
+	for i in _foes.size():
+		var f: Dictionary = _foes[i]
+		if int(f.get("hp", 0)) <= 0:
+			continue
+		f["guard_turns"] = maxi(int(f.get("guard_turns", 0)), 2)
+		f["guard_cut"] = 0.55
+		_focus_on(i)
+		_fx("guard", Vector2(_enemy_base_x(), _ground_y - 62.0), ART_GUARD_COL, 0.6, 46.0)
+		n += 1
+	_focus_on(keep)
+	_center_move("『列阵』", ART_GUARD_COL)
+	_push([str(_e()["name"]) + " 大旗一插——全队「列阵」：此后两次挨打各减伤 45%（「破防」能把这层撕开）"])
+	_refresh()
+
+# 「锁招」：锁我方怒气最高的那个（两手放不出大招）
+func _seal_ult() -> void:
+	var best: Dictionary = {}
+	for m_v in _party:
+		var m: Dictionary = m_v
+		if int(m.get("hp", 0)) <= 0:
+			continue
+		if best.is_empty() or int(m.get("rage", 0)) > int(best.get("rage", 0)):
+			best = m
+	if best.is_empty():
+		return
+	St.apply(best, "ultseal", 2, 1)
+	_center_move("『锁招』", St.col_of("ultseal"))
+	_float_at(Vector2(float(best.get("base_x", 0.0)), _ground_y - 158.0), "封招", St.col_of("ultseal"), 22)
+	_push([str(_e()["name"]) + " 甩出锁链缠住 " + str(best.get("name", "")) + " 的气门——「封招」两手：怒气满也放不出大招"])
+	_refresh()
+
+# 「换招」：半血换一套更凶的招，并当场接一次大招
+func _phase_shift() -> void:
+	_phase_done = true
+	var o: Dictionary = _e()
+	if not (o.get("phase_arts", []) as Array).is_empty():
+		o["arts"] = (o["phase_arts"] as Array).duplicate(true)
+	if not (o.get("phase_ult", {}) as Dictionary).is_empty():
+		o["ult"] = (o["phase_ult"] as Dictionary).duplicate(true)
+	o["art_cd"] = 0
+	o["art_i"] = 0
+	o["stack"] = 1.6            # 越打越凶（战意那一份）
+	o["rage"] = 100             # 怒气拉满——这一手接着就放大招
+	_center_move("『换招·血战』", SEAL)
+	_flash_now(SEAL, 0.45)
+	_push([str(o.get("name", "")) + " 见了血——招式全换，气势陡然一沉！"])
+	_refresh()
+
+# 单给一只敌人补节点（与 _spawn_fighters 里那一段同一套写法；「号令」用）
+func _spawn_one_foe_node(i: int) -> void:
+	if _world == null or i < 0 or i >= _foes.size():
+		return
+	var f: Dictionary = _foes[i]
+	var ex := size.x * 0.72
+	var en = ActorFactory.make_enemy(ActorFactory.enemy_key(str(f.get("name", ""))))
+	en.set_equipment(str(f.get("weapon", ENEMY_WEAPON)), "douli", "short")
+	var sc := maxf(0.5, float(f.get("scale", 1.0)))
+	en.scale = Vector2(-sc if ENEMY_FLIP else sc, sc)
+	var ecol: Array = f.get("color", [])
+	if ecol.size() >= 3 and not bool(en.get("is_q_art")):
+		en.body_color = Color(float(ecol[0]), float(ecol[1]), float(ecol[2]))
+	var slot := _foe_slot_x(ex, i)
+	en.position = Vector2(slot + 160.0, _ground_y)
+	en.modulate.a = 0.0
+	_world.add_child(en)
+	_foe_nodes.append(en)
+	var tw := create_tween()
+	tw.tween_property(en, "modulate:a", 1.0, 0.28)
+	var etw: Tween = en.move_seq()
+	etw.tween_property(en, "position:x", slot, 0.45).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	_idle_bob(en)
+
 func _enemy_act() -> void:
 	if _enemy_skip:
 		_enemy_skip = false
@@ -3288,6 +3768,8 @@ func _enemy_act() -> void:
 	if target.is_empty():
 		return
 	_set_e_acts(_e_acts() + (1))
+	# v129：追剿 boss 的特性（号令/列阵/锁招/换招）——在它自己这一手的开头结算
+	_trait_tick()
 	# v9 词缀：回春（回气）／鼓舞（士气叠加）
 	# v53：「封脉」把回春压到三成；「挫锐」让怒气只剩四成
 	# v13（用户："回春词缀改为 10%恢复 两手恢复一次"）：**改成每两手回一次**
@@ -3393,7 +3875,7 @@ func _enemy_act() -> void:
 		_push([str(_e()["name"]) + " 余势回响：" + str(target["name"]) + " 再挨 " + str(a3)])
 	# 词缀·毒刃：击中上毒
 	if _e_affixes().has("poison") and int(target["hp"]) > 0:
-		target["poison"] = mini(Affixes.POISON_MAX(), int(target.get("poison", 0)) + 1)
+		target["poison"] = mini(Affixes.POISON_MAX() + (2 if _traits.has("venom") else 0), int(target.get("poison", 0)) + 1)   # v129：追剿「淬毒」毒层上限 +2
 		_float_at(Vector2(tx, _ground_y - 184.0), "中毒 +1", Color(0.42, 0.62, 0.30), 18)
 	# v55：词缀·火魔/铁锁/锁喉/软筋/缠足/裂甲/泄气/滞脉/封穴/点窍
 	#   ——击中就上状态（与毒刃同一个位置、同一个口径）。哪些词缀上什么状态写在 data_affixes.ON_HIT，
@@ -3476,6 +3958,9 @@ func _center_move(txt: String, col: Color) -> void:
 #   现在：① 先炸一圈金光；② 六枚带纸底的"战利品签"按弧线弹起、停一下、再飞进右下角；
 #   ③ 出金币音；④ 结算大字等爆物演完再出（见 _end）。
 func _loot_burst(at: Vector2) -> void:
+	# v129：追剿**暂时不给奖励**（用户："奖励暂时不给 做好再设置"）——不爆东西
+	if chase:
+		return
 	# v93m（用户：「不需要战利品签 换成素材 以及那一关爆什么东西就爆什么素材」）：
 	#   ① 不再是文字签，**直接爆素材图**（宝箱/银两/经验，都是 assets/items 里那批图）；
 	#   ② 爆什么**看这一关真实给什么**——银两取 stage_silver、经验取 stage_exp_gain、
@@ -3620,11 +4105,17 @@ func _end(win: bool) -> void:
 		for m in _party:
 			if int(m["hp"]) <= 0:
 				_fall(m["node"], -1.0)
-	_push(["——" + ("清缴了这关。" if win else "退回去再整备。")])
-	if GameState.auto_climb:
+	if chase:
+		_push(["——" + ("追杀队退了这一阵。" if win else "退回去再整备。")])
+	else:
+		_push(["——" + ("清缴了这关。" if win else "退回去再整备。")])
+	if _auto_on():
 		_start_countdown()
 		# ㊿q：把"人可以先走"这件事说在战报里——手机上没有 tooltip，只能靠这行
-		_push(["自动挑战：接着开下一关；想先回村就点［回村·后台继续］"])
+		if chase:
+			_push(["追剿·连打：接着开下一关；想停就点右上那颗钮"])
+		else:
+			_push(["自动挑战：接着开下一关；想先回村就点［回村·后台继续］"])
 	else:
 		_act_btn.text = "回村"
 	_refresh_auto_ui()

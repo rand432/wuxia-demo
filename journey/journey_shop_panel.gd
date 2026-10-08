@@ -226,7 +226,7 @@ func _preview_offer(i: int) -> void:
 	body += "碎片加成：" + str(Cards.bonus_text(Cards.card_bonus(sid))) + "\n"
 	if Cards.is_arts(sid):
 		var art: Dictionary = Cards.art_of(sid)
-		body += "成品：" + str(Cards.item_name(sid)) + "（功法）\n"
+		body += "成品：" + str(Cards.item_name(sid)) + "（" + (Cards.cat_name(Cards.cat_of(sid)) if Cards.cat_of(sid) != "" else "功法") + "）\n"
 		body += "功法效果：" + str(art.get("desc", "—")) + "\n"
 	else:
 		body += "成品：" + str(Cards.item_name(sid)) + "（" + str(Cards.bonus_text(Cards.item_bonus(sid))) + "）\n"

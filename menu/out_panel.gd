@@ -1,15 +1,21 @@
 extends Control
 # ============================================================
-# out_panel.gd —— 「出村」关卡面板 v5
+# out_panel.gd —— 「出村」关卡面板 v6
 # v5：只改提示文案——自动挑战现在战斗画面右上角也能开关；
 #   战斗结束后自动接下一关，不用再点回村。其余同 v4。
+# v6（v129）：底下多一张「追剿」卡——精英爬塔（公主府的追杀队）。
+#   手动＝手牌模式（kushou）· 自动＝battle_lite；**每五关一个 boss**，共 500 关。
+#   爬塔没到 500 关时这张卡灰着，并写清"还差多少关"。
 # ============================================================
 
 const GameState := preload("res://shared/game_state.gd")
+const Chase := preload("res://shared/data_chase.gd")
 
 signal challenge(i: int)
 signal config_pressed
 signal chest_pressed   # v6：宝箱（爬塔宝箱机制）
+signal chase_manual    # v129：追剿·手牌模式（kushou）
+signal chase_auto      # v129：追剿·自动战斗（battle_lite）
 signal closed
 
 const INK := Color(0.14, 0.13, 0.15)
@@ -18,7 +24,8 @@ const SEAL := Color(0.68, 0.15, 0.12)
 const GREEN := Color(0.30, 0.52, 0.32)
 
 const PANEL_W := 640.0
-const PANEL_H := 820.0
+# v129：820 → 892——底下要给「追剿」那张卡腾出 72 高（底排按钮跟着下移）
+const PANEL_H := 892.0
 const PER_PAGE := 5
 # ㊿n2：页数跟着塔高走（STAGE_MAX 50 ÷ 每章 5 关 ＝ 10 章）——不再写死 6
 func _pages() -> int:
@@ -35,6 +42,11 @@ var _hint_lb: Label
 var _row_name: Array = []
 var _row_status: Array = []
 var _row_btn: Array = []
+# v129：追剿那张卡上的三件
+var _chase_lb: Label
+var _chase_sub: Label
+var _chase_m_btn: Button
+var _chase_a_btn: Button
 
 func _ready() -> void:
 	size = get_viewport_rect().size
@@ -164,15 +176,65 @@ func _build() -> void:
 		_row_status.append(stt)
 		_row_btn.append(btn)
 
+	# ============================================================
+	# v129：［追剿］卡——精英爬塔（公主府的追杀队）
+	#   位置在五关列表与底部按钮之间（682~754），跟固定件都不打架；
+	#   卡上两行字＋两颗钮：［手牌］走 kushou（自己配牌）、［自动］走 battle_lite。
+	# ============================================================
+	var ccard := Panel.new()
+	ccard.position = Vector2(28, 682)
+	ccard.size = Vector2(584, 72)
+	ccard.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var csb := StyleBoxFlat.new()
+	csb.bg_color = Color(SEAL.r, SEAL.g, SEAL.b, 0.10)
+	csb.set_corner_radius_all(8)
+	csb.border_color = Color(SEAL.r, SEAL.g, SEAL.b, 0.55)
+	csb.set_border_width_all(1)
+	ccard.add_theme_stylebox_override("panel", csb)
+	_panel.add_child(ccard)
+
+	_chase_lb = _label("", 17, INK)
+	_chase_lb.position = Vector2(18, 6)
+	_chase_lb.size = Vector2(340, 24)
+	ccard.add_child(_chase_lb)
+
+	_chase_sub = _label("", 12, Color(INK.r, INK.g, INK.b, 0.62))
+	_chase_sub.position = Vector2(18, 32)
+	_chase_sub.size = Vector2(340, 34)
+	_chase_sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	ccard.add_child(_chase_sub)
+
+	_chase_m_btn = Button.new()
+	_chase_m_btn.text = "手牌"
+	_chase_m_btn.position = Vector2(348, 19)
+	_chase_m_btn.size = Vector2(84, 34)
+	_chase_m_btn.add_theme_font_size_override("font_size", 15)
+	_chase_m_btn.focus_mode = Control.FOCUS_NONE
+	_chase_m_btn.tooltip_text = "手牌模式：进战斗自己点牌出手（游历那种出牌）——轮到你的人就摊一张手牌"
+	_chase_m_btn.pressed.connect(_on_chase_manual)
+	_style_dark(_chase_m_btn)
+	ccard.add_child(_chase_m_btn)
+
+	_chase_a_btn = Button.new()
+	_chase_a_btn.text = "自动"
+	_chase_a_btn.position = Vector2(440, 19)
+	_chase_a_btn.size = Vector2(110, 34)
+	_chase_a_btn.add_theme_font_size_override("font_size", 15)
+	_chase_a_btn.focus_mode = Control.FOCUS_NONE
+	_chase_a_btn.tooltip_text = "自动战斗：跟爬塔一样，看着它一场一场打（可开自动连打）"
+	_chase_a_btn.pressed.connect(_on_chase_auto)
+	_style_challenge(_chase_a_btn)
+	ccard.add_child(_chase_a_btn)
+
 	_hint_lb = _label("", 13, Color(INK.r, INK.g, INK.b, 0.45))   # v61（手游）：12 → 13 号
-	_hint_lb.position = Vector2(28, 690)
+	_hint_lb.position = Vector2(28, 762)
 	_hint_lb.size = Vector2(584, 44)
 	_hint_lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_panel.add_child(_hint_lb)
 
 	var cfg_btn := Button.new()
 	cfg_btn.text = "出战配置"
-	cfg_btn.position = Vector2(28, 740)
+	cfg_btn.position = Vector2(28, 812)
 	cfg_btn.size = Vector2(180, 56)
 	cfg_btn.add_theme_font_size_override("font_size", 19)
 	cfg_btn.focus_mode = Control.FOCUS_NONE
@@ -182,7 +244,7 @@ func _build() -> void:
 
 	_auto_btn = Button.new()
 	_auto_btn.text = "自动挑战：关"
-	_auto_btn.position = Vector2(220, 740)
+	_auto_btn.position = Vector2(220, 812)
 	_auto_btn.size = Vector2(200, 56)
 	_auto_btn.add_theme_font_size_override("font_size", 17)
 	_auto_btn.focus_mode = Control.FOCUS_NONE
@@ -191,7 +253,7 @@ func _build() -> void:
 
 	var close_btn := Button.new()
 	close_btn.text = "关闭"
-	close_btn.position = Vector2(432, 740)
+	close_btn.position = Vector2(432, 812)
 	close_btn.size = Vector2(180, 56)
 	close_btn.add_theme_font_size_override("font_size", 22)
 	close_btn.focus_mode = Control.FOCUS_NONE
@@ -246,6 +308,7 @@ func _style_challenge(btn: Button) -> void:
 func refresh() -> void:
 	if _panel == null:
 		return
+	_refresh_chase()
 	_coin_lb.text = GameState.coin_line(false)
 	# v6：宝箱钮上写"攒了几个"——一眼看得出该不该去开
 	if _chest_btn != null:
@@ -313,6 +376,40 @@ func refresh() -> void:
 			_hint_lb.text = "自动挑战：开——清完一关自动接下一关；撤退/败退自停。\n战斗画面右下角还有［回村·后台继续］：人先回村，塔改后台估算接着推（这个钮不用关）。"
 	else:
 		_hint_lb.text = "清关得银两；经验进经验池（弟子面板分配）｜首领关另赏一件装备/兵器/功法：凡品给整套，良品起给残页（同一件凑齐才算到手）｜第一关打完可开［自动挑战］（开了才会连打、也才会挂机推塔）"
+
+# v129：追剿那条卡——进度 / 下一战 / 特性名；没解锁就写清"还差多少关"
+func _refresh_chase() -> void:
+	if _chase_lb == null:
+		return
+	var p := GameState.chase_progress
+	var on := GameState.chase_unlocked()
+	if not on:
+		_chase_lb.text = "追剿 · 未解锁"
+		_chase_sub.text = "爬塔到第 " + str(Chase.UNLOCK_STAGE) + " 关才开 · 还差 " + str(GameState.chase_gap()) + " 关（现在第 " + str(GameState.stage_progress) + " 关）"
+	elif p >= Chase.STAGE_MAX:
+		_chase_lb.text = "追剿 · 500/500（已清）"
+		_chase_sub.text = "公主府的追杀队一个不剩——村口安静了。"
+	else:
+		_chase_lb.text = "追剿 · 第 " + str(p + 1) + "/" + str(Chase.STAGE_MAX) + " 关（第 " + str(Chase.round_of(p)) + " 剿）"
+		var tail := ""
+		if Chase.is_boss(p):
+			tail = "　" + Chase.trait_names(Chase.boss_traits_of(p))
+		_chase_sub.text = "第 " + str(Chase.wave_in_round(p)) + "/" + str(Chase.BOSS_EVERY) + " 关 ｜ " + Chase.panel_line(p) + tail
+	var can := on and p < Chase.STAGE_MAX
+	_chase_m_btn.disabled = not can
+	_chase_a_btn.disabled = not can
+	_chase_m_btn.text = "手牌" if can else "未开"
+	_chase_a_btn.text = "自动" if can else "未开"
+
+func _on_chase_manual() -> void:
+	if _chase_m_btn.disabled:
+		return
+	chase_manual.emit()
+
+func _on_chase_auto() -> void:
+	if _chase_a_btn.disabled:
+		return
+	chase_auto.emit()
 
 func _on_row(i: int) -> void:
 	challenge.emit(_page * PER_PAGE + i)

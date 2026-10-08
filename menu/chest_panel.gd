@@ -19,6 +19,7 @@ const UiKit := preload("res://shared/ui_kit.gd")   # v77：内景垫图要用
 const Audio := preload("res://shared/audio.gd")   # v78：开箱音
 const SceneArt := preload("res://shared/scene_art.gd")
 const Icons3 := preload("res://shared/item_art.gd")   # v93r：奖励飞出来时带图
+const Cards := preload("res://shared/data_cards.gd")   # v133：残卡品质那一行要读品级表
 
 signal closed
 
@@ -256,7 +257,8 @@ func _build() -> void:
 	title.position = Vector2(28, 16)
 	title.size = Vector2(220, 44)
 	_panel.add_child(title)
-	var sub := _label("每清一关给一个：杂兵＝木箱 · 精英＝银箱 · 首领＝金箱 · 里程碑＝玉箱/龙箱。\n开箱有几率出角色碎片与突破丹，其余给银两与炼丹材料。", 14, Color(INK.r, INK.g, INK.b, 0.60))
+	# v133：把"残卡三线 + 品质跟箱子走"写进说明（用户："宝箱品质不同 给的残页品质也不同"）
+	var sub := _label("每清一关给一个：杂兵木箱 · 精英银箱 · 首领金箱 · 里程碑玉/龙箱。\n开箱出：角色碎片 · 武学残页 · 残兵 · 残装备 · 突破丹（残卡几率更低、品质跟箱子走）。", 14, Color(INK.r, INK.g, INK.b, 0.60))
 	sub.position = Vector2(28, 56)
 	sub.size = Vector2(584, 42)   # v61（手游）：12 → 14 号，框补宽补高（原来 500×40）
 	sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -458,10 +460,14 @@ func refresh() -> void:
 		var n := GameState.chest_count(cid)
 		var info: Label = row["info"]
 		var frag_pct := int(round(float(d.get("frag_chance", 0.0)) * 100.0))
-		var pill_pct := int(round(float(d.get("pill_chance", 0.0)) * 100.0))
-		var fr: Array = d.get("frag", [0, 0])
-		info.text = ("碎片 " + str(frag_pct) + "%（" + str(int(fr[0])) + "~" + str(int(fr[1]))
-			+ " 片）· 突破丹 " + str(pill_pct) + "% · 其余银两/材料")
+		# v134：突破丹的几率也留一位小数（砍半之后 1.5% / 2.8% 这种，取整会看成 2%/3%）
+		var pill_pct := int(round(float(d.get("pill_chance", 0.0)) * 1000.0)) / 10.0
+		# v133：三条残卡线的几率也报出来（一律低于角色碎片，品质跟箱子走）
+		var page_pct := int(round(float(d.get("page_chance", 0.0)) * 1000.0)) / 10.0
+		var blade_pct := int(round(float(d.get("blade_chance", 0.0)) * 1000.0)) / 10.0
+		var gear_pct := int(round(float(d.get("gear_chance", 0.0)) * 1000.0)) / 10.0
+		info.text = ("碎片" + str(frag_pct) + "% · 残页" + str(page_pct) + "% · 残兵" + str(blade_pct)
+			+ "% · 残装" + str(gear_pct) + "% · 丹" + str(pill_pct) + "%")
 		var cnt: Label = row["cnt"]
 		cnt.text = "×" + str(n)
 		var c: Color = TIER_COL[clampi(int(row["grad"]), 0, TIER_COL.size() - 1)]
@@ -471,10 +477,17 @@ func refresh() -> void:
 		b.add_theme_stylebox_override("normal", b.get_meta("box_sel") if is_sel else b.get_meta("box_plain"))
 		b.add_theme_stylebox_override("hover", b.get_meta("box_sel_hover") if is_sel else b.get_meta("box_hover"))
 	_art.tier = _sel_grad()
+	# v133：选中的这一档，把"它的残卡是什么品质"写在脸上
+	var q_cn := str(Cards.QUALITY_ORDER[clampi(_sel_grad(), 0, Cards.QUALITY_ORDER.size() - 1)])
+	# v134：把"这一档成堆给什么"也写在台面上（突破丹一次几颗、材料一次几件）
+	var sd: Dictionary = Tower.chest_def(_sel)
+	var pn2: Array = sd.get("pill_n", [1, 1])
+	var mn2: Array = sd.get("mat_n", [1, 1])
+	var stack_txt := "　｜　丹 ×" + str(int(pn2[0])) + "~" + str(int(pn2[1])) + " · 材料 ×" + str(int(mn2[0])) + "~" + str(int(mn2[1]))
 	if sel_n > 0:
-		_stage_lb.text = Tower.chest_name(_sel) + " ×" + str(sel_n) + "　——　点下面的［开 1］"
+		_stage_lb.text = Tower.chest_name(_sel) + " ×" + str(sel_n) + "（" + q_cn + "残卡）" + stack_txt
 	else:
-		_stage_lb.text = Tower.chest_name(_sel) + " ×0　——　这档还空着，去清关攒"
+		_stage_lb.text = Tower.chest_name(_sel) + " ×0（" + q_cn + "残卡）" + stack_txt + "　——　这档还空着"
 	var odds_parts: Array = []
 	odds_parts.append("攒着 " + str(GameState.chest_total()) + " 个箱子")
 	odds_parts.append("已清 " + str(GameState.stage_progress) + " 关")
@@ -487,7 +500,7 @@ func refresh() -> void:
 	_close_btn.disabled = _busy
 	var notes: Array = GameState.chest_notes
 	if notes.is_empty():
-		_note_lb.text = "开出来的东西会列在这儿。银两与材料直接进村账，碎片进碎片账（弟子面板升星用），突破丹进丹药包裹（突破用）。"
+		_note_lb.text = "开出来的东西会列在这儿。银两与材料直接进村账，角色碎片进碎片账（升星用），残页/残兵/残装备进仓库（凑齐了合成整件），突破丹进丹药包裹（突破用）。\n突破丹与材料都是成堆给的：出现的几率低，一次给一堆。"
 	else:
 		_note_lb.text = "刚开出来：" + "、".join(PackedStringArray(notes))
 
@@ -583,7 +596,8 @@ func _merge_items(list: Array) -> Array:
 			out.append({"kind": str(it.get("kind", "")), "name": str(it.get("name", "")), "n": int(it.get("n", 0))})
 	# 由稀到常排一遍（碎片 → 突破丹 → 银两 → 材料）：飞出来的头几件就是好东西。
 	#   ⚠ 这里手写四桶、不用 sort_custom：同一个字典键排序，分桶比 lambda 好读也好查。
-	var order := ["frag", "pill", "silver", "mat"]
+	# v133：残卡排在最前（比角色碎片更稀罕——先飞出来的就是好东西）
+	var order := ["page", "blade", "gear", "frag", "pill", "silver", "mat"]
 	var sorted_out: Array = []
 	for kind in order:
 		for o2_v in out:
@@ -688,6 +702,12 @@ func _reward_icon(it: Dictionary) -> Texture2D:
 			return Icons3.icon("it_herb")
 		"frag":
 			return Icons3.icon("it_token")
+		"page":
+			return Icons3.icon("it_book")      # v133：武学残页
+		"blade":
+			return Icons3.icon("it_blade")     # v133：残兵
+		"gear":
+			return Icons3.icon("it_armor")     # v133：残装备
 	return Icons3.icon("it_scroll")
 
 func _item_text(it: Dictionary) -> String:
@@ -705,6 +725,12 @@ func _item_col(kind: String) -> Color:
 			return Color(0.52, 0.32, 0.66)     # 突破丹：紫
 		"silver":
 			return Color(0.84, 0.64, 0.16)     # 银两：金
+		"page":
+			return Color(0.26, 0.46, 0.62)     # 武学残页：青
+		"blade":
+			return Color(0.48, 0.46, 0.52)     # 残兵：钢
+		"gear":
+			return Color(0.55, 0.40, 0.26)     # 残装备：赭
 		_:
 			return Color(0.30, 0.56, 0.34)     # 材料：绿
 

@@ -85,7 +85,7 @@ func _show_page() -> void:
 	var dup := false
 	if is_arts:
 		var art: Dictionary = Cards.art_of(sid)
-		extra = "招式：『" + str(Cards.name_of(sid)) + "』" + str(art.get("move", "")) + "\n" + "效果：" + str(art.get("desc", ""))
+		extra = ("归类：" + Cards.cat_name(Cards.cat_of(sid)) + "\n" if Cards.cat_of(sid) != "" else "") + "招式：『" + str(Cards.name_of(sid)) + "』" + str(art.get("move", "")) + "\n" + "效果：" + str(art.get("desc", ""))
 		if st.arts.has(sid):
 			# v60（用户报的："合成了功法也无法装备，只能放在包里"）：这里以前只写"已有同名功法"，
 			#   而下面那颗［装备］是灰的——玩家看不出"是谁已经有了、多的这本会去哪"，

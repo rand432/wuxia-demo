@@ -748,7 +748,7 @@ func _ov_arts(panel: Control) -> void:
 		var n_lb := UiKit.make_label(panel, Vector2(40, 318), Vector2(600, 36), 24, UiKit.INK)
 		UiKit.set_text(n_lb, "『" + str(Cards.name_of(sid2)) + "』" + GameState.star_marks(sid2))
 		var m_lb := UiKit.make_label(panel, Vector2(40, 354), Vector2(600, 30), 18, UiKit.DIM)
-		UiKit.set_text(m_lb, "招式：" + str(art.get("move", "—")))
+		UiKit.set_text(m_lb, "归类：" + (Cards.cat_name(Cards.cat_of(sid2)) if Cards.cat_of(sid2) != "" else "—") + "　·　招式：" + str(art.get("move", "—")))
 		var d_lb := UiKit.make_label(panel, Vector2(40, 384), Vector2(600, 84), 18, Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.85))
 		UiKit.set_text(d_lb, str(art.get("desc", "—")))
 		d_lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART

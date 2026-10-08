@@ -64,6 +64,9 @@ var _sub_lb: Label
 var _tab_btns: Array = []
 var _tab := 0
 var _pick_cat := ""            # "" = 普通；"weapon"/"armor"/"helm"/"cloak"/"arts" = 联动取用
+# v132：功法的**归类粗筛**（""=全部；"atk"/"buff"/"ctrl"/"pass"/"elem"/"ex"）——只筛「武学」页
+var _cat_grp := ""
+var _cat_btn: Button = null
 var _cells: Array = []
 var _stacks_now: Array = []
 # v62（用户："仓库需要加一个整理功能 残卷和成品都是混在一起的"）：
@@ -120,17 +123,35 @@ func _build() -> void:
 	UiKit.add_room_bg(_panel, SceneArt.store_room(), 0.34)
 
 	_title_lb = _label("仓　库", 30, INK)
-	_title_lb.position = Vector2(28, 20)
-	_title_lb.size = Vector2(420, 44)
+	_title_lb.position = Vector2(28, 18)
+	_title_lb.size = Vector2(206, 36)
 	_panel.add_child(_title_lb)
 
-	_sub_lb = _label("历练带回的东西，分类收在这里", 15, Color(INK.r, INK.g, INK.b, 0.55))
-	_sub_lb.position = Vector2(30, 60)
-	_sub_lb.size = Vector2(390, 22)
+	# v132：副标题缩到标题底下那一小条（12 号、两行以内）——右边两颗钮（归类/整理）
+	#   原来那颗长副标题（390 宽）尾巴会被钮压住，改成短句 + 自动换行，谁也不压谁。
+	_sub_lb = _label("分类收在这儿 · 残卡凑齐可合成", 12, Color(INK.r, INK.g, INK.b, 0.55))
+	_sub_lb.position = Vector2(30, 52)
+	_sub_lb.size = Vector2(206, 34)
+	_sub_lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_panel.add_child(_sub_lb)
 
 	# v62：整理钮——放在标题行右侧那块空处（标题"仓　库"只占左边一小段，副标题也只占 390 宽）
 	#   按一下换一种排法，钮上写着当前是哪种。48 高 ＝ 手游可点档。
+	# v132：**归类**筛钮（用户："功法要做归类了"）——只在「武学」页生效：
+	#   全部 → 攻击 → 增益 → 控制 → 被动 → 元素 → 专属 → 全部…（按大类粗筛，15 类在细则里）
+	#   位置：把标题牌缩窄，与整理钮并排（两颗都 48 高 ＝ 手游可点档）
+	_title_lb.size = Vector2(210, 44)
+	_cat_btn = Button.new()
+	_cat_btn.position = Vector2(248, 20)
+	_cat_btn.size = Vector2(170, 48)
+	_cat_btn.add_theme_font_size_override("font_size", 17)
+	_cat_btn.focus_mode = Control.FOCUS_NONE
+	_cat_btn.text = "归类：全部"
+	_cat_btn.pressed.connect(_on_cat_filter)
+	_style_dark_button(_cat_btn)
+	UiKit.font_states(_cat_btn, Color(0.94, 0.91, 0.84))
+	_panel.add_child(_cat_btn)
+
 	_sort_btn = Button.new()
 	_sort_btn.position = Vector2(430, 20)
 	_sort_btn.size = Vector2(182, 48)
@@ -415,6 +436,32 @@ func _on_sort() -> void:
 		_sort_btn.text = "整理：" + str(SORT_CN[_sort_mode])
 	refresh()
 
+# ---- v132：归类筛（武学页）----
+#   粗筛按六个大类走（攻击/增益/控制/被动/元素/专属）——15 个细类在详情页里写着，
+#   一格一格点 15 下太碎；要细看某一门的归类，点开它看"归类："那一行。
+func _cat_cycle() -> Array:
+	var out: Array = [""]
+	out.append_array(Cards.CAT_GROUPS)
+	return out
+
+func _on_cat_filter() -> void:
+	var cyc := _cat_cycle()
+	var i := cyc.find(_cat_grp)
+	_cat_grp = str(cyc[(i + 1) % cyc.size()])
+	if _cat_btn != null:
+		_cat_btn.text = "归类：" + (str(Cards.CAT_GROUP_CN.get(_cat_grp, "全部")) if _cat_grp != "" else "全部")
+	print("[仓库] 归类筛 = ", _cat_grp)
+	refresh()
+
+# 这一件过不过当前的归类筛（只筛武学；别的页一律放行）
+func _cat_pass(s: Dictionary) -> bool:
+	if _cat_grp == "":
+		return true
+	var sid := str(s.get("id", ""))
+	if str(s.get("pool", "")) != "arts":
+		return true
+	return Cards.in_group(sid, _cat_grp)
+
 # ---- 分类 ----
 
 func _in_cat(s: Dictionary, tab_id: String) -> bool:
@@ -442,6 +489,9 @@ func _stacks() -> Array:
 				out.append({"kind": "item", "sid": sid, "pool": pool, "weapon": str(s.get("weapon", "")), "set_name": str(GEAR_CN.get(pool, s.get("name", sid))), "title": Cards.item_name(sid), "part_name": Cards.item_name(sid), "count": ni})
 			continue
 		if not _in_cat(s, str(TABS[_tab]["id"])):
+			continue
+		# v132：归类筛（只对武学页有实感；别的页没有 art 归类，一律放行）
+		if not _cat_pass(s):
 			continue
 		var parts: Array = s.get("parts", [])
 		for p in parts.size():
@@ -525,9 +575,9 @@ func refresh() -> void:
 	else:
 		_title_lb.text = "仓　库"
 		if str(TABS[_tab]["id"]) == "pill":
-			_sub_lb.text = "丹药收在这一格（包裹）——给谁吃去「弟子」面板，喂兽去「宠物」面板"
+			_sub_lb.text = "丹药收这一格 · 吃用去弟子页"
 		else:
-			_sub_lb.text = "历练带回的东西，分类收在这里　·　残页/残卡凑齐了点一下就能合成（金边＝能合）"
+			_sub_lb.text = "分类收在这儿 · 残卡凑齐可合成（金边＝能合）"
 	# v62：整理钮的牌子跟着当前排法走（选人模式下藏起来——那会儿只用点一件）
 	if _sort_btn != null:
 		_sort_btn.visible = not picking
@@ -734,7 +784,12 @@ func _open_equip_win(sid: String) -> void:
 	t1.size = Vector2(EQ_W - 52.0, 36)
 	w.add_child(t1)
 	var kind_cn := "功法·武学" if is_arts else str(GEAR_CN.get(pool, Cards.name_of(sid)))
-	var t2 := _label(GameState.grade_of(sid) + "　【" + kind_cn + "】", 17, Color(INK.r, INK.g, INK.b, 0.66))
+	var kind_full := kind_cn
+	if is_arts:
+		var cid := Cards.cat_of(sid)
+		if cid != "":
+			kind_full = "功法·" + Cards.cat_name(cid)
+	var t2 := _label(GameState.grade_of(sid) + "　【" + kind_full + "】", 17, Color(INK.r, INK.g, INK.b, 0.66))
 	t2.position = Vector2(26, 58)
 	t2.size = Vector2(EQ_W - 52.0, 26)
 	w.add_child(t2)
@@ -747,6 +802,10 @@ func _open_equip_win(sid: String) -> void:
 	# v63（用户："我得穿上了才能看到技能"）：武学的**招式说明**直接写进弹窗——
 	#   不用先装到弟子身上再去面板里看。
 	if is_arts:
+		# v132：先报**归类**（用户："功法要做归类了"），再报招式
+		var cl := Cards.cat_line(sid)
+		if cl != "":
+			lines.append(cl)
 		var ad: Dictionary = Cards.by_id(sid).get("art", {})
 		var adesc := str(ad.get("desc", ""))
 		if adesc != "":

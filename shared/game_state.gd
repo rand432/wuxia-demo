@@ -1577,6 +1577,62 @@ static func enemy_at(i: int) -> Dictionary:
 			out["affixes"] = affixes
 	return out
 
+# ============================================================
+# v129 追剿（精英爬塔）—— 数据在 shared/data_chase.gd
+#
+# 用户 2026-10-08："增加精英爬塔【500关解锁】…剧情是公主的部分追杀队已经来到了这村落…
+#   也是在点出村之后 那个关卡列表里显示 这个可手动【手牌模式】可自动 难度略高
+#   按照五关一boss形成 boss需要富有特色 特性什么的 让玩家可以针对的进行战术【奖励暂时不给】"
+# 用户 2026-10-09（本轮）："当前先做500关 每五关一个boss"
+#
+# 账本这一层只管三件：**进度**（chase_progress）、**存档**、以及"给怪补境界与压制"。
+# 关卡表 / boss / 特性 / 杂兵名全在 data_chase.gd——调难度只开那一个文件。
+# ⚠ 奖励**先留空**（用户："奖励暂时不给 做好再设置"）：chase_clear 只推关，不给银两/经验/箱子。
+# ⚠ 追剿的自动连打是**独立的开关**（chase_auto）——不能蹭爬塔的 auto_climb，
+#   那个开关同时还管着"挂机后台推塔"（_idle_climb），蹭上去两头都会乱。
+# ============================================================
+const Chase := preload("res://shared/data_chase.gd")
+
+static var chase_progress := 0     # 追剿已清关数（0 ~ Chase.STAGE_MAX）
+static var chase_auto := false     # 追剿的"自动连打"（与爬塔 auto_climb 分开）
+
+static func chase_unlocked() -> bool:
+	return stage_progress >= Chase.UNLOCK_STAGE
+
+static func chase_gap() -> int:
+	return maxi(0, Chase.UNLOCK_STAGE - stage_progress)
+
+static func chase_enemy_at(i: int) -> Dictionary:
+	# 与爬塔（enemy_at）同一把尺：
+	#   ① 境界按关卡给——追剿第 i 关用的是"塔上等价关"（OFFSET+i）/ 350，与塔的 i/350 一条线；
+	#   ② 再按境界差折算血攻（±10%/境、夹 ±80%），并同样吃 1.15 的整体难度；
+	#   ③ 杂兵那一条随机词缀与塔同池同规矩（boss 的词缀是**写死的**——那是它的性格）。
+	var ti := clampi(i, 0, Chase.STAGE_MAX - 1)
+	var out: Dictionary = Chase.enemy_at(ti)
+	var fr := clampi((Chase.OFFSET + ti) / Chase.REALM_DIV, 0, Realm.MAX_LV)
+	out["realm"] = fr
+	var sup := Realm.suppress_mul(advance_lv, fr) * TOWER_HARD_MUL
+	out["hp"] = maxi(1, int(round(float(out.get("hp", 1)) * sup)))
+	out["atk"] = maxi(1, int(round(float(out.get("atk", 1)) * sup)))
+	var n := int(out.get("affix_n", 0))
+	if n > 0:
+		var tier := mini(1 + (Chase.round_of(ti) - 1) / 10, 6)
+		var affixes: Array = DataAffixes.roll_from(DataAffixes.pool_for(tier), n)
+		if not affixes.is_empty():
+			out["affixes"] = affixes
+	return out
+
+# 清一关：只推进度（**不给奖励**）——i 必须是当前该打的那一关
+static func chase_clear(i: int) -> bool:
+	if i != chase_progress:
+		return false
+	if i >= Chase.STAGE_MAX:
+		return false
+	chase_progress += 1
+	save_game()
+	print("[账本] 追剿清关：第 ", i + 1, " 关（", Chase.enemy_name(i), "）——进度 ", chase_progress, "/", Chase.STAGE_MAX)
+	return true
+
 # ---- 品酒坊 ----
 const TASTERS := [
 	{"key": "color", "name": "柳先生", "low": "「色浑发浊——可惜。」", "mid": "「色正，过得去。」", "high": "「好色！亮得像新漆的梁。」"},
@@ -3453,6 +3509,51 @@ static func chest_count(cid := "") -> int:
 static func chest_total() -> int:
 	return chest_count("")
 
+# ============================================================
+# v133：宝箱的三条残卡线（武学残页 / 残兵 / 残装备）
+#
+#   用户："开宝箱给武学残页残兵 但是比角色碎片几率低 宝箱品质不同 给的残页品质也不同" +"也给残装备"
+#
+#   口径：
+#     · 池子按**品级现算**（Tower.chest_card_pool：grad 就是品级下标），专武不进池；
+#     · 一次给**同一套的 n 页**（页不重复）——分散给四套等于一套都凑不齐，所以必须同一套；
+#     · 页数会被"这一套有几页"夹住（三页的套最多给三页）。
+#   下面是两个小工具：攒账（pages 那种 {套id: {页号: 张数}}）与写明细。
+# ============================================================
+static func _chest_pages_into(acc: Dictionary, kind: String, grad: int, n_rng: Array) -> void:
+	var ids: Array = Tower.chest_card_pool(kind, grad)
+	if ids.is_empty():
+		return
+	var sid := str(ids[randi() % ids.size()])
+	var parts: Array = Cards.parts_of(sid)
+	var idxs: Array = []
+	for i in parts.size():
+		idxs.append(i)
+	idxs.shuffle()
+	var n := randi_range(int(n_rng[0]), int(n_rng[1]))
+	var bucket: Dictionary = acc.get(sid, {})
+	for i2 in mini(n, idxs.size()):
+		var p := int(idxs[i2])
+		bucket[p] = int(bucket.get(p, 0)) + 1
+	acc[sid] = bucket
+
+static func _bucket_sum(d: Dictionary) -> int:
+	var n := 0
+	for k in d.keys():
+		n += int(d[k])
+	return n
+
+# "劈山掌·残页（卷上×1、卷中×1）"——哪一套、凑到哪几页，一句话说清
+static func _chest_pages_text(sid: String, bucket: Dictionary) -> String:
+	var parts: Array = Cards.parts_of(sid)
+	var seg: Array = []
+	for p_v in bucket.keys():
+		var p := int(p_v)
+		var pn := str(parts[p]) if p < parts.size() else "?"
+		seg.append(pn + "×" + str(int(bucket[p_v])))
+	var tail := "残页" if Cards.is_arts(sid) else ("残兵" if str(Cards.by_id(sid).get("pool", "")) == "weapon" else "残片")
+	return Cards.item_name(sid) + "·" + tail + "（" + "、".join(PackedStringArray(seg)) + "）"
+
 # 开 n 个某品质的箱子（返回 {"ok","msg","got"}；got 是明细数组）
 static func chest_open(cid: String, n := 1) -> Dictionary:
 	var d: Dictionary = Tower.chest_def(cid)
@@ -3467,6 +3568,10 @@ static func chest_open(cid: String, n := 1) -> Dictionary:
 	var mats: Dictionary = {}
 	var frags: Dictionary = {}
 	var pill_got: Dictionary = {}
+	# v133：三条残卡线（武学残页 / 残兵 / 残装备）——都按"套 → 页"收，最后一次性进仓库
+	var pages: Dictionary = {}
+	var blades: Dictionary = {}
+	var gears: Dictionary = {}
 	for k in cnt:
 		# ① 角色碎片（有几率）
 		if randf() < float(d.get("frag_chance", 0.0)):
@@ -3475,16 +3580,28 @@ static func chest_open(cid: String, n := 1) -> Dictionary:
 			var fid := str(pick.get("id", "frag_player"))
 			var fn := randi_range(int(fr[0]), int(fr[1]))
 			frags[fid] = int(frags.get(fid, 0)) + fn
-		# ② 突破丹（有几率）
+		# ② 突破丹（有几率）——v134：**少而厚**，一次给 pill_n 里的颗数（原来恒 1 颗）
 		if randf() < float(d.get("pill_chance", 0.0)):
 			var pl: Array = d.get("pills", [])
 			if not pl.is_empty():
 				var pid := str(pl[randi() % pl.size()])
-				pill_got[pid] = int(pill_got.get(pid, 0)) + 1
-		# ③ 银两与材料（掷 rolls 次）
+				var pn: Array = d.get("pill_n", [1, 1])
+				pill_got[pid] = int(pill_got.get(pid, 0)) + randi_range(int(pn[0]), int(pn[1]))
+		# ④ v133：武学残页（几率**比角色碎片低**，品质跟箱子走）
+		if randf() < float(d.get("page_chance", 0.0)):
+			_chest_pages_into(pages, "arts", int(d.get("grad", 0)), d.get("page_n", [1, 1]))
+		# ⑤ v133：残兵残卡（比残页再低一点）
+		if randf() < float(d.get("blade_chance", 0.0)):
+			_chest_pages_into(blades, "weapon", int(d.get("grad", 0)), d.get("blade_n", [1, 1]))
+		# ⑥ v133：残装备残片（护甲/玉佩/披风三池合一）
+		if randf() < float(d.get("gear_chance", 0.0)):
+			_chest_pages_into(gears, "gear", int(d.get("grad", 0)), d.get("gear_n", [1, 1]))
+		# ⑦ 银两与材料（掷 rolls 次）
 		silver += Tower.chest_silver_total(_chest_stage_hint, cid)
+		# v134：材料那一掷的命中率改成**表里可调**（mat_chance，默认 0.45 是旧值）——
+		#   45% → 30%，但一次给的量翻倍（mat_n），总期望反而涨两~三成
 		for r in int(d.get("rolls", 1)):
-			if randf() < 0.45:
+			if randf() < float(d.get("mat_chance", 0.45)):
 				var mn: Array = d.get("mat_n", [1, 1])
 				var mid := Tower.chest_roll_mat()
 				mats[mid] = int(mats.get(mid, 0)) + randi_range(int(mn[0]), int(mn[1]))
@@ -3494,6 +3611,13 @@ static func chest_open(cid: String, n := 1) -> Dictionary:
 		add_material(str(k2), int(mats[k2]))
 	for k3 in frags.keys():
 		add_fragment(str(k3), int(frags[k3]))
+	# v133：残卡进仓库（vault_deposit 吃 {套id: {页号: 张数}}）
+	if not pages.is_empty():
+		vault_deposit(pages)
+	if not blades.is_empty():
+		vault_deposit(blades)
+	if not gears.is_empty():
+		vault_deposit(gears)
 	for k4 in pill_got.keys():
 		pills[str(k4)] = int(pills.get(str(k4), 0)) + int(pill_got[k4])
 	# 明细（面板显示 + 日志）
@@ -3503,6 +3627,13 @@ static func chest_open(cid: String, n := 1) -> Dictionary:
 		got.append(mat_name(str(k5)) + " ×" + str(int(mats[k5])))
 	for k6 in frags.keys():
 		got.append(fragment_name(str(k6)) + " ×" + str(int(frags[k6])))
+	# v133：三条残卡线的明细（写清"哪一套、缺的哪几页"，开箱完一眼知道凑到哪了）
+	for k6b in pages.keys():
+		got.append(_chest_pages_text(str(k6b), pages[k6b]))
+	for k6c in blades.keys():
+		got.append(_chest_pages_text(str(k6c), blades[k6c]))
+	for k6d in gears.keys():
+		got.append(_chest_pages_text(str(k6d), gears[k6d]))
 	for k7 in pill_got.keys():
 		got.append(str(recipe_of(str(k7)).get("name", k7)) + " ×" + str(int(pill_got[k7])))
 	chest_notes = got.duplicate()
@@ -3510,6 +3641,13 @@ static func chest_open(cid: String, n := 1) -> Dictionary:
 	#   顺序＝由稀到常（碎片 → 突破丹 → 银两 → 材料），飞出来的头几件就是好东西。
 	#   ⚠ got（字符串那串）照旧不动：它是账本口径，别的地方在读。
 	var items: Array = []
+	# v133：残卡排在**最前面**（比角色碎片更稀罕——先飞出来的就是好东西）
+	for k7p in pages.keys():
+		items.append({"kind": "page", "name": Cards.item_name(str(k7p)) + "残页", "n": _bucket_sum(pages[k7p])})
+	for k7q in blades.keys():
+		items.append({"kind": "blade", "name": Cards.item_name(str(k7q)) + "残兵", "n": _bucket_sum(blades[k7q])})
+	for k7r in gears.keys():
+		items.append({"kind": "gear", "name": Cards.item_name(str(k7r)) + "残片", "n": _bucket_sum(gears[k7r])})
 	for k7b in frags.keys():
 		items.append({"kind": "frag", "name": fragment_name(str(k7b)), "n": int(frags[k7b])})
 	for k8 in pill_got.keys():
@@ -5598,6 +5736,9 @@ static func load_game() -> void:
 	dange_built = bool(vd.get("dange_built", dange_built))
 	auto_climb = bool(vd.get("auto_climb", auto_climb))
 	stage_progress = int(vd.get("stage_progress", stage_progress))
+	# v129：追剿（精英爬塔）进度——老档没有这两键＝还没打过，从 0 起（不报错）
+	chase_progress = clampi(int(vd.get("chase_progress", chase_progress)), 0, Chase.STAGE_MAX)
+	chase_auto = bool(vd.get("chase_auto", chase_auto))
 	formation = _sa(vd.get("formation", formation), formation)
 	formation_intro_done = bool(vd.get("formation_intro_done", formation_intro_done))
 	tower_gifts = _sa(vd.get("tower_gifts", tower_gifts), tower_gifts)   # ㊱：已发过的首领赏
@@ -5693,6 +5834,7 @@ static func save_game() -> void:
 		"map_found": map_found, "b2_built": b2_built, "cave_opened": cave_opened,
 		"winery_built": winery_built, "herbs_granted": herbs_granted, "dange_built": dange_built,
 		"auto_climb": auto_climb, "stage_progress": stage_progress,
+		"chase_progress": chase_progress, "chase_auto": chase_auto,   # v129：追剿进度与自动连打
 		"formation": formation, "formation_intro_done": formation_intro_done,
 		"tower_gifts": tower_gifts,
 		"chests": chest_inv, "chest_stage": _chest_stage_hint,   # v36：宝箱账

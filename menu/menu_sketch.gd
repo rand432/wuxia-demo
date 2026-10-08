@@ -737,6 +737,8 @@ func _ready() -> void:
 	add_child(_out_panel)
 	_out_panel.challenge.connect(_on_challenge)
 	_out_panel.config_pressed.connect(_on_out_config)
+	_out_panel.chase_manual.connect(_on_chase_manual)   # v129：追剿·手牌模式（kushou）
+	_out_panel.chase_auto.connect(_on_chase_auto)       # v129：追剿·自动战斗（battle_lite）
 	# v36：宝箱面板——出村屏右上角［宝箱］开它；v4.2 底排第 5 格也开它
 	_chest_panel = ChestPanel.new()
 	add_child(_chest_panel)
@@ -2401,6 +2403,85 @@ func _on_out_config() -> void:
 	_out_panel.close()
 	print("[主界面] 出战配置（整备面板·三格）")
 	_formation.open_config()
+
+# ============================================================
+# v129：追剿（精英爬塔）——出村面板那颗卡的**两条路**
+#   手动 ＝ 手牌模式（kushou：自己配牌，连打这一剿的五关）
+#   自动 ＝ 自动战斗（battle_lite：跟爬塔一样看着它打，可开连打）
+#   进度与奖励都在账本：GameState.chase_progress（**奖励暂不给**，只推关）。
+# ============================================================
+const Chase := preload("res://shared/data_chase.gd")
+
+func _on_chase_manual() -> void:
+	_out_panel.close()
+	if not GameState.chase_unlocked():
+		_show_toast("追剿还没开——爬塔到第 " + str(Chase.UNLOCK_STAGE) + " 关（还差 " + str(GameState.chase_gap()) + " 关）", 3.0)
+		return
+	if GameState.chase_progress >= Chase.STAGE_MAX:
+		_show_toast("追剿 500 关已清——村口清净了", 2.6)
+		return
+	# v135（用户："追剿 的手牌说的是游历的那种出牌 直接加在战斗里设置即可"）：
+	#   ［手牌］不再开困兽那张牌桌——**直接进战斗，手动出牌**（战斗里右上那颗钮随时能切回自动）。
+	_start_chase_stage(GameState.chase_progress, true)
+	_show_toast("[追剿·手牌] 进战斗自己点牌出手——轮到你的人就摊一张手牌", 3.2)
+
+func _on_chase_kushou_done(win: bool, stage_i: int) -> void:
+	if win:
+		_show_toast("追剿：" + str(Chase.chapter_of(stage_i)) + " 清了——进度 " + str(GameState.chase_progress) + "/" + str(Chase.STAGE_MAX), 3.2)
+	else:
+		_show_toast("追剿：这一剿没打下来（进度仍是 " + str(GameState.chase_progress) + "）——配好牌再来", 3.0)
+	if _out_panel != null:
+		_out_panel.refresh()
+
+func _on_chase_auto() -> void:
+	_out_panel.close()
+	if not GameState.chase_unlocked():
+		_show_toast("追剿还没开——爬塔到第 " + str(Chase.UNLOCK_STAGE) + " 关（还差 " + str(GameState.chase_gap()) + " 关）", 3.0)
+		return
+	if GameState.chase_progress >= Chase.STAGE_MAX:
+		_show_toast("追剿 500 关已清——村口清净了", 2.6)
+		return
+	_start_chase_stage(GameState.chase_progress)
+
+func _start_chase_stage(i: int, manual := false) -> void:
+	if i != GameState.chase_progress:
+		_show_toast("追剿进度对不上（要打第 " + str(GameState.chase_progress + 1) + " 关）")
+		return
+	if i >= Chase.STAGE_MAX:
+		return
+	var b := BattleLite.new()
+	b.chase = true
+	b.manual = manual          # v135：true ＝ 手动出牌（游历那套手牌）
+	b.stage_i = i
+	b.done.connect(_on_chase_battle_done.bind(i))
+	_battle = b
+	add_child(b)
+	print("[主界面] 追剿·", "手牌" if manual else "自动", "：第 ", i + 1, "/", Chase.STAGE_MAX, " 关 · ", Chase.enemy_name(i), " 特性=", Chase.boss_traits_of(i))
+
+func _on_chase_battle_done(win: bool, i: int) -> void:
+	var was_manual := false
+	if _battle != null and is_instance_valid(_battle):
+		was_manual = bool(_battle.manual)   # v135：连打时保持"手动/自动"不变
+		_battle.queue_free()
+	_battle = null
+	if win:
+		GameState.chase_clear(i)
+		_show_toast("追剿清关：第 " + str(i + 1) + "/" + str(Chase.STAGE_MAX) + " 关 · " + Chase.enemy_name(i)
+			+ "（奖励暂未开放）——进度 " + str(GameState.chase_progress), 3.2)
+		# 连打开着就接着下一关（追剿的开关是 chase_auto，与爬塔的 auto_climb 分开）
+		if GameState.chase_auto and GameState.chase_progress < Chase.STAGE_MAX and not _any_panel_open():
+			await get_tree().create_timer(0.5).timeout
+			if GameState.chase_auto and GameState.chase_progress == i + 1 and not _any_panel_open():
+				_start_chase_stage(i + 1, was_manual)
+				return
+		_out_panel.open()
+	else:
+		if GameState.chase_auto:
+			GameState.chase_auto = false
+			_show_toast("追剿败退——连打已停；整备好再点［自动］", 3.0)
+		else:
+			_show_toast("追剿败退——回去整备，再来", 2.6)
+		_out_panel.open()
 
 func _on_form_ok(i: int) -> void:
 	_start_stage(i)

@@ -219,7 +219,7 @@ const SETS := [
 	{"id": "art_disarmhand", "name": "卸甲手", "pool": "arts", "weapon": "any", "parts": ["卷首", "卷上", "卷中", "卷下"], "item": "卸甲手", "quality": "上品",
 		"art": {"kind": "damage", "mult": 2.4, "cd": 4, "move": "反手卸甲", "target": "front",
 			"apply": {"id": "disarm", "turns": 2, "stacks": 1},
-			"desc": "反手磕在腕上：×2.4，并「缴械」——对手此后 2 手**不能普攻**（武学与大招照放；冷却 4 手）"}, "item_stats": {"dmg": 4}},
+			"desc": "反手磕在腕上：×2.4，并「缴械」——对手此后 2 手不能普攻（武学与大招照放；冷却 4 手）"}, "item_stats": {"dmg": 4}},
 	{"id": "art_soulchime", "name": "摄魂音", "pool": "arts", "weapon": "any", "parts": ["卷首", "卷上", "卷中", "卷下", "卷尾"], "item": "摄魂音", "quality": "上品", "elem": "wood",
 		"art": {"kind": "damage", "mult": 1.8, "cd": 5, "move": "摄魂夺魄", "target": "mid",
 			"apply": {"id": "stun", "turns": 1, "stacks": 1, "chance": 0.75},
@@ -244,7 +244,7 @@ const SETS := [
 	{"id": "art_throatpin", "name": "封喉指", "pool": "arts", "weapon": "any", "parts": ["卷上", "卷中", "卷下"], "item": "封喉指", "quality": "良品",
 		"art": {"kind": "damage", "mult": 1.3, "cd": 4, "move": "锁喉点穴", "target": "front",
 			"apply": {"id": "silence", "turns": 2, "stacks": 1},
-			"desc": "指风锁喉：×1.3，并「沉默」——对手此后 2 手**放不出武学**（普攻与大招照放；冷却 4 手）"}},
+			"desc": "指风锁喉：×1.3，并「沉默」——对手此后 2 手放不出武学（普攻与大招照放；冷却 4 手）"}},
 	{"id": "art_dullrage", "name": "泄气散", "pool": "arts", "weapon": "any", "parts": ["卷上", "卷中", "卷下"], "item": "泄气散", "quality": "良品",
 		"art": {"kind": "damage", "mult": 1.1, "cd": 4, "move": "撒粉泄气", "target": "front",
 			"apply": {"id": "ragecut", "turns": 3, "stacks": 1},
@@ -252,17 +252,17 @@ const SETS := [
 	{"id": "art_ultbreak", "name": "断势拳", "pool": "arts", "weapon": "any", "parts": ["卷首", "卷上", "卷中", "卷下"], "item": "断势拳", "quality": "上品", "elem": "fire",
 		"art": {"kind": "damage", "mult": 2.2, "cd": 4, "move": "断势截招", "target": "front",
 			"apply": {"id": "ultseal", "turns": 2, "stacks": 1},
-			"desc": "一拳截在起势上：×2.2，并「封招」——对手此后 2 手**放不出大招**（怒气留着，满了也放不出来；冷却 4 手）"}, "item_stats": {"dmg": 4}},
+			"desc": "一拳截在起势上：×2.2，并「封招」——对手此后 2 手放不出大招（怒气留着，满了也放不出来；冷却 4 手）"}, "item_stats": {"dmg": 4}},
 	{"id": "art_slowcast", "name": "滞气针", "pool": "arts", "weapon": "any", "parts": ["卷首", "卷上", "卷中", "卷下", "卷尾"], "item": "滞气针", "quality": "上品",
 		"art": {"kind": "damage", "mult": 1.6, "cd": 4, "move": "滞气凝脉", "target": "mid",
 			"apply": {"id": "cdslow", "turns": 3, "stacks": 1},
-			"desc": "细针入脉：×1.6，并「滞涩」——对手此后 3 手**技能冷却 +2 手**（当下正在冷却的一起往后推；冷却 4 手）"}, "item_stats": {"dmg": 4}},
+			"desc": "细针入脉：×1.6，并「滞涩」——对手此后 3 手技能冷却 +2 手（当下正在冷却的一起往后推；冷却 4 手）"}, "item_stats": {"dmg": 4}},
 	# ⚠ 「闭窍」不在这里——用户："闭窍是针对玩家的"：那一条只有**首领**会给你上
 	#   （出村第 50 关往后的「点窍手」模板、游历的精英与寨主），玩家的解法是「清心诀」。
 	# ---- 驱散（净化）：自己这手不出击，**随机**洗掉全队身上一条负面，顺手磕掉对手的护体与蓄势 ----
 	{"id": "art_clearheart", "name": "清心诀", "pool": "arts", "weapon": "any", "parts": ["卷上", "卷中", "卷下", "卷尾"], "item": "清心诀", "quality": "良品",
 		"art": {"kind": "cleanse", "target": "ally_all", "cleanse": 1, "dispel_foe": true, "cd": 4, "move": "清心涤虑",
-			"desc": "涤荡杂气：自己这手不出击，全队各**随机洗掉身上一条负面**（挂三条时不一定洗得中你最想洗的那条），并磕掉当前对手的护体与蓄势（冷却 4 手）"}},
+			"desc": "涤荡杂气：自己这手不出击，全队各随机洗掉身上一条负面（挂三条时不一定洗得中你最想洗的那条），并磕掉当前对手的护体与蓄势（冷却 4 手）"}},
 	# ---- ㊿z6：专武功法（数值 + 照主人招式定制的机制；**数值随升星提升**）----
 	#   照崩铁"专武/光锥"的口径：**按命途限装、不锁人**（别人也能装、也能吃基础收益），
 	#   被动**常驻**（不是"放一手"）。这里"命途"那一层不设限：专武认人不认兵器。
@@ -276,7 +276,7 @@ const SETS := [
 		"parts": ["卷上", "卷中", "卷下", "卷尾"], "item": "长风诀",
 		"art": {"kind": "passive", "fx": {"dmg": 5}, "move": "长风自引",
 			"mech": {"ult_dmg": 0.10, "ult_per_hit": 0.06, "ult_chain_up": 0.20, "ult_chain_turns": 3},
-			"desc": "为少侠量身定做——常驻：出手伤害 +5%。\n专属机制：大招伤害 +10%；对多人时**每一名**中招的对手让那一击再 +6%（逐个叠）；\n放完大招后**三回合**内再放大招，那一下再 +20%（续得上就一路 +20%）。数值随星数提升"}},
+			"desc": "为少侠量身定做——常驻：出手伤害 +5%。\n专属机制：大招伤害 +10%；对多人时每一名中招的对手让那一击再 +6%（逐个叠）；\n放完大招后三回合内再放大招，那一下再 +20%（续得上就一路 +20%）。数值随星数提升"}},
 	{"id": "art_ex_tiebi", "name": "铁壁桩功", "pool": "arts", "weapon": "any", "role": "chen_shi", "quality": "绝品", "no_drop": true,
 		"parts": ["卷上", "卷中", "卷下", "卷尾"], "item": "铁壁桩功",
 		# v65h（用户：「修专武」）：原来 fx 栏挂着 rage_on_hit / thorn_up ——
@@ -285,12 +285,64 @@ const SETS := [
 		#   挪进 mech 栏（两套引擎都读）——数值一个没改。
 		"art": {"kind": "passive", "fx": {}, "move": "铁桩入地",
 			"mech": {"rage_on_hit": 0.15, "thorn_up": 0.15, "ult_cut": 0.075, "thorn_all": 1, "thorn_per_hit": 0.10, "thorn_heal": 0.03},
-			"desc": "为陈石量身定做——常驻：受击怒气 +15%、反刺 +15%。\n专属机制：放大招期间减伤 +7.5%，且反刺**打全体**；\n自己每击中一名敌人，反刺再 +10%（封顶 +100%）；每次反刺回 3% 气血。数值随星数提升"}},
+			"desc": "为陈石量身定做——常驻：受击怒气 +15%、反刺 +15%。\n专属机制：放大招期间减伤 +7.5%，且反刺打全体；\n自己每击中一名敌人，反刺再 +10%（封顶 +100%）；每次反刺回 3% 气血。数值随星数提升"}},
 	{"id": "art_ex_duange", "name": "短歌行", "pool": "arts", "weapon": "any", "role": "qingluan", "quality": "绝品", "no_drop": true,
 		"parts": ["卷上", "卷中", "卷下", "卷尾"], "item": "短歌行",
 		"art": {"kind": "passive", "fx": {"crit": 5, "crit_dmg": 13}, "move": "短歌相和",
 			"mech": {"follow_dmg": 0.35, "follow_crit_up": 0.20},
 			"desc": "为苏青鸾量身定做（匕首）：暴击 +5%、暴击伤害 +13%——常驻。\n触发暴击时，追击伤害 +35%；追击自己暴击时，再 +20%。数值随星数提升"}},
+	# ============================================================
+	# v132：补齐「功法归类」里空着的那几类（用户："功法要做归类了 …每种都要有"）
+	#   规矩：非元素的从**良品**起、元素的从**上品**起（与 v88 元素那条同一条尺）。
+	#   归类写在 ART_CAT 表里（哪一门归哪一类，看那张表；本文只管数值与文案）。
+	#   补的是这五类：单段攻击 · 群体控制 · 被动增益 · 单段元素攻击 · 单体元素攻击 · 站位元素单体攻击
+	# ============================================================
+	# ---- 单段攻击（物理·一段·当面）：原来一门都没有（只有多段/站位/群体）----
+	{"id": "art_palm", "name": "劈山掌", "pool": "arts", "weapon": "any", "parts": ["卷上", "卷中", "卷下"], "item": "劈山掌", "quality": "良品",
+		"art": {"kind": "damage", "mult": 2.3, "cd": 4, "move": "力劈华山", "target": "front",
+			"desc": "一掌当胸，不绕不避：×2.3（冷却 4 手）——最直白的一门，重而慢"}},
+	{"id": "art_fist", "name": "伏虎拳", "pool": "arts", "weapon": "any", "parts": ["卷上", "卷中", "卷下"], "item": "伏虎拳", "quality": "良品",
+		"art": {"kind": "damage", "mult": 1.9, "cd": 3, "move": "伏虎归山", "target": "front",
+			"desc": "拳走中宫，一拳接一拳：×1.9（冷却 3 手）——轻一点，但转得快"}},
+	# ---- 群体控制（负面）：原来一门都没有 ----
+	{"id": "art_mazedust", "name": "迷魂散", "pool": "arts", "weapon": "any", "parts": ["卷上", "卷中", "卷下"], "item": "迷魂散", "quality": "良品",
+		"art": {"kind": "damage", "mult": 1.15, "cd": 5, "move": "满堂迷烟", "target": "sweep",
+			"apply": {"id": "weak", "turns": 2, "stacks": 1},
+			"desc": "一蓬药粉撒开：×1.15，全场「虚弱」——此后 2 手出手伤害 −25%（冷却 5 手）"}},
+	{"id": "art_thunderroar", "name": "惊雷吼", "pool": "arts", "weapon": "any", "parts": ["卷首", "卷上", "卷中", "卷下"], "item": "惊雷吼", "quality": "上品",
+		"art": {"kind": "damage", "mult": 1.35, "cd": 5, "move": "雷吼震野", "target": "sweep",
+			"apply": {"id": "stun", "turns": 1, "stacks": 1, "chance": 0.5},
+			"desc": "一声暴喝压过去：×1.35，全场五成几率「震慑」——各自下一手整个不出（冷却 5 手）"}, "item_stats": {"dmg": 4}},
+	# ---- 被动增益（非专属）：装备即生效、不进出手轮转 ----
+	{"id": "art_calm", "name": "静心诀", "pool": "arts", "weapon": "any", "parts": ["卷上", "卷中", "卷下"], "item": "静心诀", "quality": "良品",
+		"art": {"kind": "passive", "fx": {"hp_pct": 5, "def": 2}, "move": "心如止水",
+			"desc": "常驻：气血上限 +5%、防御 +2。装上就生效，不占出手——被「闭窍」点住时也会失效"}},
+	{"id": "art_galeheart", "name": "疾风心法", "pool": "arts", "weapon": "any", "parts": ["卷首", "卷上", "卷中", "卷下"], "item": "疾风心法", "quality": "上品",
+		"art": {"kind": "passive", "fx": {"spd": 3, "crit": 3}, "move": "风随心转",
+			"desc": "常驻：速度 +3、暴击 +3。出手更靠前——快过对面一倍还能多打一下"}, "item_stats": {"dmg": 4}},
+	# ---- 单段元素攻击（元素·一段·当面·纯伤害）----
+	{"id": "art_metalpoint", "name": "庚金指", "pool": "arts", "weapon": "any", "parts": ["卷首", "卷上", "卷中", "卷下"], "item": "庚金指", "quality": "上品", "elem": "metal",
+		"art": {"kind": "damage", "mult": 2.6, "cd": 3, "move": "金锋一点", "target": "front",
+			"desc": "指如金锋，一点透甲：×2.6（走金元素通道，不吃对手防御、走它的金抗；冷却 3 手）"}, "item_stats": {"dmg": 4}},
+	{"id": "art_firepalm", "name": "离火掌", "pool": "arts", "weapon": "any", "parts": ["卷首", "卷上", "卷中", "卷下"], "item": "离火掌", "quality": "上品", "elem": "fire",
+		"art": {"kind": "damage", "mult": 2.5, "cd": 3, "move": "离火焚风", "target": "front",
+			"desc": "掌心一热，火气扑面：×2.5（走火元素通道；冷却 3 手）"}, "item_stats": {"dmg": 4}},
+	# ---- 单体元素攻击（元素·单体·以**元素印记**压一个点；它不封手不禁招，所以不算控制）----
+	{"id": "art_icedart", "name": "玄冰指", "pool": "arts", "weapon": "any", "parts": ["卷首", "卷上", "卷中", "卷下"], "item": "玄冰指", "quality": "上品", "elem": "water",
+		"art": {"kind": "damage", "mult": 1.9, "cd": 4, "move": "寒指入脉", "target": "front",
+			"apply": {"id": "soak", "turns": 3, "stacks": 1},
+			"desc": "一指寒意入脉：×1.9，并给对手上「水浸」印记——此后 3 手速度 −25%（可叠 3 层，叠满触发「踏浪」；冷却 4 手）"}, "item_stats": {"dmg": 4}},
+	{"id": "art_burnpalm", "name": "燎原掌", "pool": "arts", "weapon": "any", "parts": ["卷首", "卷上", "卷中", "卷下"], "item": "燎原掌", "quality": "上品", "elem": "fire",
+		"art": {"kind": "damage", "mult": 1.85, "cd": 4, "move": "星火燎原", "target": "front",
+			"apply": {"id": "burn", "turns": 3, "stacks": 1},
+			"desc": "一掌拍上火种：×1.85，并给对手上「燃烧」印记——此后 3 手每手掉 5% 气血上限（可叠 3 层，叠满「爆燃」；冷却 4 手）"}, "item_stats": {"dmg": 4}},
+	# ---- 站位元素单体攻击（元素·单体·越过前排够中/后排）----
+	{"id": "art_coldriver", "name": "寒江剑法", "pool": "arts", "weapon": "sword", "parts": ["卷首", "卷上", "卷中", "卷下"], "item": "寒江剑法", "quality": "上品", "elem": "water",
+		"art": {"kind": "damage", "mult": 2.4, "off_mult": 1.3, "cd": 4, "move": "寒江独钓", "target": "back",
+			"desc": "剑走寒江，直取躲在最后的那个：×2.4（非剑 ×1.3；走水元素通道；冷却 4 手）"}, "item_stats": {"dmg": 4}},
+	{"id": "art_windarrow", "name": "裂风箭", "pool": "arts", "weapon": "anqi", "parts": ["卷首", "卷上", "卷中", "卷下"], "item": "裂风箭", "quality": "上品", "elem": "metal",
+		"art": {"kind": "damage", "mult": 2.3, "off_mult": 1.25, "cd": 4, "move": "裂风穿云", "target": "mid",
+			"desc": "箭破风声，从当面的肩头掠过去：×2.3（非暗器 ×1.25；走金元素通道；冷却 4 手）"}, "item_stats": {"dmg": 4}},
 ]
 
 const ELEM_CN := {"metal": "金", "wood": "木", "water": "水", "fire": "火", "earth": "土", "phys": "物理", "true": "真实"}
@@ -416,6 +468,203 @@ static func art_move(id: String) -> String:
 static func art_cd(id: String) -> int:
 	return int(by_id(id).get("art", {}).get("cd", 3))
 
+# ============================================================
+# v132：**功法归类**（用户："功法要做归类了 …每种都要有 从良品开始 元素从上品开始"）
+#
+#   15 类，真源就是下面这两张表：
+#     · CATS    —— 类目本身（名字 / 组 / 门槛 / 一句话说明）
+#     · ART_CAT —— **每一门功法归哪一类**（谁归错、谁漏了，一眼看得出）
+#
+#   三条规矩（`cat_check()` 逐条自检，自检/探针会把结果打出来）：
+#     ① **每种都要有**：15 类各自至少两门（最少的一类也有 2 门）；
+#     ② **从良品起**：非元素四路（攻击/增益/控制/被动）在**良品**档就有货；
+#     ③ **元素从上品起**：凡带 `elem` 的功法一律**上品及以上**（与 v88 那条元素规矩同一条尺），
+#        五类元素功法（单段/多段/单体/站位单体/群体）全落在上品~绝品。
+#
+#   ⚠ 判类口径（免得两类打架）：
+#     · **控制**＝限制行动 / 削弱的负面（缴械·沉默·封招·虚弱·破防·迟缓·挫锐·滞涩·震慑·封脉·打断）
+#     · **单体元素攻击**＝元素·单体，上的是**元素印记**（燃烧/水浸这种持续元素伤害）——
+#       它不封手不禁招，所以不算"控制"
+#     · **多段**＝`hits` 2~3，或 `kind:"dash"`（本体一击＋追击一击，本来就是两段）
+#     · **站位单体**＝只打一个、但 `target` 是 mid/back（越过前排够后排）
+#     · **群体**＝`target:"sweep"`
+#     · **增益**＝`kind:"bless"`（给同伴上）或 `guard`/`heal`（自身护体/回气/回血）
+#     · **被动**＝`kind:"passive"`；带 `role` 的那三门是**专武**（单独一类）
+# ============================================================
+const CAT_GROUP_CN := {"atk": "攻击", "buff": "增益", "ctrl": "控制", "pass": "被动", "elem": "元素", "ex": "专属"}
+const CAT_GROUPS := ["atk", "buff", "ctrl", "pass", "elem", "ex"]
+
+const CATS := [
+	{"id": "atk_one", "grp": "atk", "name": "单段攻击", "short": "单段", "min_q": 1,
+		"desc": "一段打完、打当面的敌人（物理；胜在冷却短）"},
+	{"id": "atk_multi", "grp": "atk", "name": "多段攻击", "short": "多段", "min_q": 1,
+		"desc": "2~3 段（含追击），每段各自掷暴击（物理）"},
+	{"id": "atk_row", "grp": "atk", "name": "站位单体攻击", "short": "站位", "min_q": 1,
+		"desc": "只打一个，但越过前排够得到中/后排（物理）"},
+	{"id": "atk_all", "grp": "atk", "name": "群体攻击", "short": "群体", "min_q": 1,
+		"desc": "一扫一片，场上活着的都挨（物理）"},
+	{"id": "buff_one", "grp": "buff", "name": "单体增益", "short": "单增", "min_q": 1,
+		"desc": "给自己或一个同伴：护体 / 回气 / 增伤 / 聚气"},
+	{"id": "buff_all", "grp": "buff", "name": "群体增益", "short": "群增", "min_q": 1,
+		"desc": "全队一起吃：护体 / 增伤 / 加速 / 回春 / 驱散"},
+	{"id": "ctrl_one", "grp": "ctrl", "name": "控制（负面）", "short": "控制", "min_q": 1,
+		"desc": "打一个并上负面状态（缴械 / 沉默 / 封招 / 虚弱 / 破防 …）"},
+	{"id": "ctrl_all", "grp": "ctrl", "name": "群体控制（负面）", "short": "群控", "min_q": 1,
+		"desc": "全场一起上负面状态"},
+	{"id": "passive", "grp": "pass", "name": "被动增益", "short": "被动", "min_q": 1,
+		"desc": "装备即生效、不进出手轮转（常驻数值 / 机制）"},
+	{"id": "elem_seg", "grp": "elem", "name": "单段元素攻击", "short": "单段元", "min_q": 2,
+		"desc": "元素·一段·打当面（上品起）"},
+	{"id": "elem_multi", "grp": "elem", "name": "多段元素攻击", "short": "多段元", "min_q": 2,
+		"desc": "元素·2~3 段（上品起）"},
+	{"id": "elem_one", "grp": "elem", "name": "单体元素攻击", "short": "单体元", "min_q": 2,
+		"desc": "元素·单体·以元素印记压一个点（上品起）"},
+	{"id": "elem_row", "grp": "elem", "name": "站位元素单体攻击", "short": "站位元", "min_q": 2,
+		"desc": "元素·单体·越过前排够中/后排（上品起）"},
+	{"id": "elem_all", "grp": "elem", "name": "群体元素攻击", "short": "群体元", "min_q": 2,
+		"desc": "元素·一扫一片（上品起）"},
+	{"id": "ex", "grp": "ex", "name": "专武功法", "short": "专武", "min_q": 4,
+		"desc": "为某个人量身定做、常驻被动（暂不掉落，等来路设计好再接）"},
+]
+
+# 每一门功法的归类（60 门：45 门旧的 ＋ v132 新补的 12 门 ＋ 3 门专武）
+const ART_CAT := {
+	# ---- 凡品（4）——入门那一窗，照旧排在最前 ----
+	"art_wind": "atk_row", "art_iron": "buff_one", "art_stone": "ctrl_one", "art_breath": "buff_one",
+	# ---- 良品（25）：攻击 ----
+	"art_palm": "atk_one", "art_fist": "atk_one",
+	"art_chain3": "atk_multi", "art_twindag": "atk_multi", "art_shadow": "atk_multi",
+	"art_cloud": "atk_row", "art_breakline": "atk_row", "art_snipe": "atk_row",
+	"art_sweep": "atk_all", "art_cleave": "atk_all",
+	# 良品：增益
+	"art_aegis": "buff_one", "art_sharporder": "buff_one", "art_rageorder": "buff_one", "art_ironring": "buff_one",
+	"art_bell": "buff_one",
+	"art_oneheart": "buff_all", "art_springorder": "buff_all", "art_galeorder": "buff_all", "art_clearheart": "buff_all",
+	# 良品：控制
+	"art_flameblade": "ctrl_one", "art_softsinew": "ctrl_one", "art_throatpin": "ctrl_one", "art_dullrage": "ctrl_one",
+	"art_mazedust": "ctrl_all",
+	# 良品：被动
+	"art_calm": "passive",
+	# ---- 上品（17）----
+	"art_swallow": "atk_multi", "art_spring": "buff_one",
+	"art_disarmhand": "ctrl_one", "art_soulchime": "ctrl_one", "art_ultbreak": "ctrl_one", "art_slowcast": "ctrl_one",
+	"art_thunderroar": "ctrl_all", "art_galeheart": "passive",
+	"art_metalpoint": "elem_seg", "art_firepalm": "elem_seg",
+	"art_icedart": "elem_one", "art_burnpalm": "elem_one",
+	"art_coldriver": "elem_row", "art_windarrow": "elem_row",
+	"art_ruffle": "elem_multi",
+	"art_river": "elem_all", "art_thunder": "elem_all",
+	# ---- 极品（7）----
+	"art_bulwark": "buff_one", "art_bloom": "buff_one",
+	"art_stonebreak": "ctrl_one", "art_silkleg": "ctrl_one",
+	"art_snow": "elem_multi", "art_pearrain": "elem_multi", "art_ocean": "elem_all",
+	# ---- 绝品（4）＋ 专武（3）----
+	"art_tortoise": "buff_one", "art_mend": "buff_one",
+	"art_glimmer": "elem_multi", "art_void": "elem_all",
+	"art_ex_changfeng": "ex", "art_ex_tiebi": "ex", "art_ex_duange": "ex",
+}
+
+static func cat_of(sid: String) -> String:
+	return str(ART_CAT.get(sid, ""))
+
+static func cat_def(cid: String) -> Dictionary:
+	for c in CATS:
+		if str(c["id"]) == cid:
+			return c
+	return {}
+
+static func cat_name(cid: String) -> String:
+	return str(cat_def(cid).get("name", "未归类"))
+
+static func cat_short(cid: String) -> String:
+	return str(cat_def(cid).get("short", "?"))
+
+static func cat_group_of(sid: String) -> String:
+	return str(cat_def(cat_of(sid)).get("grp", ""))
+
+# 卡面/列表上那一小段（没归类＝空串，不会凭空多两个字）
+static func cat_tag(sid: String) -> String:
+	var c := cat_of(sid)
+	return "" if c == "" else "【" + cat_name(c) + "】"
+
+# 详情里那一行："归类：单段攻击（攻击）——一段打完…"
+static func cat_line(sid: String) -> String:
+	var d := cat_def(cat_of(sid))
+	if d.is_empty():
+		return ""
+	return "归类：" + str(d["name"]) + "（" + str(CAT_GROUP_CN.get(str(d["grp"]), "")) + "）——" + str(d["desc"])
+
+# 类里都有哪几门（按 SETS 顺序）
+static func arts_in_cat(cid: String) -> Array:
+	var out: Array = []
+	for s in SETS:
+		if str(s.get("pool", "")) != "arts":
+			continue
+		var sid := str(s["id"])
+		if cat_of(sid) == cid:
+			out.append(sid)
+	return out
+
+# 一组的类（给"归类"筛选按钮用：攻击/增益/控制/被动/元素/专属）
+static func cats_of_group(g: String) -> Array:
+	var out: Array = []
+	for c in CATS:
+		if str(c["grp"]) == g:
+			out.append(str(c["id"]))
+	return out
+
+static func cat_count(cid: String) -> int:
+	return arts_in_cat(cid).size()
+
+# 这一门能不能进"这一类"的筛选（组的粗筛）
+static func in_group(sid: String, g: String) -> bool:
+	if g == "":
+		return true
+	return cat_group_of(sid) == g
+
+# ============================================================
+# 自检：三条规矩逐条查（返回问题清单，空＝全过）
+#   · 15 类都有货 · 非元素类良品起有货 · 元素类全是上品起 · 没有漏归类的功法
+#   自检/探针里调它（print(Cards.cat_check())）——加新功法忘了归类，这里会当场报出来。
+# ============================================================
+static func cat_check() -> Array:
+	var out: Array = []
+	for c in CATS:
+		var cid := str(c["id"])
+		var ids := arts_in_cat(cid)
+		if ids.is_empty():
+			out.append("✗ 类目空着：「" + str(c["name"]) + "」一门都没有")
+			continue
+		var minq := int(c["min_q"])
+		var has_top := false
+		for sid_v in ids:
+			if q_idx(str(sid_v)) >= minq:
+				has_top = true
+				break
+		if not has_top:
+			out.append("✗ 「" + str(c["name"]) + "」没有 " + str(QUALITY_ORDER[clampi(minq, 0, 4)]) + " 及以上的功法")
+	for s in SETS:
+		if str(s.get("pool", "")) != "arts":
+			continue
+		var sid := str(s["id"])
+		if cat_of(sid) == "":
+			out.append("✗ 没归类：" + sid + "（" + str(s.get("name", "")) + "）")
+			continue
+		if elem_of(sid) != "" and q_idx(sid) < 2:
+			out.append("✗ 元素功法低于上品：" + sid + "（" + str(s.get("name", "")) + "）")
+	return out
+
+# 归类总表（一行一类，给自检/文档用）
+static func cat_table_lines() -> Array:
+	var out: Array = []
+	for c in CATS:
+		var cid := str(c["id"])
+		var names: Array = []
+		for sid_v in arts_in_cat(cid):
+			names.append(str(name_of(str(sid_v))) + "·" + quality_of(str(sid_v)))
+		out.append("【" + str(c["name"]) + "】×" + str(names.size()) + "：" + "、".join(PackedStringArray(names)))
+	return out
+
 static func card_name(id: String, part_index: int) -> String:
 	var s := by_id(id)
 	var parts: Array = s.get("parts", [])
@@ -518,13 +767,34 @@ const LADDER_SLOTS := {"weapon": 5, "arts": 4}
 const LADDER_CHAIN := {
 	"weapon": ["sword", "dual", "dagger", "spear", "staff", "sword_qiu", "spear_han", "dual_liu", "dagger_qing", "staff_tie", "sword_shuang", "dual_yue", "dagger_chan", "spear_long", "staff_pan", "sword_chang", "dual_fen", "dagger_jing", "spear_guan", "staff_fu", "sword_cheng", "dual_hai", "dagger_yu", "spear_dan", "staff_qing"],
 	# ㊿：链是按**品级排序**的滚动窗口（每 2 次首通滑一格，窗口 4 格）。
-	#   art_wind~art_breath＝凡品(0~3)，art_cleave~art_bell＝良品(4~7)，
-	#   往下依次是上品/极品/绝品。新加的加持武学是良品，所以插在 art_bell 后面——
-	#   **不在链上的东西抽不到**（事件/货郎/补齐/搜刮普通池全走这一条），
-	#   代价只是后面的品级晚 2 次首通 × 3 格 ＝ 6 次首通露头。
-	"arts": ["art_wind", "art_iron", "art_stone", "art_breath", "art_cleave", "art_shadow", "art_cloud", "art_bell",
-		"art_aegis", "art_sharporder", "art_oneheart", "art_springorder", "art_galeorder", "art_rageorder", "art_ironring",
-		"art_river", "art_thunder", "art_swallow", "art_spring", "art_ocean", "art_bulwark", "art_snow", "art_bloom", "art_void", "art_tortoise", "art_glimmer", "art_mend"],
+	#   **不在链上的东西抽不到**（事件/货郎/补齐/搜刮普通池全走这一条）——
+	#   所以每一门能掉的功法都得在这条链上有一格。
+	#
+	# v132（用户："功法要做归类了 …每种都要有"）：**整条链按归类重排了一遍**——
+	#   ① 先把 v37/v48/v52/v53 那几批**漏挂上链**的功法补进来（破阵 3 · 多段 2 · 负面 10 ·
+	#      清心诀 1：共 16 门，这一批以前只从"越阶红/首领赏"出得来）；
+	#   ② 再把 v132 新补的 12 门按品级插进去；
+	#   ③ 每一档内部按**归类**排（攻击 → 增益 → 控制 → 被动 → 元素），
+	#      这样同一档里先见到的总是"打人"的，再是"帮自己"的，最后是"上状态"的。
+	#   ⚠ 代价说清楚：链从 27 格变成 **57 格**，窗口每 2 次首通滑一格——
+	#     上品档（第 29 格起）从"第 30 次首通"推到"第 58 次首通"。
+	#     嫌慢就动 `ladder_swaps()` 里 arts 那一行（c / 2 → c 就是每首通滑一格）。
+	"arts": [
+		# ---- 凡品（4）——入门那一窗，照旧排最前 ----
+		"art_wind", "art_iron", "art_stone", "art_breath",
+		# ---- 良品（25）：单段/多段/站位/群体 → 单体·群体增益 → 控制·群控 → 被动 ----
+		"art_palm", "art_fist", "art_chain3", "art_twindag", "art_shadow", "art_cloud", "art_breakline", "art_snipe", "art_sweep", "art_cleave",
+		"art_aegis", "art_sharporder", "art_rageorder", "art_ironring", "art_bell", "art_oneheart", "art_springorder", "art_galeorder", "art_clearheart",
+		"art_flameblade", "art_softsinew", "art_throatpin", "art_dullrage", "art_mazedust",
+		"art_calm",
+		# ---- 上品（17）：先攻击与增益/控制，再五类元素（元素一律上品起）----
+		"art_swallow", "art_spring",
+		"art_disarmhand", "art_soulchime", "art_ultbreak", "art_slowcast", "art_thunderroar", "art_galeheart",
+		"art_metalpoint", "art_firepalm", "art_icedart", "art_burnpalm", "art_coldriver", "art_windarrow", "art_ruffle", "art_river", "art_thunder",
+		# ---- 极品（7）----
+		"art_bulwark", "art_bloom", "art_stonebreak", "art_silkleg", "art_snow", "art_pearrain", "art_ocean",
+		# ---- 绝品（4）——专武（no_drop）永不进链 ----
+		"art_tortoise", "art_mend", "art_glimmer", "art_void"],
 }
 
 static func ladder_start(pool: String, swaps: int) -> int:

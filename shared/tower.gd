@@ -387,22 +387,79 @@ const CHESTS := [
 	#   0.04→0.03 · 0.07→0.06 · 0.10→0.08 · 0.17→0.14 · 0.30→0.24
 	#   理由：突破丹现在是**最硬的那道进度闸**（一个人满突破要 603 颗，v62 定），
 	#   宝箱只是它的补充来路（主路是炼丹阁自己炼）——所以只轻轻收一点，别把闸门焊死。
+	#
+	# v133（用户："开宝箱给武学残页残兵 但是比角色碎片几率低 宝箱品质不同 给的残页品质也不同"
+	#    ＋"也给残装备"）：每一档再加**三条残卡线**，三条的几率**一律低于角色碎片**：
+	#     page_chance  武学残页（pool "arts"）
+	#     blade_chance 残兵残卡（pool "weapon"）
+	#     gear_chance  残装备残片（pool armor / helm / cloak 三池合一）
+	#   · **品质跟着箱子走**：木凡 · 银良 · 金上 · 玉极 · 龙绝（就是 `grad`，与 QUALITY_ORDER 同下标）；
+	#   · 一次给**同一套的 n 页**（页不重复）——凑齐了在仓库合成整件；n 看 `page_n/blade_n/gear_n`；
+	#   · 专武（no_drop）永不进宝箱池（见 chest_card_pool）。
+	#   ⚠ 改动这三条只动下面每个箱子的那两行（chance 与 [_n]）；池子由 chest_card_pool 现算。
+	#
+	# v134（用户："突破丹炼丹材料增加 爆率降低"）：**少而厚**——出现的几率降下来，一次给的量抬上去。
+	#   · 突破丹：几率**砍半上下**（3/5.5/8/14/24% → 1.5/2.8/4/6/10%），一次给 `pill_n` 里的颗数
+	#     （原来恒 ×1，现在 2~5 颗）→ 总期望 **+25%~+67%**（越高的箱子涨得越多）；
+	#   · 炼丹材料：每一掷的命中率 `mat_chance` 45% → **30%**（少了三分之一），
+	#     但一次给 `mat_n` 翻倍（如龙箱 3~7 → 6~12）→ 总期望 **+20%~+33%**。
+	#   ⚠ 两条都是"单次更厚、出现更少"：手感上从"每箱都掉一点"变成"隔几箱掉一堆"。
 	{"id": "wood", "name": "木箱", "grad": 0, "rolls": 2, "silver_mul": 0.6,
-		"frag_chance": 0.03, "frag": [1, 2], "mat_n": [1, 2],
-		"pill_chance": 0.03, "pills": ["tupo_fan"]},
+		"frag_chance": 0.03, "frag": [1, 2], "mat_chance": 0.30, "mat_n": [2, 4],
+		"pill_chance": 0.015, "pill_n": [2, 3], "pills": ["tupo_fan"],
+		"page_chance": 0.020, "page_n": [1, 2],
+		"blade_chance": 0.015, "blade_n": [1, 1],
+		"gear_chance": 0.015, "gear_n": [1, 1]},
 	{"id": "iron", "name": "银箱", "grad": 1, "rolls": 3, "silver_mul": 1.0,
-		"frag_chance": 0.05, "frag": [2, 3], "mat_n": [1, 3],
-		"pill_chance": 0.055, "pills": ["tupo_fan", "tupo_liang"]},
+		"frag_chance": 0.05, "frag": [2, 3], "mat_chance": 0.30, "mat_n": [3, 5],
+		"pill_chance": 0.028, "pill_n": [2, 3], "pills": ["tupo_fan", "tupo_liang"],
+		"page_chance": 0.032, "page_n": [1, 2],
+		"blade_chance": 0.024, "blade_n": [1, 2],
+		"gear_chance": 0.024, "gear_n": [1, 1]},
 	{"id": "gold", "name": "金箱", "grad": 2, "rolls": 4, "silver_mul": 1.6,
-		"frag_chance": 0.08, "frag": [3, 5], "mat_n": [2, 4],
-		"pill_chance": 0.08, "pills": ["tupo_fan", "tupo_liang", "tupo_shang"]},
+		"frag_chance": 0.08, "frag": [3, 5], "mat_chance": 0.30, "mat_n": [4, 7],
+		"pill_chance": 0.040, "pill_n": [2, 3], "pills": ["tupo_fan", "tupo_liang", "tupo_shang"],
+		"page_chance": 0.050, "page_n": [2, 3],
+		"blade_chance": 0.038, "blade_n": [1, 2],
+		"gear_chance": 0.038, "gear_n": [1, 2]},
 	{"id": "jade", "name": "玉箱", "grad": 3, "rolls": 5, "silver_mul": 2.4,
-		"frag_chance": 0.14, "frag": [5, 9], "mat_n": [2, 5],
-		"pill_chance": 0.14, "pills": ["tupo_liang", "tupo_shang", "tupo_ji"]},
+		"frag_chance": 0.14, "frag": [5, 9], "mat_chance": 0.30, "mat_n": [5, 9],
+		"pill_chance": 0.060, "pill_n": [3, 4], "pills": ["tupo_liang", "tupo_shang", "tupo_ji"],
+		"page_chance": 0.090, "page_n": [2, 4],
+		"blade_chance": 0.068, "blade_n": [2, 3],
+		"gear_chance": 0.068, "gear_n": [2, 3]},
 	{"id": "dragon", "name": "龙箱", "grad": 4, "rolls": 6, "silver_mul": 3.5,
-		"frag_chance": 0.25, "frag": [8, 16], "mat_n": [3, 7],
-		"pill_chance": 0.24, "pills": ["tupo_shang", "tupo_ji", "tupo_jue"]},
+		"frag_chance": 0.25, "frag": [8, 16], "mat_chance": 0.30, "mat_n": [6, 12],
+		"pill_chance": 0.100, "pill_n": [3, 5], "pills": ["tupo_shang", "tupo_ji", "tupo_jue"],
+		"page_chance": 0.160, "page_n": [3, 5],
+		"blade_chance": 0.120, "blade_n": [2, 4],
+		"gear_chance": 0.120, "gear_n": [2, 4]},
 ]
+
+# v133：宝箱那三条残卡线各取哪个池（"gear" 是三池合一）
+const CHEST_CARD_POOLS := {"arts": ["arts"], "weapon": ["weapon"], "gear": ["armor", "helm", "cloak"]}
+
+# v133：这一档箱子的残卡池——**按品级现算**（grad 就是品级下标），专武不进池。
+#   返回一套的 id 数组；空数组＝这一档这一类没内容（调用方跳过）。
+#   ⚠ 空档回退：**装备没有绝品**（护甲/玉佩/披风封顶极品）——龙箱要"绝品残装"就一门都取不到，
+#     所以这一档取不到就**往下退一档**再取（退到有货为止）。功法/兵器五档都有货，退不到。
+static func chest_card_pool(kind: String, grad: int) -> Array:
+	var pools: Array = CHEST_CARD_POOLS.get(kind, [])
+	var q := clampi(grad, 0, Cards.QUALITY_ORDER.size() - 1)
+	while q >= 0:
+		var out: Array = []
+		for s in Cards.SETS:
+			if not pools.has(str(s.get("pool", ""))):
+				continue
+			if bool(s.get("no_drop", false)):
+				continue
+			if Cards.q_idx(str(s["id"])) != q:
+				continue
+			out.append(str(s["id"]))
+		if not out.is_empty():
+			return out
+		q -= 1
+	return []
 # 材料权重（开箱那几掷在这个池子里挑；键＝game_state.MAT_CN 的键）
 # v121（用户："突破境界需要很多材料【增加新材料】"）：境界石 / 道心砂 从宝箱出（进阶专用）
 const CHEST_MATS := {"wood": 30, "zhi": 20, "guo": 20, "shen": 15, "bone": 10, "rice": 5, "jin": 3,
