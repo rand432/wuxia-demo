@@ -82,6 +82,24 @@ func _build_ui() -> void:
 	_size_btn.selected = 1
 	size_row.add_child(_size_btn)
 
+	# ---- 叠层（用户："不能叠层吗"）----
+	#   Godot 的 2D 编辑器本来就能叠层，两条路：
+	#     ① Scene 面板里上下拖节点（同级后画的盖前面的）；
+	#     ② Inspector 改 Z Index（**z 大的永远盖住 z 小的，跟树顺序无关**）。
+	#   我存/读走的正是 z_index，所以给你两颗一键按钮，省得天天进 Inspector。
+	var layer_row := HBoxContainer.new()
+	root.add_child(layer_row)
+	var up := Button.new()
+	up.text = "上移一层"
+	up.tooltip_text = "选中件 z+1（往前站）"
+	up.pressed.connect(_bump_z.bind(1))
+	layer_row.add_child(up)
+	var dn := Button.new()
+	dn.text = "下移一层"
+	dn.tooltip_text = "选中件 z-1（往后退）"
+	dn.pressed.connect(_bump_z.bind(-1))
+	layer_row.add_child(dn)
+
 	var save_btn := Button.new()
 	save_btn.text = "保存布局 JSON"
 	save_btn.pressed.connect(_on_save)
@@ -187,6 +205,24 @@ func _on_piece(path: String) -> void:
 	EditorInterface.get_selection().clear()
 	EditorInterface.get_selection().add_node(s)
 	_say("放了一件：" + s.name + " → 拖到你要的位置")
+
+# ---------------- 叠层 ----------------
+func _bump_z(d: int) -> void:
+	var sel := EditorInterface.get_selection().get_selected_nodes()
+	if sel.is_empty():
+		_say("先选中要调的件（在画布上点一下它）")
+		return
+	var n := 0
+	var z_now := 0
+	for node in sel:
+		if node is Sprite2D:
+			var s: Sprite2D = node
+			s.z_index += d
+			z_now = s.z_index
+			n += 1
+	if n > 0:
+		EditorInterface.mark_scene_as_unsaved()
+		_say("调了 " + str(n) + " 件；当前 z=" + str(z_now) + "（z 越大越靠前）")
 
 # ---------------- 存 / 读 ----------------
 func _on_save() -> void:

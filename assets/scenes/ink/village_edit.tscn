@@ -1,12 +1,67 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene format=3 uid="uid://dqh0i8mfq18d5"]
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_1"]
-bg_color = Color(0.945, 0.925, 0.882, 1)
+[ext_resource type="Texture2D" uid="uid://b17mnaecrypfy" path="res://assets/scenes/ink/house/h111.png" id="1_4rqpe"]
+[ext_resource type="Texture2D" uid="uid://odol3xmhjn0g" path="res://assets/scenes/ink/tree/t04.png" id="2_3a5jx"]
+[ext_resource type="Texture2D" uid="uid://s8vfpgyhsa8m" path="res://assets/scenes/ink/far/f01.png" id="3_03woa"]
+[ext_resource type="Texture2D" uid="uid://crebsbn2sf6u6" path="res://assets/scenes/ink/tree/t05.png" id="4_6ag6h"]
+[ext_resource type="Texture2D" uid="uid://3bdve6w8rs4a" path="res://assets/scenes/ink/tree/t06.png" id="5_7boho"]
+[ext_resource type="Texture2D" uid="uid://c1xhvdec0608p" path="res://assets/scenes/ink/far/f03.png" id="6_skr6f"]
+[ext_resource type="Texture2D" uid="uid://tdi7x3t0c7rg" path="res://assets/scenes/ink/far/f05.png" id="7_nchnf"]
+[ext_resource type="Texture2D" uid="uid://cvporhippp5id" path="res://assets/scenes/ink/far/f06.png" id="8_105l5"]
+[ext_resource type="Texture2D" uid="uid://drloc3a34mj65" path="res://assets/scenes/ink/far/f07.png" id="9_afhae"]
 
-[node name="村景_可编辑" type="Node2D"]
+[node name="村景_可编辑" type="Node2D" unique_id=1715188618]
 
-[node name="纸底" type="ColorRect" parent="."]
+[node name="纸底" type="ColorRect" parent="." unique_id=1679922761]
+offset_top = 584.0
 offset_right = 720.0
 offset_bottom = 1280.0
-color = Color(0.945, 0.925, 0.882, 1)
 mouse_filter = 2
+color = Color(0.945, 0.925, 0.882, 1)
+
+[node name="H111" type="Sprite2D" parent="." unique_id=1107394349]
+position = Vector2(359, 1112)
+scale = Vector2(1.0906676, 1.0723684)
+texture = ExtResource("1_4rqpe")
+
+[node name="T04" type="Sprite2D" parent="H111" unique_id=914407724]
+position = Vector2(-262.2247, -138.01233)
+scale = Vector2(0.19565597, 0.1971604)
+texture = ExtResource("2_3a5jx")
+
+[node name="F01" type="Sprite2D" parent="H111/T04" unique_id=650408090]
+position = Vector2(187.44525, 137.1626)
+scale = Vector2(1.452701, 1.4654408)
+texture = ExtResource("3_03woa")
+
+[node name="T05" type="Sprite2D" parent="H111" unique_id=1157072136]
+position = Vector2(269.5597, 100.71167)
+scale = Vector2(0.16503647, 0.1621184)
+texture = ExtResource("4_6ag6h")
+
+[node name="T06" type="Sprite2D" parent="H111" unique_id=457204681]
+position = Vector2(286.0633, -69.93872)
+rotation = -0.26606056
+scale = Vector2(0.06427905, 0.07593663)
+skew = 0.008460283
+texture = ExtResource("5_7boho")
+
+[node name="F03" type="Sprite2D" parent="H111" unique_id=1655664073]
+position = Vector2(198.9607, -182.77301)
+scale = Vector2(0.54866606, 0.44804564)
+texture = ExtResource("6_skr6f")
+
+[node name="F05" type="Sprite2D" parent="." unique_id=1796599011]
+position = Vector2(335, 921.99994)
+scale = Vector2(0.41857144, 0.5176768)
+texture = ExtResource("7_nchnf")
+
+[node name="F06" type="Sprite2D" parent="." unique_id=1149185606]
+position = Vector2(237.00002, 915.00006)
+scale = Vector2(0.46714285, 0.49519232)
+texture = ExtResource("8_105l5")
+
+[node name="F07" type="Sprite2D" parent="." unique_id=711583472]
+position = Vector2(524, 749)
+scale = Vector2(0.35774058, 0.37571427)
+texture = ExtResource("9_afhae")

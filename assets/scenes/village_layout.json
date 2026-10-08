@@ -1,103 +1,136 @@
 {
   "pieces": [
     {
-      "alpha": 0.45,
-      "h": 300.0,
-      "name": "f01",
+      "alpha": 0.72,
+      "h": 330.0,
+      "name": "远山1",
       "rot": 0.0,
-      "scale": 0.492,
+      "scale": 0.541,
       "tex": "res://assets/scenes/ink/far/f01.png",
-      "x": 232.0,
-      "y": 742.0,
-      "z": -20
+      "x": 190.0,
+      "y": 880.0,
+      "z": 10
     },
     {
-      "alpha": 0.38,
-      "h": 232.0,
-      "name": "f05",
-      "rot": 0.0,
-      "scale": 0.586,
-      "tex": "res://assets/scenes/ink/far/f05.png",
-      "x": 566.0,
-      "y": 764.0,
-      "z": -19
-    },
-    {
-      "alpha": 1.0,
-      "h": 178.0,
-      "name": "h101",
-      "rot": 0.0,
-      "scale": 0.372,
-      "tex": "res://assets/scenes/ink/house/h101.png",
-      "x": 236.0,
-      "y": 1006.0,
-      "z": 0
-    },
-    {
-      "alpha": 1.0,
-      "h": 128.0,
-      "name": "h137",
-      "rot": 0.0,
-      "scale": 0.274,
-      "tex": "res://assets/scenes/ink/house/h137.png",
-      "x": 552.0,
-      "y": 986.0,
-      "z": 1
-    },
-    {
-      "alpha": 1.0,
-      "h": 118.0,
-      "name": "h158",
-      "rot": 0.0,
-      "scale": 0.169,
-      "tex": "res://assets/scenes/ink/house/h158.png",
-      "x": 404.0,
-      "y": 1078.0,
-      "z": 2
-    },
-    {
-      "alpha": 0.92,
-      "h": 150.0,
-      "name": "h131",
-      "rot": 0.0,
-      "scale": 0.214,
-      "tex": "res://assets/scenes/ink/house/h131.png",
-      "x": 656.0,
-      "y": 918.0,
-      "z": 3
-    },
-    {
-      "alpha": 1.0,
-      "h": 236.0,
-      "name": "t01",
-      "rot": 0.0,
-      "scale": 0.408,
-      "tex": "res://assets/scenes/ink/tree/t01.png",
-      "x": 66.0,
-      "y": 1148.0,
-      "z": 4
-    },
-    {
-      "alpha": 1.0,
+      "alpha": 0.62,
       "h": 268.0,
-      "name": "t04",
+      "name": "远山2",
       "rot": 0.0,
       "scale": 0.383,
-      "tex": "res://assets/scenes/ink/tree/t04.png",
-      "x": 682.0,
-      "y": 1196.0,
-      "z": 5
+      "tex": "res://assets/scenes/ink/far/f03.png",
+      "x": 520.0,
+      "y": 856.0,
+      "z": 11
+    },
+    {
+      "alpha": 0.55,
+      "h": 210.0,
+      "name": "远山3",
+      "rot": 0.0,
+      "scale": 0.53,
+      "tex": "res://assets/scenes/ink/far/f05.png",
+      "x": 632.0,
+      "y": 906.0,
+      "z": 12
+    },
+    {
+      "alpha": 0.9,
+      "h": 176.0,
+      "name": "中景_村落",
+      "rot": 0.0,
+      "scale": 0.448,
+      "tex": "res://assets/scenes/ink/house/h228.png",
+      "x": 212.0,
+      "y": 988.0,
+      "z": 20
+    },
+    {
+      "alpha": 0.86,
+      "h": 150.0,
+      "name": "中景_人家",
+      "rot": 0.0,
+      "scale": 0.453,
+      "tex": "res://assets/scenes/ink/house/h215.png",
+      "x": 538.0,
+      "y": 972.0,
+      "z": 21
+    },
+    {
+      "alpha": 0.95,
+      "h": 200.0,
+      "name": "近景_柳",
+      "rot": 0.0,
+      "scale": 0.286,
+      "tex": "res://assets/scenes/ink/house/h213.png",
+      "x": 84.0,
+      "y": 1014.0,
+      "z": 24
     },
     {
       "alpha": 1.0,
-      "h": 104.0,
-      "name": "w01",
+      "h": 238.0,
+      "name": "近景_大宅",
       "rot": 0.0,
-      "scale": 0.31,
-      "tex": "res://assets/scenes/ink/water/w01.png",
-      "x": 340.0,
-      "y": 1186.0,
-      "z": 6
+      "scale": 0.415,
+      "tex": "res://assets/scenes/ink/house/h222.png",
+      "x": 250.0,
+      "y": 1084.0,
+      "z": 30
+    },
+    {
+      "alpha": 1.0,
+      "h": 186.0,
+      "name": "近景_门楼",
+      "rot": 0.0,
+      "scale": 0.472,
+      "tex": "res://assets/scenes/ink/house/h221.png",
+      "x": 488.0,
+      "y": 1066.0,
+      "z": 31
+    },
+    {
+      "alpha": 1.0,
+      "h": 152.0,
+      "name": "近景_小院",
+      "rot": 0.0,
+      "scale": 0.276,
+      "tex": "res://assets/scenes/ink/house/h240.png",
+      "x": 640.0,
+      "y": 1040.0,
+      "z": 32
+    },
+    {
+      "alpha": 0.95,
+      "h": 150.0,
+      "name": "近景_桃枝",
+      "rot": 0.0,
+      "scale": 0.214,
+      "tex": "res://assets/scenes/ink/house/h208.png",
+      "x": 664.0,
+      "y": 886.0,
+      "z": 33
+    },
+    {
+      "alpha": 1.0,
+      "h": 360.0,
+      "name": "前景_竹左",
+      "rot": 0.0,
+      "scale": 0.623,
+      "tex": "res://assets/scenes/ink/tree/t01.png",
+      "x": 58.0,
+      "y": 1244.0,
+      "z": 60
+    },
+    {
+      "alpha": 1.0,
+      "h": 384.0,
+      "name": "前景_竹右",
+      "rot": 0.0,
+      "scale": 0.549,
+      "tex": "res://assets/scenes/ink/tree/t04.png",
+      "x": 692.0,
+      "y": 1252.0,
+      "z": 61
     }
   ],
   "version": 1
