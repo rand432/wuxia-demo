@@ -58,6 +58,17 @@ var _revive := 1          # 浴血：免死次数（战场上真的会倒下）
 var _skill_pts := 0       # 技能点（每升 1 级 1 点）
 var _skill_choices: Array = []
 var _skill_badge: Label = null
+var _partner_lbs: Array = []
+var _mini_lv: Label = null        # 黑市下面那条小经验条（v4c）
+var _mini_exp: ColorRect = null
+# v4d（用户："每次击杀一名敌人 会让黑市经验条+1 同时180秒增加一次黑市刷新次数"）：
+#   这条小经验条是**黑市自己的**——击杀 +1 经验；每 180 秒送 1 次"刷新次数"（用来换货架）。
+var _bm_lv := 1                   # 黑市等级
+var _bm_exp := 0                  # 黑市经验（每击杀 +1）
+var _bm_need := 100               # 升下一级要多少（每级 +50）
+var _bm_refresh := 1              # 刷新次数
+var _bm_t := 0.0                  # 距离下一次 +1 刷新还差多久（满 180 送一次）
+const BM_REFRESH_SEC := 180.0
 var _over := false        # 这一局结束没有
 # v2f（用户这一轮的四条）：
 #   · 吞噬记录/卡面**不标流派**（"这种是玩家自己发掘的"）
@@ -173,7 +184,7 @@ func _build_hud() -> void:
 	_wave_lb = _lbl(Vector2(24, 22), Vector2(190, 52), 28, PAPER)
 	_wave_lb.text = "波 12/30"
 	_boss_lb = _lbl(Vector2(226, 26), Vector2(300, 46), 22, GOLD)
-	_boss_lb.text = "一阶 boss 00:37"
+	_boss_lb.text = "一阶 boss 00:37"      # 开局静态文本；_process 里会按 分:秒 覆写
 	_mk_btn("设置", Vector2(560, 14), Vector2(140, 68), 24, false, func(): _open_small("设置"))
 
 	# v2b：三个钱账**带图标**（用户："货币记得加图标"）——图标是画出来的，不新增素材
@@ -230,6 +241,13 @@ func _build_field() -> void:
 	_circle_btn("卡组", Vector2(22, 664), func(): _open_large("卡组"))
 	_circle_btn("存档", Vector2(594, 340), func(): _open_large("存档"))
 	_circle_btn("成就", Vector2(594, 480), func(): _open_large("成就"))
+	# v4b（用户："成就下面增加按钮 黑市【用于杀敌数兑换东西的 内容暂定】"）
+	_circle_btn("黑市", Vector2(594, 620), func(): _open_large("黑市"))
+	# v4c（用户："黑市下面加一个小型经验条 和等级"）——黑市钮正下方一条小经验条
+	_panel(Rect2(500, 736, 198, 66), Color(0.18, 0.17, 0.19, 0.96), 10)
+	_mini_lv = _lbl(Vector2(508, 740), Vector2(182, 28), 19, PAPER)
+	_mini_lv.text = "黑市 Lv 1"
+	_mini_exp = _bar(Rect2(510, 776, 178, 14), Color(0.56, 0.44, 0.72))
 
 # ---- 经验条 + 主角条 ----
 func _build_hero_bar() -> void:
@@ -261,6 +279,181 @@ func _build_hero_bar() -> void:
 	_skill_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_skill_badge.text = ""
 	_mk_btn("装备·宝物 ＋", Vector2(372, 1174), Vector2(336, 74), 26, false, func(): _open_large("装备"))
+
+# ---- 黑市（v4b）：用**杀敌数**换东西（内容暂定，先把入口与账摆上）----
+#   用户：「成就下面增加按钮 黑市【用于杀敌数兑换东西的 内容暂定】」
+const BLACK_GOODS := [
+	{"id": "coin", "name": "文钱 ×200", "cost": 50, "desc": "换成一笔现钱（直接进右上文钱）"},
+	{"id": "crystal", "name": "灵晶 ×10", "cost": 200, "desc": "抽卡用的那种晶"},
+	{"id": "gear", "name": "装备一件", "cost": 300, "desc": "随机一件，进装备六格"},
+	{"id": "treasure", "name": "宝物一件", "cost": 400, "desc": "宝物不限格"},
+	{"id": "heal", "name": "回满气血", "cost": 120, "desc": "这一下能救急"},
+]
+
+func _fill_black(p: Control, y: float, sz: Vector2) -> float:
+	var head := Label.new()
+	head.position = Vector2(28, y)
+	head.size = Vector2(640, 50)
+	head.add_theme_font_size_override("font_size", 26)
+	head.add_theme_color_override("font_color", INK)
+	head.text = "杀敌数 " + str(_kills) + "　（这是黑市通用的一门钱）"
+	p.add_child(head)
+	var sub := Label.new()
+	sub.position = Vector2(28, y + 50.0)
+	sub.size = Vector2(640, 36)
+	sub.add_theme_font_size_override("font_size", 21)
+	sub.add_theme_color_override("font_color", SEAL)
+	sub.text = "黑市 Lv " + str(_bm_lv) + "　经验 " + str(_bm_exp) + "/" + str(_bm_need) + "　刷新次数 " + str(_bm_refresh)
+	p.add_child(sub)
+	var tip := Label.new()
+	tip.position = Vector2(28, y + 88.0)
+	tip.size = Vector2(640, 60)
+	tip.add_theme_font_size_override("font_size", 20)
+	tip.add_theme_color_override("font_color", DIM)
+	tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	tip.text = "每击杀 1 名敌人，黑市经验 +1；每 180 秒自动 +1 次刷新（升级也送 1 次）。内容暂定。"
+	p.add_child(tip)
+	var ly := y + 152.0
+	for g_v in BLACK_GOODS:
+		var g: Dictionary = g_v
+		var cost := int(g["cost"])
+		var can := _kills >= cost
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.99, 0.97, 0.92) if can else Color(0.90, 0.88, 0.84)
+		sb.set_corner_radius_all(10)
+		sb.border_color = Color(SEAL.r, SEAL.g, SEAL.b, 0.55) if can else Color(INK.r, INK.g, INK.b, 0.25)
+		sb.set_border_width_all(2)
+		var row := Panel.new()
+		row.position = Vector2(28, ly)
+		row.size = Vector2(640, 104)
+		row.add_theme_stylebox_override("panel", sb)
+		row.mouse_filter = Control.MOUSE_FILTER_STOP
+		p.add_child(row)
+		var nm := Label.new()
+		nm.position = Vector2(18, 12)
+		nm.size = Vector2(360, 42)
+		nm.add_theme_font_size_override("font_size", 26)
+		nm.add_theme_color_override("font_color", INK if can else DIM)
+		nm.text = str(g["name"])
+		row.add_child(nm)
+		var ds := Label.new()
+		ds.position = Vector2(18, 58)
+		ds.size = Vector2(430, 36)
+		ds.add_theme_font_size_override("font_size", 20)
+		ds.add_theme_color_override("font_color", DIM)
+		ds.text = str(g["desc"])
+		row.add_child(ds)
+		var pr := Label.new()
+		pr.position = Vector2(452, 20)
+		pr.size = Vector2(170, 44)
+		pr.add_theme_font_size_override("font_size", 22)
+		pr.add_theme_color_override("font_color", SEAL if can else DIM)
+		pr.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		pr.text = str(cost) + " 杀"
+		row.add_child(pr)
+		var b := _pbtn(row, "换", Vector2(540, 30), Vector2(84, 44), 22, can, _black_buy.bind(str(g["id"]), cost))
+		b.disabled = not can
+		ly += 116.0
+	var foot := Label.new()
+	foot.position = Vector2(28, ly)
+	foot.size = Vector2(640, 44)
+	foot.add_theme_font_size_override("font_size", 20)
+	foot.add_theme_color_override("font_color", DIM)
+	foot.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	foot.text = "换到的东西会像掉落一样飞进对应的计数位（文钱/灵晶→右上 · 装备/宝物→右下）。"
+	p.add_child(foot)
+	return ly + 56.0
+
+func _black_buy(id: String, cost: int) -> void:
+	if _kills < cost:
+		_hint.text = "杀敌数不够（要 " + str(cost) + "，你现在 " + str(_kills) + "）"
+		return
+	_kills -= cost
+	match id:
+		"coin":
+			_spawn_drop("coin", 200, Vector2(560.0, 560.0), 12)
+		"crystal":
+			_spawn_drop("crystal", 10, Vector2(560.0, 560.0), 6)
+		"gear":
+			_spawn_drop("gear", 1, Vector2(560.0, 560.0), 1)
+		"treasure":
+			_spawn_drop("treasure", 1, Vector2(560.0, 560.0), 1)
+		"heal":
+			if _field != null:
+				_field.hero["hp"] = float(_field.hero["hp_max"])
+			_hint.text = "气血回满"
+	Audio.sfx("ui_click", -6.0)
+	_hint.text = "黑市成交：" + id + "（花 " + str(cost) + " 杀敌数，剩 " + str(_kills) + "）"
+	if _popup_kind == "黑市":
+		_open_large("黑市")
+# ---- 失败结算（v3m）----
+#   用户："任务失败卡住了"——免死用尽之后得有去处：把这一局的账摊开，给［再来一局］与［退出］。
+func _fill_over(p: Control, y: float, sz: Vector2) -> float:
+	var head := Label.new()
+	head.position = Vector2(28, y)
+	head.size = Vector2(640, 60)
+	head.add_theme_font_size_override("font_size", 32)
+	head.add_theme_color_override("font_color", SEAL)
+	head.text = "这一局到这儿"
+	p.add_child(head)
+	var rows := [
+		["打到", "第 " + str(_wave) + " 波 / 共 30 波" + ("（boss 波）" if _wave % 5 == 0 else "")],
+		["杀敌", str(_kills) + " 只"],
+		["文钱", str(_money) + "（这一局结束会清空，名声才留）"],
+		["灵晶", str(_crystal)],
+		["等级 / 技能点", "Lv " + str(_lv) + "　技能点 " + str(_skill_pts)],
+		["宠物", "白狐（跟着打到最后一口气）"],
+	]
+	var ly := y + 74.0
+	for r_v in rows:
+		var r: Array = r_v
+		var l1 := Label.new()
+		l1.position = Vector2(28, ly)
+		l1.size = Vector2(190, 46)
+		l1.add_theme_font_size_override("font_size", 23)
+		l1.add_theme_color_override("font_color", DIM)
+		l1.text = str(r[0])
+		p.add_child(l1)
+		var l2 := Label.new()
+		l2.position = Vector2(226, ly)
+		l2.size = Vector2(440, 46)
+		l2.add_theme_font_size_override("font_size", 24)
+		l2.add_theme_color_override("font_color", INK)
+		l2.text = str(r[1])
+		l2.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		p.add_child(l2)
+		ly += 56.0
+	var tip := Label.new()
+	tip.position = Vector2(28, ly + 10.0)
+	tip.size = Vector2(640, 70)
+	tip.add_theme_font_size_override("font_size", 21)
+	tip.add_theme_color_override("font_color", DIM)
+	tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	tip.text = "再来一局：波数、文钱、灵晶、技能全部重来（名声才累积，第 6 步接）。"
+	p.add_child(tip)
+	ly += 96.0
+	_pbtn(p, "再来一局", Vector2(28, ly), Vector2(320, 96), 28, true, _restart_run)
+	_pbtn(p, "退出（回村外）", Vector2(366, ly), Vector2(302, 96), 24, false, func(): close())
+	return ly + 116.0
+
+func _restart_run() -> void:
+	_wave = 1
+	_money = 0
+	_crystal = 0
+	_kills = 0
+	_exp = 0.0
+	_lv = 1
+	_grow = 3
+	_skill_pts = 0
+	_skill_choices.clear()
+	_revive = 1
+	_boss_sec = 60.0
+	_boss_seq = 0
+	_over = false
+	_field.reset_run()
+	_sync_battle_stats()
+	_close_popup()
+	_hint.text = "新的一局——预备几秒，怪就压上来了"
 
 # ---- 技能页：三选一（有技能点时）／当前招式（没点时）----
 #   数据与效果都在战场（kushou_battle.gd）里：roll_choices() 抽、apply_pick() 落。
@@ -331,6 +524,14 @@ func _fill_skill(p: Control, y: float, sz: Vector2) -> float:
 			txt = txt.replace("<W>", str(snappedf(_field.jg_width(), 0.01)))
 			txt = txt.replace("<P>", str(_field.jg_pierce()))
 			txt = txt.replace("<S>", str(int(_field.jg_speed())))
+			# 飞匕那一套的实时数值
+			txt = txt.replace("<DP>", str(_field.dg_pierce()))
+			txt = txt.replace("<DD>", str(snappedf(_field.dg_dmg_mul(), 0.01)))
+			txt = txt.replace("<DB>", str(_field.dg_bounce()))
+			txt = txt.replace("<DM>", str(_field.dg_multi()))
+			txt = txt.replace("<DBM>", str(snappedf(_field.dg_bounce_mul(), 0.01)))
+			txt = txt.replace("<MD>", str(snappedf(_field.dg_multi_mul(), 0.01)))
+			txt = txt.replace("<DS>", str(int(_field.dg_interval())))
 			txt = txt.replace("**", "")
 			ds.text = txt
 			ds.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -579,17 +780,29 @@ func _process(delta: float) -> void:
 			lb.add_theme_color_override("font_color", GREEN if cd <= 0.0 else DIM)
 	_wave_lb.text = "波 " + str(_wave) + "/" + str(_wave_max)
 	var tier_cn: String = str(["", "一阶", "二阶", "三阶"][clampi(_boss_tier, 1, 3)])
-	_boss_lb.text = tier_cn + " boss 00:" + ("%02d" % int(ceil(maxf(0.0, _boss_sec))))
+	# v4e：倒计时按"分:秒"走——浴血把 boss 推到 180 秒后，原来那套 "00:180" 就露馅了
+	var bs := int(ceil(maxf(0.0, _boss_sec)))
+	_boss_lb.text = tier_cn + " boss " + ("%02d:%02d" % [bs / 60, bs % 60])
 	_money_lb.text = str(_money)
 	_crystal_lb.text = str(_crystal)
 	_kill_lb.text = str(_kills)
 	_exp_lb.text = "Lv " + str(_lv)
 	_exp_bar.size.x = 548.0 * _exp
+	# 黑市下面那条小的，跟大条一个数
+	if _mini_exp != null:
+		_mini_exp.size.x = 178.0 * clampf(float(_bm_exp) / maxf(1.0, float(_bm_need)), 0.0, 1.0)
+	if _mini_lv != null:
+		_mini_lv.text = "黑市 Lv " + str(_bm_lv) + "　刷新 " + str(_bm_refresh)
+	# 每 180 秒送一次黑市刷新
+	_bm_t += delta
+	if _bm_t >= BM_REFRESH_SEC:
+		_bm_t -= BM_REFRESH_SEC
+		_bm_refresh += 1
+		_hint.text = "黑市刷新 +1（现有 " + str(_bm_refresh) + " 次）"
 	# 生命/杀敌都跟战场上那本真账走（v2j）
 	if _field != null:
 		_hp = float(_field.hero["hp"])
 		_hp_max = float(_field.hero["hp_max"])
-		_kills = _field.kills_total
 	_hp_lb.text = "生命 " + str(int(_hp)) + " / " + str(int(_hp_max))
 	_hp_bar.size.x = 470.0 * clampf(_hp / maxf(1.0, _hp_max), 0.0, 1.0)
 	_mp_lb.text = "内力 " + str(int(_mp)) + " / " + str(int(_mp_max))
@@ -611,6 +824,12 @@ func _process(delta: float) -> void:
 	if _skill_badge != null:
 		_skill_badge.text = ("＋" if _skill_pts > 0 else "")
 	_refresh_band()      # 大弹窗顶部那条状态带每帧跟着走
+	_refresh_partner_live()
+	# v4e：提醒横幅的倒计时
+	if _note_t > 0.0:
+		_note_t = maxf(0.0, _note_t - delta)
+		if _note_t <= 0.0 and _note_lb != null:
+			_note_lb.visible = false
 	# 大弹窗的保险②：血 <25% 自动收起
 	if _hp / maxf(1.0, _hp_max) < 0.25 and _popup_kind != "" and _is_large(_popup_kind):
 		_close_popup()
@@ -625,6 +844,21 @@ func _boss_arrive() -> void:
 	_hint.text = "boss 入场——顶上那条是它的血条"
 
 # ---- 战场信号 ----
+# v4e：给玩家的一条**醒目提醒**（横幅 ＋ 底部提示；横幅 5 秒后自己消失）
+var _note_lb: Label = null
+var _note_t := 0.0
+
+func _note(txt: String, secs: float) -> void:
+	if _note_lb == null:
+		_note_lb = _lbl(Vector2(24, 196), Vector2(672, 88), 20, Color(1.0, 0.92, 0.72))
+		_note_lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_note_lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_note_lb.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_note_lb.text = txt
+	_note_lb.visible = true
+	_note_t = secs
+	Audio.sfx("tension", -8.0)
+
 func _sync_battle_stats() -> void:
 	if _field == null:
 		return
@@ -743,7 +977,17 @@ func _update_coins(delta: float) -> void:
 		_coin_layer.queue_redraw()
 
 func _on_kill(_n: int) -> void:
-	_kills = _field.kills_total
+	# v4b：杀敌数**是可花的钱**（黑市用它换东西），所以这里自己累加、不再每帧从战场回读
+	_kills += 1
+	# v4d：黑市经验 每击杀 +1；攒够就升一级（升级送 1 次刷新）
+	_bm_exp += 1
+	while _bm_exp >= _bm_need:
+		_bm_exp -= _bm_need
+		_bm_lv += 1
+		_bm_need += 50
+		_bm_refresh += 1
+		_hint.text = "黑市升到 Lv " + str(_bm_lv) + "，刷新 +1（现有 " + str(_bm_refresh) + " 次）"
+		Audio.sfx("levelup", -8.0)
 	_exp += 0.04
 	if _exp >= 1.0:
 		_exp -= 1.0
@@ -773,12 +1017,29 @@ func _on_hero_down() -> void:
 	if _revive > 0:
 		_revive -= 1
 		_grow += 1
+		# v4e：浴血＝**清场**（普通怪奖励照给 · 挑战怪算失败 · boss 撤走并 180 秒后再来）
+		var res: Dictionary = _field.blood_bath_clear()
 		_field.revive()
 		_sync_battle_stats()
-		_hint.text = "浴血：免死一次（剩 " + str(_revive) + " 次），成长 +1 → " + str(_grow)
+		var msg := "浴血：免死一次（剩 " + str(_revive) + " 次）· 成长 +1 → " + str(_grow)
+		msg += "　｜　场上清空：普通怪 " + str(int(res["normal"])) + " 只奖励照给，挑战怪 " + str(int(res["challenge"])) + " 只算失败"
+		if bool(res["boss"]):
+			_boss_sec = 180.0                     # 主线 boss：出现时间重置，180 秒后再来
+			msg += "　｜　boss 180 秒后再来"
+		if int(res["challenge"]) > 0 and _auto_chal:
+			_auto_chal = false                    # 解除自动挑战（挑战怪算失败，别让它继续刷）
+			if _auto_btn != null and is_instance_valid(_auto_btn):
+				_auto_btn.text = "自动挑战：关（浴血后已解除）"
+			msg += "　｜　自动挑战已解除"
+		_hint.text = msg
+		# 提醒玩家：战场中央横幅 ＋ 一声紧张的弦（大弹窗会被这条规则自动收掉）
+		_note(msg, 5.0)
 	else:
+		# v3m（用户："任务失败卡住了"）：免死用尽＝这一局结束——
+		#   战场停住 ＋ 弹**失败结算页**（原来只改了一句提示，玩的人就卡在 0 血没去处）
 		_over = true
-		_hint.text = "免死用尽——你死在了笼子里。结算页第 6 步做。"
+		_field.running = false
+		_open_large("局终")
 
 # 临时试玩键
 func _input(e: InputEvent) -> void:
@@ -802,7 +1063,7 @@ func _input(e: InputEvent) -> void:
 # 弹窗（两层）
 # ============================================================
 func _is_large(k: String) -> bool:
-	return ["卡组", "技能", "装备", "挑战", "存档", "成就", "角色", "队员", "仓库", "卡牌详情"].has(k)
+	return ["卡组", "技能", "装备", "挑战", "存档", "成就", "角色", "队员", "仓库", "卡牌详情", "局终", "黑市"].has(k)
 
 func _close_popup() -> void:
 	if _popup != null and is_instance_valid(_popup):
@@ -925,6 +1186,10 @@ func _fill_popup(p: Control, kind: String, y: float, sz: Vector2) -> float:
 		return _fill_chal(p, y, sz)
 	if kind == "技能":
 		return _fill_skill(p, y, sz)
+	if kind == "局终":
+		return _fill_over(p, y, sz)
+	if kind == "黑市":
+		return _fill_black(p, y, sz)
 	if kind == "角色":
 		# 页签点了要**真的换内容**（探针抓到过：只高亮了页签、内容没换）
 		return _fill_mates(p, y, sz) if _role_tab == 1 else _fill_role(p, y, sz)
@@ -1251,8 +1516,124 @@ func _set_role_tab(i: int) -> void:
 func _atk() -> float:
 	return 12.0 + float(_grow) * float(maxi(0, _lv - 1))
 
-# ---- 队员页：显示继承到的队友（点头看成长与携带技能） ----
+# ---- 伙伴页（v4a）：两位伙伴 ＋ 他们的技能与档位 ----
+#   用户在战斗里**自动放**（内力够、不在冷却就放），这一页是看账的地方。
 func _fill_mates(p: Control, y: float, sz: Vector2) -> float:
+	var tabs := ["属性", "伙伴"]
+	for i in 2:
+		_pbtn(p, tabs[i], Vector2(28.0 + float(i) * 130.0, y), Vector2(120, 58), 24, _role_tab == i, _set_role_tab.bind(i))
+	var head := Label.new()
+	head.position = Vector2(28, y + 74.0)
+	head.size = Vector2(640, 44)
+	head.add_theme_font_size_override("font_size", 23)
+	head.add_theme_color_override("font_color", INK)
+	head.text = "伙伴 " + str(_field.PARTNER_INFO.size()) + " 名（内力够/到点就自动放；招募与继承第 5 步做）"
+	p.add_child(head)
+	_partner_lbs.clear()
+	var ly := y + 128.0
+	# 伙伴列表**通用遍历**（加人不用改这里）：档位那行也按池子里 req_p 自动拼
+	for id in _field.PARTNER_INFO.keys():
+		var info: Dictionary = _field.PARTNER_INFO[id]
+		var pid := str(id)
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.99, 0.97, 0.92)
+		sb.set_corner_radius_all(12)
+		var up := str(info["quality"]) == "上品"
+		sb.border_color = Color(0.52, 0.34, 0.72, 0.8) if up else Color(INK.r, INK.g, INK.b, 0.35)
+		sb.set_border_width_all(3 if up else 2)
+		var box := Panel.new()
+		box.position = Vector2(28, ly)
+		box.size = Vector2(640, 210)
+		box.add_theme_stylebox_override("panel", sb)
+		box.mouse_filter = Control.MOUSE_FILTER_STOP
+		p.add_child(box)
+		var nm := Label.new()
+		nm.position = Vector2(18, 12)
+		nm.size = Vector2(420, 42)
+		nm.add_theme_font_size_override("font_size", 26)
+		nm.add_theme_color_override("font_color", INK)
+		nm.text = str(info["name"]) + "　【" + str(info["quality"]) + "】　技能「" + str(info["skill"]) + "」"
+		box.add_child(nm)
+		var live := Label.new()
+		live.position = Vector2(430, 14)
+		live.size = Vector2(196, 40)
+		live.add_theme_font_size_override("font_size", 20)
+		live.add_theme_color_override("font_color", SEAL)
+		live.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		live.text = ""
+		box.add_child(live)
+		_partner_lbs.append([pid, live])
+		var st := Label.new()
+		st.position = Vector2(18, 58)
+		st.size = Vector2(600, 34)
+		st.add_theme_font_size_override("font_size", 21)
+		st.add_theme_color_override("font_color", DIM)
+		var dt := str(info.get("dtype", ""))
+		st.text = ("伤害：" + dt + "　" if dt != "" else "")
+		if float(info["mp0"]) <= 0.0:
+			st.text += "每隔 " + str(int(_field.dg_interval())) + " 秒出一枚"
+		else:
+			st.text += "内力 " + str(int(_field.p_mp(pid))) + "　持续 " + str(int(_field.p_dur(pid))) + " 秒　冷却 " + str(int(_field.p_cd(pid))) + " 秒"
+		box.add_child(st)
+		var ds := Label.new()
+		ds.position = Vector2(18, 96)
+		ds.size = Vector2(600, 62)
+		ds.add_theme_font_size_override("font_size", 20)
+		ds.add_theme_color_override("font_color", INK)
+		ds.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		ds.text = str(info["desc"])
+		box.add_child(ds)
+		# ⚠ 档位那行会很长（飞匕有七项）——给足高度并允许换行，不然会被裁掉半个字（截图抓到过）
+		var lv := Label.new()
+		lv.position = Vector2(18, 156)
+		lv.size = Vector2(604, 52)
+		lv.add_theme_font_size_override("font_size", 19)
+		lv.add_theme_color_override("font_color", DIM)
+		lv.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		var parts: Array = []
+		for pk_v in _field.SKILL_POOL:
+			var pk: Dictionary = pk_v
+			if str(pk.get("req_p", "")) != pid:
+				continue
+			var nmv: String = str(pk["name"])
+			var nm2: String = nmv.split("·")[1] if nmv.contains("·") else nmv
+			parts.append(nm2 + " " + str(_field.skill_lv(str(pk["id"]))))
+		lv.text = ("档位：" + "／".join(PackedStringArray(parts))) if parts.size() > 0 else "档位：还没强化过"
+		box.add_child(lv)
+		ly += 222.0
+	var tip := Label.new()
+	tip.position = Vector2(28, ly)
+	tip.size = Vector2(640, 44)
+	tip.add_theme_font_size_override("font_size", 20)
+	tip.add_theme_color_override("font_color", DIM)
+	tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	tip.text = "战斗里内力每秒回 2；伙伴的强化项在升级三选一里出现（都自带内力消耗提升的代价）。"
+	p.add_child(tip)
+	return ly + 56.0
+
+func _refresh_partner_live() -> void:
+	if _popup_kind != "伙伴" and _popup_kind != "角色":
+		return
+	if _field == null:
+		return
+	for e_v in _partner_lbs:
+		var e: Array = e_v
+		var lb = e[1]
+		if lb == null or not is_instance_valid(lb):
+			continue
+		var pid := str(e[0])
+		var p: Dictionary = _field.partners[pid]
+		if _field.p_active(pid):
+			lb.text = "释放中"
+			lb.add_theme_color_override("font_color", Color(0.42, 0.66, 0.36))
+		elif float(p["cd"]) > 0.0:
+			lb.text = "冷却 " + str(int(ceil(float(p["cd"])))) + "s"
+			lb.add_theme_color_override("font_color", DIM)
+		else:
+			lb.text = "待机"
+			lb.add_theme_color_override("font_color", SEAL)
+# ---- 旧版队友页（假数据；v4a 起被"伙伴页"取代，**留着当参照**，别再往外调）----
+func _fill_mates_old(p: Control, y: float, sz: Vector2) -> float:
 	var tabs := ["属性", "队员"]
 	for i in 2:
 		_pbtn(p, tabs[i], Vector2(28.0 + float(i) * 130.0, y), Vector2(120, 58), 24, _role_tab == i, _set_role_tab.bind(i))
