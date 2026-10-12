@@ -247,7 +247,8 @@ var _twitch_rec: Node = null
 var _out_panel = null
 var _chest_panel = null   # v36：宝箱面板
 var _formation = null
-var _kushou = null          # v63：困兽试玩面板（主界面按 K）
+var _kushou = null          # v63：困兽 v1 试玩面板（现在按 Shift+E）
+var _kushou_v2 = null       # v147：困兽 v2 主界面空壳（按 E）
 var _winery_panel = null
 var _alchemy_panel = null
 var _star_panel = null   # v4.3：统一升星页（替掉旧的升星台）
@@ -1780,13 +1781,22 @@ func _unhandled_input(ev: InputEvent) -> void:
 	# ---- v63：「困兽」试玩入口（新独立模式）----
 	#   v63n（用户："困兽也开启不了"）：原来挂在 K 上，但 K 早被"后山·重播宠链"
 	#   （本函数前面那一段）抢先 return 了 ✗——K 永远到不了这里。改挂 **E** 键。
+	#   v147：**E 改成开 v2 主界面空壳**（kushou/kushou_v2.gd，设计稿见 docs/困兽_主界面设计稿.md），
+	#     老的 v1 试玩挪到 **Shift+E**（还能进，方便对照）。
 	if ke.keycode == KEY_E:
-		if _kushou == null:
-			_kushou = (preload("res://kushou/kushou_mode.gd") as GDScript).new()
-			add_child(_kushou)
-		_kushou.visible = true
-		_kushou.move_to_front()
-		_show_toast("[困兽] 试玩——死牢斗兽场（开发中）")
+		if ke.shift_pressed:
+			if _kushou == null:
+				_kushou = (preload("res://kushou/kushou_mode.gd") as GDScript).new()
+				add_child(_kushou)
+			_kushou.visible = true
+			_kushou.move_to_front()
+			_show_toast("[困兽·v1 旧试玩] Shift+E 进的是旧版牌桌")
+			return
+		if _kushou_v2 == null:
+			_kushou_v2 = (preload("res://kushou/kushou_v2.gd") as GDScript).new()
+			add_child(_kushou_v2)
+		_kushou_v2.open()
+		_show_toast("[困兽·v2] 主界面空壳——按钮/字都按大的排，H 扣血、B 叫 boss")
 		return
 	# ---- v63d（用户："给个快捷键让我直接过引子"）：U = 跳引子（已挪进 _input，v63j）----
 	# ---- v63m（用户："主角团还差一人，三人阵要测"）：S = 直接招苏青鸾入队 ----
