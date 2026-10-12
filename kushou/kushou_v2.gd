@@ -16,6 +16,8 @@ extends Control
 # ============================================================
 
 const UiKit := preload("res://shared/ui_kit.gd")
+const Audio := preload("res://shared/audio.gd")   # v2h：战斗音效＋BGM
+const Battle := preload("res://kushou/kushou_battle.gd")   # v2j：真战斗引擎
 
 const INK := Color(0.14, 0.13, 0.15)
 const PAPER := Color(0.905, 0.878, 0.795)
@@ -50,6 +52,9 @@ var _deck: Array = [
 	{"school": "技能流", "name": "连锁", "star": 1, "ate": 0, "fx": "技能击杀 冷却 −1 秒"},
 ]
 var _deck_tab := 0        # 0＝十格卡组 · 1＝吞噬记录（两种"查询"）
+var _boss_seq := 0        # v2j：叫过几个 boss
+var _revive := 1          # 浴血：免死次数（战场上真的会倒下）
+var _over := false        # 这一局结束没有
 # v2f（用户这一轮的四条）：
 #   · 吞噬记录/卡面**不标流派**（"这种是玩家自己发掘的"）
 #   · **长按卡牌**看全部效果
@@ -121,11 +126,13 @@ func open() -> void:
 	_want_open = true
 	visible = true
 	move_to_front()
+	Audio.play_bgm("bgm_battle", 0.6)      # v2h：进场就是战斗曲（与爬塔同一首）
 
 func close() -> void:
 	_want_open = false
 	visible = false
 	_close_popup()
+	Audio.play_bgm(Audio.menu_track(), 1.2)   # 回主界面：换回玩家选的那首
 
 # ============================================================
 # 搭建
@@ -145,6 +152,13 @@ func _build() -> void:
 	#   底下那排六格**整块撤掉**，226 像素让给战场（616→704）与主角条（176→272）；
 
 	# 底部提示（临时，第 2 步去掉）
+	# 钱币飞行层：压在所有面板之上（不然钱会钻到面板底下），不接鼠标
+	_coin_layer = CoinLayer.new()
+	_coin_layer.host = self
+	_coin_layer.size = vp
+	_coin_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_coin_layer)
+
 	_hint = _lbl(Vector2(20, 1258), Vector2(680, 22), 18, Color(0.62, 0.60, 0.58))
 	_hint.text = "空壳预览 · E 关 · H 扣血 · B 叫 boss"
 	add_child(_hint)
@@ -185,11 +199,23 @@ func _build_hud() -> void:
 # ---- 战场：假打的小人 + 左右圆钮 ----
 func _build_field() -> void:
 	var bg := _panel(Rect2(8, 176, 704, 704), Color(0.16, 0.16, 0.18, 0.96), 12)
-	_field = FieldArt.new()
+	# v2j：战场换成**真战斗引擎**（kushou/kushou_battle.gd）——刷怪/走位/出手/飘字/浴血都在那边
+	_field = Battle.new()
 	_field.size = Vector2(704, 704)
 	_field.position = Vector2(8, 176)
 	_field.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# ⚠ 不裁剪的话，怪从上面"走进来"那一段会画到 HUD 上（截图里 boss 的名字跟倒计时叠在一起）
+	_field.clip_contents = true
 	add_child(_field)
+	_field.coin.connect(_on_coin)
+	_field.coin_drop.connect(_on_coin_drop)
+	_field.kill.connect(_on_kill)
+	_field.hero_down.connect(_on_hero_down)
+	_field.boss_arrived.connect(_on_boss)
+	_field.special.connect(_on_special)
+	_sync_battle_stats()
+	_field.set_wave(_wave)
+	_field.running = true
 
 	_circle_btn("抽卡", Vector2(22, 262), func(): _open_small("抽卡"))
 	_chal_btn = _circle_btn("挑战", Vector2(22, 396), func(): _open_large("挑战"))
@@ -414,12 +440,29 @@ func _process(delta: float) -> void:
 	_kill_lb.text = str(_kills)
 	_exp_lb.text = "Lv " + str(_lv)
 	_exp_bar.size.x = 548.0 * _exp
+	# 生命/杀敌都跟战场上那本真账走（v2j）
+	if _field != null:
+		_hp = float(_field.hero["hp"])
+		_hp_max = float(_field.hero["hp_max"])
+		_kills = _field.kills_total
 	_hp_lb.text = "生命 " + str(int(_hp)) + " / " + str(int(_hp_max))
 	_hp_bar.size.x = 470.0 * clampf(_hp / maxf(1.0, _hp_max), 0.0, 1.0)
 	_mp_lb.text = "内力 " + str(int(_mp)) + " / " + str(int(_mp_max))
 	_mp_bar.size.x = 470.0 * clampf(_mp / maxf(1.0, _mp_max), 0.0, 1.0)
 	if _field != null:
 		_field.queue_redraw()
+	_update_coins(delta)
+	# 收钱那一下数字跳一下（用户："然后文钱的数字开始增加"）
+	_coin_pop = maxf(0.0, _coin_pop - delta * 1.6)
+	_crystal_pop = maxf(0.0, _crystal_pop - delta * 1.6)
+	if _money_lb != null:
+		_money_lb.pivot_offset = _money_lb.size * 0.5
+		var sc2 := 1.0 + _coin_pop * 0.45
+		_money_lb.scale = Vector2(sc2, sc2)
+	if _crystal_lb != null:
+		_crystal_lb.pivot_offset = _crystal_lb.size * 0.5
+		var sc3 := 1.0 + _crystal_pop * 0.45
+		_crystal_lb.scale = Vector2(sc3, sc3)
 	_refresh_band()      # 大弹窗顶部那条状态带每帧跟着走
 	# 大弹窗的保险②：血 <25% 自动收起
 	if _hp / maxf(1.0, _hp_max) < 0.25 and _popup_kind != "" and _is_large(_popup_kind):
@@ -429,7 +472,163 @@ func _process(delta: float) -> void:
 func _boss_arrive() -> void:
 	if _popup_kind != "" and _is_large(_popup_kind):
 		_close_popup()
-	_hint.text = "boss 入场（空壳只演这一行）"
+	# 真叫一只 boss 下来（阶随波数涨）
+	_boss_seq += 1
+	_field.start_boss(clampi(1 + _boss_seq / 3, 1, 3))
+	_hint.text = "boss 入场——顶上那条是它的血条"
+
+# ---- 战场信号 ----
+func _sync_battle_stats() -> void:
+	if _field == null:
+		return
+	_field.setup({
+		"atk": 12.0 + float(_grow) * float(maxi(0, _lv - 1)),
+		"hp_max": 200.0 + float(_grow) * 10.0 * float(maxi(0, _lv - 1)),
+		"aspd": 1.0,
+		"crit": 0.05,
+		"dodge": 0.05,
+		"cut": 0.10,
+		"dmg_pct": 0.0,
+	})
+
+func _on_coin(n: int) -> void:
+	_money += n
+
+# ---- 钱币掉落 → 掉地 → 飞右上 → 数字跳（用户点名要的那套）----
+#   每枚钱：phase 0＝往下掉（重力＋落地小弹），phase 1＝飞向 HUD 上的钱图标，phase 2＝到了（加钱＋跳字）
+var _coinfx: Array = []
+var _coin_layer: Control = null
+var _coin_pop := 0.0
+var _crystal_pop := 0.0
+
+func _on_coin_drop(amount: int, pos: Vector2) -> void:
+	_spawn_drop("coin", amount, pos, 14)
+
+# 通用掉落：kind ∈ coin/crystal/gear/treasure；max_n ＝ 最多拆成几枚（视觉热闹度）
+func _spawn_drop(kind: String, amount: int, pos: Vector2, max_n: int) -> void:
+	var n := clampi(amount, 1, max_n)
+	var each := int(maxf(1.0, round(float(amount) / float(n))))
+	var base := Vector2(8.0, 176.0) + pos                 # 战场坐标 → 面板坐标
+	var tgt := _drop_target(kind)
+	for i in n:
+		_coinfx.append({
+			"kind": kind,
+			"pos": base + Vector2(randf_range(-10.0, 10.0), randf_range(-6.0, 6.0)),
+			"vel": Vector2(randf_range(-90.0, 90.0), randf_range(-190.0, -110.0)),
+			"phase": 0, "t": 0.0, "wait": 0.25 + randf() * 0.35,
+			"amount": each, "from": Vector2.ZERO, "target": tgt,
+		})
+	Audio.sfx("coin" if kind == "coin" else ("bell" if kind == "crystal" else "chest"), -12.0)
+
+# 到手那一下：加账 ＋ 数字跳 ＋ 音效（各类各的）
+func _credit_drop(kind: String, n: int) -> void:
+	match kind:
+		"coin":
+			_money += n
+			_coin_pop = 0.32
+			Audio.sfx("coin", -9.0)
+		"crystal":
+			_crystal += n
+			_crystal_pop = 0.32
+			Audio.sfx("bell", -10.0)
+		"gear":
+			for i in 6:
+				if str(_equip[i]) == "":
+					_equip[i] = "甲士掉落"
+					_equip_q[i] = "良品"
+					break
+			Audio.sfx("equip", -8.0)
+			_hint.text = "装备进包了（去［装备·宝物］看）"
+		"treasure":
+			_treasures.append("宝箱怪掉落")
+			_treasure_q.append("上品")
+			Audio.sfx("chest", -8.0)
+			_hint.text = "宝物进包了（宝物不限格）"
+
+# 各类掉落的"归宿"：文钱→右上钱图标 · 灵晶→右上晶图标 · 装备/宝物→右下［装备·宝物］钮
+func _drop_target(kind: String) -> Vector2:
+	if kind == "coin":
+		return Vector2(42.0, 130.0)
+	if kind == "crystal":
+		return Vector2(278.0, 130.0)
+	return Vector2(540.0, 1211.0)
+
+func _update_coins(delta: float) -> void:
+	if _coinfx.is_empty():
+		if _coin_layer != null:
+			_coin_layer.queue_redraw()
+		return
+	var ground := 176.0 + 704.0 - 84.0
+	for i in range(_coinfx.size() - 1, -1, -1):
+		var c: Dictionary = _coinfx[i]
+		c["t"] = float(c["t"]) + delta
+		if int(c["phase"]) == 0:
+			var p: Vector2 = c["pos"]
+			var v: Vector2 = c["vel"]
+			v.y += 900.0 * delta
+			p += v * delta
+			if p.y >= ground:
+				p.y = ground
+				v.y = -v.y * 0.32                # 落地小弹一下
+				v.x *= 0.5
+				c["wait"] = float(c["wait"]) - delta
+			c["pos"] = p
+			c["vel"] = v
+			if float(c["t"]) > float(c["wait"]):
+				c["phase"] = 1
+				c["from"] = p
+				c["t"] = 0.0
+		elif int(c["phase"]) == 1:
+			var k := clampf(float(c["t"]) / 0.5, 0.0, 1.0)
+			var f: Vector2 = c["from"]
+			var tgt: Vector2 = c["target"]
+			# 一条往上兜的弧线（别直愣愣地拉过去）
+			var mid := (f + tgt) * 0.5 + Vector2(0.0, -90.0)
+			var a := f.lerp(mid, k)
+			var b := mid.lerp(tgt, k)
+			c["pos"] = a.lerp(b, k)
+			if k >= 1.0:
+				_credit_drop(str(c["kind"]), int(c["amount"]))
+				_coinfx.remove_at(i)
+	if _coin_layer != null:
+		_coin_layer.queue_redraw()
+
+func _on_kill(_n: int) -> void:
+	_kills = _field.kills_total
+	_exp += 0.04
+	if _exp >= 1.0:
+		_exp -= 1.0
+		_lv += 1
+		Audio.sfx("levelup", -6.0)
+		_hint.text = "升级！Lv " + str(_lv) + "（每 5 级给一次招募机会）"
+		_sync_battle_stats()
+
+func _on_special(kind: String, n: int, pos: Vector2) -> void:
+	# 灵晶 / 装备 / 宝物：跟文钱一个套路——掉地 → 飞向各自的"计数位" → 数字或清单变化
+	match kind:
+		"crystal":
+			_spawn_drop("crystal", 6 + randi() % 5, pos, 6)
+			_hint.text = "晶怪掉灵晶——看它飞进右上的灵晶"
+		"gear":
+			_spawn_drop("gear", 1, pos, 1)
+			_hint.text = "甲士掉装备——飞进［装备·宝物］"
+		"treasure":
+			_spawn_drop("treasure", 1, pos, 1)
+			_hint.text = "宝箱怪掉宝物——飞进［装备·宝物］"
+
+func _on_boss(tier: int) -> void:
+	_hint.text = ["", "一阶", "二阶", "三阶"][clampi(tier, 1, 3)] + " boss 下场了——打赢有额外名声"
+
+func _on_hero_down() -> void:
+	if _revive > 0:
+		_revive -= 1
+		_grow += 1
+		_field.revive()
+		_sync_battle_stats()
+		_hint.text = "浴血：免死一次（剩 " + str(_revive) + " 次），成长 +1 → " + str(_grow)
+	else:
+		_over = true
+		_hint.text = "免死用尽——你死在了笼子里。结算页第 6 步做。"
 
 # 临时试玩键
 func _input(e: InputEvent) -> void:
@@ -959,7 +1158,8 @@ func _fill_mates(p: Control, y: float, sz: Vector2) -> float:
 #   装备**最多六格**（3×2）· 宝物**不限**（滚动区接着长）· 两颗入口钮：仓库 / 公共仓库
 #   规则（用户）：点击看详情；**长按拿起来**，再点目标格/仓库放下（触屏上的"拖拽"就这么做）
 func _fill_equip(p: Control, y: float, sz: Vector2) -> float:
-	var tabs := ["装备（6 格）", "宝物（不限）"]
+	# v2l（用户拍板）：装备＝**自由六格**（不分部位）
+	var tabs := ["装备（自由 6 格）", "宝物（不限）"]
 	for i in 2:
 		_pbtn(p, tabs[i], Vector2(28.0 + float(i) * 190.0, y), Vector2(178, 60), 23, _equip_tab == i, _set_equip_tab.bind(i))
 	var ly := y + 74.0
@@ -984,7 +1184,7 @@ func _fill_equip(p: Control, y: float, sz: Vector2) -> float:
 	tip.add_theme_font_size_override("font_size", 20)
 	tip.add_theme_color_override("font_color", DIM)
 	tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	tip.text = "点击看详情；长按拿起来，再点目标格或［仓库］放下（装不下的就往仓库塞）。"
+	tip.text = "六格自由摆（不分部位，随便放）。点击看详情；长按拿起来，再点目标格或［仓库］放下。"
 	p.add_child(tip)
 	return ly + 146.0
 
@@ -1199,6 +1399,35 @@ class FieldArt extends Control:
 		draw_line(c + Vector2(0, 6.0 * s), c + Vector2(9.0 * s, 26.0 * s), col, w)
 		# 手上那把：朝上或朝下
 		draw_line(c + Vector2(14.0 * s, -10.0 * s), c + Vector2(20.0 * s, -10.0 * s + d * 42.0 * s), Color(0.85, 0.84, 0.80), w)
+
+# 钱币飞行层（v2m）：把"掉在地上的钱 → 飞向右上文钱"画在所有面板之上
+class CoinLayer extends Control:
+	var host = null
+	func _draw() -> void:
+		if host == null:
+			return
+		for c_v in host._coinfx:
+			var c: Dictionary = c_v
+			var p: Vector2 = c["pos"]
+			var sc := 1.0 if int(c["phase"]) == 0 else 0.85
+			match str(c["kind"]):
+				"crystal":
+					var r := 11.0 * sc
+					var pts := PackedVector2Array([p + Vector2(0, -r), p + Vector2(r * 0.66, 0),
+						p + Vector2(0, r), p + Vector2(-r * 0.66, 0)])
+					draw_colored_polygon(pts, Color(0.42, 0.62, 0.78))
+					draw_polyline(PackedVector2Array([pts[0], pts[1], pts[2], pts[3], pts[0]]), Color(0.20, 0.38, 0.56), 2.5)
+				"gear", "treasure":
+					# 装备/宝物：一只小箱子（宝物描金边）
+					var w2 := 15.0 * sc
+					draw_rect(Rect2(p.x - w2, p.y - w2 * 0.8, w2 * 2.0, w2 * 1.6), Color(0.55, 0.38, 0.22))
+					draw_rect(Rect2(p.x - w2, p.y - w2 * 0.8, w2 * 2.0, w2 * 1.6),
+						Color(0.88, 0.72, 0.30) if str(c["kind"]) == "treasure" else Color(0.34, 0.32, 0.30), false, 2.5)
+				_:
+					# 同一套铜钱画法（外圆内方）
+					draw_circle(p, 10.0 * sc, Color(0.90, 0.74, 0.30))
+					draw_circle(p, 10.0 * sc, Color(0.55, 0.42, 0.15), false, 2.0)
+					draw_rect(Rect2(p.x - 3.2 * sc, p.y - 3.2 * sc, 6.4 * sc, 6.4 * sc), Color(0.55, 0.42, 0.15), false, 2.0)
 
 # 货币/杀敌图标（画出来的：铜钱 · 六棱晶 · 交叉小刀）
 class IconArt extends Control:
