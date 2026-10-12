@@ -56,6 +56,26 @@ var _boss_seq := 0        # v2j：叫过几个 boss
 var _revive := 1          # 浴血：免死次数（战场上真的会倒下）
 # v3a 技能（基础剑法）——见 docs/困兽_技能设计稿.md
 var _skill_pts := 0       # 技能点（每升 1 级 1 点）
+# v5a 主属性（见 docs/困兽_属性设计稿.md）
+#   臂力：气血+生命恢复；身法：攻速+护甲；悟性：内力+内力恢复
+#   主属性（力量/敏捷/悟性）决定"哪一条额外转攻击 / 转元素攻击"
+var _attr := {"arm": 0, "agi": 0, "wit": 0}
+var _attr_pts := 0        # 属性点（每升 1 级 +2）
+var _main_attr := "str"   # str＝力量 · agi＝敏捷 · wit＝悟性
+# v6a 成长继承（用户："成长就是三属性了 根据角色不同特性 三属性成长也不同
+#   【但是继承取最高值 保证稳步提升】"）
+#   —— 三属性＝成长；每位伙伴三属性成长不同；招募时**逐项取最高**，所以只会升不会降。
+var _grow_inherit := {"arm": 0, "agi": 0, "wit": 0}   # 继承到的成长（每项取所有已招募伙伴的最高）
+var _recruit_opens := 0                               # 还有几次招募（每 5 级一次）
+var _recruit_choices: Array = []                      # 本次招募的三个候选
+# v5f：装备/伙伴以后往这里塞这些（现在全是 0，接口先留着）
+var _extra := {
+	"lucky": 0.0,          # 幸运一击（0~3.0，上限 300%）
+	"dmg_all": 0.0,        # 全伤害增加
+	"res_elem": {},        # 各元素抗性 {金系: 0.1, …}
+	"dmg_elem": {},        # 各元素加成
+	"dmg_true": 0.0,       # 加真实伤害（唯一能影响真实伤害的一条）
+}
 var _skill_choices: Array = []
 var _skill_badge: Label = null
 var _partner_lbs: Array = []
@@ -280,6 +300,94 @@ func _build_hero_bar() -> void:
 	_skill_badge.text = ""
 	_mk_btn("装备·宝物 ＋", Vector2(372, 1174), Vector2(336, 74), 26, false, func(): _open_large("装备"))
 
+# ---- 招募页（v6a）：三个候选，选一个把"成长"并进来（逐项取最高）----
+func _fill_recruit(p: Control, y: float, sz: Vector2) -> float:
+	var head := Label.new()
+	head.position = Vector2(28, y)
+	head.size = Vector2(640, 46)
+	head.add_theme_font_size_override("font_size", 26)
+	head.add_theme_color_override("font_color", INK)
+	head.text = "招募机会 " + str(_recruit_opens) + " 次　（成长继承：逐项取最高）"
+	p.add_child(head)
+	var cur := Label.new()
+	cur.position = Vector2(28, y + 50.0)
+	cur.size = Vector2(640, 36)
+	cur.add_theme_font_size_override("font_size", 21)
+	cur.add_theme_color_override("font_color", DIM)
+	cur.text = "当前继承：臂力 " + str(int(_grow_inherit["arm"])) + "　身法 " + str(int(_grow_inherit["agi"]))
+	cur.text += "　悟性 " + str(int(_grow_inherit["wit"]))
+	p.add_child(cur)
+	if _recruit_opens <= 0:
+		var t0 := Label.new()
+		t0.position = Vector2(28, y + 96.0)
+		t0.size = Vector2(640, 60)
+		t0.add_theme_font_size_override("font_size", 22)
+		t0.add_theme_color_override("font_color", DIM)
+		t0.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		t0.text = "现在没有招募机会——每升 5 级给一次。"
+		p.add_child(t0)
+		return y + 170.0
+	if _recruit_choices.is_empty():
+		_recruit_choices = _roll_recruits()
+	var ly := y + 100.0
+	for i in _recruit_choices.size():
+		var pid := str(_recruit_choices[i])
+		var info: Dictionary = _field.PARTNER_INFO[pid]
+		var g: Dictionary = info.get("grow", {})
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.99, 0.97, 0.92)
+		sb.set_corner_radius_all(12)
+		sb.border_color = Color(SEAL.r, SEAL.g, SEAL.b, 0.5)
+		sb.set_border_width_all(2)
+		var box := Panel.new()
+		box.position = Vector2(28, ly)
+		box.size = Vector2(640, 150)
+		box.add_theme_stylebox_override("panel", sb)
+		box.mouse_filter = Control.MOUSE_FILTER_STOP
+		p.add_child(box)
+		var nm := Label.new()
+		nm.position = Vector2(18, 12)
+		nm.size = Vector2(430, 44)
+		nm.add_theme_font_size_override("font_size", 26)
+		nm.add_theme_color_override("font_color", INK)
+		nm.text = str(info["name"]) + "　【" + str(info["quality"]) + "】　" + str(info["skill"])
+		box.add_child(nm)
+		var gl := Label.new()
+		gl.position = Vector2(18, 60)
+		gl.size = Vector2(600, 36)
+		gl.add_theme_font_size_override("font_size", 22)
+		gl.add_theme_color_override("font_color", SEAL)
+		gl.text = "成长：臂力 +" + str(int(g.get("arm", 0))) + "　身法 +" + str(int(g.get("agi", 0)))
+		gl.text += "　悟性 +" + str(int(g.get("wit", 0)))
+		box.add_child(gl)
+		var dl := Label.new()
+		dl.position = Vector2(18, 100)
+		dl.size = Vector2(600, 34)
+		dl.add_theme_font_size_override("font_size", 19)
+		dl.add_theme_color_override("font_color", DIM)
+		dl.text = str(info["desc"]).replace("**", "")
+		box.add_child(dl)
+		_pbtn(box, "招募", Vector2(496, 96), Vector2(126, 44), 22, true, _recruit.bind(pid))
+		ly += 162.0
+	return ly
+
+# 抽三个候选：品质越高越少见（权重：下 30 · 中 25 · 上 20 · 极 15 · 绝 10），不重复
+func _roll_recruits() -> Array:
+	var pool: Array = []
+	for pid in _field.PARTNER_INFO.keys():
+		# v6b：**每种只能选一次**——已经入队的不再出现
+		if bool((_field.partners[pid] as Dictionary)["owned"]):
+			continue
+		var q := str((_field.PARTNER_INFO[pid] as Dictionary)["quality"])
+		var w: int = int({"下品": 30, "中品": 25, "上品": 20, "极品": 15, "绝品": 10}.get(q, 20))
+		for i in w:
+			pool.append(str(pid))
+	var out: Array = []
+	while out.size() < 3 and pool.size() > 0:
+		var pick := str(pool[randi() % pool.size()])
+		if not out.has(pick):
+			out.append(pick)
+	return out
 # ---- 黑市（v4b）：用**杀敌数**换东西（内容暂定，先把入口与账摆上）----
 #   用户：「成就下面增加按钮 黑市【用于杀敌数兑换东西的 内容暂定】」
 const BLACK_GOODS := [
@@ -451,6 +559,10 @@ func _restart_run() -> void:
 	_boss_seq = 0
 	_over = false
 	_field.reset_run()
+	_field.reset_partners()          # v6b：伙伴退回未入队（招募是这一局的事）
+	_grow_inherit = {"arm": 0, "agi": 0, "wit": 0}
+	_recruit_opens = 0
+	_recruit_choices.clear()
 	_sync_battle_stats()
 	_close_popup()
 	_hint.text = "新的一局——预备几秒，怪就压上来了"
@@ -913,15 +1025,30 @@ func _sync_battle_stats() -> void:
 	if _field == null:
 		return
 	_field.setup({
-		"atk": 12.0 + float(_grow) * float(maxi(0, _lv - 1)),
-		"hp_max": 200.0 + float(_grow) * 10.0 * float(maxi(0, _lv - 1)),
-		"mp_max": 300.0 + 25.0 * float(maxi(0, _lv - 1)),      # v4j：够放 300 内力那一发天雷
-		"aspd": 1.0,
+		"atk": _atk(),
+		"hp_max": _hp_max_total(),
+		"mp_max": _mp_max_total(),                             # v4j：够放 300 内力那一发天雷
+		"aspd": _aspd_total(),                                 # v5a：身法给攻速
 		"crit": 0.05,
 		"dodge": 0.05,
-		"cut": 0.10,
+		"cut": minf(0.70, 0.10 + _armor_cut()),                # v5a：护甲转减伤（上限 70%）
 		"dmg_pct": 0.0,
 	})
+	# v5a：回血 / 回蓝 / 元素攻击 这三样直接塞进 hero 字典（战场每帧要用）
+	_field.hero["hp_regen"] = _hp_regen()
+	_field.hero["mp_regen"] = _mp_regen()
+	_field.hero["elem_amp"] = _elem_amp()
+	# v5f：暴击/暴击伤害（无上限）· 幸运一击（上限 300%）· 全伤害增加与减免 · 各元素抗性/加成
+	_field.hero["crit"] = _crit_total()
+	_field.hero["crit_dmg"] = _crit_dmg_total()
+	_field.hero["lucky"] = _lucky()
+	_field.hero["dmg_all"] = _dmg_all()
+	_field.hero["cut_all"] = 0.10                                  # 横练：全伤害减免 10%
+	_field.hero["res_elem"] = _res_elem()
+	_field.hero["dmg_elem"] = _dmg_elem()
+	_field.hero["dmg_true"] = float(_extra.get("dmg_true", 0.0))   # 只有它能加真实伤害
+	# 物理那一路的减伤仍旧走 cut（护甲），元素走 res_elem、真实两边都不吃
+	_field.hero["cut"] = _armor_cut()
 
 func _on_coin(n: int) -> void:
 	_money += n
@@ -1044,6 +1171,10 @@ func _on_kill(_n: int) -> void:
 		_exp -= 1.0
 		_lv += 1
 		_skill_pts += 1                      # v3a：每升 1 级给 1 点技能点
+		_attr_pts += 2                       # v5a：再给 2 点属性点（角色页自己分配）
+		if _lv % 5 == 0:                     # v6a：每 5 级给一次招募（成长继承）
+			_recruit_opens += 1
+			_hint.text = "升级！Lv " + str(_lv) + "　招募 +1（第 " + str(_recruit_opens) + " 次，去角色页点［招募］）"
 		Audio.sfx("levelup", -6.0)
 		_hint.text = "升级！Lv " + str(_lv) + "　技能点 +1（点［技能 ＋］三选一）"
 		_sync_battle_stats()
@@ -1114,7 +1245,7 @@ func _input(e: InputEvent) -> void:
 # 弹窗（两层）
 # ============================================================
 func _is_large(k: String) -> bool:
-	return ["卡组", "技能", "装备", "挑战", "存档", "成就", "角色", "队员", "仓库", "卡牌详情", "局终", "黑市"].has(k)
+	return ["卡组", "技能", "装备", "挑战", "存档", "成就", "角色", "队员", "仓库", "卡牌详情", "局终", "黑市", "招募"].has(k)
 
 func _close_popup() -> void:
 	if _popup != null and is_instance_valid(_popup):
@@ -1241,6 +1372,8 @@ func _fill_popup(p: Control, kind: String, y: float, sz: Vector2) -> float:
 		return _fill_over(p, y, sz)
 	if kind == "黑市":
 		return _fill_black(p, y, sz)
+	if kind == "招募":
+		return _fill_recruit(p, y, sz)
 	if kind == "角色":
 		# 页签点了要**真的换内容**（探针抓到过：只高亮了页签、内容没换）
 		return _fill_mates(p, y, sz) if _role_tab == 1 else _fill_role(p, y, sz)
@@ -1521,16 +1654,99 @@ func _fill_role(p: Control, y: float, sz: Vector2) -> float:
 		_pbtn(p, tabs[i], Vector2(28.0 + float(i) * 130.0, y), Vector2(120, 58), 24, _role_tab == i, _set_role_tab.bind(i))
 	var rows := [
 		["攻击", str(int(_atk())) + "（成长 " + str(_grow) + " → 每级 +" + str(_grow) + "）"],
-		["气血", str(int(_hp_max)) + "（每级 +" + str(_grow * 10) + "）"],
-		["内力", str(int(_mp_max)) + "（每秒回 2）"],
+		["气血", str(int(_hp_max_total())) + "（每级 +" + str(_grow * 10) + "）　回复 "
+			+ str(snappedf(_hp_regen(), 0.1)) + "/秒"],
+		["内力", str(int(_mp_max_total())) + "（回 " + str(snappedf(_mp_regen(), 0.1)) + "/秒）"],
 		["暴击", "12%　暴伤 ×2.0"],
 		["闪避", "8%"],
-		["减伤", "10%（横练）"],
-		["攻速", "1.0 次/秒"],
+		["减伤", str(int((0.10 + _armor_cut()) * 100.0)) + "%（横练 10% ＋ 护甲 " + str(int(_armor_value()))
+			+ " → " + str(snappedf(_armor_cut() * 100.0, 0.1)) + "%）"],
+		["攻速", str(snappedf(_aspd_total(), 0.01)) + " 次/秒（身法加成）"],
 		["等级", "Lv " + str(_lv) + "（经验 " + str(int(_exp * 100.0)) + "%）"],
 		["宠物", "白狐（幼年期）· 全属性 +3%"],
 		["已继承技能", "、".join(PackedStringArray(_skills))],
 	]
+	# ---- v5a 主属性区：三条属性 ＋ 主属性切换 ----
+	var mtip := Label.new()
+	mtip.position = Vector2(28, y + 68.0)
+	mtip.size = Vector2(640, 32)
+	mtip.add_theme_font_size_override("font_size", 21)
+	mtip.add_theme_color_override("font_color", SEAL)
+	mtip.text = "属性点 " + str(_attr_pts) + "　主属性：" + _main_attr_cn() \
+		+ "　继承成长：臂力 " + str(int(_grow_inherit["arm"])) + " / 身法 " + str(int(_grow_inherit["agi"])) \
+		+ " / 悟性 " + str(int(_grow_inherit["wit"]))
+	p.add_child(mtip)
+	var names := ["力量", "敏捷", "悟性"]
+	var ids := ["str", "agi", "wit"]
+	for i in 3:
+		_pbtn(p, names[i], Vector2(28.0 + float(i) * 138.0, y + 104.0), Vector2(126, 56), 22,
+			_main_attr == str(ids[i]), _set_main_attr.bind(str(ids[i])))
+	var arows := [
+		["arm", "臂力", _attr_arm(), "气血 +" + str(int(12.0 * float(_attr_arm()) * _boost_for("arm")))
+			+ "　生命恢复 " + str(snappedf(_hp_regen(), 0.1)) + "/秒"
+			+ ("　（主属性 ×1.5）" if _is_main_line("arm") else "")],
+		["agi", "身法", _attr_agi(), "攻速 +" + str(int(2.0 * float(_attr_agi()) * _boost_for("agi"))) + "%　护甲 "
+			+ str(int(_armor_value())) + "（全局减伤 " + str(snappedf(_armor_cut() * 100.0, 0.1)) + "%）"
+			+ ("　（主属性 ×1.5）" if _is_main_line("agi") else "")],
+		["wit", "悟性", _attr_wit(), "内力 +" + str(int(20.0 * float(_attr_wit()) * _boost_for("wit")))
+			+ "　回蓝 " + str(snappedf(_mp_regen(), 0.1)) + "/秒　元素 +"
+			+ str(snappedf(_elem_amp() * 100.0, 0.1)) + "%"
+			+ ("（主属性 ×1.5）" if _is_main_line("wit") else "")],
+	]
+	var aly := y + 172.0
+	for r_v in arows:
+		var r: Array = r_v
+		var l1 := Label.new()
+		l1.position = Vector2(28, aly)
+		l1.size = Vector2(150, 44)
+		l1.add_theme_font_size_override("font_size", 24)
+		l1.add_theme_color_override("font_color", INK)
+		l1.text = str(r[1]) + " " + str(r[2])
+		p.add_child(l1)
+		var l2 := Label.new()
+		l2.position = Vector2(184, aly + 3.0)
+		l2.size = Vector2(370, 40)
+		l2.add_theme_font_size_override("font_size", 20)
+		l2.add_theme_color_override("font_color", DIM)
+		l2.text = str(r[3])
+		p.add_child(l2)
+		_pbtn(p, "＋", Vector2(500, aly - 4.0), Vector2(76, 52), 26, _attr_pts > 0, _add_attr.bind(str(r[0])))
+		if aly == y + 172.0:
+			_pbtn(p, "招募 " + str(_recruit_opens), Vector2(586, aly - 4.0), Vector2(82, 52), 20,
+				_recruit_opens > 0, func(): _open_large("招募"))
+		aly += 60.0
+	y = aly + 6.0
+	var ly2 := y
+	for r2_v in rows:
+		var r2: Array = r2_v
+		var l3 := Label.new()
+		l3.position = Vector2(28, ly2)
+		l3.size = Vector2(210, 44)
+		l3.add_theme_font_size_override("font_size", 22)
+		l3.add_theme_color_override("font_color", DIM)
+		l3.text = str(r2[0])
+		p.add_child(l3)
+		var l4 := Label.new()
+		l4.position = Vector2(246, ly2)
+		l4.size = Vector2(422, 44)
+		l4.add_theme_font_size_override("font_size", 23)
+		l4.add_theme_color_override("font_color", INK)
+		l4.text = str(r2[1])
+		l4.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		p.add_child(l4)
+		ly2 += 54.0
+	var tip := Label.new()
+	# ⚠ 这行字比框长会被裁（截图抓到过）——给足高度并允许换行
+	tip.position = Vector2(28, ly2 + 8.0)
+	tip.size = Vector2(640, 64)
+	tip.add_theme_font_size_override("font_size", 20)
+	tip.add_theme_color_override("font_color", DIM)
+	tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	tip.text = "主属性＝你主哪条，那条就当攻击（力量/敏捷→攻击 · 悟性→元素），并把它那条的副属性放大 1.5 倍。"
+	p.add_child(tip)
+	return ly2 + 60.0
+	# （旧版属性列表循环已删除——上面那段就是新的）
+func _fill_role_old_tail(rows: Array, y: float, p: Control) -> float:
 	var ly := y + 74.0
 	for r_v in rows:
 		var r: Array = r_v
@@ -1564,8 +1780,142 @@ func _set_role_tab(i: int) -> void:
 	if _popup_kind == "角色":
 		_open_large("角色")
 
+# ---- v5a 三条属性的换算（都在这里，改数只改这一处）----
+# v6a：实际三属性 ＝ 自己加的点 ＋ **继承来的成长**（招募取最高值）
+func _attr_arm() -> int:
+	return int(_attr["arm"]) + int(_grow_inherit["arm"])
+
+func _attr_agi() -> int:
+	return int(_attr["agi"]) + int(_grow_inherit["agi"])
+
+func _attr_wit() -> int:
+	return int(_attr["wit"]) + int(_grow_inherit["wit"])
+
+# 招募：把这位伙伴的三属性成长**逐项取最高**并进来（保证只升不降）
+func _recruit(id: String) -> void:
+	var info: Dictionary = _field.PARTNER_INFO[id]
+	var g: Dictionary = info.get("grow", {})
+	var up: Array = []
+	for k in ["arm", "agi", "wit"]:
+		var v := int(g.get(k, 0))
+		if v > int(_grow_inherit[k]):
+			_grow_inherit[k] = v
+			up.append({"arm": "臂力", "agi": "身法", "wit": "悟性"}[k] + "→" + str(v))
+	_field.partners[id]["owned"] = true
+	_recruit_opens = maxi(0, _recruit_opens - 1)
+	_recruit_choices.clear()
+	_sync_battle_stats()
+	Audio.sfx("levelup", -4.0)
+	_hint.text = "招募了「" + str(info["name"]) + "」" + ("　成长提升：" + "、".join(PackedStringArray(up)) if up.size() > 0 else "　（成长已被更高的顶住，没变）")
+	_open_large("招募")
+
+# 臂力：气血 + 生命恢复；主属性＝力量时再给攻击
+func _hp_max_total() -> float:
+	return 200.0 + float(_grow) * 10.0 * float(maxi(0, _lv - 1)) \
+		+ 12.0 * float(_attr_arm()) * _boost_for("arm")
+
+func _hp_regen() -> float:
+	return 0.4 * float(_attr_arm()) * _boost_for("arm")
+
+# 身法：攻速 + 护甲；主属性＝敏捷时再给攻击
+func _aspd_total() -> float:
+	return 1.0 * (1.0 + 0.02 * float(_attr_agi()) * _boost_for("agi"))
+
+# v5e（用户："护甲是整体百分比减伤 要少给"）：
+#   身法每点 **+1 护甲**（原来 +2），换算也调钝：护甲/(护甲+**120**)（原来 60）
+#   ——6 点身法（敏捷主属性）＝9 护甲 ≈ **7%** 全局减伤（原来 23%，太肥了）
+func _armor_value() -> float:
+	return 1.0 * float(_attr_agi()) * _boost_for("agi")
+
+func _armor_cut() -> float:
+	var ar := _armor_value()
+	return ar / (ar + 120.0)
+
+# 悟性：内力 + 内力恢复；主属性＝悟性时给元素攻击
+func _mp_max_total() -> float:
+	return 300.0 + 25.0 * float(maxi(0, _lv - 1)) + 20.0 * float(_attr_wit()) * _boost_for("wit")
+
+func _mp_regen() -> float:
+	return 10.0 + 1.2 * float(_attr_wit()) * _boost_for("wit")
+
+# v5c（用户："主属性的意思是 玩家主哪个属性就按照哪个主属性作为攻击 主角三属性都有的"）：
+#   主角**三条属性都有**（副属性照常生效）；**主属性**决定"哪条属性当攻击"——
+#   力量→臂力当攻击 · 敏捷→身法当攻击 · 悟性→**元素攻击**当攻击；
+#   三条**折算系数一致**（每点 1.5）。另外悟性**始终**给 +1%/点 元素（v5b）。
+const ATTR_TO_ATK := 1.5
+# v5d（用户："主属性会对副属性有一定增幅"）：
+#   主属性**把它自己那条的副属性也放大**——力量→臂力的气血/回血 ×1.5、
+#   敏捷→身法的攻速/护甲 ×1.5、悟性→悟性的内力/回蓝 ×1.5（另两条不受影响）
+const MAIN_BOOST := 1.5
+
+func _main_line() -> String:
+	return str({"str": "arm", "agi": "agi", "wit": "wit"}.get(_main_attr, "arm"))
+
+func _boost_for(kind: String) -> float:
+	return MAIN_BOOST if kind == _main_line() else 1.0
+
+func _is_main_line(kind: String) -> bool:
+	return kind == _main_line()
+
+func _elem_amp() -> float:
+	var v := 0.01 * float(_attr_wit())          # 悟性本身：每点 +1% 元素
+	if _main_attr == "wit":
+		v += 0.015 * float(_attr_wit())          # 主属性＝悟性：再用"攻击"那一份折算成元素
+	return v
+
 func _atk() -> float:
-	return 12.0 + float(_grow) * float(maxi(0, _lv - 1))
+	var base := 12.0 + float(_grow) * float(maxi(0, _lv - 1))
+	# 主属性是哪条，就用哪条当攻击（系数统一 1.5）；主属性＝悟性时它的"攻击"是元素（见 _elem_amp）
+	match _main_attr:
+		"str":
+			base += ATTR_TO_ATK * float(_attr_arm())
+		"agi":
+			base += ATTR_TO_ATK * float(_attr_agi())
+	return base
+
+# ---- v5f 暴击 / 幸运 / 元素 / 全伤 ----
+#   臂力：每点 +2% 暴击伤害　身法：每点 +0.5% 暴击　悟性：每点 +0.5% 全元素加成
+#   幸运一击、各元素抗性、全伤害增减目前由装备/伙伴给（先给 0，接口留着）
+func _crit_total() -> float:
+	return 0.05 + 0.005 * float(_attr_agi())
+
+func _crit_dmg_total() -> float:
+	return 2.0 + 0.02 * float(_attr_arm())
+
+func _lucky() -> float:
+	return minf(3.0, float(_extra.get("lucky", 0.0)))
+
+func _dmg_all() -> float:
+	return float(_extra.get("dmg_all", 0.0))
+
+func _res_elem() -> Dictionary:
+	return _extra.get("res_elem", {})
+
+func _dmg_elem() -> Dictionary:
+	var d: Dictionary = _extra.get("dmg_elem", {}).duplicate()
+	var bonus := 0.005 * float(_attr_wit())
+	for k in d.keys():
+		d[k] = float(d[k]) + bonus
+	return d
+
+func _main_attr_cn() -> String:
+	return {"str": "力量", "agi": "敏捷", "wit": "悟性"}.get(_main_attr, "力量")
+
+func _add_attr(id: String) -> void:
+	if _attr_pts <= 0:
+		return
+	_attr_pts -= 1
+	_attr[id] = int(_attr[id]) + 1
+	_sync_battle_stats()
+	Audio.sfx("ui_click", -8.0)
+	if _popup_kind == "角色":
+		_open_large("角色")
+
+func _set_main_attr(id: String) -> void:
+	_main_attr = id
+	_sync_battle_stats()
+	if _popup_kind == "角色":
+		_open_large("角色")
 
 # ---- 伙伴页（v4a）：两位伙伴 ＋ 他们的技能与档位 ----
 #   用户在战斗里**自动放**（内力够、不在冷却就放），这一页是看账的地方。
@@ -1573,12 +1923,16 @@ func _fill_mates(p: Control, y: float, sz: Vector2) -> float:
 	var tabs := ["属性", "伙伴"]
 	for i in 2:
 		_pbtn(p, tabs[i], Vector2(28.0 + float(i) * 130.0, y), Vector2(120, 58), 24, _role_tab == i, _set_role_tab.bind(i))
+	var owned_n := 0
+	for pid in _field.partners.keys():
+		if bool((_field.partners[pid] as Dictionary)["owned"]):
+			owned_n += 1
 	var head := Label.new()
 	head.position = Vector2(28, y + 74.0)
 	head.size = Vector2(640, 44)
 	head.add_theme_font_size_override("font_size", 23)
 	head.add_theme_color_override("font_color", INK)
-	head.text = "伙伴 " + str(_field.PARTNER_INFO.size()) + " 名（内力够/到点就自动放；招募与继承第 5 步做）"
+	head.text = "伙伴 " + str(owned_n) + "/" + str(_field.PARTNER_INFO.size()) + " 名入队（每 5 级招募一次 · 每种只能选一次）"
 	p.add_child(head)
 	_partner_lbs.clear()
 	var ly := y + 128.0
@@ -1589,9 +1943,24 @@ func _fill_mates(p: Control, y: float, sz: Vector2) -> float:
 		var sb := StyleBoxFlat.new()
 		sb.bg_color = Color(0.99, 0.97, 0.92)
 		sb.set_corner_radius_all(12)
-		var up := str(info["quality"]) == "上品"
-		sb.border_color = Color(0.52, 0.34, 0.72, 0.8) if up else Color(INK.r, INK.g, INK.b, 0.35)
-		sb.set_border_width_all(3 if up else 2)
+		# v4t：品质一眼分档——绝品（赤金）> 极品（金）> 上品（紫）> 中品（青）> 下品（灰）
+		var qcol := Color(INK.r, INK.g, INK.b, 0.35)
+		var qw := 2
+		match str(info["quality"]):
+			"绝品":
+				qcol = Color(0.86, 0.44, 0.24, 0.9)
+				qw = 3
+			"极品":
+				qcol = Color(0.86, 0.68, 0.26, 0.9)
+				qw = 3
+			"上品":
+				qcol = Color(0.52, 0.34, 0.72, 0.85)
+				qw = 3
+			"中品":
+				qcol = Color(0.30, 0.58, 0.72, 0.8)
+				qw = 2
+		sb.border_color = qcol
+		sb.set_border_width_all(qw)
 		var box := Panel.new()
 		box.position = Vector2(28, ly)
 		box.size = Vector2(640, 210)
@@ -1611,7 +1980,9 @@ func _fill_mates(p: Control, y: float, sz: Vector2) -> float:
 		live.add_theme_font_size_override("font_size", 20)
 		live.add_theme_color_override("font_color", SEAL)
 		live.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-		live.text = ""
+		live.text = ("" if bool((_field.partners[pid] as Dictionary)["owned"]) else "未入队")
+		if not bool((_field.partners[pid] as Dictionary)["owned"]):
+			live.add_theme_color_override("font_color", DIM)
 		box.add_child(live)
 		_partner_lbs.append([pid, live])
 		var st := Label.new()

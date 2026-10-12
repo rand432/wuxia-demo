@@ -27,22 +27,32 @@ const DMG_WATER := "水系"       # v4l 崔三娘·雾海龙王（召唤物的�
 const DMG_EARTH := "土系"       # v4o 法度·怒目金刚（护盾破碎的震荡）
 # 规则（v4j/v4k 统一）：**元素（金/木/火）都不吃兵器防御**，只看对应的抗性（现在默认 0）
 
+# v5f：这一版起，**主角出伤统一走 hero_out_dmg()**（全伤害增加 → 元素加成 → 暴击[仅物理] → 幸运一击），
+#   这里只管"怪那一侧的防御/抗性"——所以两处都不会重复乘，加新技能也不必各自记得加。
 func _apply_dmg(f: Dictionary, amount: float, dtype: String) -> float:
-	var final := amount
+	var o := hero_out_dmg(amount, dtype)
+	var amt := float(o["dmg"])
+	var final := amt
 	if dtype == DMG_PHYS:
-		final = maxf(1.0, amount - float(f["hp_max"]) * 0.02)
+		final = maxf(1.0, amt - float(f["hp_max"]) * 0.02)      # 物理吃怪的"防御"折算
 	elif dtype == DMG_METAL:
-		final = maxf(1.0, amount * (1.0 - float(f.get("res_metal", 0.0))))
+		final = maxf(1.0, amt * (1.0 - float(f.get("res_metal", 0.0))))
 	elif dtype == DMG_WOOD:
-		final = maxf(1.0, amount * (1.0 - float(f.get("res_wood", 0.0))))
+		final = maxf(1.0, amt * (1.0 - float(f.get("res_wood", 0.0))))
 	elif dtype == DMG_FIRE:
-		final = maxf(1.0, amount * (1.0 - float(f.get("res_fire", 0.0))))
+		final = maxf(1.0, amt * (1.0 - float(f.get("res_fire", 0.0))))
 	elif dtype == DMG_WATER:
-		final = maxf(1.0, amount * (1.0 - float(f.get("res_water", 0.0))))
+		final = maxf(1.0, amt * (1.0 - float(f.get("res_water", 0.0))))
 	elif dtype == DMG_EARTH:
-		final = maxf(1.0, amount * (1.0 - float(f.get("res_earth", 0.0))))
+		final = maxf(1.0, amt * (1.0 - float(f.get("res_earth", 0.0))))
+	# 暴击/幸运的飘字标记挂在"这一帧最后一次伤害"上（外层读它来飘字）
+	_last_crit = bool(o["crit"])
+	_last_lucky = bool(o["lucky"])
 	f["hp"] = float(f["hp"]) - final
 	return final
+
+var _last_crit := false
+var _last_lucky := false
 # v2h（用户："打斗的音效和战斗音乐 以及 boss 登场的音乐也得要"）：
 #   全部走工程已有的音频总管 shared/audio.gd（BGM 交叉淡入＋音效一发），
 #   音效库是现成的（hit_slash / hit_heavy / coin / levelup / drum / fall_down…），不新增素材；
@@ -151,6 +161,18 @@ func setup(stats: Dictionary) -> void:
 			hero[str(k)] = stats[k]
 	hero["hp"] = float(hero["hp_max"])
 	_mp_base = float(hero["mp_max"])       # 纳气按"原本内力"的百分比涨，先记下基数
+
+# 重开一局：伙伴全部退回未入队（招募是这一局的事）
+func reset_partners() -> void:
+	for pid in partners.keys():
+		var p: Dictionary = partners[pid]
+		p["owned"] = false
+		p["cd"] = 0.0
+		p["active"] = 0.0
+	_minions.clear()
+	_dg_list.clear()
+	_qi_list.clear()
+	_jg_list.clear()
 
 # 开打：站着等几秒，让怪先走进画面（用户："让主角刚开始等待几秒"）
 func start_run() -> void:
@@ -513,7 +535,8 @@ func _process(delta: float) -> void:
 					_push_float(float((fmin["pos"] as Vector2).x) + 16.0, float((fmin["pos"] as Vector2).y) - 26.0,
 						"-" + str(int(f["atk"])), Color(0.94, 0.66, 0.60))
 					continue
-				var d2 := float(f["atk"])
+				# v5f：怪打主角走 hero_in_dmg()（物理吃护甲＋全减；元素吃抗性不吃护甲；真实不吃）
+				var d2 := hero_in_dmg(float(f["atk"]), DMG_PHYS)
 				if randf() < float(hero["dodge"]):
 					_push_float(size.x * 0.5, size.y - HERO_LINE - 40.0, "闪", Color(0.60, 0.80, 0.90))
 				else:
@@ -748,7 +771,7 @@ const SKILL_POOL := [
 	{"id": "anying_dur", "name": "肝·加持续", "kind": "num", "max": 3, "req_p": "anying",
 		"desc": "持续 +2 秒（现 <DUR> 秒）【内力消耗 +20/层】", "anim": "身上那层紫光留得久"},
 	{"id": "anying_hp", "name": "肝·杀敌生命", "kind": "num", "max": 3, "req_p": "anying",
-		"desc": "持续期间杀敌生命上限 +1（现 +<KH>）【内力消耗 +20/层】", "anim": "每杀一只飘绿字"},
+		"desc": "持续期间杀敌生命上限 +0.5（现 +<KH>）【内力消耗 +20/层】", "anim": "每杀一只飘绿字"},
 	{"id": "anying_cost", "name": "肝·减内力", "kind": "num", "max": 3, "req_p": "anying",
 		"desc": "内力消耗 −15（现 <MP>，效果不变）", "anim": "紫光不变，只是更省"},
 	{"id": "chenshi_cd", "name": "刺骨·减冷却", "kind": "num", "max": 3, "req_p": "chenshi",
@@ -756,7 +779,7 @@ const SKILL_POOL := [
 	{"id": "chenshi_dur", "name": "刺骨·加持续", "kind": "num", "max": 3, "req_p": "chenshi",
 		"desc": "持续 +2 秒（现 <DUR> 秒）【内力消耗 +20/层】", "anim": "反伤窗口更长"},
 	{"id": "chenshi_dmg", "name": "刺骨·加反伤", "kind": "num", "max": 3, "req_p": "chenshi",
-		"desc": "反伤 +0.5% 生命上限（现 <TH>%）【内力消耗 +20/层】", "anim": "反伤数字更大"},
+		"desc": "反伤 +0.5% 生命上限（现 <TH>%，中品基础 2.5%）【内力消耗 +20/层】", "anim": "反伤数字更大"},
 	{"id": "chenshi_tgt", "name": "刺骨·反伤敌人", "kind": "num", "max": 3, "req_p": "chenshi",
 		"desc": "反伤敌人 +1（现 <TG> 名）【内力消耗 +20/层】", "anim": "一次弹向多个敌人"},
 	{"id": "chenshi_cost", "name": "刺骨·减内力", "kind": "num", "max": 3, "req_p": "chenshi",
@@ -1113,7 +1136,8 @@ func _draw_qi() -> void:
 # ============================================================
 # 伙伴（v4a）—— 见 docs/困兽_伙伴设计稿.md
 #   用户口径：
-#     暗影裁决【上品】技能「肝」：持续时间内杀敌，生命值上限 +2；耗内力 100 · 持续 5s · 冷却 20s
+#     暗影裁决【下品】技能「肝」：持续时间内杀敌，生命值上限 +1（每层 +0.5）；
+#       耗内力 100 · 持续 5s · 冷却 25s（v4s 按用户要求降品削弱）
 #       可选：-冷却【提升内力消耗】/ +持续【提升内力消耗】/ +杀敌生命【提升内力消耗】/ -内力消耗
 #     陈石【下品】技能「刺骨」：持续时间内被攻击时，对攻击自己的一名敌人造成生命值 2% 的真实伤害；
 #       耗内力 100 · 持续 8s · 冷却 20s
@@ -1121,9 +1145,9 @@ func _draw_qi() -> void:
 #   规则：**内力够了且不在冷却就自动放**（战斗是自动打的）；"提升内力消耗"是这些强化项自带的代价。
 # ============================================================
 var partners := {
-	"anying": {"owned": true, "mp": 0.0, "cd": 0.0, "active": 0.0,
+	"anying": {"owned": false, "mp": 0.0, "cd": 0.0, "active": 0.0,
 		"cd_lv": 0, "dur_lv": 0, "hp_lv": 0, "cost_lv": 0},
-	"chenshi": {"owned": true, "mp": 0.0, "cd": 0.0, "active": 0.0,
+	"chenshi": {"owned": false, "mp": 0.0, "cd": 0.0, "active": 0.0,
 		"cd_lv": 0, "dur_lv": 0, "dmg_lv": 0, "tgt_lv": 0, "cost_lv": 0},
 	# v4f（用户）：苏青鸾【极品】技能「飞匕」——**每隔 8 秒生成一个匕首，命中最近的敌人**
 	#   可选：+穿透 / +飞匕伤害 / +弹射【弹射独立伤害】/ +多重【多重独立伤害】/ +弹射伤害 / +弹射独立伤害 / -秒数
@@ -1133,61 +1157,64 @@ var partners := {
 	# v4j（用户）：张道陵【绝品】技能「天雷道术」——范围金系伤害，耗 300 内力、冷却 10s
 	# v4l（用户）崔三娘【绝品】雾海龙王：召唤蛟龙为你作战（继承主角 25% 属性、**可多招**），
 	#   蛟龙会普攻，还带自己的技能「大浪拍击」（水系、冷却 20s）；耗 500 内力、冷却 60s
-	"cuisanniang": {"owned": true, "mp": 0.0, "cd": 6.0, "active": 0.0,
+	"cuisanniang": {"owned": false, "mp": 0.0, "cd": 6.0, "active": 0.0,
 		"inherit_lv": 0, "skill_lv": 0, "radius_lv": 0, "cost_lv": 0, "cd_lv": 0, "life_lv": 0},
 	# v4n（用户："杀敌+攻击的 和杀敌加内力的 下品 和暗影裁决几乎雷同 你帮我想 同样要特效"）
 	#   两位下品，跟暗影裁决一个骨架（持续窗口内杀敌涨属性），但**更弱**、**特效各不同**：
 	#   独眼彪「杀气」＝杀敌涨**攻击**（赤红杀气）；枯荣「纳气」＝杀敌涨**内力上限**（琥珀气丝往身上收）
 	# v4o 法度【中品】怒目金刚：护盾 ＋ 破盾土系范围伤害 ＋ 每降 10% 出一段
-	"fadu": {"owned": true, "mp": 0.0, "cd": 0.0, "active": 0.0,
+	"fadu": {"owned": false, "mp": 0.0, "cd": 0.0, "active": 0.0,
 		"shield_lv": 0, "break_lv": 0, "dur_lv": 0, "cd_lv": 0, "cost_lv": 0, "step_lv": 0, "range_lv": 0},
-	"duyanbiao": {"owned": true, "mp": 0.0, "cd": 0.0, "active": 0.0,
+	"duyanbiao": {"owned": false, "mp": 0.0, "cd": 0.0, "active": 0.0,
 		"cd_lv": 0, "dur_lv": 0, "atk_lv": 0, "cost_lv": 0},
-	"kurong": {"owned": true, "mp": 0.0, "cd": 0.0, "active": 0.0,
+	"kurong": {"owned": false, "mp": 0.0, "cd": 0.0, "active": 0.0,
 		"cd_lv": 0, "dur_lv": 0, "mp_lv": 0, "cost_lv": 0},
 	# v4k 柳卿卿【上品】回春：治疗自己 ＋ 让最近一名敌人中毒（木系持续伤害）
-	"liuqingqing": {"owned": true, "mp": 0.0, "cd": 2.0, "active": 0.0,
+	"liuqingqing": {"owned": false, "mp": 0.0, "cd": 2.0, "active": 0.0,
 		"heal_lv": 0, "poison_lv": 0, "pdur_lv": 0, "spread_lv": 0, "cd_lv": 0, "cost_lv": 0},
 	# v4k 季沧海【极品】怒火焚身：每 3 秒烧最近一名敌人（火系），**传火**会引燃它身边一名
-	"jicanghai": {"owned": true, "mp": 0.0, "cd": 2.0, "active": 0.0,
+	"jicanghai": {"owned": false, "mp": 0.0, "cd": 2.0, "active": 0.0,
 		"dmg_lv": 0, "spread_lv": 0, "burn_lv": 0, "sec_lv": 0},
-	"zhangdaoling": {"owned": true, "mp": 0.0, "cd": 3.0, "active": 0.0,
+	"zhangdaoling": {"owned": false, "mp": 0.0, "cd": 3.0, "active": 0.0,
 		"dmg_lv": 0, "range_lv": 0, "para_lv": 0, "paradur_lv": 0,
 		"cost_lv": 0, "cd_lv": 0, "multi_lv": 0, "multidmg_lv": 0},
-	"suqingluan": {"owned": true, "mp": 0.0, "cd": 4.0, "active": 0.0,
+	"suqingluan": {"owned": false, "mp": 0.0, "cd": 4.0, "active": 0.0,
 		"pierce_lv": 0, "dmg_lv": 0, "bounce_lv": 0, "multi_lv": 0,
 		"bdmg_lv": 0, "mdmg_lv": 0, "sec_lv": 0},
 }
 var _dg_list: Array = []            # 飞匕：{pos, dir, tgt, dmg, pierce, bounce, hits, t}
 const PARTNER_INFO := {
-	"anying": {"name": "暗影裁决", "quality": "上品", "skill": "肝", "dtype": "无伤害",
-		"desc": "持续时间内杀敌，生命值上限 +2（每层 +1）",
-		"mp0": 100.0, "cd0": 20.0, "dur0": 5.0},
-	"chenshi": {"name": "陈石", "quality": "下品", "skill": "刺骨", "dtype": "真实",
-		"desc": "持续时间内被攻击时，对攻击自己的一名敌人造成生命值 2% 的真实伤害",
-		"mp0": 100.0, "cd0": 20.0, "dur0": 8.0},
-	"fadu": {"name": "法度", "quality": "中品", "skill": "怒目金刚", "dtype": "土系（护盾）",
+	# v4s（用户："暗影调整为下品 适当削弱"）：品质降到**下品**，并跟另两位下品（杀气/纳气）对齐——
+	#   冷却 20 → **25 秒**；杀敌生命 +2 → **+1**（每层 +0.5）
+	"anying": {"name": "暗影裁决", "quality": "下品", "skill": "肝", "dtype": "无伤害", "grow": {"arm": 2, "agi": 1, "wit": 1},
+		"desc": "持续时间内杀敌，生命值上限 +1（每层 +0.5）",
+		"mp0": 100.0, "cd0": 25.0, "dur0": 5.0},
+	# v4t（用户："陈石改为中 略微加强"）：下品 → **中品**；反伤 2% → **2.5%**、冷却 20 → **17 秒**、持续 8 → **9 秒**
+	"chenshi": {"name": "陈石", "quality": "中品", "skill": "刺骨", "dtype": "真实", "grow": {"arm": 3, "agi": 1, "wit": 0},
+		"desc": "持续时间内被攻击时，对攻击自己的一名敌人造成生命值 2.5% 的真实伤害（无视防御）",
+		"mp0": 100.0, "cd0": 17.0, "dur0": 9.0},
+	"fadu": {"name": "法度", "quality": "中品", "skill": "怒目金刚", "dtype": "土系（护盾）", "grow": {"arm": 2, "agi": 2, "wit": 1},
 		"desc": "给自己套一层护盾（先扣盾再扣血）；护盾被击破时，对周围造成等于护盾值的土系范围伤害",
 		"mp0": 150.0, "cd0": 20.0, "dur0": 8.0},
-	"duyanbiao": {"name": "独眼彪", "quality": "下品", "skill": "杀气", "dtype": "无伤害",
+	"duyanbiao": {"name": "独眼彪", "quality": "下品", "skill": "杀气", "dtype": "无伤害", "grow": {"arm": 3, "agi": 2, "wit": 0},
 		"desc": "持续时间内每杀一名敌人，攻击 +1（每层强化再 +0.5）——一生二、二生三的滚雪球",
 		"mp0": 100.0, "cd0": 25.0, "dur0": 5.0},
-	"kurong": {"name": "枯荣", "quality": "下品", "skill": "纳气", "dtype": "无伤害",
+	"kurong": {"name": "枯荣", "quality": "下品", "skill": "纳气", "dtype": "无伤害", "grow": {"arm": 1, "agi": 1, "wit": 3},
 		"desc": "持续时间内每杀一名敌人，内力上限 +3（并回同样多内力）——越打越能放法术",
 		"mp0": 100.0, "cd0": 25.0, "dur0": 5.0},
-	"cuisanniang": {"name": "崔三娘", "quality": "绝品", "skill": "雾海龙王", "dtype": "召唤 · 水系",
+	"cuisanniang": {"name": "崔三娘", "quality": "绝品", "skill": "雾海龙王", "dtype": "召唤 · 水系", "grow": {"arm": 2, "agi": 1, "wit": 4},
 		"desc": "召唤一条蛟龙替你作战（继承主角 25% 属性，可多招）；蛟龙会自行普攻，并带技能「大浪拍击」（水系）",
 		"mp0": 500.0, "cd0": 60.0, "dur0": 0.0},
-	"liuqingqing": {"name": "柳卿卿", "quality": "上品", "skill": "回春", "dtype": "治疗 + 木系",
+	"liuqingqing": {"name": "柳卿卿", "quality": "上品", "skill": "回春", "dtype": "治疗 + 木系", "grow": {"arm": 1, "agi": 1, "wit": 3},
 		"desc": "治疗自己（回生命上限的一部分），同时让最近的敌人中毒——木系持续伤害，每秒跳一次",
 		"mp0": 120.0, "cd0": 12.0, "dur0": 0.0},
-	"jicanghai": {"name": "季沧海", "quality": "极品", "skill": "怒火焚身", "dtype": "火系",
+	"jicanghai": {"name": "季沧海", "quality": "极品", "skill": "怒火焚身", "dtype": "火系", "grow": {"arm": 2, "agi": 2, "wit": 3},
 		"desc": "每 3 秒烧最近一名敌人（火系）；传火：会引燃它身边范围内的另一名敌人",
 		"mp0": 0.0, "cd0": 3.0, "dur0": 0.0},
-	"zhangdaoling": {"name": "张道陵", "quality": "绝品", "skill": "天雷道术", "dtype": "金系",
+	"zhangdaoling": {"name": "张道陵", "quality": "绝品", "skill": "天雷道术", "dtype": "金系", "grow": {"arm": 0, "agi": 2, "wit": 5},
 		"desc": "落下一道天雷，砸在最近的敌人身上，**两个人身位**内的敌人一起吃金系伤害；有几率麻痹",
 		"mp0": 300.0, "cd0": 10.0, "dur0": 0.0},
-	"suqingluan": {"name": "苏青鸾", "quality": "极品", "skill": "飞匕", "dtype": "物理",
+	"suqingluan": {"name": "苏青鸾", "quality": "极品", "skill": "飞匕", "dtype": "物理", "grow": {"arm": 1, "agi": 4, "wit": 1},
 		"desc": "每隔 8 秒生成一枚飞匕，命中最近的敌人。飞匕/弹射/多重都是物理伤害，只是倍率各算各的（都吃防御）",
 		"mp0": 0.0, "cd0": 8.0, "dur0": 0.0},
 }
@@ -1222,11 +1249,11 @@ func p_dur(id: String) -> float:
 	var lv := float((partners[id] as Dictionary).get("dur_lv", 0))
 	return float(PARTNER_INFO[id]["dur0"]) + 2.0 * lv
 
-func p_kill_hp() -> float:                 # 肝：杀敌给的生命上限
-	return 2.0 + 1.0 * float(partners["anying"]["hp_lv"])
+func p_kill_hp() -> float:                 # 肝：杀敌给的生命上限（下品削弱：2 → 1，每层 +0.5）
+	return 1.0 + 0.5 * float(partners["anying"]["hp_lv"])
 
-func p_thorns() -> float:                  # 刺骨：反伤（占生命上限的比例）
-	return 0.02 + 0.005 * float(partners["chenshi"]["dmg_lv"])
+func p_thorns() -> float:                  # 刺骨：反伤（占生命上限的比例）——v4t 中品：2% → 2.5%
+	return 0.025 + 0.005 * float(partners["chenshi"]["dmg_lv"])
 
 func p_thorn_targets() -> int:
 	return 1 + int(partners["chenshi"]["tgt_lv"])
@@ -1871,7 +1898,13 @@ func _draw_daggers(shk: Vector2) -> void:
 
 # 每帧：内力回复 ＋ 伙伴技能的冷却/持续/自动释放
 func _update_partners(delta: float) -> void:
-	hero["mp"] = minf(float(hero["mp_max"]), float(hero["mp"]) + MP_REGEN * delta)
+	# v5a 主属性：回蓝吃 hero["mp_regen"]（悟性给的），缺省才用常量
+	hero["mp"] = minf(float(hero["mp_max"]),
+		float(hero["mp"]) + float(hero.get("mp_regen", MP_REGEN)) * delta)
+	# 臂力的"生命恢复"：每秒回一点血
+	var hpr := float(hero.get("hp_regen", 0.0))
+	if hpr > 0.0:
+		hero["hp"] = minf(float(hero["hp_max"]), float(hero["hp"]) + hpr * delta)
 	for id in partners.keys():
 		var p: Dictionary = partners[id]
 		if not bool(p["owned"]):
@@ -2088,6 +2121,48 @@ func _draw_partner_fx(shk: Vector2) -> void:
 		var mid := (a3 + b3) * 0.5 + (b3 - a3).orthogonal().normalized() * 14.0
 		draw_line(a3 + shk, mid + shk, Color(0.94, 0.52, 0.78, la), 4.0)
 		draw_line(mid + shk, b3 + shk, Color(0.98, 0.78, 0.90, la), 3.0)
+# ============================================================
+# v5f 伤害管线（用户：暴击/暴击伤害无上限 · 元素**不吃暴击也不吃护甲减伤** ·
+#   幸运一击上限 300% · 各元素抗性与元素加成 · 全伤害增加与减免）
+#   出伤：全伤害增加 → 元素加成（仅元素）→ 暴击（**仅物理**，无上限）→ 幸运一击（上限 300%）
+#   受伤：物理吃（护甲＋全减）· 元素吃（该元素抗性＋全减，**不吃护甲**）· 真实什么都不吃
+# ============================================================
+const LUCKY_CAP := 3.0            # 幸运一击上限 300%
+const ELEMS := ["金系", "木系", "火系", "水系", "土系"]
+
+# 出伤：把主角这一下的伤害算全（返回 Dictionary：{dmg, crit, lucky}）
+func hero_out_dmg(base: float, dtype: String) -> Dictionary:
+	# v5g（用户："真实伤害 不吃增幅 不吃抗性 除了加真实伤害的"）：
+	#   真实伤害**只吃"加真实伤害"这一条**——全伤/元素/暴击/幸运/抗性全都不参与
+	if dtype == DMG_TRUE:
+		return {"dmg": base * (1.0 + float(hero.get("dmg_true", 0.0))), "crit": false, "lucky": false}
+	var d := base * (1.0 + float(hero.get("dmg_all", 0.0)))       # 全伤害增加
+	if dtype != DMG_PHYS and dtype != DMG_TRUE:
+		d *= 1.0 + float(hero.get("elem_amp", 0.0))                # 悟性给的元素攻击
+		d *= 1.0 + float((hero.get("dmg_elem", {}) as Dictionary).get(dtype, 0.0))   # 该元素加成
+	var crit := false
+	if dtype == DMG_PHYS:                                          # **元素与真实不暴击**
+		crit = randf() < float(hero.get("crit", 0.05))
+		if crit:
+			d *= float(hero.get("crit_dmg", 2.0))                  # 暴击伤害（无上限）
+	var lucky := false
+	var lk := minf(LUCKY_CAP, float(hero.get("lucky", 0.0)))
+	if lk > 0.0 and randf() < lk / 3.0:                            # 概率＝幸运/3（满 300% 必触发）
+		lucky = true
+		d *= 1.0 + lk
+	return {"dmg": d, "crit": crit, "lucky": lucky}
+
+# 受伤：主角挨打时按类型减（物理吃护甲；元素吃抗性不吃护甲；真实不吃）
+func hero_in_dmg(amount: float, dtype: String) -> float:
+	if dtype == DMG_TRUE:
+		return amount
+	var cut := float(hero.get("cut_all", 0.0))                     # 全伤害减免（含横练）
+	if dtype == DMG_PHYS:
+		cut += float(hero.get("cut", 0.0))                         # 护甲只减物理
+	else:
+		cut += float((hero.get("res_elem", {}) as Dictionary).get(dtype, 0.0))
+	return maxf(0.0, amount * (1.0 - minf(0.90, cut)))
+
 # ============================================================
 # 画：主角在下（武器朝上）· 怪在上（武器朝下）
 # ============================================================
