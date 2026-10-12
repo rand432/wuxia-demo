@@ -68,6 +68,7 @@ var _main_attr := "str"   # str＝力量 · agi＝敏捷 · wit＝悟性
 var _grow_inherit := {"arm": 0, "agi": 0, "wit": 0}   # 继承到的成长（每项取所有已招募伙伴的最高）
 var _recruit_opens := 0                               # 还有几次招募（每 5 级一次）
 var _recruit_choices: Array = []                      # 本次招募的三个候选
+var _draw_choices: Array = []                         # v8a：抽卡的三张候选
 # v7a 卡牌状态
 var _deck_cards: Array = []                           # 十格里的卡（id；空位用 ""）
 var _card_star := {}                                  # id → 星级（1~5）
@@ -667,6 +668,111 @@ func card_prop(id: String) -> String:
 	var part := int(sp[1]) if sp.size() > 1 else 0
 	var arr: Array = CARD_PARTS.get(set_id, [])
 	return str(arr[part]) if part < arr.size() else "—"
+# ---- v8a 抽卡本体（用户：20 灵晶三选一 ＋ 重抽 5 灵晶）----
+const DRAW_COST := 20
+const REROLL_ONE := 5
+const REFRESH_ALL := 5
+const QUALITY_WEIGHT := {"下品": 30, "中品": 25, "上品": 20, "极品": 15, "绝品": 10}
+
+# 候选池：还没拿到、且这套没成型的卡（每张卡只能"拿一次"；成型后整套出池）
+func _card_pool_available() -> Array:
+	var out: Array = []
+	for s_v in CARD_SETS:
+		var s: Dictionary = s_v
+		var set_id := str(s["set"])
+		if bool(_sets_done.get(set_id, false)):
+			continue
+		var w: int = int(QUALITY_WEIGHT.get(str(s["quality"]), 20))
+		for i in int(s["size"]):
+			var cid := card_id(set_id, i)
+			if _card_have.has(cid):
+				continue
+			for k in w:
+				out.append(cid)
+	return out
+
+func _roll_cards() -> Array:
+	var pool := _card_pool_available()
+	var out: Array = []
+	var guard := 0
+	while out.size() < 3 and pool.size() > 0 and guard < 400:
+		guard += 1
+		var pick := str(pool[randi() % pool.size()])
+		if not out.has(pick):
+			out.append(pick)
+	return out
+
+# 抽一张（花 20 灵晶）；十格满了会先弹卡组页让你腾位置
+func _draw_card(id: String) -> void:
+	if int(_crystal) < DRAW_COST:
+		_hint.text = "灵晶不够（要 " + str(DRAW_COST) + "，现有 " + str(int(_crystal)) + "）"
+		return
+	_crystal -= DRAW_COST
+	_card_gain(id)
+	_draw_choices.clear()
+	Audio.sfx("paper", -6.0)
+	_hint.text = "抽到「" + card_name(id) + "」： " + card_prop(id)
+	if _popup_kind == "抽卡":
+		_open_large("抽卡")
+
+func _reroll_one(idx: int) -> void:
+	if int(_crystal) < REROLL_ONE:
+		_hint.text = "重抽要 " + str(REROLL_ONE) + " 灵晶"
+		return
+	_crystal -= REROLL_ONE
+	var fresh := _roll_cards()
+	for cid in fresh:
+		if not _draw_choices.has(cid):
+			_draw_choices[idx] = cid
+			break
+	Audio.sfx("ui_click", -8.0)
+	_open_large("抽卡")
+
+func _refresh_all() -> void:
+	if int(_crystal) < REFRESH_ALL:
+		_hint.text = "刷新要 " + str(REFRESH_ALL) + " 灵晶"
+		return
+	_crystal -= REFRESH_ALL
+	_draw_choices = _roll_cards()
+	Audio.sfx("ui_click", -8.0)
+	_open_large("抽卡")
+
+# 三选一页：三张大卡面（大的先做"信息区"，插画下一轮补）
+func _fill_draw(p: Control, y: float, sz: Vector2) -> float:
+	var head := Label.new()
+	head.position = Vector2(24, y)
+	head.size = Vector2(660, 44)
+	head.add_theme_font_size_override("font_size", 24)
+	head.add_theme_color_override("font_color", INK)
+	head.text = "抽卡　" + str(DRAW_COST) + " 灵晶　现有 " + str(int(_crystal)) + " 灵晶"
+	p.add_child(head)
+	var tip := Label.new()
+	tip.position = Vector2(24, y + 46.0)
+	tip.size = Vector2(660, 36)
+	tip.add_theme_font_size_override("font_size", 19)
+	tip.add_theme_color_override("font_color", DIM)
+	tip.text = "三选一 · 单张重抽 " + str(REROLL_ONE) + " · 全刷新 " + str(REFRESH_ALL) + " · 每张卡一局只能拿一次"
+	p.add_child(tip)
+	if _draw_choices.is_empty():
+		_draw_choices = _roll_cards()
+	var cw := 204.0
+	var ly := y + 92.0
+	for i in _draw_choices.size():
+		var cid := str(_draw_choices[i])
+		var x := 24.0 + float(i) * (cw + 12.0)
+		_card_face(p, Vector2(x, ly), Vector2(cw, 168), cid)
+		_pbtn(p, "选它 " + str(DRAW_COST), Vector2(x, ly + 176.0), Vector2(cw, 60), 21, int(_crystal) >= DRAW_COST, _draw_card.bind(cid))
+		_pbtn(p, "重抽 " + str(REROLL_ONE), Vector2(x, ly + 242.0), Vector2(cw, 48), 19, int(_crystal) >= REROLL_ONE, _reroll_one.bind(i))
+	ly += 306.0
+	_pbtn(p, "全部刷新 " + str(REFRESH_ALL), Vector2(24, ly), Vector2(220, 64), 22, int(_crystal) >= REFRESH_ALL, _refresh_all)
+	var done := Label.new()
+	done.position = Vector2(260, ly + 14.0)
+	done.size = Vector2(420, 40)
+	done.add_theme_font_size_override("font_size", 19)
+	done.add_theme_color_override("font_color", DIM)
+	done.text = "已拿到 " + str(_card_have.size()) + " / " + str(card_pool_size()) + " 张"
+	p.add_child(done)
+	return ly + 84.0
 # ---- v7a 卡面（单卡属性 ＋ 组合栏 ＋ 进度条）----
 func _card_face(p: Control, pos: Vector2, sz: Vector2, id: String) -> void:
 	var sb := StyleBoxFlat.new()
@@ -1965,49 +2071,7 @@ func _slot_box(p: Control, pos: Vector2, sz: Vector2, idx: int) -> void:
 	# 点击＝选中；**长按＝看这张卡的全部效果**（用户："长按可显示卡牌的全部效果"）
 	_press_btn(pp, Vector2(0, 0), sz, _card_press.bind(idx), _card_long.bind(idx))
 
-# ---- 抽卡页：三张候选（大格子） ----
-func _fill_draw(p: Control, y: float, sz: Vector2) -> float:
-	var head := Label.new()
-	head.position = Vector2(28, y)
-	head.size = Vector2(sz.x - 56, 40)
-	head.add_theme_font_size_override("font_size", 25)
-	head.add_theme_color_override("font_color", INK)
-	head.text = "抽卡 · 20 灵晶（现有 " + str(_crystal) + "）——十格满时会先进「替换」模式"
-	p.add_child(head)
-	var opts := ["凝神 1★", "疾风诀 1★", "破罡 1★"]
-	for i in 3:
-		var x := 28.0 + float(i) * 218.0
-		var sb := StyleBoxFlat.new()
-		sb.bg_color = Color(0.99, 0.97, 0.92)
-		sb.set_corner_radius_all(12)
-		sb.border_color = Color(SEAL.r, SEAL.g, SEAL.b, 0.45)
-		sb.set_border_width_all(2)
-		var pp := Panel.new()
-		pp.position = Vector2(x, y + 58.0)
-		pp.size = Vector2(206, 150)
-		pp.add_theme_stylebox_override("panel", sb)
-		pp.mouse_filter = Control.MOUSE_FILTER_STOP
-		p.add_child(pp)
-		var l := Label.new()
-		l.position = Vector2(10, 30)
-		l.size = Vector2(186, 44)
-		l.add_theme_font_size_override("font_size", 26)
-		l.add_theme_color_override("font_color", INK)
-		l.text = opts[i]
-		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		pp.add_child(l)
-		# ⚠ 门派那行原来落在 86..138、按钮 104..144——两行叠着（探针截图看出来的），往下挪开
-		var l2 := Label.new()
-		l2.position = Vector2(10, 74)
-		l2.size = Vector2(186, 30)
-		l2.add_theme_font_size_override("font_size", 20)
-		l2.add_theme_color_override("font_color", DIM)
-		l2.text = "技能流"
-		l2.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		pp.add_child(l2)
-		_pbtn(pp, "选它", Vector2(53, 106), Vector2(100, 38), 20, true, func(): pass)
-	return y + 226.0
-
+# ---- 通用小按钮 / 状态带刷新（⚠ 上一版误删过这两个，别再删）----
 func _pbtn(parent: Node, txt: String, pos: Vector2, sz: Vector2, fs: int, seal: bool, cb: Callable) -> Button:
 	var b := Button.new()
 	b.text = txt
@@ -2020,6 +2084,7 @@ func _pbtn(parent: Node, txt: String, pos: Vector2, sz: Vector2, fs: int, seal: 
 	b.add_theme_stylebox_override("hover", _flat(c.lightened(0.12)))
 	b.add_theme_stylebox_override("pressed", _flat(c.darkened(0.15)))
 	b.add_theme_color_override("font_color", Color(0.97, 0.94, 0.88))
+	b.add_theme_stylebox_override("focus", _flat(Color(0, 0, 0, 0)))
 	b.pressed.connect(cb)
 	parent.add_child(b)
 	return b
@@ -2027,7 +2092,7 @@ func _pbtn(parent: Node, txt: String, pos: Vector2, sz: Vector2, fs: int, seal: 
 func _refresh_band() -> void:
 	if _band == null:
 		return
-	_band.text = "波 " + str(_wave) + "/" + str(_wave_max) + "　❤ " + str(int(_hp)) + "/" + str(int(_hp_max)) + "　内力 " + str(int(_mp)) + "/" + str(int(_mp_max))
+	_band.text = "波 " + str(_wave) + "/" + str(_wave_max) + "　❤ " + str(int(_hp)) + "/" + str(int(_hp_max)) + "　内力 " + str(int(_mp)) + "/" + str(int(_mp_max)) + "　内力 " + str(int(_mp)) + "/" + str(int(_mp_max))
 
 
 # ---- 角色页：详细属性 ＋ 一颗［队员］钮 ----
