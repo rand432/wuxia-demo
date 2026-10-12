@@ -68,6 +68,116 @@ var _main_attr := "str"   # str＝力量 · agi＝敏捷 · wit＝悟性
 var _grow_inherit := {"arm": 0, "agi": 0, "wit": 0}   # 继承到的成长（每项取所有已招募伙伴的最高）
 var _recruit_opens := 0                               # 还有几次招募（每 5 级一次）
 var _recruit_choices: Array = []                      # 本次招募的三个候选
+# v7a 卡牌状态
+var _deck_cards: Array = []                           # 十格里的卡（id；空位用 ""）
+var _card_star := {}                                  # id → 星级（1~5）
+var _card_have := {}                                  # id → 已拥有张数（升星用）
+var _sets_done := {}                                  # 已凑齐的套（set_id → true）
+# v7b：三条成长线的"杀敌涨属性"（小数先存着，攒够 1 点进 _grow_card）
+var _grow_kill := {"arm": 0.0, "agi": 0.0, "wit": 0.0}
+var _grow_card := {"arm": 0, "agi": 0, "wit": 0}
+const STAR_COST := [2, 3, 5, 5]                       # 默认：1★→2★ … 4★→5★ 各吃几张同名卡
+# v7e（用户："还有那种六合一 八合一的也可以出"）：**升星成本按套可配**——
+#   便宜线走 2/3/5/5；重卡（聚宝/同心/招怪这类）走 3/6/8/8，越重越难成型但收益也大。
+const STAR_COST_HEAVY := [3, 6, 8, 8]
+
+# 卡池总数（用户："暂定50张"）——用来在抽卡页与文档里对账
+func card_pool_size() -> int:
+	var n := 0
+	for s_v in CARD_SETS:
+		n += int((s_v as Dictionary)["size"])
+	return n
+
+func card_star_cost(id: String, star: int) -> int:
+	var s := card_set_of(id)
+	var arr: Array = s.get("star_cost", STAR_COST)
+	var i := clampi(star - 1, 0, arr.size() - 1)
+	return int(arr[i])
+
+# 把一张卡塞进十格（有位置就进；满了返回 false，由界面去问"换哪张"）
+func _card_into_deck(id: String) -> bool:
+	if _deck_cards.has(id):
+		return true
+	for i in 10:
+		if i >= _deck_cards.size():
+			_deck_cards.append(id)
+			return true
+		if str(_deck_cards[i]) == "":
+			_deck_cards[i] = id
+			return true
+	return false
+
+# v7f（用户："不要升星"）：**撤掉吞噬升星**——卡只有两条成长线：
+#   ①组合成套（凑齐给效果＋腾格）  ②进化/突破（下一形态直接替换原来那一张）
+#   重复抽到的卡不再升星，直接**回收成灵晶**（免得白抽）。
+func _card_gain(id: String) -> void:
+	if _card_have.has(id):
+		_card_have[id] = int(_card_have[id]) + 1
+		_crystal += 5                                  # 重复卡回收
+		_hint.text = "重复的「" + card_name(id) + "」回收成 5 灵晶"
+		Audio.sfx("coin", -10.0)
+		return
+	_card_have[id] = 1
+	if not _card_into_deck(id):
+		_open_large("卡组")       # 十格满了：让玩家去换
+	_set_check(str(id.split("_")[0]))
+
+# 组合：这套的每张卡都到手了 → 给组合效果 ＋ 三张一起离开十格（腾位）
+func _set_check(set_id: String) -> void:
+	if bool(_sets_done.get(set_id, false)):
+		return
+	var s := card_set_of(set_id + "_0")
+	if s.is_empty():
+		return
+	var n := int(s["size"])
+	for i in n:
+		if not _card_have.has(card_id(set_id, i)):
+			return
+	_sets_done[set_id] = true
+	# 成套后的常驻效果（成长线 / 经济线 / 数值线）
+	match str(s.get("combo_id", "")):
+		"cut_all_5":
+			_extra["cut_all_bonus"] = float(_extra.get("cut_all_bonus", 0.0)) + 0.05
+		"aspd_10":
+			_extra["aspd_bonus"] = float(_extra.get("aspd_bonus", 0.0)) + 0.10
+		"lucky_15":
+			_extra["lucky"] = float(_extra.get("lucky", 0.0)) + 0.15
+		"wave_crystal":
+			_extra["wave_crystal"] = float(_extra.get("wave_crystal", 0.0)) + 2.0
+		"chal_cd":
+			_extra["chal_cd"] = float(_extra.get("chal_cd", 0.0)) + 0.15
+		"chal_spawn":
+			_extra["chal_spawn"] = float(_extra.get("chal_spawn", 0.0)) + 3.0
+		"partner_grow":
+			_extra["partner_grow"] = float(_extra.get("partner_grow", 0.0)) + 1.0
+		"elem_all_15":
+			for el in ["金系", "木系", "火系", "水系", "土系"]:
+				_extra["dmg_elem"][el] = float(_extra["dmg_elem"].get(el, 0.0)) + 0.15
+		"elem_fire_20":
+			_extra["dmg_elem"]["火系"] = float(_extra["dmg_elem"].get("火系", 0.0)) + 0.20
+		"elem_water_20":
+			_extra["dmg_elem"]["水系"] = float(_extra["dmg_elem"].get("水系", 0.0)) + 0.20
+		"elem_metal_20":
+			_extra["dmg_elem"]["金系"] = float(_extra["dmg_elem"].get("金系", 0.0)) + 0.20
+		"atk_all_12":
+			_extra["atk_all"] = float(_extra.get("atk_all", 0.0)) + 0.12
+		"critdmg_40":
+			_extra["crit_dmg_bonus"] = float(_extra.get("crit_dmg_bonus", 0.0)) + 0.40
+		"arrow_pierce":
+			_extra["arrow_pierce"] = 1.0
+		"thunder_para":
+			_extra["thunder_para"] = 1.0
+		"cut_all_6":
+			_extra["cut_all_bonus"] = float(_extra.get("cut_all_bonus", 0.0)) + 0.06
+		"skill_cd_12":
+			_extra["skill_cd"] = float(_extra.get("skill_cd", 0.0)) + 0.12
+		_:
+			pass
+	for i in n:
+		_deck_cards.erase(card_id(set_id, i))     # 腾出占位（效果保留）
+	_field._push_float(_field.hero_pos.x, _field.hero_pos.y - 100.0, "组合完成：" + str(s["name"]), Color(1.0, 0.86, 0.40), true)
+	Audio.sfx("chest", -3.0)
+	_hint.text = "【" + str(s["name"]) + "】组合完成：" + str(s["combo"]) + "　卡已腾出占位，效果转常驻"
 # v5f：装备/伙伴以后往这里塞这些（现在全是 0，接口先留着）
 var _extra := {
 	"lucky": 0.0,          # 幸运一击（0~3.0，上限 300%）
@@ -75,6 +185,14 @@ var _extra := {
 	"res_elem": {},        # 各元素抗性 {金系: 0.1, …}
 	"dmg_elem": {},        # 各元素加成
 	"dmg_true": 0.0,       # 加真实伤害（唯一能影响真实伤害的一条）
+	# 卡给的常驻（v7b/v7c）
+	"cut_all_bonus": 0.0,  # 铁壁套：全伤害减免 +
+	"aspd_bonus": 0.0,     # 疾风套：攻速 +
+	"wave_crystal": 0.0,   # 商路套：每波额外灵晶
+	"chal_cd": 0.0,        # 连战/招怪：挑战冷却 −
+	"chal_spawn": 0.0,     # 招怪套：挑战多刷几只
+	"partner_grow": 0.0,   # 同心套：招募时伙伴成长 +N
+	"partner_dmg": 0.0,    # 同心：伙伴技能伤害 +
 }
 var _skill_choices: Array = []
 var _skill_badge: Label = null
@@ -388,6 +506,259 @@ func _roll_recruits() -> Array:
 		if not out.has(pick):
 			out.append(pick)
 	return out
+# ============================================================
+# v7a 卡牌（用户口径）：一张卡＝**单卡属性 ＋ 组合**；
+#   组合按【编号】分（I/II/III…），卡片有**品级与颜色**（跟伙伴同一套配色）；
+#   凑齐一套 → **给组合效果**、三张**一起离开十格（腾位）**、效果**转常驻**、
+#   并且这些卡**从池子里永久移除**（不回池）；同名卡走**吞噬升星 2/3/5/5**。
+#   长线（5 张）与短线（2~3 张）都有。
+# ============================================================
+const CARD_SETS := [
+	{"set": "liliang", "name": "力量祝福", "quality": "下品", "size": 3,
+		"combo": "每杀一名敌人 → 臂力 +0.2（本局永久叠加）", "combo_id": "kill_arm", "grow": "arm"},
+	{"set": "tayun", "name": "踏云步", "quality": "下品", "size": 3,
+		"combo": "每杀一名敌人 → 身法 +0.2（本局永久叠加）", "combo_id": "kill_agi", "grow": "agi"},
+	{"set": "jingxin", "name": "静心诀", "quality": "中品", "size": 3,
+		"combo": "每杀一名敌人 → 悟性 +0.2（本局永久叠加）", "combo_id": "kill_wit", "grow": "wit"},
+	{"set": "tiebi", "name": "铁壁", "quality": "中品", "size": 2,
+		"combo": "全伤害减免 +5%", "combo_id": "cut_all_5"},
+	{"set": "jifeng", "name": "疾风", "quality": "中品", "size": 2,
+		"combo": "攻速 +10%", "combo_id": "aspd_10"},
+	{"set": "jubao", "name": "聚宝", "quality": "上品", "size": 3, "star_cost": [3, 6, 8, 8],
+		"combo": "幸运一击 +15%", "combo_id": "lucky_15"},
+	{"set": "shanglu", "name": "商路", "quality": "上品", "size": 2,
+		"combo": "每波额外 +2 灵晶", "combo_id": "wave_crystal"},
+	{"set": "lianzhan", "name": "连战", "quality": "极品", "size": 2,
+		"combo": "挑战冷却 −15%", "combo_id": "chal_cd"},
+	# v7c（用户："还有增加挑战怪的卡也要 招募队员会增强的卡也要"）
+	{"set": "zhaoguai", "name": "招怪", "quality": "上品", "size": 3, "star_cost": [3, 6, 8, 8],
+		"combo": "挑战一次多刷 3 只怪（挑战怪也吃这条）", "combo_id": "chal_spawn"},
+	{"set": "tongxin", "name": "同心", "quality": "极品", "size": 3, "star_cost": [3, 6, 8, 8],
+		"combo": "招募时伙伴成长 +1（三属性各 +1 后再并入继承）", "combo_id": "partner_grow"},
+	# ---- v7g（用户："多加一些卡 3合的 2合的啊 毕竟还有元素的 攻击的 额外特效的"）----
+	# 元素线
+	{"set": "wuxing", "name": "五行", "quality": "上品", "size": 3,
+		"combo": "全元素伤害 +15%", "combo_id": "elem_all_15"},
+	{"set": "lieyan", "name": "烈焰", "quality": "中品", "size": 2,
+		"combo": "火系伤害 +20%", "combo_id": "elem_fire_20"},
+	{"set": "hanshui", "name": "寒水", "quality": "中品", "size": 2,
+		"combo": "水系伤害 +20%", "combo_id": "elem_water_20"},
+	{"set": "jinglei", "name": "惊雷", "quality": "上品", "size": 2,
+		"combo": "金系伤害 +20%", "combo_id": "elem_metal_20"},
+	# 攻击线
+	{"set": "cuifeng", "name": "淬锋", "quality": "下品", "size": 3,
+		"combo": "攻击 +12%", "combo_id": "atk_all_12"},
+	{"set": "liebo", "name": "裂帛", "quality": "中品", "size": 2,
+		"combo": "暴击伤害 +40%", "combo_id": "critdmg_40"},
+	# 额外特效线（触发型，等战场接）
+	{"set": "feiyu", "name": "飞羽", "quality": "上品", "size": 2,
+		"combo": "飞羽改为**穿透**（一支箭穿两个）", "combo_id": "arrow_pierce"},
+	{"set": "leiting", "name": "雷霆", "quality": "极品", "size": 2,
+		"combo": "暴击落雷必定麻痹 1 秒", "combo_id": "thunder_para"},
+	# v7h（用户："暂定50张吧"）——补两套 3 合的，凑满 **50 张**
+	{"set": "panshi", "name": "磐石", "quality": "中品", "size": 3,
+		"combo": "全伤害减免 +6%", "combo_id": "cut_all_6"},
+	{"set": "lingxi", "name": "灵犀", "quality": "上品", "size": 3,
+		"combo": "技能冷却 −12%", "combo_id": "skill_cd_12"},
+	# ---- v7i（用户："100张吧"）：再补 50 张 → 合计 40 套 / 100 张 ----
+	{"set": "muling", "name": "木灵", "quality": "中品", "size": 3, "combo": "木系伤害 +20%", "combo_id": "elem_wood_20"},
+	{"set": "houtu", "name": "厚土", "quality": "中品", "size": 3, "combo": "土系伤害 +20%", "combo_id": "elem_earth_20"},
+	{"set": "bingxin", "name": "冰心", "quality": "上品", "size": 3, "combo": "技能冷却 −12%", "combo_id": "skill_cd_12b"},
+	{"set": "xuezhan", "name": "血战", "quality": "中品", "size": 3, "combo": "攻击 +12%", "combo_id": "atk_all_12"},
+	{"set": "xunying", "name": "迅影", "quality": "上品", "size": 3, "combo": "攻速 +15%", "combo_id": "aspd_15"},
+	{"set": "jingang", "name": "金刚", "quality": "上品", "size": 3, "combo": "全伤害减免 +8%", "combo_id": "cut_all_6"},
+	{"set": "liesha", "name": "猎杀", "quality": "极品", "size": 3, "combo": "幸运一击 +20%", "combo_id": "lucky_20"},
+	{"set": "wudao", "name": "悟道", "quality": "极品", "size": 3, "combo": "属性点 +3", "combo_id": "attr_pts_3"},
+	{"set": "shouhun", "name": "兽魂", "quality": "上品", "size": 3, "combo": "伙伴技能伤害 +20%", "combo_id": "partner_dmg_20"},
+	{"set": "leifa", "name": "雷罚", "quality": "绝品", "size": 3, "combo": "暴击落雷必定麻痹 1 秒", "combo_id": "thunder_para"},
+	{"set": "tieqi", "name": "铁骑", "quality": "中品", "size": 2, "combo": "攻击 +10%", "combo_id": "atk_all_12"},
+	{"set": "pojun", "name": "破军", "quality": "上品", "size": 2, "combo": "暴击伤害 +50%", "combo_id": "critdmg_40"},
+	{"set": "lingmao", "name": "灵猫", "quality": "中品", "size": 2, "combo": "闪避 +8%", "combo_id": "dodge_8"},
+	{"set": "jinzhong", "name": "金钟", "quality": "上品", "size": 2, "combo": "全伤害减免 +6%", "combo_id": "cut_all_6"},
+	{"set": "caishen", "name": "财神", "quality": "上品", "size": 2, "combo": "每波额外 +3 灵晶", "combo_id": "wave_crystal"},
+	{"set": "zhangu", "name": "战鼓", "quality": "极品", "size": 2, "combo": "挑战多刷 2 只", "combo_id": "chal_spawn"},
+	{"set": "shuangxiu", "name": "双修", "quality": "极品", "size": 2, "combo": "招募时伙伴成长 +1", "combo_id": "partner_grow"},
+	{"set": "liuxing", "name": "流星", "quality": "极品", "size": 2, "combo": "落星改为范围", "combo_id": "star_aoe"},
+	{"set": "jingji", "name": "荆棘", "quality": "上品", "size": 2, "combo": "反伤 +50%", "combo_id": "thorns_50"},
+	{"set": "tianming", "name": "天命", "quality": "绝品", "size": 2, "combo": "幸运一击 +30%", "combo_id": "lucky_20"},
+]
+# 每一张卡的"单卡属性"（按编号从小到大）
+const CARD_PARTS := {
+	"liliang": ["气血 +100", "攻击 +12", "生命恢复 +5"],
+	"tayun": ["攻速 +6%", "闪避 +4%", "护甲 +6"],
+	"jingxin": ["内力 +60", "内力恢复 +2/秒", "元素攻击 +5%"],
+	"tiebi": ["减伤 +6%", "护甲 +8"],
+	"jifeng": ["攻速 +8%", "暴击 +5%"],
+	"jubao": ["文钱 +20%", "灵晶 +10%", "幸运一击 +5%"],
+	"shanglu": ["文钱 +25%", "灵晶 +15%"],
+	"lianzhan": ["杀敌数 +15%", "挑战刷怪 +1 只"],
+	"zhaoguai": ["挑战刷怪 +1 只", "挑战冷却 −10%", "挑战怪掉落 +20%"],
+	"tongxin": ["伙伴技能伤害 +10%", "伙伴冷却 −10%", "伙伴内力消耗 −15%"],
+	"wuxing": ["全元素伤害 +8%", "元素抗性 +6%", "元素攻击 +10%"],
+	"lieyan": ["火系伤害 +12%", "火系抗性 +10%"],
+	"hanshui": ["水系伤害 +12%", "水系抗性 +10%"],
+	"jinglei": ["金系伤害 +12%", "金系抗性 +10%"],
+	"cuifeng": ["攻击 +6%", "暴击 +4%", "暴击伤害 +15%"],
+	"liebo": ["暴击 +6%", "暴击伤害 +20%"],
+	"feiyu": ["每 3 秒射一支箭（60% 伤害）", "箭 +1（每层）"],
+	"leiting": ["暴击时落一道雷（范围 80）", "雷伤 +30%"],
+	"panshi": ["护甲 +6", "气血 +120", "全伤害减免 +3%"],
+	"lingxi": ["内力 +80", "技能冷却 −8%", "伙伴技能伤害 +8%"],
+	"muling": ["木系伤害 +12%", "木系抗性 +10%", "生命恢复 +4"],
+	"houtu": ["土系伤害 +12%", "土系抗性 +10%", "护甲 +8"],
+	"bingxin": ["内力 +90", "技能冷却 −8%", "元素攻击 +6%"],
+	"xuezhan": ["攻击 +7%", "暴击伤害 +18%", "生命恢复 +5"],
+	"xunying": ["攻速 +7%", "闪避 +4%", "暴击 +4%"],
+	"jingang": ["护甲 +10", "全伤害减免 +3%", "气血 +140"],
+	"liesha": ["杀敌数 +20%", "文钱 +25%", "幸运一击 +6%"],
+	"wudao": ["属性点 +1", "内力恢复 +2/秒", "元素攻击 +6%"],
+	"shouhun": ["伙伴技能伤害 +8%", "伙伴冷却 −8%", "伙伴内力消耗 −12%"],
+	"leifa": ["暴击 +8%", "暴击伤害 +25%", "金系伤害 +15%"],
+	"tieqi": ["攻击 +8%", "护甲 +6"],
+	"pojun": ["暴击 +7%", "暴击伤害 +25%"],
+	"lingmao": ["闪避 +5%", "攻速 +6%"],
+	"jinzhong": ["全伤害减免 +4%", "护甲 +10"],
+	"caishen": ["文钱 +30%", "灵晶 +12%"],
+	"zhangu": ["挑战刷怪 +1 只", "挑战冷却 −8%"],
+	"shuangxiu": ["伙伴技能伤害 +10%", "招募成长 +1（组合才给）"],
+	"liuxing": ["每 4 秒落星（70% 伤害）", "星伤 +30%"],
+	"jingji": ["反伤 +30%", "反伤敌人 +1"],
+	"tianming": ["幸运一击 +8%", "全属性 +3%"],
+}
+# 长线的"名字递进"（用户参考别人的 力量-野蛮人-战神）：I/II/III 各有名号
+const CARD_TIER_NAME := {
+	"liliang": ["力量祝福", "力士", "刑天"],
+	"tayun": ["踏云步", "追风", "缩地"],
+	"jingxin": ["静心诀", "明镜", "菩提"],
+}
+const CARD_ROMAN := ["I", "II", "III", "IV", "V"]
+
+func card_id(set_id: String, part: int) -> String:
+	return set_id + "_" + str(part)
+
+func card_name(id: String) -> String:
+	var sp := id.split("_")
+	if sp.size() < 2:
+		return id
+	var set_id := str(sp[0])
+	var part := int(sp[1])
+	# 长线走"名字递进"（力量祝福→力士→刑天），短线仍是 套名【I/II/III】
+	if CARD_TIER_NAME.has(set_id):
+		var arr: Array = CARD_TIER_NAME[set_id]
+		if part < arr.size():
+			return str(arr[part])
+	for s_v in CARD_SETS:
+		var s: Dictionary = s_v
+		if str(s["set"]) == set_id:
+			return str(s["name"]) + "【" + str(CARD_ROMAN[part]) + "】"
+	return id
+
+func card_set_of(id: String) -> Dictionary:
+	var set_id := str(id.split("_")[0])
+	for s_v in CARD_SETS:
+		var s: Dictionary = s_v
+		if str(s["set"]) == set_id:
+			return s
+	return {}
+
+func card_prop(id: String) -> String:
+	var sp := id.split("_")
+	var set_id := str(sp[0])
+	var part := int(sp[1]) if sp.size() > 1 else 0
+	var arr: Array = CARD_PARTS.get(set_id, [])
+	return str(arr[part]) if part < arr.size() else "—"
+# ---- v7a 卡面（单卡属性 ＋ 组合栏 ＋ 进度条）----
+func _card_face(p: Control, pos: Vector2, sz: Vector2, id: String) -> void:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.99, 0.97, 0.92) if id != "" else Color(0.85, 0.83, 0.79)
+	sb.set_corner_radius_all(10)
+	var qcol := Color(INK.r, INK.g, INK.b, 0.35)
+	var set_done := false
+	if id != "":
+		# v7b：**成套后描金**（用户参考的"三国凑 9 张变色"）
+		set_done = bool(_sets_done.get(str(id.split("_")[0]), false))
+		qcol = Color(0.92, 0.74, 0.28, 1.0) if set_done else _quality_color(str(card_set_of(id).get("quality", "下品")))
+	sb.border_color = qcol
+	sb.set_border_width_all(3 if set_done else 2)
+	var box := Panel.new()
+	box.position = pos
+	box.size = sz
+	box.add_theme_stylebox_override("panel", sb)
+	box.mouse_filter = Control.MOUSE_FILTER_STOP
+	p.add_child(box)
+	if id == "":
+		var e0 := Label.new()
+		e0.position = Vector2(6, sz.y * 0.5 - 16.0)
+		e0.size = Vector2(sz.x - 12, 32)
+		e0.add_theme_font_size_override("font_size", 22)
+		e0.add_theme_color_override("font_color", DIM)
+		e0.text = "空"
+		e0.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		box.add_child(e0)
+		return
+	var s := card_set_of(id)
+	# ⚠ 卡面只有 118 宽：名字要缩到 17 并允许换行，不然【I】会被裁掉（截图抓到过）
+	var nm := Label.new()
+	nm.position = Vector2(5, 4)
+	nm.size = Vector2(sz.x - 10, 42)
+	nm.add_theme_font_size_override("font_size", 17)
+	nm.add_theme_color_override("font_color", INK)
+	nm.text = card_name(id)
+	nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	nm.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(nm)
+	var pr := Label.new()
+	pr.position = Vector2(5, 48)
+	pr.size = Vector2(sz.x - 10, 30)
+	pr.add_theme_font_size_override("font_size", 19)
+	pr.add_theme_color_override("font_color", SEAL)
+	pr.text = card_prop(id)
+	pr.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(pr)
+	var st := Label.new()
+	st.position = Vector2(5, 78)
+	st.size = Vector2(sz.x - 16, 28)
+	st.add_theme_font_size_override("font_size", 18)
+	st.add_theme_color_override("font_color", GOLD)
+	# v7f：撤掉星级——这一行改成"品级"（卡面信息更干净）
+	st.text = str(card_set_of(id).get("quality", ""))
+	st.add_theme_color_override("font_color", _quality_color(str(card_set_of(id).get("quality", "下品"))))
+	st.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(st)
+	# 组合栏（灰字）＋ 进度
+	var cm := Label.new()
+	cm.position = Vector2(5, sz.y - 58.0)
+	cm.size = Vector2(sz.x - 10, 32)
+	cm.add_theme_font_size_override("font_size", 14)
+	cm.add_theme_color_override("font_color", DIM)
+	cm.text = str(s.get("combo", "")).replace("每杀一名敌人 → ", "杀敌→").replace("全伤害减免", "全减").replace("幸运一击", "幸运")
+	cm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	cm.clip_text = true
+	box.add_child(cm)
+	var got := 0
+	for i in int(s.get("size", 1)):
+		if _card_have.has(card_id(str(s.get("set", "")), i)):
+			got += 1
+	var pg := Label.new()
+	pg.position = Vector2(5, sz.y - 26.0)
+	pg.size = Vector2(sz.x - 16, 22)
+	pg.add_theme_font_size_override("font_size", 15)
+	pg.add_theme_color_override("font_color", Color(0.42, 0.62, 0.40) if got >= int(s.get("size", 1)) else DIM)
+	pg.text = str(got) + "/" + str(int(s.get("size", 1))) + ("　已成型" if got >= int(s.get("size", 1)) else "")
+	pg.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(pg)
+
+func _quality_color(q: String) -> Color:
+	match q:
+		"绝品":
+			return Color(0.86, 0.44, 0.24, 0.9)
+		"极品":
+			return Color(0.86, 0.68, 0.26, 0.9)
+		"上品":
+			return Color(0.52, 0.34, 0.72, 0.85)
+		"中品":
+			return Color(0.30, 0.58, 0.72, 0.8)
+	return Color(INK.r, INK.g, INK.b, 0.35)
 # ---- 黑市（v4b）：用**杀敌数**换东西（内容暂定，先把入口与账摆上）----
 #   用户：「成就下面增加按钮 黑市【用于杀敌数兑换东西的 内容暂定】」
 const BLACK_GOODS := [
@@ -1043,7 +1414,7 @@ func _sync_battle_stats() -> void:
 	_field.hero["crit_dmg"] = _crit_dmg_total()
 	_field.hero["lucky"] = _lucky()
 	_field.hero["dmg_all"] = _dmg_all()
-	_field.hero["cut_all"] = 0.10                                  # 横练：全伤害减免 10%
+	_field.hero["cut_all"] = 0.10 + float(_extra.get("cut_all_bonus", 0.0))   # 横练 10% ＋ 铁壁套
 	_field.hero["res_elem"] = _res_elem()
 	_field.hero["dmg_elem"] = _dmg_elem()
 	_field.hero["dmg_true"] = float(_extra.get("dmg_true", 0.0))   # 只有它能加真实伤害
@@ -1157,6 +1528,15 @@ func _update_coins(delta: float) -> void:
 func _on_kill(_n: int) -> void:
 	# v4b：杀敌数**是可花的钱**（黑市用它换东西），所以这里自己累加、不再每帧从战场回读
 	_kills += 1
+	# v7b：三条成长线——成套后**每杀一名敌人**给 臂力/身法/悟性 +0.2（本局永久叠加）
+	for pair in [["liliang", "arm"], ["tayun", "agi"], ["jingxin", "wit"]]:
+		if bool(_sets_done.get(str(pair[0]), false)):
+			var key := str(pair[1])
+			_grow_kill[key] = float(_grow_kill.get(key, 0.0)) + 0.2
+			if _grow_kill[key] >= 1.0:
+				var add := int(floor(float(_grow_kill[key])))
+				_grow_kill[key] = float(_grow_kill[key]) - float(add)
+				_grow_card[key] = int(_grow_card.get(key, 0)) + add
 	# v4d：黑市经验 每击杀 +1；攒够就升一级（升级送 1 次刷新）
 	_bm_exp += 1
 	while _bm_exp >= _bm_need:
@@ -1463,16 +1843,19 @@ func _set_deck_tab(i: int) -> void:
 
 # 视图①：十格（5×2）
 func _fill_deck_slots(p: Control, y: float) -> float:
+	# v7a：十格改成**新卡面**（单卡属性 ＋ 组合栏 ＋ 进度）
+	while _deck_cards.size() < 10:
+		_deck_cards.append("")
 	for i in 10:
 		var col := i % 5
 		var row := i / 5
-		_slot_box(p, Vector2(28.0 + float(col) * 130.0, y + float(row) * 118.0), Vector2(118, 106), i)
+		_card_face(p, Vector2(24.0 + float(col) * 134.0, y + float(row) * 134.0), Vector2(126, 122), str(_deck_cards[i]))
 	var tip := Label.new()
 	tip.position = Vector2(28, y + 248.0)
 	tip.size = Vector2(640, 44)
 	tip.add_theme_font_size_override("font_size", 20)
 	tip.add_theme_color_override("font_color", DIM)
-	tip.text = "十格满了以后再抽到 → 选一张换掉；同名卡直接吞噬升星，不占新格。点击选中 · 长按看全部效果。"
+	tip.text = "同名卡自动吞噬升星（2/3/5/5）；凑齐一套 → 给组合效果并把这几张**腾出占位**（效果转常驻，卡永久出池）。换掉的卡会回池。".replace("**腾出占位**", "腾出占位")
 	tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	p.add_child(tip)
 	return y + 300.0
@@ -1783,21 +2166,22 @@ func _set_role_tab(i: int) -> void:
 # ---- v5a 三条属性的换算（都在这里，改数只改这一处）----
 # v6a：实际三属性 ＝ 自己加的点 ＋ **继承来的成长**（招募取最高值）
 func _attr_arm() -> int:
-	return int(_attr["arm"]) + int(_grow_inherit["arm"])
+	return int(_attr["arm"]) + int(_grow_inherit["arm"]) + int(_grow_card["arm"])
 
 func _attr_agi() -> int:
-	return int(_attr["agi"]) + int(_grow_inherit["agi"])
+	return int(_attr["agi"]) + int(_grow_inherit["agi"]) + int(_grow_card["agi"])
 
 func _attr_wit() -> int:
-	return int(_attr["wit"]) + int(_grow_inherit["wit"])
+	return int(_attr["wit"]) + int(_grow_inherit["wit"]) + int(_grow_card["wit"])
 
 # 招募：把这位伙伴的三属性成长**逐项取最高**并进来（保证只升不降）
 func _recruit(id: String) -> void:
 	var info: Dictionary = _field.PARTNER_INFO[id]
 	var g: Dictionary = info.get("grow", {})
 	var up: Array = []
+	var bonus := int(_extra.get("partner_grow", 0.0))     # v7c：同心套给的"招募成长 +1"
 	for k in ["arm", "agi", "wit"]:
-		var v := int(g.get(k, 0))
+		var v := int(g.get(k, 0)) + bonus
 		if v > int(_grow_inherit[k]):
 			_grow_inherit[k] = v
 			up.append({"arm": "臂力", "agi": "身法", "wit": "悟性"}[k] + "→" + str(v))
@@ -1819,7 +2203,7 @@ func _hp_regen() -> float:
 
 # 身法：攻速 + 护甲；主属性＝敏捷时再给攻击
 func _aspd_total() -> float:
-	return 1.0 * (1.0 + 0.02 * float(_attr_agi()) * _boost_for("agi"))
+	return 1.0 * (1.0 + 0.02 * float(_attr_agi()) * _boost_for("agi") + float(_extra.get("aspd_bonus", 0.0)))
 
 # v5e（用户："护甲是整体百分比减伤 要少给"）：
 #   身法每点 **+1 护甲**（原来 +2），换算也调钝：护甲/(护甲+**120**)（原来 60）
@@ -1865,6 +2249,7 @@ func _elem_amp() -> float:
 
 func _atk() -> float:
 	var base := 12.0 + float(_grow) * float(maxi(0, _lv - 1))
+	base *= 1.0 + float(_extra.get("atk_all", 0.0))          # v7g：淬锋套给的攻击 %
 	# 主属性是哪条，就用哪条当攻击（系数统一 1.5）；主属性＝悟性时它的"攻击"是元素（见 _elem_amp）
 	match _main_attr:
 		"str":
@@ -1880,7 +2265,7 @@ func _crit_total() -> float:
 	return 0.05 + 0.005 * float(_attr_agi())
 
 func _crit_dmg_total() -> float:
-	return 2.0 + 0.02 * float(_attr_arm())
+	return 2.0 + 0.02 * float(_attr_arm()) + float(_extra.get("crit_dmg_bonus", 0.0))
 
 func _lucky() -> float:
 	return minf(3.0, float(_extra.get("lucky", 0.0)))
