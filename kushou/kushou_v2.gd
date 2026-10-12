@@ -50,6 +50,26 @@ var _deck: Array = [
 	{"school": "技能流", "name": "连锁", "star": 1, "ate": 0, "fx": "技能击杀 冷却 −1 秒"},
 ]
 var _deck_tab := 0        # 0＝十格卡组 · 1＝吞噬记录（两种"查询"）
+# v2f（用户这一轮的四条）：
+#   · 吞噬记录/卡面**不标流派**（"这种是玩家自己发掘的"）
+#   · **长按卡牌**看全部效果
+#   · 装备**最多六格** · 宝物**不限**（滚动区自己长）· 多一个**仓库/公共仓库**窗口，
+#     超出格子的可以**长按拖拽**放进仓库（点击看详情）
+#   · 角色页要有**详细属性** ＋ 一颗**队员**钮（点队员看"成长 ＋ 携带技能"）
+var _card_idx := 0                                  # 长按看详情的那张卡
+var _equip_tab := 0                                 # 0＝装备 · 1＝宝物
+var _equip: Array = ["青锋剑", "铁叶甲", "", "", "", ""]      # 装备：**最多六格**
+var _equip_q: Array = ["良品", "良品", "", "", "", ""]
+var _treasures: Array = ["护心镜", "玄铁令", "定神珠"]         # 宝物：**不限**（滚动区接着长）
+var _treasure_q: Array = ["上品", "凡品", "良品"]
+var _vault: Array = ["紫玉冠", "雁翎披风", "疗伤丹", "金丝软甲"] # 仓库（公共仓库＝联网共享，暂不开放）
+var _vault_q: Array = ["上品", "良品", "凡品", "极品"]
+var _carry := ""                                    # 长按拿起来的那件：equip:2 / vault:1 / treasure:0
+var _role_tab := 0                                  # 0＝属性 · 1＝队员
+var _mates: Array = [
+	{"name": "陈石", "grow": 3, "skills": ["守拙", "扎马稳桩"]},
+	{"name": "苏青鸾", "grow": 5, "skills": ["惊鸿照影", "引气归元"]},
+]
 var _skills := ["追风剑 3★", "护体式 1★"]
 var _equips := ["兵器·青锋剑（良品）", "护甲·铁叶甲（良品）", "玉佩·空", "披风·空", "宝物·空", "宝物·空"]
 var _events := 0
@@ -194,7 +214,7 @@ func _build_hero_bar() -> void:
 	av.position = Vector2(24, 984)
 	av.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(av)
-	var av_btn := _mk_btn("", Vector2(24, 984), Vector2(176, 176), 20, false, func(): _open_small("头像"))
+	var av_btn := _mk_btn("", Vector2(24, 984), Vector2(176, 176), 20, false, func(): _open_large("角色"))
 	av_btn.flat = true
 	av_btn.add_theme_stylebox_override("normal", _flat(Color(0, 0, 0, 0)))
 	av_btn.add_theme_stylebox_override("hover", _flat(Color(1, 1, 1, 0.06)))
@@ -433,7 +453,7 @@ func _input(e: InputEvent) -> void:
 # 弹窗（两层）
 # ============================================================
 func _is_large(k: String) -> bool:
-	return ["卡组", "技能", "装备", "挑战", "存档", "成就"].has(k)
+	return ["卡组", "技能", "装备", "挑战", "存档", "成就", "角色", "队员", "仓库", "卡牌详情"].has(k)
 
 func _close_popup() -> void:
 	if _popup != null and is_instance_valid(_popup):
@@ -554,11 +574,23 @@ func _fill_popup(p: Control, kind: String, y: float, sz: Vector2) -> float:
 		return _fill_draw(p, y, sz)
 	if kind == "挑战":
 		return _fill_chal(p, y, sz)
+	if kind == "角色":
+		# 页签点了要**真的换内容**（探针抓到过：只高亮了页签、内容没换）
+		return _fill_mates(p, y, sz) if _role_tab == 1 else _fill_role(p, y, sz)
+	if kind == "装备":
+		return _fill_equip(p, y, sz)
+	if kind == "仓库" or kind == "公共仓库":
+		return _fill_vault(p, y, sz, kind)
 	var lines: Array = []
 	if kind == "设置":
 		lines = ["音乐：开", "音效：开", "（这一版只有开关，曲子后补）"]
-	elif kind == "头像":
-		lines = ["主角 · 成长 " + str(_grow), "生命 " + str(int(_hp)) + " / " + str(int(_hp_max)), "内力 " + str(int(_mp)) + " / " + str(int(_mp_max)), "已继承技能：" + "、".join(PackedStringArray(_skills)), "宠物：白狐（幼年期）"]
+	elif kind == "卡牌详情":
+		var c: Dictionary = _deck[clampi(_card_idx, 0, _deck.size() - 1)]
+		lines = ["『" + str(c["name"]) + "』　" + str(c["star"]) + "★（已吞 " + str(c["ate"]) + " 张）",
+			"现在效果：" + str(c["fx"]),
+			"每升一星：效果按 +50% 走（1★→5★ 一共 ×3）",
+			"再吃 " + str(maxi(1, 2 - int(c["ate"]))) + " 张同名卡升下一星",
+			"长按卡牌就看这一页（流派不写，自己发掘）"]
 	elif kind == "事件":
 		lines = ["牢中事件（三选一 · 4 秒不点自动随机）", "① 捡到钱袋：文钱 +150", "② 灵晶矿：灵晶 +8", "③ 武学残页：随机一张卡 +1 星"]
 	elif kind == "抽卡":
@@ -586,14 +618,14 @@ func _fill_popup(p: Control, kind: String, y: float, sz: Vector2) -> float:
 		var fs: int = 22 if t.begins_with("　") else 25
 		var l := Label.new()
 		l.position = Vector2(28, ly)
-		l.size = Vector2(sz.x - 56, 48)
+		l.size = Vector2(sz.x - 56, 62)
 		l.add_theme_font_size_override("font_size", fs)
 		l.add_theme_color_override("font_color", INK if fs >= 24 else DIM)
 		l.text = t
 		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		l.clip_text = true
 		p.add_child(l)
-		ly += 56.0
+		ly += 70.0
 	return ly
 
 # ---- 卡组页：流派页签 ＋ **两种查询**（十格 / 吞噬记录）＋ 操作钮 ----
@@ -640,7 +672,7 @@ func _fill_deck_slots(p: Control, y: float) -> float:
 	tip.size = Vector2(640, 44)
 	tip.add_theme_font_size_override("font_size", 20)
 	tip.add_theme_color_override("font_color", DIM)
-	tip.text = "十格满了以后再抽到 → 选一张换掉（或选「保留效果 / 移除格子」）；同名卡直接吞噬升星，不占新格。"
+	tip.text = "十格满了以后再抽到 → 选一张换掉；同名卡直接吞噬升星，不占新格。点击选中 · 长按看全部效果。"
 	tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	p.add_child(tip)
 	return y + 300.0
@@ -696,6 +728,18 @@ func _fill_deck_ate(p: Control, y: float) -> float:
 		ly += 94.0
 	return ly
 
+func _card_press(idx: int) -> void:
+	if idx >= _deck.size():
+		_hint.text = "这一格是空的——抽卡抽到新卡才填"
+		return
+	_hint.text = "选中了「" + str((_deck[idx] as Dictionary)["name"]) + "」（长按看全部效果）"
+
+func _card_long(idx: int) -> void:
+	if idx >= _deck.size():
+		return
+	_card_idx = idx
+	_open_large("卡牌详情")
+
 func _slot_box(p: Control, pos: Vector2, sz: Vector2, idx: int) -> void:
 	var card := str((_deck[idx] as Dictionary)["name"]) if idx < _deck.size() else ""
 	var sb := StyleBoxFlat.new()
@@ -717,31 +761,26 @@ func _slot_box(p: Control, pos: Vector2, sz: Vector2, idx: int) -> void:
 		school = str(c["school"])
 		nm = str(c["name"])
 		star = str(c["star"]) + "★"
-	var l1 := Label.new()
-	l1.position = Vector2(6, 6)
-	l1.size = Vector2(sz.x - 12, 24)
-	l1.add_theme_font_size_override("font_size", 16)
-	l1.add_theme_color_override("font_color", DIM)
-	l1.text = school
-	l1.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	pp.add_child(l1)
+	# v2f：卡面**不写流派**（用户："这种是玩家自己发掘的"）——只留名字与星
 	var l2 := Label.new()
-	l2.position = Vector2(6, 32)
-	l2.size = Vector2(sz.x - 12, 40)
-	l2.add_theme_font_size_override("font_size", 22)
+	l2.position = Vector2(6, 20)
+	l2.size = Vector2(sz.x - 12, 46)
+	l2.add_theme_font_size_override("font_size", 23)
 	l2.add_theme_color_override("font_color", INK if card != "" else DIM)
 	l2.text = nm
 	l2.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	l2.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	pp.add_child(l2)
 	var l3 := Label.new()
-	l3.position = Vector2(6, 74)
-	l3.size = Vector2(sz.x - 12, 26)
-	l3.add_theme_font_size_override("font_size", 18)
+	l3.position = Vector2(6, 68)
+	l3.size = Vector2(sz.x - 12, 30)
+	l3.add_theme_font_size_override("font_size", 20)
 	l3.add_theme_color_override("font_color", GOLD)
 	l3.text = star
 	l3.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	pp.add_child(l3)
+	# 点击＝选中；**长按＝看这张卡的全部效果**（用户："长按可显示卡牌的全部效果"）
+	_press_btn(pp, Vector2(0, 0), sz, _card_press.bind(idx), _card_long.bind(idx))
 
 # ---- 抽卡页：三张候选（大格子） ----
 func _fill_draw(p: Control, y: float, sz: Vector2) -> float:
@@ -807,6 +846,303 @@ func _refresh_band() -> void:
 		return
 	_band.text = "波 " + str(_wave) + "/" + str(_wave_max) + "　❤ " + str(int(_hp)) + "/" + str(int(_hp_max)) + "　内力 " + str(int(_mp)) + "/" + str(int(_mp_max))
 
+
+# ---- 角色页：详细属性 ＋ 一颗［队员］钮 ----
+func _fill_role(p: Control, y: float, sz: Vector2) -> float:
+	var tabs := ["属性", "队员"]
+	for i in 2:
+		_pbtn(p, tabs[i], Vector2(28.0 + float(i) * 130.0, y), Vector2(120, 58), 24, _role_tab == i, _set_role_tab.bind(i))
+	var rows := [
+		["攻击", str(int(_atk())) + "（成长 " + str(_grow) + " → 每级 +" + str(_grow) + "）"],
+		["气血", str(int(_hp_max)) + "（每级 +" + str(_grow * 10) + "）"],
+		["内力", str(int(_mp_max)) + "（每秒回 2）"],
+		["暴击", "12%　暴伤 ×2.0"],
+		["闪避", "8%"],
+		["减伤", "10%（横练）"],
+		["攻速", "1.0 次/秒"],
+		["等级", "Lv " + str(_lv) + "（经验 " + str(int(_exp * 100.0)) + "%）"],
+		["宠物", "白狐（幼年期）· 全属性 +3%"],
+		["已继承技能", "、".join(PackedStringArray(_skills))],
+	]
+	var ly := y + 74.0
+	for r_v in rows:
+		var r: Array = r_v
+		var l := Label.new()
+		l.position = Vector2(28, ly)
+		l.size = Vector2(210, 44)
+		l.add_theme_font_size_override("font_size", 22)
+		l.add_theme_color_override("font_color", DIM)
+		l.text = str(r[0])
+		p.add_child(l)
+		var v := Label.new()
+		v.position = Vector2(246, ly)
+		v.size = Vector2(422, 44)
+		v.add_theme_font_size_override("font_size", 23)
+		v.add_theme_color_override("font_color", INK)
+		v.text = str(r[1])
+		v.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		p.add_child(v)
+		ly += 54.0
+	var tip := Label.new()
+	tip.position = Vector2(28, ly + 8.0)
+	tip.size = Vector2(640, 40)
+	tip.add_theme_font_size_override("font_size", 20)
+	tip.add_theme_color_override("font_color", DIM)
+	tip.text = "队伍上限 3 人；队员不显示在动画里，但成长与技能都并到主角身上。"
+	p.add_child(tip)
+	return ly + 60.0
+
+func _set_role_tab(i: int) -> void:
+	_role_tab = i
+	if _popup_kind == "角色":
+		_open_large("角色")
+
+func _atk() -> float:
+	return 12.0 + float(_grow) * float(maxi(0, _lv - 1))
+
+# ---- 队员页：显示继承到的队友（点头看成长与携带技能） ----
+func _fill_mates(p: Control, y: float, sz: Vector2) -> float:
+	var tabs := ["属性", "队员"]
+	for i in 2:
+		_pbtn(p, tabs[i], Vector2(28.0 + float(i) * 130.0, y), Vector2(120, 58), 24, _role_tab == i, _set_role_tab.bind(i))
+	var head := Label.new()
+	head.position = Vector2(28, y + 74.0)
+	head.size = Vector2(640, 46)
+	head.add_theme_font_size_override("font_size", 24)
+	head.add_theme_color_override("font_color", INK)
+	head.text = "已继承 " + str(_mates.size()) + " 名队友（等级每 +5 给一次招募机会）"
+	p.add_child(head)
+	var ly := y + 132.0
+	for i in _mates.size():
+		var m: Dictionary = _mates[i]
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.99, 0.97, 0.92)
+		sb.set_corner_radius_all(10)
+		sb.border_color = Color(INK.r, INK.g, INK.b, 0.30)
+		sb.set_border_width_all(2)
+		var row := Panel.new()
+		row.position = Vector2(28, ly)
+		row.size = Vector2(640, 104)
+		row.add_theme_stylebox_override("panel", sb)
+		row.mouse_filter = Control.MOUSE_FILTER_STOP
+		p.add_child(row)
+		var nm := Label.new()
+		nm.position = Vector2(18, 10)
+		nm.size = Vector2(360, 42)
+		nm.add_theme_font_size_override("font_size", 26)
+		nm.add_theme_color_override("font_color", INK)
+		nm.text = str(m["name"])
+		row.add_child(nm)
+		var sk: Array = m["skills"]
+		var sub := Label.new()
+		sub.position = Vector2(18, 56)
+		sub.size = Vector2(420, 36)
+		sub.add_theme_font_size_override("font_size", 21)
+		sub.add_theme_color_override("font_color", DIM)
+		sub.text = "携带技能：" + "、".join(PackedStringArray(sk))
+		row.add_child(sub)
+		# ⚠ 「成长 N」原来落在 430..620、跟右上那颗［看］(556..626) 叠着——往左收
+		var gr := Label.new()
+		gr.position = Vector2(380, 22)
+		gr.size = Vector2(166, 46)
+		gr.add_theme_font_size_override("font_size", 24)
+		gr.add_theme_color_override("font_color", SEAL)
+		gr.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		gr.text = "成长 " + str(m["grow"])
+		row.add_child(gr)
+		# 点这一行：看这一位的成长与技能（照旧点开看详情）
+		_pbtn(row, "看", Vector2(556, 32), Vector2(70, 40), 20, false, func(): pass)
+		ly += 116.0
+	return ly + 12.0
+
+# ---- 装备 / 宝物页 ----
+#   装备**最多六格**（3×2）· 宝物**不限**（滚动区接着长）· 两颗入口钮：仓库 / 公共仓库
+#   规则（用户）：点击看详情；**长按拿起来**，再点目标格/仓库放下（触屏上的"拖拽"就这么做）
+func _fill_equip(p: Control, y: float, sz: Vector2) -> float:
+	var tabs := ["装备（6 格）", "宝物（不限）"]
+	for i in 2:
+		_pbtn(p, tabs[i], Vector2(28.0 + float(i) * 190.0, y), Vector2(178, 60), 23, _equip_tab == i, _set_equip_tab.bind(i))
+	var ly := y + 74.0
+	if _equip_tab == 0:
+		for i in 6:
+			var col := i % 3
+			var row := i / 3
+			_gear_box(p, Vector2(28.0 + float(col) * 216.0, ly + float(row) * 132.0), Vector2(200, 120), "equip", i)
+		ly += 276.0
+	else:
+		for i in _treasures.size():
+			var col2 := i % 3
+			var row2 := i / 3
+			_gear_box(p, Vector2(28.0 + float(col2) * 216.0, ly + float(row2) * 132.0), Vector2(200, 120), "treasure", i)
+		ly += 132.0 * float(1 + _treasures.size() / 3)
+	ly += 12.0
+	_pbtn(p, "仓库", Vector2(28, ly), Vector2(200, 76), 24, false, func(): _open_large("仓库"))
+	_pbtn(p, "公共仓库（暂不开放）", Vector2(240, ly), Vector2(300, 76), 21, false, func(): _open_large("公共仓库"))
+	var tip := Label.new()
+	tip.position = Vector2(28, ly + 86.0)
+	tip.size = Vector2(640, 44)
+	tip.add_theme_font_size_override("font_size", 20)
+	tip.add_theme_color_override("font_color", DIM)
+	tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	tip.text = "点击看详情；长按拿起来，再点目标格或［仓库］放下（装不下的就往仓库塞）。"
+	p.add_child(tip)
+	return ly + 146.0
+
+func _set_equip_tab(i: int) -> void:
+	_equip_tab = i
+	if _popup_kind == "装备":
+		_open_large("装备")
+
+# 一格装备/宝物/仓库件（点击看详情 · 长按拿起来/放下）
+func _gear_box(p: Control, pos: Vector2, sz: Vector2, src: String, idx: int) -> void:
+	var nm := ""
+	var q := ""
+	if src == "equip":
+		nm = str(_equip[idx])
+		q = str(_equip_q[idx])
+	elif src == "treasure":
+		nm = str(_treasures[idx]) if idx < _treasures.size() else ""
+		q = str(_treasure_q[idx]) if idx < _treasure_q.size() else ""
+	else:
+		nm = str(_vault[idx]) if idx < _vault.size() else ""
+		q = str(_vault_q[idx]) if idx < _vault_q.size() else ""
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.99, 0.97, 0.92) if nm != "" else Color(0.85, 0.83, 0.79)
+	sb.set_corner_radius_all(10)
+	sb.border_color = Color(SEAL.r, SEAL.g, SEAL.b, 0.8) if _carry == (src + ":" + str(idx)) else Color(INK.r, INK.g, INK.b, 0.35)
+	sb.set_border_width_all(3 if _carry == (src + ":" + str(idx)) else 2)
+	var box := Panel.new()
+	box.position = pos
+	box.size = sz
+	box.add_theme_stylebox_override("panel", sb)
+	box.mouse_filter = Control.MOUSE_FILTER_STOP
+	p.add_child(box)
+	var l1 := Label.new()
+	l1.position = Vector2(10, 26)
+	l1.size = Vector2(sz.x - 20, 44)
+	l1.add_theme_font_size_override("font_size", 23)
+	l1.add_theme_color_override("font_color", INK if nm != "" else DIM)
+	l1.text = nm if nm != "" else "空"
+	l1.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l1.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(l1)
+	var l2 := Label.new()
+	l2.position = Vector2(10, 74)
+	l2.size = Vector2(sz.x - 20, 32)
+	l2.add_theme_font_size_override("font_size", 19)
+	l2.add_theme_color_override("font_color", GOLD)
+	l2.text = q
+	l2.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(l2)
+	var b := _press_btn(box, Vector2(0, 0), sz, _gear_press.bind(src, idx), _gear_long.bind(src, idx))
+
+func _gear_press(src: String, idx: int) -> void:
+	# 手上有东西 → 这一下是"放下"；手上空 → 这一下是"看详情"
+	if _carry != "":
+		var from := _carry
+		_carry = ""
+		_hint.text = "把「" + from + "」放到了 " + src + " 第 " + str(idx + 1) + " 格（空壳只演示动作，真存取第 2 步接）"
+		if _popup_kind == "装备":
+			_open_large("装备")
+		elif _popup_kind == "仓库":
+			_open_large("仓库")
+		return
+	_hint.text = "查看了 " + src + " 第 " + str(idx + 1) + " 格的详情（空壳只回一句）"
+
+func _gear_long(src: String, idx: int) -> void:
+	var nm := ""
+	if src == "equip":
+		nm = str(_equip[idx])
+	elif src == "treasure":
+		nm = str(_treasures[idx]) if idx < _treasures.size() else ""
+	else:
+		nm = str(_vault[idx]) if idx < _vault.size() else ""
+	if nm == "":
+		_hint.text = "这一格是空的——长按要对着有东西的那格"
+		return
+	_carry = src + ":" + str(idx)
+	_hint.text = "拿起了「" + nm + "」——再点一个格子或［仓库］放下"
+	if _popup_kind == "装备":
+		_open_large("装备")
+	elif _popup_kind == "仓库":
+		_open_large("仓库")
+
+# ---- 仓库 / 公共仓库 ----
+func _fill_vault(p: Control, y: float, sz: Vector2, kind: String) -> float:
+	var head := Label.new()
+	head.position = Vector2(28, y)
+	head.size = Vector2(640, 46)
+	head.add_theme_font_size_override("font_size", 24)
+	head.add_theme_color_override("font_color", INK)
+	head.text = ("仓库存货 " + str(_vault.size()) + " 件（点击看详情 · 长按拿起来）" if kind == "仓库" else "玩家共享联网——暂不开放")
+	p.add_child(head)
+	var ly := y + 56.0
+	if kind == "仓库":
+		for i in _vault.size():
+			var col := i % 3
+			var row := i / 3
+			_gear_box(p, Vector2(28.0 + float(col) * 216.0, ly + float(row) * 132.0), Vector2(200, 120), "vault", i)
+		ly += 132.0 * float(1 + _vault.size() / 3)
+		_pbtn(p, "回装备页", Vector2(28, ly + 8.0), Vector2(220, 76), 24, false, func(): _open_large("装备"))
+		ly += 96.0
+	else:
+		var tip := Label.new()
+		tip.position = Vector2(28, ly + 10.0)
+		tip.size = Vector2(640, 120)
+		tip.add_theme_font_size_override("font_size", 22)
+		tip.add_theme_color_override("font_color", DIM)
+		tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		tip.text = "公共仓库要联网（几台机器共享同一份存货）——这一版先占位，等联机那一批一起开。"
+		p.add_child(tip)
+		ly += 140.0
+		_pbtn(p, "回装备页", Vector2(28, ly), Vector2(220, 76), 24, false, func(): _open_large("装备"))
+		ly += 96.0
+	return ly
+
+# ---- 长按（0.45 秒）＋ 单击：触屏上"长按拿起"就靠这一对回调 ----
+var _lp_timer: Timer = null
+var _lp_cb: Callable = Callable()
+var _lp_fired := false
+
+func _press_btn(parent: Node, pos: Vector2, sz: Vector2, on_press: Callable, on_long: Callable) -> Button:
+	var b := Button.new()
+	b.position = pos
+	b.size = sz
+	b.focus_mode = Control.FOCUS_NONE
+	b.add_theme_stylebox_override("normal", _flat(Color(1, 1, 1, 0.03)))
+	b.add_theme_stylebox_override("hover", _flat(Color(1, 1, 1, 0.10)))
+	b.add_theme_stylebox_override("pressed", _flat(Color(1, 1, 1, 0.16)))
+	b.add_theme_stylebox_override("focus", _flat(Color(0, 0, 0, 0)))
+	b.button_down.connect(_lp_start.bind(on_long))
+	b.button_up.connect(_lp_up.bind(on_press))
+	b.mouse_exited.connect(_lp_stop)
+	parent.add_child(b)
+	return b
+
+func _lp_start(cb: Callable) -> void:
+	if _lp_timer == null:
+		_lp_timer = Timer.new()
+		_lp_timer.one_shot = true
+		_lp_timer.wait_time = 0.45
+		_lp_timer.timeout.connect(_lp_fire)
+		add_child(_lp_timer)
+	_lp_cb = cb
+	_lp_fired = false
+	_lp_timer.start()
+
+func _lp_fire() -> void:
+	_lp_fired = true
+	if _lp_cb.is_valid():
+		_lp_cb.call()
+
+func _lp_up(on_press: Callable) -> void:
+	_lp_stop()
+	if not _lp_fired and on_press.is_valid():
+		on_press.call()
+
+func _lp_stop() -> void:
+	if _lp_timer != null:
+		_lp_timer.stop()
 
 # ============================================================
 # 战场画面（简笔小人 · 假打）
