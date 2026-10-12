@@ -145,6 +145,12 @@ static func map_night() -> Texture2D:
 static func map_redmoon() -> Texture2D:
 	return _tex("map_redmoon")
 
+# v146（用户发来一张水墨山水，说"游历背景换成这个"）：**游历旅途的主背景**。
+#   assets/scenes/journey_xishan.png（1680×720）——远景那一层改成它；
+#   取不到就照旧退回 map_night（老图）/程序化远山，功能不受影响。
+static func journey_scene() -> Texture2D:
+	return _tex("journey_xishan")
+
 # v78：**素材里的刀光序列帧**（Atlas_hun_daoguang2 切成 25 帧）——技能特效直接用
 static var _slash_cache: Array = []
 

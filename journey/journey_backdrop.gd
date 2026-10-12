@@ -17,6 +17,18 @@ static func draw_all(ctrl: Control, sz: Vector2, scroll_far: float, scroll_mid: 
 	# v78（用户："图4 不适合做游历旅途的更换场景？"）：**远景真的换成素材里那幅水墨城郭了**
 	#   （影之刃 Atlas_MainMap 切出来的月夜城郭）——视差最慢、横向无缝平铺。
 	#   找不到图就退回原来的程序化远山，功能不受影响。
+	# v146（用户："游历背景换成这个"）：主背景＝assets/scenes/journey_xishan.png
+	#   （一幅水墨山水）。它是一张**整幅画**，不是"远景剪影"——所以用它的时候
+	#   程序化那两层远山/近树就不画了（会跟画打架），只留地平线、地面压色与路标。
+	var art_tex := SceneArt.journey_scene()
+	if art_tex != null:
+		_draw_painting(ctrl, sz, scroll_far, art_tex)
+		# 地平线以下那一条压色：0.42 —— 再淡一点画里的水石就透出来了，
+		#   再浓一点就糊成一条白带（0.55 试过，看着像被裁掉半张画）
+		ctrl.draw_rect(Rect2(0, 950.0, w, h - 950.0), Color(0.885, 0.850, 0.775, 0.42))
+		ctrl.draw_line(Vector2(0, 950.0), Vector2(w, 950.0), Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.30), 2.0)
+		_road_marks(ctrl, sz, scroll_road)
+		return
 	var far_tex := SceneArt.map_night()
 	if far_tex != null:
 		# ⚠ 直接 tile=true 会看出"同一座城并排两份"（第一版就是），改**正反交替**：
@@ -42,6 +54,19 @@ static func draw_all(ctrl: Control, sz: Vector2, scroll_far: float, scroll_mid: 
 	ctrl.draw_rect(Rect2(0, 950.0, w, h - 950.0), Color(0.885, 0.850, 0.775, 0.62))
 	ctrl.draw_line(Vector2(0, 950.0), Vector2(w, 950.0), Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.30), 2.0)
 	_road_marks(ctrl, sz, scroll_road)
+
+# v146：把那张水墨山水铺满整屏——**按屏幕高度缩放**（1680×720 的横画 → 1280 高、
+#   约 2987 宽），横向按视差缓慢平移、正反交替接缝（与老远景同一套写法，接缝处是镜像，
+#   看不出重复）。竖屏里一屏只看到整幅画的四分之一左右——正好是"走在画里"的感觉。
+static func _draw_painting(ctrl: Control, sz: Vector2, scroll: float, tex: Texture2D) -> void:
+	var th: float = sz.y
+	var tw: float = th * float(tex.get_width()) / maxf(float(tex.get_height()), 1.0)
+	var period := tw * 2.0
+	var x := -fposmod(scroll * 0.12, period)
+	while x < sz.x:
+		ctrl.draw_texture_rect(tex, Rect2(x, 0.0, tw, th), false, Color(1, 1, 1, 1.0))
+		ctrl.draw_texture_rect(tex, Rect2(x + tw, 0.0, -tw, th), false, Color(1, 1, 1, 1.0))
+		x += period
 
 static func _ridge(ctrl: Control, sz: Vector2, offset: float, base_y: float, hgt: float, col: Color, wave: float) -> void:
 	var pts := PackedVector2Array()

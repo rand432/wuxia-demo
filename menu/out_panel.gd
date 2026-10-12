@@ -24,6 +24,8 @@ signal chase_challenge(i: int)   # v144：在追剿关卡列表里点［挑战�
 #   上面那五行就变成追剿的五关（含 boss 行的特性/被动提示），一关一个［挑战］。
 var _chase_view := false
 var _chase_page := 0
+var _intel: Control = null      # v145：首领敌情确认窗（只在追剿那条线上用）
+var _pending_intel := -1
 signal closed
 
 const INK := Color(0.14, 0.13, 0.15)
@@ -532,9 +534,33 @@ func _on_chase_auto() -> void:
 func _on_row(i: int) -> void:
 	# v144：追剿视图里，这一行的［挑战］打的是追剿那一关
 	if _chase_view:
-		chase_challenge.emit(Chase.stage_of_round(_chase_page + 1) + i)
+		var si := Chase.stage_of_round(_chase_page + 1) + i
+		# v145（用户："在boss关卡 可以点击挑战后额外一个窗口 显示该boss敌情 然后给个确定或者放弃"
+		#    ＋"指追剿"）：**只有追剿的首领关**先弹敌情窗——看清特性/被动再决定打不打；
+		#    爬塔那边照旧（直接开打）。
+		if Chase.is_boss(si):
+			_open_intel(si)
+			return
+		chase_challenge.emit(si)
 		return
 	challenge.emit(_page * PER_PAGE + i)
+
+# v145：首领敌情窗——确认了才真开打
+func _open_intel(i: int) -> void:
+	_pending_intel = i
+	if _intel == null:
+		_intel = (preload("res://menu/boss_intel_popup.gd") as GDScript).new()
+		add_child(_intel)
+		_intel.confirmed.connect(_on_intel_ok)
+		_intel.cancelled.connect(_on_intel_no)
+	_intel.open_for(i, true)
+
+func _on_intel_ok() -> void:
+	if _pending_intel >= 0:
+		chase_challenge.emit(_pending_intel)
+
+func _on_intel_no() -> void:
+	_pending_intel = -1
 
 func _on_config() -> void:
 	config_pressed.emit()
