@@ -531,6 +531,51 @@ func _fill_skill(p: Control, y: float, sz: Vector2) -> float:
 			txt = txt.replace("<DM>", str(_field.dg_multi()))
 			txt = txt.replace("<DBM>", str(snappedf(_field.dg_bounce_mul(), 0.01)))
 			txt = txt.replace("<MD>", str(snappedf(_field.dg_multi_mul(), 0.01)))
+			# 天雷那一套
+			txt = txt.replace("<TD>", str(snappedf(_field.tl_dmg_mul(), 0.01)))
+			txt = txt.replace("<TR>", str(int(_field.tl_radius())))
+			txt = txt.replace("<TP>", str(int(_field.tl_para_chance() * 100.0)) + "%")
+			txt = txt.replace("<TPD>", str(snappedf(_field.tl_para_dur(), 0.1)))
+			txt = txt.replace("<TM>", str(int(_field.tl_multi_chance() * 100.0)) + "%")
+			txt = txt.replace("<TMD>", str(snappedf(_field.tl_multi_mul(), 0.01)))
+			txt = txt.replace("<TMP>", str(int(_field.tl_mp())))
+			txt = txt.replace("<TCD>", str(snappedf(_field.tl_cd(), 0.1)))
+			# 回春 / 怒火
+			txt = txt.replace("<LH>", str(int(_field.lq_heal() * 100.0)))
+			txt = txt.replace("<LP>", str(snappedf(_field.lq_poison_mul(), 0.01)))
+			txt = txt.replace("<LPD>", str(snappedf(_field.lq_poison_dur(), 0.1)))
+			txt = txt.replace("<LS>", str(_field.lq_spread()))
+			txt = txt.replace("<LCD>", str(snappedf(_field.lq_cd(), 0.1)))
+			txt = txt.replace("<LMP>", str(int(_field.lq_mp())))
+			txt = txt.replace("<JD>", str(snappedf(_field.jc_dmg_mul(), 0.01)))
+			txt = txt.replace("<JS>", str(_field.jc_spread()))
+			txt = txt.replace("<JB>", str(snappedf(_field.jc_burn_mul(), 0.01)))
+			txt = txt.replace("<JCD>", str(snappedf(_field.jc_interval(), 0.1)))
+			# 崔三娘·龙王
+			txt = txt.replace("<CI>", str(int(_field.cn_inherit() * 100.0)))
+			txt = txt.replace("<CS>", str(snappedf(_field.cn_skill_mul(), 0.01)))
+			txt = txt.replace("<CR>", str(int(_field.cn_skill_radius())))
+			txt = txt.replace("<CM>", str(int(_field.cn_mp())))
+			txt = txt.replace("<CC>", str(snappedf(_field.cn_cd(), 0.1)))
+			txt = txt.replace("<CL>", str(int(_field.cn_life())))
+			# 杀气 / 纳气
+			txt = txt.replace("<SBC>", str(snappedf(_field.sb_cd(), 0.1)))
+			txt = txt.replace("<SBD>", str(snappedf(_field.sb_dur(), 0.1)))
+			txt = txt.replace("<SBA>", str(snappedf(_field.sb_atk_add(), 0.1)))
+			txt = txt.replace("<SBM>", str(int(_field.p_mp("duyanbiao"))))
+			txt = txt.replace("<KRC>", str(snappedf(_field.kr_cd(), 0.1)))
+			txt = txt.replace("<KRD>", str(snappedf(_field.kr_dur(), 0.1)))
+			txt = txt.replace("<KRA>", str(int(_field.kr_mp_add())))
+			txt = txt.replace("<KRP>", str(int(_field.kr_mp_pct() * 100.0)) + "%")
+			# 法度·怒目金刚
+			txt = txt.replace("<FDS>", str(int((0.40 + 0.15 * _field.skill_lv("fadu_shield")) * 100.0)))
+			txt = txt.replace("<FDB>", str(snappedf(_field.fd_break_mul(), 0.01)))
+			txt = txt.replace("<FDP>", str(int(_field.fd_step_pct() * 100.0)))
+			txt = txt.replace("<FDR>", str(int(_field.fd_range())))
+			txt = txt.replace("<FDD>", str(snappedf(_field.fd_dur(), 0.1)))
+			txt = txt.replace("<FDC>", str(snappedf(_field.fd_cd(), 0.1)))
+			txt = txt.replace("<FDM>", str(int(_field.p_mp("fadu"))))
+			txt = txt.replace("<KRM>", str(int(_field.p_mp("kurong"))))
 			txt = txt.replace("<DS>", str(int(_field.dg_interval())))
 			txt = txt.replace("**", "")
 			ds.text = txt
@@ -803,6 +848,8 @@ func _process(delta: float) -> void:
 	if _field != null:
 		_hp = float(_field.hero["hp"])
 		_hp_max = float(_field.hero["hp_max"])
+		_mp = float(_field.hero["mp"])
+		_mp_max = float(_field.hero["mp_max"])
 	_hp_lb.text = "生命 " + str(int(_hp)) + " / " + str(int(_hp_max))
 	_hp_bar.size.x = 470.0 * clampf(_hp / maxf(1.0, _hp_max), 0.0, 1.0)
 	_mp_lb.text = "内力 " + str(int(_mp)) + " / " + str(int(_mp_max))
@@ -831,9 +878,12 @@ func _process(delta: float) -> void:
 		if _note_t <= 0.0 and _note_lb != null:
 			_note_lb.visible = false
 	# 大弹窗的保险②：血 <25% 自动收起
-	if _hp / maxf(1.0, _hp_max) < 0.25 and _popup_kind != "" and _is_large(_popup_kind):
-		_close_popup()
-		_hint.text = "血量告急——大弹窗自动收起了"
+	# ⚠ 但**结算页（局终）不能被这条收掉**——人一死血就是 0（<25%），
+	#   上一版这里会把刚弹出来的"局终"立刻关掉，玩的人看到的就是"死了以后卡住没反应"（用户报的 bug）
+	if _popup_kind != "" and _popup_kind != "局终" and _is_large(_popup_kind):
+		if _hp / maxf(1.0, _hp_max) < 0.25:
+			_close_popup()
+			_hint.text = "血量告急——大弹窗自动收起了"
 
 func _boss_arrive() -> void:
 	if _popup_kind != "" and _is_large(_popup_kind):
@@ -865,6 +915,7 @@ func _sync_battle_stats() -> void:
 	_field.setup({
 		"atk": 12.0 + float(_grow) * float(maxi(0, _lv - 1)),
 		"hp_max": 200.0 + float(_grow) * 10.0 * float(maxi(0, _lv - 1)),
+		"mp_max": 300.0 + 25.0 * float(maxi(0, _lv - 1)),      # v4j：够放 300 内力那一发天雷
 		"aspd": 1.0,
 		"crit": 0.05,
 		"dodge": 0.05,
@@ -1570,8 +1621,20 @@ func _fill_mates(p: Control, y: float, sz: Vector2) -> float:
 		st.add_theme_color_override("font_color", DIM)
 		var dt := str(info.get("dtype", ""))
 		st.text = ("伤害：" + dt + "　" if dt != "" else "")
-		if float(info["mp0"]) <= 0.0:
-			st.text += "每隔 " + str(int(_field.dg_interval())) + " 秒出一枚"
+		if pid == "jicanghai":
+			st.text += "每隔 " + str(snappedf(_field.jc_interval(), 0.1)) + " 秒自动烧一次"
+		elif pid == "suqingluan":
+			st.text += "每隔 " + str(snappedf(_field.dg_interval(), 0.1)) + " 秒出一枚"
+		elif float(info["mp0"]) <= 0.0:
+			st.text += "自动"
+		elif str(pid) == "liuqingqing":
+			st.text += "内力 " + str(int(_field.lq_mp())) + "　冷却 " + str(snappedf(_field.lq_cd(), 0.1)) + " 秒"
+		elif str(pid) == "zhangdaoling":
+			st.text += "内力 " + str(int(_field.tl_mp())) + "　冷却 " + str(snappedf(_field.tl_cd(), 0.1)) + " 秒"
+		elif str(pid) == "cuisanniang":
+			st.text += "内力 " + str(int(_field.cn_mp())) + "　冷却 " + str(snappedf(_field.cn_cd(), 0.1))
+			st.text += " 秒　场上 " + str(_field._minions.size()) + " 条"
+			st.text += "　（蛟龙活 " + str(int(_field.cn_life())) + " 秒、会被打掉）"
 		else:
 			st.text += "内力 " + str(int(_field.p_mp(pid))) + "　持续 " + str(int(_field.p_dur(pid))) + " 秒　冷却 " + str(int(_field.p_cd(pid))) + " 秒"
 		box.add_child(st)
@@ -1581,7 +1644,8 @@ func _fill_mates(p: Control, y: float, sz: Vector2) -> float:
 		ds.add_theme_font_size_override("font_size", 20)
 		ds.add_theme_color_override("font_color", INK)
 		ds.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		ds.text = str(info["desc"])
+		# ⚠ 面板里的字不认 markdown：描述里写 **传火** 会原样画出星号——统一清一遍
+		ds.text = str(info["desc"]).replace("**", "")
 		box.add_child(ds)
 		# ⚠ 档位那行会很长（飞匕有七项）——给足高度并允许换行，不然会被裁掉半个字（截图抓到过）
 		var lv := Label.new()

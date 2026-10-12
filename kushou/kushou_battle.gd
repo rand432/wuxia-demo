@@ -20,15 +20,27 @@ const GOLD := Color(0.86, 0.68, 0.26)
 #   真实：一点不减（刺骨那种）。
 const DMG_PHYS := "物理"
 const DMG_TRUE := "真实"
-const DMG_METAL := "金系"       # v4j 张道陵·天雷道术：法术伤害，**不吃兵器防御**
+const DMG_METAL := "金系"       # v4j 张道陵·天雷道术
+const DMG_WOOD := "木系"        # v4k 柳卿卿·回春（毒）
+const DMG_FIRE := "火系"        # v4k 季沧海·怒火焚身
+const DMG_WATER := "水系"       # v4l 崔三娘·雾海龙王（召唤物的大浪拍击）
+const DMG_EARTH := "土系"       # v4o 法度·怒目金刚（护盾破碎的震荡）
+# 规则（v4j/v4k 统一）：**元素（金/木/火）都不吃兵器防御**，只看对应的抗性（现在默认 0）
 
 func _apply_dmg(f: Dictionary, amount: float, dtype: String) -> float:
 	var final := amount
 	if dtype == DMG_PHYS:
 		final = maxf(1.0, amount - float(f["hp_max"]) * 0.02)
 	elif dtype == DMG_METAL:
-		# 金系：兵器防御对它无效；将来给怪加"金抗"就在这里乘（现在默认 0）
 		final = maxf(1.0, amount * (1.0 - float(f.get("res_metal", 0.0))))
+	elif dtype == DMG_WOOD:
+		final = maxf(1.0, amount * (1.0 - float(f.get("res_wood", 0.0))))
+	elif dtype == DMG_FIRE:
+		final = maxf(1.0, amount * (1.0 - float(f.get("res_fire", 0.0))))
+	elif dtype == DMG_WATER:
+		final = maxf(1.0, amount * (1.0 - float(f.get("res_water", 0.0))))
+	elif dtype == DMG_EARTH:
+		final = maxf(1.0, amount * (1.0 - float(f.get("res_earth", 0.0))))
 	f["hp"] = float(f["hp"]) - final
 	return final
 # v2h（用户："打斗的音效和战斗音乐 以及 boss 登场的音乐也得要"）：
@@ -138,6 +150,7 @@ func setup(stats: Dictionary) -> void:
 		if hero.has(str(k)):
 			hero[str(k)] = stats[k]
 	hero["hp"] = float(hero["hp_max"])
+	_mp_base = float(hero["mp_max"])       # 纳气按"原本内力"的百分比涨，先记下基数
 
 # 开打：站着等几秒，让怪先走进画面（用户："让主角刚开始等待几秒"）
 func start_run() -> void:
@@ -292,6 +305,21 @@ func _process(delta: float) -> void:
 		sl["t"] = float(sl["t"]) + delta
 		if float(sl["t"]) > slash_life:
 			_slashes.remove_at(i)
+	for i7 in range(_blood.size() - 1, -1, -1):
+		var bl: Dictionary = _blood[i7]
+		bl["t"] = float(bl["t"]) + delta
+		bl["y"] = float(bl["y"]) - 54.0 * delta
+		bl["x"] = float(bl["x"]) + float(bl["vx"]) * delta
+		if float(bl["t"]) > 0.7:
+			_blood.remove_at(i7)
+	for i8 in range(_qi_threads.size() - 1, -1, -1):
+		var qt: Dictionary = _qi_threads[i8]
+		qt["t"] = float(qt["t"]) + delta
+		# 从外往身上收（跟"肝"的往上飘正好相反）
+		qt["x"] = lerpf(float(qt["x"]), float(qt["px"]), delta * 3.2)
+		qt["y"] = lerpf(float(qt["y"]), float(qt["py"]), delta * 3.2)
+		if float(qt["t"]) > 0.7:
+			_qi_threads.remove_at(i8)
 	for i4 in range(_motes.size() - 1, -1, -1):
 		var mo: Dictionary = _motes[i4]
 		mo["t"] = float(mo["t"]) + delta
@@ -422,14 +450,52 @@ func _process(delta: float) -> void:
 			if float(f["dying"]) <= 0.0:
 				foes.erase(f)
 			continue
+		# 持续伤害（毒/灼烧）：每秒跳一次（麻痹时照样掉血）
+		var dots: Array = f.get("dot", [])
+		for di in range(dots.size() - 1, -1, -1):
+			var dd: Dictionary = dots[di]
+			dd["t"] = float(dd["t"]) - dt
+			dd["tick"] = float(dd["tick"]) - dt
+			if float(dd["tick"]) <= 0.0:
+				dd["tick"] = 1.0
+				var dtd := str(dd["dtype"])
+				var dm3 := _apply_dmg(f, float(hero["atk"]) * float(dd["mul"]), dtd)
+				_push_float(float(f["x"]) + 18.0, float(f["y"]) - 22.0, dtd + " " + str(int(dm3)),
+					Color(0.64, 0.92, 0.58) if dtd == DMG_WOOD else Color(1.0, 0.66, 0.32))
+				if float(f["hp"]) <= 0.0:
+					_kill_foe(f)
+					break
+			if float(dd["t"]) <= 0.0:
+				dots.remove_at(di)
+		f["dot"] = dots
+		if not foes.has(f):
+			continue
+		# 麻痹（天雷）：这段时间**不动也不打**
+		if float(f.get("para", 0.0)) > 0.0:
+			f["para"] = maxf(0.0, float(f["para"]) - dt)
+			f["flash"] = maxf(0.0, float(f.get("flash", 0.0)) - delta)
+			continue
 		# 挨打那一下的击退与闪白
 		if float(f.get("kb", 0.0)) > 0.0:
 			f["y"] = maxf(20.0, float(f["y"]) - float(f["kb"]) * dt)
 			f["kb"] = maxf(0.0, float(f.get("kb", 0.0)) - 130.0 * dt)
 		f["flash"] = maxf(0.0, float(f.get("flash", 0.0)) - delta)
 		f["lunge"] = maxf(0.0, float(f.get("lunge", 0.0)) - delta * 4.5)
-		# 怪**朝主角走**（主角会动，所以不再用固定的那条线）——走到 FOE_REACH 就停下开打
-		var to_h := hero_pos - Vector2(float(f["x"]), float(f["y"]))
+		# v4m：怪打**最近的目标**（主角 **或蛟龙**）——所以蛟龙会被打掉
+		var ftgt := hero_pos
+		var fmin: Dictionary = {}
+		var bd2 := hero_pos.distance_to(Vector2(float(f["x"]), float(f["y"])))
+		for m_v in _minions:
+			var mm: Dictionary = m_v
+			if float(mm.get("dying", 0.0)) > 0.0:
+				continue
+			var dmv: float = (mm["pos"] as Vector2).distance_to(Vector2(float(f["x"]), float(f["y"])))
+			if dmv < bd2:
+				bd2 = dmv
+				fmin = mm
+				ftgt = mm["pos"]
+		# 怪**朝目标走**（主角会动，所以不再用固定的那条线）——走到 FOE_REACH 就停下开打
+		var to_h := ftgt - Vector2(float(f["x"]), float(f["y"]))
 		var dh := to_h.length()
 		if dh > FOE_REACH:
 			# v3l（用户："boss可以正常速度"）：boss 不再走 0.7 倍——跟寻常怪一个速度
@@ -441,11 +507,19 @@ func _process(delta: float) -> void:
 			if float(f["t"]) >= 1.0 / FOE_ASPD:
 				f["t"] = 0.0
 				f["lunge"] = 1.0                 # 怪扑下来那一下
+				# 打的是蛟龙：扣它的血（蛟龙没有防御，挨多少掉多少）
+				if not fmin.is_empty():
+					fmin["hp"] = float(fmin["hp"]) - float(f["atk"])
+					_push_float(float((fmin["pos"] as Vector2).x) + 16.0, float((fmin["pos"] as Vector2).y) - 26.0,
+						"-" + str(int(f["atk"])), Color(0.94, 0.66, 0.60))
+					continue
 				var d2 := float(f["atk"])
 				if randf() < float(hero["dodge"]):
 					_push_float(size.x * 0.5, size.y - HERO_LINE - 40.0, "闪", Color(0.60, 0.80, 0.90))
 				else:
 					d2 = maxf(1.0, d2 * (1.0 - float(hero["cut"])))
+					# v4o：先扣护盾（法度·怒目金刚），盾破了才动血
+					d2 = _absorb_by_shield(d2)
 					hero["hp"] = float(hero["hp"]) - d2
 					_hero_hit_flash = 0.18
 					_shake = maxf(_shake, 3.5)
@@ -461,6 +535,17 @@ func _process(delta: float) -> void:
 	_update_partners(dt)
 	_update_daggers(dt)
 	_update_dagger_motion(dt)
+	_update_bolts(dt)
+	_update_jicanghai(dt)
+	_update_minions(dt)
+	_update_waves(dt)
+	_update_shield(dt)
+	_update_quake(dt)
+	for i6 in range(_fire_lines.size() - 1, -1, -1):
+		var fl2: Dictionary = _fire_lines[i6]
+		fl2["t"] = float(fl2["t"]) + delta
+		if float(fl2["t"]) > 0.30:
+			_fire_lines.remove_at(i6)
 	# 飘字
 	for j in range(_floats.size() - 1, -1, -1):
 		var fl: Dictionary = _floats[j]
@@ -691,6 +776,93 @@ const SKILL_POOL := [
 		"desc": "多重那几枚的伤害 +25%（现 ×<MD>）——多重的整体伤害会增加", "anim": "多出来的寒光更亮更粗"},
 	{"id": "suqingluan_sec", "name": "飞匕·减秒数", "kind": "num", "max": 3, "req_p": "suqingluan",
 		"desc": "出匕间隔 −1 秒（现 <DS> 秒）", "anim": "寒光冒得更勤"},
+	# ---- v4j 张道陵·天雷道术（绝品）：范围金系伤害 ＋ 麻痹 ＋ 多重施法 ----
+	{"id": "zhangdaoling_dmg", "name": "天雷·伤害", "kind": "num", "max": 3, "req_p": "zhangdaoling",
+		"desc": "天雷伤害 +25%（现 ×<TD>）【内力 +30/层】", "anim": "雷柱更粗更白"},
+	{"id": "zhangdaoling_range", "name": "天雷·范围", "kind": "num", "max": 3, "req_p": "zhangdaoling",
+		"desc": "范围 +22 像素（现 <TR> 像素，约两个人身位）【内力 +30/层】", "anim": "地上那圈雷光更大"},
+	{"id": "zhangdaoling_para", "name": "天雷·麻痹几率", "kind": "mech", "max": 3, "req_p": "zhangdaoling",
+		"desc": "麻痹几率 +10%（现 <TP>，麻痹 1 秒起步）【内力 +30/层】", "anim": "被劈中的怪头顶跳电花"},
+	{"id": "zhangdaoling_paradur", "name": "天雷·麻痹时长", "kind": "num", "max": 3, "req_p": "zhangdaoling",
+		"desc": "麻痹持续 +1 秒（现 <TPD> 秒）【内力 +30/层】", "anim": "电花挂得更久"},
+	{"id": "zhangdaoling_multi", "name": "天雷·多重施法", "kind": "mech", "max": 3, "req_p": "zhangdaoling",
+		"desc": "额外释放一次的几率 +15%（现 <TM>；那一下**伤害比例不同**，也是金系）【内力 +30/层】",
+		"anim": "第二道雷稍细稍快，落点另算"},
+	{"id": "zhangdaoling_multidmg", "name": "天雷·多重伤害", "kind": "num", "max": 3, "req_p": "zhangdaoling",
+		"desc": "多重施法那一下伤害 +25%（现 ×<TMD>）", "anim": "第二道雷也变粗"},
+	{"id": "zhangdaoling_cost", "name": "天雷·减内力", "kind": "num", "max": 3, "req_p": "zhangdaoling",
+		"desc": "内力消耗 −25（现 <TMP>）", "anim": "雷不变，只是更省"},
+	{"id": "zhangdaoling_cd", "name": "天雷·减冷却", "kind": "num", "max": 3, "req_p": "zhangdaoling",
+		"desc": "冷却 −1.5 秒（现 <TCD> 秒）", "anim": "雷落得更勤"},
+	# ---- v4k 柳卿卿·回春（上品）：治疗自己 ＋ 最近一名敌人中毒（木系 DoT）----
+	{"id": "liuqingqing_heal", "name": "回春·治疗量", "kind": "num", "max": 3, "req_p": "liuqingqing",
+		"desc": "回血 +6% 生命上限（现 <LH>%）【内力 +20/层】", "anim": "绿光更浓"},
+	{"id": "liuqingqing_poison", "name": "回春·毒伤", "kind": "num", "max": 3, "req_p": "liuqingqing",
+		"desc": "毒伤 +25%（现每秒 ×<LP>，木系）【内力 +20/层】", "anim": "毒泡更大更绿"},
+	{"id": "liuqingqing_pdur", "name": "回春·毒持续", "kind": "num", "max": 3, "req_p": "liuqingqing",
+		"desc": "毒持续 +2 秒（现 <LPD> 秒）【内力 +20/层】", "anim": "毒点挂得更久"},
+	{"id": "liuqingqing_spread", "name": "回春·毒扩散", "kind": "mech", "max": 3, "req_p": "liuqingqing",
+		"desc": "毒多传给 1 名附近的敌人（现 <LS> 名，一条绿线连过去）【内力 +20/层】",
+		"anim": "绿线一跳一跳地连出去"},
+	{"id": "liuqingqing_cd", "name": "回春·减冷却", "kind": "num", "max": 3, "req_p": "liuqingqing",
+		"desc": "冷却 −1.5 秒（现 <LCD> 秒）", "anim": "回得更勤"},
+	{"id": "liuqingqing_cost", "name": "回春·减内力", "kind": "num", "max": 3, "req_p": "liuqingqing",
+		"desc": "内力消耗 −15（现 <LMP>）", "anim": "绿光不变，只是更省"},
+	# ---- v4k 季沧海·怒火焚身（极品）：每 3 秒烧最近一名（火系）；传火会引燃身边的 ----
+	{"id": "jicanghai_dmg", "name": "怒火·伤害", "kind": "num", "max": 3, "req_p": "jicanghai",
+		"desc": "火伤 +25%（现 ×<JD>）", "anim": "火焰更旺"},
+	{"id": "jicanghai_spread", "name": "怒火·传火", "kind": "mech", "max": 3, "req_p": "jicanghai",
+		"desc": "传火多引燃 1 名（现 <JS> 名；引燃线是一道火线）", "anim": "火线一道接一道"},
+	{"id": "jicanghai_burn", "name": "怒火·灼烧", "kind": "num", "max": 3, "req_p": "jicanghai",
+		"desc": "命中后留下灼烧（每秒额外 ×<JB>，火系，4 秒）", "anim": "橙点挂在头顶"},
+	{"id": "jicanghai_sec", "name": "怒火·减秒数", "kind": "num", "max": 3, "req_p": "jicanghai",
+		"desc": "出火间隔 −0.4 秒（现 <JCD> 秒）", "anim": "火冒得更勤"},
+	# ---- v4l 崔三娘·雾海龙王（绝品）：召唤蛟龙（可多招）＋ 蛟龙自带「大浪拍击」 ----
+	{"id": "cuisanniang_inherit", "name": "龙王·继承属性", "kind": "num", "max": 3, "req_p": "cuisanniang",
+		"desc": "蛟龙继承主角属性 +5%（现 <CI>%）【内力 +60/层】", "anim": "蛟龙更粗更长"},
+	{"id": "cuisanniang_skill", "name": "龙王·技能伤害", "kind": "num", "max": 3, "req_p": "cuisanniang",
+		"desc": "大浪拍击 +25%（现 ×<CS>）【内力 +60/层】", "anim": "浪头更高"},
+	{"id": "cuisanniang_radius", "name": "龙王·技能范围", "kind": "num", "max": 3, "req_p": "cuisanniang",
+		"desc": "大浪从「只打一名」变成一片（现半径 <CR> 像素）【内力 +60/层】", "anim": "水浪扩成一圈"},
+	{"id": "cuisanniang_cost", "name": "龙王·降内力", "kind": "num", "max": 3, "req_p": "cuisanniang",
+		"desc": "内力消耗 −40（现 <CM>）", "anim": "召唤光不变，只是更省"},
+	# ---- v4n 独眼彪·杀气（下品）/ 枯荣·纳气（下品）：跟"肝"一个骨架，更弱，但特效各不同 ----
+	{"id": "duyanbiao_cd", "name": "杀气·减冷却", "kind": "num", "max": 3, "req_p": "duyanbiao",
+		"desc": "冷却 −3 秒（现 <SBC> 秒）【内力 +20/层】", "anim": "赤气冒得更勤"},
+	{"id": "duyanbiao_dur", "name": "杀气·加持续", "kind": "num", "max": 3, "req_p": "duyanbiao",
+		"desc": "持续 +2 秒（现 <SBD> 秒）【内力 +20/层】", "anim": "赤刃留得更久"},
+	{"id": "duyanbiao_atk", "name": "杀气·杀敌攻击", "kind": "num", "max": 3, "req_p": "duyanbiao",
+		"desc": "杀敌攻击 +0.5（现 +<SBA>/只）【内力 +20/层】", "anim": "每杀一只爆一圈红环"},
+	{"id": "duyanbiao_cost", "name": "杀气·减内力", "kind": "num", "max": 3, "req_p": "duyanbiao",
+		"desc": "内力消耗 −15（现 <SBM>）", "anim": "赤气不变，只是更省"},
+	{"id": "kurong_cd", "name": "纳气·减冷却", "kind": "num", "max": 3, "req_p": "kurong",
+		"desc": "冷却 −3 秒（现 <KRC> 秒）【内力 +20/层】", "anim": "气丝收得更勤"},
+	{"id": "kurong_dur", "name": "纳气·加持续", "kind": "num", "max": 3, "req_p": "kurong",
+		"desc": "持续 +2 秒（现 <KRD> 秒）【内力 +20/层】", "anim": "暖环留得更久"},
+	{"id": "kurong_mp", "name": "纳气·杀敌内力", "kind": "num", "max": 3, "req_p": "kurong",
+		"desc": "杀敌内力上限 +3%（现 +<KRP> 原本内力/只）【内力 +20/层】", "anim": "气丝收得更密"},
+	{"id": "kurong_cost", "name": "纳气·减内力", "kind": "num", "max": 3, "req_p": "kurong",
+		"desc": "内力消耗 −15（现 <KRM>）", "anim": "暖环不变，只是更省"},
+	# ---- v4o 法度·怒目金刚（中品）：护盾 / 破盾土系范围伤害 / 每降 10% 出一段 / **范围** ----
+	{"id": "fadu_shield", "name": "怒目·护盾值", "kind": "num", "max": 3, "req_p": "fadu",
+		"desc": "护盾 = 生命上限的 +15%（现 <FDS>%）【内力 +20/层】", "anim": "石甲更厚更多"},
+	{"id": "fadu_break", "name": "怒目·破盾伤害", "kind": "num", "max": 3, "req_p": "fadu",
+		"desc": "破盾那一下 +25%（现 ×<FDB> 护盾值，土系范围）【内力 +20/层】", "anim": "破盾的地裂更大"},
+	{"id": "fadu_step", "name": "怒目·层段", "kind": "mech", "max": 3, "req_p": "fadu",
+		"desc": "护盾每掉 10% 就震荡一次，造成护盾值的 10%×层（现 <FDP>%）土系范围伤害【内力 +20/层】",
+		"anim": "盾一层层碎、地面一圈圈裂"},
+	{"id": "fadu_range", "name": "怒目·范围", "kind": "num", "max": 3, "req_p": "fadu",
+		"desc": "震荡半径 +25 像素（现 <FDR> 像素）【内力 +20/层】", "anim": "土浪扩得更远"},
+	{"id": "fadu_dur", "name": "怒目·持续", "kind": "num", "max": 3, "req_p": "fadu",
+		"desc": "护盾持续 +2 秒（现 <FDD> 秒）【内力 +20/层】", "anim": "石甲挂得更久"},
+	{"id": "fadu_cd", "name": "怒目·减冷却", "kind": "num", "max": 3, "req_p": "fadu",
+		"desc": "冷却 −3 秒（现 <FDC> 秒）", "anim": "盾补得更勤"},
+	{"id": "fadu_cost", "name": "怒目·减内力", "kind": "num", "max": 3, "req_p": "fadu",
+		"desc": "内力消耗 −15（现 <FDM>）", "anim": "石甲不变，只是更省"},
+	{"id": "cuisanniang_life", "name": "龙王·存在时间", "kind": "num", "max": 3, "req_p": "cuisanniang",
+		"desc": "蛟龙多活 6 秒（现 <CL> 秒）【内力 +60/层】", "anim": "蛟龙身上的水光留得更久"},
+	{"id": "cuisanniang_cd", "name": "龙王·降冷却", "kind": "num", "max": 3, "req_p": "cuisanniang",
+		"desc": "冷却 −8 秒（现 <CC> 秒）", "anim": "蛟龙出得更勤"},
 ]
 
 func skill_lv(id: String) -> int:
@@ -959,6 +1131,26 @@ var partners := {
 	#   **三条并列的伤害账**——飞匕伤害（首击与穿透都用它）／弹射伤害（弹射那一下）／多重伤害（多出来的匕首）；
 	#   各自有对应的"+XX伤害"强化项，互不串味。
 	# v4j（用户）：张道陵【绝品】技能「天雷道术」——范围金系伤害，耗 300 内力、冷却 10s
+	# v4l（用户）崔三娘【绝品】雾海龙王：召唤蛟龙为你作战（继承主角 25% 属性、**可多招**），
+	#   蛟龙会普攻，还带自己的技能「大浪拍击」（水系、冷却 20s）；耗 500 内力、冷却 60s
+	"cuisanniang": {"owned": true, "mp": 0.0, "cd": 6.0, "active": 0.0,
+		"inherit_lv": 0, "skill_lv": 0, "radius_lv": 0, "cost_lv": 0, "cd_lv": 0, "life_lv": 0},
+	# v4n（用户："杀敌+攻击的 和杀敌加内力的 下品 和暗影裁决几乎雷同 你帮我想 同样要特效"）
+	#   两位下品，跟暗影裁决一个骨架（持续窗口内杀敌涨属性），但**更弱**、**特效各不同**：
+	#   独眼彪「杀气」＝杀敌涨**攻击**（赤红杀气）；枯荣「纳气」＝杀敌涨**内力上限**（琥珀气丝往身上收）
+	# v4o 法度【中品】怒目金刚：护盾 ＋ 破盾土系范围伤害 ＋ 每降 10% 出一段
+	"fadu": {"owned": true, "mp": 0.0, "cd": 0.0, "active": 0.0,
+		"shield_lv": 0, "break_lv": 0, "dur_lv": 0, "cd_lv": 0, "cost_lv": 0, "step_lv": 0, "range_lv": 0},
+	"duyanbiao": {"owned": true, "mp": 0.0, "cd": 0.0, "active": 0.0,
+		"cd_lv": 0, "dur_lv": 0, "atk_lv": 0, "cost_lv": 0},
+	"kurong": {"owned": true, "mp": 0.0, "cd": 0.0, "active": 0.0,
+		"cd_lv": 0, "dur_lv": 0, "mp_lv": 0, "cost_lv": 0},
+	# v4k 柳卿卿【上品】回春：治疗自己 ＋ 让最近一名敌人中毒（木系持续伤害）
+	"liuqingqing": {"owned": true, "mp": 0.0, "cd": 2.0, "active": 0.0,
+		"heal_lv": 0, "poison_lv": 0, "pdur_lv": 0, "spread_lv": 0, "cd_lv": 0, "cost_lv": 0},
+	# v4k 季沧海【极品】怒火焚身：每 3 秒烧最近一名敌人（火系），**传火**会引燃它身边一名
+	"jicanghai": {"owned": true, "mp": 0.0, "cd": 2.0, "active": 0.0,
+		"dmg_lv": 0, "spread_lv": 0, "burn_lv": 0, "sec_lv": 0},
 	"zhangdaoling": {"owned": true, "mp": 0.0, "cd": 3.0, "active": 0.0,
 		"dmg_lv": 0, "range_lv": 0, "para_lv": 0, "paradur_lv": 0,
 		"cost_lv": 0, "cd_lv": 0, "multi_lv": 0, "multidmg_lv": 0},
@@ -974,6 +1166,24 @@ const PARTNER_INFO := {
 	"chenshi": {"name": "陈石", "quality": "下品", "skill": "刺骨", "dtype": "真实",
 		"desc": "持续时间内被攻击时，对攻击自己的一名敌人造成生命值 2% 的真实伤害",
 		"mp0": 100.0, "cd0": 20.0, "dur0": 8.0},
+	"fadu": {"name": "法度", "quality": "中品", "skill": "怒目金刚", "dtype": "土系（护盾）",
+		"desc": "给自己套一层护盾（先扣盾再扣血）；护盾被击破时，对周围造成等于护盾值的土系范围伤害",
+		"mp0": 150.0, "cd0": 20.0, "dur0": 8.0},
+	"duyanbiao": {"name": "独眼彪", "quality": "下品", "skill": "杀气", "dtype": "无伤害",
+		"desc": "持续时间内每杀一名敌人，攻击 +1（每层强化再 +0.5）——一生二、二生三的滚雪球",
+		"mp0": 100.0, "cd0": 25.0, "dur0": 5.0},
+	"kurong": {"name": "枯荣", "quality": "下品", "skill": "纳气", "dtype": "无伤害",
+		"desc": "持续时间内每杀一名敌人，内力上限 +3（并回同样多内力）——越打越能放法术",
+		"mp0": 100.0, "cd0": 25.0, "dur0": 5.0},
+	"cuisanniang": {"name": "崔三娘", "quality": "绝品", "skill": "雾海龙王", "dtype": "召唤 · 水系",
+		"desc": "召唤一条蛟龙替你作战（继承主角 25% 属性，可多招）；蛟龙会自行普攻，并带技能「大浪拍击」（水系）",
+		"mp0": 500.0, "cd0": 60.0, "dur0": 0.0},
+	"liuqingqing": {"name": "柳卿卿", "quality": "上品", "skill": "回春", "dtype": "治疗 + 木系",
+		"desc": "治疗自己（回生命上限的一部分），同时让最近的敌人中毒——木系持续伤害，每秒跳一次",
+		"mp0": 120.0, "cd0": 12.0, "dur0": 0.0},
+	"jicanghai": {"name": "季沧海", "quality": "极品", "skill": "怒火焚身", "dtype": "火系",
+		"desc": "每 3 秒烧最近一名敌人（火系）；传火：会引燃它身边范围内的另一名敌人",
+		"mp0": 0.0, "cd0": 3.0, "dur0": 0.0},
 	"zhangdaoling": {"name": "张道陵", "quality": "绝品", "skill": "天雷道术", "dtype": "金系",
 		"desc": "落下一道天雷，砸在最近的敌人身上，**两个人身位**内的敌人一起吃金系伤害；有几率麻痹",
 		"mp0": 300.0, "cd0": 10.0, "dur0": 0.0},
@@ -983,7 +1193,8 @@ const PARTNER_INFO := {
 }
 const PARTNER_UP_STEP_MP := 20.0      # 每个"提升内力消耗"的强化 +20 内力
 const PARTNER_DOWN_STEP_MP := 15.0    # "减内力消耗"每层 −15
-const MP_REGEN := 2.0                 # 内力每秒回（角色页写的就是"每秒回 2"）
+# v4j：内力池要为"300 内力一发"的法术留出空间——上限 300 起（每级 +25），每秒回 10
+const MP_REGEN := 10.0
 const PARTNER_MP_FLOOR := 40.0
 
 # 现算的数值（改一项不用到处同步）
@@ -992,8 +1203,12 @@ func p_mp(id: String) -> float:
 	var info: Dictionary = PARTNER_INFO[id]
 	if float(info["mp0"]) <= 0.0:
 		return 0.0
-	var ups := float(p.get("cd_lv", 0)) + float(p.get("dur_lv", 0))
-	ups += float(p.get("hp_lv", 0)) if id == "anying" else float(p.get("dmg_lv", 0)) + float(p.get("tgt_lv", 0))
+	# 通用：**所有**"加效果"的层都 +20 内力（除 cost_lv）——加新伙伴不用改这里
+	var ups := 0.0
+	for k in p.keys():
+		var ks := str(k)
+		if ks.ends_with("_lv") and ks != "cost_lv":
+			ups += float(p[k])
 	var v := float(info["mp0"]) + PARTNER_UP_STEP_MP * ups - PARTNER_DOWN_STEP_MP * float(p.get("cost_lv", 0))
 	return maxf(PARTNER_MP_FLOOR, v)
 
@@ -1016,6 +1231,411 @@ func p_thorns() -> float:                  # 刺骨：反伤（占生命上限�
 func p_thorn_targets() -> int:
 	return 1 + int(partners["chenshi"]["tgt_lv"])
 
+# ============================================================
+# 法度·怒目金刚（v4o）：护盾 ＋ 破盾土系**范围**伤害 ＋"每降 10% 出一段"
+#   护盾：先扣盾、再扣血；破盾那一下＝对**周围一圈**造成等于护盾值的土系伤害
+#   层段（用户点名）：护盾每掉 10% 就震荡一次，造成"10% × 层数"的护盾值土系伤害——**也是范围**
+# ============================================================
+var _quake_fx: Array = []           # 土系震荡：{x, y, r, t, big}
+
+func fd_shield() -> float:
+	return float(hero["hp_max"]) * (0.40 + 0.15 * float(partners["fadu"].get("shield_lv", 0)))
+
+func fd_break_mul() -> float:
+	return 1.0 + 0.25 * float(partners["fadu"].get("break_lv", 0))
+
+# v4p（用户："我单指的法度有范围"）：**只有法度**这条 +范围（天雷/龙王那两条是原本就有的）
+func fd_range() -> float:
+	return 150.0 + 25.0 * float(partners["fadu"].get("range_lv", 0))
+
+func fd_step_pct() -> float:
+	return 0.10 * float(partners["fadu"].get("step_lv", 0))     # 0 ＝ 没学"层段"
+
+func fd_dur() -> float:
+	return 8.0 + 2.0 * float(partners["fadu"].get("dur_lv", 0))
+
+func fd_cd() -> float:
+	return maxf(6.0, 20.0 - 3.0 * float(partners["fadu"].get("cd_lv", 0)))
+
+func _cast_shield() -> void:
+	var sv := fd_shield()
+	hero["shield_max"] = sv
+	hero["shield"] = sv
+	hero["shield_t"] = fd_dur()
+	_push_float(hero_pos.x, hero_pos.y - 84.0, "怒目金刚　盾 " + str(int(sv)), Color(0.86, 0.72, 0.42), true)
+	_quake_fx.append({"x": hero_pos.x, "y": hero_pos.y + 6.0, "r": 70.0, "t": 0.0, "big": false})
+	Audio.sfx("drum", -8.0)
+
+# 土系**范围**震荡：主角周围一圈敌人一起吃
+func _earth_quake(dmg: float, big: bool) -> void:
+	if dmg <= 0.0:
+		return
+	var r := 150.0 if not big else 210.0
+	for f_v in foes.duplicate():
+		var f: Dictionary = f_v
+		if float(f.get("dying", 0.0)) > 0.0:
+			continue
+		if hero_pos.distance_to(Vector2(float(f["x"]), float(f["y"]))) > r:
+			continue
+		var dm := _apply_dmg(f, dmg, DMG_EARTH)
+		f["flash"] = 0.16
+		f["kb"] = 10.0 if not big else 18.0
+		_push_float(float(f["x"]), float(f["y"]) - 32.0, "震荡 " + str(int(dm)), Color(0.90, 0.76, 0.46), big)
+		if float(f["hp"]) <= 0.0:
+			_kill_foe(f)
+	_quake_fx.append({"x": hero_pos.x, "y": hero_pos.y + 6.0, "r": r, "t": 0.0, "big": big})
+	_shake = maxf(_shake, 10.0 if big else 5.0)
+	Audio.sfx("hit_heavy" if big else "melee", -6.0)
+
+func _update_shield(delta: float) -> void:
+	if float(hero.get("shield", 0.0)) <= 0.0:
+		return
+	hero["shield_t"] = float(hero.get("shield_t", 0.0)) - delta
+	if float(hero["shield_t"]) <= 0.0:
+		hero["shield"] = 0.0
+		_push_float(hero_pos.x, hero_pos.y - 70.0, "护盾消散", Color(0.80, 0.74, 0.60))
+
+# 挨打先扣盾：返回"还有多少要打到血上"；跨过每个 10% 就震荡一段，盾碎再来一发大的（都是范围）
+func _absorb_by_shield(dmg: float) -> float:
+	var sh := float(hero.get("shield", 0.0))
+	if sh <= 0.0:
+		return dmg
+	var mx := maxf(1.0, float(hero.get("shield_max", 1.0)))
+	var before := sh / mx
+	var left := maxf(0.0, sh - dmg)
+	hero["shield"] = left
+	var after := left / mx
+	var step := fd_step_pct()
+	if step > 0.0:
+		var a := int(floor(before * 10.0))
+		var b := int(floor(after * 10.0))
+		if b < a:
+			_earth_quake(mx * step, false)
+	if left <= 0.0:
+		_earth_quake(mx * fd_break_mul(), true)
+		_push_float(hero_pos.x - 20.0, hero_pos.y - 96.0, "盾破！", Color(0.96, 0.82, 0.50), true)
+		Audio.sfx("sword_in_ground", -4.0)
+	return maxf(0.0, dmg - sh)
+
+func _update_quake(delta: float) -> void:
+	for i in range(_quake_fx.size() - 1, -1, -1):
+		var q: Dictionary = _quake_fx[i]
+		q["t"] = float(q["t"]) + delta
+		if float(q["t"]) > 0.45:
+			_quake_fx.remove_at(i)
+
+# 画护盾：身周六片石甲 ＋ 一道环；震荡时地面扩开一圈土浪（破盾那圈更大并带放射裂痕）
+func _draw_shield(shk: Vector2) -> void:
+	var sh := float(hero.get("shield", 0.0))
+	var hp2 := hero_pos + shk
+	if sh > 0.0:
+		var ratio := clampf(sh / maxf(1.0, float(hero.get("shield_max", 1.0))), 0.0, 1.0)
+		for i in 6:
+			var a := TAU * float(i) / 6.0 + _t * 0.8
+			var pp := hp2 + Vector2(cos(a), sin(a) * 0.6) * 52.0
+			var plate := PackedVector2Array([pp + Vector2(0, -9), pp + Vector2(8, 0), pp + Vector2(0, 9), pp + Vector2(-8, 0)])
+			draw_colored_polygon(plate, Color(0.86, 0.72, 0.42, 0.30 + 0.45 * ratio))
+		draw_arc(hp2 + Vector2(0, 12), 54.0, 0.0, TAU, 30, Color(0.92, 0.80, 0.48, 0.30 + 0.4 * ratio), 3.0)
+	for q_v in _quake_fx:
+		var q2: Dictionary = q_v
+		var qa := 1.0 - float(q2["t"]) / 0.45
+		var rr := float(q2["r"]) * (0.4 + 0.9 * (1.0 - qa))
+		var qp := Vector2(float(q2["x"]), float(q2["y"])) + shk
+		draw_arc(qp, rr, 0.0, TAU, 30, Color(0.92, 0.76, 0.44, qa), 8.0 if bool(q2["big"]) else 5.0)
+		if bool(q2["big"]):
+			for k in 8:
+				var a6 := TAU * float(k) / 8.0
+				draw_line(qp + Vector2(cos(a6), sin(a6) * 0.6) * rr * 0.6,
+					qp + Vector2(cos(a6), sin(a6) * 0.6) * rr * 1.1, Color(0.86, 0.70, 0.40, qa), 4.0)
+
+# ============================================================
+# 崔三娘·雾海龙王（v4l）：**召唤物**这一套
+#   蛟龙：继承主角 25% 属性（可强化）· 会自己走位普攻 · 自带技能「大浪拍击」（水系，冷却 20s）
+#   召唤：耗 500 内力、冷却 60s；**可多招**（同时在场最多 6 条）
+# ============================================================
+const MINION_MAX := 6
+var _minions: Array = []            # 蛟龙：{pos, tgt, atk_cd, skill_cd, born}
+var _waves_fx: Array = []           # 大浪拍击的水浪：{x, y, r, t}
+
+func cn_inherit() -> float:
+	return 0.25 + 0.05 * float(partners["cuisanniang"]["inherit_lv"])
+
+func cn_skill_mul() -> float:
+	return 2.50 * (1.0 + 0.25 * float(partners["cuisanniang"]["skill_lv"]))
+
+# 大浪拍击的范围：0 ＝ 只打一名（升级后变成一片水浪）
+func cn_skill_radius() -> float:
+	return 60.0 * float(partners["cuisanniang"]["radius_lv"])
+
+func cn_mp() -> float:
+	var p: Dictionary = partners["cuisanniang"]
+	var ups := float(p.get("inherit_lv", 0)) + float(p.get("skill_lv", 0)) + float(p.get("radius_lv", 0))
+	ups += float(p.get("life_lv", 0))
+	return maxf(200.0, 500.0 + 60.0 * ups - 40.0 * float(p.get("cost_lv", 0)))
+
+func cn_cd() -> float:
+	return maxf(20.0, 60.0 - 8.0 * float(partners["cuisanniang"].get("cd_lv", 0)))
+
+# 蛟龙的存在时间（用户："有存在时间 【+存在时间】"）
+func cn_life() -> float:
+	return 30.0 + 6.0 * float(partners["cuisanniang"].get("life_lv", 0))
+
+# 蛟龙的血量：继承主角气血的一部分（所以"会被怪打掉"）
+func cn_hp() -> float:
+	return maxf(30.0, float(hero["hp_max"]) * cn_inherit() * 1.2)
+
+func _summon_dragon() -> void:
+	if _minions.size() >= MINION_MAX:
+		return
+	_minions.append({"pos": hero_pos + Vector2(randf_range(-70.0, 70.0), randf_range(-20.0, 30.0)),
+		"tgt": {}, "atk_cd": 0.6, "skill_cd": 20.0, "born": _t,
+		"hp": cn_hp(), "hp_max": cn_hp(), "life": cn_life(), "life_max": cn_life(), "dying": 0.0})
+	_push_float(hero_pos.x, hero_pos.y - 70.0, "雾海龙王！", Color(0.60, 0.88, 1.0), true)
+	_bursts.append({"x": hero_pos.x, "y": hero_pos.y - 10.0, "t": 0.0, "col": Color(0.52, 0.84, 1.0), "scale": 2.0})
+	Audio.sfx("bell", -5.0, 0.9)
+
+# 蛟龙：自己找最近的敌人 → 走过去 → 普攻；技能好了就"大浪拍击"
+func _update_minions(delta: float) -> void:
+	for i in range(_minions.size() - 1, -1, -1):
+		var m: Dictionary = _minions[i]
+		# 寿终 / 被打死：先"归海"半秒再消失
+		if float(m.get("dying", 0.0)) > 0.0:
+			m["dying"] = float(m["dying"]) - delta
+			if float(m["dying"]) <= 0.0:
+				_minions.remove_at(i)
+			continue
+		m["life"] = float(m["life"]) - delta
+		if float(m["life"]) <= 0.0:
+			m["dying"] = 0.45
+			_push_float(float((m["pos"] as Vector2).x), float((m["pos"] as Vector2).y) - 30.0, "蛟龙归海", Color(0.62, 0.86, 1.0))
+			continue
+		if float(m["hp"]) <= 0.0:
+			m["dying"] = 0.45
+			_bursts.append({"x": float((m["pos"] as Vector2).x), "y": float((m["pos"] as Vector2).y), "t": 0.0,
+				"col": Color(0.52, 0.80, 1.0), "scale": 1.4})
+			_push_float(float((m["pos"] as Vector2).x), float((m["pos"] as Vector2).y) - 30.0, "蛟龙被打散", Color(0.94, 0.72, 0.72))
+			Audio.sfx("fall_down", -6.0)
+			continue
+		var mp2: Vector2 = m["pos"]
+		var tg: Dictionary = m["tgt"]
+		if tg.is_empty() or not foes.has(tg) or float(tg.get("dying", 0.0)) > 0.0:
+			tg = _nearest_except(mp2, [])
+			m["tgt"] = tg
+		m["atk_cd"] = maxf(0.0, float(m["atk_cd"]) - delta)
+		m["skill_cd"] = maxf(0.0, float(m["skill_cd"]) - delta)
+		if tg.is_empty():
+			# 没敌人：跟在主角旁边
+			var home := hero_pos + Vector2(-120.0, 30.0)
+			m["pos"] = mp2 + (home - mp2) * minf(1.0, delta * 2.0)
+			continue
+		var tp := Vector2(float(tg["x"]), float(tg["y"]))
+		var to_t := tp - mp2
+		if to_t.length() > 58.0:
+			m["pos"] = mp2 + to_t.normalized() * minf(128.0 * delta, to_t.length() - 50.0)
+		else:
+			# 够得着：普攻（物理）——继承主角攻击的一部分
+			if float(m["atk_cd"]) <= 0.0:
+				m["atk_cd"] = 1.1
+				var dm := _apply_dmg(tg, float(hero["atk"]) * cn_inherit() * 0.5, DMG_PHYS)
+				tg["flash"] = 0.10
+				_push_float(float(tg["x"]) - 20.0, float(tg["y"]) - 20.0, str(int(dm)), Color(0.66, 0.90, 1.0))
+				if float(tg["hp"]) <= 0.0:
+					_kill_foe(tg)
+		# 大浪拍击：到点就放（水系；升级后带范围）
+		if float(m["skill_cd"]) <= 0.0:
+			m["skill_cd"] = 20.0
+			_cast_wave(tp)
+		# 别跑出战场
+		var p2: Vector2 = m["pos"]
+		m["pos"] = Vector2(clampf(p2.x, 40.0, size.x - 40.0), clampf(p2.y, size.y * 0.10, size.y - 40.0))
+
+func _cast_wave(at: Vector2) -> void:
+	# v4q 调伤害：6 条同时在场的总量要收——大浪 ×0.72
+	var base := float(hero["atk"]) * cn_inherit() * cn_skill_mul() * 0.72
+	var r := cn_skill_radius()
+	var n := 0
+	for f_v in foes.duplicate():
+		var f: Dictionary = f_v
+		if float(f.get("dying", 0.0)) > 0.0:
+			continue
+		var fp := Vector2(float(f["x"]), float(f["y"]))
+		if r > 0.0:
+			if at.distance_to(fp) > r:
+				continue
+		elif n > 0:
+			continue
+		var dm := _apply_dmg(f, base, DMG_WATER)
+		f["flash"] = 0.14
+		f["kb"] = 12.0
+		_push_float(float(f["x"]), float(f["y"]) - 32.0, "大浪 " + str(int(dm)), Color(0.62, 0.88, 1.0), true)
+		n += 1
+		if float(f["hp"]) <= 0.0:
+			_kill_foe(f)
+	_waves_fx.append({"x": at.x, "y": at.y, "r": maxf(70.0, r), "t": 0.0})
+	Audio.sfx("rain", -6.0)
+
+func _update_waves(delta: float) -> void:
+	for i in range(_waves_fx.size() - 1, -1, -1):
+		var wv: Dictionary = _waves_fx[i]
+		wv["t"] = float(wv["t"]) + delta
+		if float(wv["t"]) > 0.45:
+			_waves_fx.remove_at(i)
+
+# 画蛟龙：一串由粗到细的青色圆（蛇身）＋ 头 ＋ 角 ＋ 鳍，随移动摆动
+func _draw_minions(shk: Vector2) -> void:
+	for m_v in _minions:
+		var m: Dictionary = m_v
+		var c: Vector2 = m["pos"] + shk
+		var tg: Dictionary = m["tgt"]
+		var face := Vector2(0.0, -1.0)
+		if not tg.is_empty():
+			face = (Vector2(float(tg["x"]), float(tg["y"])) - (m["pos"] as Vector2)).normalized()
+		var side := face.orthogonal()
+		var fade := clampf(float(m.get("dying", 0.0)) / 0.45, 0.0, 1.0)
+		for k in 6:
+			var f2 := float(k) / 5.0
+			var seg := c - face * (10.0 + 16.0 * float(k)) + side * sin(_t * 6.0 + float(k) * 0.8) * 7.0
+			draw_circle(seg, 12.0 - 1.4 * float(k), Color(0.30, 0.62, 0.86, (0.95 - 0.08 * f2) * (1.0 if fade <= 0.0 else fade)))
+		draw_circle(c, 13.0, Color(0.42, 0.76, 0.96, 1.0 if fade <= 0.0 else fade))
+		draw_line(c + face * 12.0, c + face * 22.0, Color(0.90, 0.96, 1.0), 3.0)
+		draw_line(c - side * 8.0, c - side * 16.0 - face * 6.0, Color(0.72, 0.90, 1.0), 3.0)
+		draw_line(c + side * 8.0, c + side * 16.0 - face * 6.0, Color(0.72, 0.90, 1.0), 3.0)
+		draw_circle(c + face * 6.0 - side * 4.0, 2.2, Color(0.10, 0.16, 0.22))
+		# 蛟龙的血条（青）＋ 存在时间条（白），让它"会被打掉/会到点"一眼可见
+		var hpr := clampf(float(m.get("hp", 1.0)) / maxf(1.0, float(m.get("hp_max", 1.0))), 0.0, 1.0)
+		var lfr := clampf(float(m.get("life", 1.0)) / maxf(1.0, float(m.get("life_max", 1.0))), 0.0, 1.0)
+		draw_rect(Rect2(c.x - 26.0, c.y - 30.0, 52.0, 6.0), Color(0.12, 0.16, 0.20))
+		draw_rect(Rect2(c.x - 26.0, c.y - 30.0, 52.0 * hpr, 6.0), Color(0.42, 0.80, 0.96))
+		draw_rect(Rect2(c.x - 26.0, c.y - 22.0, 52.0 * lfr, 3.0), Color(0.88, 0.96, 1.0, 0.85))
+		if float(m.get("dying", 0.0)) > 0.0:
+			draw_circle(c, 18.0, Color(0.62, 0.88, 1.0, float(m["dying"]) * 0.6))
+	# 大浪：一圈扩散的蓝环＋几道浪线
+	for w_v in _waves_fx:
+		var w: Dictionary = w_v
+		var wa := 1.0 - float(w["t"]) / 0.45
+		var rr := float(w["r"]) * (0.5 + 0.6 * (1.0 - wa))
+		var wp := Vector2(float(w["x"]), float(w["y"])) + shk
+		draw_arc(wp, rr, 0.0, TAU, 30, Color(0.54, 0.84, 1.0, wa * 0.9), 7.0)
+		draw_arc(wp, rr * 0.7, 0.0, TAU, 26, Color(0.78, 0.94, 1.0, wa * 0.6), 4.0)
+# ============================================================
+# 柳卿卿·回春（v4k）＋ 季沧海·怒火焚身（v4k）
+#   回春：治疗自己 ＋ 最近一名敌人中毒（**木系** DoT，每秒跳一次）
+#   怒火：每 3 秒烧最近一名敌人（**火系**）；**传火**＝连它身边范围内的一名一起点着
+#   两者都不吃兵器防御（元素规则），只看 res_wood / res_fire
+# ============================================================
+var _fire_lines: Array = []         # 传火的火线：{from,to,t}
+
+# ---- 柳卿卿 ----
+func lq_heal() -> float:
+	return 0.18 + 0.06 * float(partners["liuqingqing"]["heal_lv"])
+
+func lq_poison_mul() -> float:
+	return 0.30 * (1.0 + 0.25 * float(partners["liuqingqing"]["poison_lv"]))
+
+func lq_poison_dur() -> float:
+	return 4.0 + 2.0 * float(partners["liuqingqing"]["pdur_lv"])
+
+func lq_spread() -> int:
+	return 1 + int(partners["liuqingqing"]["spread_lv"])
+
+func lq_cd() -> float:
+	return maxf(4.0, 12.0 - 1.5 * float(partners["liuqingqing"].get("cd_lv", 0)))
+
+func lq_mp() -> float:
+	var p: Dictionary = partners["liuqingqing"]
+	var ups := float(p.get("heal_lv", 0)) + float(p.get("poison_lv", 0)) + float(p.get("pdur_lv", 0))
+	ups += float(p.get("spread_lv", 0))
+	return maxf(60.0, 120.0 + 20.0 * ups - 15.0 * float(p.get("cost_lv", 0)))
+
+func _cast_spring() -> void:
+	# 治疗：回生命上限的一部分（并飘绿字＋绿色光点）
+	var heal := float(hero["hp_max"]) * lq_heal()
+	hero["hp"] = minf(float(hero["hp_max"]), float(hero["hp"]) + heal)
+	_push_float(hero_pos.x - 30.0, hero_pos.y - 60.0, "回春 +" + str(int(heal)), Color(0.60, 0.94, 0.66), true)
+	for i in 5:
+		_motes.append({"x": hero_pos.x + randf_range(-30.0, 30.0), "y": hero_pos.y + randf_range(-4.0, 24.0), "t": 0.0})
+	# 中毒：最近的敌人 ＋ 几率再扩散给身边的几只
+	var n := lq_spread()
+	var done := 0
+	var from := hero_pos
+	var cur := _nearest_except(hero_pos, [])
+	while not cur.is_empty() and done < n:
+		_add_dot(cur, lq_poison_mul(), lq_poison_dur(), DMG_WOOD)
+		_push_float(float(cur["x"]), float(cur["y"]) - 34.0, "中毒", Color(0.62, 0.90, 0.58))
+		_bursts.append({"x": float(cur["x"]), "y": float(cur["y"]) - 12.0, "t": 0.0,
+			"col": Color(0.56, 0.88, 0.52), "scale": 1.1})
+		_thorn_lines.append({"from": from, "to": Vector2(float(cur["x"]), float(cur["y"])), "t": 0.0,
+			"col": Color(0.60, 0.92, 0.56)})
+		from = Vector2(float(cur["x"]), float(cur["y"]))
+		done += 1
+		cur = _nearest_except(from, [])
+	Audio.sfx("bell", -8.0, 1.1)
+
+# ---- 季沧海 ----
+func jc_dmg_mul() -> float:
+	# v4q 调伤害：0.70 → 0.60（无内力消耗、每 3 秒一发还带传火，收一点更稳）
+	return 0.60 * (1.0 + 0.25 * float(partners["jicanghai"]["dmg_lv"]))
+
+func jc_spread() -> int:
+	return 1 + int(partners["jicanghai"]["spread_lv"])          # 传火：多引燃几名
+
+func jc_burn_mul() -> float:
+	return 0.12 * float(partners["jicanghai"]["burn_lv"])        # 灼烧：每秒额外火伤
+
+func jc_interval() -> float:
+	return maxf(1.2, 3.0 - 0.4 * float(partners["jicanghai"]["sec_lv"]))
+
+func _cast_fire() -> void:
+	var tg := _nearest()
+	if tg.is_empty():
+		return
+	var base := float(hero["atk"]) * (1.0 + float(hero["dmg_pct"])) * jc_dmg_mul()
+	var dm := _apply_dmg(tg, base, DMG_FIRE)
+	tg["flash"] = 0.14
+	_push_float(float(tg["x"]), float(tg["y"]) - 34.0, "怒火 " + str(int(dm)), Color(1.0, 0.66, 0.34), true)
+	_bursts.append({"x": float(tg["x"]), "y": float(tg["y"]) - 12.0, "t": 0.0,
+		"col": Color(1.0, 0.60, 0.26), "scale": 1.3})
+	if jc_burn_mul() > 0.0:
+		_add_dot(tg, jc_burn_mul(), 4.0, DMG_FIRE)
+	if float(tg["hp"]) <= 0.0:
+		_kill_foe(tg)
+	# **传火**：把火引到它身边范围内的另一名敌人（升级可以多引几名）
+	var tp := Vector2(float(tg["x"]), float(tg["y"]))
+	var hit: Array = [tg]
+	for i in jc_spread():
+		var nx := _nearest_except(tp, hit)
+		if nx.is_empty():
+			break
+		if tp.distance_to(Vector2(float(nx["x"]), float(nx["y"]))) > 150.0:
+			break
+		var d2 := _apply_dmg(nx, base * 0.7, DMG_FIRE)     # 传过去那一下略弱
+		nx["flash"] = 0.12
+		_push_float(float(nx["x"]), float(nx["y"]) - 34.0, "传火 " + str(int(d2)), Color(1.0, 0.74, 0.40))
+		_fire_lines.append({"from": tp, "to": Vector2(float(nx["x"]), float(nx["y"])), "t": 0.0})
+		_bursts.append({"x": float(nx["x"]), "y": float(nx["y"]) - 12.0, "t": 0.0,
+			"col": Color(1.0, 0.62, 0.28), "scale": 1.0})
+		hit.append(nx)
+		if float(nx["hp"]) <= 0.0:
+			_kill_foe(nx)
+	Audio.sfx("slash_light", -9.0, 0.9)
+
+# 挂一层持续伤害（毒/灼烧都用这个；每秒跳一次）
+func _add_dot(f: Dictionary, mul: float, dur: float, dtype: String) -> void:
+	if mul <= 0.0:
+		return
+	var dots: Array = f.get("dot", [])
+	dots.append({"mul": mul, "t": dur, "tick": 1.0, "dtype": dtype})
+	f["dot"] = dots
+
+# 画火线（传火）
+func _draw_fire_lines(shk: Vector2) -> void:
+	for l_v in _fire_lines:
+		var l: Dictionary = l_v
+		var la := 1.0 - float(l["t"]) / 0.30
+		var a3: Vector2 = l["from"]
+		var b3: Vector2 = l["to"]
+		draw_line(a3 + shk, b3 + shk, Color(1.0, 0.62, 0.24, la), 5.0)
+		draw_line(a3 + shk, b3 + shk, Color(1.0, 0.88, 0.52, la * 0.8), 2.0)
 # ============================================================
 # 张道陵·天雷道术（v4j）：范围金系伤害 ＋ 几率麻痹 ＋ 几率多重施法
 #   "两个人身位"≈ 110 像素半径（简笔小人一人约 50 像素宽）；每级 +22。
@@ -1049,6 +1669,30 @@ func tl_mp() -> float:
 
 func tl_cd() -> float:
 	return maxf(3.0, 10.0 - 1.5 * float(partners["zhangdaoling"].get("cd_lv", 0)))
+
+# 一次性法术的统一入口（加新伙伴只需在这里加一条）
+func _cast_partner(id: String) -> void:
+	match id:
+		"zhangdaoling":
+			_cast_tianlei(1.0, "天雷")
+			if randf() < tl_multi_chance():
+				_cast_tianlei(tl_multi_mul(), "多重天雷")     # 不同伤害比例，也是金系
+		"liuqingqing":
+			_cast_spring()
+		"cuisanniang":
+			_summon_dragon()
+		_:
+			pass
+
+# 季沧海：每 3 秒（可减）自动烧一次，不吃内力
+func _update_jicanghai(delta: float) -> void:
+	var p: Dictionary = partners["jicanghai"]
+	if not bool(p["owned"]):
+		return
+	p["cd"] = maxf(0.0, float(p["cd"]) - delta)
+	if float(p["cd"]) <= 0.0:
+		p["cd"] = jc_interval()
+		_cast_fire()
 
 func _cast_tianlei(ratio: float, tag: String) -> void:
 	var tg := _nearest()
@@ -1131,7 +1775,8 @@ func dg_bounce_mul() -> float:
 
 # 多重伤害：多出来的那几枚匕首单算（+多重伤害 = 多重的整体伤害增加）
 func dg_multi_mul() -> float:
-	return 0.80 * (1.0 + 0.25 * float(partners["suqingluan"]["mdmg_lv"]))
+	# v4q 调伤害：多重 0.80 → 0.70（数量已占优，单枚略低）
+	return 0.70 * (1.0 + 0.25 * float(partners["suqingluan"]["mdmg_lv"]))
 
 # 每 8 秒（可减）放一把；多重就是一次放好几把，各自独立结算
 func _update_daggers(delta: float) -> void:
@@ -1234,12 +1879,37 @@ func _update_partners(delta: float) -> void:
 		# 只处理"内力/持续/冷却"型的伙伴技能；苏青鸾那种"每隔 N 秒出一枚"走 _update_daggers
 		if float((PARTNER_INFO[id] as Dictionary)["mp0"]) <= 0.0:
 			continue
+		var is_nuke: bool = float((PARTNER_INFO[id] as Dictionary)["dur0"]) <= 0.0
+		if str(id) == "fadu":
+			# 怒目金刚：套盾型（有持续时间，但效果是"给自己挂一层盾"）
+			if float(p["cd"]) <= 0.0 and float(hero["mp"]) >= p_mp("fadu"):
+				hero["mp"] = float(hero["mp"]) - p_mp("fadu")
+				p["cd"] = fd_cd()
+				_cast_shield()
+			continue
 		p["active"] = maxf(0.0, float(p["active"]) - delta)
 		p["cd"] = maxf(0.0, float(p["cd"]) - delta)
-		if float(p["cd"]) <= 0.0 and float(hero["mp"]) >= p_mp(str(id)):
-			hero["mp"] = float(hero["mp"]) - p_mp(str(id))
-			p["cd"] = p_cd(str(id))
-			p["active"] = p_dur(str(id))
+		# 张道陵是"一次性砸下去"的法术，内力/冷却按它自己那套算
+		var cost := p_mp(str(id))
+		var cool := p_cd(str(id))
+		var dur2 := p_dur(str(id))
+		if str(id) == "zhangdaoling":
+			cost = tl_mp()
+			cool = tl_cd()
+		elif str(id) == "duyanbiao":
+			cool = sb_cd()
+			dur2 = sb_dur()
+		elif str(id) == "kurong":
+			cool = kr_cd()
+			dur2 = kr_dur()
+		if float(p["cd"]) <= 0.0 and float(hero["mp"]) >= cost:
+			hero["mp"] = float(hero["mp"]) - cost
+			p["cd"] = cool
+			if is_nuke:
+				# 一次性法术：各按各的（天雷/回春…）
+				_cast_partner(str(id))
+				continue
+			p["active"] = dur2
 			var info: Dictionary = PARTNER_INFO[id]
 			_push_float(hero_pos.x + 60.0, hero_pos.y - 40.0, str(info["skill"]) + "！", Color(0.86, 0.74, 1.0), true)
 			_bursts.append({"x": hero_pos.x, "y": hero_pos.y - 10.0, "t": 0.0,
@@ -1255,17 +1925,61 @@ func p_ratio(id: String) -> float:
 		return 0.0
 	return clampf(float(partners[id]["active"]) / d, 0.0, 1.0)
 
-# 肝：持续时间内每杀一只 → 生命上限 +2（并回同样多的血）
+# 杀气：独眼彪——持续期间每杀一只 → 攻击 +（1 + 0.5×层）
+func sb_atk_add() -> float:
+	return 1.0 + 0.5 * float(partners["duyanbiao"].get("atk_lv", 0))
+
+func sb_cd() -> float:
+	return maxf(6.0, 25.0 - 3.0 * float(partners["duyanbiao"].get("cd_lv", 0)))
+
+func sb_dur() -> float:
+	return 5.0 + 2.0 * float(partners["duyanbiao"].get("dur_lv", 0))
+
+# v4r（用户："不 跟原本内力的百分比增加好一点"）：纳气改成**按原本内力的百分比**涨
+#   ——涨的是"开局那管内力"的百分比，所以不会滚雪球
+var _mp_base := 300.0
+
+func kr_mp_pct() -> float:
+	return 0.03 + 0.03 * float(partners["kurong"].get("mp_lv", 0))     # 3% → 12%
+
+func kr_mp_add() -> float:
+	return _mp_base * kr_mp_pct()
+
+func kr_cd() -> float:
+	return maxf(6.0, 25.0 - 3.0 * float(partners["kurong"].get("cd_lv", 0)))
+
+func kr_dur() -> float:
+	return 5.0 + 2.0 * float(partners["kurong"].get("dur_lv", 0))
+
+# 杀敌结算：三位"持续窗口内杀敌涨属性"的伙伴都在这里
 func _on_kill_partner() -> void:
-	if not p_active("anying"):
-		return
-	var add := p_kill_hp()
-	hero["hp_max"] = float(hero["hp_max"]) + add
-	hero["hp"] = minf(float(hero["hp_max"]), float(hero["hp"]) + add)
-	_push_float(hero_pos.x - 46.0, hero_pos.y - 52.0, "生命上限 +" + str(int(add)), Color(0.72, 0.92, 0.72))
-	# 肝的动画：三颗绿光点从击杀处飘回主角身上
-	for i in 3:
-		_motes.append({"x": hero_pos.x + randf_range(-26.0, 26.0), "y": hero_pos.y + randf_range(-6.0, 22.0), "t": 0.0})
+	# 肝：生命上限
+	if p_active("anying"):
+		var add := p_kill_hp()
+		hero["hp_max"] = float(hero["hp_max"]) + add
+		hero["hp"] = minf(float(hero["hp_max"]), float(hero["hp"]) + add)
+		_push_float(hero_pos.x - 46.0, hero_pos.y - 52.0, "生命上限 +" + str(int(add)), Color(0.72, 0.92, 0.72))
+		for i in 3:
+			_motes.append({"x": hero_pos.x + randf_range(-26.0, 26.0), "y": hero_pos.y + randf_range(-6.0, 22.0), "t": 0.0})
+	# 杀气：攻击
+	if p_active("duyanbiao"):
+		var a2 := sb_atk_add()
+		hero["atk"] = float(hero["atk"]) + a2
+		_push_float(hero_pos.x + 34.0, hero_pos.y - 58.0, "攻击 +" + str(snappedf(a2, 0.1)), Color(1.0, 0.52, 0.46))
+		for i in 3:                                   # 赤红血点：从击杀处炸开再往上飘
+			_blood.append({"x": hero_pos.x + randf_range(-30.0, 30.0), "y": hero_pos.y + randf_range(0.0, 26.0),
+				"t": 0.0, "vx": randf_range(-40.0, 40.0)})
+		_shake = maxf(_shake, 3.0)
+	# 纳气：内力上限（并回同样多）
+	if p_active("kurong"):
+		var m2 := kr_mp_add()
+		hero["mp_max"] = float(hero["mp_max"]) + m2
+		hero["mp"] = minf(float(hero["mp_max"]), float(hero["mp"]) + m2)
+		_push_float(hero_pos.x - 30.0, hero_pos.y - 74.0,
+			"内力上限 +" + str(int(m2)) + "（" + str(int(kr_mp_pct() * 100.0)) + "%）", Color(0.96, 0.80, 0.42))
+		for i in 3:                                   # 琥珀气丝：**从外往身上收**（方向跟"肝"相反，一眼分得开）
+			_qi_threads.append({"x": hero_pos.x + randf_range(-46.0, 46.0), "y": hero_pos.y + randf_range(-58.0, 18.0),
+				"t": 0.0, "px": hero_pos.x, "py": hero_pos.y})
 
 # 刺骨：持续时间内被攻击 → 对攻击者造成"生命上限 × 2%"的**真实伤害**（一点不减；升级还能多打几个）
 func _on_hero_hurt(src: Dictionary) -> void:
@@ -1300,6 +2014,8 @@ func _on_hero_hurt(src: Dictionary) -> void:
 #   飞匕（苏青鸾） ＝手上两点寒光（待机）＋ 飞出去的小匕首（在 _draw_daggers 里）
 # ============================================================
 var _motes: Array = []              # 肝：杀敌时冒起的绿色光点 {x,y,vy,t}
+var _blood: Array = []              # 杀气：赤红血点 {x,y,vx,t}
+var _qi_threads: Array = []         # 纳气：琥珀气丝（从外往身上收）{x,y,px,py,t}
 var _thorn_lines: Array = []        # 刺骨：反伤刺线 {from,to,t}
 
 func _draw_partner_fx(shk: Vector2) -> void:
@@ -1333,6 +2049,31 @@ func _draw_partner_fx(shk: Vector2) -> void:
 		var tw := 0.5 + 0.5 * sin(_t * 6.0)
 		draw_circle(hp2 + Vector2(26, -22), 3.0 + 1.6 * tw, Color(0.86, 0.96, 1.0, 0.8))
 		draw_circle(hp2 + Vector2(34, -6), 2.2 + 1.2 * (1.0 - tw), Color(0.80, 0.94, 1.0, 0.7))
+	# —— 杀气（独眼彪）：赤红杀气——三片旋转的赤刃 ＋ 脚下的红环 ——
+	if p_active("duyanbiao"):
+		var k3 := 0.45 + 0.55 * p_ratio("duyanbiao")
+		for i in 3:
+			var a4 := -_t * 4.2 + TAU * float(i) / 3.0
+			var base2 := hp2 + Vector2(0, 8) + Vector2(cos(a4), sin(a4) * 0.5) * 44.0
+			var d4 := Vector2(cos(a4 + 0.6), sin(a4 + 0.6) * 0.5)
+			draw_line(base2 - d4 * 14.0, base2 + d4 * 14.0, Color(1.0, 0.32, 0.26, 0.85 * k3), 5.0)
+		draw_arc(hp2 + Vector2(0, 18), 40.0, 0.0, TAU, 24, Color(0.94, 0.24, 0.20, 0.4 * k3), 3.0)
+	# —— 纳气（枯荣）：琥珀色气丝往身上收 ＋ 脚下一圈暖环 ——
+	if p_active("kurong"):
+		var k4 := 0.45 + 0.55 * p_ratio("kurong")
+		draw_arc(hp2 + Vector2(0, 20), 46.0, _t * 1.6, _t * 1.6 + 2.0, 18, Color(0.98, 0.78, 0.36, 0.6 * k4), 4.0)
+		for i in 6:
+			var a5 := TAU * float(i) / 6.0 + _t * 0.9
+			var pp3 := hp2 + Vector2(cos(a5), sin(a5) * 0.55) * 56.0
+			draw_line(pp3, pp3 + (hp2 - pp3).normalized() * 16.0, Color(1.0, 0.84, 0.44, 0.5 * k4), 3.0)
+	# —— 杀气的血点 / 纳气的气丝（实体粒子）——
+	for bl_v in _blood:
+		var bl2: Dictionary = bl_v
+		draw_circle(Vector2(float(bl2["x"]), float(bl2["y"])) + shk, 3.6, Color(0.98, 0.36, 0.30, 1.0 - float(bl2["t"]) / 0.7))
+	for qt_v in _qi_threads:
+		var qt2: Dictionary = qt_v
+		var qp := Vector2(float(qt2["x"]), float(qt2["y"])) + shk
+		draw_line(qp, qp + Vector2(0, 7.0), Color(1.0, 0.84, 0.44, 0.85 * (1.0 - float(qt2["t"]) / 0.7)), 3.0)
 	# —— 肝的杀敌绿光点（往上飘）——
 	for m_v in _motes:
 		var m: Dictionary = m_v
@@ -1370,6 +2111,20 @@ func _draw() -> void:
 		var dying := float(f.get("dying", 0.0))
 		var flash := float(f.get("flash", 0.0))
 		var lunge := float(f.get("lunge", 0.0))
+		# 中毒/灼烧：头顶挂一个小色点（绿＝毒 · 橙＝烧）
+		var dots2: Array = f.get("dot", [])
+		if dots2.size() > 0:
+			var dd2: Dictionary = dots2[0]
+			var dc := Color(0.58, 0.90, 0.54) if str(dd2["dtype"]) == DMG_WOOD else Color(1.0, 0.62, 0.28)
+			draw_circle(Vector2(float(f["x"]) + 14.0, float(f["y"]) - 50.0 * sc), 5.0 + sin(_t * 6.0) * 1.2, dc)
+			draw_circle(Vector2(float(f["x"]) + 14.0, float(f["y"]) - 50.0 * sc), 8.0, Color(dc.r, dc.g, dc.b, 0.25))
+		# 麻痹：头顶跳两下电花（一眼看出"这只动不了"）
+		if float(f.get("para", 0.0)) > 0.0:
+			var pp2 := Vector2(float(f["x"]), float(f["y"]) - 46.0 * sc)
+			for k in 2:
+				var off := Vector2(randf_range(-12.0, 12.0), randf_range(-10.0, 10.0))
+				draw_line(pp2 + off, pp2 + off + Vector2(randf_range(-8.0, 8.0), randf_range(-8.0, 8.0)),
+					Color(0.92, 0.96, 1.0, 0.85), 2.0)
 		var fc := Color(0.66, 0.62, 0.60)
 		if flash > 0.0:
 			fc = Color(1.0, 0.97, 0.90)                    # 挨打闪白
@@ -1448,6 +2203,10 @@ func _draw() -> void:
 	_draw_jg(shk)
 	_draw_daggers(shk)
 	_draw_partner_fx(shk)
+	_draw_bolts(shk)
+	_draw_fire_lines(shk)
+	_draw_minions(shk)
+	_draw_shield(shk)
 	# 命中炸开（溅射/剑气）：一圈冲击环 ＋ 八根放射线
 	for bu_v in _bursts:
 		var bu: Dictionary = bu_v
