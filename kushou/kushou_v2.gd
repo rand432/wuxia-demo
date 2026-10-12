@@ -54,6 +54,10 @@ var _deck: Array = [
 var _deck_tab := 0        # 0＝十格卡组 · 1＝吞噬记录（两种"查询"）
 var _boss_seq := 0        # v2j：叫过几个 boss
 var _revive := 1          # 浴血：免死次数（战场上真的会倒下）
+# v3a 技能（基础剑法）——见 docs/困兽_技能设计稿.md
+var _skill_pts := 0       # 技能点（每升 1 级 1 点）
+var _skill_choices: Array = []
+var _skill_badge: Label = null
 var _over := false        # 这一局结束没有
 # v2f（用户这一轮的四条）：
 #   · 吞噬记录/卡面**不标流派**（"这种是玩家自己发掘的"）
@@ -215,7 +219,7 @@ func _build_field() -> void:
 	_field.special.connect(_on_special)
 	_sync_battle_stats()
 	_field.set_wave(_wave)
-	_field.running = true
+	_field.start_run()          # v3h：开场先站几秒（怪先走进画面），再"远快近慢"地压上去
 
 	_circle_btn("抽卡", Vector2(22, 262), func(): _open_small("抽卡"))
 	_chal_btn = _circle_btn("挑战", Vector2(22, 396), func(): _open_large("挑战"))
@@ -252,7 +256,148 @@ func _build_hero_bar() -> void:
 	_mp_bar = _bar(Rect2(216, 1126, 470, 38), Color(0.30, 0.42, 0.62))
 	# 技能 / 装备：底部两颗**大**钮（用户："按钮和字一定不要很小"）
 	_mk_btn("技能 ＋", Vector2(24, 1174), Vector2(336, 74), 26, false, func(): _open_large("技能"))
+	# 有技能点没花的时候，钮右上角亮个红点（"＋"号）
+	_skill_badge = _lbl(Vector2(318, 1162), Vector2(36, 32), 24, Color(1.0, 0.84, 0.34))
+	_skill_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_skill_badge.text = ""
 	_mk_btn("装备·宝物 ＋", Vector2(372, 1174), Vector2(336, 74), 26, false, func(): _open_large("装备"))
+
+# ---- 技能页：三选一（有技能点时）／当前招式（没点时）----
+#   数据与效果都在战场（kushou_battle.gd）里：roll_choices() 抽、apply_pick() 落。
+func _fill_skill(p: Control, y: float, sz: Vector2) -> float:
+	var head := Label.new()
+	head.position = Vector2(28, y)
+	head.size = Vector2(640, 46)
+	head.add_theme_font_size_override("font_size", 26)
+	head.add_theme_color_override("font_color", INK)
+	head.text = "技能点：" + str(_skill_pts) + "　（每升 1 级给 1 点）"
+	p.add_child(head)
+	var ly := y + 54.0
+	if _skill_pts > 0:
+		if _skill_choices.is_empty():
+			_skill_choices = _field.roll_choices()
+		var sub := Label.new()
+		sub.position = Vector2(28, ly)
+		sub.size = Vector2(640, 40)
+		sub.add_theme_font_size_override("font_size", 22)
+		sub.add_theme_color_override("font_color", DIM)
+		sub.text = "三选一——选完**立刻生效**，动作也跟着变".replace("**立刻生效**", "立刻生效")
+		p.add_child(sub)
+		ly += 46.0
+		var w := 200.0
+		for i in _skill_choices.size():
+			var e: Dictionary = _skill_choices[i]
+			var x := 28.0 + float(i) * (w + 20.0)
+			var sb := StyleBoxFlat.new()
+			sb.bg_color = Color(0.99, 0.97, 0.92)
+			sb.set_corner_radius_all(12)
+			var mech := str(e["kind"]) == "mech"
+			sb.border_color = Color(SEAL.r, SEAL.g, SEAL.b, 0.75) if mech else Color(INK.r, INK.g, INK.b, 0.35)
+			sb.set_border_width_all(3 if mech else 2)
+			var box := Panel.new()
+			box.position = Vector2(x, ly)
+			box.size = Vector2(w, 330)
+			box.add_theme_stylebox_override("panel", sb)
+			box.mouse_filter = Control.MOUSE_FILTER_STOP
+			p.add_child(box)
+			var nm := Label.new()
+			nm.position = Vector2(12, 14)
+			nm.size = Vector2(w - 24, 62)
+			nm.add_theme_font_size_override("font_size", 26)
+			nm.add_theme_color_override("font_color", INK)
+			nm.text = str(e["name"])
+			nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			nm.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			box.add_child(nm)
+			var tag := Label.new()
+			tag.position = Vector2(12, 76)
+			tag.size = Vector2(w - 24, 30)
+			tag.add_theme_font_size_override("font_size", 19)
+			tag.add_theme_color_override("font_color", SEAL if mech else DIM)
+			tag.text = ("机制" if mech else "数值") + "　" + str(_field.skill_lv(str(e["id"]))) + "/" + str(e["max"])
+			tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			box.add_child(tag)
+			var ds := Label.new()
+			ds.position = Vector2(12, 112)
+			ds.size = Vector2(w - 24, 120)
+			ds.add_theme_font_size_override("font_size", 20)
+			ds.add_theme_color_override("font_color", INK)
+			# <R> 是范围技的实时半径（学了才显示数字）
+			# <R>/<C>/<D>/<W>/<P>/<S> 都是"实时数值"，让玩家点之前就看见当前档位
+			var txt := str(e["desc"])
+			txt = txt.replace("<R>", str(int(_field.splash_radius())) + " 像素")
+			txt = txt.replace("<C>", str(int(_field.jg_chance() * 100.0)) + "%")
+			txt = txt.replace("<D>", str(snappedf(_field.jg_dmg_mul(), 0.01)))
+			txt = txt.replace("<W>", str(snappedf(_field.jg_width(), 0.01)))
+			txt = txt.replace("<P>", str(_field.jg_pierce()))
+			txt = txt.replace("<S>", str(int(_field.jg_speed())))
+			txt = txt.replace("**", "")
+			ds.text = txt
+			ds.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			box.add_child(ds)
+			var an := Label.new()
+			an.position = Vector2(12, 236)
+			an.size = Vector2(w - 24, 56)
+			an.add_theme_font_size_override("font_size", 18)
+			an.add_theme_color_override("font_color", DIM)
+			an.text = "动作：" + str(e["anim"])
+			an.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			box.add_child(an)
+			_pbtn(box, "选它", Vector2(26, 288), Vector2(w - 52, 34), 20, mech, _pick_skill.bind(str(e["id"])))
+		ly += 344.0
+	# 当前招式一览（没技能点时这就是主内容）
+	var title := Label.new()
+	title.position = Vector2(28, ly)
+	title.size = Vector2(640, 44)
+	title.add_theme_font_size_override("font_size", 25)
+	title.add_theme_color_override("font_color", INK)
+	title.text = "基础剑法（普攻本体）"
+	p.add_child(title)
+	ly += 50.0
+	var rows := [
+		["伤害", "×" + str(snappedf(_field.atk_mul(), 0.01)) + "（伤害提升 " + str(_field.skill_lv("dmg")) + "/5）"],
+		["攻速", "×" + str(snappedf(_field.aspd_mul(), 0.01)) + "（攻速提升 " + str(_field.skill_lv("aspd")) + "/5）"],
+		["横扫范围", ("无" if _field.splash_radius() <= 0.0 else str(int(_field.splash_radius())) + " 像素") +
+			"（溅射 " + str(_field.skill_lv("splash")) + "/5）　被溅到 ×" +
+			str(snappedf(_field.splash_mul(), 0.01)) + "（溅射伤害提升 " + str(_field.skill_lv("splash_dmg")) + "/3）"],
+		["剑光", ("无（未解锁）" if _field.skill_lv("jg") <= 0 else
+			"几率 " + str(int(_field.jg_chance() * 100.0)) + "%　伤害 ×" + str(snappedf(_field.jg_dmg_mul(), 0.01))
+			+ "　宽度 ×" + str(snappedf(_field.jg_width(), 0.01))
+			+ "　穿透 " + str(_field.jg_pierce()) + "　速度 " + str(int(_field.jg_speed())))],
+	]
+	for r_v in rows:
+		var r: Array = r_v
+		var l1 := Label.new()
+		l1.position = Vector2(28, ly)
+		l1.size = Vector2(150, 44)
+		l1.add_theme_font_size_override("font_size", 22)
+		l1.add_theme_color_override("font_color", DIM)
+		l1.text = str(r[0])
+		p.add_child(l1)
+		var l2 := Label.new()
+		l2.position = Vector2(186, ly)
+		l2.size = Vector2(480, 44)
+		l2.add_theme_font_size_override("font_size", 22)
+		l2.add_theme_color_override("font_color", INK)
+		l2.text = str(r[1])
+		l2.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		p.add_child(l2)
+		ly += 52.0
+	return ly + 10.0
+
+func _pick_skill(id: String) -> void:
+	if _skill_pts <= 0:
+		return
+	_field.apply_pick(id)
+	_skill_pts -= 1
+	_skill_choices.clear()
+	var nm := id
+	for e_v in _field.SKILL_POOL:
+		if str((e_v as Dictionary)["id"]) == id:
+			nm = str((e_v as Dictionary)["name"])
+	Audio.sfx("skill", -5.0)
+	_hint.text = "学了「" + nm + "」——招式已经变了，接着打就能看出来"
+	_open_large("技能")
 
 # ---- 挑战弹窗：五格（2×3）＋ 底部那颗大开关 ----
 func _fill_chal(p: Control, y: float, sz: Vector2) -> float:
@@ -463,6 +608,8 @@ func _process(delta: float) -> void:
 		_crystal_lb.pivot_offset = _crystal_lb.size * 0.5
 		var sc3 := 1.0 + _crystal_pop * 0.45
 		_crystal_lb.scale = Vector2(sc3, sc3)
+	if _skill_badge != null:
+		_skill_badge.text = ("＋" if _skill_pts > 0 else "")
 	_refresh_band()      # 大弹窗顶部那条状态带每帧跟着走
 	# 大弹窗的保险②：血 <25% 自动收起
 	if _hp / maxf(1.0, _hp_max) < 0.25 and _popup_kind != "" and _is_large(_popup_kind):
@@ -511,12 +658,14 @@ func _spawn_drop(kind: String, amount: int, pos: Vector2, max_n: int) -> void:
 	var base := Vector2(8.0, 176.0) + pos                 # 战场坐标 → 面板坐标
 	var tgt := _drop_target(kind)
 	for i in n:
+		# ⚠ 拆成 n 枚时**余数给最后一枚**——不然 30 文拆 14 枚（每枚 2）只到账 28（探针抓到的）
+		var amt: int = each if i < n - 1 else amount - each * (n - 1)
 		_coinfx.append({
 			"kind": kind,
 			"pos": base + Vector2(randf_range(-10.0, 10.0), randf_range(-6.0, 6.0)),
 			"vel": Vector2(randf_range(-90.0, 90.0), randf_range(-190.0, -110.0)),
 			"phase": 0, "t": 0.0, "wait": 0.25 + randf() * 0.35,
-			"amount": each, "from": Vector2.ZERO, "target": tgt,
+			"amount": amt, "from": Vector2.ZERO, "target": tgt,
 		})
 	Audio.sfx("coin" if kind == "coin" else ("bell" if kind == "crystal" else "chest"), -12.0)
 
@@ -599,8 +748,9 @@ func _on_kill(_n: int) -> void:
 	if _exp >= 1.0:
 		_exp -= 1.0
 		_lv += 1
+		_skill_pts += 1                      # v3a：每升 1 级给 1 点技能点
 		Audio.sfx("levelup", -6.0)
-		_hint.text = "升级！Lv " + str(_lv) + "（每 5 级给一次招募机会）"
+		_hint.text = "升级！Lv " + str(_lv) + "　技能点 +1（点［技能 ＋］三选一）"
 		_sync_battle_stats()
 
 func _on_special(kind: String, n: int, pos: Vector2) -> void:
@@ -773,6 +923,8 @@ func _fill_popup(p: Control, kind: String, y: float, sz: Vector2) -> float:
 		return _fill_draw(p, y, sz)
 	if kind == "挑战":
 		return _fill_chal(p, y, sz)
+	if kind == "技能":
+		return _fill_skill(p, y, sz)
 	if kind == "角色":
 		# 页签点了要**真的换内容**（探针抓到过：只高亮了页签、内容没换）
 		return _fill_mates(p, y, sz) if _role_tab == 1 else _fill_role(p, y, sz)
