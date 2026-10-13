@@ -33,8 +33,13 @@ var _wave := 12
 var _wave_max := 30
 var _boss_sec := 37.0
 var _boss_tier := 1
-var _money := 1234
-var _crystal := 46
+# v13m（用户："还有玩家的初始文钱和灵晶"）：
+#   玩家的**开局钱包**——只在这一处定义。新开 App 和点［再来一局］都从这里取，
+#   不会再出现"声明处 1234 / 重开处 0"这种分叉（探针抓出来过）。
+const START_MONEY := 1234
+const START_CRYSTAL := 46
+var _money := START_MONEY
+var _crystal := START_CRYSTAL
 var _kills := 287
 var _lv := 7
 var _exp := 0.62
@@ -529,15 +534,15 @@ func _build_field() -> void:
 	_chal_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_circle_btn("任务", Vector2(22, 530), func(): _open_large("任务"))
 	_circle_btn("卡组", Vector2(22, 664), func(): _open_large("卡组"))
-	_circle_btn("存档", Vector2(594, 340), func(): _open_large("存档"))
-	_circle_btn("成就", Vector2(594, 480), func(): _open_large("成就"))
+	_circle_btn("存档", Vector2(594, 236), func(): _open_large("存档"))
+	_circle_btn("成就", Vector2(594, 372), func(): _open_large("成就"))
 	# v4b（用户："成就下面增加按钮 黑市【用于杀敌数兑换东西的 内容暂定】"）
-	_circle_btn("黑市", Vector2(594, 620), func(): _open_large("黑市"))
+	_circle_btn("黑市", Vector2(594, 508), func(): _open_large("黑市"))
 	# v4c（用户："黑市下面加一个小型经验条 和等级"）——黑市钮正下方一条小经验条
-	_panel(Rect2(500, 736, 198, 66), Color(0.18, 0.17, 0.19, 0.96), 10)
-	_mini_lv = _lbl(Vector2(508, 740), Vector2(182, 28), 19, PAPER)
+	_panel(Rect2(500, 620, 198, 66), Color(0.18, 0.17, 0.19, 0.96), 10)
+	_mini_lv = _lbl(Vector2(508, 624), Vector2(182, 28), 19, PAPER)
 	_mini_lv.text = "黑市 Lv 1"
-	_mini_exp = _bar(Rect2(510, 776, 178, 14), Color(0.56, 0.44, 0.72))
+	_mini_exp = _bar(Rect2(510, 660, 178, 14), Color(0.56, 0.44, 0.72))
 
 # ---- 经验条 + 主角条 ----
 func _build_hero_bar() -> void:
@@ -570,18 +575,27 @@ func _build_hero_bar() -> void:
 	_skill_badge.text = ""
 	_mk_btn("装备·宝物 ＋", Vector2(372, 1174), Vector2(336, 74), 26, false, func(): _open_large("装备"))
 	# v12a：玲珑玉壶（主动宝物）——战场右下角一颗大按钮 ＋ 一颗自动开关
-	_yh_btn = _mk_btn("玉壶", Vector2(596, 792), Vector2(104, 104), 26, true, _yh_use)
-	_yh_lb = Label.new()
-	_yh_lb.position = Vector2(560, 900)
-	_yh_lb.size = Vector2(176, 34)
-	_yh_lb.add_theme_font_size_override("font_size", 20)
-	_yh_lb.add_theme_color_override("font_color", DIM)
-	_yh_lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	# v13i（用户：玉壶看着重合了，直接丢进宝物里面设置）：
+	#   玉壶的**按钮＋自动开关搬进［装备·宝物］页**；主界面只留一条极简状态。
+	#   旧位置（按钮 y792~896 · 状态 y900~934 · 自动 y936~980）会压住
+	#   黑市小条（y736~802）和主角经验条那块（y888 起）——截图确认过，现在让开。
+	# v13j（用户：玉壶按钮放在原先黑市那个位置）：
+	#   右列整体上移后，玉壶大按钮回到"原黑市"那一格 (594, 624)；
+	#   冷却状态**直接写在按钮上**（就绪＝玉壶 / 冷却＝12s），自动开关在宝物页里。
+	# v13k（用户："原先的玉壶框挺不错的 换成原来的玉壶框"）：
+	#   恢复原版那一组——大按钮 ＋ 「玉壶 就绪」＋［自动：开］；
+	#   因为右列整体上移了 94px，这组现在落在 698~886，**不再压**主角条（888 起）。
+	# v13l（用户指着截图说："我说的玉壶框是这个玉壶框"）：
+	#   要的是**这个信息小方框**，不是大红按钮。方框整块可点＝喝一口；
+	#   自动开关和详细状态在［装备·宝物］页那张卡里。
+	_yh_btn = _mk_btn("", Vector2(500, 698), Vector2(198, 68), 20, false, _yh_use)
+	_yh_btn.add_theme_stylebox_override("normal", _flat(Color(0.16, 0.15, 0.17, 0.92)))
+	_yh_btn.add_theme_stylebox_override("hover", _flat(Color(0.25, 0.23, 0.26, 0.95)))
+	_yh_btn.add_theme_stylebox_override("pressed", _flat(Color(0.33, 0.31, 0.34, 0.95)))
+	_yh_lb = _lbl(Vector2(508, 702), Vector2(182, 32), 21, Color(0.62, 0.92, 0.86))
 	_yh_lb.text = "玉壶 就绪"
-	add_child(_yh_lb)
-	_yh_auto_btn = _mk_btn("自动：开", Vector2(560, 936), Vector2(176, 44), 20, false, _yh_toggle_auto)
-
-
+	_yh_auto_lb = _lbl(Vector2(508, 736), Vector2(182, 26), 16, DIM)
+	_yh_auto_lb.text = "自动：开 · 宝物页里用"
 # ---- 招募页（v6a）：三个候选，选一个把"成长"并进来（逐项取最高）----
 func _fill_recruit(p: Control, y: float, sz: Vector2) -> float:
 	var head := Label.new()
@@ -2296,13 +2310,16 @@ var _yh_auto := true
 var _yh_q := 0
 var _yh_btn: Button = null
 var _yh_lb: Label = null
-var _yh_auto_btn: Button = null
+var _yh_auto_lb: Label = null      # v13l：方框里那行「自动：开 · 宝物页里用」小字
 
 func _yh_ready() -> bool:
 	return _yh_cd <= 0.0
 
 func _yh_use() -> void:
-	if not _yh_ready() or _field == null:
+	if not _yh_ready():
+		_hint.text = "玉壶还在冷却（还有 " + str(int(ceil(_yh_cd))) + " 秒）"
+		return
+	if _field == null:
 		return
 	var heals := float(YUHU_HEAL[clampi(_yh_q, 0, 5)])
 	var hp_add := float(_field.hero["hp_max"]) * heals
@@ -2315,11 +2332,17 @@ func _yh_use() -> void:
 		_field._burst_at(_field.hero_pos, Color(0.62, 0.92, 0.86), 2.0)
 	Audio.sfx("chest", -6.0)
 	_hint.text = "玲珑玉壶：气血 +" + str(int(hp_add)) + " · 内力 +" + str(int(mp_add))
+	if _popup_kind == "装备":                       # v13i：在宝物页里点的话，刷新一下状态
+		_open_large("装备")
 
 func _yh_toggle_auto() -> void:
 	_yh_auto = not _yh_auto
-	if _yh_auto_btn != null and is_instance_valid(_yh_auto_btn):
-		_yh_auto_btn.text = "自动：" + ("开" if _yh_auto else "关")
+	_hint.text = "玉壶自动使用：" + ("开（气血低于 50% 自己喝）" if _yh_auto else "关（点小方框或去宝物页手动喝）")
+	_hint.text = "玉壶自动使用：" + ("开（气血低于 50% 自己喝）" if _yh_auto else "关（只在宝物页里手动喝）")
+	Audio.sfx("ui_click", -8.0)
+	if _popup_kind == "装备":
+		_open_large("装备")
+		_open_large("装备")
 
 # 每帧：冷却倒计时 ＋ 自动使用（气血低于 50% 就喝）
 func _yh_tick(delta: float) -> void:
@@ -2330,12 +2353,13 @@ func _yh_tick(delta: float) -> void:
 		var mx := maxf(1.0, float(_field.hero["hp_max"]))
 		if hp / mx < 0.5:
 			_yh_use()
+	# v13l：状态写进小方框那两行（方框整块可点，冷却时点了会提示还剩几秒）
 	if _yh_lb != null and is_instance_valid(_yh_lb):
-		_yh_lb.text = "玉壶 " + str(int(ceil(_yh_cd))) + "s" if not _yh_ready() else "玉壶 就绪"
+		_yh_lb.text = "玉壶 就绪" if _yh_ready() else ("玉壶 " + str(int(ceil(_yh_cd))) + "s")
 		_yh_lb.add_theme_color_override("font_color", Color(0.62, 0.92, 0.86) if _yh_ready() else DIM)
-	if _yh_btn != null and is_instance_valid(_yh_btn):
-		_yh_btn.disabled = not _yh_ready()
-# ---- v7a 卡面（单卡属性 ＋ 组合栏 ＋ 进度条）----
+	if _yh_auto_lb != null and is_instance_valid(_yh_auto_lb):
+		_yh_auto_lb.text = "自动：" + ("开" if _yh_auto else "关") + " · 宝物页里用"
+
 func _card_face(p: Control, pos: Vector2, sz: Vector2, id: String) -> void:
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(0.99, 0.97, 0.92) if id != "" else Color(0.85, 0.83, 0.79)
@@ -3096,12 +3120,16 @@ func _q_tick(delta: float) -> void:
 					_note("【血战】开打——撑住 30 秒", 3.0)
 			else:
 				q["alive"] = float(q.get("alive", 0.0)) + delta
+		# 完成？（⚠ 这两行在 v13h 被误删过：任务全都不结算——探针抓回来的）
+		if _q_prog(q) >= int(q["goal"]):
+			_q_teardown(q)
 			var got := _q_grant(q)
 			_q_slots.remove_at(i)
 			_q_done += 1
 			_note("【任务完成】" + str(q["n"]) + "　到手：" + got, 4.0)
 			Audio.sfx("levelup", -4.0)
 			continue
+		# 超时？
 		if float(q["left"]) >= 0.0:
 			q["left"] = float(q["left"]) - delta
 			if float(q["left"]) <= 0.0:
@@ -3109,7 +3137,8 @@ func _q_tick(delta: float) -> void:
 				_q_slots.remove_at(i)
 				_q_fail += 1
 				_note("【任务失败】" + str(q["n"]) + "　时间到——失败不给东西", 3.5)
-				Audio.sfx("fall_down", -6.0)	# v13f：清道夫 / 越狱——这一波里"场上的怪被清空过"就记一笔（换波时没清空的会归零）
+				Audio.sfx("fall_down", -6.0)
+	# v13f：清道夫 / 越狱——这一波里"场上的怪被清空过"就记一笔（换波时没清空的会归零）
 	if _field != null and _field.live_foes() <= 0:
 		for qc_v in _q_slots:
 			var qc: Dictionary = qc_v
@@ -3117,10 +3146,7 @@ func _q_tick(delta: float) -> void:
 				qc["hit_this_wave"] = true
 				qc["alive"] = float(qc.get("alive", 0.0)) + 1.0
 				_hint.text = "场上清空了：「" + str(qc["n"]) + "」记一笔"
-
 	_q_chips_update()
-	_q_chips_update()
-
 # 战场左下角那两条任务条（点着不挡操作：Label 不吃鼠标）
 func _q_chips_update() -> void:
 	if _q_panel == null:
@@ -3301,8 +3327,8 @@ func _fill_over(p: Control, y: float, sz: Vector2) -> float:
 
 func _restart_run() -> void:
 	_wave = 1
-	_money = 0
-	_crystal = 0
+	_money = START_MONEY                 # v13m：开局钱包（跟新开 App 同一份）
+	_crystal = START_CRYSTAL
 	_kills = 0
 	_exp = 0.0
 	_lv = 1
@@ -3319,6 +3345,10 @@ func _restart_run() -> void:
 	_recruit_opens = 0
 	_recruit_choices.clear()
 	_bm_roll()                       # v13a：新的一局，黑市货架重摆
+	# v13m（用户："刚开始是自带那个成长武器和玉壶"）：
+	#   玉壶是**开局自带**的——新的一局当然是"就绪"，不该把上一局的冷却带过来。
+	#   成长武器（_wpn_lv/_wpn_q）**故意不重置**：那是跨局的那一件，无限强化。
+	_yh_cd = 0.0
 	# v13c：新的一局——任务栏清空、行为计数清零、事件计时重来
 	_q_slots.clear()
 	_q_ctr.clear()
@@ -5157,8 +5187,8 @@ func _fill_equip(p: Control, y: float, sz: Vector2) -> float:
 	for i in 2:
 		_pbtn(p, tabs[i], Vector2(28.0 + float(i) * 190.0, y), Vector2(178, 60), 23, _equip_tab == i, _set_equip_tab.bind(i))
 	var ly := y + 74.0
+	ly = _fill_yuhu_card(p, ly)          # v13i：玲珑玉壶（主动宝物）——从主界面搬进来的
 	if _equip_tab == 0:
-		# v12f（用户："装备那边也是"）：跟卡组/宝物一套——紧凑格子（126×98，5 个一行）
 		#   ⚠ 上一版把［存］［卖］画在了 if 外面，结果压到宝物页上（截图抓到过）——现在收回这一支里
 		for i in 6:
 			var col := i % 5
@@ -5185,10 +5215,14 @@ func _fill_equip(p: Control, y: float, sz: Vector2) -> float:
 	# v12f：旧的"每格两颗小钮"循环**已删**——它画在 if 外面，会跑到宝物页上压住格子（截图抓到过）。
 	#   现在的［存］［卖］在装备那一支里、跟着每个格子画。
 	# v12c：宝物三选一入口
-	_pbtn(p, "宝物三选一（刷新 " + str(_trea_refresh) + " 次）", Vector2(240, ly), Vector2(428, 76), 23, true,
+	# v13j（用户："刷新按钮和公共仓库重合了"）：
+	#   原来「宝物三选一（刷新 N 次）」在 (240, ly) 宽 428、「公共仓库」也在 (240, ly) 宽 300
+	#   ——同一个 y 同一个 x，后者把前者盖住一半。现在拆成两行，各占自己的地方。
+	_pbtn(p, "宝物三选一（刷新 " + str(_trea_refresh) + " 次）", Vector2(24, ly), Vector2(640, 76), 24, true,
 		func(): _open_large("宝物三选一"))
-	_pbtn(p, "仓库", Vector2(28, ly), Vector2(200, 76), 24, false, func(): _open_large("仓库"))
-	_pbtn(p, "公共仓库（暂不开放）", Vector2(240, ly), Vector2(300, 76), 21, false, func(): _open_large("公共仓库"))
+	_pbtn(p, "仓库", Vector2(24, ly + 88.0), Vector2(300, 72), 24, false, func(): _open_large("仓库"))
+	_pbtn(p, "公共仓库（暂不开放）", Vector2(340, ly + 88.0), Vector2(324, 72), 21, false, func(): _open_large("公共仓库"))
+	ly += 172.0
 	var tip := Label.new()
 	tip.position = Vector2(28, ly + 86.0)
 	tip.size = Vector2(640, 44)
@@ -5203,7 +5237,7 @@ func _fill_equip(p: Control, y: float, sz: Vector2) -> float:
 	wsum.size = Vector2(640, 40)
 	wsum.add_theme_font_size_override("font_size", 24)
 	wsum.add_theme_color_override("font_color", _quality_color(str(WPN_Q_CN[_wpn_q])))
-	wsum.text = "成长武器 ＋" + str(_wpn_lv) + "　【" + str(WPN_Q_CN[_wpn_q]) + "】"
+	wsum.text = "成长武器 ＋" + str(_wpn_lv) + "　【" + str(WPN_Q_CN[_wpn_q]) + "】　·　开局自带（跨局保留）"
 	p.add_child(wsum)
 	var wsub := Label.new()
 	wsub.position = Vector2(24, sy + 42.0)
@@ -5238,6 +5272,51 @@ func _fill_equip(p: Control, y: float, sz: Vector2) -> float:
 
 	p.add_child(tip)
 	return ly + 146.0
+
+# v13i：玉壶卡片——从主界面搬进［装备·宝物］页（两个页签都看得到）
+func _fill_yuhu_card(p: Control, y: float) -> float:
+	var q := clampi(_yh_q, 0, 5)
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.99, 0.97, 0.92)
+	sb.set_corner_radius_all(12)
+	sb.border_color = _quality_color(str(WPN_Q_CN[q]))
+	sb.set_border_width_all(2)
+	var box := Panel.new()
+	box.position = Vector2(24, y)
+	box.size = Vector2(632, 116)
+	box.add_theme_stylebox_override("panel", sb)
+	box.mouse_filter = Control.MOUSE_FILTER_STOP
+	p.add_child(box)
+	var nm := Label.new()
+	nm.position = Vector2(16, 8)
+	nm.size = Vector2(410, 36)
+	nm.add_theme_font_size_override("font_size", 26)
+	nm.add_theme_color_override("font_color", INK)
+	nm.text = YUHU_NAME + "　【" + str(WPN_Q_CN[q]) + "】　开局自带"
+	box.add_child(nm)
+	var heals := int(float(YUHU_HEAL[q]) * 100.0)
+	var cds := int(YUHU_CD[q])
+	var ds := Label.new()
+	ds.position = Vector2(16, 46)
+	ds.size = Vector2(410, 30)
+	ds.add_theme_font_size_override("font_size", 19)
+	ds.add_theme_color_override("font_color", DIM)
+	ds.text = "主动宝物：回复 气血/内力 " + str(heals) + "%　·　冷却 " + str(cds) + " 秒"
+	box.add_child(ds)
+	var st := Label.new()
+	st.position = Vector2(16, 78)
+	st.size = Vector2(410, 30)
+	st.add_theme_font_size_override("font_size", 21)
+	st.add_theme_color_override("font_color", Color(0.30, 0.62, 0.34) if _yh_ready() else SEAL)
+	st.text = "状态：就绪，随时能喝" if _yh_ready() else ("状态：冷却中（还有 " + str(int(ceil(_yh_cd))) + " 秒）")
+	box.add_child(st)
+	var bb := _pbtn(box, "喝一口", Vector2(440, 8), Vector2(178, 58), 24, _yh_ready(), _yh_use)
+	if not _yh_ready():
+		bb.add_theme_stylebox_override("normal", _flat(Color(0.55, 0.53, 0.51, 0.95)))
+		bb.add_theme_stylebox_override("hover", _flat(Color(0.60, 0.58, 0.56, 0.95)))
+		bb.add_theme_stylebox_override("pressed", _flat(Color(0.48, 0.46, 0.44, 0.95)))
+	_pbtn(box, "自动：" + ("开" if _yh_auto else "关"), Vector2(440, 72), Vector2(178, 36), 18, false, _yh_toggle_auto)
+	return y + 128.0
 
 func _set_equip_tab(i: int) -> void:
 	_equip_tab = i
