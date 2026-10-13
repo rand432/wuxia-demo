@@ -2831,6 +2831,9 @@ func _update_partners(delta: float) -> void:
 		var p: Dictionary = partners[id]
 		if not bool(p["owned"]):
 			continue
+		# v14s：**开局出战的那位是主角本人**——他不作为队友出手，技能改由 hero_has_skill 驱动
+		if str(id) == hero_mate:
+			continue
 		# 只处理"内力/持续/冷却"型的伙伴技能；苏青鸾那种"每隔 N 秒出一枚"走 _update_daggers
 		if float((PARTNER_INFO[id] as Dictionary)["mp0"]) <= 0.0:
 			continue
@@ -2842,34 +2845,22 @@ func _update_partners(delta: float) -> void:
 				p["cd"] = fd_cd()
 				_cast_shield()
 			continue
-		p["active"] = maxf(0.0, float(p["active"]) - delta)
-		p["cd"] = maxf(0.0, float(p["cd"]) - delta)
-		# 张道陵是"一次性砸下去"的法术，内力/冷却按它自己那套算
-		var cost := p_mp(str(id))
-		var cool := p_cd(str(id))
-		var dur2 := p_dur(str(id))
-		if str(id) == "zhangdaoling":
-			cost = tl_mp()
-			cool = tl_cd()
-		elif str(id) == "duyanbiao":
-			cool = sb_cd()
-			dur2 = sb_dur()
-		elif str(id) == "kurong":
-			cool = kr_cd()
-			dur2 = kr_dur()
-		if float(p["cd"]) <= 0.0 and float(hero["mp"]) >= cost:
-			hero["mp"] = float(hero["mp"]) - cost
-			p["cd"] = cool
-			if is_nuke:
-				# 一次性法术：各按各的（天雷/回春…）
-				_cast_partner(str(id))
-				continue
-			p["active"] = dur2
-			var info: Dictionary = PARTNER_INFO[id]
-			_push_float(hero_pos.x + 60.0, hero_pos.y - 40.0, str(info["skill"]) + "！", Color(0.86, 0.74, 1.0), true)
-			_bursts.append({"x": hero_pos.x, "y": hero_pos.y - 10.0, "t": 0.0,
-				"col": Color(0.78, 0.62, 1.0), "scale": 1.6})
-			Audio.sfx("skill", -6.0)
+		var cost := p_cost_of(str(id))
+		var cool := p_cool_of(str(id))
+		var dur2 := p_dur_of(str(id))
+		if p_try_cast(str(id), p, cost, cool, dur2, delta):
+			continue
+	# v14s：出战主角的**专属技能**——同一套"内力够 + 不在冷却就放"，只是算在他自己头上
+	if hero_mate != "" and partners.has(hero_mate) and bool((partners[hero_mate] as Dictionary)["owned"]):
+		var hp2: Dictionary = partners[hero_mate]
+		if float((PARTNER_INFO[hero_mate] as Dictionary)["mp0"]) > 0.0:
+			var t := p_try_cast(hero_mate, hp2, p_cost_of(hero_mate), p_cool_of(hero_mate), p_dur_of(hero_mate), delta)
+			if t and not bool(p_is_nuke(hero_mate)):
+				hero_skill_t = 0.9                 # 冒个"你的技能"提示，跟队友那条分开
+	# （"不吃内力"的那几位——苏青鸾飞匕/季沧海怒火/雷小七连环腿/西门烈焰刀——各自 update 里
+	#   本来就按 owned 跑，出战主角照样生效；鹰眼/坚守/点金/铁壁是被动，也一直在。）
+	if hero_skill_t > 0.0:
+		hero_skill_t = maxf(0.0, hero_skill_t - delta)
 
 # ============================================================
 # v14o 伙伴星级：★1 起步，每星 ① 成长继承 +3%（外壳算）② 技能威力 +12% ③ 冷却 −5%
@@ -2877,6 +2868,102 @@ func _update_partners(delta: float) -> void:
 # ============================================================
 func p_star_mul(id: String) -> float:
 	return 1.0 + 0.12 * float(maxi(0, int((partners[id] as Dictionary).get("star", 1)) - 1))
+
+# ============================================================
+# v14s 开局出战：出战的那位**替换主角**（外壳存档里设，跨局）
+#   · hero_mate 记着他是谁；外层画主角时按他换长相
+#   · 他不作为队友出手（_update_partners 里跳过），技能改由主角自己放
+#   · 一次性 / 套盾 / 持续那几种的算法跟队友时**完全同一套**（抽成下面几个函数，两处共用）
+# ============================================================
+var hero_mate := ""
+var hero_skill_t := 0.0           # "你的技能"提示的剩余秒数（给外层画 HUD 用）
+
+
+# v14s：开局出战 —— 把"这一局的主角"换成那位伙伴（长相 / 手里的家伙 / 配色）
+#   ⚠ 只管画：数值仍旧是主角那一套（成长并进继承，见外壳 _mate_restore）
+const HERO_ART := {
+	"chenshi": {"hair": "", "wpn": "", "col": Color(0.86, 0.84, 0.78)},
+	"anying": {"hair": "hood", "wpn": "blade", "col": Color(0.56, 0.52, 0.62)},
+	"fadu": {"hair": "crown", "wpn": "shield", "col": Color(0.82, 0.74, 0.56)},
+	"duyanbiao": {"hair": "red", "wpn": "blade", "col": Color(0.80, 0.42, 0.36)},
+	"kurong": {"hair": "topknot", "wpn": "staff", "col": Color(0.84, 0.72, 0.44)},
+	"cuisanniang": {"hair": "long", "wpn": "fan", "col": Color(0.52, 0.74, 0.80)},
+	"liuqingqing": {"hair": "long", "wpn": "staff", "col": Color(0.62, 0.84, 0.60)},
+	"jicanghai": {"hair": "red", "wpn": "blade", "col": Color(0.90, 0.56, 0.30)},
+	"zhangdaoling": {"hair": "crown", "wpn": "staff", "col": Color(0.88, 0.86, 0.60)},
+	"suqingluan": {"hair": "long", "wpn": "blade", "col": Color(0.80, 0.88, 0.94)},
+	"shigandang": {"hair": "topknot", "wpn": "shield", "col": Color(0.70, 0.64, 0.54)},
+	"qianduoduo": {"hair": "topknot", "wpn": "fan", "col": Color(0.90, 0.80, 0.40)},
+	"leixiaoqi": {"hair": "topknot", "wpn": "blade", "col": Color(0.72, 0.70, 0.62)},
+	"baipopo": {"hair": "long", "wpn": "staff", "col": Color(0.84, 0.86, 0.88)},
+	"tiexinwu": {"hair": "topknot", "wpn": "shield", "col": Color(0.62, 0.62, 0.68)},
+	"shenqingluo": {"hair": "long", "wpn": "staff", "col": Color(0.56, 0.80, 0.56)},
+	"yanwugui": {"hair": "topknot", "wpn": "bow", "col": Color(0.60, 0.64, 0.72)},
+	"ximenlie": {"hair": "red", "wpn": "blade", "col": Color(0.86, 0.48, 0.32)},
+	"duniangzi": {"hair": "long", "wpn": "fan", "col": Color(0.66, 0.56, 0.80)},
+	"xuanjizi": {"hair": "crown", "wpn": "staff", "col": Color(0.72, 0.78, 0.90)},
+}
+
+func set_hero_mate(id: String) -> void:
+	hero_mate = id
+	var a: Dictionary = HERO_ART.get(id, {})
+	hair = str(a.get("hair", ""))
+	wpn = str(a.get("wpn", ""))
+	if a.has("col"):
+		hero["hero_col"] = a["col"]
+
+func p_is_nuke(id: String) -> bool:
+	return float((PARTNER_INFO[id] as Dictionary)["dur0"]) <= 0.0
+
+func p_cost_of(id: String) -> float:
+	if str(id) == "zhangdaoling":
+		return tl_mp()
+	return p_mp(id)
+
+func p_cool_of(id: String) -> float:
+	match str(id):
+		"zhangdaoling":
+			return tl_cd()
+		"duyanbiao":
+			return sb_cd()
+		"kurong":
+			return kr_cd()
+	return p_cd(id)
+
+func p_dur_of(id: String) -> float:
+	match str(id):
+		"duyanbiao":
+			return sb_dur()
+		"kurong":
+			return kr_dur()
+	return p_dur(id)
+
+# 冷却好 + 内力够就放（成／不成返回 true/false）；fadu 的套盾也走这里
+func p_try_cast(id: String, p: Dictionary, cost: float, cool: float, dur2: float, delta: float) -> bool:
+	if str(id) == "fadu":
+		if float(p["cd"]) <= 0.0 and float(hero["mp"]) >= cost:
+			hero["mp"] = float(hero["mp"]) - cost
+			p["cd"] = cool
+			_cast_shield()
+			return true
+		return false
+	p["active"] = maxf(0.0, float(p["active"]) - delta)
+	p["cd"] = maxf(0.0, float(p["cd"]) - delta)
+	if float(p["cd"]) > 0.0 or float(hero["mp"]) < cost:
+		return false
+	hero["mp"] = float(hero["mp"]) - cost
+	p["cd"] = cool
+	if p_is_nuke(id):
+		_cast_partner(str(id))                    # 一次性法术：各按各的（天雷/回春…）
+		return true
+	p["active"] = dur2
+	var info: Dictionary = PARTNER_INFO[id]
+	_push_float(hero_pos.x + 60.0, hero_pos.y - 40.0, str(info["skill"]) + "！", Color(0.86, 0.74, 1.0), true)
+	_bursts.append({"x": hero_pos.x, "y": hero_pos.y - 10.0, "t": 0.0,
+		"col": Color(0.78, 0.62, 1.0), "scale": 1.6})
+	Audio.sfx("skill", -6.0)
+	return true
+
 
 func p_active(id: String) -> bool:
 	return float(partners[id]["active"]) > 0.0
@@ -3256,12 +3343,17 @@ func _draw() -> void:
 	# 主角＋宠物
 	var hx := hero_pos.x
 	var hy := hero_pos.y
-	var hero_col := Color(0.94, 0.92, 0.86)
+	var hero_col: Color = hero.get("hero_col", Color(0.94, 0.92, 0.86))     # v14s：出战那位自己的配色
 	if _hero_hit_flash > 0.0:
 		hero_col = Color(0.98, 0.62, 0.56)
 	# 出手那一下往上一冲（突刺），平时轻轻起伏
 	var hy2 := hy + sin(_t * 4.0) * 3.0 - _hero_lunge * 16.0
 	_stick(Vector2(hx, hy2), 1.35, hero_col, true)
+	# v14s：出战那位放技能时，头顶冒一行"你的技能"
+	if hero_skill_t > 0.0 and hero_mate != "":
+		draw_string(ThemeDB.fallback_font, Vector2(hx - 90.0, hy2 - 108.0),
+			str(PARTNER_INFO[hero_mate]["skill"]) + "（你的技能）",
+			HORIZONTAL_ALIGNMENT_CENTER, 180.0, 20, Color(0.92, 0.84, 1.0, minf(1.0, hero_skill_t * 1.6)))
 	# 突刺时手边拖一道刀光
 	if _hero_lunge > 0.35:
 		draw_line(Vector2(hx + 26.0, hy2 - 10.0), Vector2(hx + 40.0, hy2 - 66.0),
@@ -3558,6 +3650,10 @@ func _pet(c: Vector2, sh: Vector2) -> void:
 		draw_circle(Vector2(-17, -11), 2.0, Color(0.16, 0.16, 0.18))
 	draw_set_transform(sh)      # ⚠ 还原抖屏变换，后面的刀光/飘字才不会被宠物的旋转带跑
 
+# v14s：hair / wpn 是"出战主角的长相"参数（空字符串＝原来那个默认小人，队友/怪都不受影响）
+var hair := ""
+var wpn := ""
+
 func _stick(c: Vector2, s: float, col: Color, up: bool) -> void:
 	var w := 3.0 * s
 	var d := -1.0 if up else 1.0
@@ -3568,3 +3664,51 @@ func _stick(c: Vector2, s: float, col: Color, up: bool) -> void:
 	draw_line(c + Vector2(0, 6.0 * s), c + Vector2(-9.0 * s, 26.0 * s), col, w)
 	draw_line(c + Vector2(0, 6.0 * s), c + Vector2(9.0 * s, 26.0 * s), col, w)
 	draw_line(c + Vector2(14.0 * s, -10.0 * s), c + Vector2(20.0 * s, -10.0 * s + d * 42.0 * s), Color(0.85, 0.84, 0.80), w)
+	# v14s：开局出战时，主角的小人换成那位伙伴的长相（头发/道冠 ＋ 手里的家伙）
+	if hair != "":
+		var hc := Color(0.16, 0.15, 0.17)
+		var hc2 := Color(0.30, 0.13, 0.16)
+		var head := c + Vector2(0, -34.0 * s)
+		if hair == "long":
+			draw_line(head + Vector2(-8.0 * s, 2.0 * s), head + Vector2(-13.0 * s, 30.0 * s), hc, 4.0 * s)
+			draw_line(head + Vector2(8.0 * s, 2.0 * s), head + Vector2(13.0 * s, 30.0 * s), hc, 4.0 * s)
+			draw_line(head + Vector2(-9.0 * s, -3.0 * s), head + Vector2(9.0 * s, -3.0 * s), hc, 3.0 * s)
+		elif hair == "crown":
+			draw_circle(head + Vector2(0, -10.0 * s), 4.0 * s, Color(0.86, 0.70, 0.28))
+			draw_line(head + Vector2(-8.0 * s, -7.0 * s), head + Vector2(8.0 * s, -7.0 * s), Color(0.72, 0.58, 0.24), 2.5 * s)
+		elif hair == "topknot":
+			draw_circle(head + Vector2(0, -11.0 * s), 4.2 * s, hc)
+			draw_line(head + Vector2(-7.0 * s, -6.0 * s), head + Vector2(7.0 * s, -6.0 * s), hc, 2.5 * s)
+		elif hair == "hood":
+			draw_arc(head, 10.5 * s, PI, TAU, 18, hc, 4.0 * s)
+			draw_line(head + Vector2(-9.0 * s, 0.0), head + Vector2(-6.0 * s, 16.0 * s), hc, 3.5 * s)
+		elif hair == "red":
+			draw_line(head + Vector2(-9.0 * s, -4.0 * s), head + Vector2(-15.0 * s, -18.0 * s), hc2, 3.5 * s)
+			draw_line(head + Vector2(0, -10.0 * s), head + Vector2(2.0 * s, -24.0 * s), hc2, 3.5 * s)
+			draw_line(head + Vector2(9.0 * s, -4.0 * s), head + Vector2(15.0 * s, -18.0 * s), hc2, 3.5 * s)
+	# 手里的家伙也按人换（原来一律是那把刀）
+	if wpn != "":
+		var hd := c + Vector2(14.0 * s, -10.0 * s)
+		match wpn:
+			"staff":
+				draw_line(hd, hd + Vector2(6.0 * s, float(d) * 46.0 * s), Color(0.60, 0.48, 0.30), w)
+				draw_circle(hd + Vector2(6.0 * s, float(d) * 50.0 * s), 6.0 * s, Color(0.92, 0.88, 0.56))
+			"blade":
+				draw_colored_polygon(PackedVector2Array([
+					hd + Vector2(-2.0 * s, 4.0 * s), hd + Vector2(2.0 * s, 4.0 * s),
+					hd + Vector2(4.0 * s, float(d) * 44.0 * s), hd + Vector2(-4.0 * s, float(d) * 44.0 * s)]),
+					Color(0.90, 0.94, 0.98))
+			"shield":
+				draw_line(hd + Vector2(-2.0 * s, 0.0), hd + Vector2(-14.0 * s, float(d) * 22.0 * s), Color(0.56, 0.46, 0.32), w)
+				draw_circle(hd + Vector2(-15.0 * s, float(d) * 24.0 * s), 9.0 * s, Color(0.74, 0.62, 0.34))
+			"fan":
+				draw_colored_polygon(PackedVector2Array([
+					hd, hd + Vector2(-16.0 * s, float(d) * 24.0 * s), hd + Vector2(10.0 * s, float(d) * 30.0 * s)]),
+					Color(0.88, 0.86, 0.80, 0.92))
+			"bow":
+				draw_arc(hd + Vector2(4.0 * s, float(d) * 26.0 * s), 17.0 * s, PI * 0.25, PI * 1.35, 16,
+					Color(0.62, 0.44, 0.26), 3.0 * s)
+				draw_line(hd + Vector2(-9.0 * s, float(d) * 10.0 * s), hd + Vector2(17.0 * s, float(d) * 12.0 * s),
+					Color(0.86, 0.84, 0.78), 1.6 * s)
+			_:
+				pass

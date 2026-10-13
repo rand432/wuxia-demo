@@ -577,6 +577,7 @@ func _ready() -> void:
 	_ach_load()
 	_apply_achievements()
 	_apply_pet_bonus()                   # v14d：宠物被动也发一次
+	_sync_avatar()
 
 func open() -> void:
 	_want_open = true
@@ -707,6 +708,8 @@ func _build_hero_bar() -> void:
 	av.size = Vector2(176, 176)
 	av.position = Vector2(24, 984)
 	av.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_avatar = av
+	_sync_avatar()                       # v14s：出战那位是谁，头像就是谁
 	add_child(av)
 	var av_btn := _mk_btn("", Vector2(24, 984), Vector2(176, 176), 20, false, func(): _open_large("角色"))
 	av_btn.flat = true
@@ -747,6 +750,15 @@ func _build_hero_bar() -> void:
 	_yh_lb.text = "玉壶 就绪"
 	_yh_auto_lb = _lbl(Vector2(508, 736), Vector2(182, 26), 16, DIM)
 	_yh_auto_lb.text = "自动：开 · 宝物页里用"
+var _avatar: AvatarArt = null
+
+# v14s：左上角头像跟着"开局出战"那位走
+func _sync_avatar() -> void:
+	if _avatar == null:
+		return
+	var a: Dictionary = _field.HERO_ART.get(_mate_start, {}) if _mate_start != "" else {}
+	_avatar.setup(str(a.get("hair", "")), a.get("col", Color(0.86, 0.83, 0.76)))
+
 # ---- 招募页（v6a）：三个候选，选一个把"成长"并进来（逐项取最高）----
 func _fill_recruit(p: Control, y: float, sz: Vector2) -> float:
 	var head := Label.new()
@@ -3947,15 +3959,29 @@ const MATE_STAR_PRICE := 600                # 升到第 n 星要 600 × n
 func _mate_star_of(id: String) -> int:
 	return clampi(int(_mate_star.get(id, 1)), 1, MATE_STAR_MAX)
 
-# v14q 初始队员（用户："存档里可设「开局自带的那位队员」"）：
-#   存 meta（跨局）；新的一局开始时**自动入队**（成长照样并进继承、技能当场就带）。
-#   入队过的人不会再出现在招募候选里——所以这是"这一局少一次招募、换一个保底"的取舍。
-var _mate_start := ""                       # 开局自带的伙伴 id（"" ＝ 不带）
+# v14s 开局出战（用户："存档里初始队员出战 是替换原本作为主角的角色"）：
+#   存 meta（跨局）。选了谁，新的一局就**由他当主角**——
+#     · 画的是他（战场上的小人换成他的长相/武器/配色）
+#     · 他的技能变成**主角自己的技能**（照冷却自动放，原队友那一份不再单独出手）
+#     · 他的成长并进主角继承（跟招募同一条口径）
+#   ⚠ 代价 / 口径，已跟用户确认过：**是替换，不是多一个队友**——
+#     所以出战的那位**不会再作为伙伴出手**，这一局等于"用伙伴换主角形象＋技能"。
+var _mate_start := ""                       # 开局出战的伙伴 id（"" ＝ 还是原来的少侠）
 
 func _mate_start_name() -> String:
 	if _mate_start == "" or not _field.PARTNER_INFO.has(_mate_start):
-		return "不带"
-	return str((_field.PARTNER_INFO[_mate_start] as Dictionary)["name"])
+		return "少侠（默认）"
+	return str((_field.PARTNER_INFO[_mate_start] as Dictionary)["name"]) + "（替换主角）"
+
+# 开局出战时：入队 ＋ 成长并进继承 ＋ 告诉战场"这一局的主角长他这样"
+func _mate_restore() -> String:
+	if _mate_start == "" or not _field.PARTNER_INFO.has(_mate_start):
+		_field.set_hero_mate("")
+		return ""
+	_mate_grant(_mate_start)
+	var info: Dictionary = _field.PARTNER_INFO[_mate_start]
+	_field.set_hero_mate(_mate_start)
+	return str(info["name"])
 
 # 把 id 并进继承（逐项取最高）＋ 标记入队——开局发人与局内招募共用这一套
 func _mate_grant(id: String) -> Array:
@@ -3975,15 +4001,16 @@ func _mate_grant(id: String) -> Array:
 
 # 存档页那颗［开局自带］按下去：设成他／取消
 func _mate_set_start(id: String) -> void:
+	var nm := str((_field.PARTNER_INFO[id] as Dictionary)["name"])
 	if _mate_start == id:
 		_mate_start = ""
-		_hint.text = "开局不再自带队员"
+		_hint.text = "开局出战取消——下局还是少侠当主角"
 	else:
 		if not bool((_field.partners[id] as Dictionary)["owned"]):
-			_hint.text = "要先在这一局里招募到「" + str((_field.PARTNER_INFO[id] as Dictionary)["name"]) + "」，才能设成开局自带"
+			_hint.text = "要先在这一局里招募到「" + nm + "」，才能让他开局出战"
 			return
 		_mate_start = id
-		_hint.text = "开局自带：「" + str((_field.PARTNER_INFO[id] as Dictionary)["name"]) + "」（下一局开始生效）"
+		_hint.text = "开局出战：「" + nm + "」下一局**替换主角**（画的是他、他的技能归你）"
 	_ach_save()
 	Audio.sfx("ui_click", -8.0)
 	if _popup_kind == "存档":
@@ -4524,7 +4551,8 @@ func _fill_save(p: Control, y: float, sz: Vector2) -> float:
 	mnote.add_theme_color_override("font_color", DIM)
 	mnote.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	mnote.text = "★1 是招募自带的；花钱升星永久保留。每星：招募成长继承 +3% · 战场技能威力 +12% · 技能冷却 −5%。价钱 600 × 目标星级（都从银两里扣）。\n" \
-		+ "［设为开局自带］＝下一局一开场就带着他（成长照样并进继承）——开局自带现在：" + _mate_start_name() + "。"
+		+ "［设为开局出战］＝**下一局由他替换主角**：画的是他、他的技能变成你的技能、成长并进继承；" \
+		+ "代价是这一局他不再作为队友单独出手。现在出战：" + _mate_start_name() + "。"
 	p.add_child(mnote)
 	ly += 92.0
 	for mpid_v in _field.PARTNER_INFO.keys():
@@ -4555,7 +4583,7 @@ func _fill_save(p: Control, y: float, sz: Vector2) -> float:
 		mrow.add_child(msl)
 		# v14q：这颗按下去＝"开局自带的那位队员"（再按一次取消）；已入过队的才有资格
 		var msel := (_mate_start == mpid)
-		var mbb0 := _pbtn(mrow, ("开局自带 ✓" if msel else "设为开局自带"), Vector2(196, 12), Vector2(236, 54), 19,
+		var mbb0 := _pbtn(mrow, ("开局出战 ✓" if msel else "设为开局出战"), Vector2(196, 12), Vector2(236, 54), 19,
 			true, _mate_set_start.bind(mpid))
 		if msel:
 			mbb0.add_theme_stylebox_override("normal", _flat(Color(0.30, 0.46, 0.32, 0.98)))
@@ -4986,9 +5014,8 @@ func _restart_run() -> void:
 	_field.reset_run()
 	_field.reset_partners()          # v6b：伙伴退回未入队（招募是这一局的事）
 	_grow_inherit = {"arm": 0, "agi": 0, "wit": 0}
-	# v14q：开局自带的那位队员（存档里设的）——先入队、成长并进继承，招募里就不会再出现他
-	if _mate_start != "" and _field.PARTNER_INFO.has(_mate_start):
-		_mate_grant(_mate_start)
+	# v14s：开局出战的那位（存档里设的）——他**就是这一局的主角**
+	var hero_who := _mate_restore()
 	_recruit_opens = 0
 	_bath_used = 0                       # v13w：新的一局，浴血次数归零
 	_yh_uses = 0                         # v13x：本局喝玉壶次数
@@ -5026,7 +5053,11 @@ func _restart_run() -> void:
 	_stage_paid = false
 	_hint.text = "关卡 " + _stage_sel + " " + str(st["n"]) + "：怪 ×" + str(st["mul"]) + " · " + str(st["waves"]) + " 波通关"
 	_close_popup()
-	_hint.text = "新的一局——预备几秒，怪就压上来了"
+	if hero_who != "":
+		_hint.text = "这一局由「" + hero_who + "」出战（替换主角）——他的技能就是你的技能"
+	else:
+		_hint.text = "新的一局——预备几秒，怪就压上来了"
+	_sync_avatar()                       # v14s：出战那位定了，头像跟着换
 
 # ---- 技能页：三选一（有技能点时）／当前招式（没点时）----
 #   数据与效果都在战场（kushou_battle.gd）里：roll_choices() 抽、apply_pick() 落。
@@ -5627,6 +5658,8 @@ func _sync_battle_stats() -> void:
 	_field.hero["mech_comboaspd"] = float(_extra.get("mech_comboaspd", 0.0))
 	_field.hero["mech_root"] = float(_extra.get("mech_root", 0.0))
 	_field.hero["mech_killatk"] = float(_extra.get("mech_killatk", 0.0))
+	# v14s：开局出战的那位＝主角本人（战场按这个换画法与技能归属）
+	_field.hero["hero_name"] = _mate_start_name()
 	# v14o：伙伴星级写进战场（那边 p_star_mul 只读这个字段）
 	for pid_s in _field.partners.keys():
 		var pd_s: Dictionary = _field.partners[pid_s]
@@ -7420,10 +7453,34 @@ class IconArt extends Control:
 
 # 主角头像（简笔）
 class AvatarArt extends Control:
+	# v14s：开局出战时，左上角这个头像也换成那位主角（配色 ＋ 头发样式一致）
+	var body := Color(0.30, 0.28, 0.28)
+	var hair := ""
+	var tint := Color(0.86, 0.83, 0.76)
+
+	func setup(hair_kind: String, col: Color) -> void:
+		hair = hair_kind
+		tint = col
+		body = col.darkened(0.35)
+		queue_redraw()
+
 	func _draw() -> void:
 		var c := Vector2(size.x * 0.5, size.y * 0.5)
-		draw_circle(c, 64.0, Color(0.86, 0.83, 0.76))
-		draw_circle(c + Vector2(0, -18.0), 20.0, Color(0.30, 0.28, 0.28))
-		draw_line(c + Vector2(0, 2.0), c + Vector2(0, 40.0), Color(0.30, 0.28, 0.28), 6.0)
-		draw_line(c + Vector2(0, 10.0), c + Vector2(-24.0, 28.0), Color(0.30, 0.28, 0.28), 6.0)
-		draw_line(c + Vector2(0, 10.0), c + Vector2(24.0, 28.0), Color(0.30, 0.28, 0.28), 6.0)
+		draw_circle(c, 64.0, tint)
+		draw_circle(c + Vector2(0, -18.0), 20.0, body)
+		if hair == "long":
+			draw_line(c + Vector2(-16.0, -22.0), c + Vector2(-26.0, 22.0), body, 8.0)
+			draw_line(c + Vector2(16.0, -22.0), c + Vector2(26.0, 22.0), body, 8.0)
+		elif hair == "crown":
+			draw_circle(c + Vector2(0, -38.0), 9.0, Color(0.86, 0.70, 0.28))
+		elif hair == "topknot":
+			draw_circle(c + Vector2(0, -40.0), 8.0, body)
+		elif hair == "hood":
+			draw_arc(c + Vector2(0, -18.0), 22.0, PI, TAU, 20, body, 9.0)
+		elif hair == "red":
+			draw_line(c + Vector2(-18.0, -26.0), c + Vector2(-30.0, -46.0), Color(0.72, 0.20, 0.22), 7.0)
+			draw_line(c + Vector2(0, -38.0), c + Vector2(4.0, -58.0), Color(0.72, 0.20, 0.22), 7.0)
+			draw_line(c + Vector2(18.0, -26.0), c + Vector2(30.0, -46.0), Color(0.72, 0.20, 0.22), 7.0)
+		draw_line(c + Vector2(0, 2.0), c + Vector2(0, 40.0), body, 6.0)
+		draw_line(c + Vector2(0, 10.0), c + Vector2(-24.0, 28.0), body, 6.0)
+		draw_line(c + Vector2(0, 10.0), c + Vector2(24.0, 28.0), body, 6.0)
