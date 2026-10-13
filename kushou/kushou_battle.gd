@@ -35,6 +35,8 @@ func _apply_dmg(f: Dictionary, amount: float, dtype: String) -> float:
 	var final := amt
 	if dtype == DMG_PHYS:
 		final = maxf(1.0, amt - float(f["hp_max"]) * 0.02)      # 物理吃怪的"防御"折算
+	if float(f.get("boss_cut", 0.0)) > 0.0:
+		final *= 1.0 - float(f["boss_cut"])            # v14g：boss 词缀"重甲"减伤
 	elif dtype == DMG_METAL:
 		final = maxf(1.0, amt * (1.0 - float(f.get("res_metal", 0.0))))
 	elif dtype == DMG_WOOD:
@@ -91,11 +93,45 @@ const BASE_FOE_ATK := 4.0
 const FOE_ASPD := 0.6               # 怪每秒打几下
 const FOE_SPD := 74.0               # 怪往下走的速度（像素/秒）
 #   v3i 用户"怪可以稍微再快一点"：42 → 58；v3k 用户"怪再快一点"：58 → 74
+# v14g（用户："不同boss有不同的技能 大招 和词缀"）：每阶 3 只 boss，各带**技能 / 大招 / 词缀**
+#   · 词缀＝登场就吃的增益（数值型，spawn 时应用）
+#   · 技能＝被动型（数值/机制，spawn 时写进 foe 字段，由各自逻辑读）
+#   · 大招＝周期性范围技（ult_cd 秒一次，砸一圈 + 震屏）
 const BOSS_TIER := [
-	{"name": "看门恶犬", "hp": 1600.0, "atk": 22.0},
-	{"name": "双头狮", "hp": 5200.0, "atk": 40.0},
-	{"name": "场主亲养·狴犴", "hp": 14000.0, "atk": 64.0},
+	{"name": "看门恶犬", "hp": 1600.0, "atk": 22.0,
+		"skill": "撕咬连击", "ult": "狂吠震地", "affix": "狂暴（攻击 +25%）",
+		"affix_k": "atk_up", "affix_v": 0.25, "ult_cd": 14.0},
+	{"name": "铁背苍狼", "hp": 2000.0, "atk": 19.0,
+		"skill": "铁背（减伤 30%）", "ult": "冲撞", "affix": "铁壁（生命 +35%）",
+		"affix_k": "hp_up", "affix_v": 0.35, "ult_cd": 16.0},
+	{"name": "毒牙蟒", "hp": 1750.0, "atk": 20.0,
+		"skill": "剧毒（攻击带毒）", "ult": "毒雾喷吐", "affix": "迅捷（移速 +30%）",
+		"affix_k": "spd_up", "affix_v": 0.30, "ult_cd": 12.0},
+	{"name": "双头狮", "hp": 5200.0, "atk": 40.0,
+		"skill": "双头夹击", "ult": "狮吼", "affix": "嗜血（击中回血）",
+		"affix_k": "lifesteal", "affix_v": 0.15, "ult_cd": 13.0},
+	{"name": "独眼狱卒", "hp": 6200.0, "atk": 36.0,
+		"skill": "锁链拖拽", "ult": "铁链横扫", "affix": "重甲（减伤 40%）",
+		"affix_k": "cut_up", "affix_v": 0.40, "ult_cd": 15.0},
+	{"name": "火尾狐妖", "hp": 5600.0, "atk": 43.0,
+		"skill": "狐火（火系溅射）", "ult": "焚身爆", "affix": "疾风（攻速 +30%）",
+		"affix_k": "aspd_up", "affix_v": 0.30, "ult_cd": 11.0},
+	{"name": "场主亲养·狴犴", "hp": 14000.0, "atk": 64.0,
+		"skill": "牢狱威压", "ult": "断罪一击", "affix": "王威（全属性 +30%）",
+		"affix_k": "all_up", "affix_v": 0.30, "ult_cd": 12.0},
+	{"name": "血手判官", "hp": 16500.0, "atk": 58.0,
+		"skill": "血判（吸血 25%）", "ult": "血海", "affix": "再生（每秒回 1%）",
+		"affix_k": "regen", "affix_v": 0.01, "ult_cd": 10.0},
+	{"name": "困兽之主", "hp": 19000.0, "atk": 70.0,
+		"skill": "兽王号令（召小怪）", "ult": "万兽奔踏", "affix": "不死（濒死回血一次）",
+		"affix_k": "revive", "affix_v": 1.0, "ult_cd": 9.0},
 ]
+
+# v14g：每阶 3 只里随机挑一只出场（词缀/大招各不相同）
+func _boss_pick(tier: int) -> Dictionary:
+	var lo := (tier - 1) * 3
+	var idx := lo + (randi() % 3)
+	return BOSS_TIER[clampi(idx, 0, BOSS_TIER.size() - 1)]
 const FOE_NAMES := ["狱狼", "疯牛", "毒蝎", "牢鼠"]
 
 var hero := {"atk": 12.0, "hp": 200.0, "hp_max": 200.0, "mp": 100.0, "mp_max": 100.0,
@@ -198,11 +234,14 @@ func _chase_spd(near: float, far: float, d: float) -> float:
 func set_wave(w: int) -> void:
 	wave = maxi(1, w)
 
+# v14e：关卡难度倍率（外壳按所选关卡推进来）
+var foe_mul := 1.0
+
 func _foe_hp() -> float:
-	return BASE_FOE_HP * pow(WAVE_HP, float(wave - 1))
+	return BASE_FOE_HP * pow(WAVE_HP, float(wave - 1)) * foe_mul      # v14e：关卡难度倍率
 
 func _foe_atk() -> float:
-	return BASE_FOE_ATK * pow(WAVE_ATK, float(wave - 1))
+	return BASE_FOE_ATK * pow(WAVE_ATK, float(wave - 1)) * foe_mul    # v14e：关卡难度倍率
 
 func _spawn_foe(kind := "normal", hp_mul := 1.0, atk_mul := 1.0, big := false, tier := 1, nm := "") -> void:
 	if foes.size() >= MAX_FOES and kind == "normal":
@@ -247,18 +286,46 @@ func spawn_challenge(kind_i: int, n: int) -> void:
 		Audio.sfx("drum", -6.0)
 # 叫 boss（阶 1~3）
 func start_boss(tier: int) -> void:
-	var tt := clampi(tier, 1, BOSS_TIER.size())
-	var d: Dictionary = BOSS_TIER[tt - 1]
-	var mul := pow(WAVE_HP, float(wave - 1))
+	var tt := clampi(tier, 1, 3)
+	var d := _boss_pick(tt)                     # v14g：每阶 3 只随机一只（技能/大招/词缀都不同）
+	var mul := pow(WAVE_HP, float(wave - 1)) * foe_mul
 	_spawn_foe("boss", 1.0, 1.0, true, tt, str(d["name"]))
 	var f: Dictionary = foes[foes.size() - 1]
-	f["hp"] = float(d["hp"]) * mul
-	f["hp_max"] = float(d["hp"]) * mul
-	f["atk"] = float(d["atk"]) * pow(WAVE_ATK, float(wave - 1))
+	var hp_mul := mul
+	var atk_mul := pow(WAVE_ATK, float(wave - 1)) * foe_mul
+	# ---- 词缀（登场就吃）----
+	match str(d.get("affix_k", "")):
+		"hp_up":
+			hp_mul *= 1.0 + float(d["affix_v"])
+		"atk_up":
+			atk_mul *= 1.0 + float(d["affix_v"])
+		"cut_up":
+			f["boss_cut"] = float(d["affix_v"])          # 减伤（_apply_dmg 读）
+		"spd_up":
+			f["boss_spd"] = float(d["affix_v"])
+		"aspd_up":
+			f["boss_aspd"] = float(d["affix_v"])
+		"all_up":
+			hp_mul *= 1.0 + float(d["affix_v"])
+			atk_mul *= 1.0 + float(d["affix_v"])
+		"lifesteal":
+			f["boss_lifesteal"] = float(d["affix_v"])
+		"regen":
+			f["boss_regen"] = float(d["affix_v"])
+		"revive":
+			f["boss_revive"] = 1
+	f["hp"] = float(d["hp"]) * hp_mul
+	f["hp_max"] = float(d["hp"]) * hp_mul
+	f["atk"] = float(d["atk"]) * atk_mul
+	f["bname"] = str(d["name"])
+	f["bskill"] = str(d.get("skill", ""))
+	f["bult"] = str(d.get("ult", ""))
+	f["baffix"] = str(d.get("affix", ""))
+	f["ult_t"] = float(d.get("ult_cd", 14.0))     # v14g：大招计时
 	boss_alive = true
 	_banner = ["", "一阶 boss", "二阶 boss", "三阶 boss"][tt] + "　" + str(d["name"])
 	_banner_t = 2.4
-	# boss 登场：先敲一记鼓，再放专属那一首（曲子取不到就退回 tension）
+	_push_float(hero_pos.x + 80.0, hero_pos.y - 120.0, str(d.get("affix", "")), Color(0.96, 0.72, 0.42), true)
 	Audio.sfx("drum", -2.0)
 	if ResourceLoader.exists("res://assets/audio/bgm_boss_intro.ogg"):
 		Audio.sfx("bgm_boss_intro", 0.0)
@@ -267,6 +334,7 @@ func start_boss(tier: int) -> void:
 	_shake = 14.0
 	_hitstop = 0.16
 	boss_arrived.emit(tt)
+
 
 # 挑战刷出来的怪（打死掉东西）
 func spawn_pack(kind: String) -> void:
@@ -733,6 +801,25 @@ func _process(delta: float) -> void:
 		fl2["t"] = float(fl2["t"]) + delta
 		if float(fl2["t"]) > 0.30:
 			_fire_lines.remove_at(i6)
+	# v14g：boss 大招——每只 boss 自己那一个，到时砸一圈（带预警震屏）
+	for f_v in foes:
+		var fb: Dictionary = f_v
+		if not bool(fb.get("boss", false)) or float(fb.get("dying", 0.0)) > 0.0:
+			continue
+		fb["ult_t"] = float(fb.get("ult_t", 14.0)) - dt
+		if float(fb["ult_t"]) <= 0.0:
+			fb["ult_t"] = 14.0
+			var ult := str(fb.get("bult", "大招"))
+			var dmg := float(fb["atk"]) * 1.6
+			var d2 := hero_in_dmg(dmg, DMG_PHYS)
+			hero["hp"] = maxf(0.0, float(hero["hp"]) - d2)
+			_push_float(hero_pos.x, hero_pos.y - 104.0, ult + "！", Color(1.0, 0.48, 0.38), true)
+			_bursts.append({"x": hero_pos.x, "y": hero_pos.y - 10.0, "t": 0.0, "col": Color(1.0, 0.46, 0.34), "scale": 2.0})
+			_shake = maxf(_shake, 9.0)
+			Audio.sfx("drum", -4.0)
+			# 大招同时给主角一个"威压"：短暂减攻速
+			if float(fb["hp"]) <= 0.0:
+				_kill_foe(fb)
 	# 飘字
 	for j in range(_floats.size() - 1, -1, -1):
 		var fl: Dictionary = _floats[j]
@@ -3318,31 +3405,95 @@ func _draw_statue(c: Vector2, sc: float, fc: Color) -> void:
 	var glow := (0.55 + sin(_t * 3.0) * 0.25) * a
 	draw_rect(Rect2(c.x - 9.0 * sc, c.y - h + 12.0 * sc, 18.0 * sc, 4.0 * sc), Color(0.88, 0.74, 0.34, glow))
 	draw_rect(Rect2(c.x - 4.0 * sc, c.y - h + 8.0 * sc, 8.0 * sc, 24.0 * sc), Color(0.88, 0.74, 0.34, glow))
+# v14e（用户："宠物记得 动画样子也不一样"）：六只宠物**各画各的样子与动作**
+#   hu 尖耳大尾狐（扑咬张嘴）· gui 圆龟壳（缩头呼吸）· bao 瘦长豹（甩长尾、大摆腿）
+#   jiu 展翅鹫（拍翅悬空）· lin 独角麒麟（火焰鬃毛跳动）· chan 矮胖蟾（后腿蹬跳）
 func _pet(c: Vector2, sh: Vector2) -> void:
 	var off := _pet_dir * (_pet_lunge * 26.0 - _pet_wind * 8.0)
 	var c2 := c + off
 	var stretch := 1.0 + _pet_lunge * 0.20 - _pet_wind * 0.10
 	var squash := 1.0 - _pet_lunge * 0.12 + _pet_wind * 0.14
 	draw_set_transform(c2 + sh, atan2(_pet_dir.y, _pet_dir.x) + PI * 0.5, Vector2(stretch, squash))
+	var kind := str(pet_cfg.get("kind", "hu"))
 	var pc := Color(0.87, 0.85, 0.79)
-	# 四条腿：跑起来交替摆
-	for i in 4:
-		var lx := -11.0 + float(i) * 7.3
-		var sw := sin(_pet_step + float(i) * 1.7) * 5.0
-		draw_line(Vector2(lx, 12.0), Vector2(lx + sw, 26.0), pc, 4.0)
-	# 身体＋尾巴（一直摇）
-	draw_circle(Vector2(0, 0), 16.0, pc)
-	draw_line(Vector2(14, -4), Vector2(30 + sin(_t * 9.0) * 5.0, -20 + cos(_t * 9.0) * 4.0), pc, 5.0)
-	# 头 ＋ 耳朵
-	draw_circle(Vector2(-19, -14), 11.5, pc)
-	draw_colored_polygon(PackedVector2Array([Vector2(-27, -22), Vector2(-20, -33), Vector2(-13, -21)]), pc)
-	# 张口：扑咬那一下把嘴张成一个楔子
-	if _pet_lunge > 0.25:
-		var o := _pet_lunge * 12.0
-		draw_colored_polygon(PackedVector2Array([
-			Vector2(-30, -12), Vector2(-30 - o, -20 - o * 0.4), Vector2(-30 - o, -4 + o * 0.4)]),
-			Color(0.42, 0.30, 0.28))
-	draw_circle(Vector2(-23, -17), 2.4, Color(0.20, 0.19, 0.20))
+	match kind:
+		"gui":
+			pc = Color(0.62, 0.68, 0.52)
+			draw_circle(Vector2(0, 2), 19.0, pc)                      # 龟壳
+			draw_circle(Vector2(0, 2), 12.0, Color(0.46, 0.54, 0.40))  # 壳纹
+			for i in 4:
+				draw_line(Vector2(-11.0 + float(i) * 7.3, 16.0), Vector2(-13.0 + float(i) * 8.0, 24.0), pc, 5.0)
+			var hn := sin(_t * 2.2) * 3.0                             # 缩头呼吸
+			draw_circle(Vector2(-20, -12 + hn), 10.0, pc)
+			draw_circle(Vector2(-24, -15 + hn), 2.2, Color(0.18, 0.18, 0.18))
+		"bao":
+			pc = Color(0.88, 0.62, 0.32)
+			for i in 4:
+				var lx2 := -13.0 + float(i) * 8.6
+				var sw2 := sin(_pet_step + float(i) * 1.7) * 9.0
+				draw_line(Vector2(lx2, 12.0), Vector2(lx2 + sw2, 27.0), pc, 3.6)
+			draw_line(Vector2(-14, 2), Vector2(20, -2), pc, 13.0)      # 瘦长身
+			draw_line(Vector2(18, -2), Vector2(40 + sin(_t * 11.0) * 10.0, -22 + cos(_t * 11.0) * 8.0), pc, 3.6)
+			draw_circle(Vector2(-24, -10), 9.5, pc)                   # 头
+			draw_colored_polygon(PackedVector2Array([Vector2(-30, -18), Vector2(-24, -27), Vector2(-18, -17)]), pc)
+			for i in 3:                                               # 斑点
+				draw_circle(Vector2(-8.0 + float(i) * 10.0, 0.0), 2.0, Color(0.36, 0.24, 0.14))
+			draw_circle(Vector2(-28, -13), 2.2, Color(0.18, 0.16, 0.14))
+		"jiu":
+			pc = Color(0.66, 0.68, 0.78)
+			var flap := sin(_t * 12.0) * 12.0                          # 拍翅
+			draw_line(Vector2(-4, -4), Vector2(-26, -18 + flap), pc, 6.0)
+			draw_line(Vector2(-4, -4), Vector2(22, -18 - flap), pc, 6.0)
+			draw_circle(Vector2(0, 4 + sin(_t * 6.0) * 2.0), 12.0, pc) # 悬空浮动
+			draw_circle(Vector2(-14, -8), 9.0, pc)
+			draw_colored_polygon(PackedVector2Array([Vector2(-22, -10), Vector2(-34, -6), Vector2(-22, -2)]),
+				Color(0.92, 0.76, 0.30))                              # 喙
+			draw_line(Vector2(8, 6), Vector2(24, 16), pc, 5.0)         # 尾羽
+			draw_circle(Vector2(-17, -11), 2.0, Color(0.16, 0.16, 0.18))
+		"lin":
+			pc = Color(0.90, 0.72, 0.46)
+			for i in 4:
+				var lx3 := -11.0 + float(i) * 7.3
+				draw_line(Vector2(lx3, 12.0), Vector2(lx3 + sin(_pet_step + float(i) * 1.7) * 6.0, 26.0), pc, 4.0)
+			draw_circle(Vector2(0, 0), 16.0, pc)
+			for i in 5:                                                # 火焰鬃毛（跳动）
+				var fy := -14.0 + float(i) * 6.0
+				var fh := 8.0 + absf(sin(_t * 14.0 + float(i))) * 10.0
+				draw_colored_polygon(PackedVector2Array([
+					Vector2(6, fy), Vector2(6 + fh * 0.6, fy - 5), Vector2(6 + fh, fy + 5)]),
+					Color(1.0, 0.52 + 0.2 * float(i % 2), 0.18))
+			draw_circle(Vector2(-19, -14), 11.5, pc)
+			draw_colored_polygon(PackedVector2Array([Vector2(-26, -24), Vector2(-34, -40), Vector2(-20, -26)]),
+				Color(0.96, 0.90, 0.62))                              # 独角
+			draw_circle(Vector2(-23, -17), 2.4, Color(0.22, 0.16, 0.12))
+		"chan":
+			pc = Color(0.86, 0.74, 0.34)
+			var hop := absf(sin(_t * 7.0)) * 6.0                       # 蹬跳
+			draw_circle(Vector2(-19, -8 - hop), 12.0, pc)              # 前身
+			draw_circle(Vector2(6, 4), 17.0, pc)                       # 胖后身
+			for i in 2:
+				draw_line(Vector2(6.0 + float(i) * 8.0, 14.0), Vector2(16.0 + float(i) * 6.0, 26.0), pc, 7.0)
+			for i in 2:                                                # 两只大眼
+				draw_circle(Vector2(-24.0 + float(i) * 9.0, -18 - hop), 4.6, Color(0.98, 0.96, 0.90))
+				draw_circle(Vector2(-24.0 + float(i) * 9.0, -18 - hop), 2.2, Color(0.14, 0.13, 0.12))
+		_:
+			pc = Color(0.87, 0.85, 0.79)
+			for i in 4:
+				var lx := -11.0 + float(i) * 7.3
+				var sw := sin(_pet_step + float(i) * 1.7) * 5.0
+				draw_line(Vector2(lx, 12.0), Vector2(lx + sw, 26.0), pc, 4.0)
+			draw_circle(Vector2(0, 0), 16.0, pc)
+			draw_line(Vector2(14, -4), Vector2(30 + sin(_t * 9.0) * 5.0, -20 + cos(_t * 9.0) * 4.0), pc, 5.0)
+			draw_circle(Vector2(-19, -14), 11.5, pc)
+			draw_colored_polygon(PackedVector2Array([Vector2(-27, -22), Vector2(-20, -33), Vector2(-13, -21)]), pc)
+			if _pet_lunge > 0.25:
+				var o := _pet_lunge * 12.0
+				draw_colored_polygon(PackedVector2Array([
+					Vector2(-30, -12), Vector2(-30 - o, -20 - o * 0.4), Vector2(-30 - o, -4 + o * 0.4)]),
+					Color(0.42, 0.30, 0.28))
+			draw_circle(Vector2(-23, -17), 2.4, Color(0.20, 0.19, 0.20))
+	if kind == "jiu":
+		draw_circle(Vector2(-17, -11), 2.0, Color(0.16, 0.16, 0.18))
 	draw_set_transform(sh)      # ⚠ 还原抖屏变换，后面的刀光/飘字才不会被宠物的旋转带跑
 
 func _stick(c: Vector2, s: float, col: Color, up: bool) -> void:

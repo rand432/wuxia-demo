@@ -370,8 +370,9 @@ func _set_check(set_id: String) -> void:
 			_extra["crystal_bonus"] = float(_extra.get("crystal_bonus", 0.0)) + 0.25
 			_extra["wave_crystal"] = float(_extra.get("wave_crystal", 0.0)) + 2.0
 		"allattr_equip":
+			# v14h：⚠ 原来写的是 wpn_*，会被 _wpn_sync 每帧覆盖（死键）——改走 bonus_*
 			for k2 in ["arm", "agi", "wit"]:
-				_extra["wpn_" + k2] = float(_extra.get("wpn_" + k2, 0.0)) + 8.0
+				_extra["bonus_" + k2] = float(_extra.get("bonus_" + k2, 0.0)) + 8.0
 		"mp_flat_150":
 			_extra["mp_flat"] = float(_extra.get("mp_flat", 0.0)) + 150.0
 		"money_now_400":
@@ -2584,10 +2585,9 @@ func _trea_take(i: int) -> void:
 		_hint.text = "拿到道具：" + nm + " ×" + str(int(_items[nm])) + "（" + str(it["fx"]) + "）"
 	else:
 		if key == "attr_all":
-			# ⚠ wpn_* 会被 _wpn_sync 覆盖（探针抓到），所以直接加属性点
+			# v14h：⚠ wpn_* 会被 _wpn_sync 每帧覆盖（死键），所以直接加属性点
 			for a in ["arm", "agi", "wit"]:
 				_attr[a] = int(_attr[a]) + int(v)
-			_extra["wpn_wit"] = float(_extra.get("wpn_wit", 0.0)) + v
 		else:
 			_extra[key] = float(_extra.get(key, 0.0)) + v
 		var own: Dictionary = _trea_own.get(nm, {"q": str(it["q"]), "fx": str(it["fx"]), "n": 0})
@@ -3800,6 +3800,237 @@ func _fill_quest(p: Control, y: float, sz: Vector2) -> float:
 #   宠物＝咬人（各不相同的攻击）＋ 给主人的被动加成；没有生命值、不会死
 # ============================================================
 var _pet_kind := "hu"
+var _pet_star := {}                       # v14j：宠物星级（id → 0..5），存 meta
+const PET_STAR_MAX := 5
+const PET_STAR_PRICE := 600                # 每星价钱 = 600 × (当前星 + 1)
+
+func _pet_star_of(kind: String) -> int:
+	return clampi(int(_pet_star.get(kind, 0)), 0, PET_STAR_MAX)
+
+# 星级倍率：攻击 +15%/星，被动加成 +20%/星（用户："每提升星级 可以强化其成长和基础属性"）
+func _pet_star_mul(kind: String) -> float:
+	return 1.0 + 0.15 * float(_pet_star_of(kind))
+
+func _pet_bonus_mul(kind: String) -> float:
+	return 1.0 + 0.20 * float(_pet_star_of(kind))
+
+func _pet_star_up(kind: String) -> void:
+	var st := _pet_star_of(kind)
+	if st >= PET_STAR_MAX:
+		_hint.text = "「" + str(_pet_info(kind)["n"]) + "」已经满星（" + str(PET_STAR_MAX) + " 星）"
+		return
+	var price := PET_STAR_PRICE * (st + 1)
+	if int(_money) < price:
+		_hint.text = "银两不够（升到 " + str(st + 1) + " 星要 " + str(price) + "，现有 " + str(int(_money)) + "）"
+		return
+	_money -= price
+	_pet_star[kind] = st + 1
+	_ach_save()
+	_hint.text = "「" + str(_pet_info(kind)["n"]) + "」升到 " + str(st + 1) + " 星：攻击 +" + str(15 * (st + 1)) + "% · 被动 +" + str(20 * (st + 1)) + "%"
+	Audio.sfx("levelup", -4.0)
+	if _popup_kind == "存档":
+		_open_large("存档")
+
+# ============================================================
+# v14e 难度挑战（用户："设置难度挑战比如1-1 2-1 4-8 不同的难度解锁不同卡组成员武器装备事件boss
+#        【不要与存档重合】刚开始给一些基础的就行"）
+#   4 章 × 4 关；首通奖励与「存档」那 26 项完全不重合
+#   mul＝怪强度倍率 · waves＝这一关的波数上限（打满即通关）
+# ============================================================
+var _stage_sel := "1-1"
+var _stage_paid := false                  # 这一关的银两/通关结算过没有
+var _endless := false                      # 无尽模式（破 4-4 解锁）
+var _best_wave := 0                        # 无尽模式最高波（永久记录）
+var _stage_done := {}                     # 已通关的关卡 id（永久，存 meta）
+
+const STAGES := [
+	# 第一章 · 入门
+	{"id": "1-1", "n": "牢门初开", "mul": 1.0, "waves": 10, "cat": "卡组", "un": "磐石心", "set": "panshixin"},
+	{"id": "1-2", "n": "铁栅血痕", "mul": 1.0, "waves": 15, "cat": "卡组", "un": "铁布衫", "set": "tiebushan"},
+	{"id": "1-3", "n": "断锁残灯", "mul": 1.1, "waves": 20, "cat": "队员", "un": "白婆婆", "pid": "baipopo"},
+	{"id": "1-4", "n": "监牢深处", "mul": 1.1, "waves": 25, "cat": "卡组", "un": "断岳", "set": "duanyue"},
+	# 第二章 · 进阶
+	{"id": "2-1", "n": "典吏巡夜", "mul": 1.3, "waves": 20, "cat": "宝物", "un": "灵晶袋", "trea": "灵晶袋"},
+	{"id": "2-2", "n": "五行乱阵", "mul": 1.3, "waves": 25, "cat": "卡组", "un": "五行", "set": "wuxing"},
+	{"id": "2-3", "n": "贪墨之狱", "mul": 1.4, "waves": 30, "cat": "装备卡", "un": "聚财珠", "set": "jucaizhu"},
+	{"id": "2-4", "n": "藤萝缠狱", "mul": 1.4, "waves": 30, "cat": "队员", "un": "沈青萝", "pid": "shenqingluo"},
+	# 第三章 · 困难
+	{"id": "3-1", "n": "龙纹石壁", "mul": 1.7, "waves": 30, "cat": "宝物", "un": "龙纹佩", "trea": "龙纹佩"},
+	{"id": "3-2", "n": "雷罚天牢", "mul": 1.7, "waves": 30, "cat": "卡组", "un": "雷罚", "set": "leifa"},
+	{"id": "3-3", "n": "传家之秘", "mul": 1.8, "waves": 30, "cat": "装备卡", "un": "传家宝", "set": "chuanjiabao"},
+	{"id": "3-4", "n": "鹰唳九霄", "mul": 1.8, "waves": 30, "cat": "队员", "un": "燕无归", "pid": "yanwugui"},
+	# 第四章 · 地狱
+	{"id": "4-1", "n": "火麟熔狱", "mul": 2.2, "waves": 30, "cat": "宠物", "un": "火麟", "pet": "lin"},
+	{"id": "4-2", "n": "诛心绝境", "mul": 2.2, "waves": 30, "cat": "卡组", "un": "诛心", "set": "zhuxin"},
+	{"id": "4-3", "n": "连环杀狱", "mul": 2.4, "waves": 30, "cat": "队员", "un": "雷小七", "pid": "leixiaoqi"},
+	{"id": "4-4", "n": "困兽之斗", "mul": 2.6, "waves": 30, "cat": "宝物", "un": "悟道果", "trea": "悟道果"},
+]
+
+func _stage_info(id: String) -> Dictionary:
+	for s_v in STAGES:
+		if str((s_v as Dictionary)["id"]) == id:
+			return s_v
+	return STAGES[0]
+
+# 第 2 关起要前一关通过才开
+func _stage_open(id: String) -> bool:
+	var idx := -1
+	for i in STAGES.size():
+		if str((STAGES[i] as Dictionary)["id"]) == id:
+			idx = i
+	if idx <= 0:
+		return true
+	return bool(_stage_done.get(str((STAGES[idx - 1] as Dictionary)["id"]), false))
+
+# 首通：把奖励记进 _unlocked（跟存档共用一张解锁表，但池子不重合）
+func _stage_clear(id: String) -> void:
+	if bool(_stage_done.get(id, false)):
+		return
+	var s := _stage_info(id)
+	_stage_done[id] = true
+	var uid := ""
+	if s.has("set"):
+		uid = "u_set_" + str(s["set"])
+	elif s.has("pid"):
+		uid = "u_part_" + str(s["pid"])
+	elif s.has("trea"):
+		uid = "u_trea_" + str(s["trea"])
+	elif s.has("pet"):
+		uid = "u_pet_" + str(s["pet"])
+	if uid != "":
+		_unlocked[uid] = true
+	_ach_save()
+	_bm_roll()
+	_note("【通关】" + id + " " + str(s["n"]) + "　首通奖励：" + str(s["cat"]) + "「" + str(s["un"]) + "」已解锁", 6.0)
+	Audio.sfx("levelup", -2.0)
+
+func _endless_open() -> bool:
+	return bool(_stage_done.get("4-4", false))
+
+func _set_endless() -> void:
+	if not _endless_open():
+		_hint.text = "无尽模式要先把 4-4「困兽之斗」打通"
+		return
+	_endless = not _endless
+	_ach_save()
+	_hint.text = ("无尽模式：开——波数不封顶，死了记最高波" if _endless else "无尽模式：关，打普通关卡")
+	Audio.sfx("ui_click", -8.0)
+	if _popup_kind == "关卡":
+		_open_large("关卡")
+
+func _set_stage(id: String) -> void:
+	if not _stage_open(id):
+		_hint.text = "先通过前一关才能打这一关"
+		return
+	_stage_sel = id
+	_ach_save()
+	var s := _stage_info(id)
+	_hint.text = "已选关卡 " + id + " " + str(s["n"]) + "（怪强度 ×" + str(s["mul"]) + " · " + str(s["waves"]) + " 波上限）——重开一局生效"
+	Audio.sfx("ui_click", -8.0)
+	if _popup_kind == "关卡":
+		_open_large("关卡")
+
+# 关卡页：4 章 × 4 关
+func _fill_stage(p: Control, y: float, sz: Vector2) -> float:
+	var s0 := _stage_info(_stage_sel)
+	var head := Label.new()
+	head.position = Vector2(24, y)
+	head.size = Vector2(660, 46)
+	head.add_theme_font_size_override("font_size"    , 28)
+	head.add_theme_color_override("font_color", INK)
+	head.text = "难度挑战　当前：" + _stage_sel + " " + str(s0["n"])
+	p.add_child(head)
+	var tip := Label.new()
+	tip.position = Vector2(24, y + 48.0)
+	tip.size = Vector2(660, 56)
+	tip.add_theme_font_size_override("font_size", 19)
+	tip.add_theme_color_override("font_color", DIM)
+	tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	tip.text = "怪强度 ×" + str(s0["mul"]) + "　波数上限 " + str(s0["waves"]) + "（打满即通关，给首通奖励）· 首通奖励与［存档］那批不重合"
+	p.add_child(tip)
+	var ly := y + 116.0
+	var last_ch := ""
+	for s_v in STAGES:
+		var s: Dictionary = s_v
+		var id := str(s["id"])
+		var ch := id.split("-")[0]
+		if ch != last_ch:
+			last_ch = ch
+			var cl := Label.new()
+			cl.position = Vector2(24, ly)
+			cl.size = Vector2(660, 34)
+			cl.add_theme_font_size_override("font_size", 22)
+			cl.add_theme_color_override("font_color", SEAL)
+			cl.text = "—— 第 " + ch + " 章 ——"
+			p.add_child(cl)
+			ly += 40.0
+		var done := bool(_stage_done.get(id, false))
+		var open := _stage_open(id)
+		var cur := (id == _stage_sel)
+		var qc := GOLD if done else (Color(INK.r, INK.g, INK.b, 0.75) if open else Color(0.55, 0.53, 0.51))
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.99, 0.97, 0.92) if open else Color(0.90, 0.88, 0.85)
+		sb.set_corner_radius_all(10)
+		sb.border_color = SEAL if cur else qc
+		sb.set_border_width_all(3 if cur else 2)
+		var box := Panel.new()
+		box.position = Vector2(24, ly)
+		box.size = Vector2(640, 92)
+		box.add_theme_stylebox_override("panel", sb)
+		box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		p.add_child(box)
+		var l1 := Label.new()
+		l1.position = Vector2(14, 8)
+		l1.size = Vector2(420, 36)
+		l1.add_theme_font_size_override("font_size", 24)
+		l1.add_theme_color_override("font_color", qc)
+		l1.text = id + "　" + str(s["n"]) + ("　（已通关）" if done else ("" if open else "　（未解锁）"))
+		box.add_child(l1)
+		var l2 := Label.new()
+		l2.position = Vector2(14, 48)
+		l2.size = Vector2(430, 36)
+		l2.add_theme_font_size_override("font_size", 18)
+		l2.add_theme_color_override("font_color", INK if open else DIM)
+		l2.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		l2.text = "怪 ×" + str(s["mul"]) + " · " + str(s["waves"]) + " 波　首通：" + str(s["cat"]) + "「" + str(s["un"]) + "」"
+		box.add_child(l2)
+		if open:
+			var bb := _pbtn(box, ("已选" if cur else "选它"), Vector2(460, 20), Vector2(166, 54), 22, true, _set_stage.bind(id))
+			if cur:
+				bb.add_theme_stylebox_override("normal", _flat(Color(0.55, 0.20, 0.18, 0.95)))
+		ly += 100.0
+	# v14f：无尽模式那一行（破 4-4 解锁）
+	var eo := _endless_open()
+	var ec := GOLD if eo else Color(0.55, 0.53, 0.51)
+	var esb := StyleBoxFlat.new()
+	esb.bg_color = Color(0.99, 0.97, 0.92) if eo else Color(0.90, 0.88, 0.85)
+	esb.set_corner_radius_all(10)
+	esb.border_color = SEAL if _endless else ec
+	esb.set_border_width_all(3 if _endless else 2)
+	var ebox := Panel.new()
+	ebox.position = Vector2(24, ly)
+	ebox.size = Vector2(640, 92)
+	ebox.add_theme_stylebox_override("panel", esb)
+	ebox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	p.add_child(ebox)
+	var el1 := Label.new()
+	el1.position = Vector2(14, 8)
+	el1.size = Vector2(420, 36)
+	el1.add_theme_font_size_override("font_size", 24)
+	el1.add_theme_color_override("font_color", ec)
+	el1.text = "无尽模式" + ("" if eo else "　（打通 4-4 解锁）") + ("　·　开" if _endless else "")
+	ebox.add_child(el1)
+	var el2 := Label.new()
+	el2.position = Vector2(14, 48)
+	el2.size = Vector2(430, 36)
+	el2.add_theme_font_size_override("font_size", 18)
+	el2.add_theme_color_override("font_color", INK if eo else DIM)
+	el2.text = "怪 ×1.6 · 波数不封顶　最高纪录：" + str(_best_wave) + " 波"
+	ebox.add_child(el2)
+	if eo:
+		_pbtn(ebox, ("关闭" if _endless else "开它"), Vector2(460, 20), Vector2(166, 54), 22, true, _set_endless)
+	ly += 100.0
+	return ly + 8.0
 
 const PETS := [
 	{"id": "hu", "n": "白狐", "q": "下品", "d": "扑咬单体 · 全属性 +3%",
@@ -3827,7 +4058,7 @@ func _apply_pet_bonus() -> void:
 	var e: Dictionary = info.get("eff", {})
 	for k in e.keys():
 		var key := str(k)
-		var v := float(e[k])
+		var v := float(e[k]) * _pet_bonus_mul(_pet_kind)     # v14j：星级越高，被动越强
 		if key == "attr_all":
 			# ⚠ wpn_* 会被 _wpn_sync 覆盖（探针抓到），直接加属性点
 			for a in ["arm", "agi", "wit"]:
@@ -3955,7 +4186,8 @@ func _fill_save(p: Control, y: float, sz: Vector2) -> float:
 	tip.add_theme_color_override("font_color", DIM)
 	tip.text = "花的就是主界面那个钱账（银两）· 解锁永久生效，下一局进池；另有［难度挑战］给出不重合的那批"
 	p.add_child(tip)
-	var ly := y + 92.0
+	_pbtn(p, "难度挑战（关卡 · 无尽）", Vector2(24, y + 96.0), Vector2(640, 68), 24, true, func(): _open_large("关卡"))
+	var ly := y + 180.0
 	var last_cat := ""
 	for u_v in UNLOCKS:
 		var u: Dictionary = u_v
@@ -3999,14 +4231,44 @@ func _fill_save(p: Control, y: float, sz: Vector2) -> float:
 		l2.text = str(u["d"])
 		box.add_child(l2)
 		if got:
-			var ok := Label.new()
-			ok.position = Vector2(470, 26)
-			ok.size = Vector2(156, 44)
-			ok.add_theme_font_size_override("font_size", 22)
-			ok.add_theme_color_override("font_color", GOLD)
-			ok.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			ok.text = "✓ 已有"
-			box.add_child(ok)
+			# v14i（用户："宠物在存档里面显示 解锁和出战即可"）：
+			#   宠物这一行解锁后直接给［出战］按钮（正在出战的那只标红）
+			if u.has("pet"):
+				var pk := str(u["pet"])
+				var on := (_pet_kind == pk)
+				var st := _pet_star_of(pk)
+				# v14j：星级显示在名字后面（⭐ 用 ★ 表示，避免字体缺字）
+				l1.text = str(u["n"]) + "　" + "★".repeat(st) + ("☆".repeat(PET_STAR_MAX - st))
+				var pbb := _pbtn(box, ("出战中" if on else "出战"), Vector2(352, 20), Vector2(120, 54), 20, true, _set_pet.bind(pk))
+				if on:
+					pbb.add_theme_stylebox_override("normal", _flat(Color(0.55, 0.20, 0.18, 0.95)))
+					pbb.add_theme_stylebox_override("hover", _flat(Color(0.60, 0.24, 0.22, 0.95)))
+					pbb.add_theme_stylebox_override("pressed", _flat(Color(0.48, 0.16, 0.15, 0.95)))
+				var sp := PET_STAR_PRICE * (st + 1)
+				if st < PET_STAR_MAX:
+					var sbb := _pbtn(box, "升星 " + str(sp), Vector2(480, 20), Vector2(146, 54), 18,
+						int(_money) >= sp, _pet_star_up.bind(pk))
+					if int(_money) < sp:
+						sbb.add_theme_stylebox_override("normal", _flat(Color(0.55, 0.53, 0.51, 0.95)))
+						sbb.add_theme_stylebox_override("hover", _flat(Color(0.60, 0.58, 0.56, 0.95)))
+						sbb.add_theme_stylebox_override("pressed", _flat(Color(0.48, 0.46, 0.44, 0.95)))
+				else:
+					var ml := Label.new()
+					ml.position = Vector2(480, 26)
+					ml.size = Vector2(146, 44)
+					ml.add_theme_font_size_override("font_size", 20)
+					ml.add_theme_color_override("font_color", GOLD)
+					ml.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+					ml.text = "满星"
+					box.add_child(ml)
+				var ok := Label.new()
+				ok.position = Vector2(470, 26)
+				ok.size = Vector2(156, 44)
+				ok.add_theme_font_size_override("font_size", 22)
+				ok.add_theme_color_override("font_color", GOLD)
+				ok.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+				ok.text = "✓ 已有"
+				box.add_child(ok)
 		else:
 			var can := int(_money) >= int(u["price"])
 			var bb := _pbtn(box, "解锁 " + str(u["price"]), Vector2(456, 20), Vector2(170, 54), 22, can, _unlock_buy.bind(id))
@@ -4079,6 +4341,27 @@ const ACHS := [
 		"fx": "开局灵晶 +15", "eff": {"crystal": 15}},
 	{"id": "shibai", "cat": "live", "n": "屡败屡战", "d": "一局任务失败 5 次", "ck": "qfail", "goal": 5,
 		"fx": "开局灵晶 +10（安慰奖）", "eff": {"crystal": 10}},
+	# ---- v14e 再扩 10 条（用户："成就 不要特别简单 有些难有些简单 有些普通 多做一点"）----
+	{"id": "chuchu", "cat": "live", "n": "初出茅庐", "d": "单局打到第 5 波", "ck": "wave", "goal": 5,
+		"fx": "开局文钱 +100", "eff": {"money": 100}},
+	{"id": "xiaoshi", "cat": "live", "n": "小试牛刀", "d": "单局打到第 15 波", "ck": "wave", "goal": 15,
+		"fx": "开局杀敌数 +50", "eff": {"kills": 50}},
+	{"id": "fuke", "cat": "gold", "n": "富可敌国", "d": "一局赚到 20000 文钱", "ck": "money_earned", "goal": 20000,
+		"fx": "开局文钱 +600", "eff": {"money": 600}},
+	{"id": "wanrendi", "cat": "fight", "n": "万人敌", "d": "一局击杀 5000 只普通怪", "ck": "kill_normal", "goal": 5000,
+		"fx": "开局杀敌数 +500", "eff": {"kills": 500}},
+	{"id": "tieren", "cat": "time", "n": "铁人", "d": "单局存活 45 分钟", "ck": "run_time", "goal": 2700,
+		"fx": "开局气血上限 +200", "eff": {"hp_flat": 200}},
+	{"id": "shoucang", "cat": "collect", "n": "收藏家", "d": "一局拥有 20 种宝物", "ck": "trea", "goal": 20,
+		"fx": "开局灵晶 +40", "eff": {"crystal": 40}},
+	{"id": "kapai", "cat": "collect", "n": "卡牌大师", "d": "一局凑齐 15 套卡", "ck": "sets", "goal": 15,
+		"fx": "开局灵晶 +50", "eff": {"crystal": 50}},
+	{"id": "huobanman", "cat": "collect", "n": "伙伴满堂", "d": "一局招募 15 次", "ck": "recruits", "goal": 15,
+		"fx": "开局文钱 +300", "eff": {"money": 300}},
+	{"id": "yuhuqian", "cat": "time", "n": "玉壶千杯", "d": "一局喝玉壶 30 次", "ck": "yh_uses", "goal": 30,
+		"fx": "玉壶冷却 −10%（永久）", "eff": {"yh_cd_mul": -0.10}},
+	{"id": "jixian", "cat": "live", "n": "极限挑战", "d": "通关第 4 章任意一关", "ck": "stage4", "goal": 1,
+		"fx": "开局全伤害 +8%", "eff": {"dmg_all": 0.08}},
 ]
 const ACH_CAT_CN := {"fight": "战斗", "live": "生存", "gold": "经济", "collect": "收集", "time": "时长"}
 
@@ -4091,11 +4374,36 @@ func _ach_load() -> void:
 		if bool(cf.get_value("ach", id, false)):
 			_ach_done[id] = true
 
+	for s_v in STAGES:
+		var sid := str((s_v as Dictionary)["id"])
+		if bool(cf.get_value("stage", sid, false)):
+			_stage_done[sid] = true
+	var pk := str(cf.get_value("misc", "pet", "hu"))
+	if pk != "":
+		_pet_kind = pk
+	_stage_sel = str(cf.get_value("misc", "stage", "1-1"))
+	_endless = bool(cf.get_value("misc", "endless", false))
+	_best_wave = int(cf.get_value("misc", "best_wave", 0))
+	for pv2 in PETS:
+		var pid2 := str((pv2 as Dictionary)["id"])
+		var st2 := int(cf.get_value("petstar", pid2, 0))
+		if st2 > 0:
+			_pet_star[pid2] = st2
 func _ach_save() -> void:
 	var cf := ConfigFile.new()
 	for id in _ach_done.keys():
 		cf.set_value("ach", str(id), true)
 	cf.save(_meta_path)
+	for u in _unlocked.keys():
+		cf.set_value("unlock", str(u), true)
+	for s2 in _stage_done.keys():
+		cf.set_value("stage", str(s2), true)
+	cf.set_value("misc", "pet", _pet_kind)
+	cf.set_value("misc", "stage", _stage_sel)
+	cf.set_value("misc", "endless", _endless)
+	cf.set_value("misc", "best_wave", _best_wave)
+	for pk2 in _pet_star.keys():
+		cf.set_value("petstar", str(pk2), int(_pet_star[pk2]))
 
 # 条件当前值（都在本局内算）
 func _ach_val(ck: String) -> float:
@@ -4152,6 +4460,11 @@ func _ach_val(ck: String) -> float:
 			return float(_yh_uses)
 		"qfail":
 			return float(_q_fail)
+		"stage4":
+			for sid in _stage_done.keys():
+				if str(sid).begins_with("4-"):
+					return 1.0
+			return 0.0
 	return 0.0
 
 # 每半秒查一次（15 条，很便宜）
@@ -4202,6 +4515,8 @@ func _apply_achievements() -> void:
 			_extra["cut_all_bonus"] = float(_extra.get("cut_all_bonus", 0.0)) + float(e["cut_all_bonus"])
 		if e.has("yh_ready"):
 			_yh_cd = 0.0
+		if e.has("yh_cd_mul"):
+			_extra["yh_cd_mul"] = maxf(0.5, float(_extra.get("yh_cd_mul", 1.0)) + float(e["yh_cd_mul"]))
 		got.append(str(a["n"]))
 	_sync_battle_stats()
 	if not got.is_empty():
@@ -4383,6 +4698,16 @@ func _restart_run() -> void:
 	# v13w：新的一局开局——把已解锁的成就加成发下去（放最后，免得被上面的重置覆盖）
 	_apply_achievements()
 	_apply_pet_bonus()                   # v14d：宠物被动（换宠物下一局生效）
+	# v14e：所选关卡——难度倍率 ＋ 波数上限（打满即通关）
+	var st := _stage_info(_stage_sel)
+	_wave_max = int(st["waves"])
+	if _endless:                             # v14f：无尽——波数不封顶
+		_wave_max = 999
+		_hint.text = "无尽模式：怪 ×1.6，波数不封顶——最高纪录 " + str(_best_wave) + " 波"
+	if _field != null:
+		_field.foe_mul = float(st["mul"])
+	_stage_paid = false
+	_hint.text = "关卡 " + _stage_sel + " " + str(st["n"]) + "：怪 ×" + str(st["mul"]) + " · " + str(st["waves"]) + " 波通关"
 	_close_popup()
 	_hint.text = "新的一局——预备几秒，怪就压上来了"
 
@@ -4803,6 +5128,14 @@ func _process(delta: float) -> void:
 		_bond_check()            # v12b：羁绊宝物每秒查一次
 	_yh_tick(delta)             # v12a：玲珑玉壶（冷却 ＋ 气血低于 50% 自动用）
 	_ach_tick(delta)            # v13w：成就达成检查（每半秒一次）
+	# v14e：打满这一关的波数上限 → 通关（首通给解锁）
+	if not _stage_paid and _wave >= _wave_max:
+		_stage_paid = true
+		_stage_clear(_stage_sel)
+	# v14f：无尽模式——波数爬到新高就记一笔
+	if _endless and _field != null and int(_field.wave) > _best_wave:
+		_best_wave = int(_field.wave)
+		_ach_save()
 	_card_time_tick(delta)      # v11e：时间进化（淬火剑这类）
 	_boss_sec -= delta
 	if _boss_sec <= 0.0:
@@ -4981,11 +5314,12 @@ func _sync_battle_stats() -> void:
 	var pcfg: Dictionary = _pet_info(_pet_kind).get("cfg", {})
 	_field.set_pet_cfg({
 		"cd": float(pcfg.get("cd", 1.1)),
-		"dmg": float(pcfg.get("dmg", 0.35)),
+		"dmg": float(pcfg.get("dmg", 0.35)) * _pet_star_mul(_pet_kind),   # v14j：星级强化攻击
 		"elem": str(pcfg.get("elem", "")),
 		"chain": int(pcfg.get("chain", 1)),
 		"room": float(pcfg.get("room", 0.0)),
 		"verb": str(pcfg.get("verb", "咬 ")),
+		"kind": _pet_kind,
 	})
 	# v9i 触发型卡（飞羽 / 流星 / 雷霆）——战场每帧读这几个开关
 	for k in ["cg_feiyu", "cg_feiyu_pierce", "cg_liuxing", "cg_liuxing_aoe", "cg_leiting", "cg_leiting_para"]:
@@ -5261,7 +5595,7 @@ func _input(e: InputEvent) -> void:
 # 弹窗（两层）
 # ============================================================
 func _is_large(k: String) -> bool:
-	return ["卡组", "技能", "装备", "装备详情", "当前宝物", "成长武器详情", "装备详情", "成长武器详情", "挑战", "存档", "成就", "角色", "队员", "仓库", "卡牌详情", "局终", "黑市", "招募", "成长武器", "宝物三选一", "图鉴", "任务"].has(k)
+	return ["卡组", "技能", "装备", "关卡", "装备详情", "当前宝物", "成长武器详情", "装备详情", "成长武器详情", "挑战", "存档", "成就", "角色", "队员", "仓库", "卡牌详情", "局终", "黑市", "招募", "成长武器", "宝物三选一", "图鉴", "任务"].has(k)
 
 func _close_popup() -> void:
 	if _popup != null and is_instance_valid(_popup):
@@ -5398,6 +5732,8 @@ func _fill_popup(p: Control, kind: String, y: float, sz: Vector2) -> float:
 		return _fill_trea_pick(p, y, sz)
 	if kind == "当前宝物":
 		return _fill_trea_own(p, y, sz)
+	if kind == "关卡":
+		return _fill_stage(p, y, sz)
 	if kind == "存档":
 		return _fill_save(p, y, sz)
 	if kind == "成就":
@@ -5885,13 +6221,13 @@ func _set_role_tab(i: int) -> void:
 # ---- v5a 三条属性的换算（都在这里，改数只改这一处）----
 # v6a：实际三属性 ＝ 自己加的点 ＋ **继承来的成长**（招募取最高值）
 func _attr_arm() -> int:
-	return int(_attr["arm"]) + int(_grow_inherit["arm"]) + int(_grow_card["arm"]) + int(_extra.get("wpn_arm", 0))
+	return int(_attr["arm"]) + int(_grow_inherit["arm"]) + int(_grow_card["arm"]) + int(_extra.get("wpn_arm", 0)) + int(_extra.get("bonus_arm", 0.0))
 
 func _attr_agi() -> int:
-	return int(_attr["agi"]) + int(_grow_inherit["agi"]) + int(_grow_card["agi"]) + int(_extra.get("wpn_agi", 0))
+	return int(_attr["agi"]) + int(_grow_inherit["agi"]) + int(_grow_card["agi"]) + int(_extra.get("wpn_agi", 0)) + int(_extra.get("bonus_agi", 0.0))
 
 func _attr_wit() -> int:
-	return int(_attr["wit"]) + int(_grow_inherit["wit"]) + int(_grow_card["wit"]) + int(_extra.get("wpn_wit", 0))
+	return int(_attr["wit"]) + int(_grow_inherit["wit"]) + int(_grow_card["wit"]) + int(_extra.get("wpn_wit", 0)) + int(_extra.get("bonus_wit", 0.0))
 
 # 招募：把这位伙伴的三属性成长**逐项取最高**并进来（保证只升不降）
 func _recruit(id: String) -> void:
