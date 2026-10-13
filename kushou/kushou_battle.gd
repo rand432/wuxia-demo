@@ -286,6 +286,7 @@ func reset_run() -> void:
 	foes.clear()
 	_floats.clear()
 	_slashes.clear()
+	kill_normal = 0
 	_shards.clear()
 	_bursts.clear()
 	_qi_list.clear()
@@ -511,7 +512,11 @@ func _process(delta: float) -> void:
 		var tgt := target
 		if true:
 			# 出手间隔吃"攻速提升"（技能）
-			_hero_cd = 1.0 / maxf(0.2, float(hero["aspd"]) * aspd_mul())
+			# v14a 连杀卡：连杀每 10 层 → 攻速 +5%（上限 +50%）
+			var combo_aspd := 0.0
+			if float(hero.get("mech_comboaspd", 0.0)) > 0.0:
+				combo_aspd = minf(0.50, float(_combo) / 10.0 * float(hero["mech_comboaspd"]))
+			_hero_cd = 1.0 / maxf(0.2, float(hero["aspd"]) * aspd_mul() * (1.0 + combo_aspd))
 			_hero_strike(tgt)
 	# 怪：往下走 / 贴上来打
 	# 连杀计时：1.4 秒内没有新击杀就归零
@@ -674,6 +679,26 @@ func _process(delta: float) -> void:
 	_update_minions(dt)
 	_update_waves(dt)
 	_update_shield(dt)
+	# v14a 机制卡：定身脉冲（把全场怪按成"麻痹"）＋ 定期护盾
+	if float(hero.get("mech_root", 0.0)) > 0.0:
+		_root_t -= dt
+		if _root_t <= 0.0:
+			_root_t = 25.0
+			for f_v in foes:
+				var fr: Dictionary = f_v
+				if not bool(fr.get("still", false)) and float(fr.get("dying", 0.0)) <= 0.0:
+					fr["para"] = maxf(float(fr.get("para", 0.0)), 1.5)
+			_push_float(hero_pos.x, hero_pos.y - 100.0, "定身！", Color(0.74, 0.88, 1.0), true)
+			Audio.sfx("drum", -6.0)
+	if float(hero.get("mech_shield", 0.0)) > 0.0:
+		_shield_t -= dt
+		if _shield_t <= 0.0:
+			_shield_t = 8.0
+			var sv := float(hero["hp_max"]) * float(hero["mech_shield"])
+			hero["shield_max"] = sv
+			hero["shield"] = sv
+			hero["shield_t"] = 6.0
+			_push_float(hero_pos.x, hero_pos.y - 84.0, "护盾 " + str(int(sv)), Color(0.66, 0.86, 1.0))
 	_update_quake(dt)
 	for i6 in range(_fire_lines.size() - 1, -1, -1):
 		var fl2: Dictionary = _fire_lines[i6]
@@ -703,11 +728,16 @@ func _hero_strike(tgt: Dictionary) -> void:
 	_heavy += 1
 	var heavy := _heavy % 3 == 0
 	var base := float(hero["atk"]) * (1.0 + float(hero["dmg_pct"])) * atk_mul()
+	base += float(hero.get("_kill_atk", 0.0))            # v14a 战意：本局每杀一个 +0.4 攻击
+	if float(hero.get("mech_laststand", 0.0)) > 0.0 \
+			and float(hero["hp"]) / maxf(1.0, float(hero["hp_max"])) <= 0.35:
+		base *= 1.0 + float(hero["mech_laststand"])      # v14a 背水：残血 +50%
 	if crit:
 		base *= 2.0
 	if heavy:
 		base *= 1.6
 	var hit_list: Array = [tgt]
+	var dealt := 0.0                                      # v14a 这一刀打出的总伤害（吸血用）
 	# 溅射（范围）：**命中点周围 R 以内**的敌人全扫上（R 随溅射等级变大）
 	var rad := splash_radius()
 	if rad > 0.0:
@@ -734,14 +764,22 @@ func _hero_strike(tgt: Dictionary) -> void:
 		if is_extra:
 			_bursts.append({"x": float(h["x"]), "y": float(h["y"]) - 18.0, "t": 0.0,
 				"col": Color(1.0, 0.74, 0.34), "scale": 1.25})
+		dealt += dmg                                   # v14a 吸血：累计这一刀的总伤害
 		if float(h["hp"]) <= 0.0:
 			_kill_foe(h)
+	# v14a 吸血：按这一刀打出的总伤害回血
+	if float(hero.get("mech_lifesteal", 0.0)) > 0.0 and dealt > 0.0:
+		var heal := dealt * float(hero["mech_lifesteal"])
+		hero["hp"] = minf(float(hero["hp_max"]), float(hero["hp"]) + heal)
+		_push_float(hero_pos.x, hero_pos.y - 74.0, "+" + str(int(heal)), Color(0.62, 0.92, 0.72))
 	# 刀光：横扫时画一道大弧（动作跟单体突刺不一样）
 	if wide:
 		_slashes.append({"x": float(tgt["x"]), "y": float(tgt["y"]) - 10.0, "t": 0.0,
 			"ang": 0.0, "crit": crit or heavy, "wide": true, "radius": rad})
 		Audio.sfx("swing", -3.0, randf_range(0.9, 1.05))      # 横扫的"呼"一声，跟单体刀声分开
 	else:
+		_slashes.append({"x": float(tgt["x"]), "y": float(tgt["y"]) - 18.0, "t": 0.0,
+			"ang": randf_range(-0.9, 0.9), "crit": crit or heavy})
 		_slashes.append({"x": float(tgt["x"]), "y": float(tgt["y"]) - 18.0, "t": 0.0,
 			"ang": randf_range(-0.9, 0.9), "crit": crit or heavy})
 	_hero_lunge = 1.0 if not heavy else 1.5
@@ -1028,6 +1066,26 @@ func _death_sfx(kind: String, is_boss: bool) -> void:
 # v9h：挑战怪死亡 —— 外壳按类型发奖（文钱/灵晶/经验/宝物）
 signal chal_drop(kind_i: int, at: Vector2)
 
+# v14a 机制卡：连锁——击杀时炸一圈（用 _chain_lock 防递归）
+var _chain_lock := false
+var _root_t := 6.0            # 定身脉冲计时（首发 6 秒后）
+var _shield_t := 8.0          # 护盾回复计时
+
+func _chain_blast(at: Vector2) -> void:
+	_chain_lock = true
+	var dmg := float(hero["atk"]) * float(hero.get("mech_chain", 0.0))
+	for f_v in foes.duplicate():
+		var f: Dictionary = f_v
+		if float(f.get("dying", 0.0)) > 0.0 or float(f["hp"]) <= 0.0:
+			continue
+		if at.distance_to(Vector2(float(f["x"]), float(f["y"]))) <= 110.0:
+			var d := _apply_dmg(f, dmg, DMG_PHYS)
+			_push_float(float(f["x"]), float(f["y"]) - 30.0, "连锁 " + str(int(d)), Color(1.0, 0.64, 0.30), true)
+			if float(f["hp"]) <= 0.0:
+				_kill_foe(f)
+	_bursts.append({"x": at.x, "y": at.y, "t": 0.0, "col": Color(1.0, 0.66, 0.32), "scale": 1.6})
+	_chain_lock = false
+
 func _kill_foe(f: Dictionary) -> void:
 	# v13f：元素/伙伴技打死的（百步任务）——普通刀砍是物理，不算
 	if str(f.get("last_dtype", "")) in ELEMS:
@@ -1098,6 +1156,13 @@ func _kill_foe(f: Dictionary) -> void:
 		for i in 7:
 			_shards.append({"x": float(f["x"]), "y": float(f["y"]) - 20.0,
 				"vx": randf_range(-160.0, 160.0), "vy": randf_range(-280.0, -90.0), "t": 0.0})
+	if str(f.get("kind", "")) == "normal":
+		kill_normal += 1               # v13w：成就「嗜杀如命」数普通怪
+	# v14a 机制卡：战意（每杀一个永久加点攻击）＋ 连锁（击杀溅射）
+	if float(hero.get("mech_killatk", 0.0)) > 0.0:
+		hero["_kill_atk"] = float(hero.get("_kill_atk", 0.0)) + float(hero["mech_killatk"])
+	if float(hero.get("mech_chain", 0.0)) > 0.0 and not _chain_lock and not bool(f.get("still", false)):
+		_chain_blast(Vector2(float(f["x"]), float(f["y"])))
 	var kind := str(f["kind"])
 	var coins := 1 + randi() % 3
 	# v9h（挑战掉落表）：挑战怪身上带 chal —— 按类型掉，结算交给外壳
@@ -1838,6 +1903,11 @@ func _absorb_by_shield(dmg: float) -> float:
 		_earth_quake(mx * fd_break_mul(), true)
 		_push_float(hero_pos.x - 20.0, hero_pos.y - 96.0, "盾破！", Color(0.96, 0.82, 0.50), true)
 		Audio.sfx("sword_in_ground", -4.0)
+		# v14a 回流卡：盾破回血
+		if float(hero.get("mech_shieldheal", 0.0)) > 0.0:
+			var hl := float(hero["hp_max"]) * float(hero["mech_shieldheal"])
+			hero["hp"] = minf(float(hero["hp_max"]), float(hero["hp"]) + hl)
+			_push_float(hero_pos.x, hero_pos.y - 74.0, "回流 +" + str(int(hl)), Color(0.62, 0.92, 0.86))
 	return maxf(0.0, dmg - sh)
 
 func _update_quake(delta: float) -> void:
@@ -2628,6 +2698,7 @@ const ELEMS := ["金系", "木系", "火系", "水系", "土系"]
 # v13f：给外壳的普通档任务用的两个计数
 var dmg_done := 0.0                  # 本局累计造成伤害（以战养战）
 var skill_kills := 0                 # 元素/伙伴技击杀数（百步）
+var kill_normal := 0                # v13w：普通怪击杀数（成就「嗜杀如命」用）
 
 signal elite_down()
 const ELITE_NAME := "典狱长的走狗"
