@@ -37,7 +37,7 @@ var _boss_tier := 1
 #   玩家的**开局钱包**——只在这一处定义。新开 App 和点［再来一局］都从这里取，
 #   不会再出现"声明处 1234 / 重开处 0"这种分叉（探针抓出来过）。
 const START_MONEY := 1234
-const START_CRYSTAL := 46
+const START_CRYSTAL := 100      # 开局灵晶＝**抽五下**的量（用户口径：5 × DRAW_COST 20）
 var _money := START_MONEY
 var _crystal := START_CRYSTAL
 var _kills := 287
@@ -365,8 +365,10 @@ var _over := false        # 这一局结束没有
 #     超出格子的可以**长按拖拽**放进仓库（点击看详情）
 #   · 角色页要有**详细属性** ＋ 一颗**队员**钮（点队员看"成长 ＋ 携带技能"）
 var _card_idx := 0                                  # 长按看详情的那张卡
+# v13s（用户给的装备页草图）：六格里的**第一格是自带的成长武器**，其余 5 格放装备
+const GEAR_SLOTS := 5
 var _equip_tab := 0                                 # 0＝装备 · 1＝宝物
-var _equip: Array = ["青锋剑", "铁叶甲", "", "", "", ""]      # 装备：**最多六格**
+var _equip: Array = ["青锋剑", "铁叶甲", "", "", "", ""]      # 装备：**5 格**（第 6 个下标留给旧存档迁移）
 var _equip_q: Array = ["良品", "良品", "", "", "", ""]
 var _treasures: Array = ["护心镜", "玄铁令", "定神珠"]         # 宝物：**不限**（滚动区接着长）
 var _treasure_q: Array = ["上品", "凡品", "良品"]
@@ -1106,11 +1108,70 @@ func _card_big(p: Control, pos: Vector2, sz: Vector2, id: String) -> void:
 const DRAW_COST := 20
 const REROLL_ONE := 5
 const REFRESH_ALL := 5
-const QUALITY_WEIGHT := {"下品": 30, "中品": 25, "上品": 20, "极品": 15, "绝品": 10}
+# v13o（用户："抽卡有优先级"）：
+#   ① **锁定了某套**（在抽卡页卡面点［优先这套］）→ 这套还没拿到的卡**大幅加权 ×6**（大概率就是它）
+#   ② 没锁定时按**品质分档**，权重随波次在锚点之间**线性插值**——过渡丝滑，不跳档
+# v13p（用户："不用加锁定按钮 你知道有锁定就行了 重开一局本身就是重新开始"）：
+#   优先套**自动算**——不做按钮、不做跨局保留：谁在攒且最接近成型，就偏向谁
+func _auto_draw_focus() -> String:
+	var best := ""
+	var best_score := -1.0
+	for s_v in CARD_SETS:
+		var s: Dictionary = s_v
+		var sid := str(s["set"])
+		if bool(_sets_done.get(sid, false)):
+			continue                                   # 已经成型的不用再攒
+		var size := int(s.get("size", 1))
+		var got := 0
+		for i in size:
+			if _card_have.has(card_id(sid, i)):
+				got += 1
+		if got <= 0:
+			continue                                   # 一张都没拿过 → 还不算"在攒这套"
+		var score := float(got) / float(maxi(1, size))
+		if score > best_score:
+			best_score = score
+			best = sid
+	return best
+const DRAW_FOCUS_MUL := 6
+const QUALITY_KEYS := ["下品", "中品", "上品", "极品", "绝品"]
+const QUALITY_CURVE := [                                # 波次 → 五档权重（中间连续插值）
+	{"w": 1, "v": [45.0, 30.0, 17.0, 6.0, 2.0]},
+	{"w": 10, "v": [28.0, 30.0, 25.0, 13.0, 4.0]},
+	{"w": 20, "v": [15.0, 25.0, 28.0, 22.0, 10.0]},
+	{"w": 30, "v": [8.0, 18.0, 27.0, 28.0, 19.0]},
+]
+
+# 当前这一波的五档权重（在曲线锚点之间 lerp）
+func _quality_weights() -> Array:
+	var wv := float(maxi(1, _wave))
+	var a: Dictionary = QUALITY_CURVE[0]
+	var b: Dictionary = QUALITY_CURVE[QUALITY_CURVE.size() - 1]
+	for i in QUALITY_CURVE.size() - 1:
+		var c0: Dictionary = QUALITY_CURVE[i]
+		var c1: Dictionary = QUALITY_CURVE[i + 1]
+		if wv >= float(c0["w"]) and wv <= float(c1["w"]):
+			a = c0
+			b = c1
+			break
+	var span := maxf(1.0, float(b["w"]) - float(a["w"]))
+	var t := clampf((wv - float(a["w"])) / span, 0.0, 1.0)
+	var out: Array = []
+	for i in QUALITY_KEYS.size():
+		out.append(lerpf(float((a["v"] as Array)[i]), float((b["v"] as Array)[i]), t))
+	return out
+
+func _quality_w(q: String) -> float:
+	var idx := QUALITY_KEYS.find(q)
+	if idx < 0:
+		return 20.0
+	return float(_quality_weights()[idx])
+
 
 # 候选池：还没拿到、且这套没成型的卡（每张卡只能"拿一次"；成型后整套出池）
 func _card_pool_available() -> Array:
 	var out: Array = []
+	var foc := _auto_draw_focus()          # v13p：本手偏向哪一套（自动算，只算一次）
 	for s_v in CARD_SETS:
 		var s: Dictionary = s_v
 		var set_id := str(s["set"])
@@ -1122,7 +1183,10 @@ func _card_pool_available() -> Array:
 		# v10b：杀意的进阶形态只靠"进化"拿到，不进池
 		if bool(s.get("evo_from", false)):
 			continue
-		var w: int = int(QUALITY_WEIGHT.get(str(s["quality"]), 20))
+		# v13o/v13p：品质权重按波次插值；本手偏向的那套再 ×6（"大概率就是这个合成的卡"）
+		var w: int = int(maxf(1.0, round(_quality_w(str(s["quality"])))))
+		if foc != "" and set_id == foc:
+			w *= DRAW_FOCUS_MUL
 		for i in int(s["size"]):
 			var cid := card_id(set_id, i)
 			if _card_have.has(cid):
@@ -1134,6 +1198,15 @@ func _card_pool_available() -> Array:
 func _roll_cards() -> Array:
 	var pool := _card_pool_available()
 	var out: Array = []
+	var foc := _auto_draw_focus()
+	# v13o/v13p：正在攒的那套 → **先保底放一张**（"后面抽卡大概率就是这个合成的卡"）
+	if foc != "":
+		var fp: Array = []
+		for cid_v in pool:
+			if str(str(cid_v).split("_")[0]) == foc:
+				fp.append(str(cid_v))
+		if not fp.is_empty():
+			out.append(str(fp[randi() % fp.size()]))
 	var guard := 0
 	while out.size() < 3 and pool.size() > 0 and guard < 400:
 		guard += 1
@@ -1204,12 +1277,28 @@ func _fill_draw(p: Control, y: float, sz: Vector2) -> float:
 	head.add_theme_color_override("font_color", INK)
 	head.text = "抽卡　" + str(DRAW_COST) + " 灵晶　现有 " + str(int(_crystal)) + " 灵晶"
 	p.add_child(head)
+	# v13p：抽卡优先是**自动**的（用户："不用加锁定按钮 你知道有锁定就行了"）——
+	#   这里只写一行"本手偏向哪一套"，不设任何开关；重开一局自然重新开始
 	var tip := Label.new()
 	tip.position = Vector2(24, y + 46.0)
 	tip.size = Vector2(660, 36)
 	tip.add_theme_font_size_override("font_size", 19)
 	tip.add_theme_color_override("font_color", DIM)
-	tip.text = "三选一 · 单张重抽 " + str(REROLL_ONE) + " · 全刷新 " + str(REFRESH_ALL) + " · 每张卡一局只能拿一次"
+	var tip2 := "本手偏向：按品质分档"
+	var foc0 := _auto_draw_focus()
+	if foc0 != "":
+		var fgot := 0
+		var fsize := 1
+		var fnm := foc0
+		for s_v in CARD_SETS:
+			if str((s_v as Dictionary)["set"]) == foc0:
+				fsize = int((s_v as Dictionary).get("size", 1))
+				fnm = str((s_v as Dictionary).get("name", foc0))
+				for i in fsize:
+					if _card_have.has(card_id(foc0, i)):
+						fgot += 1
+		tip2 = "本手偏向：你正在攒的【" + fnm + "】" + str(fgot) + "/" + str(fsize)
+	tip.text = tip2 + "　·　三选一 · 重抽 " + str(REROLL_ONE) + " · 全刷新 " + str(REFRESH_ALL)
 	p.add_child(tip)
 	if _draw_choices.is_empty():
 		_draw_choices = _roll_cards()
@@ -1292,7 +1381,7 @@ func _gear_from_vault(idx: int) -> void:
 		return
 	var label := str(_vault[idx])
 	var stat: Dictionary = _vault_stat[idx] if idx < _vault_stat.size() else {}
-	for i in _equip.size():
+	for i in GEAR_SLOTS:      # v13s：装备只占 5 格（第一格是成长武器）
 		if str(_equip[i]) == "":
 			_equip[i] = label
 			_equip_stat[i] = stat
@@ -1340,7 +1429,7 @@ func _gen_gear(is_treasure: bool, big: bool) -> Dictionary:
 # 装备进六格（带加成）
 func _equip_add(g: Dictionary) -> void:
 	var label := str(g["name"]) + "（" + str(WPN_Q_CN[int(g["q"])]) + "）"
-	for i in _equip.size():
+	for i in GEAR_SLOTS:      # v13s：装备只占 5 格（第一格是成长武器）
 		if str(_equip[i]) == "":
 			_equip[i] = label
 			_equip_stat[i] = g
@@ -1357,7 +1446,7 @@ func _equip_add(g: Dictionary) -> void:
 func _gear_sync() -> void:
 	var a := 0
 	var h := 0
-	for i in _equip.size():
+	for i in GEAR_SLOTS:      # v13s：装备只占 5 格（第一格是成长武器）
 		if i < _equip_stat.size() and _equip_stat[i] is Dictionary:
 			a += int((_equip_stat[i] as Dictionary).get("atk", 0))
 			h += int((_equip_stat[i] as Dictionary).get("hp", 0))
@@ -1425,7 +1514,7 @@ func _card_time_tick(delta: float) -> void:
 
 # v11e：凑齐成套的装备卡 → **自动穿到六格第一空格**（散卡永不进六格）
 func _equip_auto(name_cn: String) -> void:
-	for i in _equip.size():
+	for i in GEAR_SLOTS:      # v13s：装备只占 5 格（第一格是成长武器）
 		if str(_equip[i]) == "":
 			_equip[i] = name_cn
 			_hint.text = "装备成型，自动穿上：" + name_cn + "（第 " + str(i + 1) + " 格）"
@@ -2076,6 +2165,8 @@ const TREA_POOL := [
 	{"n": "属性丹", "q": "上品", "t": "instant", "fx": "属性点 +3", "key": "attr_pt", "v": 3},
 	{"n": "洗髓丹", "q": "极品", "t": "instant", "fx": "三属性各 +2（永久）", "key": "attr_all", "v": 2},
 	{"n": "淬火石", "q": "极品", "t": "instant", "fx": "成长武器立刻 +3 级（不花钱）", "key": "wpn_lv", "v": 3},
+# v13n（用户："玉壶都加"）：三选一里能刷到玉壶升档（已满档时 _trea_roll 会把它筛掉）
+	{"n": YUHU_UP_NAME, "q": "极品", "t": "instant", "fx": "玲珑玉壶 +1 档（回复更高·冷却更短）", "key": "yuhu_up", "v": 1},
 ]
 
 func _trea_roll() -> void:
@@ -2084,6 +2175,9 @@ func _trea_roll() -> void:
 	while out.size() < 3 and guard < 200:
 		guard += 1
 		var pick: Dictionary = TREA_POOL[randi() % TREA_POOL.size()]
+# v13n：玉壶满了就不再刷出秘卷
+		if str(pick["n"]) == YUHU_UP_NAME and _yh_q >= 5:
+			continue
 		var dup := false
 		for o_v in out:
 			if str((o_v as Dictionary)["n"]) == str(pick["n"]):
@@ -2132,6 +2226,8 @@ func _trea_take(i: int) -> void:
 			"wpn_lv":
 				_wpn_lv += int(v)
 				_sync_battle_stats()
+			"yuhu_up":
+				_yh_upgrade()
 			_:
 				pass
 		_hint.text = "闲散宝物：" + nm + "　" + str(it["fx"])
@@ -2305,12 +2401,37 @@ func _bond_check() -> void:
 const YUHU_NAME := "玲珑玉壶"
 const YUHU_HEAL := [0.25, 0.28, 0.30, 0.32, 0.35, 0.40]
 const YUHU_CD := [60.0, 55.0, 50.0, 45.0, 40.0, 35.0]
+# v13n（用户："玉壶都加"）：升档价——**花灵晶，越升越贵**（5 次升满：凡→下→中→上→极→绝）
+const YUHU_UP_PRICE := [80, 160, 280, 450, 700]
+const YUHU_UP_NAME := "玉壶秘卷"
 var _yh_cd := 0.0
 var _yh_auto := true
 var _yh_q := 0
 var _yh_btn: Button = null
 var _yh_lb: Label = null
 var _yh_auto_lb: Label = null      # v13l：方框里那行「自动：开 · 宝物页里用」小字
+
+# v13n：玉壶当前升档要多少灵晶（已满档返回 -1）
+func _yh_up_price() -> int:
+	if _yh_q >= 5:
+		return -1
+	return int(YUHU_UP_PRICE[clampi(_yh_q, 0, 4)])
+
+# v13n：玉壶升一档——**三条路都走这里**（黑市买 / 宝物三选一刷到秘卷 / 任务奖励）
+func _yh_upgrade() -> bool:
+	if _yh_q >= 5:
+		_hint.text = "玲珑玉壶已经是【绝品】了（最高档）"
+		return false
+	_yh_q += 1
+	var q := clampi(_yh_q, 0, 5)
+	_hint.text = "玲珑玉壶升档：【" + str(WPN_Q_CN[q]) + "】回复 " + str(int(float(YUHU_HEAL[q]) * 100.0))         + "% · 冷却 " + str(int(YUHU_CD[q])) + " 秒"
+	if _field != null:
+		_field._push_float(_field.hero_pos.x, _field.hero_pos.y - 108.0,
+			"玉壶升档：" + str(WPN_Q_CN[q]), Color(0.62, 0.92, 0.86), true)
+	Audio.sfx("levelup", -3.0)
+	if _popup_kind == "装备":
+		_open_large("装备")
+	return true
 
 func _yh_ready() -> bool:
 	return _yh_cd <= 0.0
@@ -2476,6 +2597,8 @@ const BM_GOODS := [
 	{"id": "gear", "n": "装备", "cost": 300, "lv": 2, "w": 12, "d": "按品级随机一件（六格满则进仓库）"},
 	{"id": "gear_s", "n": "消耗型装备·小", "cost": 80, "lv": 3, "w": 15, "d": "点击即用：攻 +3 · 血 +15（可重复买，叠加）"},
 	{"id": "eat_pill", "n": "吞噬丹", "cost": 200, "lv": 5, "w": 14, "d": "随机吞掉十格一张卡：腾位，效果与成套计数保留"},
+# v13n：这一格**花灵晶**（别的货品还是花杀敌数）——价目见 YUHU_UP_PRICE
+	{"id": "yuhu_up", "n": "玉壶升级", "cost": 0, "lv": 3, "w": 11, "d": "玲珑玉壶 +1 档（回复更高、冷却更短）"},
 ]
 
 # 折扣权重：Lv1 就是规格里的 40/30/20/10；等级越高越偏大折扣（总和恒为 100）
@@ -2581,6 +2704,12 @@ func _bm_slot_title(s: Dictionary) -> String:
 
 # 货品说明（装备把品级与加成写出来）
 func _bm_slot_desc(s: Dictionary) -> String:
+	# v13n：玉壶升级那一格——写明现在几档、升一档要多少灵晶
+	if str(s["id"]) == "yuhu_up":
+		var up := _yh_up_price()
+		if up < 0:
+			return "玲珑玉壶已是【绝品】（最高档）"
+		return "玲珑玉壶 +1 档（现【" + str(WPN_Q_CN[clampi(_yh_q, 0, 5)]) + "】）· 要灵晶 " + str(up)
 	if str(s["id"]) == "gear":
 		var g: Dictionary = s.get("gear", {})
 		return "【" + str(WPN_Q_CN[int(g.get("q", 0))]) + "】攻 +" + str(int(g.get("atk", 0))) \
@@ -2626,8 +2755,11 @@ func _bm_eat_pill() -> String:
 func _bm_tile(p: Control, pos: Vector2, sz: Vector2, i: int) -> void:
 	var s: Dictionary = _bm_slots[i]
 	var bought := bool(s.get("bought", false))
-	var cost := int(s["cost"])
-	var can: bool = (not bought) and _kills >= cost
+	var is_yuhu: bool = str(s["id"]) == "yuhu_up"
+	var cost := _yh_up_price() if is_yuhu else int(s["cost"])
+	if is_yuhu and cost < 0:
+		cost = 0                                   # 满档：价签显示 0，按钮不可点
+	var can: bool = (not bought) and (int(_crystal) >= cost if is_yuhu else _kills >= cost)
 	var is_gear: bool = str(s["id"]) == "gear"
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(0.90, 0.88, 0.84) if bought else Color(0.99, 0.97, 0.92)
@@ -2673,14 +2805,14 @@ func _bm_tile(p: Control, pos: Vector2, sz: Vector2, i: int) -> void:
 	var pr := RichTextLabel.new()
 	pr.bbcode_enabled = true
 	pr.scroll_active = false
-	pr.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	pr.position = Vector2(14, 96)
-	pr.size = Vector2(sz.x - 28.0, 44)
-	pr.add_theme_font_size_override("normal_font_size", 20)
-	if int(s["disc"]) >= 0:
+	if is_yuhu:
+		# v13n：玉壶升级用灵晶结算（满档显示「满档」，按钮已经不可点）
+		pr.text = "[color=#ad2620][font_size=26]" + ("满档" if _yh_up_price() < 0 else str(cost)) \
+			+ "[/font_size][/color][color=#6b625c] 灵晶[/color]"
+	elif int(s["disc"]) >= 0:
 		pr.text = "[color=#6b625c][s]原价 " + str(int(s["base"])) + "[/s][/color] → [color=#ad2620][font_size=26]" \
 			+ str(BM_DISC_CN[int(s["disc"])]) + " " + str(cost) + "[/font_size][/color]"
-	else:
 		pr.text = "[color=#ad2620][font_size=26]" + str(cost) + "[/font_size][/color][color=#6b625c] 杀敌数[/color]"
 	box.add_child(pr)
 	var bb := _pbtn(box, "买", Vector2(14, 144), Vector2(sz.x - 28.0, 50), 26, can, _bm_buy.bind(i))
@@ -2751,21 +2883,33 @@ func _bm_buy(i: int) -> void:
 	if bool(s.get("bought", false)):
 		_hint.text = "这一格已经买过了（买掉即空，等下次刷新）"
 		return
-	var cost := int(s["cost"])
-	if _kills < cost:
-		_hint.text = "杀敌数不够（要 " + str(cost) + "，你现在 " + str(_kills) + "）"
-		return
 	var id := str(s["id"])
+	# v13n（用户口径）：玉壶升级**花灵晶**、越升越贵；其余货品照旧花杀敌数
+	var pay_crystal := (id == "yuhu_up")
+	var price := int(s["cost"])
+	if pay_crystal:
+		price = _yh_up_price()
+		if price < 0:
+			_hint.text = "玲珑玉壶已经是【绝品】了，不用再升"
+			return
+		if int(_crystal) < price:
+			_hint.text = "灵晶不够（要 " + str(price) + "，你现在 " + str(int(_crystal)) + "）"
+			return
+	elif _kills < price:
+		_hint.text = "杀敌数不够（要 " + str(price) + "，你现在 " + str(_kills) + "）"
+		return
 	if id == "eat_pill" and _bm_edible() <= 0:
 		_hint.text = "十格是空的，吞噬丹没东西可吞（先抽卡再来）"
 		return
-	_kills -= cost
+	if pay_crystal:
+		_crystal -= float(price)
+	else:
+		_kills -= price
 	var msg := ""
 	match id:
 		"bm_refresh":
 			_bm_refresh += 1
 			msg = "黑市刷新 +1（现有 " + str(_bm_refresh) + " 次）"
-		"money_bag":
 			_money += 600
 			_money_earned += 600
 			_coin_pop = 0.32
@@ -2774,6 +2918,11 @@ func _bm_buy(i: int) -> void:
 			_crystal += 40
 			_crystal_pop = 0.32
 			msg = "灵晶 +40（现有 " + str(int(_crystal)) + "）"
+		"yuhu_up":
+			_yh_upgrade()
+			var qq := clampi(_yh_q, 0, 5)
+			msg = "玲珑玉壶升档 → 【" + str(WPN_Q_CN[qq]) + "】回复 " + str(int(float(YUHU_HEAL[qq]) * 100.0)) \
+				+ "% · 冷却 " + str(int(YUHU_CD[qq])) + " 秒（花了灵晶 " + str(price) + "）"
 		"trea_refresh":
 			_trea_refresh += 1
 			msg = "宝物刷新 +1（现有 " + str(_trea_refresh) + " 次）"
@@ -2804,7 +2953,7 @@ func _bm_buy(i: int) -> void:
 	Audio.sfx("coin", -6.0)
 	if _field != null:
 		_field._push_float(_field.hero_pos.x, _field.hero_pos.y - 110.0, "黑市 · " + str(s["n"]), GOLD, true)
-	_hint.text = "黑市成交 · " + msg + "　（花 " + str(cost) + " 杀敌数，剩 " + str(_kills) + "）"
+	_hint.text = "黑市成交 · " + msg + "　（花 " + (("灵晶 " + str(price)) if pay_crystal else (str(price) + " 杀敌数")) + "）"
 	if _popup_kind == "黑市":
 		_open_large("黑市")
 # ============================================================
@@ -2837,7 +2986,7 @@ const QUEST_NORMAL := [
 ]
 # 困难档（P4）：守护（牢车）
 const QUEST_HARD := [
-	{"id": "shouhu", "n": "守护", "d": "60 秒内保住牢车（怪会砸它 · 碎了立刻失败）", "ck": "guardsec", "goal": 60, "sec": 66.0, "cr": 100, "trs": 2, "setup": "guard"},
+	{"id": "shouhu", "n": "守护", "d": "60 秒内保住牢车（怪会砸它 · 碎了立刻失败）", "ck": "guardsec", "goal": 60, "sec": 66.0, "yuhu": 1, "cr": 100, "trs": 2, "setup": "guard"},
 ]
 const QUEST_SPECIAL := [
 	{"id": "dandou", "n": "单挑", "d": "打死来挑战的高手（怪照刷，不清场）", "ck": "champion", "goal": 1, "sec": 90.0, "cr": 180, "gear": 1, "setup": "champion"},
@@ -2900,6 +3049,8 @@ func _q_reward_cn(d: Dictionary) -> String:
 		parts.append("卡组刷新 " + str(int(d["card"])))
 	if int(d.get("atkall", 0.0)) > 0.0:
 		parts.append("全伤 +" + str(int(float(d["atkall"]) * 100.0)) + "%")
+	if int(d.get("yuhu", 0)) > 0:
+		parts.append("玉壶 +" + str(int(d["yuhu"])) + " 档")
 	if int(d.get("tgear", 0)) > 0:
 		parts.append("宝物 " + str(int(d["tgear"])) + " 件")
 
@@ -2932,6 +3083,9 @@ func _q_grant(d: Dictionary) -> String:
 	if float(d.get("atkall", 0.0)) > 0.0:
 		_extra["atk_all"] = float(_extra.get("atk_all", 0.0)) + float(d["atkall"])
 		_sync_battle_stats()
+	if int(d.get("yuhu", 0)) > 0:
+		for yi in int(d["yuhu"]):
+			_yh_upgrade()
 	if int(d.get("tgear", 0)) > 0:
 		for ti in int(d["tgear"]):
 			_equip_add(_gen_gear(true, true))
@@ -4214,7 +4368,7 @@ func _input(e: InputEvent) -> void:
 # 弹窗（两层）
 # ============================================================
 func _is_large(k: String) -> bool:
-	return ["卡组", "技能", "装备", "挑战", "存档", "成就", "角色", "队员", "仓库", "卡牌详情", "局终", "黑市", "招募", "成长武器", "宝物三选一", "图鉴", "任务"].has(k)
+	return ["卡组", "技能", "装备", "装备详情", "成长武器详情", "装备详情", "成长武器详情", "挑战", "存档", "成就", "角色", "队员", "仓库", "卡牌详情", "局终", "黑市", "招募", "成长武器", "宝物三选一", "图鉴", "任务"].has(k)
 
 func _close_popup() -> void:
 	if _popup != null and is_instance_valid(_popup):
@@ -4356,6 +4510,10 @@ func _fill_popup(p: Control, kind: String, y: float, sz: Vector2) -> float:
 		return _fill_mates(p, y, sz) if _role_tab == 1 else _fill_role(p, y, sz)
 	if kind == "装备":
 		return _fill_equip(p, y, sz)
+	if kind == "装备详情":
+		return _fill_gear_detail(p, y, sz)
+	if kind == "成长武器详情":
+		return _fill_wpn_detail(p, y, sz)
 	if kind == "仓库" or kind == "公共仓库":
 		return _fill_vault(p, y, sz, kind)
 	var lines: Array = []
@@ -5182,98 +5340,48 @@ func _fill_mates_old(p: Control, y: float, sz: Vector2) -> float:
 #   装备**最多六格**（3×2）· 宝物**不限**（滚动区接着长）· 两颗入口钮：仓库 / 公共仓库
 #   规则（用户）：点击看详情；**长按拿起来**，再点目标格/仓库放下（触屏上的"拖拽"就这么做）
 func _fill_equip(p: Control, y: float, sz: Vector2) -> float:
-	# v2l（用户拍板）：装备＝**自由六格**（不分部位）
-	var tabs := ["装备（自由 6 格）", "宝物（不限）"]
-	for i in 2:
-		_pbtn(p, tabs[i], Vector2(28.0 + float(i) * 190.0, y), Vector2(178, 60), 23, _equip_tab == i, _set_equip_tab.bind(i))
-	var ly := y + 74.0
-	ly = _fill_yuhu_card(p, ly)          # v13i：玲珑玉壶（主动宝物）——从主界面搬进来的
+	# v13s（用户给的装备页草图 + "上面装备/宝物/仓库 就行了"）：
+	#   顶部三个页签：装备 / 宝物 / 仓库（仓库不再单开按钮）；
+	#   装备页 = 2 列 × 3 行大格，**第一格就是自带的成长武器**，其余 5 格放装备；
+	#   格子上**不再挂小按钮**——点格子开弹窗，操作（存储/贩卖/升级）都在弹窗里。
+	var tabs3 := ["装备", "宝物", "仓库"]
+	for i in 3:
+		_pbtn(p, tabs3[i], Vector2(24.0 + float(i) * 216.0, y), Vector2(208, 62), 24, _equip_tab == i, _set_equip_tab.bind(i))
+	var ly := y + 76.0
 	if _equip_tab == 0:
-		#   ⚠ 上一版把［存］［卖］画在了 if 外面，结果压到宝物页上（截图抓到过）——现在收回这一支里
 		for i in 6:
-			var col := i % 5
-			var row := i / 5
-			var bx2 := 24.0 + float(col) * 134.0
-			var by3 := ly + float(row) * 152.0
-			_gear_box(p, Vector2(bx2, by3), Vector2(126, 98), "equip", i)
-			# v12g：整格可点 → 装备详情（说明都在详情页，格子上只留名字与品质）
-			var ghit := _pbtn(p, "", Vector2(bx2, by3), Vector2(126, 96), 16, false, _gear_detail.bind(i))
-			ghit.add_theme_stylebox_override("normal", _flat(Color(1, 1, 1, 0.001)))
-			ghit.add_theme_stylebox_override("hover", _flat(Color(1, 1, 1, 0.10)))
-			if str(_equip[i]) != "":
-				_pbtn(p, "存", Vector2(bx2, by3 + 100.0), Vector2(58, 34), 17, false, _gear_to_vault.bind(i))
-				_pbtn(p, "卖", Vector2(bx2 + 66.0, by3 + 100.0), Vector2(58, 34), 17, true, _gear_sell.bind(false, i))
-		ly += 284.0
-	else:
-		# v12e：宝物页照卡组那套——紧凑格子（名字＋品质色＋×数量）· 点击详情 · 可滑动
-		ly = _fill_trea_list(p, ly, sz)
+			var col := i % 2
+			var row := i / 2
+			var bx2 := 24.0 + float(col) * 330.0
+			var by3 := ly + float(row) * 284.0
+			if i == 0:
+				# 第一格：成长武器（自带 · 跨局保留）
+				_gear_box(p, Vector2(bx2, by3), Vector2(310, 250), "weapon", 0)
+			else:
+				var gi2 := i - 1
+				_gear_box(p, Vector2(bx2, by3), Vector2(310, 250), "equip", gi2)
+				var ghit := _pbtn(p, "", Vector2(bx2, by3), Vector2(310, 248), 16, false, _gear_detail.bind(gi2))
+				ghit.add_theme_stylebox_override("normal", _flat(Color(1, 1, 1, 0.001)))
+				ghit.add_theme_stylebox_override("hover", _flat(Color(1, 1, 1, 0.08)))
+		ly += 852.0
+		var tip := Label.new()
+		tip.position = Vector2(28, ly + 4.0)
+		tip.size = Vector2(640, 40)
+		tip.add_theme_font_size_override("font_size", 21)
+		tip.add_theme_color_override("font_color", DIM)
+		tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		tip.text = "点格子开弹窗：里面有属性、价格、［存储］［贩卖］（成长武器是升级）"
+		p.add_child(tip)
+		return ly + 50.0
+	if _equip_tab == 2:
+		return _fill_vault(p, ly, sz, "仓库")
+	# ---- 宝物页：玉壶卡 → 宝物列表 → 宝物三选一 ----
+	ly = _fill_yuhu_card(p, ly)
+	ly = _fill_trea_list(p, ly, sz)
 	ly += 12.0
-	# v11c：成长武器入口（自带那一件，无限强化）
-	_pbtn(p, "成长武器 ＋" + str(_wpn_lv) + "（" + str(WPN_Q_CN[_wpn_q]) + "）", Vector2(28, ly), Vector2(640, 80), 26, true,
-		func(): _open_large("成长武器"))
-	ly += 92.0
-	# v12f：旧的"每格两颗小钮"循环**已删**——它画在 if 外面，会跑到宝物页上压住格子（截图抓到过）。
-	#   现在的［存］［卖］在装备那一支里、跟着每个格子画。
-	# v12c：宝物三选一入口
-	# v13j（用户："刷新按钮和公共仓库重合了"）：
-	#   原来「宝物三选一（刷新 N 次）」在 (240, ly) 宽 428、「公共仓库」也在 (240, ly) 宽 300
-	#   ——同一个 y 同一个 x，后者把前者盖住一半。现在拆成两行，各占自己的地方。
 	_pbtn(p, "宝物三选一（刷新 " + str(_trea_refresh) + " 次）", Vector2(24, ly), Vector2(640, 76), 24, true,
 		func(): _open_large("宝物三选一"))
-	_pbtn(p, "仓库", Vector2(24, ly + 88.0), Vector2(300, 72), 24, false, func(): _open_large("仓库"))
-	_pbtn(p, "公共仓库（暂不开放）", Vector2(340, ly + 88.0), Vector2(324, 72), 21, false, func(): _open_large("公共仓库"))
-	ly += 172.0
-	var tip := Label.new()
-	tip.position = Vector2(28, ly + 86.0)
-	tip.size = Vector2(640, 44)
-	tip.add_theme_font_size_override("font_size", 21)
-	tip.add_theme_color_override("font_color", DIM)
-	tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	tip.text = "点格子看详情；每格下面［存］［卖］"
-	# v12j（用户："不要留太多空白"）：把装备页下半屏用起来——成长武器摘要 ＋ 六格加成合计
-	var sy := ly + 88.0
-	var wsum := Label.new()
-	wsum.position = Vector2(24, sy)
-	wsum.size = Vector2(640, 40)
-	wsum.add_theme_font_size_override("font_size", 24)
-	wsum.add_theme_color_override("font_color", _quality_color(str(WPN_Q_CN[_wpn_q])))
-	wsum.text = "成长武器 ＋" + str(_wpn_lv) + "　【" + str(WPN_Q_CN[_wpn_q]) + "】　·　开局自带（跨局保留）"
-	p.add_child(wsum)
-	var wsub := Label.new()
-	wsub.position = Vector2(24, sy + 42.0)
-	wsub.size = Vector2(640, 34)
-	wsub.add_theme_font_size_override("font_size", 21)
-	wsub.add_theme_color_override("font_color", INK)
-	wsub.text = "每级：攻击 +" + str(_wpn_flat_atk()) + "　气血 +" + str(_wpn_flat_hp())
-	p.add_child(wsub)
-	var wline := Label.new()
-	wline.position = Vector2(24, sy + 78.0)
-	wline.size = Vector2(640, 66)
-	wline.add_theme_font_size_override("font_size", 20)
-	wline.add_theme_color_override("font_color", SEAL)
-	wline.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	if _wpn_lines.is_empty():
-		wline.text = "已选强化线：还没有（每 10 级进阶时选一条）"
-	else:
-		var wparts := []
-		for it_v in _wpn_lines:
-			var it: Dictionary = it_v
-			wparts.append(str(it["n"]) + "（" + str(WPN_Q_CN[int(it["q"])]) + "）")
-		wline.text = "已选 " + str(_wpn_lines.size()) + " 条：" + "、".join(PackedStringArray(wparts))
-	p.add_child(wline)
-	var gsum := Label.new()
-	gsum.position = Vector2(24, sy + 150.0)
-	gsum.size = Vector2(640, 34)
-	gsum.add_theme_font_size_override("font_size", 21)
-	gsum.add_theme_color_override("font_color", INK)
-	gsum.text = "六格加成合计：攻击 +" + str(int(_extra.get("gear_atk", 0))) + "　气血 +" + str(int(_extra.get("gear_hp", 0)))
-	p.add_child(gsum)
-	return sy + 210.0
-
-	p.add_child(tip)
-	return ly + 146.0
-
-# v13i：玉壶卡片——从主界面搬进［装备·宝物］页（两个页签都看得到）
+	return ly + 92.0
 func _fill_yuhu_card(p: Control, y: float) -> float:
 	var q := clampi(_yh_q, 0, 5)
 	var sb := StyleBoxFlat.new()
@@ -5283,7 +5391,7 @@ func _fill_yuhu_card(p: Control, y: float) -> float:
 	sb.set_border_width_all(2)
 	var box := Panel.new()
 	box.position = Vector2(24, y)
-	box.size = Vector2(632, 116)
+	box.size = Vector2(632, 152)
 	box.add_theme_stylebox_override("panel", sb)
 	box.mouse_filter = Control.MOUSE_FILTER_STOP
 	p.add_child(box)
@@ -5294,29 +5402,46 @@ func _fill_yuhu_card(p: Control, y: float) -> float:
 	nm.add_theme_color_override("font_color", INK)
 	nm.text = YUHU_NAME + "　【" + str(WPN_Q_CN[q]) + "】　开局自带"
 	box.add_child(nm)
-	var heals := int(float(YUHU_HEAL[q]) * 100.0)
-	var cds := int(YUHU_CD[q])
 	var ds := Label.new()
 	ds.position = Vector2(16, 46)
-	ds.size = Vector2(410, 30)
+	ds.size = Vector2(410, 28)
 	ds.add_theme_font_size_override("font_size", 19)
 	ds.add_theme_color_override("font_color", DIM)
-	ds.text = "主动宝物：回复 气血/内力 " + str(heals) + "%　·　冷却 " + str(cds) + " 秒"
+	ds.text = "当前：回复 气血/内力 " + str(int(float(YUHU_HEAL[q]) * 100.0)) + "%　·　冷却 " + str(int(YUHU_CD[q])) + " 秒" \
+		+ ("　（就绪）" if _yh_ready() else ("　（冷却中 " + str(int(ceil(_yh_cd))) + " 秒）"))
 	box.add_child(ds)
-	var st := Label.new()
-	st.position = Vector2(16, 78)
-	st.size = Vector2(410, 30)
-	st.add_theme_font_size_override("font_size", 21)
-	st.add_theme_color_override("font_color", Color(0.30, 0.62, 0.34) if _yh_ready() else SEAL)
-	st.text = "状态：就绪，随时能喝" if _yh_ready() else ("状态：冷却中（还有 " + str(int(ceil(_yh_cd))) + " 秒）")
-	box.add_child(st)
+	var nx := Label.new()
+	nx.position = Vector2(16, 76)
+	nx.size = Vector2(410, 28)
+	nx.add_theme_font_size_override("font_size", 19)
+	if q >= 5:
+		nx.add_theme_color_override("font_color", GOLD)
+		nx.text = "已经是【绝品】——最高档了"
+	else:
+		nx.add_theme_color_override("font_color", Color(0.24, 0.62, 0.58))
+		var nq := q + 1
+		nx.text = "下一档【" + str(WPN_Q_CN[nq]) + "】：回复 " + str(int(float(YUHU_HEAL[nq]) * 100.0)) \
+			+ "%　·　冷却 " + str(int(YUHU_CD[nq])) + " 秒"
+	box.add_child(nx)
+	var hw := Label.new()
+	hw.position = Vector2(16, 106)
+	hw.size = Vector2(410, 40)
+	hw.add_theme_font_size_override("font_size", 17)
+	hw.add_theme_color_override("font_color", DIM)
+	hw.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	if q >= 5:
+		hw.text = "升档三条路：黑市 · 宝物三选一「玉壶秘卷」· 完成「守护」"
+	else:
+		hw.text = "升档三条路：黑市买（灵晶 " + str(_yh_up_price()) + "）· 宝物三选一「玉壶秘卷」· 完成「守护」"
+	box.add_child(hw)
 	var bb := _pbtn(box, "喝一口", Vector2(440, 8), Vector2(178, 58), 24, _yh_ready(), _yh_use)
 	if not _yh_ready():
 		bb.add_theme_stylebox_override("normal", _flat(Color(0.55, 0.53, 0.51, 0.95)))
 		bb.add_theme_stylebox_override("hover", _flat(Color(0.60, 0.58, 0.56, 0.95)))
 		bb.add_theme_stylebox_override("pressed", _flat(Color(0.48, 0.46, 0.44, 0.95)))
 	_pbtn(box, "自动：" + ("开" if _yh_auto else "关"), Vector2(440, 72), Vector2(178, 36), 18, false, _yh_toggle_auto)
-	return y + 128.0
+	return y + 164.0
+
 
 func _set_equip_tab(i: int) -> void:
 	_equip_tab = i
@@ -5327,7 +5452,10 @@ func _set_equip_tab(i: int) -> void:
 func _gear_box(p: Control, pos: Vector2, sz: Vector2, src: String, idx: int) -> void:
 	var nm := ""
 	var q := ""
-	if src == "equip":
+	if src == "weapon":
+		nm = WPN_NAME          # v13s：第一格＝自带的成长武器
+		q = "+" + str(_wpn_lv) + "　【" + str(WPN_Q_CN[_wpn_q]) + "】"
+	elif src == "equip":
 		nm = str(_equip[idx])
 		q = str(_equip_q[idx])
 	elif src == "treasure":
@@ -5339,7 +5467,6 @@ func _gear_box(p: Control, pos: Vector2, sz: Vector2, src: String, idx: int) -> 
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(0.99, 0.97, 0.92) if nm != "" else Color(0.85, 0.83, 0.79)
 	sb.set_corner_radius_all(10)
-	sb.border_color = Color(SEAL.r, SEAL.g, SEAL.b, 0.8) if _carry == (src + ":" + str(idx)) else Color(INK.r, INK.g, INK.b, 0.35)
 	sb.set_border_width_all(3 if _carry == (src + ":" + str(idx)) else 2)
 	var box := Panel.new()
 	box.position = pos
@@ -5347,26 +5474,31 @@ func _gear_box(p: Control, pos: Vector2, sz: Vector2, src: String, idx: int) -> 
 	box.add_theme_stylebox_override("panel", sb)
 	box.mouse_filter = Control.MOUSE_FILTER_STOP
 	p.add_child(box)
+	# v13q：格子大小自适应字号——大格（装备页 200×140）用大号，小格（宝物/仓库）照旧
+	var big_f := 26 if sz.y >= 120.0 else 23
+	var sml_f := 21 if sz.y >= 120.0 else 19
+	var t1 := 30.0 if sz.y >= 120.0 else 26.0
+	var t2 := 82.0 if sz.y >= 120.0 else 74.0
 	var l1 := Label.new()
-	l1.position = Vector2(10, 26)
-	l1.size = Vector2(sz.x - 20, 44)
-	l1.add_theme_font_size_override("font_size", 23)
+	l1.position = Vector2(10, t1)
+	l1.size = Vector2(sz.x - 20, 46)
+	l1.add_theme_font_size_override("font_size", big_f)
 	l1.add_theme_color_override("font_color", INK if nm != "" else DIM)
 	l1.text = nm if nm != "" else "空"
 	l1.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	l1.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(l1)
 	var l2 := Label.new()
-	l2.position = Vector2(10, 74)
-	l2.size = Vector2(sz.x - 20, 32)
-	l2.add_theme_font_size_override("font_size", 19)
-	l2.add_theme_color_override("font_color", GOLD)
-	l2.text = q
-	l2.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	box.add_child(l2)
+	l2.position = Vector2(10, t2)
+	l2.size = Vector2(sz.x - 20, 34)
+	l2.add_theme_font_size_override("font_size", sml_f)
 	var b := _press_btn(box, Vector2(0, 0), sz, _gear_press.bind(src, idx), _gear_long.bind(src, idx))
 
 func _gear_press(src: String, idx: int) -> void:
+	# v13s：装备页第一格是成长武器——点它开武器弹窗
+	if src == "weapon":
+		_open_large("成长武器详情")
+		return
 	# 手上有东西 → 这一下是"放下"；手上空 → 这一下是"看详情"
 	if _carry != "":
 		var from := _carry
@@ -5398,6 +5530,92 @@ func _gear_long(src: String, idx: int) -> void:
 		_open_large("仓库")
 
 # ---- 仓库 / 公共仓库 ----
+# v13s：装备格/武器格的弹窗操作（做完顺手关窗）
+func _gear_to_vault_and_close(i: int) -> void:
+	_gear_to_vault(i)
+	_close_popup()
+
+func _gear_sell_and_close(i: int) -> void:
+	_gear_sell(false, i)
+	_close_popup()
+
+# v13s（草图）：装备格弹窗——属性、价格 ＋ ［存储］［贩卖］（格子上的小按钮撤了，操作都在这儿）
+func _fill_gear_detail(p: Control, y: float, sz: Vector2) -> float:
+	var gi := clampi(_detail_gear, 0, GEAR_SLOTS - 1)
+	var nm := str(_equip[gi])
+	var head := Label.new()
+	head.position = Vector2(24, y)
+	head.size = Vector2(660, 48)
+	head.add_theme_font_size_override("font_size", 30)
+	head.add_theme_color_override("font_color", INK)
+	head.text = "『" + (nm if nm != "" else "空格") + "』　【" + (str(_equip_q[gi]) if nm != "" else "—") + "】"
+	p.add_child(head)
+	var st: Dictionary = _equip_stat[gi] if gi < _equip_stat.size() else {}
+	var lines: Array = []
+	if nm == "":
+		lines = ["这一格是空的", "来源：宝物三选一 / 挑战 / 装备卡 / 黑市"]
+	elif not st.is_empty():
+		lines = ["加成：攻击 +" + str(int(st.get("atk", 0))) + "　气血 +" + str(int(st.get("hp", 0))),
+			"卖价：" + str(int(st.get("price", 60))) + " 文钱"]
+	else:
+		lines = ["初始装备（无加成）", "卖价：60 文钱"]
+	var ly := y + 64.0
+	for t_v in lines:
+		var l := Label.new()
+		l.position = Vector2(24, ly)
+		l.size = Vector2(660, 40)
+		l.add_theme_font_size_override("font_size", 22)
+		l.add_theme_color_override("font_color", INK)
+		l.text = str(t_v)
+		p.add_child(l)
+		ly += 46.0
+	ly += 20.0
+	if nm != "":
+		_pbtn(p, "存储（进仓库）", Vector2(24, ly), Vector2(310, 80), 24, false, _gear_to_vault_and_close.bind(gi))
+		_pbtn(p, "贩卖", Vector2(354, ly), Vector2(310, 80), 24, true, _gear_sell_and_close.bind(gi))
+		ly += 92.0
+	_pbtn(p, "关闭", Vector2(24, ly), Vector2(640, 72), 24, false, _close_popup)
+	return ly + 88.0
+
+# v13s（草图）：成长武器弹窗——属性、升级价 ＋ ［一键强化］［强化页］
+func _fill_wpn_detail(p: Control, y: float, sz: Vector2) -> float:
+	var head := Label.new()
+	head.position = Vector2(24, y)
+	head.size = Vector2(660, 48)
+	head.add_theme_font_size_override("font_size", 30)
+	head.add_theme_color_override("font_color", _quality_color(str(WPN_Q_CN[_wpn_q])))
+	head.text = "『" + WPN_NAME + "』　+" + str(_wpn_lv) + "　【" + str(WPN_Q_CN[_wpn_q]) + "】"
+	p.add_child(head)
+	var ly := y + 64.0
+	var rows := ["开局自带 · 跨局保留（不占装备格，第一格就是它）",
+		"每级：攻击 +" + str(_wpn_flat_atk()) + "　气血 +" + str(_wpn_flat_hp()),
+		"下一级价：" + str(_wpn_cost()) + " 文钱（现有 " + str(int(_money)) + "）",
+		"进阶：每 10 级升一档品质 ＋ 掷一次三选一（现在 " + str(_wpn_tier()) + " 阶）"]
+	if _wpn_lines.is_empty():
+		rows.append("已选强化线：还没有（每 10 级进阶时选一条）")
+	else:
+		var wparts := []
+		for it_v in _wpn_lines:
+			var it: Dictionary = it_v
+			wparts.append(str(it["n"]) + "（" + str(WPN_Q_CN[int(it["q"])]) + "）")
+		rows.append("已选 " + str(_wpn_lines.size()) + " 条：" + "、".join(PackedStringArray(wparts)))
+	for t_v in rows:
+		var l := Label.new()
+		l.position = Vector2(24, ly)
+		l.size = Vector2(660, 40)
+		l.add_theme_font_size_override("font_size", 21)
+		l.add_theme_color_override("font_color", INK)
+		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		l.text = str(t_v)
+		p.add_child(l)
+		ly += 46.0
+	ly += 20.0
+	_pbtn(p, "一键强化", Vector2(24, ly), Vector2(310, 80), 26, true, _wpn_auto)
+	_pbtn(p, "强化页（选线/详情）", Vector2(354, ly), Vector2(310, 80), 22, false, func(): _open_large("成长武器"))
+	ly += 92.0
+	_pbtn(p, "关闭", Vector2(24, ly), Vector2(640, 72), 24, false, _close_popup)
+	return ly + 88.0
+
 func _fill_vault(p: Control, y: float, sz: Vector2, kind: String) -> float:
 	var head := Label.new()
 	head.position = Vector2(28, y)
