@@ -138,6 +138,7 @@ func _set_check(set_id: String) -> void:
 		if not _card_have.has(card_id(set_id, i)):
 			return
 	_sets_done[set_id] = true
+	_sync_battle_stats()          # ⚠ 成套后立刻同步（不然新效果要等下一次受伤才生效）
 	# 成套后的常驻效果（成长线 / 经济线 / 数值线）
 	match str(s.get("combo_id", "")):
 		"cut_all_5":
@@ -175,6 +176,17 @@ func _set_check(set_id: String) -> void:
 			_extra["cut_all_bonus"] = float(_extra.get("cut_all_bonus", 0.0)) + 0.06
 		"skill_cd_12":
 			_extra["skill_cd"] = float(_extra.get("skill_cd", 0.0)) + 0.12
+		# v9e 装备卡：装备槽 / 宝物槽 / 开局装备
+		"equip_slot":
+			_extra["equip_slot"] = float(_extra.get("equip_slot", 0.0)) + 1.0
+			_hint.text = "兵器·剑 成型：装备槽 +1"
+		"treasure_slot":
+			_extra["treasure_slot"] = float(_extra.get("treasure_slot", 0.0)) + 1.0
+			_hint.text = "宝器 成型：宝物槽 +1"
+		"start_equip_up":
+			_extra["start_equip_up"] = float(_extra.get("start_equip_up", 0.0)) + 1.0
+		"thorns_50":
+			_extra["thorns"] = float(_extra.get("thorns", 0.0)) + 0.30
 		_:
 			pass
 	for i in n:
@@ -197,6 +209,10 @@ var _extra := {
 	"chal_spawn": 0.0,     # 招怪套：挑战多刷几只
 	"partner_grow": 0.0,   # 同心套：招募时伙伴成长 +N
 	"partner_dmg": 0.0,    # 同心：伙伴技能伤害 +
+	"equip_slot": 0.0,     # v9e 兵器·剑：装备槽 +
+	"treasure_slot": 0.0,  # v9e 宝器：宝物槽 +
+	"start_equip_up": 0.0, # v9e 神兵：开局自带装备
+	"thorns": 0.0,         # 荆棘/护心镜：反伤比例
 }
 var _skill_choices: Array = []
 var _skill_badge: Label = null
@@ -585,6 +601,20 @@ const CARD_SETS := [
 	{"set": "liuxing", "name": "流星", "quality": "极品", "size": 2, "combo": "落星改为范围", "combo_id": "star_aoe"},
 	{"set": "jingji", "name": "荆棘", "quality": "上品", "size": 2, "combo": "反伤 +50%", "combo_id": "thorns_50"},
 	{"set": "tianming", "name": "天命", "quality": "绝品", "size": 2, "combo": "幸运一击 +30%", "combo_id": "lucky_20"},
+	# ---- v9e（用户："然后加入装备卡"）：**装备卡**这一类 ----
+	#   单卡给装备向的数值；组合给"装备槽/开局装备"这类**元效果**
+	{"set": "bingqi", "name": "兵器·剑", "quality": "中品", "size": 3, "cat": "装备",
+		"combo": "开局自带一件兵器（装备槽 +1）", "combo_id": "equip_slot"},
+	{"set": "dao", "name": "兵器·刀", "quality": "中品", "size": 2, "cat": "装备",
+		"combo": "攻击 +10%", "combo_id": "atk_all_12"},
+	{"set": "ruanjia", "name": "软甲", "quality": "中品", "size": 2, "cat": "装备",
+		"combo": "全伤害减免 +5%", "combo_id": "cut_all_6"},
+	{"set": "baoqi", "name": "宝器", "quality": "上品", "size": 3, "cat": "装备",
+		"combo": "宝物槽 +1（宝物不限格，这条再送一格）", "combo_id": "treasure_slot"},
+	{"set": "shenbing", "name": "神兵", "quality": "极品", "size": 2, "cat": "装备",
+		"combo": "开局自带一件上品装备", "combo_id": "start_equip_up"},
+	{"set": "huxinjing", "name": "护心镜", "quality": "上品", "size": 2, "cat": "装备",
+		"combo": "反伤 +30%", "combo_id": "thorns_50"},
 ]
 # 每一张卡的"单卡属性"（按编号从小到大）
 const CARD_PARTS := {
@@ -628,6 +658,12 @@ const CARD_PARTS := {
 	"liuxing": ["每 4 秒落星（70% 伤害）", "星伤 +30%"],
 	"jingji": ["反伤 +30%", "反伤敌人 +1"],
 	"tianming": ["幸运一击 +8%", "全属性 +3%"],
+	"bingqi": ["攻击 +6%", "暴击 +4%", "暴击伤害 +15%"],
+	"dao": ["攻击 +7%", "破甲（无视 8% 防御）"],
+	"ruanjia": ["护甲 +8", "气血 +110"],
+	"baoqi": ["幸运一击 +4%", "灵晶 +12%", "文钱 +20%"],
+	"shenbing": ["攻击 +9%", "暴击伤害 +22%"],
+	"huxinjing": ["全伤害减免 +3%", "反伤 +20%"],
 }
 # 长线的"名字递进"（用户参考别人的 力量-野蛮人-战神）：I/II/III 各有名号
 const CARD_TIER_NAME := {
@@ -1500,6 +1536,7 @@ func _chal_press(i: int) -> void:
 	_chal_cd[i] = _chal_base_cd(i)
 	# 挑战怪的数量（招怪/战鼓套会给更多）
 	var n := _chal_spawn_count(i)
+	# v9g：把"一群 N 只"交给战场（群怪一群／大怪一只只刷，由战场决定体型与血厚）
 	# v9b（用户："去掉装备挑战 换成经验挑战"）：第 3 个挑战＝**经验**——当场给一笔经验
 	#   （升级那套逻辑跟击杀走的是同一段，这里只是把经验加进去）
 	if i == 2:
@@ -1748,6 +1785,7 @@ func _sync_battle_stats() -> void:
 	_field.hero["res_elem"] = _res_elem()
 	_field.hero["dmg_elem"] = _dmg_elem()
 	_field.hero["dmg_true"] = float(_extra.get("dmg_true", 0.0))   # 只有它能加真实伤害
+	_field.hero["thorns"] = float(_extra.get("thorns", 0.0))       # v9f 荆棘/护心镜：挨打反伤
 	# 物理那一路的减伤仍旧走 cut（护甲），元素走 res_elem、真实两边都不吃
 	_field.hero["cut"] = _armor_cut()
 

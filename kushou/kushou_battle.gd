@@ -208,6 +208,29 @@ func _spawn_foe(kind := "normal", hp_mul := 1.0, atk_mul := 1.0, big := false, t
 	}
 	foes.append(f)
 
+
+# v9g（用户："文钱/经验/灵晶都是群怪 boss和宝物是大怪"）：
+#   **挑战真的刷怪**——群怪走一群小怪；大怪走"体型大、血厚、掉更好"的单只大怪。
+#   kind: 0 文钱 · 1 灵晶 · 2 经验 · 3 宝物（大怪）· 4 boss（大怪）
+const CHAL_FOE_HP := [1.0, 1.2, 1.0, 2.6, 3.2]        # 血量倍率（大怪明显厚）
+const CHAL_FOE_ATK := [0.9, 1.0, 0.9, 1.5, 1.8]       # 攻击倍率
+const CHAL_FOE_SCALE := [0.86, 0.86, 0.86, 1.7, 2.0]  # 体型（大怪一眼看得出来）
+const CHAL_FOE_NAME := ["钱怪", "晶怪", "书怪", "宝箱大怪", "挑战 boss"]
+
+func spawn_challenge(kind_i: int, n: int) -> void:
+	var i := clampi(kind_i, 0, 4)
+	var big := i >= 3
+	for k in maxi(1, n):
+		_spawn_foe("chal", float(CHAL_FOE_HP[i]), float(CHAL_FOE_ATK[i]), big, 1, str(CHAL_FOE_NAME[i]))
+		var f: Dictionary = foes[foes.size() - 1]
+		f["scale"] = float(CHAL_FOE_SCALE[i])
+		f["chal"] = i                              # 掉什么由这个字段决定（结算侧读它）
+		f["stop"] = (FOE_STOP + 60.0 if big else FOE_STOP) + randf() * 20.0
+	_banner = ("挑战：" + str(CHAL_FOE_NAME[i]) + ("　大怪" if big else ("　一群 " + str(n) + " 只")))
+	_banner_t = 2.0
+	Audio.sfx("bell", -8.0)
+	if big:
+		Audio.sfx("drum", -6.0)
 # 叫 boss（阶 1~3）
 func start_boss(tier: int) -> void:
 	var tt := clampi(tier, 1, BOSS_TIER.size())
@@ -546,6 +569,15 @@ func _process(delta: float) -> void:
 					hero["hp"] = float(hero["hp"]) - d2
 					_hero_hit_flash = 0.18
 					_shake = maxf(_shake, 3.5)
+					# v9f（卡：荆棘 / 护心镜）——**挨打反弹一部分伤害给打你的那只怪**
+					var th := float(hero.get("thorns", 0.0))
+					if th > 0.0 and float(f.get("dying", 0.0)) <= 0.0:
+						var back := maxf(1.0, d2 * th)
+						f["hp"] = float(f["hp"]) - back
+						_push_float(float(f["x"]) + 10.0, float(f["y"]) - 22.0,
+							"反 " + str(int(back)), Color(0.88, 0.62, 0.28))
+						_bursts.append({"x": float(f["x"]), "y": float(f["y"]), "t": 0.0,
+							"col": Color(0.90, 0.64, 0.30), "scale": 0.6})
 					_on_hero_hurt(f)                 # 刺骨：挨打就反真实伤害
 					_push_float(size.x * 0.5 + float(randi() % 40 - 20), size.y - HERO_LINE - 40.0, "-" + str(int(d2)), Color(0.86, 0.36, 0.30))
 					if float(hero["hp"]) <= 0.0:
@@ -2180,7 +2212,8 @@ func _draw() -> void:
 	# 怪（先画，压在主角下面一层）
 	for f_v in foes:
 		var f: Dictionary = f_v
-		var sc := float(f["scale"])
+		# ⚠ 用 get 兜底：手工塞进来的怪（探针/召唤）不一定带 scale，硬取会每帧刷错
+		var sc := float(f.get("scale", 1.0))
 		if float(f["y"]) < -20.0:
 			continue
 		var dying := float(f.get("dying", 0.0))
@@ -2287,7 +2320,8 @@ func _draw() -> void:
 		var bu: Dictionary = bu_v
 		var ba := 1.0 - float(bu["t"]) / 0.30
 		var bc: Color = bu["col"]
-		var bs := float(bu["scale"]) * (0.6 + 0.9 * (1.0 - ba))
+		# ⚠ 用 get 兜底：漏写 scale 的条目会每帧刷 "Invalid access to property"（探针抓到过）
+		var bs := float(bu.get("scale", 1.0)) * (0.6 + 0.9 * (1.0 - ba))
 		var bp := Vector2(float(bu["x"]), float(bu["y"]))
 		draw_arc(bp, 30.0 * bs, 0.0, TAU, 22, Color(bc.r, bc.g, bc.b, ba * 0.9), 4.0)
 		for k2 in 8:
