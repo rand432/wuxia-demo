@@ -704,7 +704,9 @@ func _process(delta: float) -> void:
 		var dh := to_h.length()
 		if dh > FOE_REACH:
 			# v3l（用户："boss可以正常速度"）：boss 不再走 0.7 倍——跟寻常怪一个速度
-			var mv := to_h.normalized() * minf(FOE_SPD * delta, dh - FOE_REACH)
+			# v14r：boss 词缀"迅捷"——走得更快（原来 boss_spd 只存着没人读）
+			var fspd := FOE_SPD * (1.0 + float(f.get("boss_spd", 0.0)))
+			var mv := to_h.normalized() * minf(fspd * delta, dh - FOE_REACH)
 			f["x"] = clampf(float(f["x"]) + mv.x, 40.0, size.x - 40.0)
 			f["y"] = float(f["y"]) + mv.y
 		else:
@@ -713,8 +715,14 @@ func _process(delta: float) -> void:
 				f["para"] = maxf(0.0, float(f["para"]) - delta)
 				f["t"] = 0.0
 				continue
+			# v14r：boss 词缀"再生"——每秒回一点（原来 boss_regen 只存着没人读）
+			var breg := float(f.get("boss_regen", 0.0))
+			if breg > 0.0 and float(f["hp"]) > 0.0 and float(f["hp"]) < float(f["hp_max"]):
+				f["hp"] = minf(float(f["hp_max"]), float(f["hp"]) + float(f["hp_max"]) * breg * delta)
 			f["t"] = float(f["t"]) + delta
-			if float(f["t"]) >= 1.0 / (FOE_ASPD * (STATUE_ASPD if float(f.get("buff", 0.0)) > 0.0 else 1.0)):
+			# v14r：boss 词缀"疾风"——出手更频（原来 boss_aspd 只存着没人读）
+			var faspd := FOE_ASPD * (1.0 + float(f.get("boss_aspd", 0.0)))
+			if float(f["t"]) >= 1.0 / (faspd * (STATUE_ASPD if float(f.get("buff", 0.0)) > 0.0 else 1.0)):
 				f["t"] = 0.0
 				f["lunge"] = 1.0                 # 怪扑下来那一下
 				# 打的是蛟龙：扣它的血（蛟龙没有防御，挨多少掉多少）
@@ -744,6 +752,18 @@ func _process(delta: float) -> void:
 					hero["hp"] = float(hero["hp"]) - d2
 					_hero_hit_flash = 0.18
 					_shake = maxf(_shake, 3.5)
+					# v14r：boss 词缀"嗜血"（打中回血）与二技能"剧毒"（打中带毒）接上进行为
+					var bls := float(f.get("boss_lifesteal", 0.0))
+					if bls > 0.0 and float(f["hp"]) > 0.0:
+						var blh := minf(float(f["hp_max"]), float(f["hp"]) + d2 * bls)
+						if blh > float(f["hp"]):
+							f["hp"] = blh
+							_push_float(float(f["x"]) + 14.0, float(f["y"]) - 44.0, "嗜血 +" + str(int(blh - float(f["hp"]) + d2 * bls)),
+								Color(0.86, 0.36, 0.40))
+					if bool(f.get("boss_poison", false)) and d2 > 0.0:
+						_add_dot({"dot": hero.get("dot", []), "x": 0.0, "y": 0.0}, 0.0, 0.0, DMG_WOOD) if false else null
+						hero["poison_t"] = maxf(float(hero.get("poison_t", 0.0)), 4.0)
+						_push_float(size.x * 0.5 - 40.0, size.y - HERO_LINE - 66.0, "中毒", Color(0.62, 0.90, 0.44))
 					# v9f（卡：荆棘 / 护心镜）——**挨打反弹一部分伤害给打你的那只怪**
 					var th := float(hero.get("thorns", 0.0))
 					if th > 0.0 and float(f.get("dying", 0.0)) <= 0.0:
@@ -1982,17 +2002,17 @@ func p_mp(id: String) -> float:
 #   直接下标会报 "Invalid access to property or key"（探针抓到的）
 func p_cd(id: String) -> float:
 	var lv := float((partners[id] as Dictionary).get("cd_lv", 0))
-	return maxf(4.0, float(PARTNER_INFO[id]["cd0"]) - 3.0 * lv)
+	return maxf(4.0, float(PARTNER_INFO[id]["cd0"]) - 3.0 * lv) / p_star_mul(id)     # v14o：星减冷却
 
 func p_dur(id: String) -> float:
 	var lv := float((partners[id] as Dictionary).get("dur_lv", 0))
-	return float(PARTNER_INFO[id]["dur0"]) + 2.0 * lv
+	return (float(PARTNER_INFO[id]["dur0"]) + 2.0 * lv) * p_star_mul(id)     # v14o：星也加持续
 
 func p_kill_hp() -> float:                 # 肝：杀敌给的生命上限（下品削弱：2 → 1，每层 +0.5）
-	return 1.0 + 0.5 * float(partners["anying"]["hp_lv"])
+	return (1.0 + 0.5 * float(partners["anying"]["hp_lv"])) * p_star_mul("anying")
 
 func p_thorns() -> float:                  # 刺骨：反伤（占生命上限的比例）——v4t 中品：2% → 2.5%
-	return 0.025 + 0.005 * float(partners["chenshi"]["dmg_lv"])
+	return (0.025 + 0.005 * float(partners["chenshi"]["dmg_lv"])) * p_star_mul("chenshi")
 
 func p_thorn_targets() -> int:
 	return 1 + int(partners["chenshi"]["tgt_lv"])
@@ -2005,7 +2025,7 @@ func p_thorn_targets() -> int:
 var _quake_fx: Array = []           # 土系震荡：{x, y, r, t, big}
 
 func fd_shield() -> float:
-	return float(hero["hp_max"]) * (0.40 + 0.15 * float(partners["fadu"].get("shield_lv", 0)))
+	return float(hero["hp_max"]) * (0.40 + 0.15 * float(partners["fadu"].get("shield_lv", 0))) * p_star_mul("fadu")
 
 func fd_break_mul() -> float:
 	return 1.0 + 0.25 * float(partners["fadu"].get("break_lv", 0))
@@ -2018,10 +2038,10 @@ func fd_step_pct() -> float:
 	return 0.10 * float(partners["fadu"].get("step_lv", 0))     # 0 ＝ 没学"层段"
 
 func fd_dur() -> float:
-	return 8.0 + 2.0 * float(partners["fadu"].get("dur_lv", 0))
+	return (8.0 + 2.0 * float(partners["fadu"].get("dur_lv", 0))) * p_star_mul("fadu")
 
 func fd_cd() -> float:
-	return maxf(6.0, 20.0 - 3.0 * float(partners["fadu"].get("cd_lv", 0)))
+	return maxf(6.0, 20.0 - 3.0 * float(partners["fadu"].get("cd_lv", 0))) / p_star_mul("fadu")
 
 func _cast_shield() -> void:
 	var sv := fd_shield()
@@ -2132,7 +2152,7 @@ func cn_inherit() -> float:
 	return 0.25 + 0.05 * float(partners["cuisanniang"]["inherit_lv"])
 
 func cn_skill_mul() -> float:
-	return 2.50 * (1.0 + 0.25 * float(partners["cuisanniang"]["skill_lv"]))
+	return 2.50 * (1.0 + 0.25 * float(partners["cuisanniang"]["skill_lv"])) * p_star_mul("cuisanniang")
 
 # 大浪拍击的范围：0 ＝ 只打一名（升级后变成一片水浪）
 func cn_skill_radius() -> float:
@@ -2145,7 +2165,7 @@ func cn_mp() -> float:
 	return maxf(200.0, 500.0 + 60.0 * ups - 40.0 * float(p.get("cost_lv", 0)))
 
 func cn_cd() -> float:
-	return maxf(20.0, 60.0 - 8.0 * float(partners["cuisanniang"].get("cd_lv", 0)))
+	return maxf(20.0, 60.0 - 8.0 * float(partners["cuisanniang"].get("cd_lv", 0))) / p_star_mul("cuisanniang")
 
 # 蛟龙的存在时间（用户："有存在时间 【+存在时间】"）
 func cn_life() -> float:
@@ -2298,10 +2318,10 @@ var _fire_lines: Array = []         # 传火的火线：{from,to,t}
 
 # ---- 柳卿卿 ----
 func lq_heal() -> float:
-	return 0.18 + 0.06 * float(partners["liuqingqing"]["heal_lv"])
+	return (0.18 + 0.06 * float(partners["liuqingqing"]["heal_lv"])) * p_star_mul("liuqingqing")
 
 func lq_poison_mul() -> float:
-	return 0.30 * (1.0 + 0.25 * float(partners["liuqingqing"]["poison_lv"]))
+	return 0.30 * (1.0 + 0.25 * float(partners["liuqingqing"]["poison_lv"])) * p_star_mul("liuqingqing")
 
 func lq_poison_dur() -> float:
 	return 4.0 + 2.0 * float(partners["liuqingqing"]["pdur_lv"])
@@ -2310,7 +2330,7 @@ func lq_spread() -> int:
 	return 1 + int(partners["liuqingqing"]["spread_lv"])
 
 func lq_cd() -> float:
-	return maxf(4.0, 12.0 - 1.5 * float(partners["liuqingqing"].get("cd_lv", 0)))
+	return maxf(4.0, 12.0 - 1.5 * float(partners["liuqingqing"].get("cd_lv", 0))) / p_star_mul("liuqingqing")
 
 func lq_mp() -> float:
 	var p: Dictionary = partners["liuqingqing"]
@@ -2345,7 +2365,7 @@ func _cast_spring() -> void:
 # ---- 季沧海 ----
 func jc_dmg_mul() -> float:
 	# v4q 调伤害：0.70 → 0.60（无内力消耗、每 3 秒一发还带传火，收一点更稳）
-	return 0.60 * (1.0 + 0.25 * float(partners["jicanghai"]["dmg_lv"]))
+	return 0.60 * (1.0 + 0.25 * float(partners["jicanghai"]["dmg_lv"])) * p_star_mul("jicanghai")
 
 func jc_spread() -> int:
 	return 1 + int(partners["jicanghai"]["spread_lv"])          # 传火：多引燃几名
@@ -2354,7 +2374,7 @@ func jc_burn_mul() -> float:
 	return 0.12 * float(partners["jicanghai"]["burn_lv"])        # 灼烧：每秒额外火伤
 
 func jc_interval() -> float:
-	return maxf(1.2, 3.0 - 0.4 * float(partners["jicanghai"]["sec_lv"]))
+	return maxf(1.2, 3.0 - 0.4 * float(partners["jicanghai"]["sec_lv"])) / p_star_mul("jicanghai")
 
 func _cast_fire() -> void:
 	var tg := _nearest()
@@ -2417,7 +2437,7 @@ func tl_radius() -> float:
 	return 110.0 + 22.0 * float(partners["zhangdaoling"]["range_lv"])
 
 func tl_dmg_mul() -> float:
-	return 1.60 * (1.0 + 0.25 * float(partners["zhangdaoling"]["dmg_lv"]))
+	return 1.60 * (1.0 + 0.25 * float(partners["zhangdaoling"]["dmg_lv"])) * p_star_mul("zhangdaoling")
 
 func tl_para_chance() -> float:
 	return 0.20 + 0.10 * float(partners["zhangdaoling"]["para_lv"])
@@ -2430,7 +2450,7 @@ func tl_multi_chance() -> float:
 
 # 多重施法那一下：**不同伤害比例**，但也是金系
 func tl_multi_mul() -> float:
-	return 0.60 * (1.0 + 0.25 * float(partners["zhangdaoling"]["multidmg_lv"]))
+	return 0.60 * (1.0 + 0.25 * float(partners["zhangdaoling"]["multidmg_lv"])) * p_star_mul("zhangdaoling")
 
 func tl_mp() -> float:
 	var p: Dictionary = partners["zhangdaoling"]
@@ -2439,7 +2459,7 @@ func tl_mp() -> float:
 	return maxf(120.0, 300.0 + 30.0 * ups - 25.0 * float(p.get("cost_lv", 0)))
 
 func tl_cd() -> float:
-	return maxf(3.0, 10.0 - 1.5 * float(partners["zhangdaoling"].get("cd_lv", 0)))
+	return maxf(3.0, 10.0 - 1.5 * float(partners["zhangdaoling"].get("cd_lv", 0))) / p_star_mul("zhangdaoling")
 
 # 一次性法术的统一入口（加新伙伴只需在这里加一条）
 func _cast_partner(id: String) -> void:
@@ -2467,7 +2487,7 @@ func _cast_partner(id: String) -> void:
 # ---- v14b 新队员的一次性技能 ----
 # 白婆婆：续命（回血；自己残血翻倍）
 func _cast_heal() -> void:
-	var ratio := 0.12 + 0.02 * float(partners["baipopo"].get("heal_lv", 0))
+	var ratio := (0.12 + 0.02 * float(partners["baipopo"].get("heal_lv", 0))) * p_star_mul("baipopo")
 	if float(hero["hp"]) / maxf(1.0, float(hero["hp_max"])) < 0.40:
 		ratio *= 2.0
 	var heal := float(hero["hp_max"]) * ratio
@@ -2479,7 +2499,7 @@ func _cast_heal() -> void:
 # 沈青萝：藤缚（定住最近 3 名 + 木系伤害）
 func _cast_vine() -> void:
 	var n := 3 + int(partners["shenqingluo"].get("tgt_lv", 0))
-	var dmg := float(hero["atk"]) * (0.8 + 0.15 * float(partners["shenqingluo"].get("dmg_lv", 0)))
+	var dmg := float(hero["atk"]) * (0.8 + 0.15 * float(partners["shenqingluo"].get("dmg_lv", 0))) * p_star_mul("shenqingluo")
 	var sorted: Array = []
 	for f_v in foes:
 		var f: Dictionary = f_v
@@ -2503,7 +2523,7 @@ func _cast_vine() -> void:
 
 # 毒娘子：万毒（全场挂毒）
 func _cast_poison_all() -> void:
-	var dmg := float(hero["atk"]) * (0.25 + 0.06 * float(partners["duniangzi"].get("dmg_lv", 0)))
+	var dmg := float(hero["atk"]) * (0.25 + 0.06 * float(partners["duniangzi"].get("dmg_lv", 0))) * p_star_mul("duniangzi")
 	var dur := 6.0 + 1.0 * float(partners["duniangzi"].get("dot_lv", 0))
 	var n := 0
 	for f_v in foes:
@@ -2520,7 +2540,7 @@ func _cast_poison_all() -> void:
 
 # 玄机子：时间停止（全场定身 3 秒 + 自己攻速翻倍 3 秒）
 func _cast_timestop() -> void:
-	var dur := 3.0 + 0.5 * float(partners["xuanjizi"].get("dur_lv", 0))
+	var dur := (3.0 + 0.5 * float(partners["xuanjizi"].get("dur_lv", 0))) * p_star_mul("xuanjizi")
 	_p_aspd = maxf(_p_aspd, dur)            # 攻速翻倍（战场自己的临时通道）
 	for f_v in foes:
 		var f: Dictionary = f_v
@@ -2649,10 +2669,10 @@ func _draw_bolts(shk: Vector2) -> void:
 
 # ---- 苏青鸾·飞匕（v4f）----
 func dg_interval() -> float:
-	return maxf(2.0, 8.0 - 1.0 * float(partners["suqingluan"]["sec_lv"]))
+	return maxf(2.0, 8.0 - 1.0 * float(partners["suqingluan"]["sec_lv"])) / p_star_mul("suqingluan")
 
 func dg_dmg_mul() -> float:
-	return 0.80 * (1.0 + 0.25 * float(partners["suqingluan"]["dmg_lv"]))
+	return 0.80 * (1.0 + 0.25 * float(partners["suqingluan"]["dmg_lv"])) * p_star_mul("suqingluan")
 
 func dg_pierce() -> int:
 	return int(partners["suqingluan"]["pierce_lv"])
@@ -2665,12 +2685,12 @@ func dg_multi() -> int:
 
 # 弹射伤害：弹射那一下单算（跟飞匕伤害分开）
 func dg_bounce_mul() -> float:
-	return 0.60 * (1.0 + 0.25 * float(partners["suqingluan"]["bdmg_lv"]))
+	return 0.60 * (1.0 + 0.25 * float(partners["suqingluan"]["bdmg_lv"])) * p_star_mul("suqingluan")
 
 # 多重伤害：多出来的那几枚匕首单算（+多重伤害 = 多重的整体伤害增加）
 func dg_multi_mul() -> float:
 	# v4q 调伤害：多重 0.80 → 0.70（数量已占优，单枚略低）
-	return 0.70 * (1.0 + 0.25 * float(partners["suqingluan"]["mdmg_lv"]))
+	return 0.70 * (1.0 + 0.25 * float(partners["suqingluan"]["mdmg_lv"])) * p_star_mul("suqingluan")
 
 # 每 8 秒（可减）放一把；多重就是一次放好几把，各自独立结算
 func _update_daggers(delta: float) -> void:
@@ -2816,6 +2836,13 @@ func _update_partners(delta: float) -> void:
 				"col": Color(0.78, 0.62, 1.0), "scale": 1.6})
 			Audio.sfx("skill", -6.0)
 
+# ============================================================
+# v14o 伙伴星级：★1 起步，每星 ① 成长继承 +3%（外壳算）② 技能威力 +12% ③ 冷却 −5%
+#   星数由外壳写进 partners[id]["star"]（存档页花银两升，永久）；这里只读。
+# ============================================================
+func p_star_mul(id: String) -> float:
+	return 1.0 + 0.12 * float(maxi(0, int((partners[id] as Dictionary).get("star", 1)) - 1))
+
 func p_active(id: String) -> bool:
 	return float(partners[id]["active"]) > 0.0
 
@@ -2827,29 +2854,29 @@ func p_ratio(id: String) -> float:
 
 # 杀气：独眼彪——持续期间每杀一只 → 攻击 +（1 + 0.5×层）
 func sb_atk_add() -> float:
-	return 1.0 + 0.5 * float(partners["duyanbiao"].get("atk_lv", 0))
+	return (1.0 + 0.5 * float(partners["duyanbiao"].get("atk_lv", 0))) * p_star_mul("duyanbiao")
 
 func sb_cd() -> float:
-	return maxf(6.0, 25.0 - 3.0 * float(partners["duyanbiao"].get("cd_lv", 0)))
+	return maxf(6.0, 25.0 - 3.0 * float(partners["duyanbiao"].get("cd_lv", 0))) / p_star_mul("duyanbiao")
 
 func sb_dur() -> float:
-	return 5.0 + 2.0 * float(partners["duyanbiao"].get("dur_lv", 0))
+	return (5.0 + 2.0 * float(partners["duyanbiao"].get("dur_lv", 0))) * p_star_mul("duyanbiao")
 
 # v4r（用户："不 跟原本内力的百分比增加好一点"）：纳气改成**按原本内力的百分比**涨
 #   ——涨的是"开局那管内力"的百分比，所以不会滚雪球
 var _mp_base := 300.0
 
 func kr_mp_pct() -> float:
-	return 0.03 + 0.03 * float(partners["kurong"].get("mp_lv", 0))     # 3% → 12%
+	return (0.03 + 0.03 * float(partners["kurong"].get("mp_lv", 0))) * p_star_mul("kurong")   # 3% → 12%
 
 func kr_mp_add() -> float:
 	return _mp_base * kr_mp_pct()
 
 func kr_cd() -> float:
-	return maxf(6.0, 25.0 - 3.0 * float(partners["kurong"].get("cd_lv", 0)))
+	return maxf(6.0, 25.0 - 3.0 * float(partners["kurong"].get("cd_lv", 0))) / p_star_mul("kurong")
 
 func kr_dur() -> float:
-	return 5.0 + 2.0 * float(partners["kurong"].get("dur_lv", 0))
+	return (5.0 + 2.0 * float(partners["kurong"].get("dur_lv", 0))) * p_star_mul("kurong")
 
 # 杀敌结算：三位"持续窗口内杀敌涨属性"的伙伴都在这里
 func _on_kill_partner() -> void:

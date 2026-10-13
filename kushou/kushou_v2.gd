@@ -758,65 +758,194 @@ func _fill_recruit(p: Control, y: float, sz: Vector2) -> float:
 	p.add_child(head)
 	var cur := Label.new()
 	cur.position = Vector2(28, y + 50.0)
-	cur.size = Vector2(640, 36)
+	cur.size = Vector2(640, 80)
 	cur.add_theme_font_size_override("font_size", 21)
 	cur.add_theme_color_override("font_color", DIM)
-	cur.text = "当前继承：臂力 " + str(int(_grow_inherit["arm"])) + "　身法 " + str(int(_grow_inherit["agi"]))
-	cur.text += "　悟性 " + str(int(_grow_inherit["wit"]))
+	cur.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	cur.text = "当前继承：臂力 " + str(int(_grow_inherit["arm"])) + "　身法 " + str(int(_grow_inherit["agi"])) \
+		+ "　悟性 " + str(int(_grow_inherit["wit"])) + "　·　每升 5 级给一次机会，每种伙伴只能选一次"
 	p.add_child(cur)
 	if _recruit_opens <= 0:
 		var t0 := Label.new()
-		t0.position = Vector2(28, y + 96.0)
+		t0.position = Vector2(28, y + 140.0)
 		t0.size = Vector2(640, 60)
 		t0.add_theme_font_size_override("font_size", 22)
 		t0.add_theme_color_override("font_color", DIM)
 		t0.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		t0.text = "现在没有招募机会——每升 5 级给一次。"
 		p.add_child(t0)
-		return y + 170.0
+		return y + 210.0
 	if _recruit_choices.is_empty():
 		_recruit_choices = _roll_recruits()
-	var ly := y + 100.0
+	var ly := y + 126.0
 	for i in _recruit_choices.size():
-		var pid := str(_recruit_choices[i])
-		var info: Dictionary = _field.PARTNER_INFO[pid]
-		var g: Dictionary = info.get("grow", {})
-		var sb := StyleBoxFlat.new()
-		sb.bg_color = Color(0.99, 0.97, 0.92)
-		sb.set_corner_radius_all(12)
-		sb.border_color = Color(SEAL.r, SEAL.g, SEAL.b, 0.5)
-		sb.set_border_width_all(2)
-		var box := Panel.new()
-		box.position = Vector2(28, ly)
-		box.size = Vector2(640, 150)
-		box.add_theme_stylebox_override("panel", sb)
-		box.mouse_filter = Control.MOUSE_FILTER_STOP
-		p.add_child(box)
-		var nm := Label.new()
-		nm.position = Vector2(18, 12)
-		nm.size = Vector2(430, 44)
-		nm.add_theme_font_size_override("font_size", 26)
-		nm.add_theme_color_override("font_color", INK)
-		nm.text = str(info["name"]) + "　【" + str(info["quality"]) + "】　" + str(info["skill"])
-		box.add_child(nm)
-		var gl := Label.new()
-		gl.position = Vector2(18, 60)
-		gl.size = Vector2(600, 36)
-		gl.add_theme_font_size_override("font_size", 22)
-		gl.add_theme_color_override("font_color", SEAL)
-		gl.text = "成长：臂力 +" + str(int(g.get("arm", 0))) + "　身法 +" + str(int(g.get("agi", 0)))
-		gl.text += "　悟性 +" + str(int(g.get("wit", 0)))
-		box.add_child(gl)
-		var dl := Label.new()
-		dl.position = Vector2(18, 100)
-		dl.size = Vector2(600, 34)
-		dl.add_theme_font_size_override("font_size", 19)
-		dl.add_theme_color_override("font_color", DIM)
-		dl.text = str(info["desc"]).replace("**", "")
-		box.add_child(dl)
-		_pbtn(box, "招募", Vector2(496, 96), Vector2(126, 44), 22, true, _recruit.bind(pid))
-		ly += 162.0
-	return ly
+		_mate_card(p, Vector2(28.0, ly), Vector2(640, 300), str(_recruit_choices[i]), true)
+		ly += 312.0
+	# 底部两颗大按钮（跟抽卡页一个套路：全部刷新 ＋ 看账）
+	ly += 6.0
+	_pbtn(p, "全部刷新", Vector2(28, ly), Vector2(310, 72), 24, true, _recruit_refresh)
+	_pbtn(p, "查看当前伙伴", Vector2(354, ly), Vector2(314, 72), 24, true, _goto_mates_page)
+	ly += 86.0
+	var foot := Label.new()
+	foot.position = Vector2(28, ly)
+	foot.size = Vector2(640, 60)
+	foot.add_theme_font_size_override("font_size", 19)
+	foot.add_theme_color_override("font_color", DIM)
+	foot.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	foot.text = "点卡面上的［招募］直接选它（不花灵晶）。刷新不要钱，但一局里的候选是有限的——三张都入过队就不再出新的。"
+	p.add_child(foot)
+	return ly + 70.0
+
+# v14p：从招募页跳去伙伴页看账（先点页签，再把那个弹窗开出来）
+func _goto_mates_page() -> void:
+	_role_tab = 1
+	_open_large("角色")
+
+# v14p：把候选全刷一遍（不要钱；还是"没入过队的"里抽）
+func _recruit_refresh() -> void:
+	_recruit_choices = _roll_recruits()
+	Audio.sfx("ui_click", -8.0)
+	if _popup_kind == "招募":
+		_open_large("招募")
+
+# v14p：伙伴大卡面（跟抽卡页的大卡一个视觉语言）：名字/品质/★ ／ 画像 ／ 组合 ／ 成长 ／ 效果 ／ 招募
+func _mate_card(p: Control, pos: Vector2, sz: Vector2, pid: String, with_btn: bool) -> void:
+	var info: Dictionary = _field.PARTNER_INFO[pid]
+	var g: Dictionary = info.get("grow", {})
+	var qcol := _quality_color(str(info["quality"]))
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.99, 0.97, 0.92)
+	sb.set_corner_radius_all(12)
+	sb.border_color = qcol
+	sb.set_border_width_all(3)
+	var box := Panel.new()
+	box.position = pos
+	box.size = sz
+	box.add_theme_stylebox_override("panel", sb)
+	box.mouse_filter = Control.MOUSE_FILTER_STOP
+	p.add_child(box)
+	# ① 名字条（品质色的实心条）
+	var band := Panel.new()
+	band.position = Vector2(0, 0)
+	band.size = Vector2(sz.x, 50)
+	band.add_theme_stylebox_override("panel", _flat(qcol))
+	band.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(band)
+	var nm := Label.new()
+	nm.position = Vector2(14, 6)
+	nm.size = Vector2(sz.x - 28, 40)
+	nm.add_theme_font_size_override("font_size", 25)
+	nm.add_theme_color_override("font_color", Color(0.99, 0.97, 0.93))
+	nm.text = str(info["name"]) + "　【" + str(info["quality"]) + "】 " + _mate_star_cn(pid)
+	box.add_child(nm)
+	# ② 画像（程序画的简笔小人：跟战场上那个同一套笔法）
+	var art := MateArt.new()
+	art.position = Vector2(14, 60)
+	art.size = Vector2(150, 132)
+	art.setup(pid, str(info.get("dtype", "")), qcol)
+	art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(art)
+	# ③ 技能 / 组合
+	var t1 := Label.new()
+	t1.position = Vector2(174, 58)
+	t1.size = Vector2(sz.x - 190, 34)
+	t1.add_theme_font_size_override("font_size", 21)
+	t1.add_theme_color_override("font_color", SEAL)
+	t1.text = "技能「" + str(info["skill"]) + "」"
+	box.add_child(t1)
+	# ④ 成长（并进继承的那三个数）＋ ★ 加成后的实际值
+	var t2 := Label.new()
+	t2.position = Vector2(174, 92)
+	t2.size = Vector2(sz.x - 190, 34)
+	t2.add_theme_font_size_override("font_size", 20)
+	t2.add_theme_color_override("font_color", INK)
+	t2.text = "成长：臂力 +" + str(int(g.get("arm", 0))) + "　身法 +" + str(int(g.get("agi", 0))) \
+		+ "　悟性 +" + str(int(g.get("wit", 0)))
+	box.add_child(t2)
+	var t2b := Label.new()
+	t2b.position = Vector2(174, 124)
+	t2b.size = Vector2(sz.x - 190, 34)
+	t2b.add_theme_font_size_override("font_size", 20)
+	t2b.add_theme_color_override("font_color", DIM)
+	t2b.text = "★加成：成长继承 ×" + str(snappedf(_mate_grow_mul(pid), 0.01)) \
+		+ "　威力 +" + str(12 * (_mate_star_of(pid) - 1)) + "%　冷却 −" + str(5 * (_mate_star_of(pid) - 1)) + "%"
+	box.add_child(t2b)
+	# ⑤ 效果说明
+	var t3 := Label.new()
+	t3.position = Vector2(174, 166)
+	t3.size = Vector2(sz.x - 190, 70)      # ⚠ 到 236 为止：238 起是［招募］按钮那一排（截图里压过一次）
+	t3.add_theme_font_size_override("font_size", 19)
+	t3.add_theme_color_override("font_color", DIM)
+	t3.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	t3.text = str(info["desc"]).replace("**", "")
+	box.add_child(t3)
+	if with_btn:
+		_pbtn(box, "招募", Vector2(sz.x - 156, 238), Vector2(142, 50), 22, true, _recruit.bind(pid))
+
+# v14p：招募卡面/伙伴页用的简笔小人画像（自己画，不依赖外部贴图）
+class MateArt extends Control:
+	var _pid := ""
+	var _dtype := ""
+	var _col := Color(0.4, 0.36, 0.4)
+
+	func setup(pid: String, dtype: String, col: Color) -> void:
+		_pid = pid
+		_dtype = dtype
+		_col = col
+		queue_redraw()
+
+	func _draw() -> void:
+		var c := Vector2(size.x * 0.5, size.y - 26.0)
+		# 底：一圈品质色地盘
+		draw_circle(Vector2(size.x * 0.5, size.y - 22.0), 40.0, Color(_col.r, _col.g, _col.b, 0.14))
+		draw_arc(Vector2(size.x * 0.5, size.y - 22.0), 40.0, 0.0, TAU, 40, Color(_col.r, _col.g, _col.b, 0.55), 2.0)
+		var body := Color(0.22, 0.20, 0.22)
+		var s := 1.05
+		var w := 3.0 * s
+		# 头（圆）：不同伙伴换一点小特征
+		draw_circle(c + Vector2(0, -46.0 * s), 11.0 * s, body)
+		if _pid == "zhangdaoling" or _pid == "xuanjizi" or _pid == "fadu":
+			draw_circle(c + Vector2(0, -58.0 * s), 4.0 * s, Color(0.86, 0.68, 0.26))      # 道冠
+		elif _pid == "cuisanniang" or _pid == "liuqingqing" or _pid == "shenqingluo":
+			draw_line(c + Vector2(-12.0 * s, -50.0 * s), c + Vector2(-16.0 * s, -26.0 * s), Color(0.18, 0.16, 0.18), w)   # 长发
+			draw_line(c + Vector2(12.0 * s, -50.0 * s), c + Vector2(16.0 * s, -26.0 * s), Color(0.18, 0.16, 0.18), w)
+		elif _pid == "duyanbiao":
+			draw_line(c + Vector2(8.0 * s, -50.0 * s), c + Vector2(8.0 * s, -58.0 * s), body, 2.0)     # 眼罩带子
+			draw_circle(c + Vector2(8.0 * s, -46.0 * s), 5.0 * s, Color(0.10, 0.09, 0.10))
+		# 身子 / 四肢
+		draw_line(c + Vector2(0, -35.0 * s), c + Vector2(0, 8.0 * s), body, w)
+		draw_line(c + Vector2(0, -26.0 * s), c + Vector2(-17.0 * s, -2.0 * s), body, w)
+		draw_line(c + Vector2(0, -26.0 * s), c + Vector2(18.0 * s, -34.0 * s), body, w)
+		draw_line(c + Vector2(0, 8.0 * s), c + Vector2(-12.0 * s, 36.0 * s), body, w)
+		draw_line(c + Vector2(0, 8.0 * s), c + Vector2(12.0 * s, 36.0 * s), body, w)
+		# 手里的家伙：按伤害类型分（物理＝刀 · 元素＝法杖/雷 · 防护＝盾）
+		var wpn := Color(0.80, 0.78, 0.74)
+		if _dtype.begins_with("物理") or _dtype == "":
+			draw_line(c + Vector2(18.0 * s, -14.0 * s), c + Vector2(26.0 * s, -78.0 * s), wpn, w)
+			draw_line(c + Vector2(13.0 * s, -24.0 * s), c + Vector2(21.0 * s, -28.0 * s), Color(0.52, 0.36, 0.22), 4.0)
+		elif _dtype.contains("金") or _dtype.contains("雷"):
+			draw_line(c + Vector2(18.0 * s, -10.0 * s), c + Vector2(24.0 * s, -68.0 * s), Color(0.62, 0.50, 0.30), w)
+			draw_circle(c + Vector2(24.0 * s, -72.0 * s), 6.0 * s, Color(0.94, 0.88, 0.52))
+			draw_line(c + Vector2(16.0 * s, -66.0 * s), c + Vector2(30.0 * s, -80.0 * s), Color(0.98, 0.94, 0.70), 2.0)
+		elif _dtype.contains("土") or _dtype.contains("护盾"):
+			draw_line(c + Vector2(18.0 * s, -22.0 * s), c + Vector2(30.0 * s, -52.0 * s), Color(0.52, 0.42, 0.30), w)
+			draw_circle(c + Vector2(30.0 * s, -56.0 * s), 9.0 * s, Color(0.74, 0.62, 0.34))
+		elif _dtype.contains("木"):
+			draw_line(c + Vector2(18.0 * s, -12.0 * s), c + Vector2(24.0 * s, -64.0 * s), Color(0.36, 0.52, 0.30), w)
+			draw_circle(c + Vector2(24.0 * s, -68.0 * s), 7.0 * s, Color(0.52, 0.80, 0.44))
+		elif _dtype.contains("火"):
+			draw_line(c + Vector2(18.0 * s, -12.0 * s), c + Vector2(24.0 * s, -64.0 * s), Color(0.46, 0.30, 0.22), w)
+			draw_circle(c + Vector2(24.0 * s, -70.0 * s), 8.0 * s, Color(0.94, 0.52, 0.22))
+		elif _dtype.contains("水") or _dtype.contains("召唤"):
+			draw_line(c + Vector2(18.0 * s, -12.0 * s), c + Vector2(24.0 * s, -64.0 * s), Color(0.26, 0.42, 0.54), w)
+			draw_circle(c + Vector2(24.0 * s, -70.0 * s), 8.0 * s, Color(0.42, 0.78, 0.86))
+		elif _dtype.contains("治疗"):
+			draw_line(c + Vector2(18.0 * s, -12.0 * s), c + Vector2(24.0 * s, -64.0 * s), Color(0.40, 0.46, 0.40), w)
+			draw_line(c + Vector2(19.0 * s, -72.0 * s), c + Vector2(29.0 * s, -72.0 * s), Color(0.56, 0.90, 0.62), 3.0)
+			draw_line(c + Vector2(24.0 * s, -77.0 * s), c + Vector2(24.0 * s, -67.0 * s), Color(0.56, 0.90, 0.62), 3.0)
+		else:
+			draw_line(c + Vector2(18.0 * s, -16.0 * s), c + Vector2(26.0 * s, -70.0 * s), wpn, w)
+
 
 # 抽三个候选：品质越高越少见（权重：下 30 · 中 25 · 上 20 · 极 15 · 绝 10），不重复
 func _roll_recruits() -> Array:
@@ -1303,7 +1432,7 @@ func _card_big(p: Control, pos: Vector2, sz: Vector2, id: String) -> void:
 	var fl := Label.new()
 	fl.position = Vector2(8, 420.0)
 	fl.size = Vector2(sz.x - 16, 90)
-	fl.add_theme_font_size_override("font_size", 17)
+	fl.add_theme_font_size_override("font_size", 19)
 	fl.add_theme_color_override("font_color", Color(0.48, 0.44, 0.40))
 	fl.text = str(FLAVOR.get(_card_icon_of(str(s.get("set", ""))), ""))
 	fl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -1926,7 +2055,7 @@ func _fill_codex(p: Control, y: float, sz: Vector2) -> float:
 		var l2 := Label.new()
 		l2.position = Vector2(10, 22)
 		l2.size = Vector2(296, 20)
-		l2.add_theme_font_size_override("font_size", 15)
+		l2.add_theme_font_size_override("font_size", 18)
 		l2.add_theme_color_override("font_color", DIM)
 		l2.text = str(it["fx"])
 		l2.clip_text = true
@@ -1978,7 +2107,7 @@ func _fill_codex(p: Control, y: float, sz: Vector2) -> float:
 		var fl := Label.new()
 		fl.position = Vector2(10, 24)
 		fl.size = Vector2(300, 22)
-		fl.add_theme_font_size_override("font_size", 15)
+		fl.add_theme_font_size_override("font_size", 18)
 		fl.add_theme_color_override("font_color", DIM)
 		fl.text = str(b["fx"])
 		fl.clip_text = true
@@ -2113,7 +2242,7 @@ func _fill_trea_list(p: Control, y: float, sz: Vector2) -> float:
 		var fl := Label.new()
 		fl.position = Vector2(10, 24)
 		fl.size = Vector2(300, 22)
-		fl.add_theme_font_size_override("font_size", 15)
+		fl.add_theme_font_size_override("font_size", 18)
 		fl.add_theme_color_override("font_color", DIM)
 		fl.text = str(b["fx"])
 		fl.clip_text = true
@@ -2647,6 +2776,7 @@ var _bond_t := 0.0
 var _bonds_locked := {}          # 已锁定的羁绊
 var _run_time := 0.0             # 本局存活秒数
 var _money_earned := 0           # 本局累计赚到的文钱
+var _earned_crystal := 0         # v14l：本局累计入账灵晶（调平衡用）
 
 # 进度：当前/需要（界面显示 2/3 用）
 func _bond_progress(b: Dictionary) -> Array:
@@ -3804,6 +3934,71 @@ var _pet_star := {}                       # v14j：宠物星级（id → 0..5）
 const PET_STAR_MAX := 5
 const PET_STAR_PRICE := 600                # 每星价钱 = 600 × (当前星 + 1)
 
+# ============================================================
+# v14o 伙伴星级（用户口径同宠物："每提升星级 可以强化其成长和基础属性"）：
+#   ★1 起步（招募就是 1 星，不用花钱）· 上限 ★5 · **存档页**花银两升，永久生效；
+#   每星：① 招募成长继承 +3%（三位属性都按改后的算）② 战场技能威力 +12%（battle 的 p_star_mul）
+#   ③ 技能冷却 −5%（同上）④ 持续型技能窗口 +12%。价钱跟宠物一条线：600 × 目标星级。
+# ============================================================
+var _mate_star := {}                        # id → 1..5（存 meta）
+const MATE_STAR_MAX := 5
+const MATE_STAR_PRICE := 600                # 升到第 n 星要 600 × n
+
+func _mate_star_of(id: String) -> int:
+	return clampi(int(_mate_star.get(id, 1)), 1, MATE_STAR_MAX)
+
+# v14q 初始队员（用户："存档里可设「开局自带的那位队员」"）：
+#   存 meta（跨局）；新的一局开始时**自动入队**（成长照样并进继承、技能当场就带）。
+#   入队过的人不会再出现在招募候选里——所以这是"这一局少一次招募、换一个保底"的取舍。
+var _mate_start := ""                       # 开局自带的伙伴 id（"" ＝ 不带）
+
+func _mate_start_name() -> String:
+	if _mate_start == "" or not _field.PARTNER_INFO.has(_mate_start):
+		return "不带"
+	return str((_field.PARTNER_INFO[_mate_start] as Dictionary)["name"])
+
+# 把 id 并进继承（逐项取最高）＋ 标记入队——开局发人与局内招募共用这一套
+func _mate_grant(id: String) -> Array:
+	var info: Dictionary = _field.PARTNER_INFO[id]
+	var g: Dictionary = info.get("grow", {})
+	var up: Array = []
+	var bonus := int(_extra.get("partner_grow", 0.0))
+	var smul := _mate_grow_mul(id)
+	for k in ["arm", "agi", "wit"]:
+		var v := maxi(1, int(floor(float(int(g.get(k, 0)) + bonus) * smul)))
+		if v > int(_grow_inherit[k]):
+			_grow_inherit[k] = v
+			up.append({"arm": "臂力", "agi": "身法", "wit": "悟性"}[k] + "→" + str(v))
+	_field.partners[id]["owned"] = true
+	_field.partners[id]["star"] = _mate_star_of(id)
+	return up
+
+# 存档页那颗［开局自带］按下去：设成他／取消
+func _mate_set_start(id: String) -> void:
+	if _mate_start == id:
+		_mate_start = ""
+		_hint.text = "开局不再自带队员"
+	else:
+		if not bool((_field.partners[id] as Dictionary)["owned"]):
+			_hint.text = "要先在这一局里招募到「" + str((_field.PARTNER_INFO[id] as Dictionary)["name"]) + "」，才能设成开局自带"
+			return
+		_mate_start = id
+		_hint.text = "开局自带：「" + str((_field.PARTNER_INFO[id] as Dictionary)["name"]) + "」（下一局开始生效）"
+	_ach_save()
+	Audio.sfx("ui_click", -8.0)
+	if _popup_kind == "存档":
+		_open_large("存档")
+
+func _mate_star_price(id: String) -> int:
+	return MATE_STAR_PRICE * (_mate_star_of(id) + 1)
+
+func _mate_star_cn(id: String) -> String:
+	var st := _mate_star_of(id)
+	return "★".repeat(st) + "☆".repeat(MATE_STAR_MAX - st)
+
+func _mate_grow_mul(id: String) -> float:
+	return 1.0 + 0.03 * float(_mate_star_of(id) - 1)      # ★1＝×1.00 · ★5＝×1.12
+
 func _pet_star_of(kind: String) -> int:
 	return clampi(int(_pet_star.get(kind, 0)), 0, PET_STAR_MAX)
 
@@ -3827,6 +4022,33 @@ func _pet_star_up(kind: String) -> void:
 	_pet_star[kind] = st + 1
 	_ach_save()
 	_hint.text = "「" + str(_pet_info(kind)["n"]) + "」升到 " + str(st + 1) + " 星：攻击 +" + str(15 * (st + 1)) + "% · 被动 +" + str(20 * (st + 1)) + "%"
+	Audio.sfx("levelup", -4.0)
+	if _popup_kind == "存档":
+		_open_large("存档")
+
+# v14o：伙伴升星（花银两 · 永久 · 上限 ★5）
+func _mate_star_up(id: String) -> void:
+	var info: Dictionary = _field.PARTNER_INFO[id]
+	var nm := str(info["name"])
+	if not bool((_field.partners[id] as Dictionary)["owned"]):
+		_hint.text = "「" + nm + "」还没入队（要先在局内招募到，升星才算数）"
+		return
+	var st := _mate_star_of(id)
+	if st >= MATE_STAR_MAX:
+		_hint.text = "「" + nm + "」已经满星（★" + str(MATE_STAR_MAX) + "）"
+		return
+	var price := _mate_star_price(id)
+	if int(_money) < price:
+		_hint.text = "银两不够（「" + nm + "」升到 ★" + str(st + 1) + " 要 " + str(price) + "，现有 " + str(int(_money)) + "）"
+		return
+	_money -= price
+	_mate_star[id] = st + 1
+	_ach_save()
+	# v14o：**立刻**见效（不等下一局）——战场星数当场换、成长当场并进继承
+	var mup: Array = _mate_grant(id)
+	_sync_battle_stats()
+	_hint.text = "「" + nm + "」升到 ★" + str(st + 1) + "：成长继承 ×" + str(snappedf(_mate_grow_mul(id), 0.01)) \
+		+ "　技能威力 +" + str(12 * st) + "% · 冷却 −" + str(5 * st) + "%" + ("　成长提升：" + "、".join(PackedStringArray(mup)) if mup.size() > 0 else "")
 	Audio.sfx("levelup", -4.0)
 	if _popup_kind == "存档":
 		_open_large("存档")
@@ -4271,12 +4493,93 @@ func _fill_save(p: Control, y: float, sz: Vector2) -> float:
 				box.add_child(ok)
 		else:
 			var can := int(_money) >= int(u["price"])
-			var bb := _pbtn(box, "解锁 " + str(u["price"]), Vector2(456, 20), Vector2(170, 54), 22, can, _unlock_buy.bind(id))
+			var bb := _pbtn(box, "解锁 " + str(u["price"]), Vector2(456, 20), Vector2(170, 62), 22, can, _unlock_buy.bind(id))
 			if not can:
 				bb.add_theme_stylebox_override("normal", _flat(Color(0.55, 0.53, 0.51, 0.95)))
 				bb.add_theme_stylebox_override("hover", _flat(Color(0.60, 0.58, 0.56, 0.95)))
 				bb.add_theme_stylebox_override("pressed", _flat(Color(0.48, 0.46, 0.44, 0.95)))
 		ly += 100.0
+	# ============================================================
+	# v14o：伙伴星级（用户口径同宠物："每提升星级 可以强化其成长和基础属性"）——
+	#   只有**这一局招到过**的伙伴才列出来（战斗伙伴是局内的，星是跨局的）；
+	#   价钱 600 × 目标星级；每星：成长继承 +3% · 技能威力 +12% · 冷却 −5%。
+	# ============================================================
+	ly += 12.0
+	var mhead := Label.new()
+	mhead.position = Vector2(24, ly)
+	mhead.size = Vector2(660, 36)
+	mhead.add_theme_font_size_override("font_size", 24)
+	mhead.add_theme_color_override("font_color", SEAL)
+	p.add_child(mhead)
+	var owned_m := 0
+	for ppid in _field.partners.keys():
+		if bool((_field.partners[ppid] as Dictionary)["owned"]):
+			owned_m += 1
+	mhead.text = "—— 伙伴星级（永久 · 本局已入队 " + str(owned_m) + " 名）——"
+	ly += 42.0
+	var mnote := Label.new()
+	mnote.position = Vector2(24, ly)
+	mnote.size = Vector2(660, 84)
+	mnote.add_theme_font_size_override("font_size", 19)
+	mnote.add_theme_color_override("font_color", DIM)
+	mnote.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	mnote.text = "★1 是招募自带的；花钱升星永久保留。每星：招募成长继承 +3% · 战场技能威力 +12% · 技能冷却 −5%。价钱 600 × 目标星级（都从银两里扣）。\n" \
+		+ "［设为开局自带］＝下一局一开场就带着他（成长照样并进继承）——开局自带现在：" + _mate_start_name() + "。"
+	p.add_child(mnote)
+	ly += 92.0
+	for mpid_v in _field.PARTNER_INFO.keys():
+		var mpid := str(mpid_v)
+		if not bool((_field.partners[mpid] as Dictionary)["owned"]):
+			continue
+		var minfo: Dictionary = _field.PARTNER_INFO[mpid]
+		var mst := _mate_star_of(mpid)
+		var mrow := Panel.new()
+		mrow.position = Vector2(24, ly)
+		mrow.size = Vector2(640, 76)
+		mrow.add_theme_stylebox_override("panel", _flat(Color(0.96, 0.94, 0.90)))
+		mrow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		p.add_child(mrow)
+		var mnl := Label.new()
+		mnl.position = Vector2(14, 8)
+		mnl.size = Vector2(410, 34)
+		mnl.add_theme_font_size_override("font_size", 22)
+		mnl.add_theme_color_override("font_color", INK)
+		mnl.text = str(minfo["name"]) + "【" + str(minfo["quality"]) + "】 " + _mate_star_cn(mpid)
+		mrow.add_child(mnl)
+		var msl := Label.new()
+		msl.position = Vector2(14, 42)
+		msl.size = Vector2(410, 28)
+		msl.add_theme_font_size_override("font_size", 19)
+		msl.add_theme_color_override("font_color", DIM)
+		msl.text = "成长继承 ×" + str(snappedf(_mate_grow_mul(mpid), 0.01)) + "　技能威力 +" + str(12 * (mst - 1)) + "%"
+		mrow.add_child(msl)
+		# v14q：这颗按下去＝"开局自带的那位队员"（再按一次取消）；已入过队的才有资格
+		var msel := (_mate_start == mpid)
+		var mbb0 := _pbtn(mrow, ("开局自带 ✓" if msel else "设为开局自带"), Vector2(196, 12), Vector2(236, 54), 19,
+			true, _mate_set_start.bind(mpid))
+		if msel:
+			mbb0.add_theme_stylebox_override("normal", _flat(Color(0.30, 0.46, 0.32, 0.98)))
+			mbb0.add_theme_stylebox_override("hover", _flat(Color(0.36, 0.54, 0.38, 0.98)))
+			mbb0.add_theme_stylebox_override("pressed", _flat(Color(0.24, 0.38, 0.26, 0.98)))
+		if mst < MATE_STAR_MAX:
+			var mprice := _mate_star_price(mpid)
+			var mcan := int(_money) >= mprice
+			var mbb := _pbtn(mrow, "升到 ★" + str(mst + 1) + "（" + str(mprice) + "）", Vector2(440, 12), Vector2(186, 54), 19,
+				mcan, _mate_star_up.bind(mpid))
+			if not mcan:
+				mbb.add_theme_stylebox_override("normal", _flat(Color(0.55, 0.53, 0.51, 0.95)))
+				mbb.add_theme_stylebox_override("hover", _flat(Color(0.60, 0.58, 0.56, 0.95)))
+				mbb.add_theme_stylebox_override("pressed", _flat(Color(0.48, 0.46, 0.44, 0.95)))
+		else:
+			var mlb := Label.new()
+			mlb.position = Vector2(440, 22)
+			mlb.size = Vector2(186, 34)
+			mlb.add_theme_font_size_override("font_size", 21)
+			mlb.add_theme_color_override("font_color", GOLD)
+			mlb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			mlb.text = "满星"
+			mrow.add_child(mlb)
+		ly += 84.0
 	return ly + 8.0
 
 var _meta_path := "user://kushou_meta.cfg"      # ⚠ 探针会把它换成临时文件，别写脏真档
@@ -4389,6 +4692,12 @@ func _ach_load() -> void:
 		var st2 := int(cf.get_value("petstar", pid2, 0))
 		if st2 > 0:
 			_pet_star[pid2] = st2
+	for pv3 in _field.PARTNER_INFO.keys():
+		var pid3 := str(pv3)
+		var st3 := int(cf.get_value("matestar", pid3, 1))
+		if st3 > 1:
+			_mate_star[pid3] = clampi(st3, 1, MATE_STAR_MAX)
+	_mate_start = str(cf.get_value("misc", "mate_start", ""))
 func _ach_save() -> void:
 	var cf := ConfigFile.new()
 	for id in _ach_done.keys():
@@ -4404,6 +4713,9 @@ func _ach_save() -> void:
 	cf.set_value("misc", "best_wave", _best_wave)
 	for pk2 in _pet_star.keys():
 		cf.set_value("petstar", str(pk2), int(_pet_star[pk2]))
+	for pk3 in _mate_star.keys():
+		cf.set_value("matestar", str(pk3), int(_mate_star[pk3]))
+	cf.set_value("misc", "mate_start", _mate_start)
 
 # 条件当前值（都在本局内算）
 func _ach_val(ck: String) -> float:
@@ -4662,6 +4974,8 @@ func _restart_run() -> void:
 	_kills = 0
 	_exp = 0.0
 	_lv = 1
+	_evo_n = 0                           # v14m：进化是本局的事
+	_evo_mul = 1.0
 	_grow = 3
 	_skill_pts = 0
 	_skill_choices.clear()
@@ -4672,6 +4986,9 @@ func _restart_run() -> void:
 	_field.reset_run()
 	_field.reset_partners()          # v6b：伙伴退回未入队（招募是这一局的事）
 	_grow_inherit = {"arm": 0, "agi": 0, "wit": 0}
+	# v14q：开局自带的那位队员（存档里设的）——先入队、成长并进继承，招募里就不会再出现他
+	if _mate_start != "" and _field.PARTNER_INFO.has(_mate_start):
+		_mate_grant(_mate_start)
 	_recruit_opens = 0
 	_bath_used = 0                       # v13w：新的一局，浴血次数归零
 	_yh_uses = 0                         # v13x：本局喝玉壶次数
@@ -5191,7 +5508,7 @@ func _process(delta: float) -> void:
 	_crystal_lb.text = str(_crystal)
 	_kill_lb.text = str(_kills)
 	_exp_lb.text = "Lv " + str(_lv)
-	_exp_bar.size.x = 548.0 * _exp
+	_exp_bar.size.x = 548.0 * clampf(_exp / maxf(0.01, _lv_need()), 0.0, 1.0)   # v14m：门槛会涨，条要按门槛归一
 	# 黑市下面那条小的，跟大条一个数
 	if _mini_exp != null:
 		_mini_exp.size.x = 178.0 * clampf(float(_bm_exp) / maxf(1.0, float(_bm_need)), 0.0, 1.0)
@@ -5310,6 +5627,10 @@ func _sync_battle_stats() -> void:
 	_field.hero["mech_comboaspd"] = float(_extra.get("mech_comboaspd", 0.0))
 	_field.hero["mech_root"] = float(_extra.get("mech_root", 0.0))
 	_field.hero["mech_killatk"] = float(_extra.get("mech_killatk", 0.0))
+	# v14o：伙伴星级写进战场（那边 p_star_mul 只读这个字段）
+	for pid_s in _field.partners.keys():
+		var pd_s: Dictionary = _field.partners[pid_s]
+		pd_s["star"] = _mate_star_of(str(pid_s))
 	# v14d：宠物的攻击方式（咬人那一套参数）
 	var pcfg: Dictionary = _pet_info(_pet_kind).get("cfg", {})
 	_field.set_pet_cfg({
@@ -5371,13 +5692,15 @@ func _credit_drop(kind: String, n: int) -> void:
 		"coin":
 			# v14a：聚宝盆/寻宝这类"文钱 +X%"终于生效了（以前是死键）
 			var cm := 1.0 + float(_extra.get("money_bonus", 0.0))
-			_money += int(round(float(n) * cm))
-			_money_earned += int(round(float(n) * cm))
+			var wmul := 1.0 + 0.04 * float(maxi(0, _wave - 1))     # v14k：越往后掉落越厚
+			_money += int(round(float(n) * cm * wmul))
+			_money_earned += int(round(float(n) * cm * wmul))
 			_coin_pop = 0.32
 			Audio.sfx("coin", -9.0)
 		"crystal":
 			var cr_m := 1.0 + float(_extra.get("crystal_bonus", 0.0))
 			_crystal += int(round(float(n) * cr_m))
+			_earned_crystal += int(round(float(n) * cr_m))     # v14l：收益统计（调平衡用）
 			_crystal_pop = 0.32
 			Audio.sfx("bell", -10.0)
 		"gear":
@@ -5507,20 +5830,78 @@ func _on_kill(_n: int) -> void:
 	_gain_exp(0.04)
 
 # v9b：经验入口（击杀 +0.04 ／ 经验挑战 +0.30）——升级、技能点、属性点、招募都在这里
+# v14k：升到下一级要多少经验（随等级涨）
+#
+# v14m 进化系统（用户："5/10/20/40 级进化（门槛翻倍）· 一局最多 4 次"）：
+#   进化**里程碑＝Lv 5 / 10 / 20 / 40**（每段的长度正好翻倍：5 → 5 → 10 → 20）；
+#   每进一次化：① 三属性各 +2（进化淬体）② 全伤 +12% × 进化次数（累加，4 次＝+48%）
+#   ③ 气血上限 +10% × 进化次数（累加，4 次＝+40%）④ **下一段的升级门槛 ×2**（"门槛翻倍"）；
+#   4 次进化 = 满进化，到点不再触发。界面在角色页（属性页）那行【进化 N/4】里看。
+const EVO_LV := [5, 10, 20, 40]                 # 进化里程碑
+const EVO_ATTR := 2                              # 每次进化：三属性各 +
+const EVO_DMG := 0.12                            # 每次进化：全伤 +12%（累加）
+const EVO_HP := 0.10                             # 每次进化：气血上限 +10%（累加）
+var _evo_n := 0                                  # 本局进化次数（0~4）
+var _evo_mul := 1.0                              # 升级门槛倍率（每进化一次 ×2）
+
+func _evo_dmg_bonus() -> float:
+	return EVO_DMG * float(_evo_n)
+
+func _evo_hp_mul() -> float:
+	return 1.0 + EVO_HP * float(_evo_n)
+
+func _evo_cn() -> String:
+	return "【进化 " + str(_evo_n) + "/4】"
+
+# 下一段进化还差什么（满进化了就说满）
+func _evo_next_cn() -> String:
+	if _evo_n >= EVO_LV.size():
+		return "　已满进化"
+	return "　下次 Lv " + str(int(EVO_LV[_evo_n])) + "（还差 " + str(maxi(0, int(EVO_LV[_evo_n]) - _lv)) + " 级）"
+
+# 页脚那一行：进化给到手的实际加成（"等级"那行窄，写不下这么多字，放这儿）
+func _evo_foot_cn() -> String:
+	if _evo_n <= 0:
+		return "进化：Lv 5／10／20／40 各一次（一局最多 4 次），每次三属性 +2、全伤 +12%、气血 +10%，下一段升级门槛翻倍。"
+	var nxtcn := "已满"
+	if _evo_n < EVO_LV.size():
+		nxtcn = "Lv " + str(int(EVO_LV[_evo_n]))
+	return "进化 " + str(_evo_n) + "/4：三属性 +" + str(EVO_ATTR * _evo_n) + " · 全伤 +" + str(int(100.0 * _evo_dmg_bonus())) \
+		+ "% · 气血 +" + str(int(100.0 * (EVO_HP * float(_evo_n)))) + "% · 升级门槛 ×" + str(snappedf(_evo_mul, 0.1)) \
+		+ "（下一段 " + nxtcn + "）"
+
+# 到点就进化（_gain_exp 升级后调用；一次可能跨好几级，所以是 while）
+func _evo_check() -> void:
+	while _evo_n < EVO_LV.size() and _lv >= int(EVO_LV[_evo_n]):
+		_evo_n += 1
+		for k in ["arm", "agi", "wit"]:
+			_attr[k] = int(_attr[k]) + EVO_ATTR
+		_evo_mul *= 2.0
+		_note("进化！第 " + str(_evo_n) + " 次　三属性 +" + str(EVO_ATTR) + " · 全伤 +" + str(int(100.0 * _evo_dmg_bonus()))
+			+ "% · 气血 +" + str(int(100.0 * (EVO_HP * float(_evo_n)))) + "% · 下一段门槛 ×2", 4.0)
+		_sync_battle_stats()
+
+func _lv_need() -> float:
+	return (1.0 + 0.09 * float(maxi(0, _lv - 1))) * _evo_mul
+
 func _gain_exp(amount: float) -> void:
 	_exp += amount
-	if _exp >= 1.0:
-		_exp -= 1.0
+	# v14k（用户："调整…角色成长"）：升级门槛随等级**递增**（原来固定 1.0 经验＝1 级，
+	#   后期升级太廉价）——Lv1 要 1.0，Lv10 要 1.9，Lv20 要 2.8，Lv30 要 3.7
+	# v14m：改成 while——一次拿到一大笔经验（经验挑战 +0.30）可能连升两级，
+	#   原来只判一次会漏掉后面那一级（顺带把门槛算一次，别每只怪都重算）
+	while _exp >= _lv_need():
+		_exp -= _lv_need()
 		_lv += 1
-		_qc("levelup")                        # v13f：狱友任务进度
-		_skill_pts += 1                      # v3a：每升 1 级给 1 点技能点
-		_attr_pts += 2                       # v5a：再给 2 点属性点（角色页自己分配）
-		if _lv % 5 == 0:                     # v6a：每 5 级给一次招募（成长继承）
+		_qc("levelup")
+		_skill_pts += 1
+		_attr_pts += 3                   # v14k：2 → 3（成长跟不上怪）
+		if _lv % 5 == 0:
 			_recruit_opens += 1
 			_hint.text = "升级！Lv " + str(_lv) + "　招募 +1（第 " + str(_recruit_opens) + " 次，去角色页点［招募］）"
 		Audio.sfx("levelup", -6.0)
-		_hint.text = "升级！Lv " + str(_lv) + "　技能点 +1（点［技能 ＋］三选一）"
 		_sync_battle_stats()
+		_evo_check()                     # v14m：到 5/10/20/40 级就进化
 
 func _on_special(kind: String, n: int, pos: Vector2) -> void:
 	# 灵晶 / 装备 / 宝物：跟文钱一个套路——掉地 → 飞向各自的"计数位" → 数字或清单变化
@@ -5660,7 +6041,7 @@ func _open_popup(kind: String, large: bool) -> void:
 	var xb := Button.new()
 	xb.text = "关闭"
 	xb.position = Vector2(r.size.x - 156, 12)
-	xb.size = Vector2(140, 56)
+	xb.size = Vector2(140, 64)
 	xb.add_theme_font_size_override("font_size", 24)
 	xb.focus_mode = Control.FOCUS_NONE
 	xb.add_theme_stylebox_override("normal", _flat(Color(0.26, 0.25, 0.28, 0.98)))
@@ -6100,7 +6481,8 @@ func _fill_role(p: Control, y: float, sz: Vector2) -> float:
 		["减伤", str(int((0.10 + _armor_cut()) * 100.0)) + "%（横练 10% ＋ 护甲 " + str(int(_armor_value()))
 			+ " → " + str(snappedf(_armor_cut() * 100.0, 0.1)) + "%）"],
 		["攻速", str(snappedf(_aspd_total(), 0.01)) + " 次/秒（身法加成）"],
-		["等级", "Lv " + str(_lv) + "（经验 " + str(int(_exp * 100.0)) + "%）"],
+		# v14m：进化进度**不进这一行**（422 宽放两条会折行压到下面）；只在这儿标一下次数，明细在页脚
+		["等级", "Lv " + str(_lv) + "（经验 " + str(int(100.0 * clampf(_exp / maxf(0.01, _lv_need()), 0.0, 1.0))) + "%）　" + _evo_cn()],
 		["宠物", "白狐（幼年期）· 全属性 +3%"],
 		["已继承技能", "、".join(PackedStringArray(_skills))],
 	]
@@ -6175,14 +6557,23 @@ func _fill_role(p: Control, y: float, sz: Vector2) -> float:
 		ly2 += 54.0
 	var tip := Label.new()
 	# ⚠ 这行字比框长会被裁（截图抓到过）——给足高度并允许换行
-	tip.position = Vector2(28, ly2 + 8.0)
+	tip.position = Vector2(28, ly2 + 6.0)
 	tip.size = Vector2(640, 64)
 	tip.add_theme_font_size_override("font_size", 20)
 	tip.add_theme_color_override("font_color", DIM)
 	tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	tip.text = "主属性＝你主哪条，那条就当攻击（力量/敏捷→攻击 · 悟性→元素），并把它那条的副属性放大 1.5 倍。"
 	p.add_child(tip)
-	return ly2 + 60.0
+	# v14m：进化那一行（"等级"行放不下这么多字，挪到页脚）
+	var etip := Label.new()
+	etip.position = Vector2(28, ly2 + 74.0)
+	etip.size = Vector2(640, 72)
+	etip.add_theme_font_size_override("font_size", 20)
+	etip.add_theme_color_override("font_color", SEAL if _evo_n > 0 else DIM)
+	etip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	etip.text = _evo_foot_cn()
+	p.add_child(etip)
+	return ly2 + 176.0
 	# （旧版属性列表循环已删除——上面那段就是新的）
 func _fill_role_old_tail(rows: Array, y: float, p: Control) -> float:
 	var ly := y + 74.0
@@ -6233,15 +6624,8 @@ func _attr_wit() -> int:
 func _recruit(id: String) -> void:
 	_qc("recruit")                       # v13f：招贤任务进度
 	var info: Dictionary = _field.PARTNER_INFO[id]
-	var g: Dictionary = info.get("grow", {})
-	var up: Array = []
-	var bonus := int(_extra.get("partner_grow", 0.0))     # v7c：同心套给的"招募成长 +1"
-	for k in ["arm", "agi", "wit"]:
-		var v := int(g.get(k, 0)) + bonus
-		if v > int(_grow_inherit[k]):
-			_grow_inherit[k] = v
-			up.append({"arm": "臂力", "agi": "身法", "wit": "悟性"}[k] + "→" + str(v))
-	_field.partners[id]["owned"] = true
+	# v14q：并继承＋入队这一段跟"开局自带"共用 _mate_grant（一件事只写一处）
+	var up: Array = _mate_grant(id)
 	_recruit_opens = maxi(0, _recruit_opens - 1)
 	_recruit_choices.clear()
 	_sync_battle_stats()
@@ -6251,8 +6635,9 @@ func _recruit(id: String) -> void:
 
 # 臂力：气血 + 生命恢复；主属性＝力量时再给攻击
 func _hp_max_total() -> float:
-	return 200.0 + float(_grow) * 10.0 * float(maxi(0, _lv - 1)) \
+	var raw := 200.0 + float(_grow) * 10.0 * float(maxi(0, _lv - 1)) \
 		+ 12.0 * float(_attr_arm()) * _boost_for("arm") + float(_extra.get("hp_flat", 0.0)) + float(_extra.get("gear_hp", 0.0))
+	return raw * _evo_hp_mul()      # v14m：每次进化 +10% 气血上限（累加）
 
 func _hp_regen() -> float:
 	return 0.4 * float(_attr_arm()) * _boost_for("arm")
@@ -6308,7 +6693,7 @@ func _elem_amp() -> float:
 
 func _atk() -> float:
 	var base := 12.0 + float(_grow) * float(maxi(0, _lv - 1))
-	base *= 1.0 + float(_extra.get("atk_all", 0.0))          # v7g：淬锋套给的攻击 %
+	base *= 1.0 + float(_extra.get("atk_all", 0.0)) + _evo_dmg_bonus()   # v14m：进化给全伤
 	base += float(_extra.get("atk_flat", 0.0))              # v11b：成长武器给的固定攻击
 	base += float(_extra.get("evo_atk", 0.0))               # v11e：时间进化累积的攻击
 	base += float(_extra.get("gear_atk", 0.0))              # v11f：六格装备给的攻击
@@ -6440,7 +6825,8 @@ func _fill_mates(p: Control, y: float, sz: Vector2) -> float:
 		nm.size = Vector2(420, 42)
 		nm.add_theme_font_size_override("font_size", 26)
 		nm.add_theme_color_override("font_color", INK)
-		nm.text = str(info["name"]) + "　【" + str(info["quality"]) + "】　技能「" + str(info["skill"]) + "」"
+		nm.text = str(info["name"]) + "　【" + str(info["quality"]) + "】 " + _mate_star_cn(pid) \
+			+ "　技能「" + str(info["skill"]) + "」"
 		box.add_child(nm)
 		var live := Label.new()
 		live.position = Vector2(430, 14)
@@ -6502,6 +6888,7 @@ func _fill_mates(p: Control, y: float, sz: Vector2) -> float:
 			var nm2: String = nmv.split("·")[1] if nmv.contains("·") else nmv
 			parts.append(nm2 + " " + str(_field.skill_lv(str(pk["id"]))))
 		lv.text = ("档位：" + "／".join(PackedStringArray(parts))) if parts.size() > 0 else "档位：还没强化过"
+		lv.text += "　★加成：威力 +" + str(12 * (_mate_star_of(pid) - 1)) + "% · 冷却 −" + str(5 * (_mate_star_of(pid) - 1)) + "%"
 		box.add_child(lv)
 		ly += 222.0
 	var tip := Label.new()
