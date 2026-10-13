@@ -201,6 +201,9 @@ func _foe_atk() -> float:
 func _spawn_foe(kind := "normal", hp_mul := 1.0, atk_mul := 1.0, big := false, tier := 1, nm := "") -> void:
 	if foes.size() >= MAX_FOES and kind == "normal":
 		return
+	# v13g：**总上限**——挑战怪/招怪套原来绕过了 MAX_FOES，挂机久了能堆到几百只
+	if foes.size() >= MAX_FOES + 16 and kind != "boss" and kind != "champion" and kind != "elite":
+		return
 	var x := 150.0 + randf() * maxf(60.0, size.x - 320.0)
 	var f := {
 		"x": x, "y": -40.0,
@@ -397,6 +400,7 @@ func _process(delta: float) -> void:
 		sh["vy"] = float(sh["vy"]) + 420.0 * delta
 		if float(sh["t"]) > 0.45:
 			_shards.remove_at(i2)
+	_fx_trim()          # v13g：特效超预算就丢老的（大场面保帧率）
 	if not running:
 		queue_redraw()
 		return
@@ -1090,9 +1094,10 @@ func _kill_foe(f: Dictionary) -> void:
 	_shake = maxf(_shake, 6.0 + minf(6.0, float(_combo) * 0.4))
 	_hitstop = maxf(_hitstop, 0.05)
 	_death_sfx(str(f["kind"]), bool(f.get("boss", false)))
-	for i in 7:
-		_shards.append({"x": float(f["x"]), "y": float(f["y"]) - 20.0,
-			"vx": randf_range(-160.0, 160.0), "vy": randf_range(-280.0, -90.0), "t": 0.0})
+	if _shards.size() < FX_SHARDS_MAX:      # v13g：碎屑按预算给，别一次塞几千片
+		for i in 7:
+			_shards.append({"x": float(f["x"]), "y": float(f["y"]) - 20.0,
+				"vx": randf_range(-160.0, 160.0), "vy": randf_range(-280.0, -90.0), "t": 0.0})
 	var kind := str(f["kind"])
 	var coins := 1 + randi() % 3
 	# v9h（挑战掉落表）：挑战怪身上带 chal —— 按类型掉，结算交给外壳
@@ -1202,6 +1207,20 @@ func _update_card_fx(delta: float) -> void:
 				_bursts.append({"x": float(tg3["x"]), "y": float(tg3["y"]), "t": 0.0,
 					"col": Color(0.72, 0.88, 1.0), "scale": 1.6})
 				Audio.sfx("slash_light", -8.0)
+# v13g：特效预算——浴血一次清几百只时，别把几千个碎屑/飘字塞进一帧
+#   （实测：300 只一起死 → 2100 片碎屑 + 298 条飘字，单帧 100ms，之后 0.45 秒一直在画）
+const FX_SHARDS_MAX := 180
+const FX_BURSTS_MAX := 90
+const FX_FLOATS_MAX := 70
+
+func _fx_trim() -> void:
+	if _shards.size() > FX_SHARDS_MAX:
+		_shards = _shards.slice(_shards.size() - FX_SHARDS_MAX)
+	if _bursts.size() > FX_BURSTS_MAX:
+		_bursts = _bursts.slice(_bursts.size() - FX_BURSTS_MAX)
+	if _floats.size() > FX_FLOATS_MAX:
+		_floats = _floats.slice(_floats.size() - FX_FLOATS_MAX)
+
 func _push_float(x: float, y: float, txt: String, col: Color, big := false) -> void:
 	_floats.append({"x": x, "y": y, "txt": txt, "col": col, "t": 0.0, "big": big})
 
@@ -2614,17 +2633,18 @@ signal elite_down()
 const ELITE_NAME := "典狱长的走狗"
 
 # 猎杀任务：往怪群里塞一只精英（大怪）
-func spawn_elite() -> void:
+func spawn_elite(n := 1) -> void:
 	clear_elite()
 	var mul := pow(WAVE_HP, float(wave - 1))
-	_spawn_foe("elite", 1.0, 1.0, false, 1, ELITE_NAME)
-	var f: Dictionary = foes[foes.size() - 1]
-	f["hp"] = 300.0 * mul
-	f["hp_max"] = 300.0 * mul
-	f["atk"] = 10.0 * pow(WAVE_ATK, float(wave - 1))
-	f["scale"] = 1.3
-	f["stop"] = FOE_STOP + 10.0
-	_banner = "猎杀：混进来一只精英——" + ELITE_NAME
+	for ei in n:
+		_spawn_foe("elite", 1.0, 1.0, false, 1, ELITE_NAME)
+		var fe: Dictionary = foes[foes.size() - 1]
+		fe["hp"] = 300.0 * mul
+		fe["hp_max"] = 300.0 * mul
+		fe["atk"] = 10.0 * pow(WAVE_ATK, float(wave - 1))
+		fe["scale"] = 1.3
+		fe["stop"] = FOE_STOP + 10.0
+	_banner = ("猎杀：混进来一只精英——" if n <= 1 else "三英：来了 " + str(n) + " 只精英") + ("" if n > 1 else ELITE_NAME)
 	_banner_t = 2.6
 	Audio.sfx("drum", -6.0)
 
@@ -2633,7 +2653,6 @@ func clear_elite() -> void:
 		if str((foes[i] as Dictionary).get("kind", "")) == "elite":
 			foes.remove_at(i)
 
-# 场上还有几只"怪"（石像这类任务道具不算）——清道夫/越狱用
 func live_foes() -> int:
 	var n := 0
 	for f_v in foes:

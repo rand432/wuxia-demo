@@ -77,18 +77,31 @@ var _meditate_acc := 0.0                              # v10a：打坐累积（�
 var _card_kills := {}                                 # v10b：杀意这类"按杀敌进化"的卡：id → 已杀数
 
 # v10b：杀敌 → 到阈值就把卡**换成下一形态**（占同一个格子，效果立刻改）
-func _card_evo_tick() -> void:
-	for id in _card_have.keys():
-		var s := card_set_of(str(id))
+# v13g：只盯"会进化"的那几张卡（杀意这类）——原来每杀一只都遍历**全部已拥有卡 × 67 套**，
+#   浴血一次清 300 只 = 每帧两百万次查找，单帧直接 100ms
+var _evo_cards: Array = []
+var _evo_pending := 0
+
+func _card_evo_tick(n := 1) -> void:
+	for id_v in _evo_cards.duplicate():
+		var id := str(id_v)
+		if not _card_have.has(id):
+			_evo_cards.erase(id)
+			continue
+		var s := card_set_of(id)
 		if not s.has("evo_next"):
+			_evo_cards.erase(id)
 			continue
 		var need := int(s.get("evo_kills", 0))
-		_card_kills[id] = int(_card_kills.get(id, 0)) + 1
+		_card_kills[id] = int(_card_kills.get(id, 0)) + n
 		if int(_card_kills[id]) < need:
 			continue
 		var nid := str(s["evo_next"])
 		_card_kills.erase(id)
 		_card_have.erase(id)
+		_evo_cards.erase(id)
+		if card_set_of(nid).has("evo_next"):
+			_evo_cards.append(nid)
 		var at := _deck_cards.find(str(id))
 		if at >= 0:
 			_deck_cards[at] = nid                 # ⚠ 原地替换：还是那一格
@@ -199,6 +212,8 @@ func _card_gain(id: String) -> void:
 	if cs0.has("evo_next"):
 		# ⚠ 传**套名**（sayi0）不是卡 id（sayi0_0）：_apply_solo_effect 按套名匹配
 		_apply_solo_effect(str(cs0["set"]))  # v10b：杀意到手先给初阶效果
+		if not _evo_cards.has(id):
+			_evo_cards.append(id)            # v13g：登记进"要盯的进化卡"
 	# ⚠ 这一行不能省：卡要**真的进十格**（v8b 曾把它摘掉，结果卡只记账不进格）
 	if not _card_into_deck(id):
 		_pending_card = id
@@ -446,7 +461,6 @@ func _build() -> void:
 
 	_hint = _lbl(Vector2(20, 1258), Vector2(680, 22), 18, Color(0.62, 0.60, 0.58))
 	_hint.text = "空壳预览 · E 关 · H 扣血 · B 叫 boss"
-	add_child(_hint)
 
 # ---- 顶部 HUD：两行（第一行大字，第二行三个钱账） ----
 func _build_hud() -> void:
@@ -2803,6 +2817,9 @@ const QUEST_HARD := [
 ]
 const QUEST_SPECIAL := [
 	{"id": "dandou", "n": "单挑", "d": "打死来挑战的高手（怪照刷，不清场）", "ck": "champion", "goal": 1, "sec": 90.0, "cr": 180, "gear": 1, "setup": "champion"},
+	{"id": "sanying", "n": "三英", "d": "三只精英同时进场，全部杀掉", "ck": "elite", "goal": 3, "sec": 120.0, "cr": 200, "tgear": 1, "setup": "elite"},
+	{"id": "xuezhan", "n": "血战", "d": "气血掉到 30% 以下，再撑过 30 秒", "ck": "blood", "goal": 30, "sec": 90.0, "cr": 180, "atkall": 0.08},
+	{"id": "duju", "n": "赌局", "d": "押 100 文钱，五五开：赢了给 400 文", "ck": "instant", "goal": 1, "sec": -1.0, "instant": true}
 ]
 # 波次 → 档位权重（简单/普通/困难/特殊）：简单越来越少
 const Q_TIER_W := [
@@ -2840,7 +2857,7 @@ func _q_now(key: String) -> int:
 	return int(_q_ctr.get(key, 0))
 
 func _q_prog(q: Dictionary) -> int:
-	if str(q["ck"]) in ["alive", "guardsec", "nochal", "clearwave"]:
+	if str(q["ck"]) in ["alive", "guardsec", "nochal", "clearwave", "blood"]:
 		return int(float(q.get("alive", 0.0)))
 	return _q_now(str(q["ck"])) - int(q["base"])
 
@@ -2857,6 +2874,11 @@ func _q_reward_cn(d: Dictionary) -> String:
 		parts.append("宝物刷新 " + str(int(d["trs"])))
 	if int(d.get("card", 0)) > 0:
 		parts.append("卡组刷新 " + str(int(d["card"])))
+	if int(d.get("atkall", 0.0)) > 0.0:
+		parts.append("全伤 +" + str(int(float(d["atkall"]) * 100.0)) + "%")
+	if int(d.get("tgear", 0)) > 0:
+		parts.append("宝物 " + str(int(d["tgear"])) + " 件")
+
 	if int(d.get("gear", 0)) > 0:
 		parts.append("装备 " + str(int(d["gear"])) + " 件")
 
@@ -2883,6 +2905,13 @@ func _q_grant(d: Dictionary) -> String:
 		_card_refresh += int(d["card"])
 	if int(d.get("wpnlv", 0)) > 0:
 		_bm_wpn_add(int(d["wpnlv"]))
+	if float(d.get("atkall", 0.0)) > 0.0:
+		_extra["atk_all"] = float(_extra.get("atk_all", 0.0)) + float(d["atkall"])
+		_sync_battle_stats()
+	if int(d.get("tgear", 0)) > 0:
+		for ti in int(d["tgear"]):
+			_equip_add(_gen_gear(true, true))
+
 	if int(d.get("gear", 0)) > 0:
 		for gi in int(d["gear"]):
 			_equip_add(_gen_gear(false, true))
@@ -2934,6 +2963,10 @@ func _q_event() -> void:
 	q["left"] = float(d.get("sec", -1.0))
 	q["base"] = _q_now(str(d["ck"]))
 	q["alive"] = 0.0
+	# v13h：即时型事件（赌局）——当场结算，不占任务栏
+	if bool(q.get("instant", false)):
+		_q_instant(q)
+		return
 	_q_slots.append(q)
 	_q_setup(q)
 	var tail := ""
@@ -2956,7 +2989,7 @@ func _q_setup(q: Dictionary) -> void:
 		"guard":
 			_field.spawn_guard()
 		"elite":
-			_field.spawn_elite()
+			_field.spawn_elite(int(q.get("goal", 1)))
 		"champion":
 			_field.spawn_champion()
 		_:
@@ -3010,6 +3043,26 @@ func _on_elite_down() -> void:
 	_qc("elite")
 	_hint.text = "精英伏诛——猎杀成了"
 
+# 即时型事件（接了当场结算，不进任务栏）——v13h
+func _q_instant(q: Dictionary) -> void:
+	match str(q["id"]):
+		"duju":
+			if int(_money) < 100:
+				_note("【事件·特殊】赌局　庄家不收空手客（文钱不足 100）——算了", 4.0)
+				return
+			_money -= 100
+			if randf() < 0.5:
+				_money += 400
+				_money_earned += 300
+				_coin_pop = 0.32
+				_note("【事件·特殊】赌局　押 100 → 赢了 400 文（净赚 300）", 4.5)
+				Audio.sfx("levelup", -3.0)
+			else:
+				_note("【事件·特殊】赌局　押 100 → 输了，钱进庄家口袋", 4.0)
+				Audio.sfx("fall_down", -6.0)
+		_:
+			pass
+
 # 放弃：+10 灵晶
 func _q_give_up(i: int) -> void:
 	if i < 0 or i >= _q_slots.size():
@@ -3035,8 +3088,14 @@ func _q_tick(delta: float) -> void:
 		var q: Dictionary = _q_slots[i]
 		if str(q["ck"]) == "alive" or str(q["ck"]) == "guardsec" or str(q["ck"]) == "nochal":
 			q["alive"] = float(q.get("alive", 0.0)) + delta
-		if _q_prog(q) >= int(q["goal"]):
-			_q_teardown(q)
+		elif str(q["ck"]) == "blood":
+			# v13h 血战：先得掉到 30% 以下"开战"，之后撑过 30 秒
+			if not bool(q.get("armed", false)):
+				if _hp_max > 0.0 and _hp / _hp_max <= 0.30:
+					q["armed"] = true
+					_note("【血战】开打——撑住 30 秒", 3.0)
+			else:
+				q["alive"] = float(q.get("alive", 0.0)) + delta
 			var got := _q_grant(q)
 			_q_slots.remove_at(i)
 			_q_done += 1
@@ -3755,6 +3814,9 @@ func _process(delta: float) -> void:
 		_mini_lv.text = "黑市 Lv " + str(_bm_lv) + "　刷新 " + str(_bm_refresh)
 	# v13c P2：事件/任务（180 秒一次 · 进度检查 · 完成发奖 · 超时失败）
 	_q_tick(delta)
+	if _evo_pending > 0:                     # v13g：进化卡每帧只算一次
+		_card_evo_tick(_evo_pending)
+		_evo_pending = 0
 	# 每 180 秒送一次黑市刷新
 	_bm_t += delta
 	if _bm_t >= BM_REFRESH_SEC:
@@ -3875,6 +3937,13 @@ func _on_coin_drop(amount: int, pos: Vector2) -> void:
 
 # 通用掉落：kind ∈ coin/crystal/gear/treasure；max_n ＝ 最多拆成几枚（视觉热闹度）
 func _spawn_drop(kind: String, amount: int, pos: Vector2, max_n: int) -> void:
+	# v13g：粒子有上限——大场面（浴血清场几百只一起掉钱）直接**记账**，不再撒粒子
+	#   原来这里没上限：365 只一起死 → 几千枚铜钱同时飞，每帧全画，帧率直接塌
+	if _coinfx.size() >= 160:
+		_credit_drop(kind, amount)
+		return
+	if _coinfx.size() > 90:
+		max_n = mini(max_n, 3)                      # 场上粒子多的时候，每笔少撒几枚
 	var n := clampi(amount, 1, max_n)
 	var each := int(maxf(1.0, round(float(amount) / float(n))))
 	var base := Vector2(8.0, 176.0) + pos                 # 战场坐标 → 面板坐标
@@ -4005,7 +4074,7 @@ func _on_chal_drop(kind_i: int, at: Vector2) -> void:
 	Audio.sfx("coin", -8.0)
 
 func _on_kill(_n: int) -> void:
-	_card_evo_tick()          # v10b：杀意按杀敌进化
+	_evo_pending += 1         # v13g：杀敌攒着，每帧结一次（原来每杀一只扫一遍卡池）
 	# v4b：杀敌数**是可花的钱**（黑市用它换东西），所以这里自己累加、不再每帧从战场回读
 	_kills += 1
 	# v7b：三条成长线——成套后**每杀一名敌人**给 臂力/身法/悟性 +0.2（本局永久叠加）
