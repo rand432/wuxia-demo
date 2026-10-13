@@ -115,7 +115,7 @@ const BOSS_TIER := [
 		"affix_k": "cut_up", "affix_v": 0.40, "ult_cd": 15.0},
 	{"name": "火尾狐妖", "hp": 5600.0, "atk": 43.0,
 		"skill": "狐火（火系溅射）", "ult": "焚身爆", "affix": "疾风（攻速 +30%）",
-		"affix_k": "aspd_up", "affix_v": 0.30, "ult_cd": 11.0},
+		"affix_k": "aspd_up", "affix_v": 0.30, "skill_k": "foxfire", "ult_cd": 11.0},
 	{"name": "场主亲养·狴犴", "hp": 14000.0, "atk": 64.0,
 		"skill": "牢狱威压", "ult": "断罪一击", "affix": "王威（全属性 +30%）",
 		"affix_k": "all_up", "affix_v": 0.30, "ult_cd": 12.0},
@@ -124,7 +124,7 @@ const BOSS_TIER := [
 		"affix_k": "regen", "affix_v": 0.01, "ult_cd": 10.0},
 	{"name": "困兽之主", "hp": 19000.0, "atk": 70.0,
 		"skill": "兽王号令（召小怪）", "ult": "万兽奔踏", "affix": "不死（濒死回血一次）",
-		"affix_k": "revive", "affix_v": 1.0, "ult_cd": 9.0},
+		"affix_k": "revive", "affix_v": 1.0, "skill_k": "summon", "ult_cd": 9.0},
 ]
 
 # v14g：每阶 3 只里随机挑一只出场（词缀/大招各不相同）
@@ -294,8 +294,15 @@ func start_boss(tier: int) -> void:
 	var hp_mul := mul
 	var atk_mul := pow(WAVE_ATK, float(wave - 1)) * foe_mul
 	# ---- 技能（登场写进字段，由各自逻辑读）----
-	if str(d.get("skill_k", "")) == "poison":
-		f["boss_poison"] = true
+	#   v14t：只剩这两条没接了，补齐——召小怪（兽王号令）· 狐火（攻击带火系溅射）
+	match str(d.get("skill_k", "")):
+		"poison":
+			f["boss_poison"] = true
+		"summon":
+			f["boss_summon"] = 1
+			f["boss_summon_t"] = 8.0          # 登场 8 秒后第一次号令，之后每 12 秒
+		"foxfire":
+			f["boss_foxfire"] = 1
 	# ---- 词缀（登场就吃）----
 	match str(d.get("affix_k", "")):
 		"hp_up":
@@ -759,6 +766,13 @@ func _process(delta: float) -> void:
 					_hero_hit_flash = 0.18
 					_shake = maxf(_shake, 3.5)
 					# v14r：boss 词缀"嗜血"（打中回血）与二技能"剧毒"（打中带毒）接上进行为
+					# v14t：狐火——这一巴掌带火系溅射（火尾狐妖的技能，原来只是文本）
+					if int(f.get("boss_foxfire", 0)) > 0 and d2 > 0.0:
+						var ffd := maxf(1.0, hero_in_dmg(float(f["atk"]) * 0.5, DMG_FIRE))
+						hero["hp"] = maxf(0.0, float(hero["hp"]) - ffd)
+						_bursts.append({"x": hero_pos.x, "y": hero_pos.y - 16.0, "t": 0.0,
+							"col": Color(1.0, 0.52, 0.22), "scale": 1.5})
+						_push_float(hero_pos.x + 46.0, hero_pos.y - 52.0, "狐火 " + str(int(ffd)), Color(1.0, 0.62, 0.26))
 					# v14r：boss 词缀"嗜血"（打中回血）
 					var bls := float(f.get("boss_lifesteal", 0.0))
 					if bls > 0.0 and float(f["hp"]) > 0.0 and float(f["hp"]) < float(f["hp_max"]):
@@ -833,9 +847,27 @@ func _process(delta: float) -> void:
 		var fb: Dictionary = f_v
 		if not bool(fb.get("boss", false)) or float(fb.get("dying", 0.0)) > 0.0:
 			continue
+		# v14t：兽王号令——定时吼两只小怪下来（跟"大招"分开计时）
+		if int(fb.get("boss_summon", 0)) > 0:
+			fb["boss_summon_t"] = float(fb.get("boss_summon_t", 12.0)) - dt
+			if float(fb["boss_summon_t"]) <= 0.0:
+				fb["boss_summon_t"] = 12.0
+				var add_n := 2
+				for si in add_n:
+					if foes.size() < MAX_FOES + 8:
+						_spawn_foe("normal", 1.3, 1.1, false, 1, "")
+						var addf: Dictionary = foes[foes.size() - 1]
+						addf["y"] = -30.0 - float(si) * 40.0
+						addf["x"] = clampf(float(fb["x"]) + float(si) * 70.0 - 35.0, 60.0, size.x - 60.0)
+				_banner = "兽王号令！" + str(add_n) + " 只走狗扑下来"
+				_banner_t = 1.8
+				_bursts.append({"x": float(fb["x"]), "y": float(fb["y"]), "t": 0.0,
+					"col": Color(0.92, 0.56, 0.28), "scale": 1.8})
+				Audio.sfx("tension", -6.0)
 		fb["ult_t"] = float(fb.get("ult_t", 14.0)) - dt
 		if float(fb["ult_t"]) <= 0.0:
-			fb["ult_t"] = 14.0
+			# ⚠ v14t：这里原来写死 14 秒 —— 表里每只 boss 自己的 ult_cd（9~16）全被吃掉了
+			fb["ult_t"] = float(fb.get("ult_cd", 14.0))
 			var ult := str(fb.get("bult", "大招"))
 			var dmg := float(fb["atk"]) * 1.6
 			var d2 := hero_in_dmg(dmg, DMG_PHYS)

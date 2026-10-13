@@ -2124,7 +2124,7 @@ func _fill_codex(p: Control, y: float, sz: Vector2) -> float:
 		fl.text = str(b["fx"])
 		fl.clip_text = true
 		rb.add_child(fl)
-		var bh := _pbtn(rb, "", Vector2(0, 0), Vector2(318, 48), 14, false, _bond_detail.bind(i))
+		var bh := _pbtn(rb, "", Vector2(0, 0), Vector2(318, 62), 14, false, _bond_detail.bind(i))
 		bh.add_theme_stylebox_override("normal", _flat(Color(1, 1, 1, 0.001)))
 	var brow := int(ceil(float(BONDS.size()) / 2.0))
 	return ly + float(brow) * 54.0 + 10.0
@@ -2259,7 +2259,7 @@ func _fill_trea_list(p: Control, y: float, sz: Vector2) -> float:
 		fl.text = str(b["fx"])
 		fl.clip_text = true
 		rowbox.add_child(fl)
-		var bhit := _pbtn(rowbox, "", Vector2(0, 0), Vector2(318, 48), 14, false, _bond_detail.bind(i))
+		var bhit := _pbtn(rowbox, "", Vector2(0, 0), Vector2(318, 62), 14, false, _bond_detail.bind(i))
 		bhit.add_theme_stylebox_override("normal", _flat(Color(1, 1, 1, 0.001)))
 	var brow := int(ceil(float(BONDS.size()) / 2.0))
 	return ly + float(brow) * 54.0 + 10.0
@@ -2543,7 +2543,7 @@ func _fill_weapon(p: Control, y: float, sz: Vector2) -> float:
 			t1.add_theme_color_override("font_color", _quality_color(str(WPN_Q_CN[q])))
 			t1.text = str(it["n"]) + "　【" + str(WPN_Q_CN[q]) + "】"
 			box.add_child(t1)
-			_pbtn(box, "选它", Vector2(500, 16), Vector2(124, 52), 24, true, _wpn_take.bind(i))
+			_pbtn(box, "选它", Vector2(500, 10), Vector2(124, 60), 24, true, _wpn_take.bind(i))
 			ly += 92.0
 		_pbtn(p, "刷新 " + str(_wpn_refresh_cost()) + " 文钱", Vector2(28, ly), Vector2(320, 68), 24, int(_money) >= _wpn_refresh_cost(), _wpn_refresh)
 		ly += 80.0
@@ -4244,7 +4244,7 @@ func _fill_stage(p: Control, y: float, sz: Vector2) -> float:
 		l2.text = "怪 ×" + str(s["mul"]) + " · " + str(s["waves"]) + " 波　首通：" + str(s["cat"]) + "「" + str(s["un"]) + "」"
 		box.add_child(l2)
 		if open:
-			var bb := _pbtn(box, ("已选" if cur else "选它"), Vector2(460, 20), Vector2(166, 54), 22, true, _set_stage.bind(id))
+			var bb := _pbtn(box, ("已选" if cur else "选它"), Vector2(460, 16), Vector2(166, 62), 22, true, _set_stage.bind(id))
 			if cur:
 				bb.add_theme_stylebox_override("normal", _flat(Color(0.55, 0.20, 0.18, 0.95)))
 		ly += 100.0
@@ -4277,7 +4277,7 @@ func _fill_stage(p: Control, y: float, sz: Vector2) -> float:
 	el2.text = "怪 ×1.6 · 波数不封顶　最高纪录：" + str(_best_wave) + " 波"
 	ebox.add_child(el2)
 	if eo:
-		_pbtn(ebox, ("关闭" if _endless else "开它"), Vector2(460, 20), Vector2(166, 54), 22, true, _set_endless)
+		_pbtn(ebox, ("关闭" if _endless else "开它"), Vector2(460, 16), Vector2(166, 62), 22, true, _set_endless)
 	ly += 100.0
 	return ly + 8.0
 
@@ -4488,14 +4488,14 @@ func _fill_save(p: Control, y: float, sz: Vector2) -> float:
 				var st := _pet_star_of(pk)
 				# v14j：星级显示在名字后面（⭐ 用 ★ 表示，避免字体缺字）
 				l1.text = str(u["n"]) + "　" + "★".repeat(st) + ("☆".repeat(PET_STAR_MAX - st))
-				var pbb := _pbtn(box, ("出战中" if on else "出战"), Vector2(352, 20), Vector2(120, 54), 20, true, _set_pet.bind(pk))
+				var pbb := _pbtn(box, ("出战中" if on else "出战"), Vector2(352, 16), Vector2(120, 62), 20, true, _set_pet.bind(pk))
 				if on:
 					pbb.add_theme_stylebox_override("normal", _flat(Color(0.55, 0.20, 0.18, 0.95)))
 					pbb.add_theme_stylebox_override("hover", _flat(Color(0.60, 0.24, 0.22, 0.95)))
 					pbb.add_theme_stylebox_override("pressed", _flat(Color(0.48, 0.16, 0.15, 0.95)))
 				var sp := PET_STAR_PRICE * (st + 1)
 				if st < PET_STAR_MAX:
-					var sbb := _pbtn(box, "升星 " + str(sp), Vector2(480, 20), Vector2(146, 54), 18,
+					var sbb := _pbtn(box, "升星 " + str(sp), Vector2(480, 16), Vector2(146, 62), 18,
 						int(_money) >= sp, _pet_star_up.bind(pk))
 					if int(_money) < sp:
 						sbb.add_theme_stylebox_override("normal", _flat(Color(0.55, 0.53, 0.51, 0.95)))
@@ -4583,7 +4583,7 @@ func _fill_save(p: Control, y: float, sz: Vector2) -> float:
 		mrow.add_child(msl)
 		# v14q：这颗按下去＝"开局自带的那位队员"（再按一次取消）；已入过队的才有资格
 		var msel := (_mate_start == mpid)
-		var mbb0 := _pbtn(mrow, ("开局出战 ✓" if msel else "设为开局出战"), Vector2(196, 12), Vector2(236, 54), 19,
+		var mbb0 := _pbtn(mrow, ("开局出战 ✓" if msel else "设为开局出战"), Vector2(196, 8), Vector2(236, 62), 19,
 			true, _mate_set_start.bind(mpid))
 		if msel:
 			mbb0.add_theme_stylebox_override("normal", _flat(Color(0.30, 0.46, 0.32, 0.98)))
@@ -4592,7 +4592,7 @@ func _fill_save(p: Control, y: float, sz: Vector2) -> float:
 		if mst < MATE_STAR_MAX:
 			var mprice := _mate_star_price(mpid)
 			var mcan := int(_money) >= mprice
-			var mbb := _pbtn(mrow, "升到 ★" + str(mst + 1) + "（" + str(mprice) + "）", Vector2(440, 12), Vector2(186, 54), 19,
+			var mbb := _pbtn(mrow, "升到 ★" + str(mst + 1) + "（" + str(mprice) + "）", Vector2(440, 8), Vector2(186, 62), 19,
 				mcan, _mate_star_up.bind(mpid))
 			if not mcan:
 				mbb.add_theme_stylebox_override("normal", _flat(Color(0.55, 0.53, 0.51, 0.95)))
@@ -7006,7 +7006,7 @@ func _fill_mates_old(p: Control, y: float, sz: Vector2) -> float:
 		gr.text = "成长 " + str(m["grow"])
 		row.add_child(gr)
 		# 点这一行：看这一位的成长与技能（照旧点开看详情）
-		_pbtn(row, "看", Vector2(556, 32), Vector2(70, 40), 20, false, func(): pass)
+		_pbtn(row, "看", Vector2(556, 22), Vector2(70, 60), 20, false, func(): pass)
 		ly += 116.0
 	return ly + 12.0
 
@@ -7085,13 +7085,13 @@ func _fill_yuhu_card(p: Control, y: float) -> float:
 	ds.add_theme_color_override("font_color", Color(0.24, 0.52, 0.48))
 	ds.text = "回复 气血/内力 " + str(int(float(YUHU_HEAL[q]) * 100.0)) + "%　·　冷却 " + str(int(YUHU_CD[q])) + " 秒"
 	box.add_child(ds)
-	var bb := _pbtn(box, "喝一口", Vector2(440, 10), Vector2(178, 54), 24, _yh_ready(), _yh_use)
+	var bb := _pbtn(box, "喝一口", Vector2(440, 8), Vector2(178, 62), 24, _yh_ready(), _yh_use)
 	if not _yh_ready():
 		bb.add_theme_stylebox_override("normal", _flat(Color(0.55, 0.53, 0.51, 0.95)))
 		bb.add_theme_stylebox_override("hover", _flat(Color(0.60, 0.58, 0.56, 0.95)))
 		bb.add_theme_stylebox_override("pressed", _flat(Color(0.48, 0.46, 0.44, 0.95)))
-	_pbtn(box, "自动：" + ("开" if _yh_auto else "关"), Vector2(440, 68), Vector2(178, 34), 18, false, _yh_toggle_auto)
-	return y + 120.0
+	_pbtn(box, "自动：" + ("开" if _yh_auto else "关"), Vector2(440, 74), Vector2(178, 58), 20, false, _yh_toggle_auto)
+	return y + 146.0
 
 
 func _set_equip_tab(i: int) -> void:
