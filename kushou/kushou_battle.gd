@@ -392,6 +392,12 @@ func _process(delta: float) -> void:
 	if not running:
 		queue_redraw()
 		return
+	# v13b：点地的指令圈淡出
+	for i9 in range(_order_fx.size() - 1, -1, -1):
+		var ofx: Dictionary = _order_fx[i9]
+		ofx["t"] = float(ofx["t"]) + delta
+		if float(ofx["t"]) > 0.5:
+			_order_fx.remove_at(i9)
 	_t += dt
 	intro_wait = maxf(0.0, intro_wait - delta)      # 开场等待倒计时
 	_hero_hit_flash = maxf(0.0, _hero_hit_flash - delta)
@@ -402,9 +408,10 @@ func _process(delta: float) -> void:
 	if _spawn_t <= 0.0:
 		_spawn_t = SPAWN_EVERY_LATE if wave >= 10 else SPAWN_EVERY
 		_spawn_foe()
-	# 主角：**先走过去**（离最近的怪还有距离就移动；进了距离才出手；场上没怪就退回原位）
 	_hero_cd -= delta
-	var target := _nearest()
+	# v13b P1：点击指令计时（走位指令到点/超时自动撤销 → 回自动战斗）
+	_order_t += delta
+	var target := _order_target()
 	var tpos := Vector2(float(target["x"]), float(target["y"])) if not target.is_empty() else _home
 	var to_t := tpos - hero_pos
 	var dist := to_t.length()
@@ -415,6 +422,14 @@ func _process(delta: float) -> void:
 	#   并且留一点回滞（>REACH+10 才重新起步），边界上就不会抖了。
 	if intro_wait > 0.0:
 		pass                                    # 开场等待：站着不动（但怪照常走进来）
+	elif _order_has_pos:
+		# v13b P1：**走位指令优先**（自动追怪让位）——走到点、或 6 秒后自动撤销
+		var od := hero_pos.distance_to(_order_pos)
+		if od <= ORDER_STOP_DIST or _order_t > ORDER_MOVE_SEC:
+			_order_has_pos = false
+		else:
+			hero_pos += (_order_pos - hero_pos).normalized() * minf(HERO_SPD_FAR * delta, od)
+			_hero_step += delta * 8.0
 	elif not target.is_empty():
 		if dist > HERO_REACH + 10.0:
 			# 远快近慢：按当前距离取速度
@@ -700,7 +715,95 @@ func _nearest() -> Dictionary:
 			bd = d
 			best = f
 	return best
+# ============================================================
+# v13b P1：点击指令（**临时指令**，优先级高于自动战斗）
+#   用户口径：全程自动战斗；点空地＝走过去（到点/6 秒撤销）；点怪＝集火**到死**；双击＝取消指令。
+#   ——取目标只走 _order_target() 一个口子，宠物/飞匕/飞剑会自动跟着集火同一个目标。
+# ============================================================
+var _order_pos := Vector2.ZERO        # 走位目标点（战场局部坐标）
+var _order_has_pos := false
+var _order_foe: Dictionary = {}       # 集火目标（到死为止）
+var _order_t := 0.0                   # 当前指令活了多久
+var _order_fx: Array = []             # 点地的扩散圈：{x, y, t}
+var _tap_t := 0.0                     # 上一次点击时间（双击判定）
+var _tap_last := Vector2.ZERO
+const ORDER_MOVE_SEC := 6.0           # 走位指令最多管 6 秒
+const ORDER_STOP_DIST := 16.0         # 离目标点多近算"到了"
+const TAP_FOE_R := 46.0               # 点到怪的判定半径（跟着体型放大）
 
+# 点到哪只怪（没有就返回空字典）
+func foe_at(p: Vector2) -> Dictionary:
+	var best: Dictionary = {}
+	var bd := 1.0e9
+	for f_v in foes:
+		var f: Dictionary = f_v
+		if float(f.get("dying", 0.0)) > 0.0:
+			continue
+		var sc := float(f.get("scale", 1.0))
+		var r := TAP_FOE_R * maxf(0.85, sc)
+		var d := p.distance_to(Vector2(float(f["x"]), float(f["y"]) - 16.0 * sc))
+		if d <= r and d < bd:
+			bd = d
+			best = f
+	return best
+
+# 战场被点（p ＝ 战场局部坐标）：双击＝取消；点到怪＝集火；否则＝走过去
+func tap_at(p: Vector2) -> void:
+	if not running or intro_wait > 0.0:
+		return
+	var now := float(Time.get_ticks_msec()) / 1000.0
+	var dbl := (now - _tap_t) < 0.30 and p.distance_to(_tap_last) < 96.0
+	_tap_t = now
+	_tap_last = p
+	if dbl:
+		clear_order()
+		return
+	var f := foe_at(p)
+	if not f.is_empty():
+		order_focus(f)
+	else:
+		order_move(p)
+
+func order_move(p: Vector2) -> void:
+	_order_foe = {}
+	_order_has_pos = true
+	_order_t = 0.0
+	_order_pos = Vector2(clampf(p.x, 70.0, size.x - 70.0),
+		clampf(p.y, size.y * HERO_TOP, size.y - HERO_LINE * 0.5))
+	_order_fx.append({"x": _order_pos.x, "y": _order_pos.y, "t": 0.0})
+	Audio.sfx("ui_click", -12.0)
+
+func order_focus(f: Dictionary) -> void:
+	_order_foe = f
+	_order_has_pos = false
+	_order_t = 0.0
+	_banner = "集火 · " + str(f.get("name", "怪"))
+	_banner_t = 1.4
+	Audio.sfx("ui_click", -8.0)
+
+func clear_order() -> void:
+	if not _order_has_pos and _order_foe.is_empty():
+		return
+	_order_foe = {}
+	_order_has_pos = false
+	_banner = "回到自动战斗"
+	_banner_t = 1.2
+
+# 取目标：**集火优先**（到死为止）；死了/没了自动回自动索敌
+func _order_target() -> Dictionary:
+	if not _order_foe.is_empty():
+		if foes.has(_order_foe) and float(_order_foe.get("dying", 0.0)) <= 0.0:
+			return _order_foe
+		_order_foe = {}
+	return _nearest()
+
+# 点战场下指令（弹窗开着时点击被弹窗吃掉，这里收不到）
+func _gui_input(e: InputEvent) -> void:
+	if e is InputEventMouseButton:
+		var mb := e as InputEventMouseButton
+		if mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
+			tap_at(mb.position)
+			accept_event()
 # v2p（用户："怪物死亡也有音效"）：死亡音效**分层 ＋ 随机音高**——
 #   原来只有一声 -7dB 的 fall_down，被 BGM(-12dB) 和刀声盖住，听着就像"没响"。
 #   现在：一记"闷响"（hit_heavy，音高随机）＋ 一声"倒下"（fall_down）；
@@ -2358,6 +2461,29 @@ func _draw() -> void:
 			var nm := str(f["name"])
 			draw_string(ThemeDB.fallback_font, Vector2(float(f["x"]) - 70.0, float(f["y"]) - 66.0 * sc), nm,
 				HORIZONTAL_ALIGNMENT_CENTER, 140.0, 20, Color(0.95, 0.86, 0.66))
+	# v13b P1：点击指令的可视标记（走位目标圈 ＋ 集火红准星）
+	if _order_has_pos:
+		var opc := _order_pos
+		draw_arc(opc, 22.0 + sin(_t * 7.0) * 3.0, 0.0, TAU, 26, Color(0.98, 0.86, 0.42, 0.55), 3.0)
+		draw_line(opc + Vector2(-9, 0), opc + Vector2(9, 0), Color(0.98, 0.86, 0.42, 0.85), 2.0)
+		draw_line(opc + Vector2(0, -9), opc + Vector2(0, 9), Color(0.98, 0.86, 0.42, 0.85), 2.0)
+	for ofx_v in _order_fx:
+		var ofx: Dictionary = ofx_v
+		var tt := clampf(float(ofx["t"]) / 0.5, 0.0, 1.0)
+		draw_arc(Vector2(float(ofx["x"]), float(ofx["y"])), 16.0 + 60.0 * tt, 0.0, TAU, 26,
+			Color(0.98, 0.86, 0.42, 0.8 * (1.0 - tt)), 3.0)
+	if not _order_foe.is_empty() and foes.has(_order_foe):
+		var ffx: Dictionary = _order_foe
+		if float(ffx.get("dying", 0.0)) <= 0.0:
+			var fsc := float(ffx.get("scale", 1.0))
+			var ctr := Vector2(float(ffx["x"]), float(ffx["y"]) - 16.0 * fsc)
+			var rr := 30.0 + fsc * 12.0 + sin(_t * 8.0) * 2.0
+			for q in 4:
+				var sx := 1.0 if q % 2 == 0 else -1.0
+				var sy := 1.0 if q < 2 else -1.0
+				var corner := ctr + Vector2(sx * rr, sy * rr * 0.85)
+				draw_line(corner, corner - Vector2(sx * 11.0, 0.0), Color(0.94, 0.24, 0.18, 0.95), 3.0)
+				draw_line(corner, corner - Vector2(0.0, sy * 11.0), Color(0.94, 0.24, 0.18, 0.95), 3.0)
 	# 主角＋宠物
 	var hx := hero_pos.x
 	var hy := hero_pos.y

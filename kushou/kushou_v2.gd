@@ -320,6 +320,22 @@ var _bm_atk := 0                  # 「消耗型装备·小」累积的攻（可
 var _bm_hp := 0                   # 「消耗型装备·小」累积的血
 var _bm_eaten: Array = []         # 被吞噬丹吞掉的卡（id；效果与成套计数照留）
 var _card_refresh := 0            # 卡组刷新次数（黑市货品，抽卡页免费全刷用）
+# ============================================================
+# v13c P2：事件 / 任务（规格：docs/困兽_事件与任务_设计稿.md）
+#   · 每 180 秒触发一次事件 → **自动挂进任务栏**（最多 2 个，挂满就顺延）
+#   · 放弃 = +10 灵晶（抽卡 20 的一半）；限时到点 = 失败，**什么都不给**
+# ============================================================
+const Q_MAX := 2
+const Q_EVENT_SEC := 180.0
+const Q_GIVE_CRYSTAL := 10
+var _q_slots: Array = []          # 进行中任务：{id,n,d,ck,goal,sec,left,base,alive,tier…}
+var _q_t := 0.0                   # 距下一次事件还有多久
+var _q_done := 0
+var _q_give := 0
+var _q_fail := 0
+var _q_ctr := {}                  # 行为计数（任务进度的来源）
+var _q_lb: Array = []             # HUD 上那两条任务条
+var _q_panel: Panel = null
 var _over := false        # 这一局结束没有
 # v2f（用户这一轮的四条）：
 #   · 吞噬记录/卡面**不标流派**（"这种是玩家自己发掘的"）
@@ -471,7 +487,8 @@ func _build_field() -> void:
 	_field = Battle.new()
 	_field.size = Vector2(704, 704)
 	_field.position = Vector2(8, 176)
-	_field.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# v13b P1：战场**要接点击**（点空地＝走位指令 · 点怪＝集火）——原来 IGNORE 是穿过去的
+	_field.mouse_filter = Control.MOUSE_FILTER_STOP
 	# ⚠ 不裁剪的话，怪从上面"走进来"那一段会画到 HUD 上（截图里 boss 的名字跟倒计时叠在一起）
 	_field.clip_contents = true
 	add_child(_field)
@@ -491,7 +508,7 @@ func _build_field() -> void:
 	# 就绪数量做成圆钮右上角的小红点（原来靠底下那排显示"哪个能点"，现在得在这儿说）
 	_chal_badge = _lbl(Vector2(94, 384), Vector2(56, 36), 22, Color(1, 0.94, 0.88))
 	_chal_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_circle_btn("事件", Vector2(22, 530), func(): _open_small("事件"))
+_circle_btn("任务", Vector2(22, 530), func(): _open_large("任务"))
 	_circle_btn("卡组", Vector2(22, 664), func(): _open_large("卡组"))
 	_circle_btn("存档", Vector2(594, 340), func(): _open_large("存档"))
 	_circle_btn("成就", Vector2(594, 480), func(): _open_large("成就"))
@@ -1098,6 +1115,7 @@ func _draw_card(id: String) -> void:
 		_hint.text = "灵晶不够（要 " + str(DRAW_COST) + "，现有 " + str(int(_crystal)) + "）"
 		return
 	_crystal -= DRAW_COST
+_qc("draw")                       # v13c：任务进度（抽卡）
 	_draw_choices.clear()
 	Audio.sfx("paper", -6.0)
 	# v8b：十格满了 → 进"换卡"模式（抽到的先拿在手上，去卡组页点掉一张）
@@ -2060,6 +2078,7 @@ func _trea_take(i: int) -> void:
 	var key := str(it["key"])
 	var v := float(it["v"])
 	var t := str(it["t"])
+_qc("trea")                       # v13c：任务进度（拿到宝物）
 	if t == "instant":
 		# v12i：闲散宝物——当场结算，不占格不入库
 		match key:
@@ -2526,6 +2545,7 @@ func _bm_slot_desc(s: Dictionary) -> String:
 
 # 强化石：成长武器 +n 级（进阶照旧：每 10 级品质升档 ＋ 掷三选一）
 func _bm_wpn_add(n: int) -> String:
+	_qc("wpn", n)                      # v13c：任务进度（强化武器）
 	var adv := ""
 	for i in n:
 		_wpn_lv += 1
@@ -2735,6 +2755,7 @@ func _bm_buy(i: int) -> void:
 		_:
 			pass
 	s["bought"] = true
+_qc("bm")                         # v13c：任务进度（黑市成交）
 	_bm_slots[i] = s
 	Audio.sfx("coin", -6.0)
 	if _field != null:
@@ -2742,8 +2763,306 @@ func _bm_buy(i: int) -> void:
 	_hint.text = "黑市成交 · " + msg + "　（花 " + str(cost) + " 杀敌数，剩 " + str(_kills) + "）"
 	if _popup_kind == "黑市":
 		_open_large("黑市")
+# ============================================================
+# v13c P2：事件 / 任务 核心
+#   分档按波次（简单越来越少）——P2 只有简单池，普通/困难/特殊以后往池子里填
+# ============================================================
+const QUEST_SIMPLE := [
+	{"id": "tuchang", "n": "屠场", "d": "60 秒内杀 40 只", "ck": "kill", "goal": 40, "sec": 60.0, "cr": 30},
+	{"id": "liancai", "n": "敛财", "d": "本局累计攒够 800 文钱", "ck": "money", "goal": 800, "sec": -1.0, "cr": 25},
+	{"id": "canwu", "n": "参悟", "d": "抽 3 张卡", "ck": "draw", "goal": 3, "sec": -1.0, "cr": 30, "card": 1},
+	{"id": "xiaozang", "n": "销赃", "d": "在黑市成交 3 次", "ck": "bm", "goal": 3, "sec": -1.0, "cr": 25, "bms": 3},
+	{"id": "xunbao", "n": "寻宝", "d": "拿到 1 件宝物", "ck": "trea", "goal": 1, "sec": -1.0, "cr": 25, "trs": 2},
+	{"id": "shilian", "n": "试炼", "d": "完成任意 2 次挑战", "ck": "chal", "goal": 2, "sec": -1.0, "cr": 30},
+	{"id": "cuihuo", "n": "淬火", "d": "强化武器 5 次", "ck": "wpn", "goal": 5, "sec": -1.0, "cr": 20, "wpnlv": 5},
+	{"id": "yexun", "n": "夜巡", "d": "撑过一波不倒下", "ck": "alive", "goal": 60, "sec": 60.0, "cr": 30},
+	{"id": "zougou", "n": "走狗", "d": "杀掉 1 只挑战怪（大怪）", "ck": "chalkill", "goal": 1, "sec": 90.0, "cr": 35},
+]
+# 波次 → 档位权重（简单/普通/困难/特殊）：简单越来越少
+const Q_TIER_W := [
+	{"w": 9, "t": [45, 55, 0, 0]},
+	{"w": 19, "t": [20, 50, 30, 0]},
+	{"w": 999, "t": [10, 35, 40, 15]},
+]
+const Q_TIER_CN := ["简单", "普通", "困难", "特殊"]
+
+# 行为计数（任务进度从这里取）
+func _qc(key: String, n := 1) -> void:
+	_q_ctr[key] = int(_q_ctr.get(key, 0)) + n
+
+func _q_now(key: String) -> int:
+	if key == "kill":
+		return _kills
+	if key == "money":
+		return _money_earned
+	return int(_q_ctr.get(key, 0))
+
+func _q_prog(q: Dictionary) -> int:
+	if str(q["ck"]) == "alive":
+		return int(float(q.get("alive", 0.0)))
+	return _q_now(str(q["ck"])) - int(q["base"])
+
+# 奖励文案
+func _q_reward_cn(d: Dictionary) -> String:
+	var parts: Array = []
+	if int(d.get("cr", 0)) > 0:
+		parts.append("灵晶 " + str(int(d["cr"])))
+	if int(d.get("money", 0)) > 0:
+		parts.append("文钱 " + str(int(d["money"])))
+	if int(d.get("bms", 0)) > 0:
+		parts.append("黑市刷新 " + str(int(d["bms"])))
+	if int(d.get("trs", 0)) > 0:
+		parts.append("宝物刷新 " + str(int(d["trs"])))
+	if int(d.get("card", 0)) > 0:
+		parts.append("卡组刷新 " + str(int(d["card"])))
+	if int(d.get("wpnlv", 0)) > 0:
+		parts.append("武器 +" + str(int(d["wpnlv"])) + " 级")
+	if parts.is_empty():
+		return "—"
+	return "、".join(PackedStringArray(parts))
+
+# 发奖
+func _q_grant(d: Dictionary) -> String:
+	if int(d.get("cr", 0)) > 0:
+		_crystal += int(d["cr"])
+		_crystal_pop = 0.32
+	if int(d.get("money", 0)) > 0:
+		_money += int(d["money"])
+		_money_earned += int(d["money"])
+		_coin_pop = 0.32
+	if int(d.get("bms", 0)) > 0:
+		_bm_refresh += int(d["bms"])
+	if int(d.get("trs", 0)) > 0:
+		_trea_refresh += int(d["trs"])
+	if int(d.get("card", 0)) > 0:
+		_card_refresh += int(d["card"])
+	if int(d.get("wpnlv", 0)) > 0:
+		_bm_wpn_add(int(d["wpnlv"]))
+	return _q_reward_cn(d)
+
+# 掷一个任务（先按波次决定档位；池子空就往下降级）
+func _q_roll() -> Dictionary:
+	var row: Array = Q_TIER_W[0]["t"]
+	for r_v in Q_TIER_W:
+		if _wave <= int(r_v["w"]):
+			row = r_v["t"]
+			break
+	var roll := randi() % 100
+	var acc := 0
+	var tier := 0
+	for i in 4:
+		acc += int(row[i])
+		if roll < acc:
+			tier = i
+			break
+	while tier > 0:
+		# P2 只填了简单池：高档次暂时降级（池子以后补）
+		break
+	tier = 0
+	var used: Array = []
+	for s_v in _q_slots:
+		used.append(str((s_v as Dictionary)["id"]))
+	var pick: Array = []
+	for d_v in QUEST_SIMPLE:
+		var d: Dictionary = d_v
+		if not used.has(str(d["id"])):
+			pick.append(d)
+	if pick.is_empty():
+		return {}
+	var out: Dictionary = (pick[randi() % pick.size()] as Dictionary).duplicate()
+	out["tier"] = tier
+	return out
+
+# 触发一次事件：挂进任务栏（挂满就顺延），只出横幅不弹窗
+func _q_event() -> void:
+	if _q_slots.size() >= Q_MAX:
+		return
+	var d := _q_roll()
+	if d.is_empty():
+		return
+	var q := d
+	q["left"] = float(d.get("sec", -1.0))
+	q["base"] = _q_now(str(d["ck"]))
+	q["alive"] = 0.0
+	_q_slots.append(q)
+	var tail := ""
+	if float(q["left"]) >= 0.0:
+		tail = "　限时 " + str(int(q["left"])) + " 秒"
+	_note("【事件·" + str(Q_TIER_CN[int(q["tier"])]) + "】" + str(q["n"]) + "　" + str(q["d"]) + tail
+		+ "　·　奖 " + _q_reward_cn(q) + "\n（已经在任务栏里挂着；不想做就点［放弃］，给 10 灵晶）", 5.0)
+	_hint.text = "新任务：「" + str(q["n"]) + "」" + str(q["d"])
+	Audio.sfx("bell", -6.0)
+
+# 放弃：+10 灵晶
+func _q_give_up(i: int) -> void:
+	if i < 0 or i >= _q_slots.size():
+		return
+	var q: Dictionary = _q_slots[i]
+	_q_slots.remove_at(i)
+	_q_give += 1
+	_crystal += Q_GIVE_CRYSTAL
+	_crystal_pop = 0.32
+	_hint.text = "放弃「" + str(q["n"]) + "」：灵晶 +" + str(Q_GIVE_CRYSTAL) + "（现在 " + str(int(_crystal)) + "）"
+	Audio.sfx("ui_click", -8.0)
+	if _popup_kind == "任务":
+		_open_large("任务")
+
+# 每帧：事件计时 ＋ 进度检查（完成发奖 / 限时到点失败）
+func _q_tick(delta: float) -> void:
+	_q_t += delta
+	if _q_t >= Q_EVENT_SEC:
+		_q_t -= Q_EVENT_SEC
+		_q_event()
+	for i in range(_q_slots.size() - 1, -1, -1):
+		var q: Dictionary = _q_slots[i]
+		if str(q["ck"]) == "alive":
+			q["alive"] = float(q.get("alive", 0.0)) + delta
+		if _q_prog(q) >= int(q["goal"]):
+			var got := _q_grant(q)
+			_q_slots.remove_at(i)
+			_q_done += 1
+			_note("【任务完成】" + str(q["n"]) + "　到手：" + got, 4.0)
+			Audio.sfx("levelup", -4.0)
+			continue
+		if float(q["left"]) >= 0.0:
+			q["left"] = float(q["left"]) - delta
+			if float(q["left"]) <= 0.0:
+				_q_slots.remove_at(i)
+				_q_fail += 1
+				_note("【任务失败】" + str(q["n"]) + "　时间到——失败不给东西", 3.5)
+				Audio.sfx("fall_down", -6.0)
+	_q_chips_update()
+
+# 战场左下角那两条任务条（点着不挡操作：Label 不吃鼠标）
+func _q_chips_update() -> void:
+	if _q_panel == null:
+		_q_panel = _panel(Rect2(6, 794, 492, 88), Color(0.12, 0.12, 0.14, 0.70), 10)
+		for i in Q_MAX:
+			var l := _lbl(Vector2(14, 798 + float(i) * 40.0), Vector2(476, 36), 20, Color(0.97, 0.93, 0.80))
+			_q_lb.append(l)
+	var any := not _q_slots.is_empty()
+	_q_panel.visible = any
+	for i in Q_MAX:
+		var l2: Label = _q_lb[i]
+		if i < _q_slots.size():
+			var q: Dictionary = _q_slots[i]
+			var tail := ""
+			if float(q["left"]) >= 0.0:
+				var sec := int(ceil(maxf(0.0, float(q["left"]))))
+				tail = "　%02d:%02d" % [sec / 60, sec % 60]
+			l2.text = "【任务】" + str(q["n"]) + "　" + str(_q_prog(q)) + "/" + str(int(q["goal"])) + tail
+			l2.visible = true
+		else:
+			l2.visible = false
+
+# ---- 任务页（事件钮进来）：进行中 2 格 ＋ 本局账 ----
+func _fill_quest(p: Control, y: float, sz: Vector2) -> float:
+	var head := Label.new()
+	head.position = Vector2(20, y)
+	head.size = Vector2(620, 40)
+	head.add_theme_font_size_override("font_size", 24)
+	head.add_theme_color_override("font_color", INK)
+	var nxt := int(ceil(maxf(0.0, Q_EVENT_SEC - _q_t)))
+	head.text = "进行中 " + str(_q_slots.size()) + " / " + str(Q_MAX) + "　·　下一次事件 " + ("%02d:%02d" % [nxt / 60, nxt % 60])
+	p.add_child(head)
+	var ly := y + 50.0
+	if _q_slots.is_empty():
+		var em := Label.new()
+		em.position = Vector2(20, ly)
+		em.size = Vector2(620, 44)
+		em.add_theme_font_size_override("font_size", 21)
+		em.add_theme_color_override("font_color", DIM)
+		em.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		em.text = "现在没有任务——牢里每 3 分钟出一次事，出了会自动挂到这里。"
+		p.add_child(em)
+		ly += 56.0
+	for i in _q_slots.size():
+		var q: Dictionary = _q_slots[i]
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.99, 0.97, 0.92)
+		sb.set_corner_radius_all(12)
+		sb.border_color = Color(SEAL.r, SEAL.g, SEAL.b, 0.5)
+		sb.set_border_width_all(2)
+		var box := Panel.new()
+		box.position = Vector2(16, ly)
+		box.size = Vector2(624, 140)
+		box.add_theme_stylebox_override("panel", sb)
+		box.mouse_filter = Control.MOUSE_FILTER_STOP
+		p.add_child(box)
+		var nm := Label.new()
+		nm.position = Vector2(16, 8)
+		nm.size = Vector2(320, 38)
+		nm.add_theme_font_size_override("font_size", 27)
+		nm.add_theme_color_override("font_color", INK)
+		nm.text = "【" + str(q["n"]) + "】"
+		box.add_child(nm)
+		var ds := Label.new()
+		ds.position = Vector2(16, 48)
+		ds.size = Vector2(390, 34)
+		ds.add_theme_font_size_override("font_size", 20)
+		ds.add_theme_color_override("font_color", DIM)
+		ds.text = str(q["d"])
+		box.add_child(ds)
+		var prog := _q_prog(q)
+		var bgb := ColorRect.new()
+		bgb.position = Vector2(16, 92)
+		bgb.size = Vector2(390, 18)
+		bgb.color = Color(0.85, 0.83, 0.79)
+		bgb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		box.add_child(bgb)
+		var fg := ColorRect.new()
+		fg.position = Vector2(16, 92)
+		fg.size = Vector2(390.0 * clampf(float(prog) / maxf(1.0, float(q["goal"])), 0.0, 1.0), 18)
+		fg.color = SEAL
+		fg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		box.add_child(fg)
+		var pt := Label.new()
+		pt.position = Vector2(16, 112)
+		pt.size = Vector2(390, 26)
+		pt.add_theme_font_size_override("font_size", 19)
+		pt.add_theme_color_override("font_color", INK)
+		pt.text = "进度 " + str(prog) + " / " + str(int(q["goal"]))
+		box.add_child(pt)
+		var tl := Label.new()
+		tl.position = Vector2(416, 76)
+		tl.size = Vector2(192, 30)
+		tl.add_theme_font_size_override("font_size", 21)
+		tl.add_theme_color_override("font_color", SEAL if float(q["left"]) >= 0.0 else DIM)
+		tl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		if float(q["left"]) >= 0.0:
+			var sec2 := int(ceil(maxf(0.0, float(q["left"]))))
+			tl.text = "剩余 %02d:%02d" % [sec2 / 60, sec2 % 60]
+		else:
+			tl.text = "不限时"
+		box.add_child(tl)
+		var rw := Label.new()
+		rw.position = Vector2(416, 110)
+		rw.size = Vector2(192, 26)
+		rw.add_theme_font_size_override("font_size", 18)
+		rw.add_theme_color_override("font_color", GOLD)
+		rw.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		rw.text = "奖 " + _q_reward_cn(q)
+		box.add_child(rw)
+		_pbtn(box, "放弃 +" + str(Q_GIVE_CRYSTAL), Vector2(432, 10), Vector2(176, 60), 22, false, _q_give_up.bind(i))
+		ly += 152.0
+	var acc := Label.new()
+	acc.position = Vector2(20, ly + 4.0)
+	acc.size = Vector2(620, 36)
+	acc.add_theme_font_size_override("font_size", 22)
+	acc.add_theme_color_override("font_color", INK)
+	acc.text = "本局账：完成 " + str(_q_done) + "　放弃 " + str(_q_give) + "　失败 " + str(_q_fail)
+	p.add_child(acc)
+	var tip := Label.new()
+	tip.position = Vector2(20, ly + 46.0)
+	tip.size = Vector2(620, 110)
+	tip.add_theme_font_size_override("font_size", 20)
+	tip.add_theme_color_override("font_color", DIM)
+	tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	tip.text = "规则：每 180 秒牢里出一次事 → 自动挂上任务（最多 2 个，挂满就顺延到下一次）。做完才有奖励；限时到点算失败，什么都不给；不想做就放弃，放弃给 " + str(Q_GIVE_CRYSTAL) + " 灵晶（抽卡 20 的一半）。"
+	p.add_child(tip)
+	return ly + 170.0
+
 # ---- 失败结算（v3m）----
-#   用户："任务失败卡住了"——免死用尽之后得有去处：把这一局的账摊开，给［再来一局］与［退出］。
 func _fill_over(p: Control, y: float, sz: Vector2) -> float:
 	var head := Label.new()
 	head.position = Vector2(28, y)
@@ -3103,6 +3422,7 @@ func _chal_press(i: int) -> void:
 		_hint.text = "「" + str(_chal_names[i]) + "」冷却中（还要 " + str(int(ceil(cd))) + " 秒）"
 		return
 	_chal_cd[i] = _chal_base_cd(i)
+_qc("chal")                       # v13c：任务进度（挑战）
 	# 挑战怪的数量（招怪/战鼓套会给更多）
 	var n := _chal_spawn_count(i)
 	# v9g：把"一群 N 只"交给战场（群怪一群／大怪一只只刷，由战场决定体型与血厚）
@@ -3628,7 +3948,7 @@ func _input(e: InputEvent) -> void:
 # 弹窗（两层）
 # ============================================================
 func _is_large(k: String) -> bool:
-	return ["卡组", "技能", "装备", "挑战", "存档", "成就", "角色", "队员", "仓库", "卡牌详情", "局终", "黑市", "招募", "成长武器", "宝物三选一", "图鉴"].has(k)
+	return ["卡组", "技能", "装备", "挑战", "存档", "成就", "角色", "队员", "仓库", "卡牌详情", "局终", "黑市", "招募", "成长武器", "宝物三选一", "图鉴", "任务"].has(k)
 
 func _close_popup() -> void:
 	if _popup != null and is_instance_valid(_popup):
@@ -3755,6 +4075,8 @@ func _fill_popup(p: Control, kind: String, y: float, sz: Vector2) -> float:
 		return _fill_over(p, y, sz)
 	if kind == "黑市":
 		return _fill_black(p, y, sz)
+if kind == "任务":
+	return _fill_quest(p, y, sz)
 	if kind == "招募":
 		return _fill_recruit(p, y, sz)
 	if kind == "成长武器":
@@ -4098,6 +4420,10 @@ func _pbtn(parent: Node, txt: String, pos: Vector2, sz: Vector2, fs: int, seal: 
 	parent.add_child(b)
 	return b
 
+func _refresh_band() -> void:
+	if _band == null:
+		return
+	# ⚠ 上一版这里把"内力"拼了两遍（截图里看到两段一样的）——现在只写一遍
 	_band.text = "波 " + str(_wave) + "/" + str(_wave_max) + "　❤ " + str(int(_hp)) + "/" + str(int(_hp_max)) + "　内力 " + str(int(_mp)) + "/" + str(int(_mp_max))
 
 # ---- 角色页：详细属性 ＋ 一颗［队员］钮 ----
