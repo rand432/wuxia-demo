@@ -69,6 +69,8 @@ var _grow_inherit := {"arm": 0, "agi": 0, "wit": 0}   # 继承到的成长（每
 var _recruit_opens := 0                               # 还有几次招募（每 5 级一次）
 var _recruit_choices: Array = []                      # 本次招募的三个候选
 var _draw_choices: Array = []                         # v8a：抽卡的三张候选
+var _pending_card := ""                               # v8b：十格满了、等着"换哪张"的那张卡
+var _detail_card := ""                                # v8c：正在看详情的那张卡
 # v7a 卡牌状态
 var _deck_cards: Array = []                           # 十格里的卡（id；空位用 ""）
 var _card_star := {}                                  # id → 星级（1~5）
@@ -119,8 +121,9 @@ func _card_gain(id: String) -> void:
 		Audio.sfx("coin", -10.0)
 		return
 	_card_have[id] = 1
+	# ⚠ 这一行不能省：卡要**真的进十格**（v8b 曾把它摘掉，结果卡只记账不进格）
 	if not _card_into_deck(id):
-		_open_large("卡组")       # 十格满了：让玩家去换
+		_pending_card = id
 	_set_check(str(id.split("_")[0]))
 
 # 组合：这套的每张卡都到手了 → 给组合效果 ＋ 三张一起离开十格（腾位）
@@ -255,8 +258,8 @@ var _hint: Label = null
 var _chal_cd := [12.0, 0.0, 40.0, 90.0, 0.0]      # 五个挑战的冷却（0＝就绪）
 # v2c：第一格从"金币挑战"改名"**文钱挑战**"（用户："金币挑战换成文钱挑战 名字改一下即可"）——
 #   本作里那门钱就叫"文钱"，别混着两种叫法。
-var _chal_names := ["文钱挑战", "灵晶挑战", "装备挑战", "宝物挑战", "boss挑战"]
-var _chal_descs := ["刷 4 只钱怪，掉 30~60 文钱", "刷 2 只晶怪，每只掉 6~10 灵晶", "刷 1 只甲士，必掉一件装备", "刷 1 只宝箱怪，掉宝物或大钱", "把下一个 boss 提前叫出来（赢额外名声）"]
+var _chal_names := ["文钱挑战", "灵晶挑战", "经验挑战", "宝物挑战", "boss挑战"]
+var _chal_descs := ["一群钱怪（6 只），掉 30~60 文钱", "一群晶怪（3 只），每只掉 6~10 灵晶", "一群书怪（4 只），掉一大笔经验", "一只大宝箱怪（大怪），掉宝物或大钱", "boss 亲自来（大怪），赢额外名声）"]
 var _auto_chal := false                            # 自动挑战开关（弹窗底部那颗）
 var _chal_lbs: Array = []
 var _chal_pop_lbs: Array = []
@@ -668,6 +671,167 @@ func card_prop(id: String) -> String:
 	var part := int(sp[1]) if sp.size() > 1 else 0
 	var arr: Array = CARD_PARTS.get(set_id, [])
 	return str(arr[part]) if part < arr.size() else "—"
+# ============================================================
+# v8d 抽卡页的**大卡面**（用户参考别人的卡：锦旗卡名 / 插画 / 风味 / 徽章）
+#   插画没有美术素材——**用代码画简笔图标**（剑/盾/拳/符/箭/钱 六种，按套名猜）
+#   风味小字按"线"给（40 套逐句太占，先按类给一句）
+# ============================================================
+const FLAVOR := {
+	"剑": "手上没家伙，就靠这口气。",
+	"盾": "站住了，就是赢。",
+	"拳": "一寸短，一寸险。",
+	"符": "五行相生，气随意走。",
+	"箭": "先到的是箭，后到的是人。",
+	"钱": "有钱能使鬼推磨。",
+	"宝": "捡着的，都是命。",
+}
+
+func _card_icon_of(set_id: String) -> String:
+	var nm := ""
+	for s_v in CARD_SETS:
+		var s: Dictionary = s_v
+		if str(s["set"]) == set_id:
+			nm = str(s["name"])
+	if nm.contains("铁") or nm.contains("磐") or nm.contains("金钟") or nm.contains("金刚"):
+		return "盾"
+	if nm.contains("钱") or nm.contains("宝") or nm.contains("商") or nm.contains("财"):
+		return "钱"
+	if nm.contains("羽") or nm.contains("箭"):
+		return "箭"
+	if nm.contains("五行") or nm.contains("心") or nm.contains("灵") or nm.contains("道"):
+		return "符"
+	if nm.contains("力") or nm.contains("淬") or nm.contains("血") or nm.contains("战") or nm.contains("骑"):
+		return "拳"
+	return "剑"
+
+# 画一个 40×40 的简笔图标（中心 c）
+func _draw_card_icon(cv: Control, c: Vector2, kind: String) -> void:
+	var ink := Color(0.22, 0.20, 0.18, 0.9)
+	match kind:
+		"拳":
+			cv.draw_circle(c, 13.0, ink)
+			cv.draw_line(c + Vector2(-16, -14), c + Vector2(16, 14), ink, 4.0)
+			cv.draw_line(c + Vector2(-16, 14), c + Vector2(16, -14), ink, 4.0)
+		"盾":
+			var sh := PackedVector2Array([c + Vector2(0, -17), c + Vector2(15, -9),
+				c + Vector2(11, 12), c + Vector2(0, 18), c + Vector2(-11, 12), c + Vector2(-15, -9)])
+			cv.draw_colored_polygon(sh, Color(0.62, 0.60, 0.56))
+			cv.draw_polyline(PackedVector2Array([sh[0], sh[1], sh[2], sh[3], sh[4], sh[5], sh[0]]), ink, 3.0)
+		"箭":
+			cv.draw_line(c + Vector2(-16, 0), c + Vector2(10, 0), ink, 4.0)
+			cv.draw_colored_polygon(PackedVector2Array([c + Vector2(18, 0), c + Vector2(4, -9), c + Vector2(4, 9)]), ink)
+			cv.draw_line(c + Vector2(-16, 0), c + Vector2(-8, -8), ink, 3.0)
+			cv.draw_line(c + Vector2(-16, 0), c + Vector2(-8, 8), ink, 3.0)
+		"符":
+			cv.draw_rect(Rect2(c.x - 11, c.y - 17, 22, 34), Color(0.94, 0.90, 0.78))
+			cv.draw_rect(Rect2(c.x - 11, c.y - 17, 22, 34), ink, false, 3.0)
+			cv.draw_line(c + Vector2(0, -12), c + Vector2(0, 12), Color(0.72, 0.24, 0.20), 3.0)
+			cv.draw_line(c + Vector2(-6, -4), c + Vector2(6, -4), Color(0.72, 0.24, 0.20), 3.0)
+		"钱":
+			cv.draw_circle(c, 15.0, Color(0.88, 0.72, 0.30))
+			cv.draw_circle(c, 15.0, Color(0.52, 0.40, 0.14), false, 3.0)
+			cv.draw_rect(Rect2(c.x - 5, c.y - 5, 10, 10), Color(0.52, 0.40, 0.14), false, 3.0)
+		_:
+			cv.draw_line(c + Vector2(-4, 18), c + Vector2(4, 18), ink, 4.0)
+			cv.draw_line(c + Vector2(0, 16), c + Vector2(0, -14), Color(0.70, 0.72, 0.76), 5.0)
+			cv.draw_line(c + Vector2(-12, -6), c + Vector2(12, -6), ink, 4.0)
+			cv.draw_colored_polygon(PackedVector2Array([c + Vector2(0, -20), c + Vector2(6, -8), c + Vector2(-6, -8)]), Color(0.82, 0.84, 0.88))
+
+class CardIcon extends Control:
+	var host = null
+	var kind := "剑"
+	func _draw() -> void:
+		if host != null:
+			host._draw_card_icon(self, size * 0.5, kind)
+
+# 大卡面（抽卡页用）：锦旗卡名 → 图标 → 单卡属性 → 组合 → 进度 → 风味
+func _card_big(p: Control, pos: Vector2, sz: Vector2, id: String) -> void:
+	var s := card_set_of(id)
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.98, 0.95, 0.86)
+	sb.set_corner_radius_all(12)
+	sb.border_color = _quality_color(str(s.get("quality", "下品")))
+	sb.set_border_width_all(2)
+	var box := Panel.new()
+	box.position = pos
+	box.size = sz
+	box.add_theme_stylebox_override("panel", sb)
+	box.mouse_filter = Control.MOUSE_FILTER_STOP
+	p.add_child(box)
+	# ① 锦旗：一个下缘带尖角的横幅（卡面拉长后旗子也放大）
+	var bw := sz.x - 24.0
+	var banner := Control.new()
+	banner.position = Vector2(12, 10)
+	banner.size = Vector2(bw, 56)
+	banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(banner)
+	var bn := Label.new()
+	bn.position = Vector2(0, 6)
+	bn.size = Vector2(bw, 46)
+	bn.add_theme_font_size_override("font_size", 25)
+	bn.add_theme_color_override("font_color", Color(0.98, 0.96, 0.90))
+	bn.text = card_name(id)
+	bn.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	bn.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	banner.add_child(bn)
+	var band := ColorRect.new()
+	band.position = Vector2(0, 0)
+	band.size = Vector2(bw, 50)
+	band.color = _quality_color(str(s.get("quality", "下品")))
+	band.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	banner.add_child(band)
+	banner.move_child(band, 0)
+	# ② 简笔图标
+	var ic := CardIcon.new()
+	ic.host = self
+	ic.kind = _card_icon_of(str(s.get("set", "")))
+	ic.position = Vector2(sz.x * 0.5 - 52.0, 84.0)
+	ic.size = Vector2(104, 104)
+	ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(ic)
+	# ③ 单卡属性（大字）
+	var pr := Label.new()
+	pr.position = Vector2(6, 206.0)
+	pr.size = Vector2(sz.x - 12, 76)
+	pr.add_theme_font_size_override("font_size", 26)
+	pr.add_theme_color_override("font_color", SEAL)
+	pr.text = card_prop(id)
+	pr.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	pr.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(pr)
+	# ④ 组合 ＋ 进度（大字）
+	var got := 0
+	for i in int(s.get("size", 1)):
+		if _card_have.has(card_id(str(s.get("set", "")), i)):
+			got += 1
+	var cm := Label.new()
+	cm.position = Vector2(8, 292.0)
+	cm.size = Vector2(sz.x - 16, 120)
+	cm.add_theme_font_size_override("font_size", 19)
+	cm.add_theme_color_override("font_color", DIM)
+	cm.text = "组合：" + str(s.get("combo", ""))
+	cm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	cm.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(cm)
+	# 风味小字（按图标类给一句）
+	var fl := Label.new()
+	fl.position = Vector2(8, 420.0)
+	fl.size = Vector2(sz.x - 16, 90)
+	fl.add_theme_font_size_override("font_size", 17)
+	fl.add_theme_color_override("font_color", Color(0.48, 0.44, 0.40))
+	fl.text = str(FLAVOR.get(_card_icon_of(str(s.get("set", ""))), ""))
+	fl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	fl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(fl)
+	# 进度：大字（卡面拉长后放到底部）
+	var pg := Label.new()
+	pg.position = Vector2(6, sz.y - 74.0)
+	pg.size = Vector2(sz.x - 12, 52)
+	pg.add_theme_font_size_override("font_size", 30)
+	pg.add_theme_color_override("font_color", SEAL)
+	pg.text = str(got) + "/" + str(int(s.get("size", 1)))
+	pg.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(pg)
 # ---- v8a 抽卡本体（用户：20 灵晶三选一 ＋ 重抽 5 灵晶）----
 const DRAW_COST := 20
 const REROLL_ONE := 5
@@ -708,9 +872,15 @@ func _draw_card(id: String) -> void:
 		_hint.text = "灵晶不够（要 " + str(DRAW_COST) + "，现有 " + str(int(_crystal)) + "）"
 		return
 	_crystal -= DRAW_COST
-	_card_gain(id)
 	_draw_choices.clear()
 	Audio.sfx("paper", -6.0)
+	# v8b：十格满了 → 进"换卡"模式（抽到的先拿在手上，去卡组页点掉一张）
+	if not _card_have.has(id) and not _card_into_deck(id):
+		_pending_card = id
+		_hint.text = "十格满了——点一张换掉（换掉的那张回池）"
+		_open_large("卡组")
+		return
+	_card_gain(id)
 	_hint.text = "抽到「" + card_name(id) + "」： " + card_prop(id)
 	if _popup_kind == "抽卡":
 		_open_large("抽卡")
@@ -759,11 +929,11 @@ func _fill_draw(p: Control, y: float, sz: Vector2) -> float:
 	var ly := y + 92.0
 	for i in _draw_choices.size():
 		var cid := str(_draw_choices[i])
-		var x := 24.0 + float(i) * (cw + 12.0)
-		_card_face(p, Vector2(x, ly), Vector2(cw, 168), cid)
-		_pbtn(p, "选它 " + str(DRAW_COST), Vector2(x, ly + 176.0), Vector2(cw, 60), 21, int(_crystal) >= DRAW_COST, _draw_card.bind(cid))
-		_pbtn(p, "重抽 " + str(REROLL_ONE), Vector2(x, ly + 242.0), Vector2(cw, 48), 19, int(_crystal) >= REROLL_ONE, _reroll_one.bind(i))
-	ly += 306.0
+		var x := 24.0 + float(i) * (cw + 12.0)      # 三张大卡并排（v8d）
+		_card_big(p, Vector2(x, ly), Vector2(cw, 560), cid)
+		_pbtn(p, "选它 " + str(DRAW_COST), Vector2(x, ly + 568.0), Vector2(cw, 66), 23, int(_crystal) >= DRAW_COST, _draw_card.bind(cid))
+		_pbtn(p, "重抽 " + str(REROLL_ONE), Vector2(x, ly + 640.0), Vector2(cw, 52), 20, int(_crystal) >= REROLL_ONE, _reroll_one.bind(i))
+	ly += 706.0
 	_pbtn(p, "全部刷新 " + str(REFRESH_ALL), Vector2(24, ly), Vector2(220, 64), 22, int(_crystal) >= REFRESH_ALL, _refresh_all)
 	var done := Label.new()
 	done.position = Vector2(260, ly + 14.0)
@@ -803,55 +973,52 @@ func _card_face(p: Control, pos: Vector2, sz: Vector2, id: String) -> void:
 		box.add_child(e0)
 		return
 	var s := card_set_of(id)
-	# ⚠ 卡面只有 118 宽：名字要缩到 17 并允许换行，不然【I】会被裁掉（截图抓到过）
+	# v8e（用户："卡组的十格也大一些 这个界面也空了很多空间"）——十格做成**竖长卡**：
+	#   名字 / 品级 / 简笔图标 / 单卡属性 / 大字进度，整格可点看详情
 	var nm := Label.new()
-	nm.position = Vector2(5, 4)
-	nm.size = Vector2(sz.x - 10, 42)
-	nm.add_theme_font_size_override("font_size", 17)
+	nm.position = Vector2(4, 10)
+	nm.size = Vector2(sz.x - 8, 72)
+	nm.add_theme_font_size_override("font_size", 25)
 	nm.add_theme_color_override("font_color", INK)
 	nm.text = card_name(id)
 	nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	nm.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(nm)
-	var pr := Label.new()
-	pr.position = Vector2(5, 48)
-	pr.size = Vector2(sz.x - 10, 30)
-	pr.add_theme_font_size_override("font_size", 19)
-	pr.add_theme_color_override("font_color", SEAL)
-	pr.text = card_prop(id)
-	pr.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	box.add_child(pr)
+	# 品级（按档配色）
 	var st := Label.new()
-	st.position = Vector2(5, 78)
-	st.size = Vector2(sz.x - 16, 28)
-	st.add_theme_font_size_override("font_size", 18)
-	st.add_theme_color_override("font_color", GOLD)
-	# v7f：撤掉星级——这一行改成"品级"（卡面信息更干净）
+	st.position = Vector2(4, 84)
+	st.size = Vector2(sz.x - 8, 32)
+	st.add_theme_font_size_override("font_size", 22)
 	st.text = str(card_set_of(id).get("quality", ""))
 	st.add_theme_color_override("font_color", _quality_color(str(card_set_of(id).get("quality", "下品"))))
 	st.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(st)
-	# 组合栏（灰字）＋ 进度
-	var cm := Label.new()
-	cm.position = Vector2(5, sz.y - 58.0)
-	cm.size = Vector2(sz.x - 10, 32)
-	cm.add_theme_font_size_override("font_size", 14)
-	cm.add_theme_color_override("font_color", DIM)
-	cm.text = str(s.get("combo", "")).replace("每杀一名敌人 → ", "杀敌→").replace("全伤害减免", "全减").replace("幸运一击", "幸运")
-	cm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	cm.clip_text = true
-	box.add_child(cm)
+	# v8e：简笔图标 ＋ 单卡属性（竖长卡才放得下）
+	# v8g（用户："当十格子满的时候 你得在格子里腾出一个换的按钮吧"）：
+	#   换卡模式下**卡面自己让出底部一条**（图标上移、进度上移），把位置留给［换］
+	var swap_mode := _pending_card != ""
+	var ic := CardIcon.new()
+	ic.host = self
+	ic.kind = _card_icon_of(str(s.get("set", "")))
+	ic.position = Vector2(sz.x * 0.5 - (26.0 if swap_mode else 32.0), 104.0 if swap_mode else 122.0)
+	ic.size = Vector2(52, 52) if swap_mode else Vector2(64, 64)
+	ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(ic)
+	# v8f（用户："十格不用显示属性"）——十格里不写单卡属性，点开看详情
+	# v8d（用户："格子底下显示的进度条 换成1/3 这种 显目一点"）——细条改成大字
 	var got := 0
 	for i in int(s.get("size", 1)):
 		if _card_have.has(card_id(str(s.get("set", "")), i)):
 			got += 1
+	var done_set := got >= int(s.get("size", 1))
 	var pg := Label.new()
-	pg.position = Vector2(5, sz.y - 26.0)
-	pg.size = Vector2(sz.x - 16, 22)
-	pg.add_theme_font_size_override("font_size", 15)
-	pg.add_theme_color_override("font_color", Color(0.42, 0.62, 0.40) if got >= int(s.get("size", 1)) else DIM)
-	pg.text = str(got) + "/" + str(int(s.get("size", 1))) + ("　已成型" if got >= int(s.get("size", 1)) else "")
+	pg.position = Vector2(4, sz.y - (118.0 if swap_mode else 74.0))
+	pg.size = Vector2(sz.x - 8, 56 if swap_mode else 66)
+	pg.add_theme_font_size_override("font_size", 32 if swap_mode else 38)
+	pg.add_theme_color_override("font_color", Color(0.30, 0.62, 0.34) if done_set else SEAL)
+	pg.text = (str(got) + "/" + str(int(s.get("size", 1)))) if not done_set else "已成"
 	pg.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	pg.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	box.add_child(pg)
 
 func _quality_color(q: String) -> Color:
@@ -1291,8 +1458,60 @@ func _fill_chal(p: Control, y: float, sz: Vector2) -> float:
 	p.add_child(tip)
 	return ay + 150.0
 
+# v9a：挑战——连战/招怪套在这里生效：冷却 ×(1−缩减) 、刷怪数 ＋chal_spawn
+func _chal_base_cd(i: int) -> float:
+	var base: float = float([70.0, 90.0, 90.0, 90.0, 180.0][clampi(i, 0, 4)])
+	return base * (1.0 - clampf(float(_extra.get("chal_cd", 0.0)), 0.0, 0.6))
+
+# v9c（用户："挑战怪 文钱/经验/灵晶 boss和宝物是打怪都是群怪"）：
+#   五个挑战**都是群刷**——每种一群，招怪/战鼓套再加量
+# v9d（用户："文钱/经验/灵晶都是群怪 boss和宝物是大怪"）：
+#   0 文钱 / 1 灵晶 / 2 经验 → **群怪**（一群小怪）；3 宝物 / 4 boss → **大怪**（单只打大）
+const CHAL_GROUP := [6, 3, 4, 1, 1]        # 群怪：文钱 6 · 灵晶 3 · 经验 4；大怪：宝物 1 · boss 1
+
+func _chal_is_big(i: int) -> bool:
+	return i >= 3                          # 宝物 / boss ＝ 大怪
+
+func _chal_spawn_count(i: int) -> int:
+	var base: int = int(CHAL_GROUP[clampi(i, 0, 4)])
+	var extra := int(_extra.get("chal_spawn", 0.0))
+	if _chal_is_big(i):
+		return base + (1 if extra > 0 else 0)     # 大怪最多再多一只，不会变刷屏
+	return base + extra
+
+# 一群/一只——统一口径给界面用
+func _chal_group_total(i: int) -> int:
+	return _chal_spawn_count(i)
+
+# 中文口径：大怪说"一只大怪"、群怪说"一群 N 只"
+func _chal_amount_cn(i: int) -> String:
+	var n := _chal_group_total(i)
+	if _chal_is_big(i):
+		return "一只大怪" if n <= 1 else (str(n) + " 只大怪")
+	return "一群 " + str(n) + " 只"
+
 func _chal_press(i: int) -> void:
-	_hint.text = "点了「" + str(_chal_names[i]) + "」——空壳里只回一句（第 2 步真的刷怪）"
+	if i >= _chal_cd.size():
+		return
+	var cd := float(_chal_cd[i])
+	if cd > 0.0:
+		_hint.text = "「" + str(_chal_names[i]) + "」冷却中（还要 " + str(int(ceil(cd))) + " 秒）"
+		return
+	_chal_cd[i] = _chal_base_cd(i)
+	# 挑战怪的数量（招怪/战鼓套会给更多）
+	var n := _chal_spawn_count(i)
+	# v9b（用户："去掉装备挑战 换成经验挑战"）：第 3 个挑战＝**经验**——当场给一笔经验
+	#   （升级那套逻辑跟击杀走的是同一段，这里只是把经验加进去）
+	if i == 2:
+		_gain_exp(0.30 * float(n) / 4.0)          # 群刷：按实际只数给经验（基准 4 只）
+	if _field != null and _field.has_method("spawn_challenge"):
+		_field.spawn_challenge(i, n)
+		_hint.text = "「" + str(_chal_names[i]) + "」开了：" + _chal_amount_cn(i) + "（冷却 " + str(int(ceil(float(_chal_cd[i])))) + " 秒）"
+	else:
+		_hint.text = "「" + str(_chal_names[i]) + "」：" + _chal_amount_cn(i) + "（战场接口下一步接）"
+	Audio.sfx("bell", -6.0)
+	if _popup_kind == "挑战":
+		_open_large("挑战")
 
 func _toggle_auto_chal() -> void:
 	_auto_chal = not _auto_chal
@@ -1391,6 +1610,11 @@ func _process(delta: float) -> void:
 		_boss_sec = 60.0
 		_wave = mini(_wave_max, _wave + 1)
 		_boss_tier = clampi(1 + _wave / 10, 1, 3)
+		# v9a：商路/财神套——**每过一波额外给灵晶**（用户："都可"里的经济线）
+		var wc := int(_extra.get("wave_crystal", 0.0))
+		if wc > 0:
+			_crystal += wc
+			_hint.text = "商路进账：每波 +" + str(wc) + " 灵晶（现有 " + str(int(_crystal)) + "）"
 		_boss_arrive()
 	var ready := 0
 	for i in _chal_cd.size():
@@ -1652,7 +1876,11 @@ func _on_kill(_n: int) -> void:
 		_bm_refresh += 1
 		_hint.text = "黑市升到 Lv " + str(_bm_lv) + "，刷新 +1（现有 " + str(_bm_refresh) + " 次）"
 		Audio.sfx("levelup", -8.0)
-	_exp += 0.04
+	_gain_exp(0.04)
+
+# v9b：经验入口（击杀 +0.04 ／ 经验挑战 +0.30）——升级、技能点、属性点、招募都在这里
+func _gain_exp(amount: float) -> void:
+	_exp += amount
 	if _exp >= 1.0:
 		_exp -= 1.0
 		_lv += 1
@@ -1871,12 +2099,18 @@ func _fill_popup(p: Control, kind: String, y: float, sz: Vector2) -> float:
 	if kind == "设置":
 		lines = ["音乐：开", "音效：开", "（这一版只有开关，曲子后补）"]
 	elif kind == "卡牌详情":
-		var c: Dictionary = _deck[clampi(_card_idx, 0, _deck.size() - 1)]
-		lines = ["『" + str(c["name"]) + "』　" + str(c["star"]) + "★（已吞 " + str(c["ate"]) + " 张）",
-			"现在效果：" + str(c["fx"]),
-			"每升一星：效果按 +50% 走（1★→5★ 一共 ×3）",
-			"再吃 " + str(maxi(1, 2 - int(c["ate"]))) + " 张同名卡升下一星",
-			"长按卡牌就看这一页（流派不写，自己发掘）"]
+		var cid := _detail_card
+		var cs := card_set_of(cid)
+		var got := 0
+		for i in int(cs.get("size", 1)):
+			if _card_have.has(card_id(str(cs.get("set", "")), i)):
+				got += 1
+		lines = ["『" + card_name(cid) + "』　【" + str(cs.get("quality", "")) + "】",
+			"单卡属性：" + card_prop(cid),
+			"组合（" + str(cs.get("name", "")) + "）：" + str(cs.get("combo", "")),
+			"这套进度：" + str(got) + " / " + str(int(cs.get("size", 1)))
+				+ ("　（已成型）" if bool(_sets_done.get(str(cs.get("set", "")), false)) else ""),
+			"本局规则：凑齐一套 → 给组合效果并把这几张腾出占位（效果常驻）；重复抽到回收 5 灵晶"]
 	elif kind == "事件":
 		lines = ["牢中事件（三选一 · 4 秒不点自动随机）", "① 捡到钱袋：文钱 +150", "② 灵晶矿：灵晶 +8", "③ 武学残页：随机一张卡 +1 星"]
 	elif kind == "抽卡":
@@ -1890,9 +2124,10 @@ func _fill_popup(p: Control, kind: String, y: float, sz: Vector2) -> float:
 		lines.append_array(_equips)
 	elif kind == "挑战":
 		lines = ["六种挑战（与本波怪并存）"]
-		for i in 6:
+		for i in 5:
 			var cd := float(_chal_cd[i])
-			lines.append("　" + str(_chal_names[i]) + "：" + ("就绪" if cd <= 0.0 else "冷却 " + str(int(ceil(cd))) + "s"))
+			lines.append("　" + str(_chal_names[i]) + "：" + _chal_amount_cn(i) + " · "
+				+ ("就绪" if cd <= 0.0 else "冷却 " + str(int(ceil(cd))) + "s"))
 	elif kind == "存档":
 		lines = ["名声：128（局外 · 跨局保留）", "［开局 +20 灵晶］ 30 名声", "［开局带一张指定流派卡］ 60 名声", "［基础攻 +2］ 80 名声", "［基础血 +40］ 80 名声", "［抽卡 -2 灵晶］ 100 名声", "［事件池多 2 条好事］ 120 名声"]
 	elif kind == "成就":
@@ -1931,12 +2166,13 @@ func _fill_cards(p: Control, y: float, sz: Vector2) -> float:
 	var qs := ["十格卡组", "吞噬记录"]
 	for i in 2:
 		_pbtn(p, qs[i], Vector2(28.0 + float(i) * 162.0, y + 106.0), Vector2(150, 60), 24, _deck_tab == i, _set_deck_tab.bind(i))
+	# ⚠ 按钮必须**跟着内容走**：十格放大后写死偏移会压到卡上（截图抓到过）
+	var grid_bottom := 0.0
 	if _deck_tab == 0:
-		_fill_deck_slots(p, y + 182.0)
+		grid_bottom = _fill_deck_slots(p, y + 182.0)
 	else:
-		_fill_deck_ate(p, y + 182.0)
-	# 底部这三个跟着内容走（在滑动区里），别钉在窗外
-	var by := maxf(640.0, y + (460.0 if _deck_tab == 0 else 420.0))
+		grid_bottom = _fill_deck_ate(p, y + 182.0)
+	var by := maxf(640.0, grid_bottom + 96.0)
 	_pbtn(p, "查合计", Vector2(28, by), Vector2(180, 72), 24, false, func(): _open_large("卡组合计"))
 	_pbtn(p, "放弃（换 1 次刷新）", Vector2(220, by), Vector2(284, 72), 22, false, func(): pass)
 	_pbtn(p, "刷新 5 灵晶", Vector2(516, by), Vector2(152, 72), 22, true, func(): pass)
@@ -1949,13 +2185,35 @@ func _set_deck_tab(i: int) -> void:
 
 # 视图①：十格（5×2）
 func _fill_deck_slots(p: Control, y: float) -> float:
-	# v7a：十格改成**新卡面**（单卡属性 ＋ 组合栏 ＋ 进度）
+	# v7a：十格改成**新卡面**；v8e 放大成竖长卡；v8f 去掉单卡属性（点开看详情）
 	while _deck_cards.size() < 10:
 		_deck_cards.append("")
+	# v8b：手上还捏着一张（十格满）时，每张卡下面挂一颗［换］
+	if _pending_card != "":
+		var pend := Label.new()
+		# ⚠ 原来放在 y-34，正好压着"十格卡组/吞噬记录"那排页签——挪到内容区第一行
+		pend.position = Vector2(24, y + 2.0)
+		pend.size = Vector2(560, 30)
+		pend.add_theme_font_size_override("font_size", 21)
+		pend.add_theme_color_override("font_color", SEAL)
+		pend.text = "手上： " + card_name(_pending_card) + "　→ 点下面任意一张的［换］把它顶掉（原卡回池）"
+		p.add_child(pend)
+		_pbtn(p, "放弃这张", Vector2(590, y - 4.0), Vector2(96, 36), 18, false, _drop_pending)
 	for i in 10:
 		var col := i % 5
 		var row := i / 5
-		_card_face(p, Vector2(24.0 + float(col) * 134.0, y + float(row) * 134.0), Vector2(126, 122), str(_deck_cards[i]))
+		var cx := 24.0 + float(col) * 134.0
+		var cy := y + float(row) * 280.0
+		_card_face(p, Vector2(cx, cy), Vector2(126, 268), str(_deck_cards[i]))
+		# v8c：整格可点 → 看详情
+		var hit := _pbtn(p, "", Vector2(cx, cy), Vector2(126, 218 if _pending_card != "" else 260), 16, false, _card_detail.bind(i))
+		hit.add_theme_stylebox_override("normal", _flat(Color(1, 1, 1, 0.001)))
+		hit.add_theme_stylebox_override("hover", _flat(Color(1, 1, 1, 0.10)))
+		hit.add_theme_stylebox_override("pressed", _flat(Color(1, 1, 1, 0.18)))
+		if _pending_card != "" and str(_deck_cards[i]) != "":
+			# 按钮占卡片自己让出来的那一条（宽 126−8，高 38，离底 6）
+			_pbtn(p, "换这张", Vector2(cx + 4.0, cy + 224.0), Vector2(118, 38), 20, true, _swap_in.bind(i))
+	return y + 560.0
 	var tip := Label.new()
 	tip.position = Vector2(28, y + 248.0)
 	tip.size = Vector2(640, 44)
@@ -2016,6 +2274,37 @@ func _fill_deck_ate(p: Control, y: float) -> float:
 		row.add_child(fx)
 		ly += 94.0
 	return ly
+
+# v8b：把手上那张换进第 i 格——原来那张**回池**（用户："去掉的那张卡肯定回池啊"）
+func _swap_in(i: int) -> void:
+	if _pending_card == "":
+		return
+	var old := str(_deck_cards[i]) if i < _deck_cards.size() else ""
+	if old != "":
+		_card_have.erase(old)                     # 回池：从"已拥有"里划掉，以后还能抽到
+		_hint.text = "「" + card_name(old) + "」回池了；「" + card_name(_pending_card) + "」进第 " + str(i + 1) + " 格"
+	_deck_cards[i] = _pending_card
+	_card_have[_pending_card] = 1
+	var new_id := _pending_card
+	_pending_card = ""
+	Audio.sfx("equip", -6.0)
+	_set_check(str(new_id.split("_")[0]))
+	_open_large("卡组")
+
+func _drop_pending() -> void:
+	if _pending_card == "":
+		return
+	_hint.text = "「" + card_name(_pending_card) + "」丢回池子了（灵晶不退）"
+	_pending_card = ""
+	_open_large("卡组")
+
+# v8c：点十格里的卡 → 看详情（单卡属性 / 组合 / 进度）
+func _card_detail(idx: int) -> void:
+	if idx >= _deck_cards.size() or str(_deck_cards[idx]) == "":
+		_hint.text = "这一格是空的"
+		return
+	_detail_card = str(_deck_cards[idx])
+	_open_small("卡牌详情")
 
 func _card_press(idx: int) -> void:
 	if idx >= _deck.size():
@@ -2092,6 +2381,7 @@ func _pbtn(parent: Node, txt: String, pos: Vector2, sz: Vector2, fs: int, seal: 
 func _refresh_band() -> void:
 	if _band == null:
 		return
+	# ⚠ 上一版这里把"内力"拼了两遍（截图里看到两段一样的）——现在只写一遍
 	_band.text = "波 " + str(_wave) + "/" + str(_wave_max) + "　❤ " + str(int(_hp)) + "/" + str(int(_hp_max)) + "　内力 " + str(int(_mp)) + "/" + str(int(_mp_max)) + "　内力 " + str(int(_mp)) + "/" + str(int(_mp_max))
 
 
