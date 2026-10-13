@@ -76,7 +76,98 @@ var _recruit_choices: Array = []                      # 本次招募的三个候
 var _draw_choices: Array = []                         # v8a：抽卡的三张候选
 var _pending_card := ""                               # v8b：十格满了、等着"换哪张"的那张卡
 var _detail_card := ""                                # v8c：正在看详情的那张卡
-var _run_fame := 0                                    # v9h：本局名声（跨局那套还没做）
+var _run_fame := 0                                    # 本局名声（跨局那套见 v14w 的 _fame）
+
+# ============================================================
+# v14w 名声（跨局）：文档里点名"没做"的老账，补上
+#   · 从哪来：打 boss 挑战 +20（原有）／**一局结束按打到的波数结算**（每波 +2，浴血过的再少给）
+#   · 花在哪：**存档页**新增「名声」一段，四件局外解锁（花名声、永久、开局生效）：
+#       ① 开局 +20 灵晶  ② 开局随机带一张已解锁的卡  ③ 基础攻 +2  ④ 基础血 +40
+#   · 存 meta 的 fame 段；**跟银两那套是两条独立的线**（银两买 UNLOCKS，名声买 FAME_UNLOCKS）
+# ============================================================
+var _ach_sum := {}                                    # v14w：上一局成就发下去的那份账（下一局收回用）
+var _fame := 0                                        # 跨局名声（永久）
+var _fame_own := {}                                   # 已买的名声解锁：id → true
+const FAME_UNLOCKS := [
+	{"id": "f_crystal", "n": "开局灵晶 +20", "price": 30, "d": "每一局开局多 20 灵晶（多抽一张）"},
+	{"id": "f_card", "n": "开局带一张卡", "price": 60, "d": "每一局开局白送一张卡（从已解锁的池子里随机）"},
+	{"id": "f_atk", "n": "基础攻 +2", "price": 80, "d": "每一局开局攻击 +2（跟装备/卡是一样的加法）"},
+	{"id": "f_hp", "n": "基础血 +40", "price": 80, "d": "每一局开局气血上限 +40"},
+]
+
+func _fame_own_get(id: String) -> bool:
+	return bool(_fame_own.get(id, false))
+
+# 一局结束时结算名声（死掉 / 通关都走这里，只结一次）
+func _fame_settle() -> int:
+	var w := maxi(1, _wave)
+	var gain := 2 * w
+	if _bath_used > 0:
+		gain = int(round(float(gain) * 0.6))       # 靠浴血续命的，名声少给一点
+	if int(_field.kills_total) > 0:
+		gain += mini(40, int(_field.kills_total) / 50)   # 杀敌也换一点（每 50 只 +1，最多 +40）
+	gain += _run_fame                                # 本局打 boss 挑战攒的那部分
+	_fame += gain
+	_ach_save()
+	return gain
+
+# 买一件名声解锁
+func _fame_buy(id: String) -> void:
+	for u_v in FAME_UNLOCKS:
+		var u: Dictionary = u_v
+		if str(u["id"]) != id:
+			continue
+		if _fame_own_get(id):
+			_hint.text = "「" + str(u["n"]) + "」已经买过了"
+			return
+		var price := int(u["price"])
+		if int(_fame) < price:
+			_hint.text = "名声不够（「" + str(u["n"]) + "」要 " + str(price) + "，现有 " + str(int(_fame)) + "）"
+			return
+		_fame -= price
+		_fame_own[id] = true
+		_ach_save()
+		_hint.text = "买下「" + str(u["n"]) + "」——下一局开局生效（剩余名声 " + str(int(_fame)) + "）"
+		Audio.sfx("levelup", -4.0)
+		if _popup_kind == "存档":
+			_open_large("存档")
+		return
+
+# v14w：把"上一局发过的成就加成"收回 —— 成就的设定是"**每局开局发一次**"，
+#   但 _extra/_attr 都是跨局不清的，而 _apply_achievements() 每局都往里加：
+#   于是臂力 +5 变 +10、+15……（探针 k961 抓到：气血上限 358→412→466→520→574，每局 +54）
+#   这一条跟名声那条是**同一个坑**（"跨局不清的容器 + 每局叠加"）。
+const ACH_EXTRA_CH: Array = ["cut_all_bonus", "dmg_all", "yh_cd_mul"]
+
+func _ach_rollback() -> void:
+	_attr["arm"] = int(_attr["arm"]) - int(_ach_sum.get("arm", 0))
+	_attr["agi"] = int(_attr["agi"]) - int(_ach_sum.get("agi", 0))
+	_attr["wit"] = int(_attr["wit"]) - int(_ach_sum.get("wit", 0))
+	_extra["hp_flat"] = float(_extra.get("hp_flat", 0.0)) - float(_ach_sum.get("hp_flat", 0.0))
+	for k2 in ACH_EXTRA_CH:
+		_extra[k2] = float(_extra.get(k2, 0.0)) - float(_ach_sum.get(k2, 0.0))
+	_ach_sum.clear()
+
+# 开局把名声解锁发下去（在 _restart_run 里、_sync_battle_stats 之前调）
+func _apply_fame() -> void:
+	if _fame_own_get("f_crystal"):
+		_crystal += 20
+	# ⚠ _extra 是**跨局不清**的（每局只叠加、不重置）——所以这里必须写成"设成某个值"，
+	#   不能 +=（那样第 2 局就变 +4，第 3 局 +6……）。把"上一次发下去的那份"减掉再发新的。
+	var prev_a := float(_extra.get("fame_atk", 0.0))
+	var prev_h := float(_extra.get("fame_hp", 0.0))
+	var now_a := 2.0 if _fame_own_get("f_atk") else 0.0
+	var now_h := 40.0 if _fame_own_get("f_hp") else 0.0
+	_extra["atk_flat"] = float(_extra.get("atk_flat", 0.0)) - prev_a + now_a
+	_extra["hp_flat"] = float(_extra.get("hp_flat", 0.0)) - prev_h + now_h
+	_extra["fame_atk"] = now_a
+	_extra["fame_hp"] = now_h
+	if _fame_own_get("f_card"):
+		var pool := _card_pool_available()
+		if pool.size() > 0:
+			var cid := str(pool[randi() % pool.size()])
+			_card_gain(cid)
+			_hint.text = "名声：开局自带一张「" + card_name(cid) + "」"
 var _realm := 0                                       # v10a：境界 0 凡人 · 1 筑基 · 2 金丹 · 3 元婴 · 4 化神
 var _meditate_acc := 0.0                              # v10a：打坐累积（每秒加，攒够 1 点进主属性）
 var _card_kills := {}                                 # v10b：杀意这类"按杀敌进化"的卡：id → 已杀数
@@ -1895,8 +1986,11 @@ func _wpn_line_total(t: String) -> float:
 	return sum
 
 func _wpn_sync() -> void:
-	_extra["atk_flat"] = float(_wpn_flat_atk()) + _wpn_line_total("atk_flat")
-	_extra["hp_flat"] = float(_wpn_flat_hp()) + _wpn_line_total("hp_flat")
+	# ⚠ v14w：这两行是**覆盖**写。名声（f_atk/f_hp）也走这两个通道，
+	#   如果不把名声那一份加上，每局开头都会被这里冲掉 —— 然后 _apply_fame 又加一遍，
+	#   于是第 2 局 +4、第 3 局 +6……（探针 k960 抓到：412 → 426 → 480）
+	_extra["atk_flat"] = float(_wpn_flat_atk()) + _wpn_line_total("atk_flat") + float(_extra.get("fame_atk", 0.0))
+	_extra["hp_flat"] = float(_wpn_flat_hp()) + _wpn_line_total("hp_flat") + float(_extra.get("fame_hp", 0.0))
 	_extra["wpn_aspd"] = _wpn_line_total("aspd") / 100.0
 	_extra["wpn_crit"] = _wpn_line_total("crit") / 100.0
 	_extra["wpn_critdmg"] = _wpn_line_total("critdmg") / 100.0
@@ -4303,6 +4397,14 @@ func _pet_info(kind: String) -> Dictionary:
 	return PETS[0]
 
 func _apply_pet_bonus() -> void:
+	# v14w：宠物被动也是"每局开局发一次"，而 _attr 跨局不清 —— 不收回的话
+	#   白狐的"全属性 +3"每局都会再叠一次（探针 k963 抓到：3 → 6 → 9 → 12）。
+	#   跟成就同一个坑，同一种解法：先把上一局发的那份减回去。
+	var prev_pa := int(_extra.get("pet_attr_sum", 0.0))
+	if prev_pa != 0:
+		for a0 in ["arm", "agi", "wit"]:
+			_attr[a0] = int(_attr[a0]) - prev_pa
+		_extra["pet_attr_sum"] = 0.0
 	var info := _pet_info(_pet_kind)
 	var e: Dictionary = info.get("eff", {})
 	for k in e.keys():
@@ -4312,6 +4414,7 @@ func _apply_pet_bonus() -> void:
 			# ⚠ wpn_* 会被 _wpn_sync 覆盖（探针抓到），直接加属性点
 			for a in ["arm", "agi", "wit"]:
 				_attr[a] = int(_attr[a]) + int(v)
+			_extra["pet_attr_sum"] = float(int(v))
 		elif key == "elem_all":
 			for el in ["金系", "木系", "火系", "水系", "土系"]:
 				_extra["dmg_elem"][el] = float(_extra["dmg_elem"].get(el, 0.0)) + v
@@ -4437,6 +4540,10 @@ func _fill_save(p: Control, y: float, sz: Vector2) -> float:
 	p.add_child(tip)
 	_pbtn(p, "难度挑战（关卡 · 无尽）", Vector2(24, y + 96.0), Vector2(640, 68), 24, true, func(): _open_large("关卡"))
 	var ly := y + 180.0
+	# v14x：名声与伙伴星级**放在解锁清单前面** —— 26 条解锁清单很长（每条约 100px），
+	#   原来这两段被压在 3200px 以下，要拖半天；现在常用的一进来就在眼前
+	ly = _fill_fame_section(p, ly)
+	ly = _fill_mate_star_section(p, ly)
 	var last_cat := ""
 	for u_v in UNLOCKS:
 		var u: Dictionary = u_v
@@ -4526,6 +4633,86 @@ func _fill_save(p: Control, y: float, sz: Vector2) -> float:
 				bb.add_theme_stylebox_override("hover", _flat(Color(0.60, 0.58, 0.56, 0.95)))
 				bb.add_theme_stylebox_override("pressed", _flat(Color(0.48, 0.46, 0.44, 0.95)))
 		ly += 100.0
+	return ly + 8.0
+
+# v14w：名声那一段（从 _fill_save 拆出来，便于调顺序）
+func _fill_fame_section(p: Control, ly0: float) -> float:
+	var ly := ly0
+	# ============================================================
+	# v14w 名声（跨局）：一局结束按波数结算，在这儿花
+	# ============================================================
+	ly += 12.0
+	var fhead := Label.new()
+	fhead.position = Vector2(24, ly)
+	fhead.size = Vector2(660, 36)
+	fhead.add_theme_font_size_override("font_size", 24)
+	fhead.add_theme_color_override("font_color", SEAL)
+	fhead.text = "—— 名声（跨局 · 现有 " + str(int(_fame)) + "）——"
+	p.add_child(fhead)
+	ly += 42.0
+	var fnote := Label.new()
+	fnote.position = Vector2(24, ly)
+	fnote.size = Vector2(660, 56)
+	fnote.add_theme_font_size_override("font_size", 19)
+	fnote.add_theme_color_override("font_color", DIM)
+	fnote.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	fnote.text = "一局结束按打到的波数结算（每波 +2，杀敌每 50 只再 +1，靠浴血续命的 ×0.6）。名声跟上面的银两是两条独立的线，买了一次永久生效、下一局开局就发。"
+	p.add_child(fnote)
+	ly += 64.0
+	for fu_v in FAME_UNLOCKS:
+		var fu: Dictionary = fu_v
+		var fid := str(fu["id"])
+		var fgot := _fame_own_get(fid)
+		var fq := GOLD if fgot else Color(INK.r, INK.g, INK.b, 0.75)
+		var fsb := StyleBoxFlat.new()
+		fsb.bg_color = Color(0.99, 0.97, 0.92) if fgot else Color(0.93, 0.91, 0.88)
+		fsb.set_corner_radius_all(10)
+		fsb.border_color = fq
+		fsb.set_border_width_all(2)
+		var fbox := Panel.new()
+		fbox.position = Vector2(24, ly)
+		fbox.size = Vector2(640, 92)
+		fbox.add_theme_stylebox_override("panel", fsb)
+		fbox.mouse_filter = Control.MOUSE_FILTER_STOP
+		p.add_child(fbox)
+		var fl1 := Label.new()
+		fl1.position = Vector2(14, 8)
+		fl1.size = Vector2(420, 36)
+		fl1.add_theme_font_size_override("font_size", 24)
+		fl1.add_theme_color_override("font_color", fq)
+		fl1.text = str(fu["n"])
+		fbox.add_child(fl1)
+		var fl2 := Label.new()
+		fl2.position = Vector2(14, 48)
+		fl2.size = Vector2(420, 36)
+		fl2.add_theme_font_size_override("font_size", 19)
+		fl2.add_theme_color_override("font_color", INK if fgot else DIM)
+		fl2.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		fl2.text = str(fu["d"])
+		fbox.add_child(fl2)
+		if fgot:
+			var fok := Label.new()
+			fok.position = Vector2(470, 26)
+			fok.size = Vector2(156, 44)
+			fok.add_theme_font_size_override("font_size", 22)
+			fok.add_theme_color_override("font_color", GOLD)
+			fok.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			fok.text = "✓ 已有"
+			fbox.add_child(fok)
+		else:
+			var fprice := int(fu["price"])
+			var fcan := int(_fame) >= fprice
+			var fbb := _pbtn(fbox, "名声 " + str(fprice), Vector2(456, 16), Vector2(170, 62), 22, fcan, _fame_buy.bind(fid))
+			if not fcan:
+				fbb.add_theme_stylebox_override("normal", _flat(Color(0.55, 0.53, 0.51, 0.95)))
+				fbb.add_theme_stylebox_override("hover", _flat(Color(0.60, 0.58, 0.56, 0.95)))
+				fbb.add_theme_stylebox_override("pressed", _flat(Color(0.48, 0.46, 0.44, 0.95)))
+		ly += 100.0
+	return ly + 8.0
+
+# v14o：伙伴星级那一段（拆出来，便于调顺序）
+func _fill_mate_star_section(p: Control, ly0: float) -> float:
+	var ly := ly0
 	# ============================================================
 	# v14o：伙伴星级（用户口径同宠物："每提升星级 可以强化其成长和基础属性"）——
 	#   只有**这一局招到过**的伙伴才列出来（战斗伙伴是局内的，星是跨局的）；
@@ -4726,6 +4913,11 @@ func _ach_load() -> void:
 		if st3 > 1:
 			_mate_star[pid3] = clampi(st3, 1, MATE_STAR_MAX)
 	_mate_start = str(cf.get_value("misc", "mate_start", ""))
+	_fame = int(cf.get_value("fame", "total", 0))
+	for fu_v in FAME_UNLOCKS:
+		var fid := str((fu_v as Dictionary)["id"])
+		if bool(cf.get_value("fame", fid, false)):
+			_fame_own[fid] = true
 func _ach_save() -> void:
 	var cf := ConfigFile.new()
 	for id in _ach_done.keys():
@@ -4744,6 +4936,9 @@ func _ach_save() -> void:
 	for pk3 in _mate_star.keys():
 		cf.set_value("matestar", str(pk3), int(_mate_star[pk3]))
 	cf.set_value("misc", "mate_start", _mate_start)
+	cf.set_value("fame", "total", int(_fame))
+	for fu2 in _fame_own.keys():
+		cf.set_value("fame", str(fu2), true)
 
 # 条件当前值（都在本局内算）
 func _ach_val(ck: String) -> float:
@@ -4841,18 +5036,25 @@ func _apply_achievements() -> void:
 			_money += int(e["money"])
 		if e.has("crystal"):
 			_crystal += int(e["crystal"])
+		# v14w：发的同时**记一份账**（_ach_sum），下一局开局按这份账收回，不然会越垒越高
 		if e.has("arm"):
 			_attr["arm"] = int(_attr["arm"]) + int(e["arm"])
+			_ach_sum["arm"] = int(_ach_sum.get("arm", 0)) + int(e["arm"])
 		if e.has("agi"):
 			_attr["agi"] = int(_attr["agi"]) + int(e["agi"])
+			_ach_sum["agi"] = int(_ach_sum.get("agi", 0)) + int(e["agi"])
 		if e.has("wit"):
 			_attr["wit"] = int(_attr["wit"]) + int(e["wit"])
+			_ach_sum["wit"] = int(_ach_sum.get("wit", 0)) + int(e["wit"])
 		if e.has("hp_flat"):
 			_extra["hp_flat"] = float(_extra.get("hp_flat", 0.0)) + float(e["hp_flat"])
+			_ach_sum["hp_flat"] = float(_ach_sum.get("hp_flat", 0.0)) + float(e["hp_flat"])
 		if e.has("dmg_all"):
 			_extra["dmg_all"] = float(_extra.get("dmg_all", 0.0)) + float(e["dmg_all"])
+			_ach_sum["dmg_all"] = float(_ach_sum.get("dmg_all", 0.0)) + float(e["dmg_all"])
 		if e.has("cut_all_bonus"):
 			_extra["cut_all_bonus"] = float(_extra.get("cut_all_bonus", 0.0)) + float(e["cut_all_bonus"])
+			_ach_sum["cut_all_bonus"] = float(_ach_sum.get("cut_all_bonus", 0.0)) + float(e["cut_all_bonus"])
 		if e.has("yh_ready"):
 			_yh_cd = 0.0
 		if e.has("yh_cd_mul"):
@@ -5005,6 +5207,7 @@ func _restart_run() -> void:
 	_evo_n = 0                           # v14m：进化是本局的事
 	_evo_mul = 1.0
 	_grow = 3
+	_ach_rollback()                      # v14w：先收回上一局的成就加成（不然每局翻倍地垒）
 	_skill_pts = 0
 	_skill_choices.clear()
 	_revive = 1 + int(_extra.get("revive_add", 0.0))       # v13y：不屈卡多给一次浴血
@@ -5042,6 +5245,7 @@ func _restart_run() -> void:
 	# v13w：新的一局开局——把已解锁的成就加成发下去（放最后，免得被上面的重置覆盖）
 	_apply_achievements()
 	_apply_pet_bonus()                   # v14d：宠物被动（换宠物下一局生效）
+	_apply_fame()                        # v14w：名声解锁（开局灵晶/卡/攻/血）
 	# v14e：所选关卡——难度倍率 ＋ 波数上限（打满即通关）
 	var st := _stage_info(_stage_sel)
 	_wave_max = int(st["waves"])
@@ -5725,7 +5929,11 @@ func _credit_drop(kind: String, n: int) -> void:
 		"coin":
 			# v14a：聚宝盆/寻宝这类"文钱 +X%"终于生效了（以前是死键）
 			var cm := 1.0 + float(_extra.get("money_bonus", 0.0))
-			var wmul := 1.0 + 0.04 * float(maxi(0, _wave - 1))     # v14k：越往后掉落越厚
+			# v14v：越往后掉落越厚 —— 原来是**纯线性** 1.04，但怪血是 ×1.12/波（指数），
+			#   结果"越打越穷"：实测波10 每波 137 文钱 → 波30 只剩 79（砍一只从 1.19s 拖到 3.27s）。
+			#   加一个很轻的二次项补"杀得慢"：波20 ×2.33 · 波30 ×4.20（原来 ×1.76 / ×2.16）。
+			var wv := float(maxi(0, _wave - 1))
+			var wmul := 1.0 + 0.07 * wv + 0.002 * wv * wv
 			_money += int(round(float(n) * cm * wmul))
 			_money_earned += int(round(float(n) * cm * wmul))
 			_coin_pop = 0.32
@@ -5985,6 +6193,8 @@ func _on_hero_down() -> void:
 		#   战场停住 ＋ 弹**失败结算页**（原来只改了一句提示，玩的人就卡在 0 血没去处）
 		_over = true
 		_field.running = false
+		var fg := _fame_settle()             # v14w：这一局的名声结算（只结一次）
+		_hint.text = "这一局结束：名声 +" + str(fg) + "（累计 " + str(int(_fame)) + "，去存档页看能买什么）"
 		_open_large("局终")
 
 # 临时试玩键
