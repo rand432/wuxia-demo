@@ -219,6 +219,9 @@ func _set_check(set_id: String) -> void:
 			return
 	_sets_done[set_id] = true
 	_sync_battle_stats()          # ⚠ 成套后立刻同步（不然新效果要等下一次受伤才生效）
+	# v11e：装备卡成型 → **自动穿上六格**
+	if str(s.get("cat", "")) == "装备":
+		_equip_auto(str(s["name"]))
 	# 成套后的常驻效果（成长线 / 经济线 / 数值线）
 	match str(s.get("combo_id", "")):
 		"cut_all_5":
@@ -325,6 +328,8 @@ var _equip_q: Array = ["良品", "良品", "", "", "", ""]
 var _treasures: Array = ["护心镜", "玄铁令", "定神珠"]         # 宝物：**不限**（滚动区接着长）
 var _treasure_q: Array = ["上品", "凡品", "良品"]
 var _vault: Array = ["紫玉冠", "雁翎披风", "疗伤丹", "金丝软甲"] # 仓库（公共仓库＝联网共享，暂不开放）
+var _vault_stat: Array = []                       # v11f：仓库里那些的属性
+var _equip_stat: Array = [{}, {}, {}, {}, {}, {}]  # v11f：六格装备的属性（加成从这里汇总）
 var _vault_q: Array = ["上品", "良品", "凡品", "极品"]
 var _carry := ""                                    # 长按拿起来的那件：equip:2 / vault:1 / treasure:0
 var _role_tab := 0                                  # 0＝属性 · 1＝队员
@@ -522,6 +527,18 @@ func _build_hero_bar() -> void:
 	_skill_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_skill_badge.text = ""
 	_mk_btn("装备·宝物 ＋", Vector2(372, 1174), Vector2(336, 74), 26, false, func(): _open_large("装备"))
+	# v12a：玲珑玉壶（主动宝物）——战场右下角一颗大按钮 ＋ 一颗自动开关
+	_yh_btn = _mk_btn("玉壶", Vector2(596, 792), Vector2(104, 104), 26, true, _yh_use)
+	_yh_lb = Label.new()
+	_yh_lb.position = Vector2(560, 900)
+	_yh_lb.size = Vector2(176, 34)
+	_yh_lb.add_theme_font_size_override("font_size", 20)
+	_yh_lb.add_theme_color_override("font_color", DIM)
+	_yh_lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_yh_lb.text = "玉壶 就绪"
+	add_child(_yh_lb)
+	_yh_auto_btn = _mk_btn("自动：开", Vector2(560, 936), Vector2(176, 44), 20, false, _yh_toggle_auto)
+
 
 # ---- 招募页（v6a）：三个候选，选一个把"成长"并进来（逐项取最高）----
 func _fill_recruit(p: Control, y: float, sz: Vector2) -> float:
@@ -722,6 +739,34 @@ const CARD_SETS := [
 		"evo_next": "sayi3", "evo_kills": 500, "combo": "杀敌 500 → 杀意·绝", "combo_id": "sayi3"},
 	{"set": "sayi3", "name": "杀意·绝", "quality": "极品", "size": 1, "solo": true, "evo_from": true,
 		"combo": "已是极致：攻击 +40% · 暴击 +15% · 暴伤 +20%", "combo_id": "sayi4"},
+	# ---- v11d（用户：装备卡三类 × 五用途）①杀怪提升 ②固定特效 ③时间进化 ----
+	# ① 杀怪提升（单卡，复用 evo_kills：到点原地进化）
+	{"set": "yinxue", "name": "饮血刀", "quality": "中品", "size": 1, "solo": true, "cat": "装备",
+		"evo_next": "yinxue2", "evo_kills": 80, "combo": "杀敌 80 → 进化（吸血）", "combo_id": "yinxue1"},
+	{"set": "yinxue2", "name": "饮血·嗜", "quality": "上品", "size": 1, "solo": true, "cat": "装备", "evo_from": true,
+		"evo_next": "yinxue3", "evo_kills": 300, "combo": "杀敌 300 → 进化（大吸血）", "combo_id": "yinxue2"},
+	{"set": "yinxue3", "name": "饮血·狂", "quality": "极品", "size": 1, "solo": true, "cat": "装备", "evo_from": true,
+		"combo": "攻击 +18% · 吸血 8%", "combo_id": "yinxue3"},
+	{"set": "pojunq", "name": "破军枪", "quality": "上品", "size": 1, "solo": true, "cat": "装备",
+		"evo_next": "pojunq2", "evo_kills": 120, "combo": "杀敌 120 → 进化（溅射）", "combo_id": "pojun1"},
+	{"set": "pojunq2", "name": "破军·裂", "quality": "极品", "size": 1, "solo": true, "cat": "装备", "evo_from": true,
+		"combo": "攻击 +14% · 攻击溅射", "combo_id": "pojun2"},
+	# ② 固定特效（成套，凑齐才生效）
+	{"set": "chixiao", "name": "赤霄剑", "quality": "上品", "size": 2, "cat": "装备",
+		"combo": "成型：攻击溅射（打周围）", "combo_id": "splash_equip"},
+	{"set": "suozijia", "name": "锁子甲", "quality": "中品", "size": 2, "cat": "装备",
+		"combo": "成型：每 5 秒一层护盾", "combo_id": "shield_equip"},
+	{"set": "jucaizhu", "name": "聚财珠", "quality": "上品", "size": 2, "cat": "装备",
+		"combo": "成型：文钱 +25% · 灵晶 +15%", "combo_id": "money_equip"},
+	{"set": "yubanzhi", "name": "玉扳指", "quality": "极品", "size": 3, "cat": "装备",
+		"combo": "成型：全属性 +8%", "combo_id": "allattr_equip"},
+	# ③ 时间进化（单卡，每秒 tick，到点进化）
+	{"set": "cuihuo", "name": "淬火剑", "quality": "中品", "size": 1, "solo": true, "cat": "装备",
+		"evo_time": 120, "evo_next": "cuihuo2", "combo": "每 60 秒 +1 攻击；120 秒 → 进化", "combo_id": "cuihuo"},
+	{"set": "cuihuo2", "name": "淬火·利", "quality": "上品", "size": 1, "solo": true, "cat": "装备", "evo_from": true,
+		"evo_time": 300, "evo_next": "cuihuo3", "combo": "每 60 秒 +1 攻击；300 秒 → 进化", "combo_id": "cuihuo2"},
+	{"set": "cuihuo3", "name": "淬火·绝", "quality": "极品", "size": 1, "solo": true, "cat": "装备", "evo_from": true,
+		"combo": "攻击 +10% · 每 60 秒 +2 攻击（封顶）", "combo_id": "cuihuo3"},
 ]
 # 每一张卡的"单卡属性"（按编号从小到大）
 const CARD_PARTS := {
@@ -780,6 +825,18 @@ const CARD_PARTS := {
 	"sayi1": ["攻击 +14% · 暴击 +3%"],
 	"sayi2": ["攻击 +26% · 暴击 +8%"],
 	"sayi3": ["攻击 +40% · 暴击 +15% · 暴伤 +20%"],
+	"yinxue": ["攻击 +8"],
+	"yinxue2": ["攻击 +12 · 吸血 4%"],
+	"yinxue3": ["攻击 +18 · 吸血 8%"],
+	"pojunq": ["攻击 +9%"],
+	"pojunq2": ["攻击 +14% · 溅射"],
+	"chixiao": ["攻击 +7%", "溅射范围 +20"],
+	"suozijia": ["护甲 +9", "气血 +120"],
+	"jucaizhu": ["文钱 +12%", "灵晶 +8%"],
+	"yubanzhi": ["臂力 +1", "身法 +1", "悟性 +1"],
+	"cuihuo": ["每 60 秒 攻击 +1"],
+	"cuihuo2": ["每 60 秒 攻击 +1"],
+	"cuihuo3": ["攻击 +10% · 每 60 秒 +2"],
 }
 # 长线的"名字递进"（用户参考别人的 力量-野蛮人-战神）：I/II/III 各有名号
 const CARD_TIER_NAME := {
@@ -1106,6 +1163,466 @@ func _fill_draw(p: Control, y: float, sz: Vector2) -> float:
 	done.text = "已拿到 " + str(_card_have.size()) + " / " + str(card_pool_size()) + " 张"
 	p.add_child(done)
 	return ly + 84.0
+# ============================================================
+# v11a 成长武器：自带一件 · 无限强化（文钱）· 每 10 级进阶（品质升档 ＋ 三选一）
+#   强化等级保留 · 一键强化用大按钮（手机不做键盘热键）· 三选一可刷新（按次数计价）
+# ============================================================
+const WPN_NAME := "成长·初锋"
+const WPN_Q_CN := ["凡品", "下品", "中品", "上品", "极品", "绝品"]
+const WPN_Q_MUL := [1.0, 1.5, 2.0, 3.0, 4.0, 6.0]
+var _wpn_lv := 0
+var _wpn_q := 0
+var _wpn_lines: Array = []
+var _wpn_choices: Array = []
+var _wpn_refresh_n := 0
+var _wpn_await := false
+
+func _wpn_q_mul() -> float:
+	return float(WPN_Q_MUL[clampi(_wpn_q, 0, 5)])
+
+func _wpn_tier() -> int:
+	return int(_wpn_lv / 10)
+
+func _wpn_cost() -> int:
+	return int(60.0 * pow(1.22, float(_wpn_lv)) * pow(1.6, float(_wpn_tier())))
+
+func _wpn_refresh_cost() -> int:
+	return 100 + 150 * _wpn_refresh_n
+
+func _wpn_flat_atk() -> int:
+	return int(float(2 * (1 + _wpn_tier())) * _wpn_q_mul())
+
+func _wpn_flat_hp() -> int:
+	return int(float(10 * (1 + _wpn_tier())) * _wpn_q_mul())
+
+# ============================================================
+# v11g：仓库能存能取（六格 ↔ 仓库）＋ 满格醒目提醒（用户：装备满值会放入仓库，记得提醒）
+func _gear_to_vault(idx: int) -> void:
+	if idx >= _equip.size() or str(_equip[idx]) == "":
+		return
+	var label := str(_equip[idx])
+	var stat: Dictionary = _equip_stat[idx] if idx < _equip_stat.size() else {}
+	_equip[idx] = ""
+	if idx < _equip_stat.size():
+		_equip_stat[idx] = {}
+	_vault.append(label)
+	_vault_stat.append(stat)
+	_hint.text = "「" + label + "」收进仓库"
+	Audio.sfx("ui_click", -8.0)
+	_gear_sync()
+	if _popup_kind == "装备":
+		_open_large("装备")
+
+func _gear_from_vault(idx: int) -> void:
+	if idx >= _vault.size():
+		return
+	var label := str(_vault[idx])
+	var stat: Dictionary = _vault_stat[idx] if idx < _vault_stat.size() else {}
+	for i in _equip.size():
+		if str(_equip[i]) == "":
+			_equip[i] = label
+			_equip_stat[i] = stat
+			_vault.remove_at(idx)
+			if idx < _vault_stat.size():
+				_vault_stat.remove_at(idx)
+			_hint.text = "「" + label + "」穿上第 " + str(i + 1) + " 格"
+			Audio.sfx("equip", -4.0)
+			_gear_sync()
+			if _popup_kind == "装备":
+				_open_large("装备")
+			return
+	_hint.text = "六格满了，先卖或存一件"
+
+func _gear_full_notice(label: String) -> void:
+	_hint.text = "六格已满！「" + label + "」已自动放进仓库（去［仓库］取用或卖掉）"
+	if _field != null:
+		_field._push_float(_field.hero_pos.x, _field.hero_pos.y - 110.0, "六格已满 → 进仓库", Color(1.0, 0.78, 0.34), true)
+	Audio.sfx("bell", -6.0)
+# v11f 装备掉落（第 3 轮）：按品级随机生成 · 挑战真的爆 · 可以卖文钱
+#   装备/宝物都带品级与颜色（跟卡牌同一套），卖价＝品质 × 强化等级折算
+# ============================================================
+const GEAR_EQ_NAMES := ["青锋剑", "铁叶甲", "长刀", "锁子甲", "赤霄剑", "玉扳指", "玄铁令", "披风"]
+const GEAR_TR_NAMES := ["护心镜", "定神珠", "聚财珠", "引雷幡", "商队旗", "天蚕衣"]
+
+# 按品质权重掷一件装备/宝物（大怪掉得更好）
+func _gen_gear(is_treasure: bool, big: bool) -> Dictionary:
+	var w: Array = [50, 28, 14, 6, 2, 0] if not big else [18, 26, 26, 18, 9, 3]
+	var roll := randi() % 100
+	var acc := 0
+	var q := 0
+	for i in 6:
+		acc += int(w[i])
+		if roll < acc:
+			q = i
+			break
+	var mul := float(WPN_Q_MUL[q])
+	var pool: Array = GEAR_TR_NAMES if is_treasure else GEAR_EQ_NAMES
+	var nm := str(pool[randi() % pool.size()])
+	var atk := int(ceil(3.0 * mul))
+	var hp := int(ceil(14.0 * mul))
+	return {"name": nm, "q": q, "atk": atk, "hp": hp,
+		"price": int(60.0 * mul * mul)}
+
+# 装备进六格（带加成）
+func _equip_add(g: Dictionary) -> void:
+	var label := str(g["name"]) + "（" + str(WPN_Q_CN[int(g["q"])]) + "）"
+	for i in _equip.size():
+		if str(_equip[i]) == "":
+			_equip[i] = label
+			_equip_stat[i] = g
+			_hint.text = "得到 " + label + "（攻 +" + str(g["atk"]) + " 血 +" + str(g["hp"]) + "），已穿上第 " + str(i + 1) + " 格"
+			_gear_sync()
+			Audio.sfx("equip", -4.0)
+			return
+	_vault.append(label)
+	_vault_stat.append(g)
+	_gear_full_notice(label)
+	_gear_sync()
+
+# 六格 ＋ 仓库里的装备加成（每次重算，不会叠错）
+func _gear_sync() -> void:
+	var a := 0
+	var h := 0
+	for i in _equip.size():
+		if i < _equip_stat.size() and _equip_stat[i] is Dictionary:
+			a += int((_equip_stat[i] as Dictionary).get("atk", 0))
+			h += int((_equip_stat[i] as Dictionary).get("hp", 0))
+	_extra["gear_atk"] = float(a)
+	_extra["gear_hp"] = float(h)
+	_sync_battle_stats()
+
+# 卖一件（六格或仓库），按品质 × 强化等级折算成文钱
+func _gear_sell(is_vault: bool, idx: int) -> void:
+	var stat: Dictionary = {}
+	var label := ""
+	if is_vault:
+		if idx >= _vault.size():
+			return
+		label = str(_vault[idx])
+		stat = _vault_stat[idx] if idx < _vault_stat.size() else {}
+		_vault.remove_at(idx)
+		if idx < _vault_stat.size():
+			_vault_stat.remove_at(idx)
+	else:
+		if idx >= _equip.size() or str(_equip[idx]) == "":
+			return
+		label = str(_equip[idx])
+		stat = _equip_stat[idx] if idx < _equip_stat.size() else {}
+		_equip[idx] = ""
+		if idx < _equip_stat.size():
+			_equip_stat[idx] = {}
+	var price := int(stat.get("price", 60))
+	_money += price
+	_hint.text = "卖了 " + label + "，得 " + str(price) + " 文钱"
+	Audio.sfx("coin", -4.0)
+	_gear_sync()
+	if _popup_kind == "装备":
+		_open_large("装备")
+# v11e：时间进化（淬火剑这类）——每秒 tick，每 60 秒 +1 攻击，到点原地进化
+var _card_time := {}          # id → 已过秒数
+var _evo_atk := 0             # 时间进化累积的固定攻击
+
+func _card_time_tick(delta: float) -> void:
+	for id in _card_have.keys():
+		var s := card_set_of(str(id))
+		if not s.has("evo_time"):
+			continue
+		var before := float(_card_time.get(id, 0.0))
+		var now := before + delta
+		_card_time[id] = now
+		# 每满 60 秒：攻击 +1（淬火·绝 是 +2）
+		if int(now / 60.0) > int(before / 60.0):
+			_evo_atk += (2 if str(id).begins_with("cuihuo3") else 1)
+			_extra["evo_atk"] = float(_evo_atk)
+			_sync_battle_stats()
+		# 到点：进化（原地换卡）
+		if now >= float(s["evo_time"]) and s.has("evo_next"):
+			var nid := str(s["evo_next"])
+			_card_time.erase(id)
+			_card_have.erase(id)
+			var at := _deck_cards.find(str(id))
+			if at >= 0:
+				_deck_cards[at] = nid
+			_card_have[nid] = 1
+			_hint.text = "【" + card_name(str(id)) + "】随时间进化 → 【" + card_name(nid) + "】"
+			Audio.sfx("levelup", -5.0)
+			_sync_battle_stats()
+
+# v11e：凑齐成套的装备卡 → **自动穿到六格第一空格**（散卡永不进六格）
+func _equip_auto(name_cn: String) -> void:
+	for i in _equip.size():
+		if str(_equip[i]) == "":
+			_equip[i] = name_cn
+			_hint.text = "装备成型，自动穿上：" + name_cn + "（第 " + str(i + 1) + " 格）"
+			Audio.sfx("equip", -4.0)
+			return
+	_hint.text = "六格满了，" + name_cn + " 放进仓库"
+	_vault.append(name_cn)
+# v11b：把成长武器的加成写进 _extra（每次同步重算，不会重复叠加）
+func _wpn_line_total(t: String) -> float:
+	var sum := 0.0
+	for it_v in _wpn_lines:
+		var it: Dictionary = it_v
+		if str(it["t"]) == t:
+			sum += float(it["v"])
+	return sum
+
+func _wpn_sync() -> void:
+	_extra["atk_flat"] = float(_wpn_flat_atk()) + _wpn_line_total("atk_flat")
+	_extra["hp_flat"] = float(_wpn_flat_hp()) + _wpn_line_total("hp_flat")
+	_extra["wpn_aspd"] = _wpn_line_total("aspd") / 100.0
+	_extra["wpn_crit"] = _wpn_line_total("crit") / 100.0
+	_extra["wpn_critdmg"] = _wpn_line_total("critdmg") / 100.0
+	_extra["wpn_arm"] = _wpn_line_total("arm")
+	_extra["wpn_agi"] = _wpn_line_total("agi")
+	_extra["wpn_wit"] = _wpn_line_total("wit")
+	_extra["wpn_cut"] = _wpn_line_total("cut") / 100.0
+	_extra["wpn_elem"] = _wpn_line_total("elem") / 100.0
+# 三条强化线的属性池（每条带品质档，数值按档位放大）
+const WPN_POOL := [
+	{"n": "攻击 +%d", "t": "atk_flat", "v": 4},
+	{"n": "气血 +%d", "t": "hp_flat", "v": 30},
+	{"n": "攻速 +%d%%", "t": "aspd", "v": 2},
+	{"n": "暴击 +%d%%", "t": "crit", "v": 1},
+	{"n": "暴击伤害 +%d%%", "t": "critdmg", "v": 4},
+	{"n": "臂力 +%d", "t": "arm", "v": 1},
+	{"n": "身法 +%d", "t": "agi", "v": 1},
+	{"n": "悟性 +%d", "t": "wit", "v": 1},
+	{"n": "减伤 +%d%%", "t": "cut", "v": 2},
+	{"n": "元素攻击 +%d%%", "t": "elem", "v": 3},
+]
+
+# 掷三选一：品质权重跟着武器品质走（越高越容易出高档）
+func _wpn_roll_choices() -> void:
+	var w: Array = [[60, 30, 10, 0, 0, 0], [45, 32, 18, 5, 0, 0], [25, 32, 26, 13, 4, 0],
+		[12, 24, 30, 22, 9, 3], [5, 15, 28, 28, 17, 7], [2, 8, 20, 30, 25, 15]][clampi(_wpn_q, 0, 5)]
+	var out: Array = []
+	var guard := 0
+	while out.size() < 3 and guard < 200:
+		guard += 1
+		var base: Dictionary = WPN_POOL[randi() % WPN_POOL.size()]
+		var roll := randi() % 100
+		var acc := 0
+		var q := 0
+		for i in 6:
+			acc += int(w[i])
+			if roll < acc:
+				q = i
+				break
+		var mul := float(WPN_Q_MUL[q])
+		var v := int(ceil(float(base["v"]) * mul))
+		var item := {"n": str(base["n"]) % v, "t": str(base["t"]), "v": v, "q": q}
+		var dup := false
+		for o_v in out:
+			if str((o_v as Dictionary)["t"]) == str(item["t"]):
+				dup = true
+		if not dup:
+			out.append(item)
+	_wpn_choices = out
+
+func _wpn_refresh() -> void:
+	var c := _wpn_refresh_cost()
+	if int(_money) < c:
+		_hint.text = "刷新要 " + str(c) + " 文钱（现有 " + str(int(_money)) + "）"
+		return
+	_money -= c
+	_wpn_refresh_n += 1
+	_wpn_roll_choices()
+	Audio.sfx("ui_click", -8.0)
+	if _popup_kind == "成长武器":
+		_open_large("成长武器")
+# 贴上一条强化线（永久）
+func _wpn_take(i: int) -> void:
+	if i < 0 or i >= _wpn_choices.size():
+		return
+	var it: Dictionary = _wpn_choices[i]
+	_wpn_lines.append(it)
+	_wpn_choices.clear()
+	_wpn_await = false
+	_wpn_refresh_n = 0
+	_hint.text = "武器贴上：" + str(it["n"])
+	Audio.sfx("equip", -4.0)
+	_sync_battle_stats()
+	if _popup_kind == "成长武器":
+		_open_large("成长武器")
+
+# 强化一次：钱够就升；到 10 的倍数进阶＋弹三选一
+func _wpn_up() -> bool:
+	var c := _wpn_cost()
+	if int(_money) < c:
+		_hint.text = "强化要 " + str(c) + " 文钱（现有 " + str(int(_money)) + "）"
+		return false
+	_money -= c
+	_wpn_lv += 1
+	Audio.sfx("hit_heavy", -10.0, 1.3)
+	if _wpn_lv % 10 == 0:
+		_wpn_q = mini(5, _wpn_q + 1)
+		_wpn_await = true
+		_wpn_refresh_n = 0
+		_wpn_roll_choices()
+		_hint.text = "进阶！武器升为【" + str(WPN_Q_CN[_wpn_q]) + "】，来选一条强化线"
+		Audio.sfx("levelup", -3.0)
+	_sync_battle_stats()
+	if _popup_kind == "成长武器":
+		_open_large("成长武器")
+	return true
+
+# 一键强化：一直花文钱，碰到进阶（等三选一）或钱不够就停
+func _wpn_auto() -> void:
+	var n := 0
+	var spent := 0
+	while n < 200 and not _wpn_await:
+		var c := _wpn_cost()
+		if int(_money) < c:
+			break
+		if not _wpn_up():
+			break
+		n += 1
+		spent += c
+	if n <= 0:
+		_hint.text = "一键强化：文钱不够（下次要 " + str(_wpn_cost()) + "）"
+	else:
+		_hint.text = "一键强化 " + str(n) + " 次：花了 " + str(spent) + " 文钱，现在 +" + str(_wpn_lv) + "（" + str(WPN_Q_CN[_wpn_q]) + "）"
+	Audio.sfx("coin", -6.0)
+	if _popup_kind == "成长武器":
+		_open_large("成长武器")
+# ---- v11c 成长武器页：大字 · 大按钮（手机）· 三选一带品质色 ----
+func _fill_weapon(p: Control, y: float, sz: Vector2) -> float:
+	var nm := Label.new()
+	nm.position = Vector2(28, y)
+	nm.size = Vector2(420, 52)
+	nm.add_theme_font_size_override("font_size", 30)
+	nm.add_theme_color_override("font_color", _quality_color(str(WPN_Q_CN[_wpn_q])))
+	nm.text = str(WPN_NAME) + "　【" + str(WPN_Q_CN[_wpn_q]) + "】"
+	p.add_child(nm)
+	var lv := Label.new()
+	lv.position = Vector2(460, y)
+	lv.size = Vector2(200, 52)
+	lv.add_theme_font_size_override("font_size", 34)
+	lv.add_theme_color_override("font_color", SEAL)
+	lv.text = "+" + str(_wpn_lv)
+	lv.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	p.add_child(lv)
+	var ly := y + 60.0
+	# 当前属性（固定加成 ＋ 已选强化线）
+	var stat := Label.new()
+	stat.position = Vector2(28, ly)
+	stat.size = Vector2(640, 96)
+	stat.add_theme_font_size_override("font_size", 22)
+	stat.add_theme_color_override("font_color", INK)
+	stat.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	var txt := "每级：攻击 +" + str(_wpn_flat_atk()) + "　气血 +" + str(_wpn_flat_hp())
+	txt += "\n已选强化线 " + str(_wpn_lines.size()) + " 条："
+	if _wpn_lines.is_empty():
+		txt += "（还没有——每 10 级进阶时选一条）"
+	else:
+		var parts := []
+		for it_v in _wpn_lines:
+			var it: Dictionary = it_v
+			parts.append(str(it["n"]) + "（" + str(WPN_Q_CN[int(it["q"])]) + "）")
+		txt += "、".join(PackedStringArray(parts))
+	stat.text = txt
+	p.add_child(stat)
+	ly += 104.0
+	if _wpn_await and _wpn_choices.size() > 0:
+		var ht := Label.new()
+		ht.position = Vector2(28, ly)
+		ht.size = Vector2(640, 40)
+		ht.add_theme_font_size_override("font_size", 24)
+		ht.add_theme_color_override("font_color", GOLD)
+		ht.text = "进阶！三选一（可刷新）"
+		p.add_child(ht)
+		ly += 46.0
+		for i in _wpn_choices.size():
+			var it: Dictionary = _wpn_choices[i]
+			var q := int(it["q"])
+			var sb := StyleBoxFlat.new()
+			sb.bg_color = Color(0.99, 0.97, 0.92)
+			sb.set_corner_radius_all(12)
+			sb.border_color = _quality_color(str(WPN_Q_CN[q]))
+			sb.set_border_width_all(3)
+			var box := Panel.new()
+			box.position = Vector2(28, ly)
+			box.size = Vector2(640, 84)
+			box.add_theme_stylebox_override("panel", sb)
+			box.mouse_filter = Control.MOUSE_FILTER_STOP
+			p.add_child(box)
+			var t1 := Label.new()
+			t1.position = Vector2(18, 10)
+			t1.size = Vector2(360, 60)
+			t1.add_theme_font_size_override("font_size", 26)
+			t1.add_theme_color_override("font_color", _quality_color(str(WPN_Q_CN[q])))
+			t1.text = str(it["n"]) + "　【" + str(WPN_Q_CN[q]) + "】"
+			box.add_child(t1)
+			_pbtn(box, "选它", Vector2(500, 16), Vector2(124, 52), 24, true, _wpn_take.bind(i))
+			ly += 92.0
+		_pbtn(p, "刷新 " + str(_wpn_refresh_cost()) + " 文钱", Vector2(28, ly), Vector2(320, 68), 24, int(_money) >= _wpn_refresh_cost(), _wpn_refresh)
+		ly += 80.0
+	_pbtn(p, "强化（" + str(_wpn_cost()) + " 文钱）", Vector2(28, ly), Vector2(312, 88), 28, int(_money) >= _wpn_cost(), _wpn_up)
+	_pbtn(p, "一键强化", Vector2(356, ly), Vector2(312, 88), 28, true, _wpn_auto)
+	ly += 100.0
+	var tip := Label.new()
+	tip.position = Vector2(28, ly)
+	tip.size = Vector2(640, 70)
+	tip.add_theme_font_size_override("font_size", 20)
+	tip.add_theme_color_override("font_color", DIM)
+	tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	tip.text = "文钱强化 · 等级无上限 · 每 10 级进阶一次（品质升一档 ＋ 三选一）；进阶不重置等级。"
+	p.add_child(tip)
+	return ly + 84.0
+# ============================================================
+# v12a 主动宝物地基 ＋ 玲珑玉壶（用户口径）
+#   效果：恢复自身 气血 25% ＋ 内力 25%　冷却 60 秒　气血低于 50% 时**自动**用（手动也行）
+#   品质影响恢复与冷却（凡 25%/60s → 绝 40%/35s，高档附加减伤）
+#   这一套是"主动宝物"的地基：以后护身符、遁地符都是填数据。
+# ============================================================
+const YUHU_NAME := "玲珑玉壶"
+const YUHU_HEAL := [0.25, 0.28, 0.30, 0.32, 0.35, 0.40]
+const YUHU_CD := [60.0, 55.0, 50.0, 45.0, 40.0, 35.0]
+var _yh_cd := 0.0
+var _yh_auto := true
+var _yh_q := 0
+var _yh_btn: Button = null
+var _yh_lb: Label = null
+var _yh_auto_btn: Button = null
+
+func _yh_ready() -> bool:
+	return _yh_cd <= 0.0
+
+func _yh_use() -> void:
+	if not _yh_ready() or _field == null:
+		return
+	var heals := float(YUHU_HEAL[clampi(_yh_q, 0, 5)])
+	var hp_add := float(_field.hero["hp_max"]) * heals
+	var mp_add := float(_field.hero["mp_max"]) * heals
+	_field.hero["hp"] = minf(float(_field.hero["hp_max"]), float(_field.hero["hp"]) + hp_add)
+	_field.hero["mp"] = minf(float(_field.hero["mp_max"]), float(_field.hero["mp"]) + mp_add)
+	_yh_cd = float(YUHU_CD[clampi(_yh_q, 0, 5)])
+	_field._push_float(_field.hero_pos.x, _field.hero_pos.y - 96.0, "玉壶：气血/内力 +" + str(int(heals * 100.0)) + "%", Color(0.62, 0.92, 0.86), true)
+	if _field.has_method("_burst_at"):
+		_field._burst_at(_field.hero_pos, Color(0.62, 0.92, 0.86), 2.0)
+	Audio.sfx("chest", -6.0)
+	_hint.text = "玲珑玉壶：气血 +" + str(int(hp_add)) + " · 内力 +" + str(int(mp_add))
+
+func _yh_toggle_auto() -> void:
+	_yh_auto = not _yh_auto
+	if _yh_auto_btn != null and is_instance_valid(_yh_auto_btn):
+		_yh_auto_btn.text = "自动：" + ("开" if _yh_auto else "关")
+
+# 每帧：冷却倒计时 ＋ 自动使用（气血低于 50% 就喝）
+func _yh_tick(delta: float) -> void:
+	if _yh_cd > 0.0:
+		_yh_cd = maxf(0.0, _yh_cd - delta)
+	if _yh_auto and _yh_ready() and _field != null:
+		var hp := float(_field.hero["hp"])
+		var mx := maxf(1.0, float(_field.hero["hp_max"]))
+		if hp / mx < 0.5:
+			_yh_use()
+	if _yh_lb != null and is_instance_valid(_yh_lb):
+		_yh_lb.text = "玉壶 " + str(int(ceil(_yh_cd))) + "s" if not _yh_ready() else "玉壶 就绪"
+		_yh_lb.add_theme_color_override("font_color", Color(0.62, 0.92, 0.86) if _yh_ready() else DIM)
+	if _yh_btn != null and is_instance_valid(_yh_btn):
+		_yh_btn.disabled = not _yh_ready()
 # ---- v7a 卡面（单卡属性 ＋ 组合栏 ＋ 进度条）----
 func _card_face(p: Control, pos: Vector2, sz: Vector2, id: String) -> void:
 	var sb := StyleBoxFlat.new()
@@ -1782,6 +2299,8 @@ func _process(delta: float) -> void:
 			_meditate_acc -= float(add)
 			_grow_card[_main_line()] = int(_grow_card.get(_main_line(), 0)) + add
 			_sync_battle_stats()
+	_yh_tick(delta)             # v12a：玲珑玉壶（冷却 ＋ 气血低于 50% 自动用）
+	_card_time_tick(delta)      # v11e：时间进化（淬火剑这类）
 	_boss_sec -= delta
 	if _boss_sec <= 0.0:
 		_boss_sec = 60.0
@@ -1900,6 +2419,7 @@ func _note(txt: String, secs: float) -> void:
 	Audio.sfx("tension", -8.0)
 
 func _sync_battle_stats() -> void:
+	_wpn_sync()          # v11b：先把成长武器的加成算进 _extra
 	if _field == null:
 		return
 	_field.setup({
@@ -1915,13 +2435,13 @@ func _sync_battle_stats() -> void:
 	# v5a：回血 / 回蓝 / 元素攻击 这三样直接塞进 hero 字典（战场每帧要用）
 	_field.hero["hp_regen"] = _hp_regen()
 	_field.hero["mp_regen"] = _mp_regen()
-	_field.hero["elem_amp"] = _elem_amp()
+	_field.hero["elem_amp"] = _elem_amp() + float(_extra.get("wpn_elem", 0.0))
 	# v5f：暴击/暴击伤害（无上限）· 幸运一击（上限 300%）· 全伤害增加与减免 · 各元素抗性/加成
 	_field.hero["crit"] = _crit_total()
 	_field.hero["crit_dmg"] = _crit_dmg_total()
 	_field.hero["lucky"] = _lucky()
 	_field.hero["dmg_all"] = _dmg_all()
-	_field.hero["cut_all"] = 0.10 + float(_extra.get("cut_all_bonus", 0.0))   # 横练 10% ＋ 铁壁套
+	_field.hero["cut_all"] = 0.10 + float(_extra.get("cut_all_bonus", 0.0)) + float(_extra.get("wpn_cut", 0.0))
 	_field.hero["res_elem"] = _res_elem()
 	_field.hero["dmg_elem"] = _dmg_elem()
 	_field.hero["dmg_true"] = float(_extra.get("dmg_true", 0.0))   # 只有它能加真实伤害
@@ -2043,7 +2563,11 @@ func _on_chal_drop(kind_i: int, at: Vector2) -> void:
 		0:
 			var g0 := 40 + randi() % 41
 			_money += g0
-			_hint.text = "钱怪掉了 " + str(g0) + " 文钱"
+			# v11f：钱怪另有小概率掉装备
+			if randi() % 100 < 12:
+				_equip_add(_gen_gear(false, false))
+			else:
+				_hint.text = "钱怪掉了 " + str(g0) + " 文钱"
 		1:
 			var g1 := 6 + randi() % 5
 			_crystal += g1
@@ -2052,7 +2576,10 @@ func _on_chal_drop(kind_i: int, at: Vector2) -> void:
 			_gain_exp(0.06)
 			_hint.text = "书怪：经验 +6%"
 		3:
-			_hint.text = "宝箱大怪爆了宝物（宝物槽下一轮接）"
+			# v11f：宝物挑战真的爆一件宝物（大怪掉得更好）
+			var g3 := _gen_gear(true, true)
+			_treasures.append(str(g3["name"]) + "（" + str(WPN_Q_CN[int(g3["q"])]) + "）")
+			_hint.text = "宝箱大怪爆出：" + str(g3["name"]) + "【" + str(WPN_Q_CN[int(g3["q"])]) + "】"
 			Audio.sfx("chest", -3.0)
 		4:
 			# 名声是"局外"的（跨局保留），这里先记一笔本局战绩
@@ -2166,7 +2693,7 @@ func _input(e: InputEvent) -> void:
 # 弹窗（两层）
 # ============================================================
 func _is_large(k: String) -> bool:
-	return ["卡组", "技能", "装备", "挑战", "存档", "成就", "角色", "队员", "仓库", "卡牌详情", "局终", "黑市", "招募"].has(k)
+	return ["卡组", "技能", "装备", "挑战", "存档", "成就", "角色", "队员", "仓库", "卡牌详情", "局终", "黑市", "招募", "成长武器"].has(k)
 
 func _close_popup() -> void:
 	if _popup != null and is_instance_valid(_popup):
@@ -2295,6 +2822,8 @@ func _fill_popup(p: Control, kind: String, y: float, sz: Vector2) -> float:
 		return _fill_black(p, y, sz)
 	if kind == "招募":
 		return _fill_recruit(p, y, sz)
+	if kind == "成长武器":
+		return _fill_weapon(p, y, sz)
 	if kind == "角色":
 		# 页签点了要**真的换内容**（探针抓到过：只高亮了页签、内容没换）
 		return _fill_mates(p, y, sz) if _role_tab == 1 else _fill_role(p, y, sz)
@@ -2728,13 +3257,13 @@ func _set_role_tab(i: int) -> void:
 # ---- v5a 三条属性的换算（都在这里，改数只改这一处）----
 # v6a：实际三属性 ＝ 自己加的点 ＋ **继承来的成长**（招募取最高值）
 func _attr_arm() -> int:
-	return int(_attr["arm"]) + int(_grow_inherit["arm"]) + int(_grow_card["arm"])
+	return int(_attr["arm"]) + int(_grow_inherit["arm"]) + int(_grow_card["arm"]) + int(_extra.get("wpn_arm", 0))
 
 func _attr_agi() -> int:
-	return int(_attr["agi"]) + int(_grow_inherit["agi"]) + int(_grow_card["agi"])
+	return int(_attr["agi"]) + int(_grow_inherit["agi"]) + int(_grow_card["agi"]) + int(_extra.get("wpn_agi", 0))
 
 func _attr_wit() -> int:
-	return int(_attr["wit"]) + int(_grow_inherit["wit"]) + int(_grow_card["wit"])
+	return int(_attr["wit"]) + int(_grow_inherit["wit"]) + int(_grow_card["wit"]) + int(_extra.get("wpn_wit", 0))
 
 # 招募：把这位伙伴的三属性成长**逐项取最高**并进来（保证只升不降）
 func _recruit(id: String) -> void:
@@ -2758,14 +3287,14 @@ func _recruit(id: String) -> void:
 # 臂力：气血 + 生命恢复；主属性＝力量时再给攻击
 func _hp_max_total() -> float:
 	return 200.0 + float(_grow) * 10.0 * float(maxi(0, _lv - 1)) \
-		+ 12.0 * float(_attr_arm()) * _boost_for("arm")
+		+ 12.0 * float(_attr_arm()) * _boost_for("arm") + float(_extra.get("hp_flat", 0.0)) + float(_extra.get("gear_hp", 0.0))
 
 func _hp_regen() -> float:
 	return 0.4 * float(_attr_arm()) * _boost_for("arm")
 
 # 身法：攻速 + 护甲；主属性＝敏捷时再给攻击
 func _aspd_total() -> float:
-	return 1.0 * (1.0 + 0.02 * float(_attr_agi()) * _boost_for("agi") + float(_extra.get("aspd_bonus", 0.0)))
+	return 1.0 * (1.0 + 0.02 * float(_attr_agi()) * _boost_for("agi") + float(_extra.get("aspd_bonus", 0.0)) + float(_extra.get("wpn_aspd", 0.0)))
 
 # v5e（用户："护甲是整体百分比减伤 要少给"）：
 #   身法每点 **+1 护甲**（原来 +2），换算也调钝：护甲/(护甲+**120**)（原来 60）
@@ -2812,6 +3341,9 @@ func _elem_amp() -> float:
 func _atk() -> float:
 	var base := 12.0 + float(_grow) * float(maxi(0, _lv - 1))
 	base *= 1.0 + float(_extra.get("atk_all", 0.0))          # v7g：淬锋套给的攻击 %
+	base += float(_extra.get("atk_flat", 0.0))              # v11b：成长武器给的固定攻击
+	base += float(_extra.get("evo_atk", 0.0))               # v11e：时间进化累积的攻击
+	base += float(_extra.get("gear_atk", 0.0))              # v11f：六格装备给的攻击
 	# 主属性是哪条，就用哪条当攻击（系数统一 1.5）；主属性＝悟性时它的"攻击"是元素（见 _elem_amp）
 	match _main_attr:
 		"str":
@@ -2824,10 +3356,10 @@ func _atk() -> float:
 #   臂力：每点 +2% 暴击伤害　身法：每点 +0.5% 暴击　悟性：每点 +0.5% 全元素加成
 #   幸运一击、各元素抗性、全伤害增减目前由装备/伙伴给（先给 0，接口留着）
 func _crit_total() -> float:
-	return 0.05 + 0.005 * float(_attr_agi()) + float(_extra.get("crit_add", 0.0))
+	return 0.05 + 0.005 * float(_attr_agi()) + float(_extra.get("crit_add", 0.0)) + float(_extra.get("wpn_crit", 0.0))
 
 func _crit_dmg_total() -> float:
-	return 2.0 + 0.02 * float(_attr_arm()) + float(_extra.get("crit_dmg_bonus", 0.0))
+	return 2.0 + 0.02 * float(_attr_arm()) + float(_extra.get("crit_dmg_bonus", 0.0)) + float(_extra.get("wpn_critdmg", 0.0))
 
 func _lucky() -> float:
 	return minf(3.0, float(_extra.get("lucky", 0.0)))
@@ -3091,6 +3623,20 @@ func _fill_equip(p: Control, y: float, sz: Vector2) -> float:
 			_gear_box(p, Vector2(28.0 + float(col2) * 216.0, ly + float(row2) * 132.0), Vector2(200, 120), "treasure", i)
 		ly += 132.0 * float(1 + _treasures.size() / 3)
 	ly += 12.0
+	# v11c：成长武器入口（自带那一件，无限强化）
+	_pbtn(p, "成长武器 ＋" + str(_wpn_lv) + "（" + str(WPN_Q_CN[_wpn_q]) + "）", Vector2(28, ly), Vector2(640, 80), 26, true,
+		func(): _open_large("成长武器"))
+	ly += 92.0
+	# v11g：每格下面两颗小钮：存进仓库 / 卖掉
+	for gi in 6:
+		if str(_equip[gi]) == "":
+			continue
+		var gcol := gi % 3
+		var grow := gi / 3
+		var gx := 28.0 + float(gcol) * 216.0
+		var gy := y + 74.0 + float(grow) * 132.0 + 92.0
+		_pbtn(p, "存", Vector2(gx, gy), Vector2(58, 34), 18, false, _gear_to_vault.bind(gi))
+		_pbtn(p, "卖", Vector2(gx + 66.0, gy), Vector2(58, 34), 18, true, _gear_sell.bind(false, gi))
 	_pbtn(p, "仓库", Vector2(28, ly), Vector2(200, 76), 24, false, func(): _open_large("仓库"))
 	_pbtn(p, "公共仓库（暂不开放）", Vector2(240, ly), Vector2(300, 76), 21, false, func(): _open_large("公共仓库"))
 	var tip := Label.new()
