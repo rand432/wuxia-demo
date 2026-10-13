@@ -314,6 +314,12 @@ var _bm_need := 100               # 升下一级要多少（每级 +50）
 var _bm_refresh := 1              # 刷新次数
 var _bm_t := 0.0                  # 距离下一次 +1 刷新还差多久（满 180 送一次）
 const BM_REFRESH_SEC := 180.0
+# v13a 黑市重做（规格：docs/困兽_交接文档.md §6.1）：六格货架 · 买掉即空 · 只手动刷新 · 每件 30% 概率打折
+var _bm_slots: Array = []         # 六格货架（{id,n,d,base,disc,cost,q,gear,bought}）
+var _bm_atk := 0                  # 「消耗型装备·小」累积的攻（可重复买，叠加）
+var _bm_hp := 0                   # 「消耗型装备·小」累积的血
+var _bm_eaten: Array = []         # 被吞噬丹吞掉的卡（id；效果与成套计数照留）
+var _card_refresh := 0            # 卡组刷新次数（黑市货品，抽卡页免费全刷用）
 var _over := false        # 这一局结束没有
 # v2f（用户这一轮的四条）：
 #   · 吞噬记录/卡面**不标流派**（"这种是玩家自己发掘的"）
@@ -374,14 +380,14 @@ var _auto_btn: Button = null
 
 # ⚠ 注意 visible 的时序：外面习惯是"add_child 完就 open()"，而 add_child 进来的这一帧
 #   `_ready` 可能还没跑（SceneTree 建场那会儿是延迟的）——如果 _ready 里硬写 visible=false，
-#   就会把外面刚 open 的那一下**覆盖掉**（探针上表现为"整屏全黑、什么都没有"）。
-#   所以这里用 _want_open 记住意图，_ready 只按意图落地。
+#   里面 open() 设的 visible=true 会被覆盖；所以这里用 _want_open 标记，_ready 只看标记
 var _want_open := false
 
 func _ready() -> void:
 	size = get_viewport_rect().size
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	_build()
+	_bm_roll()          # v13a：开局先摆一轮黑市货（六格）
 	visible = _want_open
 
 func open() -> void:
@@ -1127,6 +1133,17 @@ func _refresh_all() -> void:
 	Audio.sfx("ui_click", -8.0)
 	_open_large("抽卡")
 
+# v13a：卡组刷新次数（黑市 60 杀敌数一件）——免费把三选一全刷一次
+func _refresh_all_free() -> void:
+	if _card_refresh <= 0:
+		_hint.text = "没有卡组刷新次数了（黑市 60 杀敌数一件）"
+		return
+	_card_refresh -= 1
+	_draw_choices = _roll_cards()
+	Audio.sfx("ui_click", -8.0)
+	_hint.text = "用掉 1 次卡组刷新（剩 " + str(_card_refresh) + " 次）"
+	_open_large("抽卡")
+
 # 三选一页：三张大卡面（大的先做"信息区"，插画下一轮补）
 func _fill_draw(p: Control, y: float, sz: Vector2) -> float:
 	var head := Label.new()
@@ -1154,15 +1171,21 @@ func _fill_draw(p: Control, y: float, sz: Vector2) -> float:
 		_pbtn(p, "选它 " + str(DRAW_COST), Vector2(x, ly + 568.0), Vector2(cw, 66), 23, int(_crystal) >= DRAW_COST, _draw_card.bind(cid))
 		_pbtn(p, "重抽 " + str(REROLL_ONE), Vector2(x, ly + 640.0), Vector2(cw, 52), 20, int(_crystal) >= REROLL_ONE, _reroll_one.bind(i))
 	ly += 706.0
-	_pbtn(p, "全部刷新 " + str(REFRESH_ALL), Vector2(24, ly), Vector2(220, 64), 22, int(_crystal) >= REFRESH_ALL, _refresh_all)
+	_pbtn(p, "全部刷新 " + str(REFRESH_ALL) + " 灵晶", Vector2(24, ly), Vector2(250, 68), 22, int(_crystal) >= REFRESH_ALL, _refresh_all)
+	# v13a：黑市买的「卡组刷新」在这里免费花（一次用 1 个）
+	var fb := _pbtn(p, "用卡组刷新 ×" + str(_card_refresh), Vector2(286, ly), Vector2(280, 68), 22, _card_refresh > 0, _refresh_all_free)
+	if _card_refresh <= 0:
+		fb.add_theme_stylebox_override("normal", _flat(Color(0.55, 0.53, 0.51, 0.95)))
+		fb.add_theme_stylebox_override("hover", _flat(Color(0.60, 0.58, 0.56, 0.95)))
+		fb.add_theme_stylebox_override("pressed", _flat(Color(0.48, 0.46, 0.44, 0.95)))
 	var done := Label.new()
-	done.position = Vector2(260, ly + 14.0)
-	done.size = Vector2(420, 40)
-	done.add_theme_font_size_override("font_size", 19)
+	done.position = Vector2(24, ly + 78.0)
+	done.size = Vector2(620, 40)
+	done.add_theme_font_size_override("font_size", 20)
 	done.add_theme_color_override("font_color", DIM)
-	done.text = "已拿到 " + str(_card_have.size()) + " / " + str(card_pool_size()) + " 张"
+	done.text = "已拿到 " + str(_card_have.size()) + " / " + str(card_pool_size()) + " 张　·　黑市卖「卡组刷新」60 杀敌数一件"
 	p.add_child(done)
-	return ly + 84.0
+	return ly + 128.0
 # ============================================================
 # v11a 成长武器：自带一件 · 无限强化（文钱）· 每 10 级进阶（品质升档 ＋ 三选一）
 #   强化等级保留 · 一键强化用大按钮（手机不做键盘热键）· 三选一可刷新（按次数计价）
@@ -1287,8 +1310,9 @@ func _gear_sync() -> void:
 		if i < _equip_stat.size() and _equip_stat[i] is Dictionary:
 			a += int((_equip_stat[i] as Dictionary).get("atk", 0))
 			h += int((_equip_stat[i] as Dictionary).get("hp", 0))
-	_extra["gear_atk"] = float(a)
-	_extra["gear_hp"] = float(h)
+	# v13a：再加上黑市买的「消耗型装备·小」（可重复买，叠加）
+	_extra["gear_atk"] = float(a + _bm_atk)
+	_extra["gear_hp"] = float(h + _bm_hp)
 	_sync_battle_stats()
 
 # 卖一件（六格或仓库），按品质 × 强化等级折算成文钱
@@ -1486,6 +1510,348 @@ func _wpn_auto() -> void:
 	Audio.sfx("coin", -6.0)
 	if _popup_kind == "成长武器":
 		_open_large("成长武器")
+# ---- v12k 图鉴：宝物全部 ＋ 羁绊 16 件（用户："可以查看有什么宝物"）----
+func _fill_codex(p: Control, y: float, sz: Vector2) -> float:
+	var head := Label.new()
+	head.position = Vector2(24, y)
+	head.size = Vector2(640, 40)
+	head.add_theme_font_size_override("font_size", 24)
+	head.add_theme_color_override("font_color", INK)
+	var own := _trea_own.size()
+	var locked := 0
+	for b_v in BONDS:
+		if bool(_bonds_locked.get(str((b_v as Dictionary)["id"]), false)):
+			locked += 1
+	head.text = "图鉴　宝物 " + str(own) + "/" + str(TREA_POOL.size()) + "　羁绊 " + str(locked) + "/" + str(BONDS.size())
+	p.add_child(head)
+	var ly := y + 46.0
+	var t1 := Label.new()
+	t1.position = Vector2(24, ly)
+	t1.size = Vector2(640, 32)
+	t1.add_theme_font_size_override("font_size", 21)
+	t1.add_theme_color_override("font_color", SEAL)
+	t1.text = "宝物（灰的还没拿到）"
+	p.add_child(t1)
+	ly += 36.0
+	for i in TREA_POOL.size():
+		var it: Dictionary = TREA_POOL[i]
+		var nm := str(it["n"])
+		var got := _trea_own.has(nm)
+		var col := i % 2
+		var row := i / 2
+		var bx := 24.0 + float(col) * 326.0
+		var by := ly + float(row) * 46.0
+		var qc := _quality_color(str(it["q"]))
+		var rowbox := Panel.new()
+		rowbox.position = Vector2(bx, by)
+		rowbox.size = Vector2(318, 42)
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.97, 0.95, 0.88) if got else Color(0.90, 0.89, 0.86)
+		sb.set_corner_radius_all(8)
+		sb.border_color = qc if got else Color(0.6, 0.6, 0.6, 0.5)
+		sb.set_border_width_all(2)
+		rowbox.add_theme_stylebox_override("panel", sb)
+		rowbox.mouse_filter = Control.MOUSE_FILTER_STOP
+		p.add_child(rowbox)
+		var l1 := Label.new()
+		l1.position = Vector2(10, 2)
+		l1.size = Vector2(180, 22)
+		l1.add_theme_font_size_override("font_size", 19)
+		l1.add_theme_color_override("font_color", qc if got else Color(0.55, 0.55, 0.55))
+		l1.text = nm + ("　×" + str(int((_trea_own[nm] as Dictionary).get("n", 1))) if got else "　未获得")
+		rowbox.add_child(l1)
+		var l2 := Label.new()
+		l2.position = Vector2(10, 22)
+		l2.size = Vector2(296, 20)
+		l2.add_theme_font_size_override("font_size", 15)
+		l2.add_theme_color_override("font_color", DIM)
+		l2.text = str(it["fx"])
+		l2.clip_text = true
+		rowbox.add_child(l2)
+	ly += float(int(ceil(float(TREA_POOL.size()) / 2.0))) * 46.0 + 12.0
+	var t2 := Label.new()
+	t2.position = Vector2(24, ly)
+	t2.size = Vector2(640, 32)
+	t2.add_theme_font_size_override("font_size", 21)
+	t2.add_theme_color_override("font_color", SEAL)
+	t2.text = "羁绊宝物（点一行看条件）"
+	p.add_child(t2)
+	ly += 36.0
+	for i in BONDS.size():
+		var b: Dictionary = BONDS[i]
+		var col2 := i % 2
+		var row2 := i / 2
+		var bx3 := 24.0 + float(col2) * 326.0
+		var by4 := ly + float(row2) * 54.0
+		var pr := _bond_progress(b)
+		var done := bool(_bonds_locked.get(str(b["id"]), false))
+		var qc2 := _quality_color(str(b["q"]))
+		var sb2 := StyleBoxFlat.new()
+		sb2.bg_color = Color(0.93, 0.96, 0.90) if done else Color(0.97, 0.95, 0.88)
+		sb2.set_corner_radius_all(8)
+		sb2.border_color = Color(0.42, 0.62, 0.40) if done else qc2
+		sb2.set_border_width_all(3 if done else 2)
+		var rb := Panel.new()
+		rb.position = Vector2(bx3, by4)
+		rb.size = Vector2(318, 48)
+		rb.add_theme_stylebox_override("panel", sb2)
+		rb.mouse_filter = Control.MOUSE_FILTER_STOP
+		p.add_child(rb)
+		var nl := Label.new()
+		nl.position = Vector2(10, 2)
+		nl.size = Vector2(190, 24)
+		nl.add_theme_font_size_override("font_size", 19)
+		nl.add_theme_color_override("font_color", Color(0.30, 0.55, 0.32) if done else qc2)
+		nl.text = str(b["n"])
+		rb.add_child(nl)
+		var pl := Label.new()
+		pl.position = Vector2(200, 4)
+		pl.size = Vector2(110, 22)
+		pl.add_theme_font_size_override("font_size", 20)
+		pl.add_theme_color_override("font_color", SEAL)
+		pl.text = "已成" if done else str(int(pr[0])) + "/" + str(int(pr[1]))
+		pl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		rb.add_child(pl)
+		var fl := Label.new()
+		fl.position = Vector2(10, 24)
+		fl.size = Vector2(300, 22)
+		fl.add_theme_font_size_override("font_size", 15)
+		fl.add_theme_color_override("font_color", DIM)
+		fl.text = str(b["fx"])
+		fl.clip_text = true
+		rb.add_child(fl)
+		var bh := _pbtn(rb, "", Vector2(0, 0), Vector2(318, 48), 14, false, _bond_detail.bind(i))
+		bh.add_theme_stylebox_override("normal", _flat(Color(1, 1, 1, 0.001)))
+	var brow := int(ceil(float(BONDS.size()) / 2.0))
+	return ly + float(brow) * 54.0 + 10.0
+# ---- v12e 宝物页（照卡组那套）：紧凑格子 · 品质描边 · ×叠加数 · 点击详情 · 可滑动 ----
+func _fill_trea_list(p: Control, y: float, sz: Vector2) -> float:
+	var head := Label.new()
+	head.position = Vector2(28, y)
+	head.size = Vector2(640, 40)
+	head.add_theme_font_size_override("font_size", 24)
+	head.add_theme_color_override("font_color", INK)
+	head.text = "宝物 " + str(_trea_own.size()) + " 种　道具 " + str(_items.size()) + " 种　刷新次数 " + str(_trea_refresh)
+	p.add_child(head)
+	var tip := Label.new()
+	tip.position = Vector2(28, y + 42.0)
+	tip.size = Vector2(640, 32)
+	tip.add_theme_font_size_override("font_size", 20)
+	tip.add_theme_color_override("font_color", DIM)
+	tip.text = "点格子看详情（宝物不限格 · 同名叠加）"
+	p.add_child(tip)
+	var keys := _trea_own.keys()
+	if keys.is_empty():
+		var empty := Label.new()
+		empty.position = Vector2(28, y + 90.0)
+		empty.size = Vector2(640, 40)
+		empty.add_theme_font_size_override("font_size", 21)
+		empty.add_theme_color_override("font_color", DIM)
+		empty.text = "还没有宝物——去［宝物三选一］拿，或打宝物挑战/boss"
+		p.add_child(empty)
+		return y + 150.0
+	var ly := y + 84.0
+	for i in keys.size():
+		var nm := str(keys[i])
+		var info: Dictionary = _trea_own[nm]
+		var col := i % 5
+		var row := i / 5
+		var bx := 24.0 + float(col) * 134.0
+		var by := ly + float(row) * 108.0
+		var qc := _quality_color(str(info.get("q", "凡品")))
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.99, 0.97, 0.92)
+		sb.set_corner_radius_all(10)
+		sb.border_color = qc
+		sb.set_border_width_all(3)
+		var box := Panel.new()
+		box.position = Vector2(bx, by)
+		box.size = Vector2(126, 98)
+		box.add_theme_stylebox_override("panel", sb)
+		box.mouse_filter = Control.MOUSE_FILTER_STOP
+		p.add_child(box)
+		var l1 := Label.new()
+		l1.position = Vector2(4, 10)
+		l1.size = Vector2(118, 44)
+		l1.add_theme_font_size_override("font_size", 21)
+		l1.add_theme_color_override("font_color", INK)
+		l1.text = nm
+		l1.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		l1.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		box.add_child(l1)
+		var l2 := Label.new()
+		l2.position = Vector2(4, 56)
+		l2.size = Vector2(118, 28)
+		l2.add_theme_font_size_override("font_size", 24)
+		l2.add_theme_color_override("font_color", SEAL)
+		l2.text = "×" + str(int(info.get("n", 1)))
+		l2.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		box.add_child(l2)
+		var hit := _pbtn(box, "", Vector2(0, 0), Vector2(126, 94), 16, false, _trea_detail.bind(nm))
+		hit.add_theme_stylebox_override("normal", _flat(Color(1, 1, 1, 0.001)))
+		hit.add_theme_stylebox_override("hover", _flat(Color(1, 1, 1, 0.10)))
+	var rows := int(ceil(float(keys.size()) / 5.0))
+	ly += float(rows) * 108.0 + 8.0
+	# v12k（用户："宝物不用全部显示 选后才会显示 … 可以加一个图鉴"）：
+	#   宝物页只列**已到手**的；想看"全部有什么"就去［图鉴］
+	_pbtn(p, "图鉴（宝物 ＋ 羁绊）", Vector2(24, ly), Vector2(400, 72), 24, false,
+		func(): _open_large("图鉴"))
+	ly += 84.0
+	return ly
+	# ↓ 下面这段（羁绊列表）已挪进图鉴；留着当参照，不再执行
+	# v12h（用户："不要留太多空白"）：空出来的地方放**羁绊宝物进度**（16 件，2 列紧凑排）
+	var bt := Label.new()
+	bt.position = Vector2(24, ly)
+	bt.size = Vector2(640, 36)
+	bt.add_theme_font_size_override("font_size", 23)
+	bt.add_theme_color_override("font_color", INK)
+	var locked := 0
+	for b_v in BONDS:
+		if bool(_bonds_locked.get(str((b_v as Dictionary)["id"]), false)):
+			locked += 1
+	bt.text = "羁绊宝物 " + str(locked) + "/" + str(BONDS.size()) + " 已激活"
+	p.add_child(bt)
+	ly += 40.0
+	for i in BONDS.size():
+		var b: Dictionary = BONDS[i]
+		var col2 := i % 2
+		var row2 := i / 2
+		var bx3 := 24.0 + float(col2) * 326.0
+		var by4 := ly + float(row2) * 54.0
+		var pr := _bond_progress(b)
+		var done := bool(_bonds_locked.get(str(b["id"]), false))
+		var qc := _quality_color(str(b["q"]))
+		var sb2 := StyleBoxFlat.new()
+		sb2.bg_color = Color(0.97, 0.95, 0.88) if not done else Color(0.93, 0.96, 0.90)
+		sb2.set_corner_radius_all(8)
+		sb2.border_color = Color(0.42, 0.62, 0.40) if done else qc
+		sb2.set_border_width_all(2 if not done else 3)
+		var rowbox := Panel.new()
+		rowbox.position = Vector2(bx3, by4)
+		rowbox.size = Vector2(318, 48)
+		rowbox.add_theme_stylebox_override("panel", sb2)
+		rowbox.mouse_filter = Control.MOUSE_FILTER_STOP
+		p.add_child(rowbox)
+		var nl := Label.new()
+		nl.position = Vector2(10, 2)
+		nl.size = Vector2(190, 24)
+		nl.add_theme_font_size_override("font_size", 19)
+		nl.add_theme_color_override("font_color", Color(0.30, 0.55, 0.32) if done else qc)
+		nl.text = str(b["n"])
+		rowbox.add_child(nl)
+		var pl := Label.new()
+		pl.position = Vector2(200, 4)
+		pl.size = Vector2(110, 22)
+		pl.add_theme_font_size_override("font_size", 20)
+		pl.add_theme_color_override("font_color", SEAL)
+		pl.text = ("已成" if done else str(int(pr[0])) + "/" + str(int(pr[1])))
+		pl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		rowbox.add_child(pl)
+		var fl := Label.new()
+		fl.position = Vector2(10, 24)
+		fl.size = Vector2(300, 22)
+		fl.add_theme_font_size_override("font_size", 15)
+		fl.add_theme_color_override("font_color", DIM)
+		fl.text = str(b["fx"])
+		fl.clip_text = true
+		rowbox.add_child(fl)
+		var bhit := _pbtn(rowbox, "", Vector2(0, 0), Vector2(318, 48), 14, false, _bond_detail.bind(i))
+		bhit.add_theme_stylebox_override("normal", _flat(Color(1, 1, 1, 0.001)))
+	var brow := int(ceil(float(BONDS.size()) / 2.0))
+	return ly + float(brow) * 54.0 + 10.0
+
+func _bond_detail(i: int) -> void:
+	_detail_bond = i
+	_open_small("羁绊详情")
+
+func _gear_detail(i: int) -> void:
+	_detail_gear = i
+	_open_small("装备详情")
+
+func _trea_detail(nm: String) -> void:
+	_detail_trea = nm
+	_open_small("宝物详情")
+# ---- v12c 宝物三选一页（三张候选带品质色 ＋ 刷新按钮）----
+func _fill_trea_pick(p: Control, y: float, sz: Vector2) -> float:
+	var head := Label.new()
+	head.position = Vector2(28, y)
+	head.size = Vector2(640, 46)
+	head.add_theme_font_size_override("font_size", 26)
+	head.add_theme_color_override("font_color", INK)
+	head.text = "宝物三选一　刷新次数：" + str(_trea_refresh)
+	p.add_child(head)
+	var tip := Label.new()
+	tip.position = Vector2(28, y + 48.0)
+	tip.size = Vector2(640, 34)
+	tip.add_theme_font_size_override("font_size", 19)
+	tip.add_theme_color_override("font_color", DIM)
+	tip.text = "刷新只花「宝物刷新次数」（每 5 波 +1 · boss 首杀 +2 · 宝物挑战 +1）"
+	p.add_child(tip)
+	if _trea_choices.is_empty():
+		_trea_roll()
+	var ly := y + 92.0
+	for i in _trea_choices.size():
+		var it: Dictionary = _trea_choices[i]
+		var qc := _quality_color(str(it["q"]))
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.99, 0.97, 0.92)
+		sb.set_corner_radius_all(12)
+		sb.border_color = qc
+		sb.set_border_width_all(3)
+		var box := Panel.new()
+		box.position = Vector2(28, ly)
+		box.size = Vector2(640, 96)
+		box.add_theme_stylebox_override("panel", sb)
+		box.mouse_filter = Control.MOUSE_FILTER_STOP
+		p.add_child(box)
+		var t1 := Label.new()
+		t1.position = Vector2(18, 10)
+		t1.size = Vector2(420, 44)
+		t1.add_theme_font_size_override("font_size", 26)
+		t1.add_theme_color_override("font_color", qc)
+		t1.text = str(it["n"]) + "　【" + str(it["q"]) + "】"
+		box.add_child(t1)
+		var t2 := Label.new()
+		t2.position = Vector2(18, 54)
+		t2.size = Vector2(470, 34)
+		t2.add_theme_font_size_override("font_size", 20)
+		t2.add_theme_color_override("font_color", INK)
+		t2.text = str(it["fx"]) + ("　（消耗型）" if str(it["t"]) == "item" else "")
+		box.add_child(t2)
+		var btn_txt := "拿它"
+		if str(it["t"]) == "item":
+			btn_txt = "收下 ×" + str(int(_items.get(str(it["n"]), 0)) + 1)
+		_pbtn(box, btn_txt, Vector2(506, 22), Vector2(118, 52), 22, true, _trea_take.bind(i))
+		ly += 104.0
+	_pbtn(p, "刷新（剩 " + str(_trea_refresh) + " 次）", Vector2(28, ly), Vector2(360, 76), 24, _trea_refresh > 0, _trea_refresh_now)
+	ly += 96.0
+	var items := Label.new()
+	items.position = Vector2(28, ly)
+	items.size = Vector2(640, 44)
+	items.add_theme_font_size_override("font_size", 20)
+	items.add_theme_color_override("font_color", DIM)
+	items.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	# v12d：道具栏每件一颗［用］按钮
+	var ix := 28.0
+	for k in _items.keys():
+		var cnt := int(_items[k])
+		if cnt <= 0:
+			continue
+		_pbtn(p, str(k) + " ×" + str(cnt) + " 用", Vector2(ix, ly + 48.0), Vector2(200, 54), 20, true, _item_use.bind(str(k)))
+		ix += 208.0
+		if ix > 500.0:
+			break
+	var itxt := "道具栏："
+	if _items.is_empty():
+		itxt += "（空——消耗型宝物会收在这里）"
+	else:
+		var parts := []
+		for k in _items.keys():
+			parts.append(str(k) + " ×" + str(int(_items[k])))
+		itxt += "、".join(PackedStringArray(parts))
+	items.text = itxt
+	p.add_child(items)
+	return ly + 60.0
 # ---- v11c 成长武器页：大字 · 大按钮（手机）· 三选一带品质色 ----
 func _fill_weapon(p: Control, y: float, sz: Vector2) -> float:
 	var nm := Label.new()
@@ -1571,6 +1937,313 @@ func _fill_weapon(p: Control, y: float, sz: Vector2) -> float:
 	p.add_child(tip)
 	return ly + 84.0
 # ============================================================
+# ============================================================
+# ============================================================
+# ============================================================
+# v12d 消耗型宝物的实际效果（道具栏里点着用）
+#   疾风符 15s 攻速 +200% · 金刚符 10s 全减 +50% · 狂血丹 15s 攻击 +150%（受伤 +30%）
+#   定身符 全场定身 5s · 天雷符 立刻全场 300% 攻击的雷伤
+# ============================================================
+var _tmp_aspd := 0.0      # 剩余秒数
+var _tmp_cut := 0.0
+var _tmp_atk := 0.0
+
+func _item_use(nm: String) -> void:
+	if int(_items.get(nm, 0)) <= 0:
+		return
+	_items[nm] = int(_items[nm]) - 1
+	if int(_items[nm]) <= 0:
+		_items.erase(nm)
+	match nm:
+		"疾风符":
+			_tmp_aspd = 15.0
+		"金刚符":
+			_tmp_cut = 10.0
+		"狂血丹":
+			_tmp_atk = 15.0
+		"定身符":
+			if _field != null:
+				for f_v in _field.foes:
+					(f_v as Dictionary)["para"] = 5.0
+				_field._push_float(_field.hero_pos.x, _field.hero_pos.y - 120.0, "定身符：全场定身", Color(0.80, 0.86, 1.0), true)
+		"天雷符":
+			if _field != null:
+				for f_v in _field.foes.duplicate():
+					_field._apply_dmg(f_v as Dictionary, float(_field.hero["atk"]) * 3.0, "金系")
+				_field._push_float(_field.hero_pos.x, _field.hero_pos.y - 120.0, "天雷符：全场落雷", Color(0.72, 0.88, 1.0), true)
+		_:
+			pass
+	_hint.text = "用了「" + nm + "」（剩 " + str(int(_items.get(nm, 0))) + " 个）"
+	Audio.sfx("slash_light", -5.0)
+	_sync_battle_stats()
+	if _popup_kind == "宝物三选一":
+		_open_large("宝物三选一")
+
+func _item_tick(delta: float) -> void:
+	var dirty := false
+	if _tmp_aspd > 0.0:
+		_tmp_aspd = maxf(0.0, _tmp_aspd - delta)
+		dirty = true
+	if _tmp_cut > 0.0:
+		_tmp_cut = maxf(0.0, _tmp_cut - delta)
+		dirty = true
+	if _tmp_atk > 0.0:
+		_tmp_atk = maxf(0.0, _tmp_atk - delta)
+		dirty = true
+	if dirty:
+		_sync_battle_stats()
+# v12c 宝物三选一（用户：宝物可以刷新 需要宝物刷新次数 依旧三选一）
+#   三张候选带品质色；刷新**消耗宝物刷新次数**（不是文钱/灵晶）
+#   次数来源：每过 5 波 +1 · boss 首杀 +2 · 宝物挑战 +1
+# ============================================================
+var _trea_refresh := 0            # 宝物刷新次数
+var _trea_choices: Array = []     # 当前三选一
+var _trea_taken := {}             # 已拿过的（被动宝物可重复拿，这里只记次数）
+
+# 宝物池（被动 / 羁绊 / 消耗 三类先放一起，闲散宝物走"即拾即用"不进池）
+const TREA_POOL := [
+	{"n": "虎符", "q": "中品", "t": "passive", "fx": "攻击 +6%", "key": "atk_all", "v": 0.06},
+	{"n": "破军印", "q": "中品", "t": "passive", "fx": "暴击 +3%", "key": "crit_add", "v": 0.03},
+	{"n": "血玉", "q": "上品", "t": "passive", "fx": "暴击伤害 +25%", "key": "crit_dmg_bonus", "v": 0.25},
+	{"n": "疾风铃", "q": "中品", "t": "passive", "fx": "攻速 +5%", "key": "aspd_bonus", "v": 0.05},
+	{"n": "玄龟甲", "q": "中品", "t": "passive", "fx": "全伤害减免 +3%", "key": "cut_all_bonus", "v": 0.03},
+	{"n": "金钟罩", "q": "下品", "t": "passive", "fx": "护甲 +6", "key": "armor_add", "v": 6.0},
+	{"n": "聚宝盆", "q": "上品", "t": "passive", "fx": "文钱 +25%", "key": "money_bonus", "v": 0.25},
+	{"n": "灵石", "q": "上品", "t": "passive", "fx": "灵晶 +15%", "key": "crystal_bonus", "v": 0.15},
+	{"n": "龙纹佩", "q": "极品", "t": "passive", "fx": "三属性各 +1", "key": "attr_all", "v": 1.0},
+	{"n": "天命石", "q": "极品", "t": "passive", "fx": "幸运一击 +5%", "key": "lucky", "v": 0.05},
+	{"n": "疾风符", "q": "中品", "t": "item", "fx": "15 秒内攻速 +200%", "key": "item_haste", "v": 15.0},
+	{"n": "金刚符", "q": "上品", "t": "item", "fx": "10 秒内全减 +50%", "key": "item_shield", "v": 10.0},
+	{"n": "狂血丹", "q": "极品", "t": "item", "fx": "15 秒内攻击 +150%（受伤 +30%）", "key": "item_rage", "v": 15.0},
+	{"n": "定身符", "q": "极品", "t": "item", "fx": "全场敌人定身 5 秒", "key": "item_root", "v": 5.0},
+	{"n": "天雷符", "q": "绝品", "t": "item", "fx": "立刻对全场造成 300% 攻击的雷伤", "key": "item_thunder", "v": 3.0},
+	# v12i（用户：闲散宝物）——**即拾即用**：拿到当场结算，不占格、不入库
+	{"n": "灵晶袋", "q": "中品", "t": "instant", "fx": "灵晶 +100", "key": "crystal", "v": 100},
+	{"n": "钱袋", "q": "下品", "t": "instant", "fx": "文钱 +800", "key": "money", "v": 800},
+	{"n": "悟道果", "q": "上品", "t": "instant", "fx": "经验 +40%", "key": "exp", "v": 0.40},
+	{"n": "属性丹", "q": "上品", "t": "instant", "fx": "属性点 +3", "key": "attr_pt", "v": 3},
+	{"n": "洗髓丹", "q": "极品", "t": "instant", "fx": "三属性各 +2（永久）", "key": "attr_all", "v": 2},
+	{"n": "淬火石", "q": "极品", "t": "instant", "fx": "成长武器立刻 +3 级（不花钱）", "key": "wpn_lv", "v": 3},
+]
+
+func _trea_roll() -> void:
+	var out: Array = []
+	var guard := 0
+	while out.size() < 3 and guard < 200:
+		guard += 1
+		var pick: Dictionary = TREA_POOL[randi() % TREA_POOL.size()]
+		var dup := false
+		for o_v in out:
+			if str((o_v as Dictionary)["n"]) == str(pick["n"]):
+				dup = true
+		if not dup:
+			out.append(pick)
+	_trea_choices = out
+
+# 刷新：只花"宝物刷新次数"
+func _trea_refresh_now() -> void:
+	if _trea_refresh <= 0:
+		_hint.text = "没有宝物刷新次数了（每 5 波 +1 · boss 首杀 +2 · 宝物挑战 +1）"
+		return
+	_trea_refresh -= 1
+	_trea_roll()
+	Audio.sfx("ui_click", -8.0)
+	if _popup_kind == "宝物三选一":
+		_open_large("宝物三选一")
+
+# 拿一件
+func _trea_take(i: int) -> void:
+	if i < 0 or i >= _trea_choices.size():
+		return
+	var it: Dictionary = _trea_choices[i]
+	var nm := str(it["n"])
+	var key := str(it["key"])
+	var v := float(it["v"])
+	var t := str(it["t"])
+	if t == "instant":
+		# v12i：闲散宝物——当场结算，不占格不入库
+		match key:
+			"crystal":
+				_crystal += int(v)
+			"money":
+				_money += int(v)
+				_money_earned += int(v)
+			"exp":
+				_gain_exp(v)
+			"attr_pt":
+				_attr_pts += int(v)
+			"attr_all":
+				_attr["arm"] = int(_attr["arm"]) + int(v)
+				_attr["agi"] = int(_attr["agi"]) + int(v)
+				_attr["wit"] = int(_attr["wit"]) + int(v)
+			"wpn_lv":
+				_wpn_lv += int(v)
+				_sync_battle_stats()
+			_:
+				pass
+		_hint.text = "闲散宝物：" + nm + "　" + str(it["fx"])
+		Audio.sfx("coin", -4.0)
+		_trea_choices.clear()
+		if _popup_kind == "宝物三选一":
+			_open_large("宝物三选一")
+		return
+	if t == "item":
+		_items[nm] = int(_items.get(nm, 0)) + 1        # 消耗型进道具栏
+		_hint.text = "拿到道具：" + nm + " ×" + str(int(_items[nm])) + "（" + str(it["fx"]) + "）"
+	else:
+		if key == "attr_all":
+			_extra["wpn_arm"] = float(_extra.get("wpn_arm", 0.0)) + v
+			_extra["wpn_agi"] = float(_extra.get("wpn_agi", 0.0)) + v
+			_extra["wpn_wit"] = float(_extra.get("wpn_wit", 0.0)) + v
+		else:
+			_extra[key] = float(_extra.get(key, 0.0)) + v
+		var own: Dictionary = _trea_own.get(nm, {"q": str(it["q"]), "fx": str(it["fx"]), "n": 0})
+		own["n"] = int(own["n"]) + 1
+		_trea_own[nm] = own
+		_trea_taken[nm] = int(_trea_taken.get(nm, 0)) + 1
+		_hint.text = "宝物到手：" + nm + "　" + str(it["fx"])
+	Audio.sfx("equip", -4.0)
+	_trea_choices.clear()
+	_sync_battle_stats()
+	if _popup_kind == "宝物三选一":
+		_open_large("宝物三选一")
+# v12b 羁绊宝物（16 件）：条件是"看你这一局的进度"，满足即**常驻锁定**（不会掉）
+#   cond 类型：sets 成套 / partners 入队数 / equip 六格 / wpn 武器等级 / realm 境界
+#              / kill 杀敌 / money 累计文钱 / time 存活秒数
+# ============================================================
+const BONDS := [
+	{"id": "zhufu", "n": "祝福之宝", "q": "上品", "cond": "sets", "arg": ["liliang", "tayun", "jingxin"],
+		"fx": "三条祝福的杀敌成长 ×1.3", "key": "bond_grow", "v": 0.30},
+	{"id": "wuxing", "n": "五行盘", "q": "上品", "cond": "sets", "arg": ["wuxing", "lieyan", "hanshui", "jinglei"],
+		"fx": "全元素伤害 +25%", "key": "dmg_elem_all", "v": 0.25},
+	{"id": "jubao", "n": "聚宝匣", "q": "上品", "cond": "sets", "arg": ["shanglu", "caishen", "jubao"],
+		"fx": "每波灵晶 +3 · 文钱 +25%", "key": "wave_crystal", "v": 3.0},
+	{"id": "zhengfa", "n": "征伐令", "q": "极品", "cond": "sets", "arg": ["zhaoguai", "zhangu", "lianzhan"],
+		"fx": "挑战多刷 3 只 · 冷却 −20%", "key": "chal_spawn", "v": 3.0},
+	{"id": "tongxin", "n": "同心结", "q": "极品", "cond": "sets", "arg": ["tongxin", "shuangxiu", "shouhun"],
+		"fx": "伙伴技能伤害 +30%", "key": "partner_dmg", "v": 0.30},
+	{"id": "bingzhu", "n": "兵主印", "q": "极品", "cond": "sets", "arg": ["bingqi", "shenbing", "huxinjing"],
+		"fx": "装备攻击 +20% · 反伤 +20%", "key": "thorns", "v": 0.20},
+	{"id": "tongxing", "n": "同行令", "q": "上品", "cond": "partners", "arg": 5,
+		"fx": "伙伴技能伤害 +25%", "key": "partner_dmg", "v": 0.25},
+	{"id": "mantang", "n": "满堂红", "q": "绝品", "cond": "partners", "arg": 10,
+		"fx": "全属性 +12%", "key": "atk_all", "v": 0.12},
+	{"id": "liuhe", "n": "六合匣", "q": "上品", "cond": "equip", "arg": 6,
+		"fx": "全伤害减免 +8%", "key": "cut_all_bonus", "v": 0.08},
+	{"id": "bailian", "n": "百炼锤", "q": "极品", "cond": "wpn", "arg": 30,
+		"fx": "攻击 +15%", "key": "atk_all", "v": 0.15},
+	{"id": "qianchui", "n": "千锤印", "q": "绝品", "cond": "wpn", "arg": 60,
+		"fx": "攻击 +20% · 暴伤 +30%", "key": "crit_dmg_bonus", "v": 0.30},
+	{"id": "wendao", "n": "问道石", "q": "上品", "cond": "realm", "arg": 1,
+		"fx": "打坐效率 +50%", "key": "meditate", "v": 0.50},
+	{"id": "jindan", "n": "金丹录", "q": "极品", "cond": "realm", "arg": 2,
+		"fx": "内力上限 +20% · 打坐再 +50%", "key": "mp_all", "v": 0.20},
+	{"id": "shafa", "n": "杀伐印", "q": "绝品", "cond": "kill", "arg": 500,
+		"fx": "攻击 +15% · 暴伤 +25%", "key": "crit_dmg_bonus", "v": 0.25},
+	{"id": "wanguan", "n": "万贯囊", "q": "上品", "cond": "money", "arg": 20000,
+		"fx": "文钱 +30%", "key": "lucky", "v": 0.03},
+	{"id": "changye", "n": "长夜灯", "q": "极品", "cond": "time", "arg": 900,
+		"fx": "攻速 +15% · 每秒回血 +1% 上限", "key": "aspd_bonus", "v": 0.15},
+]
+var _items := {}                  # v12c：道具栏（消耗型宝物，可堆叠）
+var _trea_own := {}               # v12e：已到手的宝物（名字 → {q: 品质, fx: 效果, n: 件数}）
+var _detail_trea := ""            # v12e：正在看详情的宝物
+var _detail_gear := 0             # v12g：正在看详情的装备格（点格子进详情）
+var _detail_bond := 0             # v12h：正在看详情的羁绊宝物
+var _bond_t := 0.0
+var _bonds_locked := {}          # 已锁定的羁绊
+var _run_time := 0.0             # 本局存活秒数
+var _money_earned := 0           # 本局累计赚到的文钱
+
+# 进度：当前/需要（界面显示 2/3 用）
+func _bond_progress(b: Dictionary) -> Array:
+	var c := str(b["cond"])
+	match c:
+		"sets":
+			var arr: Array = b["arg"]
+			var got := 0
+			for s in arr:
+				if bool(_sets_done.get(str(s), false)):
+					got += 1
+			return [got, arr.size()]
+		"partners":
+			var n := 0
+			for pid in _field.partners.keys() if _field != null else []:
+				if bool((_field.partners[pid] as Dictionary)["owned"]):
+					n += 1
+			return [n, int(b["arg"])]
+		"equip":
+			var e := 0
+			for s_v in _equip:
+				if str(s_v) != "":
+					e += 1
+			return [e, int(b["arg"])]
+		"wpn":
+			return [mini(_wpn_lv, int(b["arg"])), int(b["arg"])]
+		"realm":
+			return [mini(_realm, int(b["arg"])), int(b["arg"])]
+		"kill":
+			return [mini(_kills, int(b["arg"])), int(b["arg"])]
+		"money":
+			return [mini(_money_earned, int(b["arg"])), int(b["arg"])]
+		"time":
+			return [mini(int(_run_time), int(b["arg"])), int(b["arg"])]
+	return [0, 1]
+
+# 每秒检查一次：满足即**锁定**＋给效果＋提醒
+# 条件的白话说法（详情页用）
+func _bond_cond_cn(b: Dictionary) -> String:
+	match str(b["cond"]):
+		"sets":
+			var arr: Array = b["arg"]
+			var names := []
+			for s in arr:
+				for s_v in CARD_SETS:
+					if str((s_v as Dictionary)["set"]) == str(s):
+						names.append(str((s_v as Dictionary)["name"]))
+			return "完成卡组：" + "、".join(PackedStringArray(names))
+		"partners":
+			return "招募满 " + str(int(b["arg"])) + " 位伙伴"
+		"equip":
+			return "六格装备全满"
+		"wpn":
+			return "成长武器 +" + str(int(b["arg"]))
+		"realm":
+			return "境界到 " + str(["", "筑基", "金丹", "元婴", "化神"][clampi(int(b["arg"]), 0, 4)])
+		"kill":
+			return "本局杀敌 " + str(int(b["arg"]))
+		"money":
+			return "本局累计文钱 " + str(int(b["arg"]))
+		"time":
+			return "存活 " + str(int(int(b["arg"]) / 60)) + " 分钟"
+	return "—"
+
+func _bond_check() -> void:
+	for b_v in BONDS:
+		var b: Dictionary = b_v
+		var id := str(b["id"])
+		if bool(_bonds_locked.get(id, false)):
+			continue
+		var pr := _bond_progress(b)
+		if int(pr[0]) < int(pr[1]):
+			continue
+		_bonds_locked[id] = true
+		var key := str(b["key"])
+		var v := float(b["v"])
+		if key == "dmg_elem_all":
+			for el in ["金系", "木系", "火系", "水系", "土系"]:
+				_extra["dmg_elem"][el] = float(_extra["dmg_elem"].get(el, 0.0)) + v
+		elif key == "meditate":
+			_extra["meditate_bonus"] = float(_extra.get("meditate_bonus", 0.0)) + v
+		elif key == "mp_all":
+			_extra["mp_all"] = float(_extra.get("mp_all", 0.0)) + v
+		else:
+			_extra[key] = float(_extra.get(key, 0.0)) + v
+		_hint.text = "羁绊激活：" + str(b["n"]) + "　" + str(b["fx"])
+		Audio.sfx("levelup", -2.0)
+		if _field != null:
+			_field._push_float(_field.hero_pos.x, _field.hero_pos.y - 140.0, "羁绊：" + str(b["n"]), Color(1.0, 0.88, 0.42), true)
+		_sync_battle_stats()
 # v12a 主动宝物地基 ＋ 玲珑玉壶（用户口径）
 #   效果：恢复自身 气血 25% ＋ 内力 25%　冷却 60 秒　气血低于 50% 时**自动**用（手动也行）
 #   品质影响恢复与冷却（凡 25%/60s → 绝 40%/35s，高档附加减伤）
@@ -1717,110 +2390,356 @@ func _quality_color(q: String) -> Color:
 		"中品":
 			return Color(0.30, 0.58, 0.72, 0.8)
 	return Color(INK.r, INK.g, INK.b, 0.35)
-# ---- 黑市（v4b）：用**杀敌数**换东西（内容暂定，先把入口与账摆上）----
-#   用户：「成就下面增加按钮 黑市【用于杀敌数兑换东西的 内容暂定】」
-const BLACK_GOODS := [
-	{"id": "coin", "name": "文钱 ×200", "cost": 50, "desc": "换成一笔现钱（直接进右上文钱）"},
-	{"id": "crystal", "name": "灵晶 ×10", "cost": 200, "desc": "抽卡用的那种晶"},
-	{"id": "gear", "name": "装备一件", "cost": 300, "desc": "随机一件，进装备六格"},
-	{"id": "treasure", "name": "宝物一件", "cost": 400, "desc": "宝物不限格"},
-	{"id": "heal", "name": "回满气血", "cost": 120, "desc": "这一下能救急"},
+# ============================================================
+# v13a 黑市重做（规格：docs/困兽_交接文档.md §6.1）
+#   · 六格货架，**每格只能买一次**，买掉即空（不补货）
+#   · **只手动刷新**：花 1 次「黑市刷新次数」→ 六格全部重掷（折扣一起重掷）；
+#     每 180 秒自动 +1 次刷新是 v4d 的旧规矩，保留
+#   · **每件 30% 概率打折**：7/5/3/2 折（权重 40/30/20/10），黑市等级越高越偏大折扣
+#   · 等级越高东西越好：Lv2 强化石/装备 · Lv3 消耗型装备小 · Lv5 吞噬丹 · Lv7 起可能出上品/极品装备
+# ============================================================
+const BM_SLOTS := 6
+const BM_DISC := [0.7, 0.5, 0.3, 0.2]
+const BM_DISC_CN := ["7折", "5折", "3折", "2折"]
+const BM_DISC_RATE := 0.30                                   # 每件 30% 概率打折
+const BM_GEAR_PRICE := [300, 400, 550, 750, 1000, 1400]      # 装备货品：按品级，300 起
+const BM_GOODS := [
+	{"id": "bm_refresh", "n": "黑市刷新", "cost": 40, "lv": 1, "w": 16, "d": "黑市刷新次数 +1（再来一轮货）"},
+	{"id": "money_bag", "n": "文钱袋", "cost": 50, "lv": 1, "w": 16, "d": "文钱 +600（进右上钱账）"},
+	{"id": "crystal_bag", "n": "灵晶袋", "cost": 70, "lv": 1, "w": 14, "d": "灵晶 +40（抽卡用的晶）"},
+	{"id": "trea_refresh", "n": "宝物刷新", "cost": 60, "lv": 1, "w": 12, "d": "宝物刷新次数 +1"},
+	{"id": "card_refresh", "n": "卡组刷新", "cost": 60, "lv": 1, "w": 12, "d": "卡组刷新次数 +1（抽卡页免费用）"},
+	{"id": "wpn_stone", "n": "强化石", "cost": 120, "lv": 2, "w": 13, "d": "成长武器直接 +2 级"},
+	{"id": "gear", "n": "装备", "cost": 300, "lv": 2, "w": 12, "d": "按品级随机一件（六格满则进仓库）"},
+	{"id": "gear_s", "n": "消耗型装备·小", "cost": 80, "lv": 3, "w": 15, "d": "点击即用：攻 +3 · 血 +15（可重复买，叠加）"},
+	{"id": "eat_pill", "n": "吞噬丹", "cost": 200, "lv": 5, "w": 14, "d": "随机吞掉十格一张卡：腾位，效果与成套计数保留"},
 ]
 
+# 折扣权重：Lv1 就是规格里的 40/30/20/10；等级越高越偏大折扣（总和恒为 100）
+func _bm_disc_w() -> Array:
+	var t := clampi(_bm_lv - 1, 0, 12)
+	return [maxi(6, 40 - t * 3), 30, 20 + t, 10 + t * 2]
+
+# 货架上装备的品级：Lv1-3 最多中品 · Lv4-6 可能上品 · Lv7 起可能极品
+func _bm_gear_q() -> int:
+	var cap := 2
+	if _bm_lv >= 7:
+		cap = 4
+	elif _bm_lv >= 4:
+		cap = 3
+	var w: Array = [50, 28, 14, 6, 2, 0]
+	var roll := randi() % 100
+	var acc := 0
+	var q := 0
+	for i in 6:
+		acc += int(w[i])
+		if roll < acc:
+			q = i
+			break
+	return mini(q, cap)
+
+# 摆一格货（含 30% 打折；装备货品当场定品级，价按品级走）
+func _bm_make_slot(g: Dictionary) -> Dictionary:
+	var base := int(g["cost"])
+	var gear: Dictionary = {}
+	if str(g["id"]) == "gear":
+		var q := _bm_gear_q()
+		var mul := float(WPN_Q_MUL[q])
+		var pool: Array = GEAR_EQ_NAMES
+		gear = {"name": str(pool[randi() % pool.size()]), "q": q,
+			"atk": int(ceil(3.0 * mul)), "hp": int(ceil(14.0 * mul)),
+			"price": int(60.0 * mul * mul)}
+		base = int(BM_GEAR_PRICE[q])
+	var disc := -1
+	if randf() < BM_DISC_RATE:
+		var w := _bm_disc_w()
+		var roll := randi() % 100
+		var acc := 0
+		for i in 4:
+			acc += int(w[i])
+			if roll < acc:
+				disc = i
+				break
+	var cost: int = base
+	if disc >= 0:
+		cost = maxi(1, int(floor(float(base) * float(BM_DISC[disc]))))
+	return {"id": str(g["id"]), "n": str(g["n"]), "d": str(g["d"]), "base": base,
+		"disc": disc, "cost": cost, "q": int(gear.get("q", 0)), "gear": gear, "bought": false}
+
+# 重掷六格：先尽量不重样（Lv1 只有 5 种货，凑不满 6 格时才允许重样）
+func _bm_roll() -> void:
+	var pool: Array = []
+	for g_v in BM_GOODS:
+		var g: Dictionary = g_v
+		if _bm_lv >= int(g["lv"]):
+			for i in int(g["w"]):
+				pool.append(g)
+	_bm_slots.clear()
+	if pool.is_empty():
+		return
+	var used := {}
+	var tries := 0
+	while _bm_slots.size() < BM_SLOTS and tries < 900:
+		tries += 1
+		var g: Dictionary = pool[randi() % pool.size()]
+		var id := str(g["id"])
+		var limit: int = 1 if tries < 400 else 2
+		if int(used.get(id, 0)) >= limit:
+			continue
+		used[id] = int(used.get(id, 0)) + 1
+		_bm_slots.append(_bm_make_slot(g))
+
+# 花 1 次刷新：六格全部重掷（含折扣重掷）
+func _bm_refresh_now() -> void:
+	if _bm_refresh <= 0:
+		_hint.text = "没有黑市刷新次数了（每 180 秒自动 +1；货架上也有卖）"
+		return
+	_bm_refresh -= 1
+	_bm_roll()
+	Audio.sfx("ui_click", -8.0)
+	_hint.text = "黑市重掷六格（折扣一起重掷），刷新剩 " + str(_bm_refresh) + " 次"
+	if _popup_kind == "黑市":
+		_open_large("黑市")
+
+# 十格里还能被吞的卡有几张
+func _bm_edible() -> int:
+	var n := 0
+	for i in _deck_cards.size():
+		if str(_deck_cards[i]) != "":
+			n += 1
+	return n
+
+# 货名（装备带上具体那件）
+func _bm_slot_title(s: Dictionary) -> String:
+	if str(s["id"]) == "gear":
+		var g: Dictionary = s.get("gear", {})
+		return "装备·" + str(g.get("name", ""))
+	return str(s["n"])
+
+# 货品说明（装备把品级与加成写出来）
+func _bm_slot_desc(s: Dictionary) -> String:
+	if str(s["id"]) == "gear":
+		var g: Dictionary = s.get("gear", {})
+		return "【" + str(WPN_Q_CN[int(g.get("q", 0))]) + "】攻 +" + str(int(g.get("atk", 0))) \
+			+ " · 血 +" + str(int(g.get("hp", 0))) + "（六格满则进仓库）"
+	return str(s["d"])
+
+# 强化石：成长武器 +n 级（进阶照旧：每 10 级品质升档 ＋ 掷三选一）
+func _bm_wpn_add(n: int) -> String:
+	var adv := ""
+	for i in n:
+		_wpn_lv += 1
+		if _wpn_lv % 10 == 0:
+			_wpn_q = mini(5, _wpn_q + 1)
+			_wpn_await = true
+			_wpn_refresh_n = 0
+			_wpn_roll_choices()
+			adv = str(WPN_Q_CN[_wpn_q])
+	_sync_battle_stats()
+	Audio.sfx("hit_heavy", -10.0, 1.3)
+	return adv
+
+# 吞噬丹：随机吞掉十格里的一张卡 → 卡离开格子（腾位），但 _card_have 不动
+#   → 单卡效果（杀意/打坐）与成套计数（_set_check 只看 _card_have）全部保留
+func _bm_eat_pill() -> String:
+	var cand: Array = []
+	for i in _deck_cards.size():
+		if str(_deck_cards[i]) != "":
+			cand.append(i)
+	if cand.is_empty():
+		return "十格是空的——这丹药没东西可吞"
+	var idx := int(cand[randi() % cand.size()])
+	var cid := str(_deck_cards[idx])
+	_deck_cards[idx] = ""
+	_bm_eaten.append(cid)
+	_set_check(str(cid.split("_")[0]))     # 吞完立刻再验一次：成套照样给（例：3 合套吞一张，另两张仍能凑齐）
+	Audio.sfx("hit_heavy", -8.0, 0.7)
+	if _field != null:
+		_field._push_float(_field.hero_pos.x, _field.hero_pos.y - 120.0, "吞噬：" + card_name(cid), SEAL, true)
+	return "吞噬丹吞掉「" + card_name(cid) + "」（第 " + str(idx + 1) + " 格腾空 · 效果与成套计数保留）"
+
+# 一格货（320 × 200）：名字 / 说明 / 价签（原价划掉 → 折后朱红大字）/ ［买］
+func _bm_tile(p: Control, pos: Vector2, sz: Vector2, i: int) -> void:
+	var s: Dictionary = _bm_slots[i]
+	var bought := bool(s.get("bought", false))
+	var cost := int(s["cost"])
+	var can: bool = (not bought) and _kills >= cost
+	var is_gear: bool = str(s["id"]) == "gear"
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.90, 0.88, 0.84) if bought else Color(0.99, 0.97, 0.92)
+	sb.set_corner_radius_all(12)
+	if bought:
+		sb.border_color = Color(INK.r, INK.g, INK.b, 0.22)
+	elif is_gear:
+		sb.border_color = _quality_color(str(WPN_Q_CN[int(s["q"])]))
+	else:
+		sb.border_color = Color(SEAL.r, SEAL.g, SEAL.b, 0.55)
+	sb.set_border_width_all(2)
+	var box := Panel.new()
+	box.position = pos
+	box.size = sz
+	box.add_theme_stylebox_override("panel", sb)
+	box.mouse_filter = Control.MOUSE_FILTER_STOP
+	p.add_child(box)
+	var nm := Label.new()
+	nm.position = Vector2(14, 6)
+	nm.size = Vector2(sz.x - 28.0, 34)
+	nm.add_theme_font_size_override("font_size", 25)
+	nm.add_theme_color_override("font_color", DIM if bought else INK)
+	nm.text = _bm_slot_title(s)
+	box.add_child(nm)
+	var ds := Label.new()
+	ds.position = Vector2(14, 42)
+	ds.size = Vector2(sz.x - 28.0, 52)
+	ds.add_theme_font_size_override("font_size", 18)
+	ds.add_theme_color_override("font_color", DIM)
+	ds.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	ds.text = _bm_slot_desc(s)
+	box.add_child(ds)
+	if bought:
+		var sold := Label.new()
+		sold.position = Vector2(14, 112)
+		sold.size = Vector2(sz.x - 28.0, 40)
+		sold.add_theme_font_size_override("font_size", 26)
+		sold.add_theme_color_override("font_color", Color(INK.r, INK.g, INK.b, 0.45))
+		sold.text = "已售罄（等刷新）"
+		box.add_child(sold)
+		return
+	# 价签：原价划掉 → 折后朱红大字（RichTextLabel 的 [s] 就是删除线）
+	var pr := RichTextLabel.new()
+	pr.bbcode_enabled = true
+	pr.scroll_active = false
+	pr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	pr.position = Vector2(14, 96)
+	pr.size = Vector2(sz.x - 28.0, 44)
+	pr.add_theme_font_size_override("normal_font_size", 20)
+	if int(s["disc"]) >= 0:
+		pr.text = "[color=#6b625c][s]原价 " + str(int(s["base"])) + "[/s][/color] → [color=#ad2620][font_size=26]" \
+			+ str(BM_DISC_CN[int(s["disc"])]) + " " + str(cost) + "[/font_size][/color]"
+	else:
+		pr.text = "[color=#ad2620][font_size=26]" + str(cost) + "[/font_size][/color][color=#6b625c] 杀敌数[/color]"
+	box.add_child(pr)
+	var bb := _pbtn(box, "买", Vector2(14, 144), Vector2(sz.x - 28.0, 50), 26, can, _bm_buy.bind(i))
+	if not can:
+		bb.add_theme_stylebox_override("normal", _flat(Color(0.55, 0.53, 0.51, 0.95)))
+		bb.add_theme_stylebox_override("hover", _flat(Color(0.60, 0.58, 0.56, 0.95)))
+		bb.add_theme_stylebox_override("pressed", _flat(Color(0.48, 0.46, 0.44, 0.95)))
+
+# 黑市页：顶部「黑市 Lv ＋ 刷新 ×N」＋［刷新］大按钮 ＋ 六格货架
 func _fill_black(p: Control, y: float, sz: Vector2) -> float:
+	if _bm_slots.is_empty():
+		_bm_roll()                                  # 本局还没摆过货：进门先摆一排
 	var head := Label.new()
-	head.position = Vector2(28, y)
-	head.size = Vector2(640, 50)
-	head.add_theme_font_size_override("font_size", 26)
+	head.position = Vector2(16, y + 10.0)
+	head.size = Vector2(370, 46)
+	head.add_theme_font_size_override("font_size", 28)
 	head.add_theme_color_override("font_color", INK)
-	head.text = "杀敌数 " + str(_kills) + "　（这是黑市通用的一门钱）"
+	head.text = "黑市 Lv " + str(_bm_lv) + "　刷新 ×" + str(_bm_refresh)
 	p.add_child(head)
+	var rb := _pbtn(p, "刷新（花 1 次）", Vector2(392, y), Vector2(264, 76), 24, _bm_refresh > 0, _bm_refresh_now)
+	if _bm_refresh <= 0:
+		rb.disabled = true
+		rb.add_theme_stylebox_override("disabled", _flat(Color(0.46, 0.44, 0.42, 0.95)))
+		rb.add_theme_color_override("font_disabled_color", Color(0.88, 0.86, 0.83))
 	var sub := Label.new()
-	sub.position = Vector2(28, y + 50.0)
-	sub.size = Vector2(640, 36)
-	sub.add_theme_font_size_override("font_size", 21)
-	sub.add_theme_color_override("font_color", SEAL)
-	sub.text = "黑市 Lv " + str(_bm_lv) + "　经验 " + str(_bm_exp) + "/" + str(_bm_need) + "　刷新次数 " + str(_bm_refresh)
+	sub.position = Vector2(16, y + 92.0)
+	sub.size = Vector2(640, 34)
+	sub.add_theme_font_size_override("font_size", 20)
+	sub.add_theme_color_override("font_color", DIM)
+	sub.text = "杀敌数 " + str(_kills) + " 就是黑市的钱　·　每 180 秒自动 +1 次刷新"
 	p.add_child(sub)
+	var ly := y + 136.0
+	for i in _bm_slots.size():
+		var col := i % 2
+		var row := i / 2
+		_bm_tile(p, Vector2(2.0 + float(col) * 328.0, ly + float(row) * 214.0), Vector2(320, 200), i)
+	var rows_n := int((_bm_slots.size() + 1) / 2)
+	var by := ly + float(rows_n) * 214.0 + 4.0
 	var tip := Label.new()
-	tip.position = Vector2(28, y + 88.0)
-	tip.size = Vector2(640, 60)
+	tip.position = Vector2(16, by)
+	tip.size = Vector2(640, 74)
 	tip.add_theme_font_size_override("font_size", 20)
 	tip.add_theme_color_override("font_color", DIM)
 	tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	tip.text = "每击杀 1 名敌人，黑市经验 +1；每 180 秒自动 +1 次刷新（升级也送 1 次）。内容暂定。"
+	tip.text = "每件 30% 概率打折（7/5/3/2 折，等级越高越容易出大折扣）· 装备按品级定价 300 起 · 六格每格只能买一次，买掉即空（只手动刷新补货）"
 	p.add_child(tip)
-	var ly := y + 152.0
-	for g_v in BLACK_GOODS:
-		var g: Dictionary = g_v
-		var cost := int(g["cost"])
-		var can := _kills >= cost
-		var sb := StyleBoxFlat.new()
-		sb.bg_color = Color(0.99, 0.97, 0.92) if can else Color(0.90, 0.88, 0.84)
-		sb.set_corner_radius_all(10)
-		sb.border_color = Color(SEAL.r, SEAL.g, SEAL.b, 0.55) if can else Color(INK.r, INK.g, INK.b, 0.25)
-		sb.set_border_width_all(2)
-		var row := Panel.new()
-		row.position = Vector2(28, ly)
-		row.size = Vector2(640, 104)
-		row.add_theme_stylebox_override("panel", sb)
-		row.mouse_filter = Control.MOUSE_FILTER_STOP
-		p.add_child(row)
-		var nm := Label.new()
-		nm.position = Vector2(18, 12)
-		nm.size = Vector2(360, 42)
-		nm.add_theme_font_size_override("font_size", 26)
-		nm.add_theme_color_override("font_color", INK if can else DIM)
-		nm.text = str(g["name"])
-		row.add_child(nm)
-		var ds := Label.new()
-		ds.position = Vector2(18, 58)
-		ds.size = Vector2(430, 36)
-		ds.add_theme_font_size_override("font_size", 20)
-		ds.add_theme_color_override("font_color", DIM)
-		ds.text = str(g["desc"])
-		row.add_child(ds)
-		var pr := Label.new()
-		pr.position = Vector2(452, 20)
-		pr.size = Vector2(170, 44)
-		pr.add_theme_font_size_override("font_size", 22)
-		pr.add_theme_color_override("font_color", SEAL if can else DIM)
-		pr.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-		pr.text = str(cost) + " 杀"
-		row.add_child(pr)
-		var b := _pbtn(row, "换", Vector2(540, 30), Vector2(84, 44), 22, can, _black_buy.bind(str(g["id"]), cost))
-		b.disabled = not can
-		ly += 116.0
-	var foot := Label.new()
-	foot.position = Vector2(28, ly)
-	foot.size = Vector2(640, 44)
-	foot.add_theme_font_size_override("font_size", 20)
-	foot.add_theme_color_override("font_color", DIM)
-	foot.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	foot.text = "换到的东西会像掉落一样飞进对应的计数位（文钱/灵晶→右上 · 装备/宝物→右下）。"
-	p.add_child(foot)
-	return ly + 56.0
+	by += 78.0
+	if not _bm_eaten.is_empty():
+		var names: Array = []
+		for id_v in _bm_eaten:
+			names.append(card_name(str(id_v)))
+		var eat := Label.new()
+		eat.position = Vector2(16, by)
+		eat.size = Vector2(640, 44)
+		eat.add_theme_font_size_override("font_size", 20)
+		eat.add_theme_color_override("font_color", SEAL)
+		eat.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		eat.text = "吞噬丹已吞 " + str(_bm_eaten.size()) + " 张（效果与成套计数仍在）：" + "、".join(PackedStringArray(names))
+		p.add_child(eat)
+		by += 50.0
+	return by + 10.0
 
-func _black_buy(id: String, cost: int) -> void:
+# 买一格：扣杀敌数 → 当场结账 → 这格标已售罄（不补货）
+func _bm_buy(i: int) -> void:
+	if i < 0 or i >= _bm_slots.size():
+		return
+	var s: Dictionary = _bm_slots[i]
+	if bool(s.get("bought", false)):
+		_hint.text = "这一格已经买过了（买掉即空，等下次刷新）"
+		return
+	var cost := int(s["cost"])
 	if _kills < cost:
 		_hint.text = "杀敌数不够（要 " + str(cost) + "，你现在 " + str(_kills) + "）"
 		return
+	var id := str(s["id"])
+	if id == "eat_pill" and _bm_edible() <= 0:
+		_hint.text = "十格是空的，吞噬丹没东西可吞（先抽卡再来）"
+		return
 	_kills -= cost
+	var msg := ""
 	match id:
-		"coin":
-			_spawn_drop("coin", 200, Vector2(560.0, 560.0), 12)
-		"crystal":
-			_spawn_drop("crystal", 10, Vector2(560.0, 560.0), 6)
+		"bm_refresh":
+			_bm_refresh += 1
+			msg = "黑市刷新 +1（现有 " + str(_bm_refresh) + " 次）"
+		"money_bag":
+			_money += 600
+			_money_earned += 600
+			_coin_pop = 0.32
+			msg = "文钱 +600（现有 " + str(int(_money)) + "）"
+		"crystal_bag":
+			_crystal += 40
+			_crystal_pop = 0.32
+			msg = "灵晶 +40（现有 " + str(int(_crystal)) + "）"
+		"trea_refresh":
+			_trea_refresh += 1
+			msg = "宝物刷新 +1（现有 " + str(_trea_refresh) + " 次）"
+		"card_refresh":
+			_card_refresh += 1
+			msg = "卡组刷新 +1（现有 " + str(_card_refresh) + " 次，去抽卡页用）"
+		"wpn_stone":
+			var adv := _bm_wpn_add(2)
+			msg = "成长武器 +2 级 → +" + str(_wpn_lv) + "（" + str(WPN_Q_CN[_wpn_q]) + "）"
+			if adv != "":
+				msg += "　进阶了！去［成长武器］选一条线"
+		"gear_s":
+			_bm_atk += 3
+			_bm_hp += 15
+			_gear_sync()
+			msg = "吃下消耗型装备：攻 +3 · 血 +15（累计 攻 +" + str(_bm_atk) + " · 血 +" + str(_bm_hp) + "）"
 		"gear":
-			_spawn_drop("gear", 1, Vector2(560.0, 560.0), 1)
-		"treasure":
-			_spawn_drop("treasure", 1, Vector2(560.0, 560.0), 1)
-		"heal":
-			if _field != null:
-				_field.hero["hp"] = float(_field.hero["hp_max"])
-			_hint.text = "气血回满"
-	Audio.sfx("ui_click", -6.0)
-	_hint.text = "黑市成交：" + id + "（花 " + str(cost) + " 杀敌数，剩 " + str(_kills) + "）"
+			var g: Dictionary = s.get("gear", {})
+			_equip_add(g)
+			msg = "装备到手：" + str(g.get("name", "")) + "（" + str(WPN_Q_CN[int(g.get("q", 0))]) + "）"
+		"eat_pill":
+			msg = _bm_eat_pill()
+		_:
+			pass
+	s["bought"] = true
+	_bm_slots[i] = s
+	Audio.sfx("coin", -6.0)
+	if _field != null:
+		_field._push_float(_field.hero_pos.x, _field.hero_pos.y - 110.0, "黑市 · " + str(s["n"]), GOLD, true)
+	_hint.text = "黑市成交 · " + msg + "　（花 " + str(cost) + " 杀敌数，剩 " + str(_kills) + "）"
 	if _popup_kind == "黑市":
 		_open_large("黑市")
 # ---- 失败结算（v3m）----
@@ -1892,6 +2811,7 @@ func _restart_run() -> void:
 	_grow_inherit = {"arm": 0, "agi": 0, "wit": 0}
 	_recruit_opens = 0
 	_recruit_choices.clear()
+	_bm_roll()                       # v13a：新的一局，黑市货架重摆
 	_sync_battle_stats()
 	_close_popup()
 	_hint.text = "新的一局——预备几秒，怪就压上来了"
@@ -2299,12 +3219,22 @@ func _process(delta: float) -> void:
 			_meditate_acc -= float(add)
 			_grow_card[_main_line()] = int(_grow_card.get(_main_line(), 0)) + add
 			_sync_battle_stats()
+	_item_tick(delta)           # v12d：消耗型宝物的计时
+	_run_time += delta
+	_bond_t += delta
+	if _bond_t >= 1.0:
+		_bond_t = 0.0
+		_bond_check()            # v12b：羁绊宝物每秒查一次
 	_yh_tick(delta)             # v12a：玲珑玉壶（冷却 ＋ 气血低于 50% 自动用）
 	_card_time_tick(delta)      # v11e：时间进化（淬火剑这类）
 	_boss_sec -= delta
 	if _boss_sec <= 0.0:
 		_boss_sec = 60.0
 		_wave = mini(_wave_max, _wave + 1)
+		# v12c：每过 5 波送 1 次宝物刷新
+		if _wave % 5 == 0:
+			_trea_refresh += 1
+			_hint.text = "宝物刷新 +1（现有 " + str(_trea_refresh) + " 次）"
 		_boss_tier = clampi(1 + _wave / 10, 1, 3)
 		# v9a：商路/财神套——**每过一波额外给灵晶**（用户："都可"里的经济线）
 		var wc := int(_extra.get("wave_crystal", 0.0))
@@ -2441,7 +3371,7 @@ func _sync_battle_stats() -> void:
 	_field.hero["crit_dmg"] = _crit_dmg_total()
 	_field.hero["lucky"] = _lucky()
 	_field.hero["dmg_all"] = _dmg_all()
-	_field.hero["cut_all"] = 0.10 + float(_extra.get("cut_all_bonus", 0.0)) + float(_extra.get("wpn_cut", 0.0))
+	_field.hero["cut_all"] = 0.10 + float(_extra.get("cut_all_bonus", 0.0)) + float(_extra.get("wpn_cut", 0.0)) + (0.50 if _tmp_cut > 0.0 else 0.0)
 	_field.hero["res_elem"] = _res_elem()
 	_field.hero["dmg_elem"] = _dmg_elem()
 	_field.hero["dmg_true"] = float(_extra.get("dmg_true", 0.0))   # 只有它能加真实伤害
@@ -2576,12 +3506,17 @@ func _on_chal_drop(kind_i: int, at: Vector2) -> void:
 			_gain_exp(0.06)
 			_hint.text = "书怪：经验 +6%"
 		3:
+			# v12d：宝物挑战 → 送 1 次宝物刷新 ＋ 开三选一
+			_trea_refresh += 1
+			_trea_choices.clear()
+			_open_large("宝物三选一")
 			# v11f：宝物挑战真的爆一件宝物（大怪掉得更好）
 			var g3 := _gen_gear(true, true)
 			_treasures.append(str(g3["name"]) + "（" + str(WPN_Q_CN[int(g3["q"])]) + "）")
 			_hint.text = "宝箱大怪爆出：" + str(g3["name"]) + "【" + str(WPN_Q_CN[int(g3["q"])]) + "】"
 			Audio.sfx("chest", -3.0)
 		4:
+			_trea_refresh += 2            # v12d：boss 首杀送 2 次宝物刷新
 			# 名声是"局外"的（跨局保留），这里先记一笔本局战绩
 			_run_fame += 20
 			_hint.text = "挑战 boss 拿下：本局名声 +20（现在 " + str(_run_fame) + "）"
@@ -2693,7 +3628,7 @@ func _input(e: InputEvent) -> void:
 # 弹窗（两层）
 # ============================================================
 func _is_large(k: String) -> bool:
-	return ["卡组", "技能", "装备", "挑战", "存档", "成就", "角色", "队员", "仓库", "卡牌详情", "局终", "黑市", "招募", "成长武器"].has(k)
+	return ["卡组", "技能", "装备", "挑战", "存档", "成就", "角色", "队员", "仓库", "卡牌详情", "局终", "黑市", "招募", "成长武器", "宝物三选一", "图鉴"].has(k)
 
 func _close_popup() -> void:
 	if _popup != null and is_instance_valid(_popup):
@@ -2824,6 +3759,10 @@ func _fill_popup(p: Control, kind: String, y: float, sz: Vector2) -> float:
 		return _fill_recruit(p, y, sz)
 	if kind == "成长武器":
 		return _fill_weapon(p, y, sz)
+	if kind == "宝物三选一":
+		return _fill_trea_pick(p, y, sz)
+	if kind == "图鉴":
+		return _fill_codex(p, y, sz)
 	if kind == "角色":
 		# 页签点了要**真的换内容**（探针抓到过：只高亮了页签、内容没换）
 		return _fill_mates(p, y, sz) if _role_tab == 1 else _fill_role(p, y, sz)
@@ -2834,6 +3773,36 @@ func _fill_popup(p: Control, kind: String, y: float, sz: Vector2) -> float:
 	var lines: Array = []
 	if kind == "设置":
 		lines = ["音乐：开", "音效：开", "（这一版只有开关，曲子后补）"]
+	elif kind == "羁绊详情":
+		var b: Dictionary = BONDS[clampi(_detail_bond, 0, BONDS.size() - 1)]
+		var pr := _bond_progress(b)
+		var done := bool(_bonds_locked.get(str(b["id"]), false))
+		lines = ["『" + str(b["n"]) + "』　【" + str(b["q"]) + "】",
+			"条件：" + _bond_cond_cn(b),
+			"进度：" + ("已激活（常驻，不会掉）" if done else str(int(pr[0])) + " / " + str(int(pr[1]))),
+			"效果：" + str(b["fx"]),
+			"激活一次即永久生效，换掉卡也不会失效"]
+	elif kind == "装备详情":
+		var gi := clampi(_detail_gear, 0, 5)
+		var st: Dictionary = _equip_stat[gi] if gi < _equip_stat.size() else {}
+		if str(_equip[gi]) == "":
+			lines = ["这一格是空的", "来源：宝物三选一 / 挑战 / 装备卡"]
+		else:
+			var has_stat := not st.is_empty()
+			lines = ["『" + str(_equip[gi]) + "』"]
+			if has_stat:
+				lines.append("加成：攻击 +" + str(int(st.get("atk", 0))) + "　气血 +" + str(int(st.get("hp", 0))))
+				lines.append("卖价：" + str(int(st.get("price", 60))) + " 文钱")
+			else:
+				lines.append("初始装备（无加成）")
+				lines.append("卖价：60 文钱")
+			lines.append("格子下面有［存］［卖］")
+	elif kind == "宝物详情":
+		var info: Dictionary = _trea_own.get(_detail_trea, {})
+		lines = ["『" + str(_detail_trea) + "』　【" + str(info.get("q", "凡品")) + "】",
+			"效果：" + str(info.get("fx", "—")),
+			"已有：×" + str(int(info.get("n", 1))) + "（同名宝物效果叠加）",
+			"宝物不占装备格；消耗型宝物会进道具栏，点着用"]
 	elif kind == "卡牌详情":
 		var cid := _detail_card
 		var cs := card_set_of(cid)
@@ -2949,6 +3918,21 @@ func _fill_deck_slots(p: Control, y: float) -> float:
 		if _pending_card != "" and str(_deck_cards[i]) != "":
 			# 按钮占卡片自己让出来的那一条（宽 126−8，高 38，离底 6）
 			_pbtn(p, "换这张", Vector2(cx + 4.0, cy + 224.0), Vector2(118, 38), 20, true, _swap_in.bind(i))
+			_pbtn(p, "换这张", Vector2(cx + 4.0, cy + 224.0), Vector2(118, 38), 20, true, _swap_in.bind(i))
+	# v13a：被吞噬丹吞掉的卡（已腾出格子 · 效果与成套计数都还在）
+	if not _bm_eaten.is_empty():
+		var names: Array = []
+		for id_v in _bm_eaten:
+			names.append(card_name(str(id_v)))
+		var eat := Label.new()
+		eat.position = Vector2(24, y + 566.0)
+		eat.size = Vector2(608, 70)
+		eat.add_theme_font_size_override("font_size", 20)
+		eat.add_theme_color_override("font_color", SEAL)
+		eat.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		eat.text = "吞噬丹吞掉的 " + str(_bm_eaten.size()) + " 张（已腾出格子 · 效果与成套计数仍在）：" + "、".join(PackedStringArray(names))
+		p.add_child(eat)
+		return y + 646.0
 	return y + 560.0
 	var tip := Label.new()
 	tip.position = Vector2(28, y + 248.0)
@@ -3114,12 +4098,7 @@ func _pbtn(parent: Node, txt: String, pos: Vector2, sz: Vector2, fs: int, seal: 
 	parent.add_child(b)
 	return b
 
-func _refresh_band() -> void:
-	if _band == null:
-		return
-	# ⚠ 上一版这里把"内力"拼了两遍（截图里看到两段一样的）——现在只写一遍
-	_band.text = "波 " + str(_wave) + "/" + str(_wave_max) + "　❤ " + str(int(_hp)) + "/" + str(int(_hp_max)) + "　内力 " + str(int(_mp)) + "/" + str(int(_mp_max)) + "　内力 " + str(int(_mp)) + "/" + str(int(_mp_max))
-
+	_band.text = "波 " + str(_wave) + "/" + str(_wave_max) + "　❤ " + str(int(_hp)) + "/" + str(int(_hp_max)) + "　内力 " + str(int(_mp)) + "/" + str(int(_mp_max))
 
 # ---- 角色页：详细属性 ＋ 一颗［队员］钮 ----
 func _fill_role(p: Control, y: float, sz: Vector2) -> float:
@@ -3294,7 +4273,10 @@ func _hp_regen() -> float:
 
 # 身法：攻速 + 护甲；主属性＝敏捷时再给攻击
 func _aspd_total() -> float:
-	return 1.0 * (1.0 + 0.02 * float(_attr_agi()) * _boost_for("agi") + float(_extra.get("aspd_bonus", 0.0)) + float(_extra.get("wpn_aspd", 0.0)))
+	var mul := 1.0 + 0.02 * float(_attr_agi()) * _boost_for("agi") + float(_extra.get("aspd_bonus", 0.0)) + float(_extra.get("wpn_aspd", 0.0))
+	if _tmp_aspd > 0.0:
+		mul += 2.0                     # v12d 疾风符：+200%
+	return 1.0 * mul
 
 # v5e（用户："护甲是整体百分比减伤 要少给"）：
 #   身法每点 **+1 护甲**（原来 +2），换算也调钝：护甲/(护甲+**120**)（原来 60）
@@ -3344,6 +4326,8 @@ func _atk() -> float:
 	base += float(_extra.get("atk_flat", 0.0))              # v11b：成长武器给的固定攻击
 	base += float(_extra.get("evo_atk", 0.0))               # v11e：时间进化累积的攻击
 	base += float(_extra.get("gear_atk", 0.0))              # v11f：六格装备给的攻击
+	if _tmp_atk > 0.0:
+		base *= 2.5                    # v12d 狂血丹：+150%
 	# 主属性是哪条，就用哪条当攻击（系数统一 1.5）；主属性＝悟性时它的"攻击"是元素（见 _elem_amp）
 	match _main_attr:
 		"str":
@@ -3611,41 +4595,84 @@ func _fill_equip(p: Control, y: float, sz: Vector2) -> float:
 		_pbtn(p, tabs[i], Vector2(28.0 + float(i) * 190.0, y), Vector2(178, 60), 23, _equip_tab == i, _set_equip_tab.bind(i))
 	var ly := y + 74.0
 	if _equip_tab == 0:
+		# v12f（用户："装备那边也是"）：跟卡组/宝物一套——紧凑格子（126×98，5 个一行）
+		#   ⚠ 上一版把［存］［卖］画在了 if 外面，结果压到宝物页上（截图抓到过）——现在收回这一支里
 		for i in 6:
-			var col := i % 3
-			var row := i / 3
-			_gear_box(p, Vector2(28.0 + float(col) * 216.0, ly + float(row) * 132.0), Vector2(200, 120), "equip", i)
-		ly += 276.0
+			var col := i % 5
+			var row := i / 5
+			var bx2 := 24.0 + float(col) * 134.0
+			var by3 := ly + float(row) * 152.0
+			_gear_box(p, Vector2(bx2, by3), Vector2(126, 98), "equip", i)
+			# v12g：整格可点 → 装备详情（说明都在详情页，格子上只留名字与品质）
+			var ghit := _pbtn(p, "", Vector2(bx2, by3), Vector2(126, 96), 16, false, _gear_detail.bind(i))
+			ghit.add_theme_stylebox_override("normal", _flat(Color(1, 1, 1, 0.001)))
+			ghit.add_theme_stylebox_override("hover", _flat(Color(1, 1, 1, 0.10)))
+			if str(_equip[i]) != "":
+				_pbtn(p, "存", Vector2(bx2, by3 + 100.0), Vector2(58, 34), 17, false, _gear_to_vault.bind(i))
+				_pbtn(p, "卖", Vector2(bx2 + 66.0, by3 + 100.0), Vector2(58, 34), 17, true, _gear_sell.bind(false, i))
+		ly += 284.0
 	else:
-		for i in _treasures.size():
-			var col2 := i % 3
-			var row2 := i / 3
-			_gear_box(p, Vector2(28.0 + float(col2) * 216.0, ly + float(row2) * 132.0), Vector2(200, 120), "treasure", i)
-		ly += 132.0 * float(1 + _treasures.size() / 3)
+		# v12e：宝物页照卡组那套——紧凑格子（名字＋品质色＋×数量）· 点击详情 · 可滑动
+		ly = _fill_trea_list(p, ly, sz)
 	ly += 12.0
 	# v11c：成长武器入口（自带那一件，无限强化）
 	_pbtn(p, "成长武器 ＋" + str(_wpn_lv) + "（" + str(WPN_Q_CN[_wpn_q]) + "）", Vector2(28, ly), Vector2(640, 80), 26, true,
 		func(): _open_large("成长武器"))
 	ly += 92.0
-	# v11g：每格下面两颗小钮：存进仓库 / 卖掉
-	for gi in 6:
-		if str(_equip[gi]) == "":
-			continue
-		var gcol := gi % 3
-		var grow := gi / 3
-		var gx := 28.0 + float(gcol) * 216.0
-		var gy := y + 74.0 + float(grow) * 132.0 + 92.0
-		_pbtn(p, "存", Vector2(gx, gy), Vector2(58, 34), 18, false, _gear_to_vault.bind(gi))
-		_pbtn(p, "卖", Vector2(gx + 66.0, gy), Vector2(58, 34), 18, true, _gear_sell.bind(false, gi))
+	# v12f：旧的"每格两颗小钮"循环**已删**——它画在 if 外面，会跑到宝物页上压住格子（截图抓到过）。
+	#   现在的［存］［卖］在装备那一支里、跟着每个格子画。
+	# v12c：宝物三选一入口
+	_pbtn(p, "宝物三选一（刷新 " + str(_trea_refresh) + " 次）", Vector2(240, ly), Vector2(428, 76), 23, true,
+		func(): _open_large("宝物三选一"))
 	_pbtn(p, "仓库", Vector2(28, ly), Vector2(200, 76), 24, false, func(): _open_large("仓库"))
 	_pbtn(p, "公共仓库（暂不开放）", Vector2(240, ly), Vector2(300, 76), 21, false, func(): _open_large("公共仓库"))
 	var tip := Label.new()
 	tip.position = Vector2(28, ly + 86.0)
 	tip.size = Vector2(640, 44)
-	tip.add_theme_font_size_override("font_size", 20)
+	tip.add_theme_font_size_override("font_size", 21)
 	tip.add_theme_color_override("font_color", DIM)
 	tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	tip.text = "六格自由摆（不分部位，随便放）。点击看详情；长按拿起来，再点目标格或［仓库］放下。"
+	tip.text = "点格子看详情；每格下面［存］［卖］"
+	# v12j（用户："不要留太多空白"）：把装备页下半屏用起来——成长武器摘要 ＋ 六格加成合计
+	var sy := ly + 88.0
+	var wsum := Label.new()
+	wsum.position = Vector2(24, sy)
+	wsum.size = Vector2(640, 40)
+	wsum.add_theme_font_size_override("font_size", 24)
+	wsum.add_theme_color_override("font_color", _quality_color(str(WPN_Q_CN[_wpn_q])))
+	wsum.text = "成长武器 ＋" + str(_wpn_lv) + "　【" + str(WPN_Q_CN[_wpn_q]) + "】"
+	p.add_child(wsum)
+	var wsub := Label.new()
+	wsub.position = Vector2(24, sy + 42.0)
+	wsub.size = Vector2(640, 34)
+	wsub.add_theme_font_size_override("font_size", 21)
+	wsub.add_theme_color_override("font_color", INK)
+	wsub.text = "每级：攻击 +" + str(_wpn_flat_atk()) + "　气血 +" + str(_wpn_flat_hp())
+	p.add_child(wsub)
+	var wline := Label.new()
+	wline.position = Vector2(24, sy + 78.0)
+	wline.size = Vector2(640, 66)
+	wline.add_theme_font_size_override("font_size", 20)
+	wline.add_theme_color_override("font_color", SEAL)
+	wline.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	if _wpn_lines.is_empty():
+		wline.text = "已选强化线：还没有（每 10 级进阶时选一条）"
+	else:
+		var wparts := []
+		for it_v in _wpn_lines:
+			var it: Dictionary = it_v
+			wparts.append(str(it["n"]) + "（" + str(WPN_Q_CN[int(it["q"])]) + "）")
+		wline.text = "已选 " + str(_wpn_lines.size()) + " 条：" + "、".join(PackedStringArray(wparts))
+	p.add_child(wline)
+	var gsum := Label.new()
+	gsum.position = Vector2(24, sy + 150.0)
+	gsum.size = Vector2(640, 34)
+	gsum.add_theme_font_size_override("font_size", 21)
+	gsum.add_theme_color_override("font_color", INK)
+	gsum.text = "六格加成合计：攻击 +" + str(int(_extra.get("gear_atk", 0))) + "　气血 +" + str(int(_extra.get("gear_hp", 0)))
+	p.add_child(gsum)
+	return sy + 210.0
+
 	p.add_child(tip)
 	return ly + 146.0
 
