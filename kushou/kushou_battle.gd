@@ -548,6 +548,11 @@ func _process(delta: float) -> void:
 			f["x"] = clampf(float(f["x"]) + mv.x, 40.0, size.x - 40.0)
 			f["y"] = float(f["y"]) + mv.y
 		else:
+			# v9i：被雷麻痹的怪，出手计时清零（麻痹 1 秒）
+			if float(f.get("para", 0.0)) > 0.0:
+				f["para"] = maxf(0.0, float(f["para"]) - delta)
+				f["t"] = 0.0
+				continue
 			f["t"] = float(f["t"]) + delta
 			if float(f["t"]) >= 1.0 / FOE_ASPD:
 				f["t"] = 0.0
@@ -585,6 +590,7 @@ func _process(delta: float) -> void:
 						running = false
 						hero_down.emit()
 						break
+	_update_card_fx(dt)          # v9i：飞羽 / 流星 / 雷霆
 	_update_qi(dt)
 	_update_jg(dt)
 	_update_partners(dt)
@@ -726,6 +732,9 @@ func _death_sfx(kind: String, is_boss: bool) -> void:
 	Audio.sfx("swing", -12.0, pt)               # 一点点"挥空"的余韵
 
 # 死：不立刻消失——先"被打飞"半秒（碎片＋淡出＋上飘），爽感全在这一下
+# v9h：挑战怪死亡 —— 外壳按类型发奖（文钱/灵晶/经验/宝物）
+signal chal_drop(kind_i: int, at: Vector2)
+
 func _kill_foe(f: Dictionary) -> void:
 	f["dying"] = 0.30
 	f["kb"] = 210.0
@@ -742,9 +751,18 @@ func _kill_foe(f: Dictionary) -> void:
 			"vx": randf_range(-160.0, 160.0), "vy": randf_range(-280.0, -90.0), "t": 0.0})
 	var kind := str(f["kind"])
 	var coins := 1 + randi() % 3
+	# v9h（挑战掉落表）：挑战怪身上带 chal —— 按类型掉，结算交给外壳
+	#   0 文钱 · 1 灵晶 · 2 经验 · 3 宝物 · 4 boss
+	if f.has("chal"):
+		var ci := int(f["chal"])
+		if bool(f.get("boss", false)):
+			coins = [0, 0, 0, 220, 320][clampi(ci, 0, 4)]      # 大怪掉一大笔钱
+		else:
+			coins = [24 + randi() % 17, 0, 0, 0, 0][clampi(ci, 0, 4)]
+		chal_drop.emit(ci, Vector2(float(f["x"]), float(f["y"])))
 	if kind == "coin":
 		coins = 30 + randi() % 31
-	elif kind == "boss":
+	elif kind == "boss" and not f.has("chal"):
 		coins = 200
 		boss_alive = false
 		_shake = 22.0                      # boss 死：整屏重震 ＋ 长顿帧
@@ -757,6 +775,89 @@ func _kill_foe(f: Dictionary) -> void:
 		special.emit(kind, coins, Vector2(float(f["x"]), float(f["y"])))
 	kill.emit(1)
 
+
+# ============================================================
+# v9i 触发型卡（用户："额外特效的也可加"）：
+#   飞羽（每 3 秒射一支箭，成型后穿透）· 雷霆（暴击落雷＋麻痹）· 流星（每 4 秒落星，成型后范围）
+#   开启与否由外壳塞进 hero：cg_feiyu / cg_leiting / cg_liuxing（0/1），冷却自己数。
+# ============================================================
+var _cg_feiyu_t := 0.0
+var _cg_liuxing_t := 0.0
+var _cg_leiting_t := 0.0
+
+func _nearest_foe() -> Dictionary:
+	var best: Dictionary = {}
+	var bd := 1e9
+	for f_v in foes:
+		var f: Dictionary = f_v
+		if float(f.get("dying", 0.0)) > 0.0:
+			continue
+		var d := Vector2(float(f["x"]), float(f["y"])).distance_to(hero_pos)
+		if d < bd:
+			bd = d
+			best = f
+	return best
+
+func _update_card_fx(delta: float) -> void:
+	# 飞羽：每 3 秒一支箭（成型＝穿透，打两只）
+	if float(hero.get("cg_feiyu", 0.0)) > 0.0:
+		_cg_feiyu_t += delta
+		if _cg_feiyu_t >= 3.0:
+			_cg_feiyu_t = 0.0
+			var tg := _nearest_foe()
+			if not tg.is_empty():
+				var hits := 2 if float(hero.get("cg_feiyu_pierce", 0.0)) > 0.0 else 1
+				var done := 0
+				for f_v in foes.duplicate():
+					var f2: Dictionary = f_v
+					if float(f2.get("dying", 0.0)) > 0.0:
+						continue
+					if done >= hits:
+						break
+					_apply_dmg(f2, float(hero["atk"]) * 0.6, DMG_PHYS)
+					_push_float(float(f2["x"]), float(f2["y"]) - 20.0, "飞羽", Color(0.92, 0.86, 0.60))
+					_bursts.append({"x": float(f2["x"]), "y": float(f2["y"]), "t": 0.0,
+						"col": Color(0.94, 0.90, 0.66), "scale": 0.8})
+					done += 1
+				Audio.sfx("dart", -10.0)
+	# 流星：每 4 秒落一颗（成型＝范围伤害）
+	if float(hero.get("cg_liuxing", 0.0)) > 0.0:
+		_cg_liuxing_t += delta
+		if _cg_liuxing_t >= 4.0:
+			_cg_liuxing_t = 0.0
+			var tg2 := _nearest_foe()
+			if not tg2.is_empty():
+				var cx := float(tg2["x"])
+				var cy := float(tg2["y"])
+				var aoe := float(hero.get("cg_liuxing_aoe", 0.0)) > 0.0
+				for f_v in foes.duplicate():
+					var f3: Dictionary = f_v
+					if float(f3.get("dying", 0.0)) > 0.0:
+						continue
+					if not aoe and f3 != tg2:
+						continue
+					if aoe and Vector2(float(f3["x"]), float(f3["y"])).distance_to(Vector2(cx, cy)) > 110.0:
+						continue
+					_apply_dmg(f3, float(hero["atk"]) * 0.7, DMG_PHYS)
+					_push_float(float(f3["x"]), float(f3["y"]) - 26.0, "落星", Color(0.86, 0.78, 1.0))
+				_bursts.append({"x": cx, "y": cy, "t": 0.0, "col": Color(0.80, 0.74, 1.0), "scale": 2.2})
+				_shake = maxf(_shake, 5.0)
+				Audio.sfx("hit_heavy", -8.0)
+	# 雷霆：暴击后落雷（成型＝必定麻痹）。_last_crit 由 _apply_dmg 标记。
+	if float(hero.get("cg_leiting", 0.0)) > 0.0:
+		_cg_leiting_t = maxf(0.0, _cg_leiting_t - delta)
+		if _last_crit and _cg_leiting_t <= 0.0 and not foes.is_empty():
+			_last_crit = false
+			_cg_leiting_t = 0.6                     # 落雷最短间隔，免得刷屏
+			var tg3 := _nearest_foe()
+			if not tg3.is_empty():
+				_apply_dmg(tg3, float(hero["atk"]) * 0.5, DMG_METAL)
+				if float(hero.get("cg_leiting_para", 0.0)) > 0.0:
+					tg3["para"] = 1.0                # 麻痹 1 秒（怪的出手计时会被清）
+				_push_float(float(tg3["x"]), float(tg3["y"]) - 30.0, "雷", Color(0.70, 0.86, 1.0), true)
+				_bursts.append({"x": float(tg3["x"]), "y": float(tg3["y"]), "t": 0.0,
+					"col": Color(0.72, 0.88, 1.0), "scale": 1.6})
+				Audio.sfx("slash_light", -8.0)
 func _push_float(x: float, y: float, txt: String, col: Color, big := false) -> void:
 	_floats.append({"x": x, "y": y, "txt": txt, "col": col, "t": 0.0, "big": big})
 
@@ -2250,10 +2351,10 @@ func _draw() -> void:
 			col = Color(0.86, 0.68, 0.26)
 		elif str(f["kind"]) == "crystal":
 			col = Color(0.42, 0.62, 0.78)
-		elif bool(f["boss"]):
+		elif bool(f.get("boss", false)):
 			col = Color(0.72, 0.22, 0.20)
 		draw_rect(Rect2(bx, float(f["y"]) - 58.0 * sc, bw * ratio, 6.0), col)
-		if bool(f["boss"]):
+		if bool(f.get("boss", false)):
 			var nm := str(f["name"])
 			draw_string(ThemeDB.fallback_font, Vector2(float(f["x"]) - 70.0, float(f["y"]) - 66.0 * sc), nm,
 				HORIZONTAL_ALIGNMENT_CENTER, 140.0, 20, Color(0.95, 0.86, 0.66))

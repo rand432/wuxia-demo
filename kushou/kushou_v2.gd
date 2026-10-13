@@ -71,6 +71,52 @@ var _recruit_choices: Array = []                      # 本次招募的三个候
 var _draw_choices: Array = []                         # v8a：抽卡的三张候选
 var _pending_card := ""                               # v8b：十格满了、等着"换哪张"的那张卡
 var _detail_card := ""                                # v8c：正在看详情的那张卡
+var _run_fame := 0                                    # v9h：本局名声（跨局那套还没做）
+var _realm := 0                                       # v10a：境界 0 凡人 · 1 筑基 · 2 金丹 · 3 元婴 · 4 化神
+var _meditate_acc := 0.0                              # v10a：打坐累积（每秒加，攒够 1 点进主属性）
+var _card_kills := {}                                 # v10b：杀意这类"按杀敌进化"的卡：id → 已杀数
+
+# v10b：杀敌 → 到阈值就把卡**换成下一形态**（占同一个格子，效果立刻改）
+func _card_evo_tick() -> void:
+	for id in _card_have.keys():
+		var s := card_set_of(str(id))
+		if not s.has("evo_next"):
+			continue
+		var need := int(s.get("evo_kills", 0))
+		_card_kills[id] = int(_card_kills.get(id, 0)) + 1
+		if int(_card_kills[id]) < need:
+			continue
+		var nid := str(s["evo_next"])
+		_card_kills.erase(id)
+		_card_have.erase(id)
+		var at := _deck_cards.find(str(id))
+		if at >= 0:
+			_deck_cards[at] = nid                 # ⚠ 原地替换：还是那一格
+		_card_have[nid] = 1
+		_apply_solo_effect(str(card_set_of(nid)["set"]))
+		_hint.text = "【" + card_name(str(id)) + "】进化 → 【" + card_name(nid) + "】"
+		_field._push_float(_field.hero_pos.x, _field.hero_pos.y - 120.0,
+			"进化：" + card_name(nid), Color(1.0, 0.86, 0.40), true)
+		Audio.sfx("levelup", -3.0)
+
+# 单卡（杀意/打坐）的常驻效果：进 _extra
+func _apply_solo_effect(id: String) -> void:
+	match str(id):
+		"sayi0":
+			_extra["atk_all"] = float(_extra.get("atk_all", 0.0)) + 0.06
+		"sayi1":
+			_extra["atk_all"] = float(_extra.get("atk_all", 0.0)) + 0.08
+			_extra["crit_add"] = float(_extra.get("crit_add", 0.0)) + 0.03
+		"sayi2":
+			_extra["atk_all"] = float(_extra.get("atk_all", 0.0)) + 0.12
+			_extra["crit_add"] = float(_extra.get("crit_add", 0.0)) + 0.05
+		"sayi3":
+			_extra["atk_all"] = float(_extra.get("atk_all", 0.0)) + 0.14
+			_extra["crit_add"] = float(_extra.get("crit_add", 0.0)) + 0.07
+			_extra["crit_dmg_bonus"] = float(_extra.get("crit_dmg_bonus", 0.0)) + 0.20
+		_:
+			pass
+	_sync_battle_stats()
 # v7a 卡牌状态
 var _deck_cards: Array = []                           # 十格里的卡（id；空位用 ""）
 var _card_star := {}                                  # id → 星级（1~5）
@@ -113,7 +159,36 @@ func _card_into_deck(id: String) -> bool:
 # v7f（用户："不要升星"）：**撤掉吞噬升星**——卡只有两条成长线：
 #   ①组合成套（凑齐给效果＋腾格）  ②进化/突破（下一形态直接替换原来那一张）
 #   重复抽到的卡不再升星，直接**回收成灵晶**（免得白抽）。
+# v10a：境界卡的"突破"——成功进境；失败**回池**（卡从手里消失，以后还能抽到）
+func _realm_break(id: String, realm: int) -> bool:
+	var rate: float = float([0.0, 0.75, 0.60, 0.45, 0.30][clampi(realm, 0, 4)])
+	if randf() < rate:
+		_realm = maxi(_realm, realm)
+		Audio.sfx("levelup", -3.0)
+		_hint.text = "突破成功！进入【" + card_name(id) + "】（打坐效率 ×" + str(_meditate_mult()) + "）"
+		_sync_battle_stats()
+		return true
+	# 失败：回池
+	_card_have.erase(id)
+	_deck_cards.erase(id)
+	Audio.sfx("fall_down", -6.0)
+	_hint.text = "突破失败……【" + card_name(id) + "】已回到卡池（下次还能再抽）"
+	return false
+
+# 打坐倍率（境界越高越快）
+func _meditate_mult() -> int:
+	return [1, 2, 3, 5, 8][clampi(_realm, 0, 4)]
+
 func _card_gain(id: String) -> void:
+	# 境界卡：拿到就掷一次成败（失败回池）
+	var cs0 := card_set_of(id)
+	if cs0.has("realm"):
+		var r := int(cs0["realm"])
+		if r <= _realm:
+			_hint.text = "已经在【" + card_name(id) + "】或更高境界了"
+			return
+		if not _realm_break(id, r):
+			return
 	if _card_have.has(id):
 		_card_have[id] = int(_card_have[id]) + 1
 		_crystal += 5                                  # 重复卡回收
@@ -121,6 +196,9 @@ func _card_gain(id: String) -> void:
 		Audio.sfx("coin", -10.0)
 		return
 	_card_have[id] = 1
+	if cs0.has("evo_next"):
+		# ⚠ 传**套名**（sayi0）不是卡 id（sayi0_0）：_apply_solo_effect 按套名匹配
+		_apply_solo_effect(str(cs0["set"]))  # v10b：杀意到手先给初阶效果
 	# ⚠ 这一行不能省：卡要**真的进十格**（v8b 曾把它摘掉，结果卡只记账不进格）
 	if not _card_into_deck(id):
 		_pending_card = id
@@ -133,6 +211,8 @@ func _set_check(set_id: String) -> void:
 	var s := card_set_of(set_id + "_0")
 	if s.is_empty():
 		return
+	if bool(s.get("solo", false)):
+		return                                    # v10a：单卡（打坐/境界）不成套、不腾格
 	var n := int(s["size"])
 	for i in n:
 		if not _card_have.has(card_id(set_id, i)):
@@ -170,8 +250,12 @@ func _set_check(set_id: String) -> void:
 			_extra["crit_dmg_bonus"] = float(_extra.get("crit_dmg_bonus", 0.0)) + 0.40
 		"arrow_pierce":
 			_extra["arrow_pierce"] = 1.0
+			_extra["cg_feiyu"] = 1.0
+			_extra["cg_feiyu_pierce"] = 1.0
 		"thunder_para":
 			_extra["thunder_para"] = 1.0
+			_extra["cg_leiting"] = 1.0
+			_extra["cg_leiting_para"] = 1.0
 		"cut_all_6":
 			_extra["cut_all_bonus"] = float(_extra.get("cut_all_bonus", 0.0)) + 0.06
 		"skill_cd_12":
@@ -383,6 +467,7 @@ func _build_field() -> void:
 	_field.coin.connect(_on_coin)
 	_field.coin_drop.connect(_on_coin_drop)
 	_field.kill.connect(_on_kill)
+	_field.chal_drop.connect(_on_chal_drop)      # v9h：挑战怪掉落
 	_field.hero_down.connect(_on_hero_down)
 	_field.boss_arrived.connect(_on_boss)
 	_field.special.connect(_on_special)
@@ -615,6 +700,28 @@ const CARD_SETS := [
 		"combo": "开局自带一件上品装备", "combo_id": "start_equip_up"},
 	{"set": "huxinjing", "name": "护心镜", "quality": "上品", "size": 2, "cat": "装备",
 		"combo": "反伤 +30%", "combo_id": "thorns_50"},
+	# ---- v10a（用户："打坐 是每秒主属性增加 然后 卡池会出 筑基境 金丹等等境界 一个个出现
+	#       当拿筑基会有多少几率突破失败 拿金丹也是；失败了会重新进入卡池"）----
+	#   打坐：每秒涨主属性（本局永久叠加）；境界卡一个个解锁，拿了当场掷成败，失败即回池。
+	{"set": "dazuo", "name": "打坐", "quality": "下品", "size": 1, "solo": true,
+		"combo": "每秒 主属性 +0.02（本局永久叠加）", "combo_id": "meditate"},
+	{"set": "zhuji", "name": "筑基境", "quality": "中品", "size": 1, "solo": true, "realm": 1,
+		"combo": "突破 75%（失败回池）→ 打坐效率 ×2", "combo_id": "realm_1"},
+	{"set": "jindan", "name": "金丹境", "quality": "上品", "size": 1, "solo": true, "realm": 2,
+		"combo": "突破 60%（失败退筑基）→ 打坐 ×3 · 气血 +15%", "combo_id": "realm_2"},
+	{"set": "yuanying", "name": "元婴境", "quality": "极品", "size": 1, "solo": true, "realm": 3,
+		"combo": "突破 45%（失败退金丹）→ 打坐 ×5 · 全属性 +25%", "combo_id": "realm_3"},
+	{"set": "huashen", "name": "化神境", "quality": "绝品", "size": 1, "solo": true, "realm": 4,
+		"combo": "突破 30%（失败退元婴）→ 打坐 ×8 · 全属性 +50% · 元素 +30%", "combo_id": "realm_4"},
+	# ---- v10b（用户："杀敌进化的卡也要"）：**杀意**——杀敌到阈值就**换成下一形态**（同一个格子）----
+	{"set": "sayi0", "name": "杀意·初", "quality": "下品", "size": 1, "solo": true,
+		"evo_next": "sayi1", "evo_kills": 60, "combo": "杀敌 60 → 杀意·成", "combo_id": "sayi1"},
+	{"set": "sayi1", "name": "杀意·成", "quality": "中品", "size": 1, "solo": true, "evo_from": true,
+		"evo_next": "sayi2", "evo_kills": 200, "combo": "杀敌 200 → 杀意·极", "combo_id": "sayi2"},
+	{"set": "sayi2", "name": "杀意·极", "quality": "上品", "size": 1, "solo": true, "evo_from": true,
+		"evo_next": "sayi3", "evo_kills": 500, "combo": "杀敌 500 → 杀意·绝", "combo_id": "sayi3"},
+	{"set": "sayi3", "name": "杀意·绝", "quality": "极品", "size": 1, "solo": true, "evo_from": true,
+		"combo": "已是极致：攻击 +40% · 暴击 +15% · 暴伤 +20%", "combo_id": "sayi4"},
 ]
 # 每一张卡的"单卡属性"（按编号从小到大）
 const CARD_PARTS := {
@@ -664,6 +771,15 @@ const CARD_PARTS := {
 	"baoqi": ["幸运一击 +4%", "灵晶 +12%", "文钱 +20%"],
 	"shenbing": ["攻击 +9%", "暴击伤害 +22%"],
 	"huxinjing": ["全伤害减免 +3%", "反伤 +20%"],
+	"dazuo": ["每秒 主属性 +0.02"],
+	"zhuji": ["突破成功：打坐效率 ×2"],
+	"jindan": ["突破成功：打坐 ×3 · 气血 +15%"],
+	"yuanying": ["突破成功：打坐 ×5 · 全属性 +25%"],
+	"huashen": ["突破成功：打坐 ×8 · 全属性 +50% · 元素 +30%"],
+	"sayi0": ["攻击 +6%"],
+	"sayi1": ["攻击 +14% · 暴击 +3%"],
+	"sayi2": ["攻击 +26% · 暴击 +8%"],
+	"sayi3": ["攻击 +40% · 暴击 +15% · 暴伤 +20%"],
 }
 # 长线的"名字递进"（用户参考别人的 力量-野蛮人-战神）：I/II/III 各有名号
 const CARD_TIER_NAME := {
@@ -682,6 +798,11 @@ func card_name(id: String) -> String:
 		return id
 	var set_id := str(sp[0])
 	var part := int(sp[1])
+	# v10a：单卡（打坐/境界）不带编号——就叫"筑基境"，不写【I】
+	for s_v in CARD_SETS:
+		var ss: Dictionary = s_v
+		if str(ss["set"]) == set_id and bool(ss.get("solo", false)):
+			return str(ss["name"])
 	# 长线走"名字递进"（力量祝福→力士→刑天），短线仍是 套名【I/II/III】
 	if CARD_TIER_NAME.has(set_id):
 		var arr: Array = CARD_TIER_NAME[set_id]
@@ -882,6 +1003,12 @@ func _card_pool_available() -> Array:
 		var set_id := str(s["set"])
 		if bool(_sets_done.get(set_id, false)):
 			continue
+		# v10a：境界卡**一个个出现**——筑基只在没进境时出现，金丹要先进筑基…
+		if s.has("realm") and int(s["realm"]) != _realm + 1:
+			continue
+		# v10b：杀意的进阶形态只靠"进化"拿到，不进池
+		if bool(s.get("evo_from", false)):
+			continue
 		var w: int = int(QUALITY_WEIGHT.get(str(s["quality"]), 20))
 		for i in int(s["size"]):
 			var cid := card_id(set_id, i)
@@ -1052,7 +1179,12 @@ func _card_face(p: Control, pos: Vector2, sz: Vector2, id: String) -> void:
 	pg.size = Vector2(sz.x - 8, 56 if swap_mode else 66)
 	pg.add_theme_font_size_override("font_size", 32 if swap_mode else 38)
 	pg.add_theme_color_override("font_color", Color(0.30, 0.62, 0.34) if done_set else SEAL)
-	pg.text = (str(got) + "/" + str(int(s.get("size", 1)))) if not done_set else "已成"
+	# v10b：杀意这类"按杀敌进化"的卡，进度显示的是**杀敌数**
+	if s.has("evo_kills"):
+		pg.add_theme_font_size_override("font_size", 22)
+		pg.text = "杀敌 " + str(int(_card_kills.get(id, 0))) + "/" + str(int(s["evo_kills"]))
+	else:
+		pg.text = (str(got) + "/" + str(int(s.get("size", 1)))) if not done_set else "已成"
 	pg.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	pg.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	box.add_child(pg)
@@ -1642,6 +1774,14 @@ func _bar(r: Rect2, col: Color) -> ColorRect:
 # 假数据每帧走一点（看得出"活着"）
 # ============================================================
 func _process(delta: float) -> void:
+	# v10a 打坐：每秒 主属性 +0.02（境界越高倍率越大），攒够 1 点进属性
+	if _card_have.has("dazuo_0"):
+		_meditate_acc += 0.02 * float(_meditate_mult()) * delta
+		if _meditate_acc >= 1.0:
+			var add := int(floor(_meditate_acc))
+			_meditate_acc -= float(add)
+			_grow_card[_main_line()] = int(_grow_card.get(_main_line(), 0)) + add
+			_sync_battle_stats()
 	_boss_sec -= delta
 	if _boss_sec <= 0.0:
 		_boss_sec = 60.0
@@ -1786,6 +1926,9 @@ func _sync_battle_stats() -> void:
 	_field.hero["dmg_elem"] = _dmg_elem()
 	_field.hero["dmg_true"] = float(_extra.get("dmg_true", 0.0))   # 只有它能加真实伤害
 	_field.hero["thorns"] = float(_extra.get("thorns", 0.0))       # v9f 荆棘/护心镜：挨打反伤
+	# v9i 触发型卡（飞羽 / 流星 / 雷霆）——战场每帧读这几个开关
+	for k in ["cg_feiyu", "cg_feiyu_pierce", "cg_liuxing", "cg_liuxing_aoe", "cg_leiting", "cg_leiting_para"]:
+		_field.hero[k] = float(_extra.get(k, 0.0))
 	# 物理那一路的减伤仍旧走 cut（护甲），元素走 res_elem、真实两边都不吃
 	_field.hero["cut"] = _armor_cut()
 
@@ -1893,7 +2036,33 @@ func _update_coins(delta: float) -> void:
 	if _coin_layer != null:
 		_coin_layer.queue_redraw()
 
+# v9h（挑战掉落表）：打死挑战怪按类型发奖
+#   0 文钱 · 1 灵晶 · 2 经验 · 3 宝物 · 4 boss
+func _on_chal_drop(kind_i: int, at: Vector2) -> void:
+	match kind_i:
+		0:
+			var g0 := 40 + randi() % 41
+			_money += g0
+			_hint.text = "钱怪掉了 " + str(g0) + " 文钱"
+		1:
+			var g1 := 6 + randi() % 5
+			_crystal += g1
+			_hint.text = "晶怪掉了 " + str(g1) + " 灵晶"
+		2:
+			_gain_exp(0.06)
+			_hint.text = "书怪：经验 +6%"
+		3:
+			_hint.text = "宝箱大怪爆了宝物（宝物槽下一轮接）"
+			Audio.sfx("chest", -3.0)
+		4:
+			# 名声是"局外"的（跨局保留），这里先记一笔本局战绩
+			_run_fame += 20
+			_hint.text = "挑战 boss 拿下：本局名声 +20（现在 " + str(_run_fame) + "）"
+			Audio.sfx("levelup", -4.0)
+	Audio.sfx("coin", -8.0)
+
 func _on_kill(_n: int) -> void:
+	_card_evo_tick()          # v10b：杀意按杀敌进化
 	# v4b：杀敌数**是可花的钱**（黑市用它换东西），所以这里自己累加、不再每帧从战场回读
 	_kills += 1
 	# v7b：三条成长线——成套后**每杀一名敌人**给 臂力/身法/悟性 +0.2（本局永久叠加）
@@ -2655,7 +2824,7 @@ func _atk() -> float:
 #   臂力：每点 +2% 暴击伤害　身法：每点 +0.5% 暴击　悟性：每点 +0.5% 全元素加成
 #   幸运一击、各元素抗性、全伤害增减目前由装备/伙伴给（先给 0，接口留着）
 func _crit_total() -> float:
-	return 0.05 + 0.005 * float(_attr_agi())
+	return 0.05 + 0.005 * float(_attr_agi()) + float(_extra.get("crit_add", 0.0))
 
 func _crit_dmg_total() -> float:
 	return 2.0 + 0.02 * float(_attr_arm()) + float(_extra.get("crit_dmg_bonus", 0.0))
