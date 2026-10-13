@@ -106,7 +106,7 @@ const BOSS_TIER := [
 		"affix_k": "hp_up", "affix_v": 0.35, "ult_cd": 16.0},
 	{"name": "毒牙蟒", "hp": 1750.0, "atk": 20.0,
 		"skill": "剧毒（攻击带毒）", "ult": "毒雾喷吐", "affix": "迅捷（移速 +30%）",
-		"affix_k": "spd_up", "affix_v": 0.30, "ult_cd": 12.0},
+		"affix_k": "spd_up", "affix_v": 0.30, "skill_k": "poison", "ult_cd": 12.0},
 	{"name": "双头狮", "hp": 5200.0, "atk": 40.0,
 		"skill": "双头夹击", "ult": "狮吼", "affix": "嗜血（击中回血）",
 		"affix_k": "lifesteal", "affix_v": 0.15, "ult_cd": 13.0},
@@ -293,6 +293,9 @@ func start_boss(tier: int) -> void:
 	var f: Dictionary = foes[foes.size() - 1]
 	var hp_mul := mul
 	var atk_mul := pow(WAVE_ATK, float(wave - 1)) * foe_mul
+	# ---- 技能（登场写进字段，由各自逻辑读）----
+	if str(d.get("skill_k", "")) == "poison":
+		f["boss_poison"] = true
 	# ---- 词缀（登场就吃）----
 	match str(d.get("affix_k", "")):
 		"hp_up":
@@ -303,6 +306,8 @@ func start_boss(tier: int) -> void:
 			f["boss_cut"] = float(d["affix_v"])          # 减伤（_apply_dmg 读）
 		"spd_up":
 			f["boss_spd"] = float(d["affix_v"])
+		"poison":
+			f["boss_poison"] = true
 		"aspd_up":
 			f["boss_aspd"] = float(d["affix_v"])
 		"all_up":
@@ -700,6 +705,11 @@ func _process(delta: float) -> void:
 				break
 		f["buff"] = fbuff
 		# 怪**朝目标走**（主角会动，所以不再用固定的那条线）——走到 FOE_REACH 就停下开打
+		# v14r：boss 词缀"再生"——**只要活着每秒就回**（不能只在贴脸时才回：探针抓到过，
+		#   怪还在往下走的那几秒里血一点没涨）
+		var breg := float(f.get("boss_regen", 0.0))
+		if breg > 0.0 and float(f["hp"]) > 0.0 and float(f["hp"]) < float(f["hp_max"]):
+			f["hp"] = minf(float(f["hp_max"]), float(f["hp"]) + float(f["hp_max"]) * breg * delta)
 		var to_h := ftgt - Vector2(float(f["x"]), float(f["y"]))
 		var dh := to_h.length()
 		if dh > FOE_REACH:
@@ -715,10 +725,6 @@ func _process(delta: float) -> void:
 				f["para"] = maxf(0.0, float(f["para"]) - delta)
 				f["t"] = 0.0
 				continue
-			# v14r：boss 词缀"再生"——每秒回一点（原来 boss_regen 只存着没人读）
-			var breg := float(f.get("boss_regen", 0.0))
-			if breg > 0.0 and float(f["hp"]) > 0.0 and float(f["hp"]) < float(f["hp_max"]):
-				f["hp"] = minf(float(f["hp_max"]), float(f["hp"]) + float(f["hp_max"]) * breg * delta)
 			f["t"] = float(f["t"]) + delta
 			# v14r：boss 词缀"疾风"——出手更频（原来 boss_aspd 只存着没人读）
 			var faspd := FOE_ASPD * (1.0 + float(f.get("boss_aspd", 0.0)))
@@ -753,16 +759,17 @@ func _process(delta: float) -> void:
 					_hero_hit_flash = 0.18
 					_shake = maxf(_shake, 3.5)
 					# v14r：boss 词缀"嗜血"（打中回血）与二技能"剧毒"（打中带毒）接上进行为
+					# v14r：boss 词缀"嗜血"（打中回血）
 					var bls := float(f.get("boss_lifesteal", 0.0))
-					if bls > 0.0 and float(f["hp"]) > 0.0:
-						var blh := minf(float(f["hp_max"]), float(f["hp"]) + d2 * bls)
-						if blh > float(f["hp"]):
-							f["hp"] = blh
-							_push_float(float(f["x"]) + 14.0, float(f["y"]) - 44.0, "嗜血 +" + str(int(blh - float(f["hp"]) + d2 * bls)),
-								Color(0.86, 0.36, 0.40))
+					if bls > 0.0 and float(f["hp"]) > 0.0 and float(f["hp"]) < float(f["hp_max"]):
+						var old_hp := float(f["hp"])
+						f["hp"] = minf(float(f["hp_max"]), old_hp + d2 * bls)
+						if float(f["hp"]) > old_hp:
+							_push_float(float(f["x"]) + 14.0, float(f["y"]) - 44.0,
+								"嗜血 +" + str(int(float(f["hp"]) - old_hp)), Color(0.86, 0.36, 0.40))
+					# v14r：二技能"剧毒"——打中给主角挂毒（每秒跳一次，木系）
 					if bool(f.get("boss_poison", false)) and d2 > 0.0:
-						_add_dot({"dot": hero.get("dot", []), "x": 0.0, "y": 0.0}, 0.0, 0.0, DMG_WOOD) if false else null
-						hero["poison_t"] = maxf(float(hero.get("poison_t", 0.0)), 4.0)
+						hero["poison"] = maxf(float(hero.get("poison", 0.0)), 4.0)
 						_push_float(size.x * 0.5 - 40.0, size.y - HERO_LINE - 66.0, "中毒", Color(0.62, 0.90, 0.44))
 					# v9f（卡：荆棘 / 护心镜）——**挨打反弹一部分伤害给打你的那只怪**
 					var th := float(hero.get("thorns", 0.0))
@@ -1226,6 +1233,25 @@ func _chain_blast(at: Vector2) -> void:
 	_chain_lock = false
 
 func _kill_foe(f: Dictionary) -> void:
+	# v14r：boss 词缀"不死"——濒死时**回满一半血**顶一次（整个 boss 只顶一次）
+	if int(f.get("boss_revive", 0)) > 0 and float(f.get("dying", 0.0)) <= 0.0:
+		f["boss_revive"] = 0     # ⚠ 手工塞进来的怪没有这个键，读法必须是 get（探针抓到过）
+		f["hp"] = float(f["hp_max"]) * 0.5
+		# ⚠ 死亡标记必须清干净：上面刚把它打成 0 血，可能已经挂了 dying——不清就"复活了但还是死的"（探针抓到过）
+		f["dying"] = 0.0
+		f["kb"] = 0.0
+		f["flash"] = 0.30
+		_banner = "不死！" + str(f.get("bname", "boss")) + "　又站起来了"
+		_banner_t = 2.0
+		_shake = maxf(_shake, 18.0)
+		_hitstop = maxf(_hitstop, 0.14)
+		_bursts.append({"x": float(f["x"]), "y": float(f["y"]), "t": 0.0, "col": Color(0.86, 0.30, 0.34), "scale": 2.4})
+		for ri in 14:
+			_shards.append({"x": float(f["x"]), "y": float(f["y"]) - 24.0,
+				"vx": randf_range(-230.0, 230.0), "vy": randf_range(-340.0, -90.0), "t": 0.0})
+		_push_float(float(f["x"]), float(f["y"]) - 76.0, "不死之身！", Color(1.0, 0.62, 0.58), true)
+		Audio.sfx("drum", -3.0)
+		return
 	# v13f：元素/伙伴技打死的（百步任务）——普通刀砍是物理，不算
 	if str(f.get("last_dtype", "")) in ELEMS:
 		skill_kills += 1
@@ -2792,6 +2818,15 @@ func _update_partners(delta: float) -> void:
 	var hpr := float(hero.get("hp_regen", 0.0))
 	if hpr > 0.0:
 		hero["hp"] = minf(float(hero["hp_max"]), float(hero["hp"]) + hpr * delta)
+	# v14r：剧毒（毒牙蟒 / 血手判官那一路）——每秒跳一次木系伤害，无视护甲
+	if float(hero.get("poison", 0.0)) > 0.0:
+		hero["poison"] = maxf(0.0, float(hero.get("poison", 0.0)) - delta)
+		hero["poison_tick"] = float(hero.get("poison_tick", 1.0)) - delta
+		if float(hero["poison_tick"]) <= 0.0:
+			hero["poison_tick"] = 1.0
+			var pdm := maxf(1.0, hero_in_dmg(float(hero["hp_max"]) * 0.012, DMG_WOOD))
+			hero["hp"] = float(hero["hp"]) - pdm
+			_push_float(hero_pos.x, hero_pos.y - 70.0, "毒 " + str(int(pdm)), Color(0.62, 0.90, 0.44))
 	for id in partners.keys():
 		var p: Dictionary = partners[id]
 		if not bool(p["owned"]):
