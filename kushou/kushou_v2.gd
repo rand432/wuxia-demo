@@ -334,6 +334,7 @@ var _q_done := 0
 var _q_give := 0
 var _q_fail := 0
 var _q_ctr := {}                  # 行为计数（任务进度的来源）
+var _q_last_wave := 0              # v13f：上一帧看到的波次（换波时判清道夫/越狱的连击）
 var _q_lb: Array = []             # HUD 上那两条任务条
 var _q_panel: Panel = null
 var _over := false        # 这一局结束没有
@@ -499,6 +500,10 @@ func _build_field() -> void:
 	_field.hero_down.connect(_on_hero_down)
 	_field.boss_arrived.connect(_on_boss)
 	_field.special.connect(_on_special)
+	_field.statue_down.connect(_on_statue_down)
+	_field.guard_broken.connect(_on_guard_broken)
+	_field.champion_down.connect(_on_champion_down)
+	_field.elite_down.connect(_on_elite_down)
 	_sync_battle_stats()
 	_field.set_wave(_wave)
 	_field.start_run()          # v3h：开场先站几秒（怪先走进画面），再"远快近慢"地压上去
@@ -508,7 +513,7 @@ func _build_field() -> void:
 	# 就绪数量做成圆钮右上角的小红点（原来靠底下那排显示"哪个能点"，现在得在这儿说）
 	_chal_badge = _lbl(Vector2(94, 384), Vector2(56, 36), 22, Color(1, 0.94, 0.88))
 	_chal_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-_circle_btn("任务", Vector2(22, 530), func(): _open_large("任务"))
+	_circle_btn("任务", Vector2(22, 530), func(): _open_large("任务"))
 	_circle_btn("卡组", Vector2(22, 664), func(): _open_large("卡组"))
 	_circle_btn("存档", Vector2(594, 340), func(): _open_large("存档"))
 	_circle_btn("成就", Vector2(594, 480), func(): _open_large("成就"))
@@ -1115,7 +1120,7 @@ func _draw_card(id: String) -> void:
 		_hint.text = "灵晶不够（要 " + str(DRAW_COST) + "，现有 " + str(int(_crystal)) + "）"
 		return
 	_crystal -= DRAW_COST
-_qc("draw")                       # v13c：任务进度（抽卡）
+	_qc("draw")                       # v13c：任务进度（抽卡）
 	_draw_choices.clear()
 	Audio.sfx("paper", -6.0)
 	# v8b：十格满了 → 进"换卡"模式（抽到的先拿在手上，去卡组页点掉一张）
@@ -1493,8 +1498,9 @@ func _wpn_up() -> bool:
 	var c := _wpn_cost()
 	if int(_money) < c:
 		_hint.text = "强化要 " + str(c) + " 文钱（现有 " + str(int(_money)) + "）"
-		return false
 	_money -= c
+	_qc("wpn")                        # v13c：任务进度（强化武器）
+	_wpn_lv += 1
 	_wpn_lv += 1
 	Audio.sfx("hit_heavy", -10.0, 1.3)
 	if _wpn_lv % 10 == 0:
@@ -2078,7 +2084,7 @@ func _trea_take(i: int) -> void:
 	var key := str(it["key"])
 	var v := float(it["v"])
 	var t := str(it["t"])
-_qc("trea")                       # v13c：任务进度（拿到宝物）
+	_qc("trea")                       # v13c：任务进度（拿到宝物）
 	if t == "instant":
 		# v12i：闲散宝物——当场结算，不占格不入库
 		match key:
@@ -2755,7 +2761,7 @@ func _bm_buy(i: int) -> void:
 		_:
 			pass
 	s["bought"] = true
-_qc("bm")                         # v13c：任务进度（黑市成交）
+	_qc("bm")                         # v13c：任务进度（黑市成交）
 	_bm_slots[i] = s
 	Audio.sfx("coin", -6.0)
 	if _field != null:
@@ -2778,6 +2784,26 @@ const QUEST_SIMPLE := [
 	{"id": "yexun", "n": "夜巡", "d": "撑过一波不倒下", "ck": "alive", "goal": 60, "sec": 60.0, "cr": 30},
 	{"id": "zougou", "n": "走狗", "d": "杀掉 1 只挑战怪（大怪）", "ck": "chalkill", "goal": 1, "sec": 90.0, "cr": 35},
 ]
+# 普通档（P3）：破阵（石像）· 占点（法阵）
+const QUEST_NORMAL := [
+	{"id": "pozhen", "n": "破阵", "d": "60 秒内打碎 3 座石像（石像在给怪加 buff）", "ck": "statue", "goal": 3, "sec": 60.0, "cr": 60, "setup": "statue"},
+	{"id": "zhandian", "n": "占点", "d": "站住法阵累计 12 秒（离开会回退）", "ck": "zone", "goal": 12, "sec": 45.0, "cr": 90, "setup": "zone"},
+	{"id": "liesha", "n": "猎杀", "d": "90 秒内杀掉混进怪群的精英（大怪）", "ck": "elite", "goal": 1, "sec": 90.0, "cr": 55, "setup": "elite"},
+	{"id": "qingdao", "n": "清道夫", "d": "在一波之内把场上的怪清空一次", "ck": "clearwave", "goal": 1, "sec": -1.0, "cr": 50, "card": 1},
+	{"id": "kuyi", "n": "苦役", "d": "30 秒内不使用任何挑战", "ck": "nochal", "goal": 30, "sec": 40.0, "cr": 50},
+	{"id": "yueyu", "n": "越狱", "d": "连着 2 波都清空过场上（中间一波没清空就归零）", "ck": "clearwave", "goal": 2, "sec": -1.0, "cr": 70, "bms": 2},
+	{"id": "yizhan", "n": "以战养战", "d": "累计造成 3000 点伤害", "ck": "dmg", "goal": 3000, "sec": -1.0, "cr": 50},
+	{"id": "baibu", "n": "百步", "d": "用元素/伙伴技击杀 10 只（刀砍物理不算）", "ck": "skillkill", "goal": 10, "sec": -1.0, "cr": 55},
+	{"id": "yujiu", "n": "狱友", "d": "升 2 级", "ck": "levelup", "goal": 2, "sec": -1.0, "cr": 50, "trs": 1},
+	{"id": "zhaoxian", "n": "招贤", "d": "招募 1 次伙伴", "ck": "recruit", "goal": 1, "sec": -1.0, "cr": 50}
+]
+# 困难档（P4）：守护（牢车）
+const QUEST_HARD := [
+	{"id": "shouhu", "n": "守护", "d": "60 秒内保住牢车（怪会砸它 · 碎了立刻失败）", "ck": "guardsec", "goal": 60, "sec": 66.0, "cr": 100, "trs": 2, "setup": "guard"},
+]
+const QUEST_SPECIAL := [
+	{"id": "dandou", "n": "单挑", "d": "打死来挑战的高手（怪照刷，不清场）", "ck": "champion", "goal": 1, "sec": 90.0, "cr": 180, "gear": 1, "setup": "champion"},
+]
 # 波次 → 档位权重（简单/普通/困难/特殊）：简单越来越少
 const Q_TIER_W := [
 	{"w": 9, "t": [45, 55, 0, 0]},
@@ -2795,10 +2821,26 @@ func _q_now(key: String) -> int:
 		return _kills
 	if key == "money":
 		return _money_earned
+	if key == "zone":
+		return int(_field.zone_prog()) if _field != null else 0
+	if key == "statue":
+		return int(_q_ctr.get("statue", 0))
+	if key == "champion":
+		return int(_q_ctr.get("champion", 0))
+	if key == "elite":
+		return int(_q_ctr.get("elite", 0))
+	if key == "dmg":
+		return int(_field.dmg_done) if _field != null else 0
+	if key == "skillkill":
+		return int(_field.skill_kills) if _field != null else 0
+	if key == "levelup":
+		return int(_q_ctr.get("levelup", 0))
+	if key == "recruit":
+		return int(_q_ctr.get("recruit", 0))
 	return int(_q_ctr.get(key, 0))
 
 func _q_prog(q: Dictionary) -> int:
-	if str(q["ck"]) == "alive":
+	if str(q["ck"]) in ["alive", "guardsec", "nochal", "clearwave"]:
 		return int(float(q.get("alive", 0.0)))
 	return _q_now(str(q["ck"])) - int(q["base"])
 
@@ -2815,6 +2857,9 @@ func _q_reward_cn(d: Dictionary) -> String:
 		parts.append("宝物刷新 " + str(int(d["trs"])))
 	if int(d.get("card", 0)) > 0:
 		parts.append("卡组刷新 " + str(int(d["card"])))
+	if int(d.get("gear", 0)) > 0:
+		parts.append("装备 " + str(int(d["gear"])) + " 件")
+
 	if int(d.get("wpnlv", 0)) > 0:
 		parts.append("武器 +" + str(int(d["wpnlv"])) + " 级")
 	if parts.is_empty():
@@ -2838,8 +2883,10 @@ func _q_grant(d: Dictionary) -> String:
 		_card_refresh += int(d["card"])
 	if int(d.get("wpnlv", 0)) > 0:
 		_bm_wpn_add(int(d["wpnlv"]))
+	if int(d.get("gear", 0)) > 0:
+		for gi in int(d["gear"]):
+			_equip_add(_gen_gear(false, true))
 	return _q_reward_cn(d)
-
 # 掷一个任务（先按波次决定档位；池子空就往下降级）
 func _q_roll() -> Dictionary:
 	var row: Array = Q_TIER_W[0]["t"]
@@ -2855,15 +2902,18 @@ func _q_roll() -> Dictionary:
 		if roll < acc:
 			tier = i
 			break
-	while tier > 0:
-		# P2 只填了简单池：高档次暂时降级（池子以后补）
-		break
-	tier = 0
+	# P4：四档都开张了（简单/普通/困难/特殊）；哪个池空了就往下降级
+	if tier == 3 and QUEST_SPECIAL.is_empty():
+		tier = 2
+	if tier == 2 and QUEST_HARD.is_empty():
+		tier = 1
+		tier = 1
+	var pool: Array = [QUEST_SIMPLE, QUEST_NORMAL, QUEST_HARD, QUEST_SPECIAL][clampi(tier, 0, 3)]
 	var used: Array = []
 	for s_v in _q_slots:
 		used.append(str((s_v as Dictionary)["id"]))
 	var pick: Array = []
-	for d_v in QUEST_SIMPLE:
+	for d_v in pool:
 		var d: Dictionary = d_v
 		if not used.has(str(d["id"])):
 			pick.append(d)
@@ -2885,13 +2935,80 @@ func _q_event() -> void:
 	q["base"] = _q_now(str(d["ck"]))
 	q["alive"] = 0.0
 	_q_slots.append(q)
+	_q_setup(q)
 	var tail := ""
 	if float(q["left"]) >= 0.0:
 		tail = "　限时 " + str(int(q["left"])) + " 秒"
 	_note("【事件·" + str(Q_TIER_CN[int(q["tier"])]) + "】" + str(q["n"]) + "　" + str(q["d"]) + tail
-		+ "　·　奖 " + _q_reward_cn(q) + "\n（已经在任务栏里挂着；不想做就点［放弃］，给 10 灵晶）", 5.0)
+		+ "　·　奖 " + _q_reward_cn(q) + "（不想做就在任务栏点放弃，给 10 灵晶）", 5.0)
 	_hint.text = "新任务：「" + str(q["n"]) + "」" + str(q["d"])
 	Audio.sfx("bell", -6.0)
+
+# 任务的场上布置（石像 / 法阵）——P3
+func _q_setup(q: Dictionary) -> void:
+	if _field == null:
+		return
+	match str(q.get("setup", "")):
+		"statue":
+			_field.spawn_statues(int(q.get("goal", 3)))
+		"zone":
+			_field.spawn_zone(150.0, float(q.get("goal", 12)))
+		"guard":
+			_field.spawn_guard()
+		"elite":
+			_field.spawn_elite()
+		"champion":
+			_field.spawn_champion()
+		_:
+			pass
+
+# 任务结束（完成/失败/放弃）→ 把场上的东西收掉
+func _q_teardown(q: Dictionary) -> void:
+	if _field == null:
+		return
+	match str(q.get("setup", "")):
+		"statue":
+			_field.clear_statues()
+		"zone":
+			_field.clear_zone()
+		"guard":
+			_field.clear_guard()
+		"champion":
+			_field.clear_champion()
+		"elite":
+			_field.clear_elite()
+		_:
+			pass
+
+# 石像碎了（战场信号）→ 破阵任务进度 +1
+func _on_statue_down(left: int) -> void:
+	_qc("statue")
+	if left > 0:
+		_hint.text = "石像碎了一座，还剩 " + str(left) + " 座（它们给怪的加成弱一分）"
+	else:
+		_hint.text = "石像全碎了——给怪的加成没了"
+
+# 牢车被砸碎 → 守护任务立刻失败（失败啥也不给）
+func _on_guard_broken() -> void:
+	for i in range(_q_slots.size() - 1, -1, -1):
+		var q: Dictionary = _q_slots[i]
+		if str(q.get("setup", "")) == "guard":
+			_q_slots.remove_at(i)
+			_q_fail += 1
+			_note("【任务失败】" + str(q["n"]) + "　牢车被砸碎了（失败不给东西）", 4.0)
+			Audio.sfx("fall_down", -6.0)
+	_q_chips_update()
+
+# 高手倒地 → 单挑任务进度 +1
+func _on_champion_down() -> void:
+	_qc("champion")
+	_hint.text = "高手倒地——单挑赢了（去任务栏领奖励）"
+
+
+# 精英被猎杀 → 猎杀任务进度 +1
+func _on_elite_down() -> void:
+	_qc("elite")
+	_hint.text = "精英伏诛——猎杀成了"
 
 # 放弃：+10 灵晶
 func _q_give_up(i: int) -> void:
@@ -2899,6 +3016,7 @@ func _q_give_up(i: int) -> void:
 		return
 	var q: Dictionary = _q_slots[i]
 	_q_slots.remove_at(i)
+	_q_teardown(q)
 	_q_give += 1
 	_crystal += Q_GIVE_CRYSTAL
 	_crystal_pop = 0.32
@@ -2915,9 +3033,10 @@ func _q_tick(delta: float) -> void:
 		_q_event()
 	for i in range(_q_slots.size() - 1, -1, -1):
 		var q: Dictionary = _q_slots[i]
-		if str(q["ck"]) == "alive":
+		if str(q["ck"]) == "alive" or str(q["ck"]) == "guardsec" or str(q["ck"]) == "nochal":
 			q["alive"] = float(q.get("alive", 0.0)) + delta
 		if _q_prog(q) >= int(q["goal"]):
+			_q_teardown(q)
 			var got := _q_grant(q)
 			_q_slots.remove_at(i)
 			_q_done += 1
@@ -2927,10 +3046,20 @@ func _q_tick(delta: float) -> void:
 		if float(q["left"]) >= 0.0:
 			q["left"] = float(q["left"]) - delta
 			if float(q["left"]) <= 0.0:
+				_q_teardown(q)
 				_q_slots.remove_at(i)
 				_q_fail += 1
 				_note("【任务失败】" + str(q["n"]) + "　时间到——失败不给东西", 3.5)
-				Audio.sfx("fall_down", -6.0)
+				Audio.sfx("fall_down", -6.0)	# v13f：清道夫 / 越狱——这一波里"场上的怪被清空过"就记一笔（换波时没清空的会归零）
+	if _field != null and _field.live_foes() <= 0:
+		for qc_v in _q_slots:
+			var qc: Dictionary = qc_v
+			if str(qc["ck"]) == "clearwave" and not bool(qc.get("hit_this_wave", false)):
+				qc["hit_this_wave"] = true
+				qc["alive"] = float(qc.get("alive", 0.0)) + 1.0
+				_hint.text = "场上清空了：「" + str(qc["n"]) + "」记一笔"
+
+	_q_chips_update()
 	_q_chips_update()
 
 # 战场左下角那两条任务条（点着不挡操作：Label 不吃鼠标）
@@ -3131,6 +3260,18 @@ func _restart_run() -> void:
 	_recruit_opens = 0
 	_recruit_choices.clear()
 	_bm_roll()                       # v13a：新的一局，黑市货架重摆
+	# v13c：新的一局——任务栏清空、行为计数清零、事件计时重来
+	_q_slots.clear()
+	_q_ctr.clear()
+	_q_done = 0
+	_q_give = 0
+	_q_fail = 0
+	_q_t = 0.0
+	if _field != null:
+		_field.clear_statues()
+		_field.clear_zone()
+		_field.clear_guard()
+		_field.clear_champion()
 	_sync_battle_stats()
 	_close_popup()
 	_hint.text = "新的一局——预备几秒，怪就压上来了"
@@ -3422,7 +3563,12 @@ func _chal_press(i: int) -> void:
 		_hint.text = "「" + str(_chal_names[i]) + "」冷却中（还要 " + str(int(ceil(cd))) + " 秒）"
 		return
 	_chal_cd[i] = _chal_base_cd(i)
-_qc("chal")                       # v13c：任务进度（挑战）
+	_qc("chal")                       # v13c：任务进度（挑战）
+	# v13f：苦役——用了挑战就归零
+	for qk_v in _q_slots:
+		var qk: Dictionary = qk_v
+		if str(qk["ck"]) == "nochal":
+			qk["alive"] = 0.0
 	# 挑战怪的数量（招怪/战鼓套会给更多）
 	var n := _chal_spawn_count(i)
 	# v9g：把"一群 N 只"交给战场（群怪一群／大怪一只只刷，由战场决定体型与血厚）
@@ -3562,6 +3708,16 @@ func _process(delta: float) -> void:
 			_crystal += wc
 			_hint.text = "商路进账：每波 +" + str(wc) + " 灵晶（现有 " + str(int(_crystal)) + "）"
 		_boss_arrive()
+	# v13f：换波了——清道夫/越狱看这一波有没有清空过（没清空就断链）
+	if _wave != _q_last_wave:
+		_q_last_wave = _wave
+		for qw_v in _q_slots:
+			var qw: Dictionary = qw_v
+			if str(qw["ck"]) == "clearwave":
+				if not bool(qw.get("hit_this_wave", false)):
+					qw["alive"] = 0.0
+				qw["hit_this_wave"] = false
+
 	var ready := 0
 	for i in _chal_cd.size():
 		if float(_chal_cd[i]) > 0.0:
@@ -3597,6 +3753,8 @@ func _process(delta: float) -> void:
 		_mini_exp.size.x = 178.0 * clampf(float(_bm_exp) / maxf(1.0, float(_bm_need)), 0.0, 1.0)
 	if _mini_lv != null:
 		_mini_lv.text = "黑市 Lv " + str(_bm_lv) + "　刷新 " + str(_bm_refresh)
+	# v13c P2：事件/任务（180 秒一次 · 进度检查 · 完成发奖 · 超时失败）
+	_q_tick(delta)
 	# 每 180 秒送一次黑市刷新
 	_bm_t += delta
 	if _bm_t >= BM_REFRESH_SEC:
@@ -3659,7 +3817,7 @@ var _note_t := 0.0
 
 func _note(txt: String, secs: float) -> void:
 	if _note_lb == null:
-		_note_lb = _lbl(Vector2(24, 196), Vector2(672, 88), 20, Color(1.0, 0.92, 0.72))
+		_note_lb = _lbl(Vector2(24, 178), Vector2(672, 58), 19, Color(1.0, 0.92, 0.72))
 		_note_lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		_note_lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		_note_lb.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -3809,6 +3967,9 @@ func _update_coins(delta: float) -> void:
 # v9h（挑战掉落表）：打死挑战怪按类型发奖
 #   0 文钱 · 1 灵晶 · 2 经验 · 3 宝物 · 4 boss
 func _on_chal_drop(kind_i: int, at: Vector2) -> void:
+	# v13c：任务进度——挑战怪里的「大怪」（宝物 3 / boss 4）算击杀 1 只
+	if kind_i >= 3:
+		_qc("chalkill")
 	match kind_i:
 		0:
 			var g0 := 40 + randi() % 41
@@ -3873,6 +4034,7 @@ func _gain_exp(amount: float) -> void:
 	if _exp >= 1.0:
 		_exp -= 1.0
 		_lv += 1
+		_qc("levelup")                        # v13f：狱友任务进度
 		_skill_pts += 1                      # v3a：每升 1 级给 1 点技能点
 		_attr_pts += 2                       # v5a：再给 2 点属性点（角色页自己分配）
 		if _lv % 5 == 0:                     # v6a：每 5 级给一次招募（成长继承）
@@ -3899,6 +4061,11 @@ func _on_boss(tier: int) -> void:
 	_hint.text = ["", "一阶", "二阶", "三阶"][clampi(tier, 1, 3)] + " boss 下场了——打赢有额外名声"
 
 func _on_hero_down() -> void:
+	# v13c：倒下过 →「撑过一波不倒下」这类任务进度清零重来（浴血免死也照样算倒下）
+	for q_v in _q_slots:
+		var q: Dictionary = q_v
+		if str(q["ck"]) == "alive":                      # 守护的 guardsec 不清：倒下了牢车还在
+			q["alive"] = 0.0
 	if _revive > 0:
 		_revive -= 1
 		_grow += 1
@@ -4075,8 +4242,8 @@ func _fill_popup(p: Control, kind: String, y: float, sz: Vector2) -> float:
 		return _fill_over(p, y, sz)
 	if kind == "黑市":
 		return _fill_black(p, y, sz)
-if kind == "任务":
-	return _fill_quest(p, y, sz)
+	if kind == "任务":
+		return _fill_quest(p, y, sz)
 	if kind == "招募":
 		return _fill_recruit(p, y, sz)
 	if kind == "成长武器":
@@ -4572,6 +4739,7 @@ func _attr_wit() -> int:
 
 # 招募：把这位伙伴的三属性成长**逐项取最高**并进来（保证只升不降）
 func _recruit(id: String) -> void:
+	_qc("recruit")                       # v13f：招贤任务进度
 	var info: Dictionary = _field.PARTNER_INFO[id]
 	var g: Dictionary = info.get("grow", {})
 	var up: Array = []

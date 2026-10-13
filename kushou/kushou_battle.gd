@@ -48,7 +48,12 @@ func _apply_dmg(f: Dictionary, amount: float, dtype: String) -> float:
 	# 暴击/幸运的飘字标记挂在"这一帧最后一次伤害"上（外层读它来飘字）
 	_last_crit = bool(o["crit"])
 	_last_lucky = bool(o["lucky"])
+	# v13d P3：石像在，怪少挨 20%
+	if float(f.get("buff", 0.0)) > 0.0:
+		final *= STATUE_CUT
 	f["hp"] = float(f["hp"]) - final
+	dmg_done += final
+	f["last_dtype"] = dtype
 	return final
 
 var _last_crit := false
@@ -308,6 +313,9 @@ func blood_bath_clear() -> Dictionary:
 	for f_v in foes.duplicate():
 		var f: Dictionary = f_v
 		var kind := str(f["kind"])
+		# v13d P3：石像是任务目标，浴血不清它
+		if bool(f.get("still", false)):
+			continue
 		if kind == "normal":
 			n_normal += 1
 			_kill_foe(f)                    # 正常击杀：奖励照给
@@ -445,6 +453,15 @@ func _process(delta: float) -> void:
 	hero_pos.x = clampf(hero_pos.x, 70.0, size.x - 70.0)
 	# 上不去：到 HERO_TOP 那条线就停住等怪下来（"让怪大部分出现在屏幕里"）
 	hero_pos.y = clampf(hero_pos.y, size.y * HERO_TOP, size.y - HERO_LINE * 0.5)
+	# v13d P3：法阵——站圈里累计，出圈按半速回退
+	if not zone.is_empty() and bool(zone.get("on", false)):
+		if _in_zone():
+			zone["prog"] = float(zone["prog"]) + delta
+		else:
+			zone["prog"] = maxf(0.0, float(zone["prog"]) - delta * ZONE_DECAY)
+	# v13e P4：牢车挨打的闪白
+	if not guard.is_empty():
+		guard["flash"] = maxf(0.0, float(guard.get("flash", 0.0)) - delta)
 	# 宠物：跟在主角左后侧一点，也会自己上去咬
 	var pet_home := hero_pos + Vector2(-92.0, 26.0)
 	if intro_wait > 0.0:
@@ -500,6 +517,12 @@ func _process(delta: float) -> void:
 			_combo = 0
 	# 主角的"家"跟着窗口尺寸走（没怪时退回这里）
 	_home = Vector2(size.x * 0.5, size.y - HERO_LINE)
+	# v13d P3：这一帧"活着的石像"位置（给怪算 buff 用；碎一座立刻失效）
+	var live_st: Array = []
+	for fst_v in foes:
+		var fst: Dictionary = fst_v
+		if bool(fst.get("still", false)) and float(fst.get("dying", 0.0)) <= 0.0:
+			live_st.append(Vector2(float(fst["x"]), float(fst["y"])))
 	for i in range(foes.size() - 1, -1, -1):
 		var f: Dictionary = foes[i]
 		# 正在"被打飞"的那半秒：不再走位、不再打人，只上飘淡出
@@ -530,6 +553,10 @@ func _process(delta: float) -> void:
 		f["dot"] = dots
 		if not foes.has(f):
 			continue
+		# v13d P3：石像——不移动、不出手，只挨打
+		if bool(f.get("still", false)):
+			f["flash"] = maxf(0.0, float(f.get("flash", 0.0)) - delta)
+			continue
 		# 麻痹（天雷）：这段时间**不动也不打**
 		if float(f.get("para", 0.0)) > 0.0:
 			f["para"] = maxf(0.0, float(f["para"]) - dt)
@@ -554,6 +581,23 @@ func _process(delta: float) -> void:
 				bd2 = dmv
 				fmin = mm
 				ftgt = mm["pos"]
+		# v13e P4：守护目标（牢车）也在候选里——离得近就先砸车
+		var hit_guard := false
+		if not guard.is_empty() and bool(guard.get("on", false)):
+			var gp := Vector2(float(guard["x"]), float(guard["y"]))
+			var dg := gp.distance_to(Vector2(float(f["x"]), float(f["y"])))
+			if dg < bd2:
+				bd2 = dg
+				fmin = {}
+				ftgt = gp
+				hit_guard = true
+		# v13d P3：石像 buff——附近有活石像 → 攻速 +30% · 少挨 20% 伤害
+		var fbuff := 0.0
+		for sp_v in live_st:
+			if (sp_v as Vector2).distance_to(Vector2(float(f["x"]), float(f["y"]))) <= STATUE_BUFF_R:
+				fbuff = 1.0
+				break
+		f["buff"] = fbuff
 		# 怪**朝目标走**（主角会动，所以不再用固定的那条线）——走到 FOE_REACH 就停下开打
 		var to_h := ftgt - Vector2(float(f["x"]), float(f["y"]))
 		var dh := to_h.length()
@@ -569,7 +613,7 @@ func _process(delta: float) -> void:
 				f["t"] = 0.0
 				continue
 			f["t"] = float(f["t"]) + delta
-			if float(f["t"]) >= 1.0 / FOE_ASPD:
+			if float(f["t"]) >= 1.0 / (FOE_ASPD * (STATUE_ASPD if float(f.get("buff", 0.0)) > 0.0 else 1.0)):
 				f["t"] = 0.0
 				f["lunge"] = 1.0                 # 怪扑下来那一下
 				# 打的是蛟龙：扣它的血（蛟龙没有防御，挨多少掉多少）
@@ -577,6 +621,16 @@ func _process(delta: float) -> void:
 					fmin["hp"] = float(fmin["hp"]) - float(f["atk"])
 					_push_float(float((fmin["pos"] as Vector2).x) + 16.0, float((fmin["pos"] as Vector2).y) - 26.0,
 						"-" + str(int(f["atk"])), Color(0.94, 0.66, 0.60))
+					continue
+				# v13e P4：砸牢车（牢车没有防御，挨多少掉多少）
+				if hit_guard and not guard.is_empty():
+					guard["hp"] = float(guard["hp"]) - float(f["atk"])
+					guard["flash"] = 0.20
+					_push_float(float(guard["x"]) + 22.0, float(guard["y"]) - 40.0,
+						"-" + str(int(f["atk"])), Color(0.98, 0.78, 0.42))
+					_shake = maxf(_shake, 3.0)
+					if float(guard["hp"]) <= 0.0:
+						_break_guard()
 					continue
 				# v5f：怪打主角走 hero_in_dmg()（物理吃护甲＋全减；元素吃抗性不吃护甲；真实不吃）
 				var d2 := hero_in_dmg(float(f["atk"]), DMG_PHYS)
@@ -706,10 +760,18 @@ func _nearest() -> Dictionary:
 	var best: Dictionary = {}
 	# 挑**离主角最近**的那只（原来是按"最靠下"，主角会走位之后要按距离）
 	var bd := 1.0e9
+	# v13d P3：占点时只认**圈里的怪**——不然主角会追出圈，进度就白站了
+	var zc := Vector2.ZERO
+	var in_zone := false
+	if not zone.is_empty() and bool(zone.get("on", false)):
+		zc = Vector2(float(zone["x"]), float(zone["y"]))
+		in_zone = hero_pos.distance_to(zc) <= float(zone["r"])
 	for f_v in foes:
 		var f: Dictionary = f_v
 		if float(f.get("dying", 0.0)) > 0.0:
 			continue                             # 已经躺了的不再补刀
+		if in_zone and Vector2(float(f["x"]), float(f["y"])).distance_to(zc) > float(zone["r"]):
+			continue                             # 圈外的先不管
 		var d := hero_pos.distance_to(Vector2(float(f["x"]), float(f["y"])))
 		if d < bd:
 			bd = d
@@ -804,6 +866,130 @@ func _gui_input(e: InputEvent) -> void:
 		if mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
 			tap_at(mb.position)
 			accept_event()
+# ============================================================
+# v13d P3：破阵（石像）＋ 占点（法阵）—— 规格：docs/困兽_事件与任务_设计稿.md
+#   · 石像＝**不动的怪**（still=true）：不走不打，但能被主角/宠物/技能打；
+#     活着的石像给半径 160 内的怪 **攻速 +30% · 少挨 20% 伤害**（碎一座弱一分）
+#   · 法阵＝一个圈：站圈里累计秒数，出圈**按半速回退**；占点期间主角**只打圈里的怪**
+# ============================================================
+signal statue_down(left: int)
+const STATUE_BUFF_R := 160.0
+const STATUE_ASPD := 1.3
+const STATUE_CUT := 0.8
+const ZONE_DECAY := 0.5
+var zone := {}
+
+# 还活着几座石像（外壳的破阵任务读它）
+func statues_left() -> int:
+	var n := 0
+	for f_v in foes:
+		var f: Dictionary = f_v
+		if bool(f.get("still", false)) and float(f.get("dying", 0.0)) <= 0.0:
+			n += 1
+	return n
+
+# 摆 n 座石像（横着铺开，血跟着波次走）
+func spawn_statues(n := 3) -> void:
+	clear_statues()
+	var hp := _foe_hp()
+	for i in n:
+		var x := 150.0 + float(i) * ((size.x - 300.0) / maxf(1.0, float(n - 1)))
+		foes.append({"x": x, "y": size.y * 0.30, "hp": hp, "hp_max": hp, "atk": 0.0, "t": 0.0,
+			"kind": "statue", "boss": false, "tier": 1, "name": "石像", "scale": 1.15,
+			"still": true, "stop": 0.0, "flash": 0.0})
+	_banner = "破阵：打碎 " + str(n) + " 座石像（它们在给怪加成）"
+	_banner_t = 2.6
+	Audio.sfx("chest", -6.0)
+
+func clear_statues() -> void:
+	for i in range(foes.size() - 1, -1, -1):
+		if bool((foes[i] as Dictionary).get("still", false)):
+			foes.remove_at(i)
+
+# 开一个法阵（占点）：goal ＝ 要累计多少秒
+func spawn_zone(r := 150.0, goal := 12.0) -> void:
+	zone = {"x": size.x * 0.5, "y": size.y * 0.66, "r": r, "goal": goal, "prog": 0.0, "on": true}
+	_banner = "占点：站进法阵（离开会回退）"
+	_banner_t = 2.6
+	Audio.sfx("bell", -6.0)
+
+func clear_zone() -> void:
+	zone = {}
+
+func zone_prog() -> float:
+	return float(zone.get("prog", 0.0))
+
+# 主角是不是站在阵里
+func _in_zone() -> bool:
+	if zone.is_empty() or not bool(zone.get("on", false)):
+		return false
+	return hero_pos.distance_to(Vector2(float(zone["x"]), float(zone["y"]))) <= float(zone["r"])
+# ============================================================
+# v13e P4：守护（牢车）＋ 单挑（高手）
+#   · 牢车＝**能被怪打的友方目标**：怪在「主角 / 蛟龙 / 牢车」里挑最近的打；
+#     牢车**不回血**，砸碎 → 发 guard_broken，任务立刻失败
+#   · 高手＝一只大怪（**不清场**，普通怪照刷），打死发 champion_down
+# ============================================================
+signal guard_broken()
+signal champion_down()
+const CHAMPION_NAMES := ["刀疤张", "独眼彪", "铁手判官", "鬼头刀"]
+var guard := {}
+var champion := 0
+
+# 摆一辆牢车（守护任务）
+func spawn_guard() -> void:
+	var hp := maxf(200.0, _foe_atk() * 180.0)
+	guard = {"x": size.x * 0.5, "y": size.y * 0.42, "hp": hp, "hp_max": hp, "flash": 0.0, "on": true}
+	_banner = "守护：别让牢车被砸碎"
+	_banner_t = 2.6
+	Audio.sfx("chest", -6.0)
+
+func clear_guard() -> void:
+	guard = {}
+
+func guard_hp_ratio() -> float:
+	if guard.is_empty():
+		return 0.0
+	return clampf(float(guard["hp"]) / maxf(1.0, float(guard["hp_max"])), 0.0, 1.0)
+
+func _break_guard() -> void:
+	if guard.is_empty():
+		return
+	var gx := float(guard["x"])
+	var gy := float(guard["y"])
+	for gi in 14:
+		_shards.append({"x": gx + randf_range(-20.0, 20.0), "y": gy - 10.0,
+			"vx": randf_range(-220.0, 220.0), "vy": randf_range(-340.0, -120.0), "t": 0.0})
+	_bursts.append({"x": gx, "y": gy, "t": 0.0, "col": Color(0.72, 0.52, 0.32), "scale": 1.8})
+	_shake = maxf(_shake, 14.0)
+	_hitstop = maxf(_hitstop, 0.10)
+	Audio.sfx("fall_down", -2.0)
+	_push_float(gx, gy - 54.0, "牢车被砸碎了！", Color(0.98, 0.72, 0.62), true)
+	guard = {}
+	guard_broken.emit()
+
+# 高手进场（单挑任务）：一只大怪，**不清场**
+func spawn_champion() -> void:
+	clear_champion()
+	var mul := pow(WAVE_HP, float(wave - 1))
+	_spawn_foe("champion", 1.0, 1.0, false, 1, str(CHAMPION_NAMES[randi() % CHAMPION_NAMES.size()]))
+	var f: Dictionary = foes[foes.size() - 1]
+	f["hp"] = 420.0 * mul
+	f["hp_max"] = 420.0 * mul
+	f["atk"] = 12.0 * pow(WAVE_ATK, float(wave - 1))
+	f["scale"] = 1.6
+	f["stop"] = FOE_STOP + 20.0
+	champion = 1
+	_banner = "单挑：高手来了——" + str(f["name"])
+	_banner_t = 2.8
+	Audio.sfx("drum", -3.0)
+	_shake = 12.0
+
+func clear_champion() -> void:
+	for i in range(foes.size() - 1, -1, -1):
+		if str((foes[i] as Dictionary).get("kind", "")) == "champion":
+			foes.remove_at(i)
+	champion = 0
 # v2p（用户："怪物死亡也有音效"）：死亡音效**分层 ＋ 随机音高**——
 #   原来只有一声 -7dB 的 fall_down，被 BGM(-12dB) 和刀声盖住，听着就像"没响"。
 #   现在：一记"闷响"（hit_heavy，音高随机）＋ 一声"倒下"（fall_down）；
@@ -839,6 +1025,61 @@ func _death_sfx(kind: String, is_boss: bool) -> void:
 signal chal_drop(kind_i: int, at: Vector2)
 
 func _kill_foe(f: Dictionary) -> void:
+	# v13f：元素/伙伴技打死的（百步任务）——普通刀砍是物理，不算
+	if str(f.get("last_dtype", "")) in ELEMS:
+		skill_kills += 1
+	# v13e P4：高手被打死——通知外壳（单挑任务），杀敌照样算
+	if str(f.get("kind", "")) == "champion":
+		champion = 0
+		f["dying"] = 0.42
+		f["kb"] = 140.0
+		f["hp"] = 0.0
+		kills_total += 1
+		_combo += 1
+		_combo_t = 1.4
+		_shake = maxf(_shake, 16.0)
+		_hitstop = maxf(_hitstop, 0.10)
+		for ci in 12:
+			_shards.append({"x": float(f["x"]), "y": float(f["y"]) - 20.0,
+				"vx": randf_range(-200.0, 200.0), "vy": randf_range(-320.0, -100.0), "t": 0.0})
+		_bursts.append({"x": float(f["x"]), "y": float(f["y"]), "t": 0.0, "col": Color(0.92, 0.72, 0.36), "scale": 1.6})
+		Audio.sfx("hit_heavy", -4.0, 1.2)
+		Audio.sfx("drum", -6.0, 0.9)
+		_push_float(float(f["x"]), float(f["y"]) - 64.0, "高手倒地！", Color(1.0, 0.88, 0.46), true)
+		kill.emit(1)
+		champion_down.emit()
+		return
+	# v13f：精英被猎杀——通知外壳
+	if str(f.get("kind", "")) == "elite":
+		f["dying"] = 0.36
+		f["kb"] = 120.0
+		f["hp"] = 0.0
+		_shake = maxf(_shake, 12.0)
+		_hitstop = maxf(_hitstop, 0.08)
+		for ei in 10:
+			_shards.append({"x": float(f["x"]), "y": float(f["y"]) - 20.0,
+				"vx": randf_range(-200.0, 200.0), "vy": randf_range(-320.0, -100.0), "t": 0.0})
+		Audio.sfx("hit_heavy", -5.0, 1.1)
+		_push_float(float(f["x"]), float(f["y"]) - 56.0, "走狗伏诛", Color(1.0, 0.88, 0.46), true)
+		kill.emit(1)
+		elite_down.emit()
+		return
+	# v13d P3：石像碎了——不算杀敌、不掉钱，只通知外壳（破阵任务进度）
+	if bool(f.get("still", false)):
+		f["dying"] = 0.34
+		f["kb"] = 40.0
+		var n_left := statues_left() - 1
+		for si in 10:
+			_shards.append({"x": float(f["x"]), "y": float(f["y"]) - 18.0,
+				"vx": randf_range(-190.0, 190.0), "vy": randf_range(-320.0, -110.0), "t": 0.0})
+		_bursts.append({"x": float(f["x"]), "y": float(f["y"]), "t": 0.0, "col": Color(0.80, 0.78, 0.74), "scale": 1.4})
+		_shake = maxf(_shake, 9.0)
+		_hitstop = maxf(_hitstop, 0.06)
+		Audio.sfx("hit_heavy", -6.0, 0.8)
+		_push_float(float(f["x"]), float(f["y"]) - 44.0,
+			"石像碎" + ("　还剩 " + str(n_left) + " 座" if n_left > 0 else "　全碎了！"), Color(0.96, 0.90, 0.66), true)
+		statue_down.emit(maxi(0, n_left))
+		return
 	f["dying"] = 0.30
 	f["kb"] = 210.0
 	f["hp"] = 0.0
@@ -2365,6 +2606,42 @@ func _draw_partner_fx(shk: Vector2) -> void:
 # ============================================================
 const LUCKY_CAP := 3.0            # 幸运一击上限 300%
 const ELEMS := ["金系", "木系", "火系", "水系", "土系"]
+# v13f：给外壳的普通档任务用的两个计数
+var dmg_done := 0.0                  # 本局累计造成伤害（以战养战）
+var skill_kills := 0                 # 元素/伙伴技击杀数（百步）
+
+signal elite_down()
+const ELITE_NAME := "典狱长的走狗"
+
+# 猎杀任务：往怪群里塞一只精英（大怪）
+func spawn_elite() -> void:
+	clear_elite()
+	var mul := pow(WAVE_HP, float(wave - 1))
+	_spawn_foe("elite", 1.0, 1.0, false, 1, ELITE_NAME)
+	var f: Dictionary = foes[foes.size() - 1]
+	f["hp"] = 300.0 * mul
+	f["hp_max"] = 300.0 * mul
+	f["atk"] = 10.0 * pow(WAVE_ATK, float(wave - 1))
+	f["scale"] = 1.3
+	f["stop"] = FOE_STOP + 10.0
+	_banner = "猎杀：混进来一只精英——" + ELITE_NAME
+	_banner_t = 2.6
+	Audio.sfx("drum", -6.0)
+
+func clear_elite() -> void:
+	for i in range(foes.size() - 1, -1, -1):
+		if str((foes[i] as Dictionary).get("kind", "")) == "elite":
+			foes.remove_at(i)
+
+# 场上还有几只"怪"（石像这类任务道具不算）——清道夫/越狱用
+func live_foes() -> int:
+	var n := 0
+	for f_v in foes:
+		var f: Dictionary = f_v
+		if bool(f.get("still", false)) or float(f.get("dying", 0.0)) > 0.0:
+			continue
+		n += 1
+	return n
 
 # 出伤：把主角这一下的伤害算全（返回 Dictionary：{dmg, crit, lucky}）
 func hero_out_dmg(base: float, dtype: String) -> Dictionary:
@@ -2413,6 +2690,39 @@ func _draw() -> void:
 	draw_rect(Rect2(0, 0, w, 46), Color(1, 1, 1, 0.030))
 	draw_rect(Rect2(0, h - 84.0, w, 84), Color(1, 1, 1, 0.045))
 	draw_line(Vector2(24, h - 84.0), Vector2(w - 24, h - 84.0), Color(1, 1, 1, 0.06), 2.0)
+	# v13d P3：法阵（占点）——画在怪下面一层
+	if not zone.is_empty() and bool(zone.get("on", false)):
+		var zc := Vector2(float(zone["x"]), float(zone["y"]))
+		var zr := float(zone["r"])
+		var inz := _in_zone()
+		var zcol := Color(0.44, 0.86, 0.74, 0.9) if inz else Color(0.62, 0.72, 0.78, 0.5)
+		draw_circle(zc, zr, Color(zcol.r, zcol.g, zcol.b, 0.10 if inz else 0.05))
+		draw_arc(zc, zr, 0.0, TAU, 64, zcol, 3.0)
+		draw_arc(zc, zr - 12.0, 0.0, TAU, 64, Color(zcol.r, zcol.g, zcol.b, 0.32), 2.0)
+		var zgoal := maxf(1.0, float(zone.get("goal", 12.0)))
+		draw_arc(zc, 36.0, -PI * 0.5, -PI * 0.5 + TAU * clampf(float(zone["prog"]) / zgoal, 0.0, 1.0),
+			44, Color(0.98, 0.86, 0.42, 0.92), 5.0)
+		draw_circle(zc, 5.0, Color(0.98, 0.86, 0.42, 0.7))
+	# v13e P4：牢车（守护目标）——画在怪下面一层
+	if not guard.is_empty():
+		var gx := float(guard["x"])
+		var gy := float(guard["y"])
+		var gfl := float(guard.get("flash", 0.0))
+		var gbody := Color(1.0, 0.96, 0.88) if gfl > 0.0 else Color(0.62, 0.44, 0.26)
+		draw_circle(Vector2(gx, gy + 20.0), 40.0, Color(0, 0, 0, 0.16))
+		draw_rect(Rect2(gx - 34.0, gy - 24.0, 68.0, 36.0), gbody)
+		draw_rect(Rect2(gx - 34.0, gy - 36.0, 68.0, 12.0), Color(0.46, 0.32, 0.19))
+		draw_circle(Vector2(gx - 20.0, gy + 14.0), 13.0, Color(0.32, 0.24, 0.16))
+		draw_circle(Vector2(gx + 20.0, gy + 14.0), 13.0, Color(0.32, 0.24, 0.16))
+		draw_circle(Vector2(gx - 20.0, gy + 14.0), 5.0, Color(0.74, 0.64, 0.48))
+		draw_circle(Vector2(gx + 20.0, gy + 14.0), 5.0, Color(0.74, 0.64, 0.48))
+		var gw := 76.0
+		draw_rect(Rect2(gx - gw * 0.5, gy - 54.0, gw, 8.0), Color(0.28, 0.26, 0.28))
+		var gr := guard_hp_ratio()
+		var gcol := Color(0.42, 0.78, 0.50) if gr > 0.5 else (Color(0.88, 0.72, 0.32) if gr > 0.25 else Color(0.86, 0.34, 0.28))
+		draw_rect(Rect2(gx - gw * 0.5, gy - 54.0, gw * gr, 8.0), gcol)
+		draw_string(ThemeDB.fallback_font, Vector2(gx - 40.0, gy - 60.0), "牢车",
+			HORIZONTAL_ALIGNMENT_CENTER, 80.0, 18, Color(0.96, 0.90, 0.74))
 	# 怪（先画，压在主角下面一层）
 	for f_v in foes:
 		var f: Dictionary = f_v
@@ -2457,7 +2767,7 @@ func _draw() -> void:
 		elif bool(f.get("boss", false)):
 			col = Color(0.72, 0.22, 0.20)
 		draw_rect(Rect2(bx, float(f["y"]) - 58.0 * sc, bw * ratio, 6.0), col)
-		if bool(f.get("boss", false)):
+		if bool(f.get("boss", false)) or str(f.get("kind", "")) == "champion":
 			var nm := str(f["name"])
 			draw_string(ThemeDB.fallback_font, Vector2(float(f["x"]) - 70.0, float(f["y"]) - 66.0 * sc), nm,
 				HORIZONTAL_ALIGNMENT_CENTER, 140.0, 20, Color(0.95, 0.86, 0.66))
@@ -2621,6 +2931,12 @@ func _foe_art(f: Dictionary, sc: float, fc: Color) -> void:
 			_draw_chest(c, sc, fc)
 		"boss":
 			_draw_boss(c, sc, fc)
+		"statue":
+			_draw_statue(c, sc, fc)
+		"champion":
+			_draw_boss(c, sc, fc)
+		"elite":
+			_draw_boss(c, sc, fc)
 		_:
 			_stick(c, sc, fc, false)
 	# 每只脚下一小片影子（站得住）
@@ -2680,6 +2996,18 @@ func _draw_boss(c: Vector2, sc: float, fc: Color) -> void:
 # 宠物（会打架的那只 · v2k 给它整套扑咬动作）
 #   蓄力＝往后一坐并压扁；扑出去＝朝目标窜 26 像素并拉长；咬中那一瞬张口；
 #   跑动时四条腿交替摆、尾巴一直摇。
+
+# v13d P3：石像——一块立着的石碑（顶上阵纹，一眼看出是任务目标）
+func _draw_statue(c: Vector2, sc: float, fc: Color) -> void:
+	var w := 34.0 * sc
+	var h := 62.0 * sc
+	var a := fc.a
+	draw_rect(Rect2(c.x - w * 0.5, c.y - h, w, h), Color(0.50, 0.48, 0.46, a))
+	draw_rect(Rect2(c.x - w * 0.5 + 3.0, c.y - h + 4.0, w - 6.0, h - 8.0), Color(0.60, 0.58, 0.55, a))
+	draw_rect(Rect2(c.x - w * 0.5 - 5.0 * sc, c.y - 9.0 * sc, w + 10.0 * sc, 11.0 * sc), Color(0.42, 0.40, 0.38, a))
+	var glow := (0.55 + sin(_t * 3.0) * 0.25) * a
+	draw_rect(Rect2(c.x - 9.0 * sc, c.y - h + 12.0 * sc, 18.0 * sc, 4.0 * sc), Color(0.88, 0.74, 0.34, glow))
+	draw_rect(Rect2(c.x - 4.0 * sc, c.y - h + 8.0 * sc, 8.0 * sc, 24.0 * sc), Color(0.88, 0.74, 0.34, glow))
 func _pet(c: Vector2, sh: Vector2) -> void:
 	var off := _pet_dir * (_pet_lunge * 26.0 - _pet_wind * 8.0)
 	var c2 := c + off
