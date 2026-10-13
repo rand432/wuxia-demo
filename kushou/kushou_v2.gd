@@ -433,6 +433,7 @@ func _set_check(set_id: String) -> void:
 		"money_bonus_35":
 			_extra["money_bonus"] = float(_extra.get("money_bonus", 0.0)) + 0.35
 		"realm_4":
+			pass
 		_:
 			pass
 	# v14a：⚠ 上面那个 _sync_battle_stats() 是在 match 之前调的，
@@ -574,6 +575,7 @@ func _ready() -> void:
 	# v13w：读成就档 ＋ 首次开局就把已解锁的加成发下去
 	_ach_load()
 	_apply_achievements()
+	_apply_pet_bonus()                   # v14d：宠物被动也发一次
 
 func open() -> void:
 	_want_open = true
@@ -1388,6 +1390,8 @@ func _card_pool_available() -> Array:
 		var set_id := str(s["set"])
 		if bool(_sets_done.get(set_id, false)):
 			continue
+		if _set_locked(set_id):
+			continue                              # v14c：没解锁（存档/关卡）的套不进池
 		# v10a：境界卡**一个个出现**——筑基只在没进境时出现，金丹要先进筑基…
 		if s.has("realm") and int(s["realm"]) != _realm + 1:
 			continue
@@ -2514,6 +2518,9 @@ func _trea_roll() -> void:
 # v13n：玉壶满了就不再刷出秘卷
 		if str(pick["n"]) == YUHU_UP_NAME and _yh_q >= 5:
 			continue
+		# v14c：没解锁的宝物不刷出来
+		if _trea_locked(str(pick["n"])):
+			continue
 		var dup := false
 		for o_v in out:
 			if str((o_v as Dictionary)["n"]) == str(pick["n"]):
@@ -2577,8 +2584,9 @@ func _trea_take(i: int) -> void:
 		_hint.text = "拿到道具：" + nm + " ×" + str(int(_items[nm])) + "（" + str(it["fx"]) + "）"
 	else:
 		if key == "attr_all":
-			_extra["wpn_arm"] = float(_extra.get("wpn_arm", 0.0)) + v
-			_extra["wpn_agi"] = float(_extra.get("wpn_agi", 0.0)) + v
+			# ⚠ wpn_* 会被 _wpn_sync 覆盖（探针抓到），所以直接加属性点
+			for a in ["arm", "agi", "wit"]:
+				_attr[a] = int(_attr[a]) + int(v)
 			_extra["wpn_wit"] = float(_extra.get("wpn_wit", 0.0)) + v
 		else:
 			_extra[key] = float(_extra.get(key, 0.0)) + v
@@ -3781,6 +3789,234 @@ func _fill_quest(p: Control, y: float, sz: Vector2) -> float:
 #   · 条件一律在**一局之内**算；达成即**永久解锁**（写 user://kushou_meta.cfg）
 #   · 解锁的效果**从下一局开局**自动发放（_apply_achievements）
 # ============================================================
+# ============================================================
+# v14c 存档：银两解锁（用户："存档 就是用银两来解锁 新卡组和新成员和新宠物
+#        和新武器装备卡组 和新宝物道具"）
+#   · 银两是**局外货币**：成就达成给 ＋ 每局结束按波次给，存在 kushou_meta.cfg
+#   · 解锁**永久生效**：解锁后那套卡/那名队员/那件宝物才会进池
+# ============================================================
+# v14d 宠物（用户："宠物在困兽里面毕竟是没有生命的 也不需要做什么
+#        给他一个加成效果【或者特效技能】和攻击伤害即可 做一些不同类型的宠物"）
+#   宠物＝咬人（各不相同的攻击）＋ 给主人的被动加成；没有生命值、不会死
+# ============================================================
+var _pet_kind := "hu"
+
+const PETS := [
+	{"id": "hu", "n": "白狐", "q": "下品", "d": "扑咬单体 · 全属性 +3%",
+		"cfg": {"cd": 1.1, "dmg": 0.35, "verb": "咬 "}, "eff": {"attr_all": 3}},
+	{"id": "gui", "n": "玄武龟", "q": "中品", "d": "沉重撞击（慢 · 范围 90）· 全伤害减免 +6%",
+		"cfg": {"cd": 1.6, "dmg": 0.45, "room": 90.0, "verb": "撞 "}, "eff": {"cut_all_bonus": 0.06}},
+	{"id": "bao", "n": "赤豹", "q": "中品", "d": "极速连咬 · 攻速 +10%",
+		"cfg": {"cd": 0.6, "dmg": 0.28, "verb": "撕 "}, "eff": {"aspd_bonus": 0.10}},
+	{"id": "jiu", "n": "雷鹫", "q": "上品", "d": "连锁闪电（同时打 3 个）· 元素伤害 +12%",
+		"cfg": {"cd": 1.2, "dmg": 0.30, "elem": "金系", "chain": 3, "verb": "雷 "}, "eff": {"elem_all": 0.12}},
+	{"id": "lin", "n": "火麟", "q": "上品", "d": "火系范围吐息（范围 120）· 攻击 +12%",
+		"cfg": {"cd": 1.4, "dmg": 0.40, "elem": "火系", "room": 120.0, "verb": "焰 "}, "eff": {"atk_all": 0.12}},
+	{"id": "chan", "n": "金蟾", "q": "极品", "d": "撞击夺金 · 文钱 +25%",
+		"cfg": {"cd": 1.3, "dmg": 0.32, "verb": "夺 "}, "eff": {"money_bonus": 0.25}},
+]
+
+func _pet_info(kind: String) -> Dictionary:
+	for p_v in PETS:
+		if str((p_v as Dictionary)["id"]) == kind:
+			return p_v
+	return PETS[0]
+
+func _apply_pet_bonus() -> void:
+	var info := _pet_info(_pet_kind)
+	var e: Dictionary = info.get("eff", {})
+	for k in e.keys():
+		var key := str(k)
+		var v := float(e[k])
+		if key == "attr_all":
+			# ⚠ wpn_* 会被 _wpn_sync 覆盖（探针抓到），直接加属性点
+			for a in ["arm", "agi", "wit"]:
+				_attr[a] = int(_attr[a]) + int(v)
+		elif key == "elem_all":
+			for el in ["金系", "木系", "火系", "水系", "土系"]:
+				_extra["dmg_elem"][el] = float(_extra["dmg_elem"].get(el, 0.0)) + v
+		else:
+			_extra[key] = float(_extra.get(key, 0.0)) + v
+	_sync_battle_stats()
+
+func _set_pet(kind: String) -> void:
+	if _pet_locked(kind) and kind != "hu":
+		_hint.text = "「" + str(_pet_info(kind)["n"]) + "」还没解锁（去［存档］或打关卡）"
+		return
+	_pet_kind = kind
+	_ach_save()
+	_hint.text = "宠物换成「" + str(_pet_info(kind)["n"]) + "」——加成下一局开局生效"
+	Audio.sfx("ui_click", -8.0)
+	if _popup_kind == "角色":
+		_open_large("角色")
+
+# ============================================================
+# （银两＝主界面那个钱账 _money，不另造局外货币）
+var _unlocked := {}                       # unlock_id → true
+var _over_paid := false                   # 这一局的银两结算过没有
+
+const UNLOCKS := [
+	{"id": "u_set_liansuo", "cat": "卡组", "n": "连锁", "d": "击杀炸一圈的机制卡", "price": 400, "set": "liansuo"},
+	{"id": "u_set_xixue", "cat": "卡组", "n": "吸血", "d": "伤害的 6% 回血", "price": 400, "set": "xixue"},
+	{"id": "u_set_beishui", "cat": "卡组", "n": "背水", "d": "残血全伤 +50%", "price": 600, "set": "beishui"},
+	{"id": "u_set_hudun", "cat": "卡组", "n": "护盾", "d": "每 8 秒一层护盾", "price": 600, "set": "hudun"},
+	{"id": "u_set_dingshen", "cat": "卡组", "n": "定身", "d": "每 25 秒全场定身", "price": 800, "set": "dingshen"},
+	{"id": "u_set_zhanyi", "cat": "卡组", "n": "战意", "d": "每杀一个永久加攻", "price": 600, "set": "zhanyi"},
+	{"id": "u_set_wuxing2", "cat": "卡组", "n": "五行圆满", "d": "全元素 +25%（绝品）", "price": 1000, "set": "wuxing2"},
+	{"id": "u_set_yuheng", "cat": "卡组", "n": "玉衡", "d": "玉壶冷却 −25%", "price": 800, "set": "yuheng"},
+	{"id": "u_set_chixiao", "cat": "装备卡", "n": "赤霄剑", "d": "攻击溅射", "price": 500, "set": "chixiao"},
+	{"id": "u_set_suozijia", "cat": "装备卡", "n": "锁子甲", "d": "护盾型防具", "price": 500, "set": "suozijia"},
+	{"id": "u_set_yubanzhi", "cat": "装备卡", "n": "玉扳指", "d": "全属性 +8%", "price": 700, "set": "yubanzhi"},
+	{"id": "u_set_shenbing", "cat": "装备卡", "n": "神兵", "d": "开局自带一件上品装备", "price": 700, "set": "shenbing"},
+	{"id": "u_part_jicanghai", "cat": "队员", "n": "季沧海", "d": "火系传火", "price": 700, "pid": "jicanghai"},
+	{"id": "u_part_suqingluan", "cat": "队员", "n": "苏青鸾", "d": "飞匕物理", "price": 700, "pid": "suqingluan"},
+	{"id": "u_part_ximenlie", "cat": "队员", "n": "西门烈", "d": "烈焰刀范围", "price": 900, "pid": "ximenlie"},
+	{"id": "u_part_duniangzi", "cat": "队员", "n": "毒娘子", "d": "全场挂毒", "price": 900, "pid": "duniangzi"},
+	{"id": "u_part_cuisanniang", "cat": "队员", "n": "崔三娘", "d": "召唤蛟龙", "price": 1200, "pid": "cuisanniang"},
+	{"id": "u_part_xuanjizi", "cat": "队员", "n": "玄机子", "d": "时间停止", "price": 1200, "pid": "xuanjizi"},
+	{"id": "u_trea_tianlei", "cat": "宝物", "n": "天雷符", "d": "全场 300% 雷伤", "price": 400, "trea": "天雷符"},
+	{"id": "u_trea_dingshen", "cat": "宝物", "n": "定身符", "d": "全场定身 5 秒", "price": 400, "trea": "定身符"},
+	{"id": "u_trea_kuangxue", "cat": "宝物", "n": "狂血丹", "d": "15 秒攻击 +150%", "price": 550, "trea": "狂血丹"},
+	{"id": "u_trea_xisui", "cat": "宝物", "n": "洗髓丹", "d": "三属性各 +2（永久）", "price": 700, "trea": "洗髓丹"},
+	{"id": "u_trea_tianming", "cat": "宝物", "n": "天命石", "d": "幸运一击 +5%", "price": 550, "trea": "天命石"},
+	{"id": "u_trea_cuihuo", "cat": "宝物", "n": "淬火石", "d": "武器立刻 +3 级", "price": 450, "trea": "淬火石"},
+	{"id": "u_pet_gui", "cat": "宠物", "n": "玄武龟", "d": "血厚、攻击慢、自带减伤", "price": 900, "pet": "gui"},
+	{"id": "u_pet_bao", "cat": "宠物", "n": "赤豹", "d": "攻击快、伤害高、血薄", "price": 900, "pet": "bao"},
+]
+
+func _locked_sets() -> Array:
+	var out: Array = []
+	for u_v in UNLOCKS:
+		var u: Dictionary = u_v
+		if u.has("set") and not bool(_unlocked.get(str(u["id"]), false)):
+			out.append(str(u["set"]))
+	return out
+
+func _set_locked(set_id: String) -> bool:
+	return _locked_sets().has(set_id)
+
+func _partner_locked(pid: String) -> bool:
+	for u_v in UNLOCKS:
+		var u: Dictionary = u_v
+		if str(u.get("pid", "")) == pid and not bool(_unlocked.get(str(u["id"]), false)):
+			return true
+	return false
+
+func _trea_locked(nm: String) -> bool:
+	for u_v in UNLOCKS:
+		var u: Dictionary = u_v
+		if str(u.get("trea", "")) == nm and not bool(_unlocked.get(str(u["id"]), false)):
+			return true
+	return false
+
+func _pet_locked(kind: String) -> bool:
+	for u_v in UNLOCKS:
+		var u: Dictionary = u_v
+		if str(u.get("pet", "")) == kind and not bool(_unlocked.get(str(u["id"]), false)):
+			return true
+	return false
+
+func _money_add(n: int) -> void:
+	_money += n
+	_ach_save()
+
+func _unlock_buy(id: String) -> void:
+	for u_v in UNLOCKS:
+		var u: Dictionary = u_v
+		if str(u["id"]) != id:
+			continue
+		if bool(_unlocked.get(id, false)):
+			return
+		var price := int(u["price"])
+		if int(_money) < price:
+			_hint.text = "银两不够（要 " + str(price) + "，现有 " + str(int(_money)) + "）"
+			return
+		_money -= price                       # v14c：花的就是主界面那个钱账（银两）
+		_unlocked[id] = true
+		_ach_save()
+		_bm_roll()
+		_hint.text = "解锁【" + str(u["cat"]) + "】" + str(u["n"]) + "！下一局起它就在池子里"
+		Audio.sfx("levelup", -3.0)
+		if _popup_kind == "存档":
+			_open_large("存档")
+		return
+func _fill_save(p: Control, y: float, sz: Vector2) -> float:
+	var head := Label.new()
+	head.position = Vector2(24, y)
+	head.size = Vector2(660, 46)
+	head.add_theme_font_size_override("font_size", 28)
+	head.add_theme_color_override("font_color", INK)
+	head.text = "存档　银两 " + str(int(_money)) + "　·　已解锁 " + str(_unlocked.size()) + " / " + str(UNLOCKS.size())
+	p.add_child(head)
+	var tip := Label.new()
+	tip.position = Vector2(24, y + 48.0)
+	tip.size = Vector2(660, 34)
+	tip.add_theme_font_size_override("font_size", 19)
+	tip.add_theme_color_override("font_color", DIM)
+	tip.text = "花的就是主界面那个钱账（银两）· 解锁永久生效，下一局进池；另有［难度挑战］给出不重合的那批"
+	p.add_child(tip)
+	var ly := y + 92.0
+	var last_cat := ""
+	for u_v in UNLOCKS:
+		var u: Dictionary = u_v
+		var id := str(u["id"])
+		var got := bool(_unlocked.get(id, false))
+		if str(u["cat"]) != last_cat:
+			last_cat = str(u["cat"])
+			var cl := Label.new()
+			cl.position = Vector2(24, ly)
+			cl.size = Vector2(660, 34)
+			cl.add_theme_font_size_override("font_size", 22)
+			cl.add_theme_color_override("font_color", SEAL)
+			cl.text = "—— " + last_cat + " ——"
+			p.add_child(cl)
+			ly += 40.0
+		var qc := GOLD if got else Color(INK.r, INK.g, INK.b, 0.75)
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.99, 0.97, 0.92) if got else Color(0.93, 0.91, 0.88)
+		sb.set_corner_radius_all(10)
+		sb.border_color = qc
+		sb.set_border_width_all(2)
+		var box := Panel.new()
+		box.position = Vector2(24, ly)
+		box.size = Vector2(640, 92)
+		box.add_theme_stylebox_override("panel", sb)
+		box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		p.add_child(box)
+		var l1 := Label.new()
+		l1.position = Vector2(14, 8)
+		l1.size = Vector2(420, 36)
+		l1.add_theme_font_size_override("font_size", 24)
+		l1.add_theme_color_override("font_color", qc)
+		l1.text = str(u["n"])
+		box.add_child(l1)
+		var l2 := Label.new()
+		l2.position = Vector2(14, 48)
+		l2.size = Vector2(420, 36)
+		l2.add_theme_font_size_override("font_size", 19)
+		l2.add_theme_color_override("font_color", INK if got else DIM)
+		l2.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		l2.text = str(u["d"])
+		box.add_child(l2)
+		if got:
+			var ok := Label.new()
+			ok.position = Vector2(470, 26)
+			ok.size = Vector2(156, 44)
+			ok.add_theme_font_size_override("font_size", 22)
+			ok.add_theme_color_override("font_color", GOLD)
+			ok.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			ok.text = "✓ 已有"
+			box.add_child(ok)
+		else:
+			var can := int(_money) >= int(u["price"])
+			var bb := _pbtn(box, "解锁 " + str(u["price"]), Vector2(456, 20), Vector2(170, 54), 22, can, _unlock_buy.bind(id))
+			if not can:
+				bb.add_theme_stylebox_override("normal", _flat(Color(0.55, 0.53, 0.51, 0.95)))
+				bb.add_theme_stylebox_override("hover", _flat(Color(0.60, 0.58, 0.56, 0.95)))
+				bb.add_theme_stylebox_override("pressed", _flat(Color(0.48, 0.46, 0.44, 0.95)))
+		ly += 100.0
+	return ly + 8.0
+
 var _meta_path := "user://kushou_meta.cfg"      # ⚠ 探针会把它换成临时文件，别写脏真档
 var _ach_done := {}                             # id → true（永久）
 var _ach_t := 0.0
@@ -4146,6 +4382,7 @@ func _restart_run() -> void:
 	_sync_battle_stats()
 	# v13w：新的一局开局——把已解锁的成就加成发下去（放最后，免得被上面的重置覆盖）
 	_apply_achievements()
+	_apply_pet_bonus()                   # v14d：宠物被动（换宠物下一局生效）
 	_close_popup()
 	_hint.text = "新的一局——预备几秒，怪就压上来了"
 
@@ -4740,6 +4977,16 @@ func _sync_battle_stats() -> void:
 	_field.hero["mech_comboaspd"] = float(_extra.get("mech_comboaspd", 0.0))
 	_field.hero["mech_root"] = float(_extra.get("mech_root", 0.0))
 	_field.hero["mech_killatk"] = float(_extra.get("mech_killatk", 0.0))
+	# v14d：宠物的攻击方式（咬人那一套参数）
+	var pcfg: Dictionary = _pet_info(_pet_kind).get("cfg", {})
+	_field.set_pet_cfg({
+		"cd": float(pcfg.get("cd", 1.1)),
+		"dmg": float(pcfg.get("dmg", 0.35)),
+		"elem": str(pcfg.get("elem", "")),
+		"chain": int(pcfg.get("chain", 1)),
+		"room": float(pcfg.get("room", 0.0)),
+		"verb": str(pcfg.get("verb", "咬 ")),
+	})
 	# v9i 触发型卡（飞羽 / 流星 / 雷霆）——战场每帧读这几个开关
 	for k in ["cg_feiyu", "cg_feiyu_pierce", "cg_liuxing", "cg_liuxing_aoe", "cg_leiting", "cg_leiting_para"]:
 		_field.hero[k] = float(_extra.get(k, 0.0))
@@ -5151,6 +5398,8 @@ func _fill_popup(p: Control, kind: String, y: float, sz: Vector2) -> float:
 		return _fill_trea_pick(p, y, sz)
 	if kind == "当前宝物":
 		return _fill_trea_own(p, y, sz)
+	if kind == "存档":
+		return _fill_save(p, y, sz)
 	if kind == "成就":
 		return _fill_ach(p, y, sz)
 	if kind == "图鉴":
@@ -5798,8 +6047,27 @@ func _fill_mates(p: Control, y: float, sz: Vector2) -> float:
 	head.add_theme_color_override("font_color", INK)
 	head.text = "伙伴 " + str(owned_n) + "/" + str(_field.PARTNER_INFO.size()) + " 名入队（每 5 级招募一次 · 每种只能选一次）"
 	p.add_child(head)
+	# v14d：宠物选择（一排小按钮；没解锁的灰着）
+	var prow := Label.new()
+	prow.position = Vector2(28, y + 120.0)
+	prow.size = Vector2(640, 32)
+	prow.add_theme_font_size_override("font_size", 20)
+	prow.add_theme_color_override("font_color", SEAL)
+	prow.text = "宠物：" + str(_pet_info(_pet_kind)["n"]) + "　" + str(_pet_info(_pet_kind)["d"])
+	p.add_child(prow)
+	for pi in PETS.size():
+		var pv: Dictionary = PETS[pi]
+		var pk := str(pv["id"])
+		var locked := _pet_locked(pk) and pk != "hu"
+		var on := (_pet_kind == pk)
+		var pb := _pbtn(p, str(pv["n"]) + ("（锁）" if locked else ""), Vector2(28.0 + float(pi) * 108.0, y + 156.0),
+			Vector2(100, 52), 18, on, _set_pet.bind(pk))
+		if locked:
+			pb.add_theme_stylebox_override("normal", _flat(Color(0.55, 0.53, 0.51, 0.95)))
+			pb.add_theme_stylebox_override("hover", _flat(Color(0.60, 0.58, 0.56, 0.95)))
+			pb.add_theme_stylebox_override("pressed", _flat(Color(0.48, 0.46, 0.44, 0.95)))
 	_partner_lbs.clear()
-	var ly := y + 128.0
+	var ly := y + 224.0          # v14d：上面留出宠物那一排（120~208）
 	# 伙伴列表**通用遍历**（加人不用改这里）：档位那行也按池子里 req_p 自动拼
 	for id in _field.PARTNER_INFO.keys():
 		var info: Dictionary = _field.PARTNER_INFO[id]

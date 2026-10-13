@@ -132,6 +132,12 @@ var hero_pos := Vector2(352.0, 608.0)
 var pet_pos := Vector2(256.0, 634.0)
 var _home := Vector2(352.0, 608.0)
 var _pet_cd := 0.0
+# v14d：宠物配置（外壳通过 set_pet_cfg 推进来；默认＝白狐）
+var pet_cfg := {"cd": 1.1, "dmg": 0.35, "elem": "", "chain": 1, "room": 0.0, "verb": "咬 "}
+
+func set_pet_cfg(d: Dictionary) -> void:
+	for k in d.keys():
+		pet_cfg[k] = d[k]
 var _facing := -1.0                 # -1 ＝ 朝上（打上面的怪）
 # v2k（用户："宠物打怪也要有动画 这里的宠物不是装饰品"）：
 #   宠物是**打架的**——扑咬有整套动作：蓄力（往后坐）→ 前扑（朝目标窜出去）→ 张口 → 收势；
@@ -490,20 +496,38 @@ func _process(delta: float) -> void:
 	pet_pos.y = clampf(pet_pos.y, size.y * HERO_TOP + 12.0, size.y - HERO_LINE * 0.4)
 	_pet_cd -= delta
 	if _pet_cd <= 0.0 and not target.is_empty() and pet_pos.distance_to(tpos) <= PET_REACH + 18.0:
-		_pet_cd = 1.1
-		# —— 扑咬那一套动作：先蓄力（往后一坐），再朝目标窜出去
+		# v14d（用户："宠物在困兽里面毕竟是没有生命的…给他一个加成效果【或者特效技能】和攻击伤害即可
+		#        "做一些不同类型的宠物"）：宠物只做两件事——**咬人**（伤害/频率/元素/连锁各不同）＋ **给主人的被动加成**
+		_pet_cd = float(pet_cfg.get("cd", 1.1))
 		_pet_wind = 1.0
 		_pet_lunge = 1.0
 		_pet_dir = (tpos - pet_pos).normalized()
-		var pd := maxf(1.0, float(hero["atk"]) * 0.35)
-		target["hp"] = float(target["hp"]) - pd
-		target["flash"] = 0.12
+		var pd := maxf(1.0, float(hero["atk"]) * float(pet_cfg.get("dmg", 0.35)))
+		var elem := str(pet_cfg.get("elem", ""))
+		var chain := maxi(1, int(pet_cfg.get("chain", 1)))
+		var room := float(pet_cfg.get("room", 0.0))
+		var hits: Array = [target]
+		if chain > 1 or room > 0.0:
+			var at := Vector2(float(target["x"]), float(target["y"]))
+			for f_v in foes:
+				var fx: Dictionary = f_v
+				if fx == target or float(fx.get("dying", 0.0)) > 0.0:
+					continue
+				if room > 0.0 and at.distance_to(Vector2(float(fx["x"]), float(fx["y"]))) <= room:
+					hits.append(fx)
+				elif hits.size() < chain:
+					hits.append(fx)
+		for h_v in hits:
+			var h: Dictionary = h_v
+			var dm := _apply_dmg(h, pd * (0.7 if h != target else 1.0), elem if elem != "" else DMG_PHYS)
+			h["flash"] = 0.12
+			_slashes.append({"x": float(h["x"]) + _pet_dir.x * 10.0, "y": float(h["y"]) + _pet_dir.y * 10.0,
+				"t": 0.0, "ang": randf_range(-1.2, 1.2), "crit": false})
+			_push_float(float(h["x"]) + 16.0, float(h["y"]) - 10.0, str(pet_cfg.get("verb", "咬 ")) + str(int(dm)),
+				Color(0.84, 0.90, 0.98), true)
+			if float(h["hp"]) <= 0.0:
+				_kill_foe(h)
 		_shake = maxf(_shake, 3.0)
-		_slashes.append({"x": float(target["x"]) + _pet_dir.x * 10.0, "y": float(target["y"]) + _pet_dir.y * 10.0,
-			"t": 0.0, "ang": randf_range(-1.2, 1.2), "crit": false})
-		_push_float(float(target["x"]) + 16.0, float(target["y"]) - 10.0, "咬 " + str(int(pd)), Color(0.84, 0.90, 0.98), true)
-		# ⚠ 原来这里放的是 pet_chirp1（一声鸟叫）——用户："攻击时有个奇怪的鸟叫声"，
-		#   换成短促的撞击声，音高随机，听着像"咬"，不像鸟。
 		Audio.sfx("melee", -10.0, randf_range(0.92, 1.12))
 		if float(target["hp"]) <= 0.0:
 			_kill_foe(target)
@@ -676,9 +700,13 @@ func _process(delta: float) -> void:
 	_update_dagger_motion(dt)
 	_update_bolts(dt)
 	_update_jicanghai(dt)
+	_update_leixiaoqi(dt)       # v14b：雷小七 连环腿
+	_update_ximenlie(dt)        # v14b：西门烈 烈焰刀
 	_update_minions(dt)
 	_update_waves(dt)
 	_update_shield(dt)
+	if _p_aspd > 0.0:
+		_p_aspd = maxf(0.0, _p_aspd - dt)      # v14b：时停的攻速加成倒计时
 	# v14a 机制卡：定身脉冲（把全场怪按成"麻痹"）＋ 定期护盾
 	if float(hero.get("mech_root", 0.0)) > 0.0:
 		_root_t -= dt
@@ -724,7 +752,11 @@ func _boss_foe() -> Dictionary:
 
 # 一次出手：算伤害（含技能加成/暴击/重击）→ 打中 → 横扫（溅射）→ 命中后弹剑气 → 手感特效
 func _hero_strike(tgt: Dictionary) -> void:
-	var crit := randf() < float(hero["crit"])
+	# v14b 燕无归「鹰眼」：持续期内暴击 +25%
+	var crit_rate := float(hero["crit"])
+	if p_active("yanwugui"):
+		crit_rate += 0.25 + 0.05 * float(partners["yanwugui"].get("crit_lv", 0))
+	var crit := randf() < crit_rate
 	_heavy += 1
 	var heavy := _heavy % 3 == 0
 	var base := float(hero["atk"]) * (1.0 + float(hero["dmg_pct"])) * atk_mul()
@@ -1163,6 +1195,9 @@ func _kill_foe(f: Dictionary) -> void:
 		hero["_kill_atk"] = float(hero.get("_kill_atk", 0.0)) + float(hero["mech_killatk"])
 	if float(hero.get("mech_chain", 0.0)) > 0.0 and not _chain_lock and not bool(f.get("still", false)):
 		_chain_blast(Vector2(float(f["x"]), float(f["y"])))
+	# v14b 钱多多「点金」：持续期内每杀一个额外掉 3 文钱
+	if p_active("qianduoduo") and not bool(f.get("still", false)):
+		coin_drop.emit(3 + int(partners["qianduoduo"].get("gold_lv", 0)), Vector2(float(f["x"]), float(f["y"])))
 	var kind := str(f["kind"])
 	var coins := 1 + randi() % 3
 	# v9h（挑战掉落表）：挑战怪身上带 chal —— 按类型掉，结算交给外壳
@@ -1465,8 +1500,14 @@ func skill_lv(id: String) -> int:
 func atk_mul() -> float:
 	return 1.0 + 0.12 * float(skill["dmg"])
 
+# v14b：玄机子「时间停止」给的临时攻速（战场自己管，跟外壳的疾风符互不干扰）
+var _p_aspd := 0.0
+
 func aspd_mul() -> float:
-	return 1.0 + 0.08 * float(skill["aspd"])
+	var m := 1.0 + 0.08 * float(skill["aspd"])
+	if _p_aspd > 0.0:
+		m *= 2.0
+	return m
 
 # v3c（用户："溅射 可以改为范围吗 就是每一级范围 感觉更好一点"）：
 #   溅射从"同时打 N 个"改成"**按范围**打"——每级把横扫半径撑大，
@@ -1742,6 +1783,17 @@ var partners := {
 	"suqingluan": {"owned": false, "mp": 0.0, "cd": 4.0, "active": 0.0,
 		"pierce_lv": 0, "dmg_lv": 0, "bounce_lv": 0, "multi_lv": 0,
 		"bdmg_lv": 0, "mdmg_lv": 0, "sec_lv": 0},
+	# v14b：新增 10 名（档位键跟老的一致：cd/dur + 各自的效果层 + cost）
+	"shigandang": {"owned": false, "mp": 0.0, "cd": 0.0, "active": 0.0, "cd_lv": 0, "dur_lv": 0, "cut_lv": 0, "cost_lv": 0},
+	"qianduoduo": {"owned": false, "mp": 0.0, "cd": 0.0, "active": 0.0, "cd_lv": 0, "dur_lv": 0, "gold_lv": 0, "cost_lv": 0},
+	"leixiaoqi": {"owned": false, "mp": 0.0, "cd": 0.0, "active": 0.0, "dmg_lv": 0, "sec_lv": 0},
+	"baipopo": {"owned": false, "mp": 0.0, "cd": 0.0, "active": 0.0, "cd_lv": 0, "heal_lv": 0, "cost_lv": 0},
+	"tiexinwu": {"owned": false, "mp": 0.0, "cd": 0.0, "active": 0.0, "cd_lv": 0, "dur_lv": 0, "cost_lv": 0},
+	"shenqingluo": {"owned": false, "mp": 0.0, "cd": 0.0, "active": 0.0, "cd_lv": 0, "tgt_lv": 0, "dmg_lv": 0, "cost_lv": 0},
+	"yanwugui": {"owned": false, "mp": 0.0, "cd": 0.0, "active": 0.0, "cd_lv": 0, "dur_lv": 0, "crit_lv": 0, "cost_lv": 0},
+	"ximenlie": {"owned": false, "mp": 0.0, "cd": 0.0, "active": 0.0, "dmg_lv": 0, "sec_lv": 0},
+	"duniangzi": {"owned": false, "mp": 0.0, "cd": 0.0, "active": 0.0, "cd_lv": 0, "dmg_lv": 0, "dot_lv": 0, "cost_lv": 0},
+	"xuanjizi": {"owned": false, "mp": 0.0, "cd": 0.0, "active": 0.0, "cd_lv": 0, "dur_lv": 0, "cost_lv": 0},
 }
 var _dg_list: Array = []            # 飞匕：{pos, dir, tgt, dmg, pierce, bounce, hits, t}
 const PARTNER_INFO := {
@@ -1778,6 +1830,45 @@ const PARTNER_INFO := {
 	"suqingluan": {"name": "苏青鸾", "quality": "极品", "skill": "飞匕", "dtype": "物理", "grow": {"arm": 1, "agi": 4, "wit": 1},
 		"desc": "每隔 8 秒生成一枚飞匕，命中最近的敌人。飞匕/弹射/多重都是物理伤害，只是倍率各算各的（都吃防御）",
 		"mp0": 0.0, "cd0": 8.0, "dur0": 0.0},
+	# ============================================================
+	# v14b：队员扩到 20 名（用户："队员增加到20个 保证每个品级至少3个 下品可以多一点
+	#        机制也要有 特效一定要有不同的"）——每个都是独一份的机制
+	# ============================================================
+	# ---- 下品（共 5：暗影/独眼彪/枯荣 + 这两个）----
+	"shigandang": {"name": "石敢当", "quality": "下品", "skill": "坚守", "dtype": "无伤害", "grow": {"arm": 4, "agi": 1, "wit": 0},
+		"desc": "持续 6 秒内受到的伤害 −25%（硬抗型）",
+		"mp0": 100.0, "cd0": 22.0, "dur0": 6.0},
+	"qianduoduo": {"name": "钱多多", "quality": "下品", "skill": "点金", "dtype": "无伤害", "grow": {"arm": 1, "agi": 2, "wit": 2},
+		"desc": "持续 6 秒内，每击杀一名敌人额外掉 3 文钱（经济型）",
+		"mp0": 100.0, "cd0": 24.0, "dur0": 6.0},
+	# ---- 中品（共 4：陈石/法度 + 这两个）----
+	"leixiaoqi": {"name": "雷小七", "quality": "中品", "skill": "连环腿", "dtype": "物理", "grow": {"arm": 2, "agi": 4, "wit": 0},
+		"desc": "每 4 秒对最近敌人连踢两下（两次独立判定，可能一下暴一下不暴）",
+		"mp0": 0.0, "cd0": 4.0, "dur0": 0.0},
+	"baipopo": {"name": "白婆婆", "quality": "中品", "skill": "续命", "dtype": "治疗", "grow": {"arm": 1, "agi": 1, "wit": 4},
+		"desc": "每 15 秒回一次血（生命上限 12%）；自己残血（低于 40%）时回血翻倍",
+		"mp0": 80.0, "cd0": 15.0, "dur0": 0.0},
+	# ---- 上品（共 4：柳卿卿 + 这三个）----
+	"tiexinwu": {"name": "铁无心", "quality": "上品", "skill": "铁壁", "dtype": "无伤害", "grow": {"arm": 4, "agi": 2, "wit": 1},
+		"desc": "持续 8 秒内，第一次受到的伤害完全免疫（一次性格挡）",
+		"mp0": 120.0, "cd0": 20.0, "dur0": 8.0},
+	"shenqingluo": {"name": "沈青萝", "quality": "上品", "skill": "藤缚", "dtype": "木系", "grow": {"arm": 1, "agi": 2, "wit": 4},
+		"desc": "每 12 秒缠住最近的 3 名敌人（定身 2 秒）并造成木系伤害",
+		"mp0": 120.0, "cd0": 12.0, "dur0": 0.0},
+	"yanwugui": {"name": "燕无归", "quality": "上品", "skill": "鹰眼", "dtype": "无伤害", "grow": {"arm": 1, "agi": 4, "wit": 1},
+		"desc": "持续 8 秒内暴击率 +25%（爆发窗口型）",
+		"mp0": 110.0, "cd0": 18.0, "dur0": 8.0},
+	# ---- 极品（共 4：季沧海/苏青鸾 + 这两个）----
+	"ximenlie": {"name": "西门烈", "quality": "极品", "skill": "烈焰刀", "dtype": "火系", "grow": {"arm": 3, "agi": 2, "wit": 3},
+		"desc": "每 6 秒劈出一道火刃，横扫最近敌人身前 140 像素范围（火系范围）",
+		"mp0": 0.0, "cd0": 6.0, "dur0": 0.0},
+	"duniangzi": {"name": "毒娘子", "quality": "极品", "skill": "万毒", "dtype": "木系（持续）", "grow": {"arm": 1, "agi": 2, "wit": 4},
+		"desc": "每 10 秒给全场敌人挂毒（木系，每秒跳一次，持续 6 秒）",
+		"mp0": 200.0, "cd0": 10.0, "dur0": 0.0},
+	# ---- 绝品（共 3：崔三娘/张道陵 + 这个）----
+	"xuanjizi": {"name": "玄机子", "quality": "绝品", "skill": "时间停止", "dtype": "无伤害", "grow": {"arm": 1, "agi": 3, "wit": 6},
+		"desc": "每 45 秒把全场敌人定身 3 秒，同时自己攻速翻倍 3 秒",
+		"mp0": 400.0, "cd0": 45.0, "dur0": 0.0},
 }
 const PARTNER_UP_STEP_MP := 20.0      # 每个"提升内力消耗"的强化 +20 内力
 const PARTNER_DOWN_STEP_MP := 15.0    # "减内力消耗"每层 −15
@@ -2272,12 +2363,135 @@ func _cast_partner(id: String) -> void:
 				_cast_tianlei(tl_multi_mul(), "多重天雷")     # 不同伤害比例，也是金系
 		"liuqingqing":
 			_cast_spring()
+		"baipopo":
+			_cast_heal()
+		"shenqingluo":
+			_cast_vine()
+		"duniangzi":
+			_cast_poison_all()
+		"xuanjizi":
+			_cast_timestop()
 		"cuisanniang":
 			_summon_dragon()
 		_:
 			pass
 
 # 季沧海：每 3 秒（可减）自动烧一次，不吃内力
+# ---- v14b 新队员的一次性技能 ----
+# 白婆婆：续命（回血；自己残血翻倍）
+func _cast_heal() -> void:
+	var ratio := 0.12 + 0.02 * float(partners["baipopo"].get("heal_lv", 0))
+	if float(hero["hp"]) / maxf(1.0, float(hero["hp_max"])) < 0.40:
+		ratio *= 2.0
+	var heal := float(hero["hp_max"]) * ratio
+	hero["hp"] = minf(float(hero["hp_max"]), float(hero["hp"]) + heal)
+	_push_float(hero_pos.x, hero_pos.y - 86.0, "续命 +" + str(int(heal)), Color(0.62, 0.94, 0.72), true)
+	_bursts.append({"x": hero_pos.x, "y": hero_pos.y - 10.0, "t": 0.0, "col": Color(0.60, 0.92, 0.70), "scale": 1.5})
+	Audio.sfx("levelup", -8.0)
+
+# 沈青萝：藤缚（定住最近 3 名 + 木系伤害）
+func _cast_vine() -> void:
+	var n := 3 + int(partners["shenqingluo"].get("tgt_lv", 0))
+	var dmg := float(hero["atk"]) * (0.8 + 0.15 * float(partners["shenqingluo"].get("dmg_lv", 0)))
+	var sorted: Array = []
+	for f_v in foes:
+		var f: Dictionary = f_v
+		if float(f.get("dying", 0.0)) > 0.0 or float(f["hp"]) <= 0.0 or bool(f.get("still", false)):
+			continue
+		sorted.append(f)
+	sorted.sort_custom(func(a, b): return Vector2(float(a["x"]), float(a["y"])).distance_to(hero_pos) \
+		< Vector2(float(b["x"]), float(b["y"])).distance_to(hero_pos))
+	var hit := 0
+	for f_v in sorted:
+		if hit >= n:
+			break
+		var f: Dictionary = f_v
+		f["para"] = maxf(float(f.get("para", 0.0)), 2.0)
+		var d := _apply_dmg(f, dmg, DMG_WOOD)
+		_push_float(float(f["x"]), float(f["y"]) - 30.0, "藤缚 " + str(int(d)), Color(0.56, 0.86, 0.46), true)
+		if float(f["hp"]) <= 0.0:
+			_kill_foe(f)
+		hit += 1
+	Audio.sfx("skill", -6.0)
+
+# 毒娘子：万毒（全场挂毒）
+func _cast_poison_all() -> void:
+	var dmg := float(hero["atk"]) * (0.25 + 0.06 * float(partners["duniangzi"].get("dmg_lv", 0)))
+	var dur := 6.0 + 1.0 * float(partners["duniangzi"].get("dot_lv", 0))
+	var n := 0
+	for f_v in foes:
+		var f: Dictionary = f_v
+		if float(f.get("dying", 0.0)) > 0.0 or float(f["hp"]) <= 0.0:
+			continue
+		var dots: Array = f.get("dot", [])
+		dots.append({"t": dur, "tick": 1.0, "dmg": dmg, "dtype": DMG_WOOD})
+		f["dot"] = dots
+		f["poison"] = 1.0
+		n += 1
+	_push_float(hero_pos.x, hero_pos.y - 96.0, "万毒 " + str(n) + " 名", Color(0.62, 0.90, 0.44), true)
+	Audio.sfx("skill", -6.0)
+
+# 玄机子：时间停止（全场定身 3 秒 + 自己攻速翻倍 3 秒）
+func _cast_timestop() -> void:
+	var dur := 3.0 + 0.5 * float(partners["xuanjizi"].get("dur_lv", 0))
+	_p_aspd = maxf(_p_aspd, dur)            # 攻速翻倍（战场自己的临时通道）
+	for f_v in foes:
+		var f: Dictionary = f_v
+		if not bool(f.get("still", false)) and float(f.get("dying", 0.0)) <= 0.0:
+			f["para"] = maxf(float(f.get("para", 0.0)), dur)
+	_p_aspd = maxf(_p_aspd, dur)          # 攻速翻倍（战场自己的临时通道）
+	_push_float(hero_pos.x, hero_pos.y - 110.0, "时间停止！", Color(0.90, 0.86, 1.0), true)
+	Audio.sfx("drum", -4.0)
+
+# v14b 雷小七「连环腿」：每 4 秒对最近敌人连踢两下（两次独立判定）
+func _update_leixiaoqi(delta: float) -> void:
+	var p: Dictionary = partners["leixiaoqi"]
+	if not bool(p["owned"]):
+		return
+	p["cd"] = maxf(0.0, float(p["cd"]) - delta)
+	if float(p["cd"]) > 0.0:
+		return
+	p["cd"] = maxf(2.0, 4.0 - 0.3 * float(p.get("sec_lv", 0)))
+	for i in 2:
+		var tg := _nearest()
+		if tg.is_empty():
+			return
+		var base := float(hero["atk"]) * (0.55 + 0.10 * float(p.get("dmg_lv", 0))) * (1.0 + float(hero["dmg_pct"]))
+		var dm := _apply_dmg(tg, base, DMG_PHYS)
+		tg["flash"] = 0.16
+		tg["kb"] = 10.0
+		_push_float(float(tg["x"]), float(tg["y"]) - 24.0, str(int(dm)), Color(0.92, 0.86, 0.70))
+		if float(tg["hp"]) <= 0.0:
+			_kill_foe(tg)
+	Audio.sfx("hit_slash", -10.0)
+
+# v14b 西门烈「烈焰刀」：每 6 秒劈出一道火刃，横扫最近敌人身前 140 像素
+func _update_ximenlie(delta: float) -> void:
+	var p: Dictionary = partners["ximenlie"]
+	if not bool(p["owned"]):
+		return
+	p["cd"] = maxf(0.0, float(p["cd"]) - delta)
+	if float(p["cd"]) > 0.0:
+		return
+	p["cd"] = maxf(2.5, 6.0 - 0.4 * float(p.get("sec_lv", 0)))
+	var tg := _nearest()
+	if tg.is_empty():
+		return
+	var center := Vector2(float(tg["x"]), float(tg["y"]))
+	var base := float(hero["atk"]) * (1.1 + 0.18 * float(p.get("dmg_lv", 0))) * (1.0 + float(hero["dmg_pct"]))
+	for f_v in foes.duplicate():
+		var f: Dictionary = f_v
+		if float(f.get("dying", 0.0)) > 0.0 or float(f["hp"]) <= 0.0:
+			continue
+		if center.distance_to(Vector2(float(f["x"]), float(f["y"]))) <= 140.0:
+			var dm := _apply_dmg(f, base, DMG_FIRE)
+			f["flash"] = 0.20
+			_push_float(float(f["x"]), float(f["y"]) - 28.0, "烈焰 " + str(int(dm)), Color(1.0, 0.58, 0.30), true)
+			if float(f["hp"]) <= 0.0:
+				_kill_foe(f)
+	_bursts.append({"x": center.x, "y": center.y, "t": 0.0, "col": Color(1.0, 0.56, 0.28), "scale": 1.5})
+	Audio.sfx("hit_heavy", -8.0)
+
 func _update_jicanghai(delta: float) -> void:
 	var p: Dictionary = partners["jicanghai"]
 	if not bool(p["owned"]):
@@ -2757,6 +2971,10 @@ func hero_out_dmg(base: float, dtype: String) -> Dictionary:
 
 # 受伤：主角挨打时按类型减（物理吃护甲；元素吃抗性不吃护甲；真实不吃）
 func hero_in_dmg(amount: float, dtype: String) -> float:
+	if p_active("tiexinwu") and not bool(partners["tiexinwu"].get("used", false)):
+		partners["tiexinwu"]["used"] = true
+		_push_float(hero_pos.x, hero_pos.y - 76.0, "铁壁！免伤", Color(0.86, 0.88, 0.94), true)
+		return 0.0
 	if dtype == DMG_TRUE:
 		return amount
 	var cut := float(hero.get("cut_all", 0.0))                     # 全伤害减免（含横练）
@@ -2764,6 +2982,8 @@ func hero_in_dmg(amount: float, dtype: String) -> float:
 		cut += float(hero.get("cut", 0.0))                         # 护甲只减物理
 	else:
 		cut += float((hero.get("res_elem", {}) as Dictionary).get(dtype, 0.0))
+	if p_active("shigandang"):
+		cut += 0.25 + 0.05 * float(partners["shigandang"].get("cut_lv", 0))
 	return maxf(0.0, amount * (1.0 - minf(0.90, cut)))
 
 # ============================================================
