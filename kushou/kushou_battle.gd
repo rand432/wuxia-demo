@@ -320,7 +320,10 @@ func _spawn_foe(kind := "normal", hp_mul := 1.0, atk_mul := 1.0, big := false, t
 		"kind": kind, "boss": big, "tier": tier,
 		"name": (nm if nm != "" else (str(FOE_NAMES[randi() % FOE_NAMES.size()]) if not big else "boss")),
 		"scale": (1.9 if big else 0.86),
-		"stop": (FOE_STOP + 40.0 if big else FOE_STOP) + randf() * 30.0,
+		# v16m：⚠ 停距默认值原来是 FOE_STOP(150)，但改之前**根本没人读它**，
+		#   走位用的是 FOE_REACH(66)。现在 stop 真被读了，默认必须跟原来一致，
+		#   否则**所有近战怪都变成隔空打**（探针实测：普通怪停在 118~169）。
+		"stop": (FOE_REACH + 40.0 if big else FOE_REACH) + randf() * 30.0,
 	}
 	# v16h/i（用户："小怪可以有些弓箭手啊之类的 不能全是火柴人" → "还有法师怪 肌肉壮汉啊 等等"）：
 	#   普通怪按权重挑**长相类型**（弓手 22% / 法师 18% / 壮汉 18% / 盾兵 14% / 普通 28%）。
@@ -331,17 +334,17 @@ func _spawn_foe(kind := "normal", hp_mul := 1.0, atk_mul := 1.0, big := false, t
 		var rr := randf()
 		if rr < 0.22:
 			f["ranged"] = true
-			f["stop"] = FOE_STOP + 90.0 + randf() * 40.0        # 弓手：站远
+			f["stop"] = FOE_REACH + 180.0 + randf() * 40.0      # 弓手：站远（约 250）
 		elif rr < 0.40:
 			f["mage"] = true
-			f["stop"] = FOE_STOP + 130.0 + randf() * 40.0       # 法师：站最远
+			f["stop"] = FOE_REACH + 220.0 + randf() * 40.0      # 法师：站最远（约 290）
 		elif rr < 0.58:
 			f["brute"] = true
 			f["scale"] = 1.22                                  # 壮汉：个头大一圈
-			f["stop"] = FOE_STOP - 20.0 + randf() * 20.0        # 贴得更近
+			f["stop"] = FOE_REACH - 18.0 + randf() * 16.0       # 壮汉：贴脸（约 50）
 		elif rr < 0.72:
 			f["shield"] = true
-			f["stop"] = FOE_STOP + 20.0 + randf() * 20.0        # 盾兵：顶在前面
+			f["stop"] = FOE_REACH + 30.0 + randf() * 20.0       # 盾兵：顶在前面（约 105）
 	foes.append(f)
 
 
@@ -844,14 +847,20 @@ func _process(delta: float) -> void:
 			f["hp"] = minf(float(f["hp_max"]), float(f["hp"]) + float(f["hp_max"]) * breg * delta)
 		var to_h := ftgt - Vector2(float(f["x"]), float(f["y"]))
 		var dh := to_h.length()
-		if dh > FOE_REACH:
+		# v16m（用户："有问题 法师和弓箭应该会在后面攻击"）：
+		#   ⚠ 真因：`f["stop"]`（每只怪自己的停距）在 5 个地方被**写入**，但**从来没被读过**——
+		#     走位一律用全局 FOE_REACH(66)，所以弓手/法师照样贴到脸上打，
+		#     我在生成时设的那些"站远一点"全是死数据。
+		#   现在按怪自己的停距走：弓手 ~240、法师 ~280 就停下放箭/放法术。
+		var reach := float(f.get("stop", FOE_REACH))
+		if dh > reach:
 			# v3l（用户："boss可以正常速度"）：boss 不再走 0.7 倍——跟寻常怪一个速度
 			# v14r：boss 词缀"迅捷"——走得更快（原来 boss_spd 只存着没人读）
 			var fspd := FOE_SPD * (1.0 + float(f.get("boss_spd", 0.0)))
 			# v15w 冷月娘「寒霜」：被减速的怪走得慢
 			if float(f.get("slow_t", 0.0)) > 0.0:
 				fspd *= 0.55
-			var mv := to_h.normalized() * minf(fspd * delta, dh - FOE_REACH)
+			var mv := to_h.normalized() * minf(fspd * delta, dh - reach)
 			f["x"] = clampf(float(f["x"]) + mv.x, 40.0, size.x - 40.0)
 			f["y"] = float(f["y"]) + mv.y
 		else:
@@ -1569,7 +1578,7 @@ func spawn_champion() -> void:
 	f["hp_max"] = 420.0 * mul
 	f["atk"] = 12.0 * pow(WAVE_ATK, float(wave - 1))
 	f["scale"] = 1.6
-	f["stop"] = FOE_STOP + 20.0
+	f["stop"] = FOE_REACH + 20.0          # v16m：同默认，跟着 FOE_REACH 走
 	champion = 1
 	_banner = "单挑：高手来了——" + str(f["name"])
 	_banner_t = 2.8
@@ -4377,7 +4386,7 @@ func spawn_elite(n := 1) -> void:
 		fe["hp_max"] = 300.0 * mul
 		fe["atk"] = 10.0 * pow(WAVE_ATK, float(wave - 1))
 		fe["scale"] = 1.3
-		fe["stop"] = FOE_STOP + 10.0
+		fe["stop"] = FOE_REACH + 10.0         # v16m：同默认，跟着 FOE_REACH 走
 	_banner = ("猎杀：混进来一只精英——" if n <= 1 else "三英：来了 " + str(n) + " 只精英") + ("" if n > 1 else ELITE_NAME)
 	_banner_t = 2.6
 	Audio.sfx("drum", -6.0)
