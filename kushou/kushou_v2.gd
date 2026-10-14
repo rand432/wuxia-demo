@@ -1066,11 +1066,20 @@ func _roll_recruits() -> Array:
 		var w: int = int({"下品": 30, "中品": 25, "上品": 20, "极品": 15}.get(q, 20))
 		for i in w:
 			pool.append(str(pid))
+	# v15r（用户："我招募第四个的伙伴卡住了"）：
+	#   ⚠ 原来这里是 `while out.size() < 3 and pool.size() > 0` ＋ "抽到重复就重抽"——
+	#   池子是**按品质权重重复塞**的，等可选的人**少于 3 个**（招了几位之后），
+	#   `out.size()` 永远到不了 3、而 `pool.size() > 0` 又一直成立 →
+	#   **死循环，界面直接卡死**（招到第 4 张正好踩上）。
+	#   改成"先去重、再打乱取前 3"：权重保留，但一定结束。
+	var uniq: Array = []
+	for p_v in pool:
+		if not uniq.has(str(p_v)):
+			uniq.append(str(p_v))
+	uniq.shuffle()
 	var out: Array = []
-	while out.size() < 3 and pool.size() > 0:
-		var pick := str(pool[randi() % pool.size()])
-		if not out.has(pick):
-			out.append(pick)
+	for i in mini(3, uniq.size()):
+		out.append(str(uniq[i]))
 	return out
 # ============================================================
 # v7a 卡牌（用户口径）：一张卡＝**单卡属性 ＋ 组合**；
