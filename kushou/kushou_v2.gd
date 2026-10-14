@@ -4455,14 +4455,25 @@ func _mate_grant(id: String) -> Array:
 	return up
 
 # 存档页那颗［开局自带］按下去：设成他／取消
+# v15v：这位伙伴"解锁"了吗？没解锁条目 = 不靠解锁拿（走关卡/招募那条线），当作已解锁
+func _mate_is_unlocked(id: String) -> bool:
+	for u_v in UNLOCKS:
+		var u: Dictionary = u_v
+		if str(u.get("pid", "")) == id:
+			return bool(_unlocked.get(str(u["id"]), false))
+	return true
+
 func _mate_set_start(id: String) -> void:
 	var nm := str((_field.PARTNER_INFO[id] as Dictionary)["name"])
 	if _mate_start == id:
 		_mate_start = ""
 		_hint.text = "开局出战取消——下局还是少侠当主角"
 	else:
-		if not bool((_field.partners[id] as Dictionary)["owned"]):
-			_hint.text = "要先在这一局里招募到「" + nm + "」，才能让他开局出战"
+		# v15v（用户："这个伙伴也不是招募的 也是解锁选择初始出战的"）：
+		#   ⚠ 原来卡的是"**这一局里招募到**"（局内随机招募那条线）。现在改成看**解锁**：
+		#   在存档页花银两（或打关卡）解锁过，就能选他当初始出战，不用再靠随机招募。
+		if not _mate_is_unlocked(id):
+			_hint.text = "「" + nm + "」还没解锁——去存档页花银两（或打对应关卡）解锁后才能当初始出战"
 			return
 		_mate_start = id
 		_hint.text = "开局出战：「" + nm + "」下一局**替换主角**（画的是他、他的技能归你）"
@@ -4815,6 +4826,40 @@ const UNLOCKS := [
 	{"id": "u_part_duniangzi", "cat": "队员", "n": "毒娘子", "d": "全场挂毒", "price": 900, "pid": "duniangzi"},
 	{"id": "u_part_cuisanniang", "cat": "队员", "n": "崔三娘", "d": "召唤蛟龙", "price": 1200, "pid": "cuisanniang"},
 	{"id": "u_part_xuanjizi", "cat": "队员", "n": "玄机子", "d": "时间停止", "price": 1200, "pid": "xuanjizi"},
+	# v15v（用户："这个伙伴也不是招募的 也是解锁选择初始出战的"）：
+	#   把剩下 22 位补上银两解锁条目 —— 这样**全部 32 位都能"解锁 → 选初始出战"**，
+	#   不必靠局内随机招募（随机招募那条线保留，但只是"局内临时多一位"）。
+	#   按品质定价：下品 400 · 中品 600 · 上品 800 · 极品 1100（对照现有 700~1200 的档）。
+	#   全解锁合计 ≈ 20,000 银两 ≈ 4 局（35 波一局约 5,700）。
+	{"id": "u_part_anying", "cat": "队员", "n": "暗影裁决", "d": "肝·暗影持续期杀敌涨生命上限", "price": 400, "pid": "anying"},
+	{"id": "u_part_chenshi", "cat": "队员", "n": "陈石", "d": "刺骨·持续期挨打反真实伤害", "price": 600, "pid": "chenshi"},
+	{"id": "u_part_duyanbiao", "cat": "队员", "n": "独眼彪", "d": "杀气·持续期攻击大幅提升", "price": 400, "pid": "duyanbiao"},
+	{"id": "u_part_kurong", "cat": "队员", "n": "枯荣", "d": "纳气·持续期内力上限提高", "price": 400, "pid": "kurong"},
+	{"id": "u_part_tietouseng", "cat": "队员", "n": "铁头僧", "d": "铁头功·一头撞上去，血越少撞得越狠", "price": 400, "pid": "tietouseng"},
+	{"id": "u_part_bingshusheng", "cat": "队员", "n": "病书生", "d": "咳血·给敌人挂木系持续伤害", "price": 400, "pid": "bingshusheng"},
+	{"id": "u_part_xiaoqier", "cat": "队员", "n": "小乞儿", "d": "顺手牵羊·持续期每杀一只多掉文钱", "price": 400, "pid": "xiaoqier"},
+	{"id": "u_part_laobing", "cat": "队员", "n": "瘸腿老兵", "d": "死撑·血低于一半时全伤害减免", "price": 400, "pid": "laobing"},
+	# v15v：补上漏掉的 3 位（探针查出来的「没有解锁条目」）
+	{"id": "u_part_fadu", "cat": "队员", "n": "法度", "d": "怒目金刚·给自己套盾并炸一圈", "price": 800, "pid": "fadu"},
+	{"id": "u_part_liuqingqing", "cat": "队员", "n": "柳青青", "d": "回春·持续治疗", "price": 800, "pid": "liuqingqing"},
+	{"id": "u_part_zhangdaoling", "cat": "队员", "n": "张道陵", "d": "天雷·范围雷击", "price": 1200, "pid": "zhangdaoling"},
+	{"id": "u_part_shigandang", "cat": "队员", "n": "石敢当", "d": "坚守·替主角扛伤并减伤", "price": 600, "pid": "shigandang"},
+	{"id": "u_part_qianduoduo", "cat": "队员", "n": "钱多多", "d": "点金·持续期每杀一只掉文钱", "price": 600, "pid": "qianduoduo"},
+	{"id": "u_part_baipopo", "cat": "队员", "n": "白婆婆", "d": "续命·定期回血", "price": 600, "pid": "baipopo"},
+	{"id": "u_part_zuijianxian", "cat": "队员", "n": "醉剑仙", "d": "醉里挑灯·晃上去连刺两下", "price": 600, "pid": "zuijianxian"},
+	{"id": "u_part_yaopozi", "cat": "队员", "n": "药婆子", "d": "金针·回血并定身最近敌人", "price": 600, "pid": "yaopozi"},
+	{"id": "u_part_gushangzao", "cat": "队员", "n": "鼓上蚤", "d": "踏鼓·持续期攻速提高", "price": 600, "pid": "gushangzao"},
+	{"id": "u_part_leixiaoqi", "cat": "队员", "n": "雷小七", "d": "连环腿·定期连踢两脚", "price": 800, "pid": "leixiaoqi"},
+	{"id": "u_part_tiexinwu", "cat": "队员", "n": "铁无心", "d": "铁壁·格挡窗口内免伤", "price": 800, "pid": "tiexinwu"},
+	{"id": "u_part_shenqingluo", "cat": "队员", "n": "沈青萝", "d": "藤缚·缠住最近的敌人并造成木系伤害", "price": 800, "pid": "shenqingluo"},
+	{"id": "u_part_yanwugui", "cat": "队员", "n": "燕无归", "d": "鹰眼·持续期暴击率提高", "price": 800, "pid": "yanwugui"},
+	{"id": "u_part_jinjiaxianwei", "cat": "队员", "n": "金甲校尉", "d": "拒马·挨打减伤并反弹", "price": 800, "pid": "jinjiaxianwei"},
+	{"id": "u_part_huogong", "cat": "队员", "n": "火工道人", "d": "三昧真火·点燃最近的敌人", "price": 800, "pid": "huogong"},
+	{"id": "u_part_qinchi", "cat": "队员", "n": "琴痴", "d": "乱神曲·全场定身", "price": 800, "pid": "qinchi"},
+	{"id": "u_part_ximenlie", "cat": "队员", "n": "西门烈", "d": "烈焰刀·劈出火刃横扫身前", "price": 1100, "pid": "ximenlie"},
+	{"id": "u_part_duniangzi", "cat": "队员", "n": "毒娘子", "d": "万毒·给全场敌人挂毒", "price": 1100, "pid": "duniangzi"},
+	{"id": "u_part_baiqihouren", "cat": "队员", "n": "白起后人", "d": "杀神·按目标已损失气血打真实伤害", "price": 1100, "pid": "baiqihouren"},
+	{"id": "u_part_dagongfeng", "cat": "队员", "n": "大内供奉", "d": "罡气·给自己罩一层护盾", "price": 1100, "pid": "dagongfeng"},
 	{"id": "u_trea_tianlei", "cat": "宝物", "n": "天雷符", "d": "全场 300% 雷伤", "price": 400, "trea": "天雷符"},
 	{"id": "u_trea_dingshen", "cat": "宝物", "n": "定身符", "d": "全场定身 5 秒", "price": 400, "trea": "定身符"},
 	{"id": "u_trea_kuangxue", "cat": "宝物", "n": "狂血丹", "d": "15 秒攻击 +150%", "price": 550, "trea": "狂血丹"},
