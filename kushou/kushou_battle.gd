@@ -545,7 +545,10 @@ func _process(delta: float) -> void:
 			_hero_step += delta * 6.0
 	hero_pos.x = clampf(hero_pos.x, 70.0, size.x - 70.0)
 	# 上不去：到 HERO_TOP 那条线就停住等怪下来（"让怪大部分出现在屏幕里"）
-	hero_pos.y = clampf(hero_pos.y, size.y * HERO_TOP, size.y - HERO_LINE * 0.5)
+	# v15j（用户：临时指令倒是不限制）：**有手动指令时这条线放开** —— 手指点上去就让它上去；
+	#   自动追击仍旧卡在 HERO_TOP（否则它会一路追到怪出生点，屏幕里全是空的）。
+	var top_line := 8.0 if _order_has_pos else size.y * HERO_TOP
+	hero_pos.y = clampf(hero_pos.y, top_line, size.y - HERO_LINE * 0.5)
 	# v13d P3：法阵——站圈里累计，出圈按半速回退
 	if not zone.is_empty() and bool(zone.get("on", false)):
 		if _in_zone():
@@ -1052,8 +1055,11 @@ func order_move(p: Vector2) -> void:
 	_order_foe = {}
 	_order_has_pos = true
 	_order_t = 0.0
+	# v15j（用户：临时指令倒是不限制）：**点哪走哪不卡那条 25% 的线** ——
+	#   手动只留在战场框内（别跑到画面外），想上去就上去；
+	#   HERO_TOP 只管"自动追击"（让怪大部分出现在屏幕里）。
 	_order_pos = Vector2(clampf(p.x, 70.0, size.x - 70.0),
-		clampf(p.y, size.y * HERO_TOP, size.y - HERO_LINE * 0.5))
+		clampf(p.y, 8.0, size.y - HERO_LINE * 0.5))
 	_order_fx.append({"x": _order_pos.x, "y": _order_pos.y, "t": 0.0})
 	Audio.sfx("ui_click", -12.0)
 
