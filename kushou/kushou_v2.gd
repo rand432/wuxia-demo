@@ -682,7 +682,8 @@ func open() -> void:
 	_want_open = true
 	visible = true
 	move_to_front()
-	Audio.play_bgm("bgm_battle", 0.6)      # v2h：进场就是战斗曲（与爬塔同一首）
+	# v16q（用户："换一首吧"）：战斗曲改成**可换**的（原来写死 bgm_battle，那首里有呐喊）
+	Audio.play_bgm(Audio.battle_track(), 0.6)
 
 func close() -> void:
 	_want_open = false
@@ -7277,9 +7278,30 @@ func _fill_settings(p: Control, y: float) -> float:
 	ly += 6.0
 	var tip := _lbl(Vector2(24, ly), Vector2(660, 64), 20, DIM)
 	tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	tip.text = "默认音乐已经往下压过一档（-12dB → -18dB）。觉得还吵就往左点；「关」是完全静音。"
-	p.add_child(tip)
+	# v16q：战斗曲选择器（原来那首 bgm_battle 带呐喊，用户要换）
+	var bh := _lbl(Vector2(24, ly), Vector2(660, 38), 22, DIM)
+	bh.text = "战斗曲（点一首立刻换 · 会记住）"
+	p.add_child(bh)
+	ly += 46.0
+	var cur_b := Audio.battle_track()
+	var btracks: Array = Audio.BATTLE_TRACKS
+	for i in btracks.size():
+		var tk: Dictionary = btracks[i]
+		var on2: bool = str(tk["key"]) == cur_b
+		var bb := _mk_btn(str(tk["name"]), Vector2(24.0 + float(i % 2) * 336.0, ly + float(i / 2) * 70.0), Vector2(320, 62), 21, on2, _pick_battle_track.bind(str(tk["key"])))
+		p.add_child(bb)
+	ly += float((btracks.size() + 1) / 2) * 70.0 + 8.0
+	# ⚠ 不能也叫 tip —— 上面已经有一个（同名会报 "already declared in this scope"）
+	var tip2 := _lbl(Vector2(24, ly), Vector2(660, 64), 20, DIM)
+	tip2.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	tip2.text = "默认音乐已压到 -18dB。觉得还吵就把上面「音乐」往左点；「关」是完全静音。"
+	p.add_child(tip2)
 	return ly + 80.0
+
+# 点一首战斗曲：立刻换 ＋ 重画设置页
+func _pick_battle_track(key: String) -> void:
+	Audio.set_battle_track(key)
+	_open_large("设置")
 
 # 点某一档：设音量 → 存档 → 重画这一页
 func _vol_pick(is_bgm: bool, v: float) -> void:

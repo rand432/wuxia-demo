@@ -118,6 +118,22 @@ static var _bgm_vol := 1.0
 static var _sfx_vol := 1.0
 static var _menu_track := "menu_jiangnan"
 
+# v16q（用户："换一首吧"——战斗曲 bgm_battle 里有呐喊，听着吵）：
+#   战斗曲改成**可选**，默认换成"悟 道"（纯器乐、清净）。
+#   列表里把原来那首（战鼓/呐喊那首）也留着，想换回去随时能选。
+static var _battle_track := "menu_wudao"
+
+const BATTLE_TRACKS := [
+	{"key": "menu_wudao", "name": "悟 道（默认）"},
+	{"key": "bgm_tower", "name": "爬塔战曲"},
+	{"key": "menu_shushan", "name": "蜀 山"},
+	{"key": "menu_youzhou", "name": "幽 州"},
+	{"key": "menu_shaolin", "name": "少 林"},
+	{"key": "menu_hejian", "name": "河 间"},
+	{"key": "menu_jiangnan", "name": "江 南"},
+	{"key": "bgm_battle", "name": "原战斗曲（有呐喊）"},
+]
+
 const MENU_TRACKS := [
 	{"key": "menu_jiangnan", "name": "江 南"},
 	{"key": "menu_hejian", "name": "河 间"},
@@ -136,12 +152,14 @@ static func _ensure_loaded() -> void:
 		_bgm_vol = clampf(float(cf.get_value("audio", "bgm", 1.0)), 0.0, 1.0)
 		_sfx_vol = clampf(float(cf.get_value("audio", "sfx", 1.0)), 0.0, 1.0)
 		_menu_track = str(cf.get_value("audio", "menu_track", "menu_jiangnan"))
+		_battle_track = str(cf.get_value("audio", "battle_track", "menu_wudao"))
 
 static func save_settings() -> void:
 	var cf := ConfigFile.new()
 	cf.set_value("audio", "bgm", _bgm_vol)
 	cf.set_value("audio", "sfx", _sfx_vol)
 	cf.set_value("audio", "menu_track", _menu_track)
+	cf.set_value("audio", "battle_track", _battle_track)
 	cf.save(SETTINGS_PATH)
 
 static func _vol_db(v: float) -> float:
@@ -158,6 +176,19 @@ static func sfx_volume() -> float:
 static func menu_track() -> String:
 	_ensure_loaded()
 	return _menu_track
+
+# 战斗曲（可换）
+static func battle_track() -> String:
+	_ensure_loaded()
+	return _battle_track
+
+static func set_battle_track(key: String) -> void:
+	_ensure_loaded()
+	_battle_track = key
+	save_settings()
+	# 正在放战斗曲就**立刻换掉**（换完这首重新流进来）
+	if _cur_bgm == "bgm_battle" or _cur_bgm == "bgm_tower" or _cur_bgm.begins_with("menu_"):
+		play_bgm(key, 0.6)
 
 # 改音量：立刻作用到**正在播的那一路**上（不然要等下一首才生效）
 static func set_bgm_volume(v: float) -> void:
