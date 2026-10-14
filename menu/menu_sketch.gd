@@ -923,7 +923,8 @@ func _build_plaques() -> void:
 	_plaques.add_ribbon("settings", 0.933, 0.040, "设置", _open_settings)
 	# v16z（用户："主界面加一个困兽【测试】按钮"）：跟［设置］同一排的**白纸牌**，点了直接进困兽
 	#   （原来只有 E 键能进，手机上没键盘进不去）
-	_plaques.add_ribbon("kushou_test", 0.700, 0.040, "困兽测试", _open_kushou_v2)
+	# v17a：先弹选关窗，选完才进困兽
+	_plaques.add_ribbon("kushou_test", 0.700, 0.040, "困兽测试", _open_stage_pick)
 	# v98（用户："商店固定"）：一直挂在那儿——不随风摆，也不再随剧情忽隐忽现
 	# v115：徽标换成铺子——铺子比六边形宽（104 vs 78），中心从 0.950 挪到 0.905 才不被屏幕切掉
 	_plaques.add_shop("shop", 0.905, 0.232, "商店", _open_shop)
@@ -1159,6 +1160,106 @@ func _confirm_name(n: String) -> void:
 # v16z（用户："可以再主界面加一个困兽【测试】按钮了"）：
 #   把"开困兽"抽成一个函数 —— **E 键和主界面那颗按钮共用**
 #   （原来只有 E 键能进，手机上没键盘根本进不去）。
+# v17a（用户："点击困兽测试 然后弹出难度选择窗口 点击难度选择窗口然后才会进入困兽主界面"）：
+#   困兽的 16 关＝难度档（mul 就是倍率）。这里做一个选关浮层，选完才进困兽。
+#   数据跟 kushou_v2.gd 里的 STAGES 对齐（id / 名称 / mul / 首通解锁）。
+const KUSHOU_STAGES := [
+	["1-1", "牢门初开", 1.0, "卡组·磐石心"],
+	["1-2", "铁栅血痕", 1.0, "卡组·铁布衫"],
+	["1-3", "断锁残灯", 1.1, "队员·白婆婆"],
+	["1-4", "监牢深处", 1.1, "卡组·断岳"],
+	["2-1", "典吏巡夜", 1.3, "宝物·灵晶袋"],
+	["2-2", "五行乱阵", 1.3, "卡组·五行"],
+	["2-3", "贪墨之狱", 1.4, "装备·聚财珠"],
+	["2-4", "藤萝缠狱", 1.4, "队员·沈青萝"],
+	["3-1", "龙纹石壁", 1.7, "宝物·龙纹佩"],
+	["3-2", "雷罚天牢", 1.7, "卡组·雷罚"],
+	["3-3", "传家之秘", 1.8, "装备·传家宝"],
+	["3-4", "鹰唳九霄", 1.8, "队员·燕无归"],
+	["4-1", "火麟熔狱", 2.2, "宠物·火麟"],
+	["4-2", "诛心绝境", 2.2, "卡组·诛心"],
+	["4-3", "连环杀狱", 2.4, "队员·雷小七"],
+	["4-4", "困兽之斗", 2.6, "宝物·悟道果"],
+]
+
+var _stage_ov: Control = null
+
+func _open_stage_pick() -> void:
+	if _stage_ov != null and is_instance_valid(_stage_ov):
+		return
+	var vp := get_viewport_rect().size
+	var ov := Control.new()
+	ov.set_anchors_preset(Control.PRESET_FULL_RECT)
+	ov.mouse_filter = Control.MOUSE_FILTER_STOP
+	var bg := ColorRect.new()
+	bg.color = Color(0.06, 0.06, 0.08, 0.86)
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	ov.add_child(bg)
+	var title := Label.new()
+	title.position = Vector2(0, vp.y * 0.055)
+	title.size = Vector2(vp.x, 56)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 34)
+	title.add_theme_color_override("font_color", Color(0.95, 0.90, 0.78))
+	title.text = "困兽 · 选择难度"
+	ov.add_child(title)
+	var sub := Label.new()
+	sub.position = Vector2(0, vp.y * 0.055 + 50.0)
+	sub.size = Vector2(vp.x, 34)
+	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	sub.add_theme_font_size_override("font_size", 19)
+	sub.add_theme_color_override("font_color", Color(0.72, 0.70, 0.66))
+	sub.text = "倍率越高怪越硬（×1.0 ~ ×2.6）· 每关 35 波 · 首通解锁不同奖励"
+	ov.add_child(sub)
+	# 4 列 × 4 行 的关卡格
+	var cw := minf(300.0, (vp.x - 80.0) / 4.0 - 12.0)
+	var ch := 118.0
+	var gx := (vp.x - (cw * 4.0 + 36.0)) * 0.5
+	var gy := vp.y * 0.055 + 104.0
+	for i in KUSHOU_STAGES.size():
+		var st: Array = KUSHOU_STAGES[i]
+		var sx := gx + float(i % 4) * (cw + 12.0)
+		var sy := gy + float(i / 4) * (ch + 14.0)
+		var b := Button.new()
+		b.position = Vector2(sx, sy)
+		b.size = Vector2(cw, ch)
+		b.text = str(st[0]) + "  " + str(st[1]) + "\n×" + str(st[2])
+		b.add_theme_font_size_override("font_size", 20)
+		var sb := StyleBoxFlat.new()
+		# 倍率越高底色越红（一眼看出哪关难）
+		var heat := clampf((float(st[2]) - 1.0) / 1.6, 0.0, 1.0)
+		sb.bg_color = Color(0.20, 0.18, 0.20).lerp(Color(0.42, 0.13, 0.13), heat)
+		sb.set_corner_radius_all(10)
+		sb.border_color = Color(0.85, 0.74, 0.42)
+		sb.set_border_width_all(2)
+		b.add_theme_stylebox_override("normal", sb)
+		b.add_theme_stylebox_override("hover", sb)
+		b.add_theme_stylebox_override("pressed", sb)
+		b.add_theme_color_override("font_color", Color(0.95, 0.92, 0.84))
+		b.pressed.connect(_pick_stage.bind(str(st[0]), str(st[1])))
+		ov.add_child(b)
+	# 取消
+	var cb := Button.new()
+	cb.position = Vector2(vp.x * 0.5 - 110.0, gy + 4.0 * (ch + 14.0) + 10.0)
+	cb.size = Vector2(220, 62)
+	cb.text = "取消"
+	cb.add_theme_font_size_override("font_size", 22)
+	cb.pressed.connect(func(): _stage_ov.queue_free())
+	ov.add_child(cb)
+	add_child(ov)
+	move_child(ov, get_child_count() - 1)
+	_stage_ov = ov
+
+func _pick_stage(id: String, nm: String) -> void:
+	var kz = load("res://kushou/kushou_v2.gd")
+	if kz != null:
+		kz.boot_stage = id
+	if _stage_ov != null and is_instance_valid(_stage_ov):
+		_stage_ov.queue_free()
+		_stage_ov = null
+	_open_kushou_v2()
+	_show_toast("[困兽·测试] " + id + " " + nm + "　（倍率见关卡页）")
+
 func _open_kushou_v2() -> void:
 	if _kushou_v2 == null:
 		_kushou_v2 = (preload("res://kushou/kushou_v2.gd") as GDScript).new()

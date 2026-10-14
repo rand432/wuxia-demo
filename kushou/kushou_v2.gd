@@ -4632,6 +4632,10 @@ func _mate_star_up(id: String) -> void:
 #   4 章 × 4 关；首通奖励与「存档」那 26 项完全不重合
 #   mul＝怪强度倍率 · waves＝这一关的波数上限（打满即通关）
 # ============================================================
+# v17a（用户："点击困兽测试 然后弹出难度选择窗口…然后才会进入困兽主界面"）：
+#   主界面选完难度后，把关卡 id 写在这里，困兽开屏时读它。
+#   （静态变量：主界面不用先 new 一个困兽实例就能设。）
+static var boot_stage := ""
 var _stage_sel := "1-1"
 var _stage_paid := false                  # 这一关的银两/通关结算过没有
 var _endless := false                      # 无尽模式（破 4-4 解锁）
@@ -5436,6 +5440,10 @@ const ACHS := [
 const ACH_CAT_CN := {"fight": "战斗", "live": "生存", "gold": "经济", "collect": "收集", "time": "时长"}
 
 func _ach_load() -> void:
+	# v17a：⚠ 主界面选的关卡要在**早退之前**应用 —— 下面是 `if cf.load() != OK: return`，
+	#   而全新安装（还没存过档）就会走那条早退，选关就白选了。
+	if boot_stage != "":
+		_stage_sel = boot_stage
 	var cf := ConfigFile.new()
 	if cf.load(_meta_path) != OK:
 		return
@@ -5452,6 +5460,7 @@ func _ach_load() -> void:
 	if pk != "":
 		_pet_kind = pk
 	_stage_sel = str(cf.get_value("misc", "stage", "1-1"))
+	# （v17a：主界面选的关卡已在函数开头应用过了）
 	_endless = bool(cf.get_value("misc", "endless", false))
 	_best_wave = int(cf.get_value("misc", "best_wave", 0))
 	for pv2 in PETS:
