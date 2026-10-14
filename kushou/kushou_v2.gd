@@ -2186,6 +2186,8 @@ func _wpn_up() -> bool:
 		return false
 	_money -= c
 	_qc("wpn")                        # v13c：任务进度（强化武器）
+	# v16g（用户："强化 点击时有个锤子炸开的光效 然后+音效"）：砸在右下那颗强化钮上
+	hammer_boom(612.0, 1026.0)
 	_wpn_lv += 1
 	Audio.sfx("hit_heavy", -10.0, 1.3)
 	if _wpn_lv % 10 == 0:
@@ -6460,6 +6462,13 @@ func _process(delta: float) -> void:
 	_update_coins(delta)
 	# 收钱那一下数字跳一下（用户："然后文钱的数字开始增加"）
 	_coin_pop = maxf(0.0, _coin_pop - delta * 1.6)
+	# v16g：锤子光效的寿命 ＋ 面板抖动的衰减
+	for i in range(_hammerfx.size() - 1, -1, -1):
+		var hf: Dictionary = _hammerfx[i]
+		hf["t"] = float(hf["t"]) + delta
+		if float(hf["t"]) > 0.62:
+			_hammerfx.remove_at(i)
+	_shake_ui = maxf(0.0, _shake_ui - delta * 26.0)
 	_crystal_pop = maxf(0.0, _crystal_pop - delta * 1.6)
 	if _money_lb != null:
 		_money_lb.pivot_offset = _money_lb.size * 0.5
@@ -6584,8 +6593,23 @@ func _on_coin(n: int) -> void:
 
 # ---- 钱币掉落 → 掉地 → 飞右上 → 数字跳（用户点名要的那套）----
 #   每枚钱：phase 0＝往下掉（重力＋落地小弹），phase 1＝飞向 HUD 上的钱图标，phase 2＝到了（加钱＋跳字）
+# v16g（用户："强化 点击时有个锤子炸开的光效 然后+音效"）：
+#   锤子光效：锤子从上砸下 → 命中瞬间一圈冲击环 ＋ 火星四散。
+#   记录 {x, y, t}；t < 0.16＝下落，之后＝爆开（0.6 秒散完）。
+var _hammerfx: Array = []
+var _shake_ui := 0.0              # v16g：面板抖一下（强化砸锤那下）
 var _coinfx: Array = []
 var _coin_layer: Control = null
+
+# 在某个位置砸一锤（强化成功时调）
+func hammer_boom(x: float, y: float) -> void:
+	if _hammerfx.size() >= 8:
+		_hammerfx.remove_at(0)                 # 连着点也不炸屏
+	_hammerfx.append({"x": x, "y": y, "t": 0.0})
+	Audio.sfx("hit_heavy", -3.0, 1.15)
+	Audio.sfx("equip", -8.0)                 # 铁器相击那一下
+	if _shake_ui < 6.0:
+		_shake_ui = 6.0                       # 面板抖一下（打击感）
 var _coin_pop := 0.0
 var _crystal_pop := 0.0
 
@@ -8564,6 +8588,31 @@ class CoinLayer extends Control:
 	func _draw() -> void:
 		if host == null:
 			return
+		# v16g：锤子光效（强化那一下）
+		for h_v in host._hammerfx:
+			var h: Dictionary = h_v
+			var t: float = float(h["t"])
+			var hx: float = float(h["x"])
+			var hy: float = float(h["y"])
+			if t < 0.16:
+				# 下落段：锤子从上砸下来（越近越快）
+				var k: float = t / 0.16
+				var yy: float = hy - 110.0 * (1.0 - k * k)
+				draw_line(Vector2(hx + 26.0, yy - 54.0), Vector2(hx, yy), Color(0.52, 0.38, 0.22), 7.0)
+				draw_rect(Rect2(hx - 20.0, yy - 12.0, 40.0, 24.0), Color(0.62, 0.64, 0.68))
+				draw_rect(Rect2(hx - 20.0, yy - 12.0, 40.0, 24.0), Color(0.30, 0.32, 0.36), false, 3.0)
+			else:
+				# 爆开段：冲击环 ＋ 火星四散
+				var k2: float = clampf((t - 0.16) / 0.46, 0.0, 1.0)
+				var a: float = 1.0 - k2
+				draw_arc(Vector2(hx, hy), 14.0 + 74.0 * k2, 0.0, TAU, 30, Color(1.0, 0.86, 0.46, a), 5.0 - 3.0 * k2)
+				draw_arc(Vector2(hx, hy), 8.0 + 46.0 * k2, 0.0, TAU, 24, Color(1.0, 0.96, 0.80, a * 0.8), 3.0)
+				for i in 8:
+					var ang: float = TAU * float(i) / 8.0 + k2 * 0.8
+					var d: float = 18.0 + 66.0 * k2
+					var sp := Vector2(hx, hy) + Vector2(cos(ang), sin(ang)) * d
+					draw_circle(sp, 4.0 * (1.0 - k2) + 1.0, Color(1.0, 0.88, 0.52, a))
+		# ---- 掉落粒子 ----
 		for c_v in host._coinfx:
 			var c: Dictionary = c_v
 			var p: Vector2 = c["pos"]
