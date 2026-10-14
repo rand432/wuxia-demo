@@ -2869,7 +2869,8 @@ const TREA_POOL := [
 	{"n": "定身符", "q": "极品", "t": "item", "fx": "全场敌人定身 5 秒", "key": "item_root", "v": 5.0},
 	{"n": "天雷符", "q": "绝品", "t": "item", "fx": "立刻对全场造成 300% 攻击的雷伤", "key": "item_thunder", "v": 3.0},
 	# v12i（用户：闲散宝物）——**即拾即用**：拿到当场结算，不占格、不入库
-	{"n": "灵晶袋", "q": "中品", "t": "instant", "fx": "灵晶 +100", "key": "crystal", "v": 100},
+	# v16v（用户："灵晶袋子砍半吧"）：100 → 50
+	{"n": "灵晶袋", "q": "中品", "t": "instant", "fx": "灵晶 +50", "key": "crystal", "v": 50},
 	{"n": "钱袋", "q": "下品", "t": "instant", "fx": "文钱 +800", "key": "money", "v": 800},
 	{"n": "悟道果", "q": "上品", "t": "instant", "fx": "经验 +40%", "key": "exp", "v": 0.40},
 	{"n": "属性丹", "q": "上品", "t": "instant", "fx": "属性点 +3", "key": "attr_pt", "v": 3},
@@ -5777,7 +5778,7 @@ func _restart_run() -> void:
 	_skill_pts = 0
 	_skill_choices.clear()
 	_revive = 1 + int(_extra.get("revive_add", 0.0))       # v13y：不屈卡多给一次浴血
-	_boss_sec = 60.0
+	_boss_sec = 30.0            # v16v（用户："每波时长降低为30s"）：原来 60 秒一波
 	_boss_seq = 0
 	# v15q（用户：成长武器"每局重置"）：武器改回**本局的东西** —— 等级/品质/强化线/进阶待选 全清。
 	#   （改之前是跨局保留，注释还写着"故意不重置"；用户确认口径是每局重置。
@@ -6368,7 +6369,9 @@ func _process(delta: float) -> void:
 			if _recruit_opens > 0:
 				# 红字一闪一闪：透明度 0.25~1.0 来回（比金边快一点，更抓眼）
 				_recruit_lb.text = "可招募"
-				_recruit_lb.modulate.a = 0.25 + 0.75 * (0.5 + 0.5 * sin(_rec_flash * 6.0))
+				# v16v（用户："没有招募就不用亮"）：⚠ 原来下限 0.25 —— 闪到最低点时红字几乎看不见，
+				#   只剩一圈金边亮着，看着就像"没招募还亮"。下限抬到 0.5，红字任何时刻都读得到。
+				_recruit_lb.modulate.a = 0.5 + 0.5 * (0.5 + 0.5 * sin(_rec_flash * 6.0))
 			else:
 				_recruit_lb.text = ""
 	else:
@@ -6411,12 +6414,15 @@ func _process(delta: float) -> void:
 	_card_time_tick(delta)      # v11e：时间进化（淬火剑这类）
 	_boss_sec -= delta
 	if _boss_sec <= 0.0:
-		_boss_sec = 60.0
+		_boss_sec = 30.0            # v16v（用户："每波时长降低为30s"）：原来 60 秒一波
 		_wave = mini(_wave_max, _wave + 1)
-		# v12c：每过 5 波送 1 次宝物刷新
-		if _wave % 5 == 0:
+		# v12c：送宝物刷新
+		# v16v（用户："宝物怎么还是给多了"）：⚠ 原来是**每 5 波 +1** —— 35 波就是 7 次，
+		#   再加上宝物挑战、boss 首杀、任务奖励，一局下来宝物根本用不完。
+		#   改成**每 10 波 +1**（35 波 → 3 次），整体砍掉一多半。
+		if _wave % 10 == 0:
 			_trea_refresh += 1
-			_hint.text = "宝物刷新 +1（现有 " + str(_trea_refresh) + " 次）"
+			_hint.text = "宝物刷新 +1（每 10 波一次 · 现有 " + str(_trea_refresh) + " 次）"
 		_boss_tier = clampi(1 + _wave / 10, 1, 3)
 		# v9a：商路/财神套——**每过一波额外给灵晶**（用户："都可"里的经济线）
 		var wc := int(_extra.get("wave_crystal", 0.0))

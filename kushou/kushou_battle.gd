@@ -1465,6 +1465,11 @@ func clear_order() -> void:
 		return
 	_order_foe = {}
 	_order_has_pos = false
+	# v16v（用户："双击回自动就行"）：
+	#   双击已经能到这里了（tap_at 里 0.3 秒内两下＝双击），但**光撤销指令不够** ——
+	#   上一版把"指令走到哪、哪儿就是新家"，于是双击之后主角还杵在那个新家上。
+	#   这里把家**复位回战场正中**，双击＝真正回到自动站位（中间等人）。
+	_home = Vector2(size.x * 0.5, size.y * HERO_MID)
 	_banner = "回到自动战斗"
 	_banner_t = 1.2
 
