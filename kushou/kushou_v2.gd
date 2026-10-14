@@ -628,6 +628,9 @@ var _popup: Control = null
 var _band: Label = null
 var _cp: Control = null          # 弹窗内容区（在 ScrollContainer 里，装不下就手指拖着看）
 var _field = null
+# v16f：底部面板右边的两颗常用钮（强化 / 玉壶）—— 每帧刷新文字与可用态
+var _wpn_quick: Button = null
+var _yh_quick: Button = null
 var _hp_lb: Label = null
 var _mp_lb: Label = null
 var _hp_bar = null
@@ -817,10 +820,17 @@ func _build_hero_bar() -> void:
 	av_btn.add_theme_stylebox_override("hover", _flat(Color(1, 1, 1, 0.06)))
 	av_btn.add_theme_stylebox_override("pressed", _flat(Color(1, 1, 1, 0.10)))
 	# 生命 / 内力
-	_hp_lb = _lbl(Vector2(216, 986), Vector2(470, 40), 24, PAPER)
-	_hp_bar = _bar(Rect2(216, 1030, 470, 38), Color(0.52, 0.22, 0.20))
-	_mp_lb = _lbl(Vector2(216, 1082), Vector2(470, 40), 24, PAPER)
-	_mp_bar = _bar(Rect2(216, 1126, 470, 38), Color(0.30, 0.42, 0.62))
+	# v16f（用户："切一下右边 留点空间 把玉壶按钮和自带成长武器按钮加进去"）：
+	#   ⚠ 原来两条是 x=216 宽 470（右缘 686），右边几乎没地方了。
+	#   现在**缩到 300**（右缘 516），右边腾出 168px 放两颗常用按钮。
+	_hp_lb = _lbl(Vector2(216, 986), Vector2(300, 40), 24, PAPER)
+	_hp_bar = _bar(Rect2(216, 1030, 300, 38), Color(0.52, 0.22, 0.20))
+	_mp_lb = _lbl(Vector2(216, 1082), Vector2(300, 40), 24, PAPER)
+	_mp_bar = _bar(Rect2(216, 1126, 300, 38), Color(0.30, 0.42, 0.62))
+	# ---- v16f：右边那两颗常用钮（强化 / 玉壶）----
+	#   强化：点一下就升一级；**到了 10 的倍数（进阶待选）直接开三选一窗口**
+	_wpn_quick = _mk_btn("强化", Vector2(528, 988), Vector2(168, 76), 24, true, _wpn_quick_tap)
+	_yh_quick = _mk_btn("玉壶", Vector2(528, 1074), Vector2(168, 76), 24, false, _yh_use)
 	# 技能 / 装备：底部两颗**大**钮（用户："按钮和字一定不要很小"）
 	_mk_btn("技能 ＋", Vector2(24, 1174), Vector2(336, 74), 26, false, func(): _open_large("技能"))
 	# 有技能点没花的时候，钮右上角亮个红点（"＋"号）
@@ -2147,6 +2157,20 @@ func _wpn_take(i: int) -> void:
 		_open_large("成长武器详情")
 
 # 强化一次：钱够就升；到 10 的倍数进阶＋弹三选一
+# v16f（用户："点击强化就行 满进阶之后直接弹出三选一进阶窗口"）：
+#   底栏那颗［强化］：
+#     · 进阶待选（_wpn_await）→ **直接开详情页**，那页顶上就是三选一
+#     · 否则 → 花文钱升一级；升到 10 的倍数会自动变成待选，下次点就弹三选一
+func _wpn_quick_tap() -> void:
+	if _wpn_await:
+		_open_large("成长武器详情")
+		_hint.text = "进阶三选一：挑一条强化线（选完才能继续强化）"
+		return
+	if _wpn_up():
+		if _wpn_await:
+			_open_large("成长武器详情")
+			_hint.text = "进阶！三选一挑一条强化线"
+
 func _wpn_up() -> bool:
 	# v15k（用户：装备无限强化 钱都成负数了）：⚠ 这里原来是三个 bug 摞在一起——
 	#   ① 钱不够**没有 return**：照样往下走，`_money -= c` 直接扣成负数；
@@ -6420,9 +6444,17 @@ func _process(delta: float) -> void:
 		_mp = float(_field.hero["mp"])
 		_mp_max = float(_field.hero["mp_max"])
 	_hp_lb.text = "生命 " + str(int(_hp)) + " / " + str(int(_hp_max))
-	_hp_bar.size.x = 470.0 * clampf(_hp / maxf(1.0, _hp_max), 0.0, 1.0)
+	_hp_bar.size.x = 300.0 * clampf(_hp / maxf(1.0, _hp_max), 0.0, 1.0)
 	_mp_lb.text = "内力 " + str(int(_mp)) + " / " + str(int(_mp_max))
-	_mp_bar.size.x = 470.0 * clampf(_mp / maxf(1.0, _mp_max), 0.0, 1.0)
+	_mp_bar.size.x = 300.0 * clampf(_mp / maxf(1.0, _mp_max), 0.0, 1.0)
+	# v16f：右边两颗钮的文字跟着状态走（强化显示价格/进阶 · 玉壶显示冷却）
+	if _wpn_quick != null and is_instance_valid(_wpn_quick):
+		if _wpn_await:
+			_wpn_quick.text = "进阶三选一"
+		else:
+			_wpn_quick.text = "强化 " + str(_wpn_cost())
+	if _yh_quick != null and is_instance_valid(_yh_quick):
+		_yh_quick.text = ("玉壶 就绪" if _yh_cd <= 0.0 else "玉壶 " + str(int(ceil(_yh_cd))) + "s")
 	if _field != null:
 		_field.queue_redraw()
 	_update_coins(delta)
@@ -8309,7 +8341,9 @@ func _fill_wpn_detail(p: Control, y: float, sz: Vector2) -> float:
 	head.text = "『" + WPN_NAME + "』　+" + str(_wpn_lv) + "　【" + str(WPN_Q_CN[_wpn_q]) + "】"
 	p.add_child(head)
 	var ly := y + 64.0
-	var rows := ["开局自带 · **每局重置**——它占着六格里的第一格（剩下 5 格放装备）；这一局花文钱养它，下局从 +0 重来",
+	# v16f：⚠ 这句里原来带 ** ** 强调符，Label 不认会**原样显示星号**（截图里能看到）。
+	#   顺手也把它缩短一点（原来太长，一行放不下会压到下一行）。
+	var rows := ["开局自带 · 每局重置——占六格里的第一格（剩 5 格放装备）；这一局花文钱养，下局从 +0 重来",
 		"每级：攻击 +" + str(_wpn_flat_atk()) + "　气血 +" + str(_wpn_flat_hp()),
 		"下一级价：" + str(_wpn_cost()) + " 文钱（现有 " + str(int(_money)) + "）",
 		"进阶：每 10 级升一档品质 ＋ 掷一次三选一（现在 " + str(_wpn_tier()) + " 阶）"]
@@ -8324,13 +8358,16 @@ func _fill_wpn_detail(p: Control, y: float, sz: Vector2) -> float:
 	for t_v in rows:
 		var l := Label.new()
 		l.position = Vector2(24, ly)
-		l.size = Vector2(660, 40)
+		# v16f（用户："显示字数重叠了"这么久还没根治）：⚠ 行高原来**写死 40**，
+		#   而这页有几行是要折成 2 行的（"开局自带…"那条最长）→ 溢出压下一行。
+		#   现在给足高度、并按**实际需要的高度**推进 ly（跟技能页同一套写法）。
+		l.size = Vector2(660, 84)
 		l.add_theme_font_size_override("font_size", 21)
 		l.add_theme_color_override("font_color", INK)
 		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		l.text = str(t_v)
 		p.add_child(l)
-		ly += 46.0
+		ly += maxf(46.0, l.get_minimum_size().y + 8.0)
 	ly += 20.0
 	# v15y（用户："进阶三选一 还是没有"）：⚠ 上一版我把那个"简单版武器页"整个改道跳过了，
 	#   而**进阶三选一（_wpn_take 的"选它"）就长在那一页里** —— 于是到了 10 的倍数就卡死：
@@ -8375,7 +8412,9 @@ func _fill_wpn_detail(p: Control, y: float, sz: Vector2) -> float:
 			cd.add_theme_font_size_override("font_size", 19)
 			cd.add_theme_color_override("font_color", DIM)
 			cd.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-			cd.text = str(it["fx"])
+			# v16f：⚠ WPN_POOL 的字段是 {n(已带数值), t, v, q} —— **没有 fx**，
+			#   直接读 it["fx"] 会报 "Invalid access to property or key 'fx'"（探针抓到的）。
+			cd.text = "数值 " + str(int(it["v"])) + "　这条走的是「" + str(it["t"]) + "」线"
 			cb.add_child(cd)
 			_pbtn(cb, "选它", Vector2(10, 196), Vector2(cwid - 20, 44), 22, true, _wpn_take.bind(i))
 		ly += 262.0
