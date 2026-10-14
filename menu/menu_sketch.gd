@@ -940,7 +940,11 @@ func _build_plaques() -> void:
 	# v127（用户："后山藏宝阁百工坊都不用加图素材了"）：换回木牌（素材文件留在 assets/ui 里备用）
 	_plaques.add_hang("treasure", 0.760, 0.700, "藏宝阁", _click_treasure, "", "", V)
 	_plaques.add_hang("craft", 0.895, 0.820, "百工坊", _click_craft, "", "", V)
-	_plaques.add_slip("pid", 0.545, 0.842, pn, _show_player_tag, "", V)
+	# v17b（用户："行囊上方不是有个少侠按钮吗 小船旁…点击后 名号少侠 头像点开角色面板"）：
+	#   ⚠ 这块牌已按用户要求**去掉** —— 它只弹一句"名号「少侠」——头像：点开角色面板"，
+	#     而左上角那颗头像本来就能开角色面板，功能重复。（_show_player_tag 留着不删，
+	#     以后想挂到别处还能用。）
+	# _plaques.add_slip("pid", 0.545, 0.842, pn, _show_player_tag, "", V)
 	print("[主界面] 牌子层：", _plaques.items.size(), " 块（用户标注 11 处 + 溪畔/藏宝阁两处原有功能）")
 
 func _player_tag() -> String:
