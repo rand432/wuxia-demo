@@ -121,11 +121,16 @@ static var _menu_track := "menu_jiangnan"
 # v16q（用户："换一首吧"——战斗曲 bgm_battle 里有呐喊，听着吵）：
 #   战斗曲改成**可选**，默认换成"悟 道"（纯器乐、清净）。
 #   列表里把原来那首（战鼓/呐喊那首）也留着，想换回去随时能选。
-static var _battle_track := "menu_wudao"
+# v16q-1（用户："燃一点有激情的"）：
+#   ⚠ 试过让 AI 生成一首，但 MiniMax 的音乐 API 对本账号已关闭
+#     （HTTP 410 / status_code 2153「不再对新用户开放」），三个模型 music-3.0/2.6/cover 全一样。
+#   改为默认用工程里本来就有的**爬塔战斗曲 bgm_tower** —— 它也是战斗曲，但没有原曲那种呐喊。
+#   不满意可在［设置］里逐首试（共 8 首可选）。
+static var _battle_track := "bgm_tower"
 
 const BATTLE_TRACKS := [
-	{"key": "menu_wudao", "name": "悟 道（默认）"},
-	{"key": "bgm_tower", "name": "爬塔战曲"},
+	{"key": "bgm_tower", "name": "爬塔战曲（默认）"},
+	{"key": "menu_wudao", "name": "悟 道"},
 	{"key": "menu_shushan", "name": "蜀 山"},
 	{"key": "menu_youzhou", "name": "幽 州"},
 	{"key": "menu_shaolin", "name": "少 林"},
@@ -152,7 +157,7 @@ static func _ensure_loaded() -> void:
 		_bgm_vol = clampf(float(cf.get_value("audio", "bgm", 1.0)), 0.0, 1.0)
 		_sfx_vol = clampf(float(cf.get_value("audio", "sfx", 1.0)), 0.0, 1.0)
 		_menu_track = str(cf.get_value("audio", "menu_track", "menu_jiangnan"))
-		_battle_track = str(cf.get_value("audio", "battle_track", "menu_wudao"))
+		_battle_track = str(cf.get_value("audio", "battle_track", "bgm_tower"))
 
 static func save_settings() -> void:
 	var cf := ConfigFile.new()
