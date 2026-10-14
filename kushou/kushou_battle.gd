@@ -29,12 +29,31 @@ const DMG_EARTH := "土系"       # v4o 法度·怒目金刚（护盾破碎的�
 
 # v5f：这一版起，**主角出伤统一走 hero_out_dmg()**（全伤害增加 → 元素加成 → 暴击[仅物理] → 幸运一击），
 #   这里只管"怪那一侧的防御/抗性"——所以两处都不会重复乘，加新技能也不必各自记得加。
+# v15w 临时增益的计时 —— 只减时间，效果在各自用到的地方读
+#   主角：lifesteal（吸血）· dr（减伤）· drunk（酒气加攻）
+#   怪：armor_break（破甲）· blind（致盲）· slow（减速）
+func _buffs_tick(delta: float) -> void:
+	for k in ["lifesteal_t", "dr_t", "drunk_t"]:
+		if float(hero.get(k, 0.0)) > 0.0:
+			hero[k] = maxf(0.0, float(hero[k]) - delta)
+	for f_v in foes:
+		var f: Dictionary = f_v
+		for k2 in ["armor_break_t", "blind_t", "slow_t"]:
+			if float(f.get(k2, 0.0)) > 0.0:
+				f[k2] = maxf(0.0, float(f[k2]) - delta)
+
 func _apply_dmg(f: Dictionary, amount: float, dtype: String) -> float:
+	# v15w 醉太岁「酒气」：窗口内主角出伤 +25%
+	if float(hero.get("drunk_t", 0.0)) > 0.0:
+		amount *= 1.0 + float(hero.get("drunk_atk", 0.0))
 	var o := hero_out_dmg(amount, dtype)
 	var amt := float(o["dmg"])
 	var final := amt
 	if dtype == DMG_PHYS:
 		final = maxf(1.0, amt - float(f["hp_max"]) * 0.02)      # 物理吃怪的"防御"折算
+	# v15w 破阵刀客「破甲」：被破甲的目标护甲 −20%
+	if float(f.get("armor_break_t", 0.0)) > 0.0:
+		final *= 0.80
 	if float(f.get("boss_cut", 0.0)) > 0.0:
 		final *= 1.0 - float(f["boss_cut"])            # v14g：boss 词缀"重甲"减伤
 	elif dtype == DMG_METAL:
@@ -54,6 +73,10 @@ func _apply_dmg(f: Dictionary, amount: float, dtype: String) -> float:
 	if float(f.get("buff", 0.0)) > 0.0:
 		final *= STATUE_CUT
 	f["hp"] = float(f["hp"]) - final
+	# v15w 杏林医女「回春针」：吸血窗口内，按伤害的百分比回血
+	if float(hero.get("lifesteal_t", 0.0)) > 0.0 and float(hero["hp"]) > 0.0:
+		var ls := final * float(hero.get("lifesteal", 0.04))
+		hero["hp"] = minf(float(hero["hp_max"]), float(hero["hp"]) + ls)
 	dmg_done += final
 	f["last_dtype"] = dtype
 	return final
@@ -764,6 +787,9 @@ func _process(delta: float) -> void:
 			# v3l（用户："boss可以正常速度"）：boss 不再走 0.7 倍——跟寻常怪一个速度
 			# v14r：boss 词缀"迅捷"——走得更快（原来 boss_spd 只存着没人读）
 			var fspd := FOE_SPD * (1.0 + float(f.get("boss_spd", 0.0)))
+			# v15w 冷月娘「寒霜」：被减速的怪走得慢
+			if float(f.get("slow_t", 0.0)) > 0.0:
+				fspd *= 0.55
 			var mv := to_h.normalized() * minf(fspd * delta, dh - FOE_REACH)
 			f["x"] = clampf(float(f["x"]) + mv.x, 40.0, size.x - 40.0)
 			f["y"] = float(f["y"]) + mv.y
@@ -797,6 +823,10 @@ func _process(delta: float) -> void:
 					continue
 				# v5f：怪打主角走 hero_in_dmg()（物理吃护甲＋全减；元素吃抗性不吃护甲；真实不吃）
 				var d2 := hero_in_dmg(float(f["atk"]), DMG_PHYS)
+				# v15w 更夫「报更」：被致盲的怪有 35% 概率打空
+				if float(f.get("blind_t", 0.0)) > 0.0 and randf() < 0.35:
+					_push_float(hero_pos.x, hero_pos.y - 70.0, "打空", Color(0.86, 0.86, 0.62))
+					continue
 				if randf() < float(hero["dodge"]):
 					_push_float(size.x * 0.5, size.y - HERO_LINE - 40.0, "闪", Color(0.60, 0.80, 0.90))
 				else:
@@ -842,6 +872,7 @@ func _process(delta: float) -> void:
 						running = false
 						hero_down.emit()
 						break
+	_buffs_tick(dt)              # v15w：伙伴给主角挂的那些临时增益（吸血/减伤/酒气）
 	_update_card_fx(dt)          # v9i：飞羽 / 流星 / 雷霆
 	_update_qi(dt)
 	_update_jg(dt)
@@ -1830,6 +1861,57 @@ const SKILL_POOL := [
 		"desc": "残血时反伤 +6%/层", "anim": "残了也要咬一口"},
 	{"id": "laobing_hp", "name": "死撑·加气血", "kind": "num", "max": 3, "req_p": "laobing",
 		"desc": "气血上限 +60（一层就够）", "anim": "多一点血"},
+	# v15w 新增 12 位的强化档位
+	{"id": "xinglin_cd", "name": "回春·减冷却", "kind": "num", "max": 3, "req_p": "xinglin",
+		"desc": "冷却 −2 秒（现 <CD> 秒）【内力消耗 +20/层】", "anim": "针扎得更勤"},
+	{"id": "xinglin_heal", "name": "回春·加治疗", "kind": "num", "max": 3, "req_p": "xinglin",
+		"desc": "治疗 +3% 生命上限/层【内力消耗 +20/层】", "anim": "回得更多"},
+	{"id": "xinglin_dur", "name": "回春·加吸血", "kind": "num", "max": 3, "req_p": "xinglin",
+		"desc": "吸血窗口 +1 秒（现 <DUR> 秒）【内力消耗 +20/层】", "anim": "吸血更久"},
+	{"id": "qiaofu_cd", "name": "劈柴·减冷却", "kind": "num", "max": 3, "req_p": "qiaofu",
+		"desc": "冷却 −1.5 秒（现 <CD> 秒）", "anim": "斧头抡得更勤"},
+	{"id": "qiaofu_dmg", "name": "劈柴·加伤", "kind": "num", "max": 3, "req_p": "qiaofu",
+		"desc": "伤害 +25%/层", "anim": "劈得更狠"},
+	{"id": "pozhen_dmg", "name": "破甲·加伤", "kind": "num", "max": 3, "req_p": "pozhen",
+		"desc": "伤害 +20%/层", "anim": "破得更深"},
+	{"id": "pozhen_cd", "name": "破甲·减冷却", "kind": "num", "max": 3, "req_p": "pozhen",
+		"desc": "冷却 −2 秒（现 <CD> 秒）", "anim": "砍得更频"},
+	{"id": "busheren_dmg", "name": "蛇咬·加伤", "kind": "num", "max": 3, "req_p": "busheren",
+		"desc": "伤害 +20%/层【内力消耗 +20/层】", "anim": "蛇牙更毒"},
+	{"id": "busheren_cd", "name": "蛇咬·减冷却", "kind": "num", "max": 3, "req_p": "busheren",
+		"desc": "冷却 −2 秒（现 <CD> 秒）【内力消耗 +20/层】", "anim": "放蛇更勤"},
+	{"id": "gengfu_dur", "name": "报更·加持续", "kind": "num", "max": 3, "req_p": "gengfu",
+		"desc": "致盲 +1 秒（现 <DUR> 秒）【内力消耗 +20/层】", "anim": "瞎得更久"},
+	{"id": "gengfu_cd", "name": "报更·减冷却", "kind": "num", "max": 3, "req_p": "gengfu",
+		"desc": "冷却 −3 秒（现 <CD> 秒）【内力消耗 +20/层】", "anim": "敲得更勤"},
+	{"id": "gushi_dmg", "name": "蛊毒·加毒", "kind": "num", "max": 3, "req_p": "gushi",
+		"desc": "毒伤 +20%/层【内力消耗 +20/层】", "anim": "蛊更烈"},
+	{"id": "gushi_dur", "name": "蛊毒·加持续", "kind": "num", "max": 3, "req_p": "gushi",
+		"desc": "毒持续 +1 秒（现 <DUR> 秒）【内力消耗 +20/层】", "anim": "毒留得久"},
+	{"id": "kuaidaoshou_dmg", "name": "快刀·加伤", "kind": "num", "max": 3, "req_p": "kuaidaoshou",
+		"desc": "每刀 +15%/层", "anim": "刀更快更狠"},
+	{"id": "kuaidaoshou_cd", "name": "快刀·减冷却", "kind": "num", "max": 3, "req_p": "kuaidaoshou",
+		"desc": "冷却 −1 秒（现 <CD> 秒）", "anim": "砍得更频"},
+	{"id": "chuangong_dmg", "name": "撑篙·加伤", "kind": "num", "max": 3, "req_p": "chuangong",
+		"desc": "伤害 +20%/层【内力消耗 +20/层】", "anim": "一篙更重"},
+	{"id": "chuangong_cd", "name": "撑篙·减冷却", "kind": "num", "max": 3, "req_p": "chuangong",
+		"desc": "冷却 −2 秒（现 <CD> 秒）【内力消耗 +20/层】", "anim": "撑得更勤"},
+	{"id": "tiemianseng_cut", "name": "铁面·加减伤", "kind": "num", "max": 3, "req_p": "tiemianseng",
+		"desc": "减伤 +4%/层【内力消耗 +20/层】", "anim": "更扛打"},
+	{"id": "tiemianseng_dur", "name": "铁面·加持续", "kind": "num", "max": 3, "req_p": "tiemianseng",
+		"desc": "持续 +2 秒（现 <DUR> 秒）【内力消耗 +20/层】", "anim": "入定更久"},
+	{"id": "lengyueniang_dmg", "name": "寒霜·加伤", "kind": "num", "max": 3, "req_p": "lengyueniang",
+		"desc": "伤害 +20%/层【内力消耗 +20/层】", "anim": "霜更冷"},
+	{"id": "lengyueniang_dur", "name": "寒霜·加持续", "kind": "num", "max": 3, "req_p": "lengyueniang",
+		"desc": "减速 +1 秒（现 <DUR> 秒）【内力消耗 +20/层】", "anim": "冻得更久"},
+	{"id": "guijianchou_dmg", "name": "斩首·加比例", "kind": "num", "max": 3, "req_p": "guijianchou",
+		"desc": "已损失气血那一项 +5%/层【内力消耗 +20/层】", "anim": "刀更冷"},
+	{"id": "guijianchou_cd", "name": "斩首·减冷却", "kind": "num", "max": 3, "req_p": "guijianchou",
+		"desc": "冷却 −2 秒（现 <CD> 秒）【内力消耗 +20/层】", "anim": "斩得更频"},
+	{"id": "zuitaisui_dmg", "name": "酒气·加攻", "kind": "num", "max": 3, "req_p": "zuitaisui",
+		"desc": "攻击 +3%/层【内力消耗 +20/层】", "anim": "酒更烈"},
+	{"id": "zuitaisui_cd", "name": "酒气·减冷却", "kind": "num", "max": 3, "req_p": "zuitaisui",
+		"desc": "冷却 −3 秒（现 <CD> 秒）【内力消耗 +20/层】", "anim": "喝得更勤"},
 
 ]
 func skill_lv(id: String) -> int:
@@ -2155,6 +2237,19 @@ var partners := {
 	"qinchi": {"owned": false, "mp": 0.0, "cd": 0.0, "active": 0.0, "dur_lv": 0, "cost_lv": 0},
 	"baiqihouren": {"owned": false, "mp": 0.0, "cd": 0.0, "active": 0.0, "dmg_lv": 0, "cost_lv": 0},
 	"dagongfeng": {"owned": false, "mp": 0.0, "cd": 0.0, "active": 0.0, "shield_lv": 0, "dur_lv": 0, "cost_lv": 0},
+	# v15w 新增 12 位
+	"xinglin": {"owned": false, "mp": 0.0, "cd": 0.0, "active": 0.0, "heal_lv": 0, "dur_lv": 0, "cost_lv": 0},
+	"qiaofu": {"owned": false, "mp": 0.0, "cd": 0.0, "active": 0.0, "dmg_lv": 0},
+	"pozhen": {"owned": false, "mp": 0.0, "cd": 0.0, "active": 0.0, "dmg_lv": 0},
+	"busheren": {"owned": false, "mp": 0.0, "cd": 0.0, "active": 0.0, "dmg_lv": 0, "cost_lv": 0},
+	"gengfu": {"owned": false, "mp": 0.0, "cd": 0.0, "active": 0.0, "dur_lv": 0, "cost_lv": 0},
+	"gushi": {"owned": false, "mp": 0.0, "cd": 0.0, "active": 0.0, "dmg_lv": 0, "dur_lv": 0, "cost_lv": 0},
+	"kuaidaoshou": {"owned": false, "mp": 0.0, "cd": 0.0, "active": 0.0, "dmg_lv": 0},
+	"chuangong": {"owned": false, "mp": 0.0, "cd": 0.0, "active": 0.0, "dmg_lv": 0, "cost_lv": 0},
+	"tiemianseng": {"owned": false, "mp": 0.0, "cd": 0.0, "active": 0.0, "cut_lv": 0, "dur_lv": 0, "cost_lv": 0},
+	"lengyueniang": {"owned": false, "mp": 0.0, "cd": 0.0, "active": 0.0, "dmg_lv": 0, "dur_lv": 0, "cost_lv": 0},
+	"guijianchou": {"owned": false, "mp": 0.0, "cd": 0.0, "active": 0.0, "dmg_lv": 0, "cost_lv": 0},
+	"zuitaisui": {"owned": false, "mp": 0.0, "cd": 0.0, "active": 0.0, "dmg_lv": 0},
 }
 var _dg_list: Array = []            # 飞匕：{pos, dir, tgt, dmg, pierce, bounce, hits, t}
 const PARTNER_INFO := {
@@ -2276,6 +2371,47 @@ const PARTNER_INFO := {
 	"dagongfeng": {"name": "大内供奉", "quality": "极品", "skill": "罡气", "dtype": "金系（护盾）", "grow": {"arm": 3, "agi": 1, "wit": 4},
 	"desc": "每 24 秒给自己罩一层罡气：吸收 15% 生命上限的伤害，持续 10 秒，破时炸一圈金系伤害",
 	"mp0": 200.0, "cd0": 24.0, "dur0": 10.0},
+	# ============================================================
+	# v15w（用户："伙伴内容不够就加伙伴"）：再添 12 位 —— 总数 32 → 44
+	#   档位：下品 +5 · 中品 +3 · 上品 +2 · 极品 +2
+	#   原则同前：机制尽量复用战场上已有的那几套
+	# ============================================================
+	"xinglin": {"name": "杏林医女", "quality": "下品", "skill": "回春针", "dtype": "治疗", "grow": {"arm": 1, "agi": 1, "wit": 3},
+		"desc": "每 10 秒扎一针：回一小口血，并把伤害的一部分转成回血（持续 6 秒）",
+		"mp0": 80.0, "cd0": 10.0, "dur0": 6.0},
+	"qiaofu": {"name": "樵夫", "quality": "下品", "skill": "劈柴", "dtype": "物理", "grow": {"arm": 3, "agi": 1, "wit": 0},
+		"desc": "每 7 秒抡一斧：物理重击并把目标击退一段",
+		"mp0": 0.0, "cd0": 7.0, "dur0": 0.0},
+	"pozhen": {"name": "破阵刀客", "quality": "下品", "skill": "破甲", "dtype": "物理", "grow": {"arm": 2, "agi": 2, "wit": 0},
+		"desc": "每 8 秒一刀：物理伤害并让目标护甲 −20%（持续 5 秒）",
+		"mp0": 0.0, "cd0": 8.0, "dur0": 0.0},
+	"busheren": {"name": "捕蛇人", "quality": "下品", "skill": "蛇咬", "dtype": "木系", "grow": {"arm": 1, "agi": 3, "wit": 1},
+		"desc": "每 8 秒放蛇咬最近敌人：木系伤害，目标中毒时伤害翻倍",
+		"mp0": 90.0, "cd0": 8.0, "dur0": 0.0},
+	"gengfu": {"name": "更夫", "quality": "下品", "skill": "报更", "dtype": "无伤害", "grow": {"arm": 1, "agi": 2, "wit": 2},
+		"desc": "每 14 秒敲梆子：最近 2 名敌人致盲（命中降低，持续 5 秒）",
+		"mp0": 90.0, "cd0": 14.0, "dur0": 0.0},
+	"gushi": {"name": "蛊师", "quality": "中品", "skill": "蛊毒", "dtype": "木系（持续）", "grow": {"arm": 1, "agi": 2, "wit": 4},
+		"desc": "每 13 秒撒蛊：给最近 2 名敌人挂毒",
+		"mp0": 150.0, "cd0": 13.0, "dur0": 0.0},
+	"kuaidaoshou": {"name": "快刀手", "quality": "中品", "skill": "快刀", "dtype": "物理", "grow": {"arm": 1, "agi": 4, "wit": 1},
+		"desc": "每 6 秒连砍三刀（物理，三下各自判定）",
+		"mp0": 0.0, "cd0": 6.0, "dur0": 0.0},
+	"chuangong": {"name": "老船工", "quality": "中品", "skill": "撑篙", "dtype": "水系", "grow": {"arm": 3, "agi": 1, "wit": 2},
+		"desc": "每 11 秒一篙：水系伤害并把最近敌人推开",
+		"mp0": 110.0, "cd0": 11.0, "dur0": 0.0},
+	"tiemianseng": {"name": "铁面僧", "quality": "上品", "skill": "铁面", "dtype": "土系", "grow": {"arm": 4, "agi": 1, "wit": 2},
+		"desc": "每 16 秒入定：接下来 6 秒受到伤害 −25%，减免量还给主角回血",
+		"mp0": 130.0, "cd0": 16.0, "dur0": 6.0},
+	"lengyueniang": {"name": "冷月娘", "quality": "上品", "skill": "寒霜", "dtype": "水系", "grow": {"arm": 1, "agi": 2, "wit": 4},
+		"desc": "每 12 秒撒霜：最近 3 名敌人受水系伤害并被减速（6 秒）",
+		"mp0": 140.0, "cd0": 12.0, "dur0": 0.0},
+	"guijianchou": {"name": "鬼见愁", "quality": "极品", "skill": "斩首", "dtype": "真实", "grow": {"arm": 4, "agi": 3, "wit": 1},
+		"desc": "每 18 秒斩血量最低的那个：血越少伤害越高；击杀则冷却立刻减半",
+		"mp0": 200.0, "cd0": 18.0, "dur0": 0.0},
+	"zuitaisui": {"name": "醉太岁", "quality": "极品", "skill": "酒气", "dtype": "无伤害", "grow": {"arm": 3, "agi": 2, "wit": 3},
+		"desc": "每 22 秒灌一口：接下来 8 秒攻击 +25% 且每次命中回 2 点内力",
+		"mp0": 180.0, "cd0": 22.0, "dur0": 8.0},
 }
 const PARTNER_UP_STEP_MP := 20.0      # 每个"提升内力消耗"的强化 +20 内力
 const PARTNER_DOWN_STEP_MP := 15.0    # "减内力消耗"每层 −15
@@ -2780,6 +2916,45 @@ func _cast_partner(id: String) -> void:
 			_cast_timestop()
 		"cuisanniang":
 			_summon_dragon()
+		# v15c/v15w 新增 18 位一次性技能
+		# ⚠ 这 6 个 v15c 的分支曾经被一次"删坏行"的批量清理连带删掉过（函数还在、没人调）——
+		#   所以这里有"函数定义了但技能不触发"的历史坑，改动时留意。
+		"tietouseng":
+			_cast_tietou()
+		"bingshusheng":
+			_cast_keshui()
+		"yaopozi":
+			_cast_jinzhen()
+		"huogong":
+			_cast_sanmei()
+		"qinchi":
+			_cast_luanshen()
+		"baiqihouren":
+			_cast_shashen()
+		"xinglin":
+			_cast_huichun()
+		"qiaofu":
+			_cast_pichai()
+		"pozhen":
+			_cast_pojia()
+		"busheren":
+			_cast_sheyao()
+		"gengfu":
+			_cast_baogeng()
+		"gushi":
+			_cast_gudu()
+		"kuaidaoshou":
+			_cast_kuaidao()
+		"chuangong":
+			_cast_chenggao()
+		"tiemianseng":
+			_cast_tiemian()
+		"lengyueniang":
+			_cast_hanshuang()
+		"guijianchou":
+			_cast_zhenshou()
+		"zuitaisui":
+			_cast_jiuqi()
 		_:
 			pass
 
@@ -2887,6 +3062,176 @@ func _cast_extra_shield(id: String) -> void:
 	_push_float(hero_pos.x, hero_pos.y - 92.0, tag + " +" + str(int(sv)), Color(0.86, 0.80, 0.52), true)
 	_bursts.append({"x": hero_pos.x, "y": hero_pos.y - 10.0, "t": 0.0, "col": Color(0.80, 0.72, 0.44), "scale": 1.5})
 	Audio.sfx("equip", -6.0)
+
+# ============================================================
+# v15w 新增 12 位的实现（每人复用一套已有机制）
+# ============================================================
+# ① 回春针：小治疗 ＋ 攻击吸血（给 hero 挂吸血窗口）
+func _cast_huichun() -> void:
+	var heal := float(hero["hp_max"]) * 0.06 * p_star_mul("xinglin")
+	hero["hp"] = minf(float(hero["hp_max"]), float(hero["hp"]) + heal)
+	hero["lifesteal_t"] = 6.0 + 1.0 * float(partners["xinglin"].get("dur_lv", 0))
+	hero["lifesteal"] = 0.04 + 0.01 * float(partners["xinglin"].get("heal_lv", 0))
+	_push_float(hero_pos.x, hero_pos.y - 86.0, "回春 +" + str(int(heal)) + "　吸血 6s", Color(0.70, 0.94, 0.72), true)
+	Audio.sfx("levelup", -8.0)
+
+# ② 劈柴：物理重击 ＋ 击退
+func _cast_pichai() -> void:
+	var f := _nearest()
+	if f.is_empty():
+		return
+	var base := float(hero["atk"]) * (1.6 + 0.25 * float(partners["qiaofu"].get("dmg_lv", 0))) * (1.0 + float(hero["dmg_pct"]))
+	var dm := _apply_dmg(f, base, DMG_PHYS)
+	f["kb"] = 26.0
+	_push_float(float(f["x"]), float(f["y"]) - 30.0, "劈柴 " + str(int(dm)), Color(0.90, 0.82, 0.66), true)
+	Audio.sfx("hit_heavy", -6.0)
+	if float(f["hp"]) <= 0.0:
+		_kill_foe(f)
+
+# ③ 破甲：物理伤害 ＋ 目标护甲 −20%（5 秒）
+func _cast_pojia() -> void:
+	var f := _nearest()
+	if f.is_empty():
+		return
+	var base := float(hero["atk"]) * (1.2 + 0.2 * float(partners["pozhen"].get("dmg_lv", 0))) * (1.0 + float(hero["dmg_pct"]))
+	var dm := _apply_dmg(f, base, DMG_PHYS)
+	f["armor_break_t"] = 5.0
+	_push_float(float(f["x"]), float(f["y"]) - 30.0, "破甲 " + str(int(dm)), Color(0.96, 0.72, 0.42), true)
+	Audio.sfx("hit_slash", -8.0)
+	if float(f["hp"]) <= 0.0:
+		_kill_foe(f)
+
+# ④ 蛇咬：木系伤害；目标中毒则翻倍
+func _cast_sheyao() -> void:
+	var f := _nearest()
+	if f.is_empty():
+		return
+	var mul := 1.1 + 0.2 * float(partners["busheren"].get("dmg_lv", 0))
+	if float(f.get("dot_t", 0.0)) > 0.0:
+		mul *= 2.0                        # 中毒目标翻倍
+	var dm := _apply_dmg(f, float(hero["atk"]) * mul * (1.0 + float(hero["dmg_pct"])), DMG_WOOD)
+	_push_float(float(f["x"]), float(f["y"]) - 28.0, "蛇咬 " + str(int(dm)), Color(0.60, 0.92, 0.48), true)
+	Audio.sfx("skill", -8.0)
+	if float(f["hp"]) <= 0.0:
+		_kill_foe(f)
+
+# ⑤ 报更：最近 2 名敌人致盲
+func _cast_baogeng() -> void:
+	var dur := 5.0 + 1.0 * float(partners["gengfu"].get("dur_lv", 0))
+	var n := 0
+	for f_v in foes:
+		var f: Dictionary = f_v
+		if n >= 2:
+			break
+		if float(f.get("dying", 0.0)) > 0.0 or float(f["hp"]) <= 0.0:
+			continue
+		f["blind_t"] = dur
+		n += 1
+	_push_float(hero_pos.x, hero_pos.y - 96.0, "报更：致盲 " + str(n) + " 名", Color(0.86, 0.86, 0.66), true)
+	Audio.sfx("bell", -8.0)
+
+# ⑥ 蛊毒：最近 2 名挂毒
+func _cast_gudu() -> void:
+	var mul := (0.34 + 0.06 * float(partners["gushi"].get("dmg_lv", 0))) * p_star_mul("gushi")
+	var dur := 5.0 + 1.0 * float(partners["gushi"].get("dur_lv", 0))
+	var n := 0
+	for f_v in foes:
+		var f: Dictionary = f_v
+		if n >= 2:
+			break
+		if float(f.get("dying", 0.0)) > 0.0 or float(f["hp"]) <= 0.0:
+			continue
+		_add_dot(f, mul, dur, DMG_WOOD)
+		_push_float(float(f["x"]), float(f["y"]) - 28.0, "蛊毒", Color(0.56, 0.86, 0.42), true)
+		n += 1
+	Audio.sfx("skill", -8.0)
+
+# ⑦ 快刀：连砍三刀
+func _cast_kuaidao() -> void:
+	var p: Dictionary = partners["kuaidao"]
+	for i in 3:
+		var f := _nearest()
+		if f.is_empty():
+			break
+		var base := float(hero["atk"]) * (0.55 + 0.08 * float(partners["kuaidaoshou"].get("dmg_lv", 0))) \
+			* (1.0 + float(hero["dmg_pct"]))
+		var dm := _apply_dmg(f, base, DMG_PHYS)
+		_push_float(float(f["x"]), float(f["y"]) - 22.0 - float(i) * 12.0, str(int(dm)), Color(0.94, 0.90, 0.74))
+		if float(f["hp"]) <= 0.0:
+			_kill_foe(f)
+	Audio.sfx("hit_slash", -9.0)
+
+# ⑧ 撑篙：水系伤害 ＋ 推开
+func _cast_chenggao() -> void:
+	var f := _nearest()
+	if f.is_empty():
+		return
+	var base := float(hero["atk"]) * (1.3 + 0.2 * float(partners["chuangong"].get("dmg_lv", 0))) * (1.0 + float(hero["dmg_pct"]))
+	var dm := _apply_dmg(f, base, DMG_WATER)
+	f["kb"] = 34.0
+	_push_float(float(f["x"]), float(f["y"]) - 30.0, "撑篙 " + str(int(dm)), Color(0.58, 0.84, 0.96), true)
+	Audio.sfx("hit_heavy", -7.0)
+	if float(f["hp"]) <= 0.0:
+		_kill_foe(f)
+
+# ⑨ 铁面：受伤 −25%（6 秒）＋ 减免量回血
+func _cast_tiemian() -> void:
+	hero["dr_t"] = 6.0 + 1.0 * float(partners["tiemianseng"].get("dur_lv", 0))
+	hero["dr"] = 0.22 + 0.03 * float(partners["tiemianseng"].get("cut_lv", 0))
+	_push_float(hero_pos.x, hero_pos.y - 90.0, "铁面：受伤 −" + str(int(float(hero["dr"]) * 100.0)) + "%", Color(0.88, 0.80, 0.62), true)
+	Audio.sfx("equip", -6.0)
+
+# ⑩ 寒霜：最近 3 名受水系伤害 ＋ 减速
+func _cast_hanshuang() -> void:
+	var mul := (0.8 + 0.12 * float(partners["lengyueniang"].get("dmg_lv", 0))) * p_star_mul("lengyueniang")
+	var sdur := 6.0 + 1.0 * float(partners["lengyueniang"].get("dur_lv", 0))
+	var n := 0
+	for f_v in foes:
+		var f: Dictionary = f_v
+		if n >= 3:
+			break
+		if float(f.get("dying", 0.0)) > 0.0 or float(f["hp"]) <= 0.0:
+			continue
+		var dm := _apply_dmg(f, float(hero["atk"]) * mul * (1.0 + float(hero["dmg_pct"])), DMG_WATER)
+		f["slow_t"] = sdur
+		_push_float(float(f["x"]), float(f["y"]) - 28.0, "寒霜 " + str(int(dm)), Color(0.68, 0.88, 1.0), true)
+		n += 1
+		if float(f["hp"]) <= 0.0:
+			_kill_foe(f)
+	Audio.sfx("skill", -7.0)
+
+# ⑪ 斩首：打血量最低的；血越少越痛；击杀则冷却减半
+func _cast_zhenshou() -> void:
+	var best: Dictionary = {}
+	var bh := 1.0e12
+	for f_v in foes:
+		var f: Dictionary = f_v
+		if float(f.get("dying", 0.0)) > 0.0 or float(f["hp"]) <= 0.0:
+			continue
+		if float(f["hp"]) < bh:
+			bh = float(f["hp"])
+			best = f
+	if best.is_empty():
+		return
+	var lost := maxf(0.0, float(best["hp_max"]) - float(best["hp"]))
+	var mul := (0.22 + 0.05 * float(partners["guijianchou"].get("dmg_lv", 0))) * p_star_mul("guijianchou")
+	var dmg := maxf(float(hero["atk"]) * 1.2, lost * mul)
+	var dm := _apply_dmg(best, dmg, DMG_TRUE)
+	_push_float(float(best["x"]), float(best["y"]) - 34.0, "斩首 " + str(int(dm)), Color(0.94, 0.36, 0.34), true)
+	_bursts.append({"x": float(best["x"]), "y": float(best["y"]) - 12.0, "t": 0.0, "col": Color(0.90, 0.30, 0.28), "scale": 1.8})
+	Audio.sfx("hit_heavy", -4.0)
+	if float(best["hp"]) <= 0.0:
+		_kill_foe(best)
+		var p2: Dictionary = partners["guijianchou"]
+		p2["cd"] = float(p2["cd"]) * 0.5      # 击杀 → 冷却减半
+		_push_float(float(best["x"]), float(best["y"]) - 60.0, "斩首成功·冷却减半", Color(1.0, 0.72, 0.40), true)
+
+# ⑫ 酒气：8 秒攻击 +25% ＋ 命中回内力
+func _cast_jiuqi() -> void:
+	hero["drunk_t"] = 8.0
+	hero["drunk_atk"] = 0.22 + 0.03 * float(partners["zuitaisui"].get("dmg_lv", 0))
+	_push_float(hero_pos.x, hero_pos.y - 90.0, "酒气：攻击 +" + str(int(float(hero["drunk_atk"]) * 100.0)) + "%　命中回内力", Color(1.0, 0.84, 0.46), true)
+	Audio.sfx("levelup", -7.0)
 
 # 季沧海：每 3 秒（可减）自动烧一次，不吃内力
 # ---- v14b 新队员的一次性技能 ----
@@ -3618,6 +3963,94 @@ func _draw_partner_fx(shk: Vector2) -> void:
 		for i in 5:
 			draw_circle(hp2 + Vector2(24.0 + float(i) * 3.0, -18.0 - float(i) * 10.0), 2.6, Color(0.94, 0.36, 0.32, 0.8 * kqq))
 	# ⑫ 大内供奉：白金——身周一层罡气壳 ＋ 碎金片
+
+	# v15w 新增 12 位的专属特效
+	# ① 杏林医女：淡绿——绕身走的药气点 ＋ 一株小草
+	if p_active("xinglin"):
+		var k1 := 0.45 + 0.55 * p_ratio("xinglin")
+		for i in 5:
+			var a1 := TAU * float(i) / 5.0 + _t * 1.3
+			var o1 := hp2 + Vector2(cos(a1), sin(a1) * 0.6) * (30.0 + sin(_t * 3.0 + float(i)) * 8.0)
+			draw_circle(o1, 4.0, Color(0.62, 0.94, 0.68, 0.8 * k1))
+	# ② 樵夫：棕绿——扛着斧子挥的一道弧
+	if p_active("qiaofu"):
+		var k2 := 0.45 + 0.55 * p_ratio("qiaofu")
+		draw_arc(hp2 + Vector2(18, -20), 34.0, -PI * 0.7, PI * 0.2, 16, Color(0.72, 0.62, 0.40, 0.8 * k2), 5.0)
+		draw_line(hp2 + Vector2(30, -46), hp2 + Vector2(46, -18), Color(0.86, 0.82, 0.66, 0.9 * k2), 3.0)
+	# ③ 破阵刀客：橙红——身前一横一竖的刀痕
+	if p_active("pozhen"):
+		var k3 := 0.45 + 0.55 * p_ratio("pozhen")
+		draw_line(hp2 + Vector2(-30, -34), hp2 + Vector2(30, -6), Color(0.96, 0.62, 0.32, 0.85 * k3), 4.0)
+		draw_line(hp2 + Vector2(6, -46), hp2 + Vector2(2, -4), Color(0.98, 0.76, 0.46, 0.7 * k3), 3.0)
+	# ④ 捕蛇人：草绿——脚边两条游动的蛇影
+	if p_active("busheren"):
+		var k4 := 0.45 + 0.55 * p_ratio("busheren")
+		for i in 2:
+			var ph := _t * 3.0 + float(i) * PI
+			for j in 4:
+				var pj := hp2 + Vector2(-30.0 + float(j) * 18.0 + float(i) * 6.0, 16.0 + sin(ph + float(j) * 0.8) * 7.0)
+				draw_circle(pj, 3.0, Color(0.52, 0.88, 0.40, 0.75 * k4))
+	# ⑤ 更夫：灰黄——手里一只晃动的灯笼
+	if p_active("gengfu"):
+		var k5 := 0.45 + 0.55 * p_ratio("gengfu")
+		var lp := hp2 + Vector2(26.0, -40.0 + sin(_t * 3.0) * 4.0)
+		draw_circle(lp, 12.0, Color(1.0, 0.86, 0.46, 0.28 * k5))
+		draw_circle(lp, 6.0, Color(1.0, 0.92, 0.62, 0.9 * k5))
+	# ⑥ 蛊师：暗紫——三只绕飞的小蛊虫
+	if p_active("gushi"):
+		var k6 := 0.45 + 0.55 * p_ratio("gushi")
+		for i in 3:
+			var a6 := TAU * float(i) / 3.0 + _t * 2.4
+			var o6 := hp2 + Vector2(cos(a6), sin(a6) * 0.5) * 42.0 + Vector2(0, -20)
+			draw_circle(o6, 4.5, Color(0.66, 0.40, 0.86, 0.85 * k6))
+			draw_circle(o6, 8.0, Color(0.52, 0.28, 0.72, 0.25 * k6))
+	# ⑦ 快刀手：银白——三道交错的短刀光
+	if p_active("kuaidaoshou"):
+		var k7 := 0.45 + 0.55 * p_ratio("kuaidaoshou")
+		for i in 3:
+			var oy := -56.0 + float(i) * 20.0
+			var sl := sin(_t * 9.0 + float(i)) * 4.0
+			draw_line(hp2 + Vector2(-26, oy + sl), hp2 + Vector2(30, oy - 6.0 + sl), Color(0.94, 0.96, 1.0, 0.75 * k7), 3.0)
+	# ⑧ 老船工：青蓝——脚下一道水波 ＋ 手里长篙
+	if p_active("chuangong"):
+		var k8 := 0.45 + 0.55 * p_ratio("chuangong")
+		for i in 3:
+			var r8 := fmod(_t * 0.9 + float(i) / 3.0, 1.0)
+			draw_arc(hp2 + Vector2(0, 22), 12.0 + r8 * 36.0, PI * 1.1, PI * 1.9, 14, Color(0.52, 0.80, 0.96, (1.0 - r8) * 0.7 * k8), 3.0)
+		draw_line(hp2 + Vector2(26, 6), hp2 + Vector2(44, -72), Color(0.72, 0.60, 0.40, 0.9 * k8), 4.0)
+	# ⑨ 铁面僧：土黄——一层面具般的方框 ＋ 岩石碎点
+	if p_active("tiemianseng"):
+		var k9 := 0.45 + 0.55 * p_ratio("tiemianseng")
+		var fc := hp2 + Vector2(0, -34)
+		draw_rect(Rect2(fc.x - 15.0, fc.y - 15.0, 30.0, 30.0), Color(0.84, 0.74, 0.50, 0.28 * k9), true)
+		draw_rect(Rect2(fc.x - 15.0, fc.y - 15.0, 30.0, 30.0), Color(0.92, 0.84, 0.60, 0.85 * k9), false, 3.0)
+		for i in 4:
+			var a9 := TAU * float(i) / 4.0 + _t * 0.8
+			draw_circle(hp2 + Vector2(cos(a9), sin(a9) * 0.6) * 46.0, 3.5, Color(0.80, 0.70, 0.46, 0.7 * k9))
+	# ⑩ 冷月娘：冰蓝——几片飘落的霜花
+	if p_active("lengyueniang"):
+		var k10 := 0.45 + 0.55 * p_ratio("lengyueniang")
+		for i in 6:
+			var fy := fmod(_t * 0.6 + float(i) / 6.0, 1.0)
+			var fxp := hp2.x + sin((_t + float(i) * 1.7) * 1.5) * 34.0
+			var fyp := hp2.y - 90.0 + fy * 96.0
+			draw_line(Vector2(fxp - 4.0, fyp), Vector2(fxp + 4.0, fyp), Color(0.78, 0.94, 1.0, (1.0 - fy) * 0.85 * k10), 2.0)
+			draw_line(Vector2(fxp, fyp - 4.0), Vector2(fxp, fyp + 4.0), Color(0.78, 0.94, 1.0, (1.0 - fy) * 0.85 * k10), 2.0)
+	# ⑪ 鬼见愁：血紫——头顶一道悬着的铡刀
+	if p_active("guijianchou"):
+		var k11 := 0.45 + 0.55 * p_ratio("guijianchou")
+		var by := hp2.y - 74.0 + sin(_t * 2.0) * 5.0
+		draw_line(Vector2(hp2.x - 26.0, by), Vector2(hp2.x + 26.0, by), Color(0.80, 0.30, 0.42, 0.9 * k11), 5.0)
+		draw_line(Vector2(hp2.x - 26.0, by - 10.0), Vector2(hp2.x - 26.0, by + 10.0), Color(0.66, 0.24, 0.34, 0.8 * k11), 3.0)
+		draw_arc(hp2 + Vector2(0, 16), 44.0, 0.0, TAU, 24, Color(0.70, 0.24, 0.34, 0.32 * k11), 2.0)
+	# ⑫ 醉太岁：酒金——身周飘着几个酒气圈
+	if p_active("zuitaisui"):
+		var k12 := 0.45 + 0.55 * p_ratio("zuitaisui")
+		for i in 3:
+			var a12 := TAU * float(i) / 3.0 - _t * 1.1
+			var o12 := hp2 + Vector2(cos(a12), sin(a12) * 0.7) * (26.0 + float(i) * 9.0)
+			draw_arc(o12, 9.0, 0.0, TAU, 14, Color(1.0, 0.82, 0.40, 0.55 * k12), 2.0)
+		draw_arc(hp2 + Vector2(0, 6), 40.0, 0.0, TAU, 22, Color(0.96, 0.76, 0.36, 0.25 * k12), 2.0)
 	if p_active("dagongfeng"):
 		var kd := 0.45 + 0.55 * p_ratio("dagongfeng")
 		draw_arc(hp2 + Vector2(0, -6), 34.0 + sin(_t * 4.0) * 2.0, 0.0, TAU, 28, Color(0.92, 0.90, 0.74, 0.55 * kd), 3.0)
@@ -3708,7 +4141,15 @@ func hero_in_dmg(amount: float, dtype: String) -> float:
 		cut += float((hero.get("res_elem", {}) as Dictionary).get(dtype, 0.0))
 	if p_active("shigandang"):
 		cut += 0.25 + 0.05 * float(partners["shigandang"].get("cut_lv", 0))
-	return maxf(0.0, amount * (1.0 - minf(0.90, cut)))
+	# v15w 铁面僧「铁面」：窗口内受伤再 −25%（并且减免量还给主角回血）
+	var dr := 0.0
+	if float(hero.get("dr_t", 0.0)) > 0.0:
+		dr = float(hero.get("dr", 0.0))
+		cut += dr
+	var taken := maxf(0.0, amount * (1.0 - minf(0.90, cut)))
+	if dr > 0.0 and taken > 0.0:
+		hero["hp"] = minf(float(hero["hp_max"]), float(hero["hp"]) + amount * dr * 0.5)
+	return taken
 
 # ============================================================
 # 画：主角在下（武器朝上）· 怪在上（武器朝下）
