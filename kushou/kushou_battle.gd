@@ -2899,7 +2899,10 @@ func _update_partners(delta: float) -> void:
 #   星数由外壳写进 partners[id]["star"]（存档页花银两升，永久）；这里只读。
 # ============================================================
 func p_star_mul(id: String) -> float:
-	return 1.0 + 0.12 * float(maxi(0, int((partners[id] as Dictionary).get("star", 1)) - 1))
+	# ★ 与进化**乘算**（v15a）：★1＋无进化＝1.00；★5（+48%）且进化 2 档（+50%）＝2.22
+	var st := 1.0 + 0.12 * float(maxi(0, int((partners[id] as Dictionary).get("star", 1)) - 1))
+	var ev := 1.0 + 0.25 * float(maxi(0, int((partners[id] as Dictionary).get("evo", 0))))
+	return st * ev
 
 # ============================================================
 # v14s 开局出战：出战的那位**替换主角**（外壳存档里设，跨局）

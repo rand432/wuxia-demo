@@ -905,7 +905,7 @@ func _recruit_refresh() -> void:
 func _mate_card(p: Control, pos: Vector2, sz: Vector2, pid: String, with_btn: bool) -> void:
 	var info: Dictionary = _field.PARTNER_INFO[pid]
 	var g: Dictionary = info.get("grow", {})
-	var qcol := _quality_color(str(info["quality"]))
+	var qcol := _quality_color(_mate_q_of(pid))
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(0.99, 0.97, 0.92)
 	sb.set_corner_radius_all(12)
@@ -929,7 +929,7 @@ func _mate_card(p: Control, pos: Vector2, sz: Vector2, pid: String, with_btn: bo
 	nm.size = Vector2(sz.x - 28, 40)
 	nm.add_theme_font_size_override("font_size", 25)
 	nm.add_theme_color_override("font_color", Color(0.99, 0.97, 0.93))
-	nm.text = str(info["name"]) + "　【" + str(info["quality"]) + "】 " + _mate_star_cn(pid)
+	nm.text = _mate_name_of(pid) + "　【" + _mate_q_of(pid) + "】 " + _mate_star_cn(pid)
 	box.add_child(nm)
 	# ② 画像（程序画的简笔小人：跟战场上那个同一套笔法）
 	var art := MateArt.new()
@@ -1048,7 +1048,10 @@ func _roll_recruits() -> Array:
 		if bool((_field.partners[pid] as Dictionary)["owned"]):
 			continue
 		var q := str((_field.PARTNER_INFO[pid] as Dictionary)["quality"])
-		var w: int = int({"下品": 30, "中品": 25, "上品": 20, "极品": 15, "绝品": 10}.get(q, 20))
+		# v15：绝品只从进化/特殊事件来（用户口径），不进随机池
+		if q == "绝品":
+			continue
+		var w: int = int({"下品": 30, "中品": 25, "上品": 20, "极品": 15}.get(q, 20))
 		for i in w:
 			pool.append(str(pid))
 	var out: Array = []
@@ -2733,6 +2736,9 @@ const TREA_POOL := [
 	{"n": "淬火石", "q": "极品", "t": "instant", "fx": "成长武器立刻 +3 级（不花钱）", "key": "wpn_lv", "v": 3},
 # v13n（用户："玉壶都加"）：三选一里能刷到玉壶升档（已满档时 _trea_roll 会把它筛掉）
 	{"n": YUHU_UP_NAME, "q": "极品", "t": "instant", "fx": "玲珑玉壶 +1 档（回复更高·冷却更短）", "key": "yuhu_up", "v": 1},
+	# v15（用户：这种道具定义为宝物）：进化用的两件道具进宝物池，走宝物三选一
+	{"n": "进化符", "q": "上品", "t": "instant", "fx": "伙伴进化 +1 档（升阶材料，低档只吃它）", "key": "evo_token", "v": 1},
+	{"n": "破茧·终", "q": "绝品", "t": "instant", "fx": "极品→绝品的钥匙（稀罕物）", "key": "evo_card", "v": 1},
 ]
 
 func _trea_roll() -> void:
@@ -3498,6 +3504,12 @@ func _bm_buy(i: int) -> void:
 			msg = "灵晶 +40（现有 " + str(int(_crystal)) + "）"
 		"yuhu_up":
 			_yh_upgrade()
+		# v15：两件进化道具
+		"evo_token":
+			_evo_token_add(1, '宝物·进化符')
+		"evo_card":
+			_evo_card += 1
+			_note('拿到【破茧·终】—— 极品伙伴可以冲绝品了', 4.0)
 			var qq := clampi(_yh_q, 0, 5)
 			msg = "玲珑玉壶升档 → 【" + str(WPN_Q_CN[qq]) + "】回复 " + str(int(float(YUHU_HEAL[qq]) * 100.0)) \
 				+ "% · 冷却 " + str(int(YUHU_CD[qq])) + " 秒（花了灵晶 " + str(price) + "）"
@@ -3570,7 +3582,10 @@ const QUEST_SPECIAL := [
 	{"id": "dandou", "n": "单挑", "d": "打死来挑战的高手（怪照刷，不清场）", "ck": "champion", "goal": 1, "sec": 90.0, "cr": 180, "gear": 1, "setup": "champion"},
 	{"id": "sanying", "n": "三英", "d": "三只精英同时进场，全部杀掉", "ck": "elite", "goal": 3, "sec": 120.0, "cr": 200, "tgear": 1, "setup": "elite"},
 	{"id": "xuezhan", "n": "血战", "d": "气血掉到 30% 以下，再撑过 30 秒", "ck": "blood", "goal": 30, "sec": 90.0, "cr": 180, "atkall": 0.08},
-	{"id": "duju", "n": "赌局", "d": "押 100 文钱，五五开：赢了给 400 文", "ck": "instant", "goal": 1, "sec": -1.0, "instant": true}
+	{"id": "duju", "n": "赌局", "d": "押 100 文钱，五五开：赢了给 400 文", "ck": "instant", "goal": 1, "sec": -1.0, "instant": true},
+	# v15（用户：完成什么进化任务）：【破茧】—— 给 1 个进化符，也把"升极品"的那个门槛消掉
+	{"id": "pojian", "n": "破茧", "d": "通关它就消掉一次进化门槛 ＋ 得 1 个进化符", "ck": "instant", "goal": 1,
+		"sec": -1.0, "instant": true, "evo": 1, "cr": 40, "evotask": 1}
 ]
 # 波次 → 档位权重（简单/普通/困难/特殊）：简单越来越少
 const Q_TIER_W := [
@@ -3668,6 +3683,11 @@ func _q_grant(d: Dictionary) -> String:
 	if int(d.get("tgear", 0)) > 0:
 		for ti in int(d["tgear"]):
 			_equip_add(_gen_gear(true, true))
+	# v15：进化符当奖励（特殊事件那条来路）＋ 记一次"进化任务通关"
+	if int(d.get("evotask", 0)) > 0:
+		_evo_task_done += int(d["evotask"])
+	if int(d.get("evo", 0)) > 0:
+		_evo_token_add(int(d["evo"]), '特殊事件·破茧')
 
 	if int(d.get("gear", 0)) > 0:
 		for gi in int(d["gear"]):
@@ -3817,6 +3837,10 @@ func _q_instant(q: Dictionary) -> void:
 			else:
 				_note("【事件·特殊】赌局　押 100 → 输了，钱进庄家口袋", 4.0)
 				Audio.sfx("fall_down", -6.0)
+		# v15：破茧 —— 给进化符，并把"升极品"那道门槛消掉一次
+		"pojian":
+			_q_grant(q)
+			_note("【事件·特殊】破茧　得 1 个进化符 ＋ 消掉一次进化门槛 —— 去伙伴页点［进化］", 5.0)
 		_:
 			pass
 
@@ -4040,8 +4064,84 @@ var _mate_star := {}                        # id → 1..5（存 meta）
 const MATE_STAR_MAX := 5
 const MATE_STAR_PRICE := 600                # 升到第 n 星要 600 × n
 
+# ============================================================
+# v15 伙伴进化（用户口径，几轮定稿）：
+#   · 「绝品系列伙伴都是**进化或者特殊事件**而来」→ 绝品不再从招募池随机出
+#   · 「从下品一步步到绝品线路太长 → 做成道具类型，什么品质的伙伴用就直接升阶」
+#     → 按**要升到哪一档**收材料（道具制），不看品质差几档
+#   · 「中间设一点障碍：这次进化需要进化符和什么进化卡，或完成什么进化任务」
+#     → 升中品：进化符×1　升上品：进化符×2
+#        升极品：进化符×3 ＋ 通关 1 次【破茧】进化任务
+#        升绝品：进化符×4 ＋ 破茧·终×1
+#   · 「这种道具定义为宝物吧」→ 进化符与破茧·终都进**宝物池**，走宝物三选一
+# ============================================================
+const QUALITY_LADDER: Array = ['下品', '中品', '上品', '极品', '绝品']
+const MATE_EVO_GROW := 0.25                 # 每进化一档：成长继承 +25%（与★乘算）
+const MATE_EVO_POWER := 0.25                # 每进化一档：战场技能威力 +25%（与★乘算）
+const EVO_COST_TOKEN: Array = [1, 2, 3, 4]  # 升到 中/上/极/绝 各要几张进化符
+const EVO_NEED_TASK: Array = [false, false, true, false]
+const EVO_NEED_CARD: Array = [false, false, false, true]
+var _mate_evo := {}                         # id → 已进化档数（存 meta）
+var _evo_token := 0                         # 进化符（本局拿到的进化机会；宝物给的）
+var _evo_card := 0                          # 破茧·终（稀有宝物，极品→绝品的钥匙）
+var _evo_task_done := 0                     # 本局通关过几次【破茧】进化任务
+
 func _mate_star_of(id: String) -> int:
 	return clampi(int(_mate_star.get(id, 1)), 1, MATE_STAR_MAX)
+
+# —— 进化：品质、名字、成长、材料 ——
+func _mate_base_q(id: String) -> int:
+	var info: Dictionary = _field.PARTNER_INFO.get(id, {})
+	return QUALITY_LADDER.find(str(info.get('quality', '下品')))
+
+func _mate_evo_of(id: String) -> int:
+	return maxi(0, int(_mate_evo.get(id, 0)))
+
+# 实际品质 ＝ 基准档 ＋ 已进化档数（封顶绝品）
+func _mate_q_of(id: String) -> String:
+	var b := _mate_base_q(id) + _mate_evo_of(id)
+	return str(QUALITY_LADDER[clampi(b, 0, QUALITY_LADDER.size() - 1)])
+
+func _mate_can_evo(id: String) -> bool:
+	return _mate_base_q(id) + _mate_evo_of(id) < QUALITY_LADDER.size() - 1
+
+# 名字：进化过的带后缀，一眼看得出是养上去的
+func _mate_name_of(id: String) -> String:
+	var info: Dictionary = _field.PARTNER_INFO.get(id, {})
+	var nm := str(info.get('name', id))
+	var e := _mate_evo_of(id)
+	if e <= 0:
+		return nm
+	if e <= 1:
+		return nm + '·进化'
+	return nm + '·进化' + str(e)
+
+# 往上一档要什么（界面直接显示这句）
+func _evo_cost_cn(id: String) -> String:
+	var step := clampi(_mate_base_q(id) + _mate_evo_of(id), 0, 3)
+	var parts: Array = []
+	parts.append('进化符 ×' + str(int(EVO_COST_TOKEN[step])))
+	if bool(EVO_NEED_TASK[step]):
+		parts.append('通关 1 次【破茧】进化任务')
+	if bool(EVO_NEED_CARD[step]):
+		parts.append('破茧·终 ×1')
+	return '、'.join(PackedStringArray(parts))
+
+# 差什么（空了就是够了）
+func _evo_ready(id: String) -> bool:
+	return _evo_lack(id) == ''
+
+func _evo_lack(id: String) -> String:
+	var step := clampi(_mate_base_q(id) + _mate_evo_of(id), 0, 3)
+	var lack: Array = []
+	var need_t := int(EVO_COST_TOKEN[step])
+	if _evo_token < need_t:
+		lack.append('进化符还差 ' + str(need_t - _evo_token) + ' 张')
+	if bool(EVO_NEED_TASK[step]) and _evo_task_done <= 0:
+		lack.append('还没通关【破茧】进化任务')
+	if bool(EVO_NEED_CARD[step]) and _evo_card <= 0:
+		lack.append('缺「破茧·终」')
+	return '；'.join(PackedStringArray(lack))
 
 # v14s 开局出战（用户："存档里初始队员出战 是替换原本作为主角的角色"）：
 #   存 meta（跨局）。选了谁，新的一局就**由他当主角**——
@@ -4108,7 +4208,10 @@ func _mate_star_cn(id: String) -> String:
 	return "★".repeat(st) + "☆".repeat(MATE_STAR_MAX - st)
 
 func _mate_grow_mul(id: String) -> float:
-	return 1.0 + 0.03 * float(_mate_star_of(id) - 1)      # ★1＝×1.00 · ★5＝×1.12
+	# ★ 与进化**乘算**（v15）：★1+无进化＝1.00；★5（+12%）且进化 2 档（+50%）＝1.68
+	var st := 1.0 + 0.03 * float(_mate_star_of(id) - 1)
+	var ev := 1.0 + MATE_EVO_GROW * float(_mate_evo_of(id))
+	return st * ev
 
 func _pet_star_of(kind: String) -> int:
 	return clampi(int(_pet_star.get(kind, 0)), 0, PET_STAR_MAX)
@@ -4635,6 +4738,41 @@ func _fill_save(p: Control, y: float, sz: Vector2) -> float:
 		ly += 100.0
 	return ly + 8.0
 
+# v15：进化 —— 按「要升到哪一档」收材料（道具制）
+func _mate_evolve(id: String) -> void:
+	var nm := _mate_name_of(id)
+	if not bool((_field.partners[id] as Dictionary)['owned']):
+		_hint.text = '「' + nm + '」还没入队（要先招募到才能进化）'
+		return
+	if not _mate_can_evo(id):
+		_hint.text = '「' + nm + '」已经是绝品了（到顶）'
+		return
+	if not _evo_ready(id):
+		_hint.text = '还差：' + _evo_lack(id) + '（要：' + _evo_cost_cn(id) + '）'
+		return
+	# 扣材料
+	var step := clampi(_mate_base_q(id) + _mate_evo_of(id), 0, 3)
+	_evo_token -= int(EVO_COST_TOKEN[step])
+	if bool(EVO_NEED_TASK[step]):
+		_evo_task_done -= 1
+	if bool(EVO_NEED_CARD[step]):
+		_evo_card -= 1
+	_mate_evo[id] = _mate_evo_of(id) + 1
+	_ach_save()
+	_mate_grant(id)                       # 成长立刻并进继承（跟招募一个口径）
+	_sync_battle_stats()
+	Audio.sfx('levelup', -2.0)
+	_note('进化！「' + nm + '」→ ' + _mate_q_of(id) + '　成长继承 ×' + str(snappedf(_mate_grow_mul(id), 0.01))
+		+ ' · 技能威力 +' + str(25 * _mate_evo_of(id)) + '%', 3.5)
+	if _popup_kind == '角色':
+		_open_large('角色')
+
+# 进化符：来自宝物【进化符】/【破茧·终】/ 特殊事件
+func _evo_token_add(n: int, why: String) -> void:
+	_evo_token += n
+	_note('进化符 +' + str(n) + '（' + why + '）—— 去伙伴页点［进化］', 3.5)
+	Audio.sfx('chest', -3.0)
+
 # v14w：名声那一段（从 _fill_save 拆出来，便于调顺序）
 func _fill_fame_section(p: Control, ly0: float) -> float:
 	var ly := ly0
@@ -4759,7 +4897,7 @@ func _fill_mate_star_section(p: Control, ly0: float) -> float:
 		mnl.size = Vector2(174, 30)      # v14y：x=196 起是两颗按钮，左边文字不许越界（截图抓到压字）
 		mnl.add_theme_font_size_override("font_size", 21)
 		mnl.add_theme_color_override("font_color", INK)
-		mnl.text = str(minfo["name"]) + "【" + str(minfo["quality"]) + "】"
+		mnl.text = _mate_name_of(mpid) + "【" + _mate_q_of(mpid) + "】"
 		mrow.add_child(mnl)
 		var msn := Label.new()
 		msn.position = Vector2(14, 32)
@@ -4921,6 +5059,13 @@ func _ach_load() -> void:
 		if st3 > 1:
 			_mate_star[pid3] = clampi(st3, 1, MATE_STAR_MAX)
 	_mate_start = str(cf.get_value("misc", "mate_start", ""))
+	# v15：破茧·终 是跨局道具；进化档数也存 meta
+	_evo_card = int(cf.get_value("misc", "evo_card", 0))
+	for pe_v in _field.PARTNER_INFO.keys():
+		var peid := str(pe_v)
+		var pev := int(cf.get_value("mateevo", peid, 0))
+		if pev > 0:
+			_mate_evo[peid] = pev
 	_fame = int(cf.get_value("fame", "total", 0))
 	for fu_v in FAME_UNLOCKS:
 		var fid := str((fu_v as Dictionary)["id"])
@@ -4944,6 +5089,9 @@ func _ach_save() -> void:
 	for pk3 in _mate_star.keys():
 		cf.set_value("matestar", str(pk3), int(_mate_star[pk3]))
 	cf.set_value("misc", "mate_start", _mate_start)
+	cf.set_value("misc", "evo_card", int(_evo_card))
+	for pe2 in _mate_evo.keys():
+		cf.set_value("mateevo", str(pe2), int(_mate_evo[pe2]))
 	cf.set_value("fame", "total", int(_fame))
 	for fu2 in _fame_own.keys():
 		cf.set_value("fame", str(fu2), true)
@@ -5264,6 +5412,9 @@ func _restart_run() -> void:
 	_equip_q = ["良品", "良品", "", "", "", ""]
 	_equip_stat = [{}, {}, {}, {}, {}, {}]
 	_bm_eaten.clear()
+	# v15：进化符是本局拿到的机会，每局清零；破茧·终 跨局保留
+	_evo_token = 0
+	_evo_task_done = 0
 	_bm_atk = 0
 	_bm_hp = 0
 	_trea_choices.clear()
@@ -5933,6 +6084,7 @@ func _sync_battle_stats() -> void:
 	for pid_s in _field.partners.keys():
 		var pd_s: Dictionary = _field.partners[pid_s]
 		pd_s["star"] = _mate_star_of(str(pid_s))
+		pd_s["evo"] = _mate_evo_of(str(pid_s))     # v15：进化档数（战场威力 +25%/档）
 	# v14d：宠物的攻击方式（咬人那一套参数）
 	var pcfg: Dictionary = _pet_info(_pet_kind).get("cfg", {})
 	_field.set_pet_cfg({
@@ -7107,7 +7259,7 @@ func _fill_mates(p: Control, y: float, sz: Vector2) -> float:
 		# v4t：品质一眼分档——绝品（赤金）> 极品（金）> 上品（紫）> 中品（青）> 下品（灰）
 		var qcol := Color(INK.r, INK.g, INK.b, 0.35)
 		var qw := 2
-		match str(info["quality"]):
+		match _mate_q_of(pid):
 			"绝品":
 				qcol = Color(0.86, 0.44, 0.24, 0.9)
 				qw = 3
@@ -7133,7 +7285,7 @@ func _fill_mates(p: Control, y: float, sz: Vector2) -> float:
 		nm.size = Vector2(420, 42)
 		nm.add_theme_font_size_override("font_size", 26)
 		nm.add_theme_color_override("font_color", INK)
-		nm.text = str(info["name"]) + "　【" + str(info["quality"]) + "】 " + _mate_star_cn(pid) \
+		nm.text = _mate_name_of(pid) + "　【" + _mate_q_of(pid) + "】 " + _mate_star_cn(pid) \
 			+ "　技能「" + str(info["skill"]) + "」"
 		box.add_child(nm)
 		var live := Label.new()
@@ -7197,7 +7349,32 @@ func _fill_mates(p: Control, y: float, sz: Vector2) -> float:
 			parts.append(nm2 + " " + str(_field.skill_lv(str(pk["id"]))))
 		lv.text = ("档位：" + "／".join(PackedStringArray(parts))) if parts.size() > 0 else "档位：还没强化过"
 		lv.text += "　★加成：威力 +" + str(12 * (_mate_star_of(pid) - 1)) + "% · 冷却 −" + str(5 * (_mate_star_of(pid) - 1)) + "%"
+		# v15：进化那一条也写在档位行上（跟★同口径）
+		var mev := _mate_evo_of(pid)
+		lv.text += "　进化：" + str(mev) + " 档（威力 +" + str(25 * mev) + "% · 成长 +" + str(25 * mev) + "%）"
 		box.add_child(lv)
+		# v15：［进化］按钮 —— 材料不够也亮着，点一下会告诉你差什么
+		if bool((_field.partners[pid] as Dictionary)["owned"]):
+			if _mate_can_evo(pid):
+				var ebtn := _pbtn(box, "进化（符 " + str(_evo_token) + "）", Vector2(452, 158), Vector2(174, 48), 18,
+					_evo_ready(pid), _mate_evolve.bind(pid))
+				var enl := Label.new()
+				enl.position = Vector2(452, 130)
+				enl.size = Vector2(174, 26)
+				enl.add_theme_font_size_override("font_size", 17)
+				enl.add_theme_color_override("font_color", SEAL)
+				enl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+				enl.text = "→ " + str(QUALITY_LADDER[clampi(_mate_base_q(pid) + mev + 1, 0, 4)]) + "　" + _evo_cost_cn(pid)
+				box.add_child(enl)
+			else:
+				var edone := Label.new()
+				edone.position = Vector2(452, 166)
+				edone.size = Vector2(174, 34)
+				edone.add_theme_font_size_override("font_size", 19)
+				edone.add_theme_color_override("font_color", GOLD)
+				edone.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+				edone.text = "已到绝品"
+				box.add_child(edone)
 		ly += 222.0
 	var tip := Label.new()
 	tip.position = Vector2(28, ly)
