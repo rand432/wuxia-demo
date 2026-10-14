@@ -635,14 +635,16 @@ func _process(delta: float) -> void:
 	# v13e P4：牢车挨打的闪白
 	if not guard.is_empty():
 		guard["flash"] = maxf(0.0, float(guard.get("flash", 0.0)) - delta)
-	# 宠物：跟在主角左后侧一点，也会自己上去咬
+	# 宠物：跟在主角左后侧一点，**咬主角正在咬的那只**
+	# v15z（用户："宠物不动了 可以改成主角攻击谁他就攻击谁"）：
+	#   上一步把宠物的仇恨范围也收到 90，它就只跟着主人站位、几乎不出手了（太被动）。
+	#   现在改成**跟随主角的目标**：主人打谁它打谁——主人等怪过来，它就在旁边一起咬。
 	var pet_home := hero_pos + Vector2(-92.0, 26.0)
 	if intro_wait > 0.0:
 		pass                                    # 开场同样陪着站
-	elif not target.is_empty() and pet_pos.distance_to(tpos) <= PET_AGGRO:
-		# v15y（用户："宠物也是"）：跟主角同一条口径 —— **怪离得远就不追**，
-		#   回主人身边（左后侧）待命，等怪自己走下来。
-		#   原来它会一路追着目标跑到最上面，看着就是"宠物也一直往前冲"。
+	elif not target.is_empty():
+		# v15z：**主角攻击谁，宠物就攻击谁**（不再自己找最近的）——
+		#   `tpos` 就是主角当前的目标位置，这里直接用同一个，不设仇恨范围。
 		var pd0 := pet_pos.distance_to(tpos)
 		if pd0 > PET_REACH + 12.0:
 			var st_p := minf(_chase_spd(PET_SPD, PET_SPD_FAR, pd0) * delta, pd0 - PET_REACH)
