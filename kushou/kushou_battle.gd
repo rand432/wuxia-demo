@@ -2715,8 +2715,8 @@ const PARTNER_INFO := {
 	"jinjiaxianwei": {"name": "金甲校尉", "quality": "上品", "skill": "拒马", "dtype": "土系（护盾）", "grow": {"arm": 4, "agi": 1, "wit": 2},
 	"desc": "持续 8 秒内受到伤害 −30%，并把伤害的一部分反弹给打你的人（土系）",
 	"mp0": 130.0, "cd0": 22.0, "dur0": 8.0},
-	"huogong": {"name": "火工道人", "quality": "上品", "skill": "三昧真火", "dtype": "火系（持续）", "grow": {"arm": 2, "agi": 2, "wit": 3},
-	"desc": "每 11 秒点燃最近的 2 名敌人（火系持续燃烧，每秒跳一次，持续 5 秒）",
+	"huogong": {"name": "火工道人", "quality": "上品", "skill": "火鸦", "dtype": "召唤", "grow": {"arm": 2, "agi": 2, "wit": 3},
+	"desc": "每 11 秒放 **2 只火鸦**替你作战（上品召唤 · 会飞、打得快）",
 	"mp0": 150.0, "cd0": 11.0, "dur0": 0.0},
 	"qinchi": {"name": "琴痴", "quality": "上品", "skill": "乱神曲", "dtype": "无伤害", "grow": {"arm": 0, "agi": 2, "wit": 5},
 	"desc": "每 16 秒弹一曲：**最近的 5 名**敌人定身 1.2 秒（控制型 · 强化可加时长）",
@@ -2742,14 +2742,14 @@ const PARTNER_INFO := {
 	"pozhen": {"name": "破阵刀客", "quality": "下品", "skill": "破甲", "dtype": "物理", "grow": {"arm": 2, "agi": 2, "wit": 0},
 		"desc": "每 14 秒一刀：物理伤害并让目标护甲 −20%（持续 5 秒 · 强化可减冷却/加伤）",
 		"mp0": 0.0, "cd0": 14, "dur0": 0.0},
-	"busheren": {"name": "捕蛇人", "quality": "下品", "skill": "蛇咬", "dtype": "木系", "grow": {"arm": 1, "agi": 3, "wit": 1},
-		"desc": "每 14 秒放蛇咬最近敌人：木系伤害，目标中毒时伤害翻倍（强化可减冷却/加伤）",
+	"busheren": {"name": "捕蛇人", "quality": "下品", "skill": "养蛇", "dtype": "召唤", "grow": {"arm": 1, "agi": 3, "wit": 1},
+		"desc": "每 14 秒放一条**蛇**替你作战（下品召唤 · 单体）",
 		"mp0": 90.0, "cd0": 14, "dur0": 0.0},
 	"gengfu": {"name": "更夫", "quality": "下品", "skill": "报更", "dtype": "无伤害", "grow": {"arm": 1, "agi": 2, "wit": 2},
 		"desc": "每 14 秒敲梆子：最近 2 名敌人致盲（命中降低，持续 5 秒）",
 		"mp0": 90.0, "cd0": 14.0, "dur0": 0.0},
-	"gushi": {"name": "蛊师", "quality": "中品", "skill": "蛊毒", "dtype": "木系（持续）", "grow": {"arm": 1, "agi": 2, "wit": 4},
-		"desc": "每 13 秒撒蛊：给最近 2 名敌人挂毒",
+	"gushi": {"name": "蛊师", "quality": "中品", "skill": "蛊虫群", "dtype": "召唤", "grow": {"arm": 1, "agi": 2, "wit": 4},
+		"desc": "每 13 秒放 **3 只蛊虫**替你作战（数量多、单个弱，铺场型）",
 		"mp0": 150.0, "cd0": 13.0, "dur0": 0.0},
 	"kuaidaoshou": {"name": "快刀手", "quality": "中品", "skill": "快刀", "dtype": "物理", "grow": {"arm": 1, "agi": 4, "wit": 1},
 		"desc": "每 12 秒连砍三刀（物理，三下各自判定 · 强化可加伤）",
@@ -2968,10 +2968,31 @@ func cn_life() -> float:
 func cn_hp() -> float:
 	return maxf(30.0, float(hero["hp_max"]) * cn_inherit() * 1.2)
 
+# v17j（用户："新做一些召唤系"）：**通用召唤**——蛊虫/蛇/火鸦都走这个
+#   参数：名字、颜色、体型倍率、血量/存在时长倍率、普攻间隔、技能间隔
+#   （蛟龙仍是单独那条 _summon_dragon，参数最猛）
+func summon_minion(nm: String, col: Color, sc: float, hp_m: float, life_m: float,
+	atk_cd: float, skill_cd: float, max_n: int) -> void:
+	var cnt := 0
+	for m_v in _minions:
+		if str((m_v as Dictionary).get("kind", "")) == nm:
+			cnt += 1
+	if cnt >= max_n or _minions.size() >= MINION_MAX:
+		return
+	_minions.append({"kind": nm, "col": col, "sc": sc,
+		"pos": hero_pos + Vector2(randf_range(-70.0, 70.0), randf_range(-20.0, 30.0)),
+		"tgt": {}, "atk_cd": atk_cd, "skill_cd": skill_cd, "born": _t,
+		"hp": cn_hp() * hp_m, "hp_max": cn_hp() * hp_m,
+		"life": cn_life() * life_m, "life_max": cn_life() * life_m, "dying": 0.0})
+	_push_float(hero_pos.x, hero_pos.y - 70.0, nm + "！", col.lightened(0.3), true)
+	_bursts.append({"x": hero_pos.x, "y": hero_pos.y - 10.0, "t": 0.0, "col": col, "scale": sc * 1.2})
+	Audio.sfx("bell", -5.0, 0.9)
+
 func _summon_dragon() -> void:
 	if _minions.size() >= MINION_MAX:
 		return
-	_minions.append({"pos": hero_pos + Vector2(randf_range(-70.0, 70.0), randf_range(-20.0, 30.0)),
+	_minions.append({"kind": "蛟龙", "col": Color(0.42, 0.76, 0.96), "sc": 1.0,
+		"pos": hero_pos + Vector2(randf_range(-70.0, 70.0), randf_range(-20.0, 30.0)),
 		"tgt": {}, "atk_cd": 0.6, "skill_cd": 20.0, "born": _t,
 		"hp": cn_hp(), "hp_max": cn_hp(), "life": cn_life(), "life_max": cn_life(), "dying": 0.0})
 	_push_float(hero_pos.x, hero_pos.y - 70.0, "雾海龙王！", Color(0.60, 0.88, 1.0), true)
@@ -3076,15 +3097,21 @@ func _draw_minions(shk: Vector2) -> void:
 			face = (Vector2(float(tg["x"]), float(tg["y"])) - (m["pos"] as Vector2)).normalized()
 		var side := face.orthogonal()
 		var fade := clampf(float(m.get("dying", 0.0)) / 0.45, 0.0, 1.0)
+		# v17j（用户："新做一些召唤系"）：⚠ 原来这一整段是**蛟龙专用**的（青色写死）。
+		#   现在按召唤物的 col / sc 上色上体型，同一套系统就能放不同召唤物
+		#   （蛊虫／蛇／火鸦都用这里的形状，只是颜色和大小不同）。
+		var mcol: Color = m.get("col", Color(0.42, 0.76, 0.96))
+		var msc := float(m.get("sc", 1.0))
 		for k in 6:
 			var f2 := float(k) / 5.0
-			var seg := c - face * (10.0 + 16.0 * float(k)) + side * sin(_t * 6.0 + float(k) * 0.8) * 7.0
-			draw_circle(seg, 12.0 - 1.4 * float(k), Color(0.30, 0.62, 0.86, (0.95 - 0.08 * f2) * (1.0 if fade <= 0.0 else fade)))
-		draw_circle(c, 13.0, Color(0.42, 0.76, 0.96, 1.0 if fade <= 0.0 else fade))
-		draw_line(c + face * 12.0, c + face * 22.0, Color(0.90, 0.96, 1.0), 3.0)
-		draw_line(c - side * 8.0, c - side * 16.0 - face * 6.0, Color(0.72, 0.90, 1.0), 3.0)
-		draw_line(c + side * 8.0, c + side * 16.0 - face * 6.0, Color(0.72, 0.90, 1.0), 3.0)
-		draw_circle(c + face * 6.0 - side * 4.0, 2.2, Color(0.10, 0.16, 0.22))
+			var seg := c - face * (10.0 + 16.0 * float(k)) * msc + side * sin(_t * 6.0 + float(k) * 0.8) * 7.0 * msc
+			draw_circle(seg, (12.0 - 1.4 * float(k)) * msc, Color(mcol.r * 0.7, mcol.g * 0.82, mcol.b * 0.9,
+				(0.95 - 0.08 * f2) * (1.0 if fade <= 0.0 else fade)))
+		draw_circle(c, 13.0 * msc, Color(mcol.r, mcol.g, mcol.b, 1.0 if fade <= 0.0 else fade))
+		draw_line(c + face * 12.0 * msc, c + face * 22.0 * msc, mcol.lightened(0.45), 3.0)
+		draw_line(c - side * 8.0 * msc, c - side * 16.0 * msc - face * 6.0 * msc, mcol.lightened(0.3), 3.0)
+		draw_line(c + side * 8.0 * msc, c + side * 16.0 * msc - face * 6.0 * msc, mcol.lightened(0.3), 3.0)
+		draw_circle(c + face * 6.0 * msc - side * 4.0 * msc, 2.2 * msc, Color(0.10, 0.16, 0.22))
 		# 蛟龙的血条（青）＋ 存在时间条（白），让它"会被打掉/会到点"一眼可见
 		var hpr := clampf(float(m.get("hp", 1.0)) / maxf(1.0, float(m.get("hp_max", 1.0))), 0.0, 1.0)
 		var lfr := clampf(float(m.get("life", 1.0)) / maxf(1.0, float(m.get("life_max", 1.0))), 0.0, 1.0)
@@ -3282,8 +3309,9 @@ func _cast_partner(id: String) -> void:
 			_cast_keshui()
 		"yaopozi":
 			_cast_jinzhen()
+		# v17j：火工道人改成**召唤系**——放 2 只火鸦（原来只是"点燃 2 名敌人"）
 		"huogong":
-			_cast_sanmei()
+			summon_minion("火鸦", Color(0.96, 0.52, 0.22), 0.85, 0.9, 1.1, 0.8, 7.0, 2)
 		"qinchi":
 			_cast_luanshen()
 		"baiqihouren":
@@ -3294,12 +3322,16 @@ func _cast_partner(id: String) -> void:
 			_cast_pichai()
 		"pozhen":
 			_cast_pojia()
+		# v17j（用户："新做一些召唤系"）：捕蛇人改成**召唤系**——放一条蛇
+		#   （原来只是"咬一口"，而且"目标中毒才翻倍"要别人先上毒，单上就是半残）
 		"busheren":
-			_cast_sheyao()
+			summon_minion("蛇", Color(0.34, 0.66, 0.30), 0.78, 0.8, 1.0, 1.1, 8.0, 1)
 		"gengfu":
 			_cast_baogeng()
+		# v17j（用户："新做一些召唤系"）：蛊师改成**召唤系**——一次放 3 只蛊虫
+		#   （原来只是"给 2 名敌人挂毒"，跟病书生/火工道人重复）
 		"gushi":
-			_cast_gudu()
+			summon_minion("蛊虫", Color(0.46, 0.82, 0.36), 0.62, 0.5, 0.8, 0.9, 6.0, 3)
 		"kuaidaoshou":
 			_cast_kuaidao()
 		"chuangong":
