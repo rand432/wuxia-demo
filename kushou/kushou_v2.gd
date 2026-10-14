@@ -133,19 +133,10 @@ func _fame_buy(id: String) -> void:
 			_open_large("存档")
 		return
 
-# v14w：把"上一局发过的成就加成"收回 —— 成就的设定是"**每局开局发一次**"，
-#   但 _extra/_attr 都是跨局不清的，而 _apply_achievements() 每局都往里加：
-#   于是臂力 +5 变 +10、+15……（探针 k961 抓到：气血上限 358→412→466→520→574，每局 +54）
-#   这一条跟名声那条是**同一个坑**（"跨局不清的容器 + 每局叠加"）。
-const ACH_EXTRA_CH: Array = ["cut_all_bonus", "dmg_all", "yh_cd_mul"]
-
+# v14z：这个"减法收回"整个删掉了 —— 它是漏掉进化那 +4 的根源（只收自己发的那几笔，
+#   别的来源往同一个容器里写的收不到）。现在改成：**开局 _extra/_attr 直接重置，跨局三源当场重发**。
+#   这里只留一个空壳，防止旧调用点漏改。
 func _ach_rollback() -> void:
-	_attr["arm"] = int(_attr["arm"]) - int(_ach_sum.get("arm", 0))
-	_attr["agi"] = int(_attr["agi"]) - int(_ach_sum.get("agi", 0))
-	_attr["wit"] = int(_attr["wit"]) - int(_ach_sum.get("wit", 0))
-	_extra["hp_flat"] = float(_extra.get("hp_flat", 0.0)) - float(_ach_sum.get("hp_flat", 0.0))
-	for k2 in ACH_EXTRA_CH:
-		_extra[k2] = float(_extra.get(k2, 0.0)) - float(_ach_sum.get(k2, 0.0))
 	_ach_sum.clear()
 
 # 开局把名声解锁发下去（在 _restart_run 里、_sync_battle_stats 之前调）
@@ -666,8 +657,7 @@ func _ready() -> void:
 	visible = _want_open
 	# v13w：读成就档 ＋ 首次开局就把已解锁的加成发下去
 	_ach_load()
-	_apply_achievements()
-	_apply_pet_bonus()                   # v14d：宠物被动也发一次
+	# v14z：这里原来就发了一次成就/宠物 —— 但 _extra 会在下面被重置，白写；挪到重置之后
 	_sync_avatar()
 
 func open() -> void:
@@ -4397,14 +4387,8 @@ func _pet_info(kind: String) -> Dictionary:
 	return PETS[0]
 
 func _apply_pet_bonus() -> void:
-	# v14w：宠物被动也是"每局开局发一次"，而 _attr 跨局不清 —— 不收回的话
-	#   白狐的"全属性 +3"每局都会再叠一次（探针 k963 抓到：3 → 6 → 9 → 12）。
-	#   跟成就同一个坑，同一种解法：先把上一局发的那份减回去。
-	var prev_pa := int(_extra.get("pet_attr_sum", 0.0))
-	if prev_pa != 0:
-		for a0 in ["arm", "agi", "wit"]:
-			_attr[a0] = int(_attr[a0]) - prev_pa
-		_extra["pet_attr_sum"] = 0.0
+	# v14z：属性不用在这里收回了 —— 开局 _restart_run 直接把 _attr 归零，这个函数负责"重新发"。
+	#   （原来靠"减回上一局那份"，漏了进化那一份就出错；见 _restart_run 的说明）
 	var info := _pet_info(_pet_kind)
 	var e: Dictionary = info.get("eff", {})
 	for k in e.keys():
@@ -4414,7 +4398,7 @@ func _apply_pet_bonus() -> void:
 			# ⚠ wpn_* 会被 _wpn_sync 覆盖（探针抓到），直接加属性点
 			for a in ["arm", "agi", "wit"]:
 				_attr[a] = int(_attr[a]) + int(v)
-			_extra["pet_attr_sum"] = float(int(v))
+
 		elif key == "elem_all":
 			for el in ["金系", "木系", "火系", "水系", "土系"]:
 				_extra["dmg_elem"][el] = float(_extra["dmg_elem"].get(el, 0.0)) + v
@@ -5231,7 +5215,11 @@ func _restart_run() -> void:
 	_evo_n = 0                           # v14m：进化是本局的事
 	_evo_mul = 1.0
 	_grow = 3
-	_ach_rollback()                      # v14w：先收回上一局的成就加成（不然每局翻倍地垒）
+	# v14z：三属性**每局从 0 重算** —— 它是被三个「开局发一次」的来源一起写的
+	#   （宠物被动 / 成就 / 进化），而 _attr 自己跨局不清。原来只写了「收回宠物」和「收回成就」，
+	#   漏了进化（用户：每局都是重置的、存档和成就的效果只会加一次 → 探针抓到进化那 +4 永久留下来）。
+	#   与其给每个来源都写一份「收回」，不如归零 ＋ 让三个来源当场重发：只有一个真相。
+	_attr = {"arm": 0, "agi": 0, "wit": 0}
 	_skill_pts = 0
 	_skill_choices.clear()
 	_revive = 1 + int(_extra.get("revive_add", 0.0))       # v13y：不屈卡多给一次浴血
@@ -5241,6 +5229,56 @@ func _restart_run() -> void:
 	_field.reset_run()
 	_field.reset_partners()          # v6b：伙伴退回未入队（招募是这一局的事）
 	_grow_inherit = {"arm": 0, "agi": 0, "wit": 0}
+	# ============================================================
+	# v14z 本局的东西每局清干净（用户：每局都是重置的）
+	#   设计稿口径（困兽_主界面设计稿 §4/§6、属性设计稿 §二十一）：
+	#     · 局内货币清零：文钱、灵晶（防跨局通胀）
+	#     · 卡组/抽卡「重开一局本身就是重新开始，不做跨局保留」→ 十格、已拥有、星级、成型的套 全清
+	#     · 装备/宝物/道具是「这一局打出来的」→ 清
+	#     · 跨局保留的只有：**成长武器**（无限强化那件）· 解锁 · 成就 · 名声 · 星级 · 关卡选择
+	#   ⚠ 之前漏了这一整段：钱、卡、宝物、道具、羁绊原来都跨局留着（探针实测确认）
+	# ============================================================
+	_money = START_MONEY                 # 设计稿：局终清零，防跨局通胀（跟新开 App 同源）
+	_crystal = START_CRYSTAL
+	_money_earned = 0
+	_earned_crystal = 0
+	_run_fame = 0                      # 本局名声先归零；结算时 _fame_settle 会把它加进跨局名声
+	_deck_cards.clear()
+	_card_have.clear()
+	_card_star.clear()
+	_sets_done.clear()
+	_card_kills.clear()
+	_card_time.clear()
+	_evo_cards.clear()
+	_evo_pending = 0
+	_treasures.clear()
+	_treasure_q.clear()
+	_trea_own.clear()
+	_trea_taken.clear()
+	_items.clear()
+	_bonds_locked.clear()
+	_vault.clear()
+	_vault_q.clear()
+	_vault_stat.clear()
+	_equip = ["青锋剑", "铁叶甲", "", "", "", ""]
+	_equip_q = ["良品", "良品", "", "", "", ""]
+	_equip_stat = [{}, {}, {}, {}, {}, {}]
+	_bm_eaten.clear()
+	_bm_atk = 0
+	_bm_hp = 0
+	_trea_choices.clear()
+	# _extra 是「所有加成的大杂烩」：卡/宝物/装备/黑市买的都往里写。它跨局不清 →
+	#   这里先回到默认值（只留默认键），再由**跨局的三个来源**按序重发：名声 → 成就 → 宠物。
+	#   （成长武器那部分由 _wpn_sync 每帧重算，不用管）
+	var keep_fame_atk := float(_extra.get("fame_atk", 0.0))
+	var keep_fame_hp := float(_extra.get("fame_hp", 0.0))
+	_extra = {
+		"lucky": 0.0, "dmg_all": 0.0, "res_elem": {}, "dmg_elem": {}, "dmg_true": 0.0,
+		"cut_all_bonus": 0.0, "aspd_bonus": 0.0, "wave_crystal": 0.0, "chal_cd": 0.0, "chal_spawn": 0.0,
+		"partner_grow": 0.0, "partner_dmg": 0.0, "equip_slot": 0.0, "treasure_slot": 0.0,
+		"start_equip_up": 0.0, "thorns": 0.0, "fame_atk": keep_fame_atk, "fame_hp": keep_fame_hp,
+	}
+	_ach_sum.clear()                  # 账本跟着一起清：_extra 已经干净了，不用再"收回"
 	# v14s：开局出战的那位（存档里设的）——他**就是这一局的主角**
 	var hero_who := _mate_restore()
 	_recruit_opens = 0
@@ -5267,9 +5305,12 @@ func _restart_run() -> void:
 		_field.clear_champion()
 	_sync_battle_stats()
 	# v13w：新的一局开局——把已解锁的成就加成发下去（放最后，免得被上面的重置覆盖）
-	_apply_achievements()
-	_apply_pet_bonus()                   # v14d：宠物被动（换宠物下一局生效）
-	_apply_fame()                        # v14w：名声解锁（开局灵晶/卡/攻/血）
+	# v14z：跨局的三个来源按序重发（_extra 已经在上面重置过，这里发的才算数）
+	_apply_fame()                        # 名声解锁（开局灵晶/带卡/攻+2/血+40）
+	_apply_achievements()                # 成就（永久，每局开局发一次）
+	_apply_pet_bonus()                   # 宠物被动（每局开局发一次）
+	_gear_sync()                         # 六格装备/黑市买的那点属性（本局是空的，重算一遍保证干净）
+	_wpn_sync()                          # 成长武器（跨局的那一件）
 	# v14e：所选关卡——难度倍率 ＋ 波数上限（打满即通关）
 	var st := _stage_info(_stage_sel)
 	_wave_max = int(st["waves"])
