@@ -69,6 +69,10 @@ var _attr_pts := 0        # 属性点（v15k：界面不再给加点的地方，
 var _recruit_btn: Button = null   # v15k（用户：可以招募时主角头像闪动提示）—— 存一份用来做呼吸闪
 var _rec_flash := 0.0             # 上面那个呼吸闪的相位
 var _q_offer := {}                # v15p：掷出来但玩家还没决定接不接的事件（挂在这里）
+# v16b（用户："为什么宝物还是可以选那么多次"）：⚠ 原来 _trea_take 拿完会 _trea_choices.clear()，
+#   而三选一页见到"候选为空"就**自动重摇三张** → 于是能**无限拿**。
+#   这个标志＝"这一手已经拿过了"，拿过就不再补新候选（页面显示成"已拿走"）。
+var _trea_pick_used := false
 var _q_badge: Label = null        # 任务钮右上角那个"有事件"的红点
 var _main_attr := "str"   # str＝力量 · agi＝敏捷 · wit＝悟性
 # v6a 成长继承（用户："成长就是三属性了 根据角色不同特性 三属性成长也不同
@@ -300,6 +304,11 @@ func _card_gain(id: String) -> void:
 		Audio.sfx("coin", -10.0)
 		return
 	_card_have[id] = 1
+	# v16c（用户："选卡和选宝物我希望有个动画进包裹 跟文钱那种表现形式 和做不同音效"）：
+	#   抽到卡 → 也走那套"掉一张、飞向卡组钮"的动画（纸音）。
+	#   ⚠ 这里不在战场上（是在抽卡弹窗里），所以位置给个大概：屏幕下方靠左那带，
+	#     落到卡组钮（左下）上。
+	_spawn_drop("card", 1, Vector2(-160.0, 640.0), 1)
 	if cs0.has("evo_next"):
 		# ⚠ 传**套名**（sayi0）不是卡 id（sayi0_0）：_apply_solo_effect 按套名匹配
 		_apply_solo_effect(str(cs0["set"]))  # v10b：杀意到手先给初阶效果
@@ -369,13 +378,11 @@ func _set_check(set_id: String) -> void:
 			_extra["cut_all_bonus"] = float(_extra.get("cut_all_bonus", 0.0)) + 0.06
 		"skill_cd_12":
 			_extra["skill_cd"] = float(_extra.get("skill_cd", 0.0)) + 0.12
-		# v9e 装备卡：装备槽 / 宝物槽 / 开局装备
-		"equip_slot":
-			_extra["equip_slot"] = float(_extra.get("equip_slot", 0.0)) + 1.0
-			_hint.text = "兵器·剑 成型：装备槽 +1"
-		"treasure_slot":
-			_extra["treasure_slot"] = float(_extra.get("treasure_slot", 0.0)) + 1.0
-			_hint.text = "宝器 成型：宝物槽 +1"
+		# v9e 装备卡：开局装备
+		# v16b：⚠ 原来这里还有 "equip_slot"（装备槽 +1）与 "treasure_slot"（宝物槽 +1）两条 ——
+		#   但**游戏里根本没有"装备槽/宝物槽上限"这套**（装备页写死 6 格、宝物不限格），
+		#   所以这两条只是往 _extra 写了个没人读的键，纯废牌。已经把对应卡（兵器·剑/藏锋/宝器）
+		#   从卡池删掉，这两条分派也一并清了。
 		"start_equip_up":
 			_extra["start_equip_up"] = float(_extra.get("start_equip_up", 0.0)) + 1.0
 		"thorns_50":
@@ -1158,14 +1165,10 @@ const CARD_SETS := [
 	{"set": "tianming", "name": "天命", "quality": "绝品", "size": 2, "combo": "幸运一击 +30%", "combo_id": "lucky_20"},
 	# ---- v9e（用户："然后加入装备卡"）：**装备卡**这一类 ----
 	#   单卡给装备向的数值；组合给"装备槽/开局装备"这类**元效果**
-	{"set": "bingqi", "name": "兵器·剑", "quality": "中品", "size": 3, "cat": "装备",
-		"combo": "开局自带一件兵器（装备槽 +1）", "combo_id": "equip_slot"},
 	{"set": "dao", "name": "兵器·刀", "quality": "中品", "size": 2, "cat": "装备",
 		"combo": "攻击 +10%", "combo_id": "atk_all_12"},
 	{"set": "ruanjia", "name": "软甲", "quality": "中品", "size": 2, "cat": "装备",
 		"combo": "全伤害减免 +5%", "combo_id": "cut_all_6"},
-	{"set": "baoqi", "name": "宝器", "quality": "上品", "size": 3, "cat": "装备",
-		"combo": "宝物槽 +1（宝物不限格，这条再送一格）", "combo_id": "treasure_slot"},
 	{"set": "shenbing", "name": "神兵", "quality": "极品", "size": 2, "cat": "装备",
 		"combo": "开局自带一件上品装备", "combo_id": "start_equip_up"},
 	{"set": "huxinjing", "name": "护心镜", "quality": "上品", "size": 2, "cat": "装备",
@@ -1191,7 +1194,9 @@ const CARD_SETS := [
 	{"set": "sayi2", "name": "杀意·极", "quality": "上品", "size": 1, "solo": true, "evo_from": true,
 		"evo_next": "sayi3", "evo_kills": 500, "combo": "杀敌 500 → 杀意·绝", "combo_id": "sayi3"},
 	{"set": "sayi3", "name": "杀意·绝", "quality": "极品", "size": 1, "solo": true, "evo_from": true,
-		"combo": "已是极致：攻击 +40% · 暴击 +15% · 暴伤 +20%", "combo_id": "sayi4"},
+		# v16b：⚠ 原来写"攻击 +40% · 暴击 +15%"——那是**没实现的**数字（combo_id sayi4 是死键）。
+		#   实际生效的是下面这组（在 _apply_solo_effect 的 "sayi3" 里），文案跟着改对。
+		"combo": "已是极致：攻击 +14% · 暴击 +7% · 暴伤 +20%"},
 	# ---- v11d（用户：装备卡三类 × 五用途）①杀怪提升 ②固定特效 ③时间进化 ----
 	# ① 杀怪提升（单卡，复用 evo_kills：到点原地进化）
 	{"set": "yinxue", "name": "饮血刀", "quality": "中品", "size": 1, "solo": true, "cat": "装备",
@@ -1263,7 +1268,6 @@ const CARD_SETS := [
 	{"set": "yuheng", "name": "玉衡", "quality": "极品", "size": 3, "star_cost": [3, 6, 8, 8], "combo": "玉壶冷却 −25%", "combo_id": "yh_cd_25"},
 	{"set": "buqu", "name": "不屈", "quality": "极品", "size": 2, "combo": "浴血免死次数 +1（每局）", "combo_id": "revive_1"},
 	{"set": "chuanjiabao", "name": "传家宝", "quality": "上品", "size": 3, "combo": "开局自带一件上品装备", "combo_id": "start_equip_up"},
-	{"set": "cangfeng", "name": "藏锋", "quality": "极品", "size": 2, "combo": "装备槽 +1", "combo_id": "equip_slot"},
 	# ============================================================
 	# v14a 机制卡（用户："加一些新机制的卡组"）——都带战场新玩法，不是单纯加数值
 	# ============================================================
@@ -2552,7 +2556,8 @@ func _fill_trea_pick(p: Control, y: float, sz: Vector2) -> float:
 	tip.add_theme_color_override("font_color", DIM)
 	tip.text = "点卡面直接拿（三选一）· 刷新只花「宝物刷新次数」"
 	p.add_child(tip)
-	if _trea_choices.is_empty():
+	# ⚠ v16b：只有"还没拿过"才补候选；拿过了就显示已拿走，绝不重摇（否则能无限拿）
+	if _trea_choices.is_empty() and not _trea_pick_used:
 		_trea_roll()
 	var cw := 204.0
 	var ch := 430.0
@@ -2774,7 +2779,13 @@ func _item_use(nm: String) -> void:
 		_:
 			pass
 	_hint.text = "用了「" + nm + "」（剩 " + str(int(_items.get(nm, 0))) + " 个）"
-	Audio.sfx("slash_light", -5.0)
+	# v16c（用户："喝药也有喝药的声音"）：⚠ 原来不管用什么道具都是 slash_light（刀光声），
+	#   喝药听起来像在挥刀。丹药/酒这类改走 drink，符纸/暗器那类保留原来的。
+	#   音效库里本来就有 assets/audio/sfx/drink.ogg，一直没接上。
+	if nm.find("丹") >= 0 or nm.find("酒") >= 0 or nm.find("汤") >= 0 or nm.find("膏") >= 0:
+		Audio.sfx("drink", -4.0)
+	else:
+		Audio.sfx("slash_light", -5.0)
 	_sync_battle_stats()
 	if _popup_kind == "宝物三选一":
 		_open_large("宝物三选一")
@@ -2832,6 +2843,8 @@ const TREA_POOL := [
 ]
 
 func _trea_roll() -> void:
+	# v16b：每次重摇＝开新的一手，把"已拿过"解掉
+	_trea_pick_used = false
 	var out: Array = []
 	var guard := 0
 	while out.size() < 3 and guard < 200:
@@ -2918,6 +2931,7 @@ func _trea_take(i: int) -> void:
 		_hint.text = "宝物到手：" + nm + "　" + str(it["fx"])
 	Audio.sfx("equip", -4.0)
 	_trea_choices.clear()
+	_trea_pick_used = true            # v16b：这一手已经拿过了，别再补候选
 	_sync_battle_stats()
 	if _popup_kind == "宝物三选一":
 		_open_large("宝物三选一")
@@ -5762,6 +5776,7 @@ func _restart_run() -> void:
 	_bm_atk = 0
 	_bm_hp = 0
 	_trea_choices.clear()
+	_trea_pick_used = false           # v16b：新的一局，三选一重新可用
 	# _extra 是「所有加成的大杂烩」：卡/宝物/装备/黑市买的都往里写。它跨局不清 →
 	#   这里先回到默认值（只留默认键），再由**跨局的三个来源**按序重发：名声 → 成就 → 宠物。
 	#   （成长武器那部分由 _wpn_sync 每帧重算，不用管）
@@ -6568,7 +6583,21 @@ func _spawn_drop(kind: String, amount: int, pos: Vector2, max_n: int) -> void:
 			"phase": 0, "t": 0.0, "wait": 0.25 + randf() * 0.35,
 			"amount": amt, "from": Vector2.ZERO, "target": tgt,
 		})
-	Audio.sfx("coin" if kind == "coin" else ("bell" if kind == "crystal" else "chest"), -12.0)
+	# v16c：**每一类各自的声音**（用户点名要"做不同音效"）——
+	#   文钱＝coin · 灵晶＝bell（清脆）· 装备＝equip · 宝物＝chest · 卡＝paper（纸声）
+	match kind:
+		"coin":
+			Audio.sfx("coin", -12.0)
+		"crystal":
+			Audio.sfx("bell", -10.0)
+		"card":
+			Audio.sfx("paper", -9.0)
+		"treasure":
+			Audio.sfx("chest", -7.0)
+		"gear":
+			Audio.sfx("equip", -9.0)
+		_:
+			Audio.sfx("ui_click", -12.0)
 
 # 到手那一下：加账 ＋ 数字跳 ＋ 音效（各类各的）
 func _credit_drop(kind: String, n: int) -> void:
@@ -6604,6 +6633,11 @@ func _credit_drop(kind: String, n: int) -> void:
 			_treasure_q.append("上品")
 			Audio.sfx("chest", -8.0)
 			_hint.text = "宝物进包了（宝物不限格）"
+		"card":
+			# v16c：卡飞到卡组钮那一下——卡本身在 _card_gain 里已经进格了，
+			#   这里只负责"到手"的反馈（否则粒子飞完静默消失）。
+			Audio.sfx("paper", -6.0)
+			_crystal_pop = 0.18
 
 # 各类掉落的"归宿"：文钱→右上钱图标 · 灵晶→右上晶图标 · 装备/宝物→右下［装备·宝物］钮
 func _drop_target(kind: String) -> Vector2:
@@ -6611,6 +6645,9 @@ func _drop_target(kind: String) -> Vector2:
 		return Vector2(42.0, 130.0)
 	if kind == "crystal":
 		return Vector2(278.0, 130.0)
+	# v16c：卡 → 左下那颗［卡组］钮；宝物 → 右下［装备·宝物］钮
+	if kind == "card":
+		return Vector2(88.0, 690.0)
 	return Vector2(540.0, 1211.0)
 
 func _update_coins(delta: float) -> void:
@@ -6685,6 +6722,7 @@ func _on_chal_drop(kind_i: int, at: Vector2) -> void:
 			#   ⚠ 原来是**三重给**：刷新 +1、开三选一、**还直接爆一件**（太肥）。
 			#   现在只给"一次三选一"——刷新那 1 次也去掉（不然等于白送一次重抽）。
 			_trea_choices.clear()
+			_trea_roll()                  # v16b：开新的一手（会解掉"已拿过"）
 			_open_large("宝物三选一")
 			_hint.text = "宝箱大怪倒了：开一次宝物三选一（挑一件）"
 			Audio.sfx("chest", -3.0)
