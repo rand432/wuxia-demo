@@ -842,7 +842,9 @@ func _build_hero_bar() -> void:
 	_wpn_quick = _mk_btn("强化", Vector2(528, 988), Vector2(168, 76), 25, true, _wpn_quick_tap)
 	# v16r（用户："你怎么把血条旁边玉壶删了…把先前玉壶按钮加上 点击是使用 长按是自动"）：
 	#   加回来，并且**点击＝喝 / 长按＝切自动**（跟黑市下面那颗同一套操作）。
-	_yh_quick = _mk_btn("玉壶", Vector2(528, 1072), Vector2(168, 78), 24, false, func(): pass)
+	# v16u（用户："玉壶按钮加上长按自动的提示"）：按钮上直接写清两种操作
+	_yh_quick = _mk_btn("玉壶", Vector2(528, 1072), Vector2(168, 78), 19, false, func(): pass)
+	_bind_yh_button(_yh_quick)
 	_bind_yh_button(_yh_quick)
 	# v16o（用户："上面那个玉壶按钮可以去掉了"）：已去掉底栏那颗玉壶钮。
 	#   玉壶仍能从［装备·宝物］页里用（那里本来就有大按钮 ＋ 自动开关）。
@@ -6507,7 +6509,14 @@ func _process(delta: float) -> void:
 			_wpn_quick.text = "进阶三选一"
 		else:
 			_wpn_quick.text = "强化 " + str(_wpn_cost())
-	# v16o：玉壶钮已从底栏移除，不再刷新它的文字
+	# v16u（用户："玉壶按钮加上长按自动的提示"）：
+	#   按钮上两行：第一行＝就绪/冷却，第二行＝当前自动状态 ＋「长按切」提示。
+	if _yh_quick != null and is_instance_valid(_yh_quick):
+		var line1 := "玉壶 就绪" if _yh_cd <= 0.0 else ("玉壶 " + str(int(ceil(_yh_cd))) + "s")
+		var line2 := ("自动：开" if _yh_auto else "自动：关") + "　长按切"
+		_yh_quick.text = line1 + "\n" + line2
+		# 就绪时按钮亮一点（一眼看出能喝），冷却时压暗
+		_yh_quick.modulate = Color(1, 1, 1) if _yh_cd <= 0.0 else Color(0.72, 0.72, 0.74)
 	if _field != null:
 		_field.queue_redraw()
 	_update_coins(delta)
