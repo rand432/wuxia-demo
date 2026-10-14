@@ -43,6 +43,15 @@ func _buffs_tick(delta: float) -> void:
 				f[k2] = maxf(0.0, float(f[k2]) - delta)
 
 func _apply_dmg(f: Dictionary, amount: float, dtype: String) -> float:
+	# v16k（用户："盾兵格挡（现在只是个长相，可以做成正面减伤）"）：
+	#   盾兵举着一面**朝下的**盾 —— 主角在它**正面（下方）**打过去，伤害 −45%；
+	#   绕到它**背后（上方）**打，就不减（等于鼓励"点走位绕后"）。
+	#   判定：主角 y 比它大（在它下方）＝正面。
+	#   ⚠ 减伤**只在扣血前那一次**做（下面 final *= 0.55）—— 别在这儿也乘一遍，
+	#     两处都乘会变成 0.55×0.55＝只剩 30%（写这版时真踩了）。
+	var blocked := false
+	if bool(f.get("shield", false)) and hero_pos.y > float(f["y"]):
+		blocked = true
 	# v15w 醉太岁「酒气」：窗口内主角出伤 +25%
 	if float(hero.get("drunk_t", 0.0)) > 0.0:
 		amount *= 1.0 + float(hero.get("drunk_atk", 0.0))
@@ -66,6 +75,11 @@ func _apply_dmg(f: Dictionary, amount: float, dtype: String) -> float:
 		final = maxf(1.0, amt * (1.0 - float(f.get("res_water", 0.0))))
 	elif dtype == DMG_EARTH:
 		final = maxf(1.0, amt * (1.0 - float(f.get("res_earth", 0.0))))
+	# v16k：盾兵**正面格挡**——扣血前再削一刀（−45%），并飘个"挡"字
+	if blocked:
+		final *= 0.55
+		_push_float(float(f["x"]), float(f["y"]) - 62.0, "格挡", Color(0.72, 0.82, 0.94))
+		Audio.sfx("arrow_block", -16.0)
 	# 暴击/幸运的飘字标记挂在"这一帧最后一次伤害"上（外层读它来飘字）
 	_last_crit = bool(o["crit"])
 	_last_lucky = bool(o["lucky"])
@@ -875,22 +889,41 @@ func _process(delta: float) -> void:
 				#   弓手＝物理伤 ＋ 一支从它那儿射过来的箭
 				#   （只改"打出来的花样"，伤害数值仍走同一套 atk，不动平衡）
 				var dmg_elem := DMG_PHYS
+				# v16k（用户："会有不同的音效啊 然后壮汉会延迟冲锋"＋"法师真的放延迟技"）：
+				#   每类怪出手都有**自己的声音**；法师/壮汉还会**排延迟技**（走那套预警圈）。
 				if bool(f.get("mage", false)):
 					dmg_elem = DMG_FIRE
 					_bursts.append({"x": float(f["x"]), "y": float(f["y"]) - 44.0, "t": 0.0,
 						"col": Color(0.72, 0.62, 1.0), "scale": 1.1})
+					Audio.sfx("flute", -12.0)                     # 法师：一声清越（像念咒）
+					# 法师有 1/3 概率**不近身打，改成放一发小号火雨**（预警 → 砸下）
+					if randf() < 0.33:
+						self.queue_delayed(hero_pos.x, hero_pos.y - 6.0, 70.0, float(f["atk"]) * 1.1,
+							DMG_FIRE, 1.0, "法火", "circle")
 				elif bool(f.get("brute", false)):
-					# 壮汉：把主角撞开一段（往远离它的方向推）
+					# 壮汉：撞开一段（往远离它的方向推）
 					var pdx := 16.0 if hero_pos.x < float(f["x"]) else -16.0
 					hero_pos.x = clampf(hero_pos.x + pdx, 70.0, size.x - 70.0)
 					hero_pos.y = clampf(hero_pos.y + 22.0, 40.0, size.y - HERO_LINE * 0.5)
 					_push_float(hero_pos.x, hero_pos.y - 78.0, "撞开", Color(1.0, 0.72, 0.42))
 					_shake = maxf(_shake, 5.0)
+					Audio.sfx("hit_heavy", -8.0)                 # 壮汉：闷重一记
+					# 壮汉有 1/4 概率改成**延迟冲锋**（先在地上拉一条预警，再冲过来）
+					if randf() < 0.25:
+						var cdir := (hero_pos - Vector2(float(f["x"]), float(f["y"]))).normalized()
+						self.queue_delayed(float(f["x"]), float(f["y"]) - 10.0, 52.0, float(f["atk"]) * 1.4,
+							DMG_PHYS, 1.15, "冲锋", "beam", cdir, 300.0)
+						Audio.sfx("warcry", -9.0)
 				elif bool(f.get("ranged", false)):
 					# 弓手：一支箭从它那儿射过来
 					var adir := (hero_pos - Vector2(float(f["x"]), float(f["y"]))).normalized()
 					_bursts.append({"x": float(f["x"]) + adir.x * 26.0, "y": float(f["y"]) - 30.0 + adir.y * 26.0,
 						"t": 0.0, "col": Color(0.92, 0.86, 0.62), "scale": 0.9})
+					Audio.sfx("bow", -11.0)                      # 弓手：弓弦一响
+				elif bool(f.get("shield", false)):
+					Audio.sfx("swing", -12.0)                    # 盾兵：钝器一挥
+				else:
+					Audio.sfx("melee", -14.0)                    # 普通怪：轻挥
 				var d2 := hero_in_dmg(float(f["atk"]), dmg_elem)
 				# v15w 更夫「报更」：被致盲的怪有 35% 概率打空
 				if float(f.get("blind_t", 0.0)) > 0.0 and randf() < 0.35:
