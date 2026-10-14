@@ -6526,7 +6526,7 @@ func _note(txt: String, secs: float) -> void:
 	_note_lb.text = txt
 	_note_lb.visible = true
 	_note_t = secs
-	Audio.sfx("tension", -8.0)
+	Audio.sfx("heartbeat", -8.0)
 
 func _sync_battle_stats() -> void:
 	_wpn_sync()          # v11b：先把成长武器的加成算进 _extra

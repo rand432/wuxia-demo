@@ -456,7 +456,7 @@ func start_boss(tier: int) -> void:
 	if ResourceLoader.exists("res://assets/audio/bgm_boss_intro.ogg"):
 		Audio.sfx("bgm_boss_intro", 0.0)
 	else:
-		Audio.sfx("tension", -4.0)
+		Audio.sfx("heartbeat", -4.0)
 	_shake = 14.0
 	_hitstop = 0.16
 	boss_arrived.emit(tt)
@@ -531,7 +531,7 @@ func blood_bath_clear() -> Dictionary:
 			foes.erase(f)                   # 挑战怪：算失败，什么都不给
 	_banner = "浴血！清场——普通怪 " + str(n_normal) + " 只（奖励照给）· 挑战怪 " + str(n_chal) + " 只（算失败）"
 	_banner_t = 3.4
-	Audio.sfx("tension", -3.0)
+	Audio.sfx("heartbeat", -3.0)
 	return {"normal": n_normal, "challenge": n_chal, "boss": had_boss}
 
 # 浴血：回半血站起来
@@ -918,7 +918,10 @@ func _process(delta: float) -> void:
 					dmg_elem = DMG_FIRE
 					_bursts.append({"x": float(f["x"]), "y": float(f["y"]) - 44.0, "t": 0.0,
 						"col": Color(0.72, 0.62, 1.0), "scale": 1.1})
-					Audio.sfx("flute", -12.0)                     # 法师：一声清越（像念咒）
+					# v16p（用户："还有就是 类似吹笛的声音 陆陆续续的"）：
+			#   ⚠ 那是我给法师配的 flute（笛声）—— 法师一多就"陆陆续续"吹个不停，很烦。
+			#   换成 dart（短促的暗器破空声）：**短、脆、一下就完**，不拖尾巴。
+			Audio.sfx("dart", -13.0)                    # 法师：短促一声
 					# 法师有 1/3 概率**不近身打，改成放一发小号火雨**（预警 → 砸下）
 					if randf() < 0.33:
 						self.queue_delayed(hero_pos.x, hero_pos.y - 6.0, 70.0, float(f["atk"]) * 1.1,
@@ -1061,7 +1064,7 @@ func _process(delta: float) -> void:
 				_banner_t = 1.8
 				_bursts.append({"x": float(fb["x"]), "y": float(fb["y"]), "t": 0.0,
 					"col": Color(0.92, 0.56, 0.28), "scale": 1.8})
-				Audio.sfx("tension", -6.0)
+				Audio.sfx("heartbeat", -6.0)
 		fb["ult_t"] = float(fb.get("ult_t", 14.0)) - dt
 		if float(fb["ult_t"]) <= 0.0:
 			# ⚠ v14t：这里原来写死 14 秒 —— 表里每只 boss 自己的 ult_cd（9~16）全被吃掉了
@@ -1155,7 +1158,7 @@ func queue_delayed(x: float, y: float, r: float, dmg: float, elem: String, warn 
 	_delayed.append({"x": x, "y": y, "r": r, "t": 0.0, "warn": maxf(0.35, warn),
 		"dmg": dmg, "elem": elem, "kind": kind, "shape": shape, "dir": dir, "len": len,
 		"spread": spread, "count": count, "gap": gap, "life": life, "tick": 0.0})
-	Audio.sfx("tension", -10.0)
+	Audio.sfx("heartbeat", -10.0)
 
 # 多段连招：按顺序排同一只 boss 的几招（每段自带延迟，看着就是"连着来"）
 #   seq 里每项：{shape, warn, r, dmg_mul, kind, len, spread, count, step, gap}
@@ -3341,7 +3344,7 @@ func _cast_luanshen() -> void:
 		f["para"] = maxf(float(f.get("para", 0.0)), dur)
 		n += 1
 	_push_float(hero_pos.x, hero_pos.y - 104.0, "乱神曲！定身 " + str(n) + " 名", Color(0.90, 0.86, 1.0), true)
-	Audio.sfx("tension", -5.0)
+	Audio.sfx("heartbeat", -5.0)
 
 # ⑥ 杀神：真实伤害，按目标已损失气血算（越残越致命）
 func _cast_shashen() -> void:
