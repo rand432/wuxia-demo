@@ -271,12 +271,36 @@ const CHAL_FOE_HP := [1.0, 1.2, 1.0, 2.6, 3.2]        # 血量倍率（大怪明
 const CHAL_FOE_ATK := [0.9, 1.0, 0.9, 1.5, 1.8]       # 攻击倍率
 const CHAL_FOE_SCALE := [0.86, 0.86, 0.86, 1.7, 2.0]  # 体型（大怪一眼看得出来）
 const CHAL_FOE_NAME := ["钱怪", "晶怪", "书怪", "宝箱大怪", "挑战 boss"]
+# v15o（用户："挑战方面 也会随着波次增强 奖励也会随之提升"）：
+#   挑战原来跟普通怪吃**同一条**波次曲线（血 1.12^波 / 攻 1.08^波），后期会觉得"白送"。
+#   这里再叠一层**挑战专属**的线性爬升：怪涨得比奖励快（不然灵晶经济会崩）。
+const CHAL_HP_RAMP := 0.06          # 挑战怪血：每波 +6%（波30 → ×2.74）
+const CHAL_ATK_RAMP := 0.05         # 挑战怪攻：每波 +5%（波30 → ×2.45）
+const CHAL_MONEY_RAMP := 0.05       # 钱怪文钱：每波 +5%
+const CHAL_CRYSTAL_RAMP := 0.03     # 晶怪灵晶：每波 +3%（保守：挑战每波都能刷，涨猛了一局 1500+ 灵晶）
+const CHAL_EXP_RAMP := 0.04         # 书怪经验：每波 +4%
+
+func chal_hp_mul() -> float:
+	return 1.0 + CHAL_HP_RAMP * float(maxi(0, wave - 1))
+
+func chal_atk_mul() -> float:
+	return 1.0 + CHAL_ATK_RAMP * float(maxi(0, wave - 1))
+
+func chal_money_mul() -> float:
+	return 1.0 + CHAL_MONEY_RAMP * float(maxi(0, wave - 1))
+
+func chal_crystal_mul() -> float:
+	return 1.0 + CHAL_CRYSTAL_RAMP * float(maxi(0, wave - 1))
+
+func chal_exp_mul() -> float:
+	return 1.0 + CHAL_EXP_RAMP * float(maxi(0, wave - 1))
 
 func spawn_challenge(kind_i: int, n: int) -> void:
 	var i := clampi(kind_i, 0, 4)
 	var big := i >= 3
 	for k in maxi(1, n):
-		_spawn_foe("chal", float(CHAL_FOE_HP[i]), float(CHAL_FOE_ATK[i]), big, 1, str(CHAL_FOE_NAME[i]))
+		_spawn_foe("chal", float(CHAL_FOE_HP[i]) * chal_hp_mul(), float(CHAL_FOE_ATK[i]) * chal_atk_mul(),
+		big, 1, str(CHAL_FOE_NAME[i]))
 		var f: Dictionary = foes[foes.size() - 1]
 		f["scale"] = float(CHAL_FOE_SCALE[i])
 		f["chal"] = i                              # 掉什么由这个字段决定（结算侧读它）
@@ -547,7 +571,8 @@ func _process(delta: float) -> void:
 	# 上不去：到 HERO_TOP 那条线就停住等怪下来（"让怪大部分出现在屏幕里"）
 	# v15j（用户：临时指令倒是不限制）：**有手动指令时这条线放开** —— 手指点上去就让它上去；
 	#   自动追击仍旧卡在 HERO_TOP（否则它会一路追到怪出生点，屏幕里全是空的）。
-	var top_line := 8.0 if _order_has_pos else size.y * HERO_TOP
+	# v15o：放开的下限从 8.0 收到 HERO_LINE（脚的位置），保证整个小人还在战场框里
+	var top_line := (HERO_LINE if _order_has_pos else size.y * HERO_TOP)
 	hero_pos.y = clampf(hero_pos.y, top_line, size.y - HERO_LINE * 0.5)
 	# v13d P3：法阵——站圈里累计，出圈按半速回退
 	if not zone.is_empty() and bool(zone.get("on", false)):
@@ -1058,8 +1083,12 @@ func order_move(p: Vector2) -> void:
 	# v15j（用户：临时指令倒是不限制）：**点哪走哪不卡那条 25% 的线** ——
 	#   手动只留在战场框内（别跑到画面外），想上去就上去；
 	#   HERO_TOP 只管"自动追击"（让怪大部分出现在屏幕里）。
+	# v15o（用户：人物快跑到屏幕外了）：⚠ 原来下限写的是 8.0 —— 那是**脚**的坐标，
+	#   而主角整个人是画在脚**上方**约 HERO_LINE(96) 高的地方，所以脚到 y=33 时
+	#   头已经到了 y=−63，跑出战场框、压到上面的资源条上（截图里看到的就是这个）。
+	#   改成下限 = HERO_LINE：脚最高到 96，头顶就在战场框内。
 	_order_pos = Vector2(clampf(p.x, 70.0, size.x - 70.0),
-		clampf(p.y, 8.0, size.y - HERO_LINE * 0.5))
+		clampf(p.y, HERO_LINE, size.y - HERO_LINE * 0.5))
 	_order_fx.append({"x": _order_pos.x, "y": _order_pos.y, "t": 0.0})
 	Audio.sfx("ui_click", -12.0)
 
@@ -1378,9 +1407,10 @@ func _kill_foe(f: Dictionary) -> void:
 	if f.has("chal"):
 		var ci := int(f["chal"])
 		if bool(f.get("boss", false)):
-			coins = [0, 0, 0, 220, 320][clampi(ci, 0, 4)]      # 大怪掉一大笔钱
+			# v15o：挑战的钱随波次涨
+			coins = int(float([0, 0, 0, 220, 320][clampi(ci, 0, 4)]) * chal_money_mul())
 		else:
-			coins = [24 + randi() % 17, 0, 0, 0, 0][clampi(ci, 0, 4)]
+			coins = int(float([24 + randi() % 17, 0, 0, 0, 0][clampi(ci, 0, 4)]) * chal_money_mul())
 		chal_drop.emit(ci, Vector2(float(f["x"]), float(f["y"])))
 	if kind == "coin":
 		coins = 30 + randi() % 31

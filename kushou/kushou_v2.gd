@@ -5899,9 +5899,14 @@ func _chal_group_total(i: int) -> int:
 # 中文口径：大怪说"一只大怪"、群怪说"一群 N 只"
 func _chal_amount_cn(i: int) -> String:
 	var n := _chal_group_total(i)
-	if _chal_is_big(i):
-		return "一只大怪" if n <= 1 else (str(n) + " 只大怪")
-	return "一群 " + str(n) + " 只"
+	var num := ("一只大怪" if n <= 1 else (str(n) + " 只大怪")) if _chal_is_big(i) else ("一群 " + str(n) + " 只")
+	# v15o：把"随波次增强 / 奖励提升"直接写在挑战卡上（玩家不用猜）
+	if _field != null:
+		# v15o：这里原本想写"怪 ×2.74"—— 但那只算了挑战这一层，波次曲线还有一份，
+		#   玩家会以为"就这么点"。改成一句话说清，不摆数字。
+		if _wave > 1:
+			num += "　（怪随波次变强 · 奖励同步涨）"
+	return num
 
 func _chal_press(i: int) -> void:
 	if i >= _chal_cd.size():
@@ -6394,7 +6399,8 @@ func _on_chal_drop(kind_i: int, at: Vector2) -> void:
 		_qc("chalkill")
 	match kind_i:
 		0:
-			var g0 := 40 + randi() % 41
+			# v15o（用户：挑战奖励也会随之提升）：随波次涨
+			var g0 := int(float(40 + randi() % 41) * _field.chal_money_mul())
 			_money += g0
 			# v11f：钱怪另有小概率掉装备
 			if randi() % 100 < 12:
@@ -6402,12 +6408,13 @@ func _on_chal_drop(kind_i: int, at: Vector2) -> void:
 			else:
 				_hint.text = "钱怪掉了 " + str(g0) + " 文钱"
 		1:
-			var g1 := 6 + randi() % 5
+			var g1 := int(float(6 + randi() % 5) * _field.chal_crystal_mul())
 			_crystal += g1
 			_hint.text = "晶怪掉了 " + str(g1) + " 灵晶"
 		2:
-			_gain_exp(0.06)
-			_hint.text = "书怪：经验 +6%"
+			var e1: float = 0.06 * _field.chal_exp_mul()
+			_gain_exp(e1)
+			_hint.text = "书怪：经验 +" + str(int(e1 * 100.0)) + "%"
 		3:
 			# v12d：宝物挑战 → 送 1 次宝物刷新 ＋ 开三选一
 			_trea_refresh += 1
