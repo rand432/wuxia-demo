@@ -586,7 +586,7 @@ var _card_refresh := 0            # 卡组刷新次数（黑市货品，抽卡�
 #   · 放弃 = +10 灵晶（抽卡 20 的一半）；限时到点 = 失败，**什么都不给**
 # ============================================================
 const Q_MAX := 2
-const Q_EVENT_SEC := 180.0
+const Q_EVENT_SEC := 90.0      # v17c（用户："奇遇改为90s"）：180 -> 90
 const Q_GIVE_CRYSTAL := 10
 var _q_slots: Array = []          # 进行中任务：{id,n,d,ck,goal,sec,left,base,alive,tier…}
 var _q_t := 0.0                   # 距下一次事件还有多久
@@ -3603,7 +3603,12 @@ func _bm_tile(p: Control, pos: Vector2, sz: Vector2, i: int) -> void:
 	var pr := RichTextLabel.new()
 	pr.bbcode_enabled = true
 	pr.scroll_active = false
+	# v17c（用户又报："商品价格没有"）：⚠ 真因 —— 这里只设了 position，**没设 size**。
+	#   RichTextLabel 不给尺寸就是 0 高，文字一个都不画（看着就是"没有价格"）。
+	#   给它高度，并且打开 fit_content 让它自己按内容撑。
 	pr.position = Vector2(14, 96)
+	pr.size = Vector2(sz.x - 28.0, 44)
+	pr.fit_content = true
 	if is_yuhu:
 		# v13n：玉壶升级用灵晶结算（满档显示「满档」，按钮已经不可点）
 		pr.text = "[color=#ad2620][font_size=26]" + ("满档" if _yh_up_price() < 0 else str(cost)) \

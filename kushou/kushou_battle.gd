@@ -129,7 +129,7 @@ const FOE_STOP := 150.0             # 怪走到离主角多近就停下开打
 const WAVE_HP := 1.14               # 每波怪血 ×
 const WAVE_ATK := 1.08              # 每波怪攻 ×
 const BASE_FOE_HP := 34.0           # v16x：30 -> 34（第 1 波怪血 +13%）
-const BASE_FOE_ATK := 4.0
+const BASE_FOE_ATK := 4.5            # v17c（用户："调整怪伤害略微增加"）：4.0 -> 4.5
 const FOE_ASPD := 0.6               # 怪每秒打几下
 const FOE_SPD := 74.0               # 怪往下走的速度（像素/秒）
 #   v3i 用户"怪可以稍微再快一点"：42 → 58；v3k 用户"怪再快一点"：58 → 74
@@ -138,31 +138,31 @@ const FOE_SPD := 74.0               # 怪往下走的速度（像素/秒）
 #   · 技能＝被动型（数值/机制，spawn 时写进 foe 字段，由各自逻辑读）
 #   · 大招＝周期性范围技（ult_cd 秒一次，砸一圈 + 震屏）
 const BOSS_TIER := [
-	{"name": "看门恶犬", "hp": 1600.0, "atk": 22.0,
+	{"name": "看门恶犬", "hp": 1600.0, "atk": 33,
 		"skill": "撕咬连击", "ult": "狂吠震地", "ult_shape": "circle", "affix": "狂暴（攻击 +25%）",
 		"affix_k": "atk_up", "affix_v": 0.25, "ult_cd": 14.0},
-	{"name": "铁背苍狼", "hp": 2000.0, "atk": 19.0,
+	{"name": "铁背苍狼", "hp": 2000.0, "atk": 28.5,
 		"skill": "铁背（减伤 30%）", "ult": "冲撞", "ult_shape": "beam", "affix": "铁壁（生命 +35%）",
 		"affix_k": "hp_up", "affix_v": 0.35, "ult_cd": 16.0},
-	{"name": "毒牙蟒", "hp": 1750.0, "atk": 20.0,
+	{"name": "毒牙蟒", "hp": 1750.0, "atk": 30,
 		"skill": "剧毒（攻击带毒）", "ult": "毒雾喷吐", "ult_shape": "follow", "affix": "迅捷（移速 +30%）",
 		"affix_k": "spd_up", "affix_v": 0.30, "skill_k": "poison", "ult_cd": 12.0},
-	{"name": "双头狮", "hp": 5200.0, "atk": 40.0,
+	{"name": "双头狮", "hp": 5200.0, "atk": 60,
 		"skill": "双头夹击", "ult": "狮吼", "ult_shape": "sector", "affix": "嗜血（击中回血）",
 		"affix_k": "lifesteal", "affix_v": 0.15, "ult_cd": 13.0},
-	{"name": "独眼狱卒", "hp": 6200.0, "atk": 36.0,
+	{"name": "独眼狱卒", "hp": 6200.0, "atk": 54,
 		"skill": "锁链拖拽", "ult": "铁链横扫", "ult_shape": "beam", "affix": "重甲（减伤 40%）",
 		"affix_k": "cut_up", "affix_v": 0.40, "ult_cd": 15.0},
-	{"name": "火尾狐妖", "hp": 5600.0, "atk": 43.0,
+	{"name": "火尾狐妖", "hp": 5600.0, "atk": 64.5,
 		"skill": "狐火（火系溅射）", "ult": "焚身爆", "ult_shape": "chain", "affix": "疾风（攻速 +30%）",
 		"affix_k": "aspd_up", "affix_v": 0.30, "skill_k": "foxfire", "ult_cd": 11.0},
-	{"name": "场主亲养·狴犴", "hp": 14000.0, "atk": 64.0,
+	{"name": "场主亲养·狴犴", "hp": 14000.0, "atk": 96,
 		"skill": "牢狱威压", "ult": "断罪一击", "ult_shape": "sector", "affix": "王威（全属性 +30%）",
 		"affix_k": "all_up", "affix_v": 0.30, "ult_cd": 12.0},
-	{"name": "血手判官", "hp": 16500.0, "atk": 58.0,
+	{"name": "血手判官", "hp": 16500.0, "atk": 87,
 		"skill": "血判（吸血 25%）", "ult": "血海", "ult_shape": "chain", "affix": "再生（每秒回 1%）",
 		"affix_k": "regen", "affix_v": 0.01, "ult_cd": 10.0},
-	{"name": "困兽之主", "hp": 19000.0, "atk": 70.0,
+	{"name": "困兽之主", "hp": 19000.0, "atk": 105,
 		"skill": "兽王号令（召小怪）", "ult": "万兽奔踏", "ult_shape": "beam", "affix": "不死（濒死回血一次）",
 		"affix_k": "revive", "affix_v": 1.0, "skill_k": "summon", "ult_cd": 9.0},
 ]
@@ -927,7 +927,7 @@ func _process(delta: float) -> void:
 					Audio.sfx("dart", -13.0)                    # 法师：短促一声
 					# 法师有 1/3 概率**不近身打，改成放一发小号火雨**（预警 → 砸下）
 					if randf() < 0.33:
-						self.queue_delayed(hero_pos.x, hero_pos.y - 6.0, 70.0, float(f["atk"]) * 1.1,
+						self.queue_delayed(hero_pos.x, hero_pos.y - 6.0, 70.0, float(f["atk"]) * 1.7,
 							DMG_FIRE, 1.0, "法火", "circle")
 				elif bool(f.get("brute", false)):
 					# 壮汉：撞开一段（往远离它的方向推）
@@ -940,7 +940,7 @@ func _process(delta: float) -> void:
 					# 壮汉有 1/4 概率改成**延迟冲锋**（先在地上拉一条预警，再冲过来）
 					if randf() < 0.25:
 						var cdir := (hero_pos - Vector2(float(f["x"]), float(f["y"]))).normalized()
-						self.queue_delayed(float(f["x"]), float(f["y"]) - 10.0, 52.0, float(f["atk"]) * 1.4,
+						self.queue_delayed(float(f["x"]), float(f["y"]) - 10.0, 52.0, float(f["atk"]) * 2.2,
 							DMG_PHYS, 1.15, "冲锋", "beam", cdir, 300.0)
 						# v16o（用户："背景喊杀声太多了 其实没必要有喊杀声"）：已去掉喊杀/战鼓声
 				elif bool(f.get("ranged", false)):
@@ -1077,7 +1077,7 @@ func _process(delta: float) -> void:
 			#   现在改成**延迟技**：先在主角脚下画一个逐渐变红的圈，1.2 秒后才砸下来 ——
 			#   这 1.2 秒就是"该挪开了"的窗口（点了走位的玩家能躲掉）。
 			var ult := str(fb.get("bult", "大招"))
-			var dmg := float(fb["atk"]) * 1.6
+			var dmg := float(fb["atk"]) * 2.6      # v17c（用户："boss怪伤害大幅增加"）：1.6 -> 2.6
 			# v16a：按这只 boss 的**招牌形状**排延迟技 ——
 			#   circle＝火雨/血海/狮吼那种"地上红圈"（砸在主角脚下）
 			#   beam　＝剑气/冲撞/拖链那种"一条长柱"（从 boss 指向主角）
