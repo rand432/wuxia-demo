@@ -882,7 +882,11 @@ func _process(delta: float) -> void:
 			f["y"] = float(f["y"]) + mv.y
 		else:
 			# v9i：被雷麻痹的怪，出手计时清零（麻痹 1 秒）
-			if float(f.get("para", 0.0)) > 0.0:
+			# v17g（用户："调整 boss不吃硬控"）：
+			#   ⚠ 硬控（定身/麻痹/时停）全走 para 这一个字段，而**读取点只有这里** ——
+			#     所以在这里加一句 boss 免疫就够，不用去改 7 个写入点。
+			#   boss 照常显示被控特效，但**出手计时不清零**（照样打你）。
+			if float(f.get("para", 0.0)) > 0.0 and not bool(f.get("boss", false)):
 				f["para"] = maxf(0.0, float(f["para"]) - delta)
 				f["t"] = 0.0
 				continue
@@ -1369,6 +1373,23 @@ func _hero_strike(tgt: Dictionary) -> void:
 	# 剑光（v3d ＋ v3e）：按几率、**朝出手方向**甩月牙
 	_try_spawn_jg(base, Vector2(float(tgt["x"]), float(tgt["y"])) - hero_pos)
 
+# v17g：取**离主角最近的 n 只**活怪（给"全场技"限人数用）
+#   原来琴痴/毒娘子这类是 `for f_v in foes` 打全场——怪一多就控一片/毒一片，
+#   所以改成"只打最近 n 只"。（_nearest 是取最近 1 只，这个是它的复数版。）
+func _nearest_n(n: int) -> Array:
+	var live: Array = []
+	for f_v in foes:
+		var f: Dictionary = f_v
+		if float(f.get("dying", 0.0)) > 0.0 or float(f.get("hp", 1.0)) <= 0.0:
+			continue
+		live.append(f)
+	live.sort_custom(func(a, b):
+		return hero_pos.distance_to(Vector2(float(a["x"]), float(a["y"]))) \
+			< hero_pos.distance_to(Vector2(float(b["x"]), float(b["y"]))))
+	if live.size() > n:
+		live.resize(n)
+	return live
+
 func _nearest() -> Dictionary:
 	var best: Dictionary = {}
 	# 挑**离主角最近**的那只（原来是按"最靠下"，主角会走位之后要按距离）
@@ -1765,9 +1786,19 @@ func _kill_foe(f: Dictionary) -> void:
 		hero["_kill_atk"] = float(hero.get("_kill_atk", 0.0)) + float(hero["mech_killatk"])
 	if float(hero.get("mech_chain", 0.0)) > 0.0 and not _chain_lock and not bool(f.get("still", false)):
 		_chain_blast(Vector2(float(f["x"]), float(f["y"])))
-	# v14b 钱多多「点金」：持续期内每杀一个额外掉 3 文钱
+	# v14b 钱多多「点金」：持续期内每杀一个额外掉文钱
+	# v17g（用户："钱多多改文钱【加强一些】"）：**3 + 每级1** → **10 + 每级5**
+	#   （原来满级才 6 文钱，跟没有一样；现在 0 级 10、满级 25）
 	if p_active("qianduoduo") and not bool(f.get("still", false)):
-		coin_drop.emit(3 + int(partners["qianduoduo"].get("gold_lv", 0)), Vector2(float(f["x"]), float(f["y"])))
+		coin_drop.emit(10 + 5 * int(partners["qianduoduo"].get("gold_lv", 0)),
+			Vector2(float(f["x"]), float(f["y"])))
+	# v17g（用户："小乞儿改灵晶【少量】"）：
+	#   ⚠ **原来这个技能根本没实现** —— 升级条目（xiaoqier_gold「牵羊·多掉钱」）和视觉特效都在，
+	#     但没有一行代码读它、也没有任何掉钱逻辑。所以小乞儿在场上就是个白板（这就是它"fw"的原因）。
+	#   现在补上：持续期内每杀一个掉**少量灵晶**（0 级 1 颗、满级 4 颗）。
+	if p_active("xiaoqier") and not bool(f.get("still", false)):
+		special.emit("xq_crystal", 1 + int(partners["xiaoqier"].get("gold_lv", 0)),
+			Vector2(float(f["x"]), float(f["y"])))
 	var kind := str(f["kind"])
 	var coins := 1 + randi() % 3
 	# v9h（挑战掉落表）：挑战怪身上带 chal —— 按类型掉，结算交给外壳
@@ -2068,7 +2099,7 @@ const SKILL_POOL := [
 		"desc": "毒持续 +1 秒（现 <DUR> 秒）【内力消耗 +20/层】", "anim": "毒留得久"},
 	{"id": "xiaoqier_dur", "name": "牵羊·加持续", "kind": "num", "max": 3, "req_p": "xiaoqier",
 		"desc": "持续 +2 秒（现 <DUR> 秒）【内力消耗 +20/层】", "anim": "摸得久"},
-	{"id": "xiaoqier_gold", "name": "牵羊·多掉钱", "kind": "num", "max": 3, "req_p": "xiaoqier",
+	{"id": "xiaoqier_gold", "name": "牵羊·多灵晶（每级 +1）", "kind": "num", "max": 3, "req_p": "xiaoqier",
 		"desc": "每杀一只多掉 2 文钱【内力消耗 +20/层】", "anim": "钱叮当响"},
 	{"id": "xiaoqier_cost", "name": "牵羊·减内力", "kind": "num", "max": 3, "req_p": "xiaoqier",
 		"desc": "内力消耗 −15（现 <MP>，效果不变）", "anim": "手更轻"},
@@ -2129,7 +2160,7 @@ const SKILL_POOL := [
 		"desc": "内力消耗 −15（现 <MP>，效果不变）", "anim": "更省气"},
 	{"id": "qianduoduo_cd", "name": "点金·减冷却", "kind": "num", "max": 3, "req_p": "qianduoduo",
 		"desc": "冷却 −3 秒（现 <CD> 秒）【内力消耗 +20/层】", "anim": "点得更勤"},
-	{"id": "qianduoduo_gold", "name": "点金·多掉钱", "kind": "num", "max": 3, "req_p": "qianduoduo",
+	{"id": "qianduoduo_gold", "name": "点金·多掉钱（每级 +5）", "kind": "num", "max": 3, "req_p": "qianduoduo",
 		"desc": "每杀一只多掉 2 文钱【内力消耗 +20/层】", "anim": "钱更响"},
 	{"id": "qianduoduo_cost", "name": "点金·减内力", "kind": "num", "max": 3, "req_p": "qianduoduo",
 		"desc": "内力消耗 −15（现 <MP>，效果不变）", "anim": "手更轻"},
@@ -2621,7 +2652,7 @@ const PARTNER_INFO := {
 		"desc": "持续 6 秒内受到的伤害 −25%（硬抗型）",
 		"mp0": 100.0, "cd0": 22.0, "dur0": 6.0},
 	"qianduoduo": {"name": "钱多多", "quality": "下品", "skill": "点金", "dtype": "无伤害", "grow": {"arm": 1, "agi": 2, "wit": 2},
-		"desc": "持续 6 秒内，每击杀一名敌人额外掉 3 文钱（经济型）",
+		"desc": "持续 6 秒内，每击杀一名敌人额外掉 **10 文钱**（强化后最多 25 · 经济型）",
 		"mp0": 100.0, "cd0": 24.0, "dur0": 6.0},
 	# ---- 中品（共 4：陈石/法度 + 这两个）----
 	"leixiaoqi": {"name": "雷小七", "quality": "中品", "skill": "连环腿", "dtype": "物理", "grow": {"arm": 2, "agi": 4, "wit": 0},
@@ -2645,11 +2676,11 @@ const PARTNER_INFO := {
 		"desc": "每 6 秒劈出一道火刃，横扫最近敌人身前 140 像素范围（火系范围）",
 		"mp0": 0.0, "cd0": 6.0, "dur0": 0.0},
 	"duniangzi": {"name": "毒娘子", "quality": "极品", "skill": "万毒", "dtype": "木系（持续）", "grow": {"arm": 1, "agi": 2, "wit": 4},
-		"desc": "每 10 秒给全场敌人挂毒（木系，每秒跳一次，持续 6 秒）",
+		"desc": "每 10 秒给**最近的 5 名**敌人挂毒（木系，每秒跳一次，持续 6 秒）",
 		"mp0": 200.0, "cd0": 10.0, "dur0": 0.0},
 	# ---- 绝品（共 3：崔三娘/张道陵 + 这个）----
 	"xuanjizi": {"name": "玄机子", "quality": "绝品", "skill": "时间停止", "dtype": "无伤害", "grow": {"arm": 1, "agi": 3, "wit": 6},
-		"desc": "每 45 秒把全场敌人定身 3 秒，同时自己攻速翻倍 3 秒",
+		"desc": "每 45 秒把全场敌人定身 1.8 秒，同时自己攻速翻倍 3 秒（boss 免疫定身）",
 		"mp0": 400.0, "cd0": 45.0, "dur0": 0.0},
 # ============================================================
 # v15c 新增 12 位（用户：伙伴可以多做一点新的）
@@ -2665,7 +2696,7 @@ const PARTNER_INFO := {
 	"desc": "每 9 秒让最近敌人中毒（木系持续伤害，每秒跳一次，持续 4 秒）",
 	"mp0": 80.0, "cd0": 9.0, "dur0": 0.0},
 	"xiaoqier": {"name": "小乞儿", "quality": "下品", "skill": "顺手牵羊", "dtype": "无伤害", "grow": {"arm": 1, "agi": 3, "wit": 1},
-	"desc": "持续 6 秒内，每击杀一名敌人额外掉 2 文钱（比钱多多少，冷却更短）",
+	"desc": "持续 6 秒内，每击杀一名敌人额外掉**少量灵晶**（0 级 1 颗 · 强化后最多 4 颗）",
 	"mp0": 90.0, "cd0": 18.0, "dur0": 6.0},
 	"laobing": {"name": "瘸腿老兵", "quality": "下品", "skill": "死撑", "dtype": "无伤害", "grow": {"arm": 3, "agi": 1, "wit": 1},
 	"desc": "气血低于 50% 时，全伤害减免 +12%（残血才生效的硬抗）",
@@ -2688,7 +2719,7 @@ const PARTNER_INFO := {
 	"desc": "每 11 秒点燃最近的 2 名敌人（火系持续燃烧，每秒跳一次，持续 5 秒）",
 	"mp0": 150.0, "cd0": 11.0, "dur0": 0.0},
 	"qinchi": {"name": "琴痴", "quality": "上品", "skill": "乱神曲", "dtype": "无伤害", "grow": {"arm": 0, "agi": 2, "wit": 5},
-	"desc": "每 16 秒弹一曲：全场敌人定身 2 秒（控制型）",
+	"desc": "每 16 秒弹一曲：**最近的 5 名**敌人定身 1.2 秒（控制型 · 强化可加时长）",
 	"mp0": 180.0, "cd0": 16.0, "dur0": 0.0},
 # ---- 极品 +2 ----
 	"baiqihouren": {"name": "白起后人", "quality": "极品", "skill": "杀神", "dtype": "真实", "grow": {"arm": 4, "agi": 2, "wit": 1},
@@ -3342,10 +3373,14 @@ func _cast_sanmei() -> void:
 	Audio.sfx("skill", -7.0)
 
 # ⑤ 乱神曲：全场定身
+# v17g（用户："琴痴/玄机子 群攻人太多了 控制时长太长了"）：
+#   ① 时长 2.0 → **1.2 秒**（成长仍每级 +0.4，后期靠强化补回来）
+#   ② **不限全场了**，只控最近的 5 名（原来多少怪就控多少）
+#   ③ 顺带跳过 boss（见上面 para 读取点的免疫）
 func _cast_luanshen() -> void:
-	var dur := 2.0 + 0.4 * float(partners["qinchi"].get("dur_lv", 0))
+	var dur := 1.2 + 0.4 * float(partners["qinchi"].get("dur_lv", 0))
 	var n := 0
-	for f_v in foes:
+	for f_v in _nearest_n(5):
 		var f: Dictionary = f_v
 		if float(f.get("dying", 0.0)) > 0.0 or bool(f.get("still", false)):
 			continue
@@ -3598,11 +3633,12 @@ func _cast_vine() -> void:
 	Audio.sfx("skill", -6.0)
 
 # 毒娘子：万毒（全场挂毒）
+# v17g（用户："毒娘子…群攻人太多了"）：**不再全场挂毒**，只挂最近的 5 名
 func _cast_poison_all() -> void:
 	var dmg := float(hero["atk"]) * (0.25 + 0.06 * float(partners["duniangzi"].get("dmg_lv", 0))) * p_star_mul("duniangzi")
 	var dur := 6.0 + 1.0 * float(partners["duniangzi"].get("dot_lv", 0))
 	var n := 0
-	for f_v in foes:
+	for f_v in _nearest_n(5):
 		var f: Dictionary = f_v
 		if float(f.get("dying", 0.0)) > 0.0 or float(f["hp"]) <= 0.0:
 			continue
@@ -3616,7 +3652,8 @@ func _cast_poison_all() -> void:
 
 # 玄机子：时间停止（全场定身 3 秒 + 自己攻速翻倍 3 秒）
 func _cast_timestop() -> void:
-	var dur := (3.0 + 0.5 * float(partners["xuanjizi"].get("dur_lv", 0))) * p_star_mul("xuanjizi")
+	# v17g：3.0 → **1.8 秒**（成长每级 +0.5 保留，绝品靠强化拉回控制力）
+	var dur := (1.8 + 0.5 * float(partners["xuanjizi"].get("dur_lv", 0))) * p_star_mul("xuanjizi")
 	_p_aspd = maxf(_p_aspd, dur)            # 攻速翻倍（战场自己的临时通道）
 	for f_v in foes:
 		var f: Dictionary = f_v

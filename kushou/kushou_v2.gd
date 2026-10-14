@@ -6998,6 +6998,11 @@ func _on_special(kind: String, n: int, pos: Vector2) -> void:
 		"crystal":
 			_spawn_drop("crystal", 6 + randi() % 5, pos, 6)
 			_hint.text = "晶怪掉灵晶——看它飞进右上的灵晶"
+		# v17g（用户："小乞儿改灵晶【少量】"）：小乞儿的"顺手牵羊"——按传入的 n 给**少量**灵晶
+		#   （晶怪那条 "crystal" 是写死 6~10 颗，口径不一样，所以另开一条）
+		"xq_crystal":
+			var cn := maxi(1, n)
+			_spawn_drop("crystal", cn, pos, clampi(cn, 1, 3))
 		"gear":
 			_spawn_drop("gear", 1, pos, 1)
 			_hint.text = "甲士掉装备——飞进［装备·宝物］"
