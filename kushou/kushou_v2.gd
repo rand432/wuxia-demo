@@ -65,7 +65,9 @@ var _skill_pts := 0       # 技能点（每升 1 级 1 点）
 #   臂力：气血+生命恢复；身法：攻速+护甲；悟性：内力+内力恢复
 #   主属性（力量/敏捷/悟性）决定"哪一条额外转攻击 / 转元素攻击"
 var _attr := {"arm": 0, "agi": 0, "wit": 0}
-var _attr_pts := 0        # 属性点（每升 1 级 +2）
+var _attr_pts := 0        # 属性点（v15k：界面不再给加点的地方，留着当储备）
+var _recruit_btn: Button = null   # v15k（用户：可以招募时主角头像闪动提示）—— 存一份用来做呼吸闪
+var _rec_flash := 0.0             # 上面那个呼吸闪的相位
 var _main_attr := "str"   # str＝力量 · agi＝敏捷 · wit＝悟性
 # v6a 成长继承（用户："成长就是三属性了 根据角色不同特性 三属性成长也不同
 #   【但是继承取最高值 保证稳步提升】"）
@@ -1840,8 +1842,19 @@ func _wpn_q_mul() -> float:
 func _wpn_tier() -> int:
 	return int(_wpn_lv / 10)
 
+const WPN_LV_MAX := 99             # v15k：成长武器等级上限
+const WPN_COST_MAX := 200000000    # 单级价格上限（2 亿）——别让指数算爆
+
+# v15k（用户：装备无限强化 钱都成负数了）：
+#   ⚠ 原来是 60 × 1.22^等级 × 1.6^阶，**指数会算爆**：等级 ~110 时 1.22^110×1.6^11 ≈ 21 亿，
+#   超出 int32 后 _wpn_cost() 返回**负数**；而 _money >= 负数 永远成立 →
+#   无限强化，且 _money -= 负数 → 钱越扣越多（截图里 -10304927 就是这么来的）。
+#   现在：价格封顶 2 亿，等级封顶 WPN_LV_MAX。
 func _wpn_cost() -> int:
-	return int(60.0 * pow(1.22, float(_wpn_lv)) * pow(1.6, float(_wpn_tier())))
+	if _wpn_lv >= WPN_LV_MAX:
+		return WPN_COST_MAX
+	var c := 60.0 * pow(1.22, float(_wpn_lv)) * pow(1.6, float(_wpn_tier()))
+	return int(minf(c, float(WPN_COST_MAX)))
 
 func _wpn_refresh_cost() -> int:
 	return 100 + 150 * _wpn_refresh_n
@@ -2109,12 +2122,20 @@ func _wpn_take(i: int) -> void:
 
 # 强化一次：钱够就升；到 10 的倍数进阶＋弹三选一
 func _wpn_up() -> bool:
+	# v15k（用户：装备无限强化 钱都成负数了）：⚠ 这里原来是三个 bug 摞在一起——
+	#   ① 钱不够**没有 return**：照样往下走，`_money -= c` 直接扣成负数；
+	#      扣成负数之后 `_money >= c` 永远成立 → 就成了"无限强化"（截图那个 -10304927）。
+	#   ② `_wpn_lv += 1` **写了两遍**：每次强化涨 2 级（90 次就到 180 级）。
+	#   ③ 等级没上限：配合上面的指数价格会把 int 算爆。
+	if _wpn_lv >= WPN_LV_MAX:
+		_hint.text = "【" + str(WPN_Q_CN[_wpn_q]) + "】已经到顶了（Lv" + str(WPN_LV_MAX) + "）"
+		return false
 	var c := _wpn_cost()
 	if int(_money) < c:
 		_hint.text = "强化要 " + str(c) + " 文钱（现有 " + str(int(_money)) + "）"
+		return false
 	_money -= c
 	_qc("wpn")                        # v13c：任务进度（强化武器）
-	_wpn_lv += 1
 	_wpn_lv += 1
 	Audio.sfx("hit_heavy", -10.0, 1.3)
 	if _wpn_lv % 10 == 0:
@@ -3084,11 +3105,9 @@ func _yh_use() -> void:
 
 func _yh_toggle_auto() -> void:
 	_yh_auto = not _yh_auto
-	_hint.text = "玉壶自动使用：" + ("开（气血低于 50% 自己喝）" if _yh_auto else "关（点小方框或去宝物页手动喝）")
 	_hint.text = "玉壶自动使用：" + ("开（气血低于 50% 自己喝）" if _yh_auto else "关（只在宝物页里手动喝）")
 	Audio.sfx("ui_click", -8.0)
 	if _popup_kind == "装备":
-		_open_large("装备")
 		_open_large("装备")
 
 # 每帧：冷却倒计时 ＋ 自动使用（气血低于 50% 就喝）
@@ -3142,22 +3161,62 @@ func _card_face(p: Control, pos: Vector2, sz: Vector2, id: String) -> void:
 	var s := card_set_of(id)
 	# v8e（用户："卡组的十格也大一些 这个界面也空了很多空间"）——十格做成**竖长卡**：
 	#   名字 / 品级 / 简笔图标 / 单卡属性 / 大字进度，整格可点看详情
+	# v15k（用户：卡组卡面显示不明显 —— 要"祝福卡 力量祝福 卡面效果 0/3 组合效果"这样一眼看出是哪个系列）：
+	#   卡面从上到下改成：**系列名（色带）→ 卡名 → 图标 → 系列进度 → 品级**。
+	#   系列名用品质色做成一条色带，最扎眼；进度紧跟其后（原来是全塞在底部）。
+	var set_q := str(card_set_of(id).get("quality", "下品"))
+	var set_cn := str(s.get("name", ""))
+	# 这一套已经拿到几张（色带与底部进度都用它）
+	var got2 := 0
+	for gi2 in int(s.get("size", 1)):
+		if _card_have.has(card_id(str(s.get("set", "")), gi2)):
+			got2 += 1
+	var band := Panel.new()
+	band.position = Vector2(3, 6)
+	band.size = Vector2(sz.x - 6, 30)
+	band.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var bsb := StyleBoxFlat.new()
+	# v15k：⚠ 原来只 darkened(0.10) —— 下品那个浅灰底配白字基本看不清（截图里"力量祝福"是糊的）。
+	#   加深到 0.42，五档都保证白字压得住。
+	# v15k：⚠ _quality_color("下品") 返回的是**带 0.35 透明度**的颜色，直接拿来当底
+	#   等于半透明色带 → 还是看不清白字。这里重建一个**不透明**的深色底。
+	var qc0 := _quality_color(set_q)
+	bsb.bg_color = Color(qc0.r, qc0.g, qc0.b, 1.0).darkened(0.30)
+	bsb.set_corner_radius_all(6)
+	band.add_theme_stylebox_override("panel", bsb)
+	box.add_child(band)
+	var bl := Label.new()
+	bl.position = Vector2(0, 0)
+	# v15k：⚠ 原来 size.x = sz.x − 6，而色带自身宽是 sz.x − 6 且起点在 x=3 ——
+	#   等于右缘多出 6px 被卡片裁掉（"力量祝福 2/3"最后一个字被切）。收窄 10。
+	bl.size = Vector2(sz.x - 16, 30)
+	bl.add_theme_font_size_override("font_size", 18)
+	bl.add_theme_color_override("font_color", Color(0.99, 0.97, 0.93))
+	bl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	bl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	# v15k（用户："比如 祝福卡 力量祝福"）：色带写**表里的完整系列名**（力量祝福 / 踏云步 …）。
+	#   ⚠ 别用 CARD_TIER_NAME —— 那是"卡名递进"（力量/力士/刑天），只有卡名而没有系列感。
+	bl.text = set_cn + "　" + str(got2) + "/" + str(int(s.get("size", 1)))
+	bl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	band.add_child(bl)
+	# 卡名（系列名之下，字号比系列名大一号）
 	var nm := Label.new()
-	nm.position = Vector2(4, 10)
-	nm.size = Vector2(sz.x - 8, 72)
-	nm.add_theme_font_size_override("font_size", 25)
+	nm.position = Vector2(4, 38)
+	nm.size = Vector2(sz.x - 8, 52)
+	nm.add_theme_font_size_override("font_size", 24)
 	nm.add_theme_color_override("font_color", INK)
 	nm.text = card_name(id)
 	nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	nm.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	nm.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(nm)
-	# 品级（按档配色）
+	# 品级（按档配色）——挪到最底一行，不再占卡名下面那块
 	var st := Label.new()
-	st.position = Vector2(4, 84)
-	st.size = Vector2(sz.x - 8, 32)
-	st.add_theme_font_size_override("font_size", 22)
-	st.text = str(card_set_of(id).get("quality", ""))
-	st.add_theme_color_override("font_color", _quality_color(str(card_set_of(id).get("quality", "下品"))))
+	st.position = Vector2(4, sz.y - 32.0)
+	st.size = Vector2(sz.x - 8, 28)
+	st.add_theme_font_size_override("font_size", 19)
+	st.text = set_q
+	st.add_theme_color_override("font_color", _quality_color(set_q))
 	st.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(st)
 	# v8e：简笔图标 ＋ 单卡属性（竖长卡才放得下）
@@ -3167,8 +3226,9 @@ func _card_face(p: Control, pos: Vector2, sz: Vector2, id: String) -> void:
 	var ic := CardIcon.new()
 	ic.host = self
 	ic.kind = _card_icon_of(str(s.get("set", "")))
-	ic.position = Vector2(sz.x * 0.5 - (26.0 if swap_mode else 32.0), 104.0 if swap_mode else 122.0)
-	ic.size = Vector2(52, 52) if swap_mode else Vector2(64, 64)
+	# v15k：上面多了系列色带与卡名，图标往下让，别跟卡名压上
+	ic.position = Vector2(sz.x * 0.5 - (26.0 if swap_mode else 30.0), 128.0 if swap_mode else 132.0)
+	ic.size = Vector2(52, 52) if swap_mode else Vector2(60, 60)
 	ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	box.add_child(ic)
 	# v8f（用户："十格不用显示属性"）——十格里不写单卡属性，点开看详情
@@ -3179,9 +3239,10 @@ func _card_face(p: Control, pos: Vector2, sz: Vector2, id: String) -> void:
 			got += 1
 	var done_set := got >= int(s.get("size", 1))
 	var pg := Label.new()
-	pg.position = Vector2(4, sz.y - (118.0 if swap_mode else 74.0))
-	pg.size = Vector2(sz.x - 8, 56 if swap_mode else 66)
-	pg.add_theme_font_size_override("font_size", 32 if swap_mode else 38)
+	# v15k：进度挪到图标正下方（系列名下面一眼就是"这套拿了几张"）
+	pg.position = Vector2(4, sz.y - (122.0 if swap_mode else 78.0))
+	pg.size = Vector2(sz.x - 8, 48 if swap_mode else 44)
+	pg.add_theme_font_size_override("font_size", 30 if swap_mode else 34)
 	pg.add_theme_color_override("font_color", Color(0.30, 0.62, 0.34) if done_set else SEAL)
 	# v10b：杀意这类"按杀敌进化"的卡，进度显示的是**杀敌数**
 	if s.has("evo_kills"):
@@ -3678,6 +3739,12 @@ func _q_now(key: String) -> int:
 		return int(_field.dmg_done) if _field != null else 0
 	if key == "skillkill":
 		return int(_field.skill_kills) if _field != null else 0
+	# v15k（用户：我拿到宝物了 但是任务并没有完成）：
+	#   ⚠ 原来 trea 的进度走 _q_ctr["trea"]（只在**宝物三选一**里登记过），
+	#   而挑战/黑市/事件拿到的宝物走的是别的路 → 任务永远显示 0。
+	#   改成读"真正拥有的宝物种类"（_trea_own），跟收藏类成就同一个源，怎么拿到的都算。
+	if key == "trea":
+		return _trea_own.size()
 	if key == "levelup":
 		return int(_q_ctr.get("levelup", 0))
 	if key == "recruit":
@@ -3777,7 +3844,6 @@ func _q_roll() -> Dictionary:
 	if tier == 3 and QUEST_SPECIAL.is_empty():
 		tier = 2
 	if tier == 2 and QUEST_HARD.is_empty():
-		tier = 1
 		tier = 1
 	var pool: Array = [QUEST_SIMPLE, QUEST_NORMAL, QUEST_HARD, QUEST_SPECIAL][clampi(tier, 0, 3)]
 	var used: Array = []
@@ -5227,6 +5293,7 @@ func _ach_val(ck: String) -> float:
 				if str(sid).begins_with("4-"):
 					return 1.0
 			return 0.0
+	# v15k：这一句是 match 之后的兜底（原来它上面还重复了一句，已删）
 	return 0.0
 
 # 每半秒查一次（15 条，很便宜）
@@ -5951,6 +6018,12 @@ func _bar(r: Rect2, col: Color) -> ColorRect:
 # 假数据每帧走一点（看得出"活着"）
 # ============================================================
 func _process(delta: float) -> void:
+	# v15k（用户：当可以招募伙伴的时候 主角人物头像 会闪动可招募伙伴）：
+	#   有招募机会时，那颗［招募 N］按钮做"呼吸闪"——一眼能看到该去招募了。
+	_rec_flash += delta
+	if _recruit_btn != null and is_instance_valid(_recruit_btn) and _recruit_opens > 0:
+		var fk := 0.5 + 0.5 * sin(_rec_flash * 5.0)
+		_recruit_btn.add_theme_stylebox_override("normal", _flat(SEAL.lerp(Color(1.0, 0.86, 0.32), fk * 0.85)))
 	# v10a 打坐：每秒 主属性 +0.02（境界越高倍率越大），攒够 1 点进属性
 	if _card_have.has("dazuo_0"):
 		_meditate_acc += 0.02 * float(_meditate_mult()) * delta
@@ -6007,6 +6080,18 @@ func _process(delta: float) -> void:
 			_chal_cd[i] = maxf(0.0, float(_chal_cd[i]) - delta)
 		if float(_chal_cd[i]) <= 0.0:
 			ready += 1
+		# v15k（用户：挑战并没有自动）：⚠ 原来"自动挑战"是个**空壳** —— _auto_chal 只在
+		#   开关按钮的文字、和浴血时关掉这两处出现过，**没有任何地方真的按冷却去打**。
+		#   现在补上：开关开着时，谁冷却好了就按一次 _chal_press（跟手点同一条路，
+		#   冷却/计数/提示都由它自己管，这里只负责"到点就按"）。
+		if _auto_chal and i == 0 and not _over and _field != null and bool(_field.running):
+			var pressed: Array = []
+			for aci in _chal_cd.size():
+				if float(_chal_cd[aci]) <= 0.0:
+					_chal_press(aci)
+					pressed.append(str(_chal_names[aci]))
+			if not pressed.is_empty():
+				_hint.text = "自动挑战：这一轮开了 " + "、".join(PackedStringArray(pressed))
 	# 圆钮右上角那个小红点：几个能点（原来靠底下那排看，现在挪进弹窗了）
 	if _chal_badge != null:
 		_chal_badge.text = ("" if ready <= 0 else str(ready))
@@ -6812,7 +6897,6 @@ func _fill_deck_slots(p: Control, y: float) -> float:
 		if _pending_card != "" and str(_deck_cards[i]) != "":
 			# 按钮占卡片自己让出来的那一条（宽 126−8，高 38，离底 6）
 			_pbtn(p, "换这张", Vector2(cx + 4.0, cy + 224.0), Vector2(118, 38), 20, true, _swap_in.bind(i))
-			_pbtn(p, "换这张", Vector2(cx + 4.0, cy + 224.0), Vector2(118, 38), 20, true, _swap_in.bind(i))
 	# v13a：被吞噬丹吞掉的卡（已腾出格子 · 效果与成套计数都还在）
 	if not _bm_eaten.is_empty():
 		var names: Array = []
@@ -7024,9 +7108,13 @@ func _fill_role(p: Control, y: float, sz: Vector2) -> float:
 	mtip.size = Vector2(640, 32)
 	mtip.add_theme_font_size_override("font_size", 21)
 	mtip.add_theme_color_override("font_color", SEAL)
-	mtip.text = "属性点 " + str(_attr_pts) + "　主属性：" + _main_attr_cn() \
-		+ "　继承成长：臂力 " + str(int(_grow_inherit["arm"])) + " / 身法 " + str(int(_grow_inherit["agi"])) \
-		+ " / 悟性 " + str(int(_grow_inherit["wit"]))
+	# v15k（用户：不要属性点 就属性成长即可）：不再显示"属性点 N"，也不再给加点的地方 ——
+	#   三属性**只看成长**（主属性仍是三选一，乘 ×1.5 那套不变）。
+	mtip.text = "主属性：" + _main_attr_cn() \
+		+ "　成长：臂力 " + str(int(_attr_arm())) + " / 身法 " + str(int(_attr_agi())) \
+		+ " / 悟性 " + str(int(_attr_wit())) \
+		+ "　（继承 " + str(int(_grow_inherit["arm"])) + "/" + str(int(_grow_inherit["agi"])) \
+		+ "/" + str(int(_grow_inherit["wit"])) + "）"
 	p.add_child(mtip)
 	var names := ["力量", "敏捷", "悟性"]
 	var ids := ["str", "agi", "wit"]
@@ -7062,9 +7150,9 @@ func _fill_role(p: Control, y: float, sz: Vector2) -> float:
 		l2.add_theme_color_override("font_color", DIM)
 		l2.text = str(r[3])
 		p.add_child(l2)
-		_pbtn(p, "＋", Vector2(500, aly - 4.0), Vector2(76, 52), 26, _attr_pts > 0, _add_attr.bind(str(r[0])))
+		# v15k（用户：不要属性点）：那颗"＋"按钮撤掉，三属性只靠成长涨
 		if aly == y + 172.0:
-			_pbtn(p, "招募 " + str(_recruit_opens), Vector2(586, aly - 4.0), Vector2(82, 52), 20,
+			_recruit_btn = _pbtn(p, "招募 " + str(_recruit_opens), Vector2(586, aly - 4.0), Vector2(82, 52), 20,
 				_recruit_opens > 0, func(): _open_large("招募"))
 		aly += 60.0
 	y = aly + 6.0
@@ -7322,7 +7410,22 @@ func _fill_mates(p: Control, y: float, sz: Vector2) -> float:
 	_partner_lbs.clear()
 	var ly := y + 224.0          # v14d：上面留出宠物那一排（120~208）
 	# 伙伴列表**通用遍历**（加人不用改这里）：档位那行也按池子里 req_p 自动拼
-	for id in _field.PARTNER_INFO.keys():
+	# v15k（用户：不用显示全部的伙伴 只显示已有伙伴）：32 位全列出来太长 ——
+	#   现在只画**这一局已经入队**的；一个都没有时给一句提示（不然是一片空白）。
+	var owned_ids: Array = []
+	for oid in _field.PARTNER_INFO.keys():
+		if bool((_field.partners[str(oid)] as Dictionary)["owned"]):
+			owned_ids.append(str(oid))
+	if owned_ids.is_empty():
+		var none_lb := Label.new()
+		none_lb.position = Vector2(28, ly + 10.0)
+		none_lb.size = Vector2(640, 60)
+		none_lb.add_theme_font_size_override("font_size", 22)
+		none_lb.add_theme_color_override("font_color", DIM)
+		none_lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		none_lb.text = "这一局还没招募到伙伴 —— 每升 5 级给一次招募机会，去角色页点［招募］"
+		p.add_child(none_lb)
+	for id in owned_ids:
 		var info: Dictionary = _field.PARTNER_INFO[id]
 		var pid := str(id)
 		var sb := StyleBoxFlat.new()
