@@ -1959,6 +1959,19 @@ var partners := {
 	"ximenlie": {"owned": false, "mp": 0.0, "cd": 0.0, "active": 0.0, "dmg_lv": 0, "sec_lv": 0},
 	"duniangzi": {"owned": false, "mp": 0.0, "cd": 0.0, "active": 0.0, "cd_lv": 0, "dmg_lv": 0, "dot_lv": 0, "cost_lv": 0},
 	"xuanjizi": {"owned": false, "mp": 0.0, "cd": 0.0, "active": 0.0, "cd_lv": 0, "dur_lv": 0, "cost_lv": 0},
+	# v15c 新增 12 位
+	"tietouseng": {"owned": false, "mp": 0.0, "cd": 0.0, "active": 0.0, "dmg_lv": 0},
+	"bingshusheng": {"owned": false, "mp": 0.0, "cd": 0.0, "active": 0.0, "dmg_lv": 0, "dur_lv": 0, "cost_lv": 0},
+	"xiaoqier": {"owned": false, "mp": 0.0, "cd": 0.0, "active": 0.0, "dur_lv": 0, "gold_lv": 0, "cost_lv": 0},
+	"laobing": {"owned": false, "mp": 0.0, "cd": 0.0, "active": 0.0, "cut_lv": 0},
+	"zuijianxian": {"owned": false, "mp": 0.0, "cd": 0.0, "active": 0.0, "dmg_lv": 0, "sec_lv": 0},
+	"yaopozi": {"owned": false, "mp": 0.0, "cd": 0.0, "active": 0.0, "heal_lv": 0, "cost_lv": 0},
+	"gushangzao": {"owned": false, "mp": 0.0, "cd": 0.0, "active": 0.0, "aspd_lv": 0, "cost_lv": 0},
+	"jinjiaxianwei": {"owned": false, "mp": 0.0, "cd": 0.0, "active": 0.0, "cut_lv": 0, "cost_lv": 0},
+	"huogong": {"owned": false, "mp": 0.0, "cd": 0.0, "active": 0.0, "dmg_lv": 0, "tgt_lv": 0, "dur_lv": 0, "cost_lv": 0},
+	"qinchi": {"owned": false, "mp": 0.0, "cd": 0.0, "active": 0.0, "dur_lv": 0, "cost_lv": 0},
+	"baiqihouren": {"owned": false, "mp": 0.0, "cd": 0.0, "active": 0.0, "dmg_lv": 0, "cost_lv": 0},
+	"dagongfeng": {"owned": false, "mp": 0.0, "cd": 0.0, "active": 0.0, "shield_lv": 0, "dur_lv": 0, "cost_lv": 0},
 }
 var _dg_list: Array = []            # 飞匕：{pos, dir, tgt, dmg, pierce, bounce, hits, t}
 const PARTNER_INFO := {
@@ -2034,6 +2047,52 @@ const PARTNER_INFO := {
 	"xuanjizi": {"name": "玄机子", "quality": "绝品", "skill": "时间停止", "dtype": "无伤害", "grow": {"arm": 1, "agi": 3, "wit": 6},
 		"desc": "每 45 秒把全场敌人定身 3 秒，同时自己攻速翻倍 3 秒",
 		"mp0": 400.0, "cd0": 45.0, "dur0": 0.0},
+	# ============================================================
+	# v15c 新增 12 位（用户：伙伴可以多做一点新的）
+	#   原则：机制尽量复用战场上**已有**的那几套（持续伤害/定身/治疗/掉钱/护盾/范围），
+	#   不引入没验证过的新系统；每位的特效各自不同，跟老伙伴不撞。
+	#   档位分布：下品 +4 · 中品 +3 · 上品 +3 · 极品 +2
+	# ============================================================
+	# ---- 下品 +4 ----
+	{"name": "铁头僧", "quality": "下品", "skill": "铁头功", "dtype": "物理", "grow": {"arm": 4, "agi": 1, "wit": 0},
+		"desc": "每 6 秒一头撞向最近敌人（物理，一次重击；血越少撞得越狠）",
+		"mp0": 0.0, "cd0": 6.0, "dur0": 0.0},
+	{"name": "病书生", "quality": "下品", "skill": "咳血", "dtype": "木系（持续）", "grow": {"arm": 0, "agi": 2, "wit": 3},
+		"desc": "每 9 秒让最近敌人中毒（木系持续伤害，每秒跳一次，持续 4 秒）",
+		"mp0": 80.0, "cd0": 9.0, "dur0": 0.0},
+	{"name": "小乞儿", "quality": "下品", "skill": "顺手牵羊", "dtype": "无伤害", "grow": {"arm": 1, "agi": 3, "wit": 1},
+		"desc": "持续 6 秒内，每击杀一名敌人额外掉 2 文钱（比钱多多少，冷却更短）",
+		"mp0": 90.0, "cd0": 18.0, "dur0": 6.0},
+	{"name": "瘸腿老兵", "quality": "下品", "skill": "死撑", "dtype": "无伤害", "grow": {"arm": 3, "agi": 1, "wit": 1},
+		"desc": "气血低于 50% 时，全伤害减免 +12%（残血才生效的硬抗）",
+		"mp0": 0.0, "cd0": 0.0, "dur0": 0.0},
+	# ---- 中品 +3 ----
+	{"name": "醉剑仙", "quality": "中品", "skill": "醉里挑灯", "dtype": "物理", "grow": {"arm": 2, "agi": 4, "wit": 1},
+		"desc": "每 5 秒晃到最近敌人身边连刺两下（物理，两下各自判定）",
+		"mp0": 0.0, "cd0": 5.0, "dur0": 0.0},
+	{"name": "药婆子", "quality": "中品", "skill": "金针", "dtype": "治疗", "grow": {"arm": 1, "agi": 1, "wit": 4},
+		"desc": "每 14 秒回一次血（生命上限 10%），并让最近敌人定身 1.5 秒",
+		"mp0": 100.0, "cd0": 14.0, "dur0": 0.0},
+	{"name": "鼓上蚤", "quality": "中品", "skill": "踏鼓", "dtype": "无伤害", "grow": {"arm": 1, "agi": 4, "wit": 1},
+		"desc": "持续 7 秒内攻速 +35%（自己敲鼓提气）",
+		"mp0": 100.0, "cd0": 20.0, "dur0": 7.0},
+	# ---- 上品 +3 ----
+	{"name": "金甲校尉", "quality": "上品", "skill": "拒马", "dtype": "土系（护盾）", "grow": {"arm": 4, "agi": 1, "wit": 2},
+		"desc": "持续 8 秒内受到伤害 −30%，并把伤害的一部分反弹给打你的人（土系）",
+		"mp0": 130.0, "cd0": 22.0, "dur0": 8.0},
+	{"name": "火工道人", "quality": "上品", "skill": "三昧真火", "dtype": "火系（持续）", "grow": {"arm": 2, "agi": 2, "wit": 3},
+		"desc": "每 11 秒点燃最近的 2 名敌人（火系持续燃烧，每秒跳一次，持续 5 秒）",
+		"mp0": 150.0, "cd0": 11.0, "dur0": 0.0},
+	{"name": "琴痴", "quality": "上品", "skill": "乱神曲", "dtype": "无伤害", "grow": {"arm": 0, "agi": 2, "wit": 5},
+		"desc": "每 16 秒弹一曲：全场敌人定身 2 秒（控制型）",
+		"mp0": 180.0, "cd0": 16.0, "dur0": 0.0},
+	# ---- 极品 +2 ----
+	{"name": "白起后人", "quality": "极品", "skill": "杀神", "dtype": "真实", "grow": {"arm": 4, "agi": 2, "wit": 1},
+		"desc": "每 12 秒对最近的敌人造成基于**已损失气血**的真实伤害（越残越致命，无视防御）",
+		"mp0": 160.0, "cd0": 12.0, "dur0": 0.0},
+	{"name": "大内供奉", "quality": "极品", "skill": "罡气", "dtype": "金系（护盾）", "grow": {"arm": 3, "agi": 1, "wit": 4},
+		"desc": "每 24 秒给自己罩一层罡气：吸收 15% 生命上限的伤害，持续 10 秒，破时炸一圈金系伤害",
+		"mp0": 200.0, "cd0": 24.0, "dur0": 10.0},
 }
 const PARTNER_UP_STEP_MP := 20.0      # 每个"提升内力消耗"的强化 +20 内力
 const PARTNER_DOWN_STEP_MP := 15.0    # "减内力消耗"每层 −15
@@ -2538,8 +2597,125 @@ func _cast_partner(id: String) -> void:
 			_cast_timestop()
 		"cuisanniang":
 			_summon_dragon()
+		"tietouseng":     # v15c 新增 6 位一次性技能
+			_cast_tietou()
+		"bingshusheng":
+			_cast_keshui()
+		"yaopozi":
+			_cast_jinzhen()
+		"huogong":
+			_cast_sanmei()
+		"qinchi":
+			_cast_luanshen()
+		"baiqihouren":
+			_cast_shashen()
 		_:
 			pass
+
+# ============================================================
+# v15c 新增 12 位的实现（机制尽量复用已有那几套）
+# ============================================================
+# ① 铁头功：一头撞向最近敌人（物理；自己血越少撞得越狠）
+func _cast_tietou() -> void:
+	var f := _nearest()
+	if f.is_empty():
+		return
+	var hp_r := clampf(float(hero["hp"]) / maxf(1.0, float(hero["hp_max"])), 0.0, 1.0)
+	var mul := 1.4 + (1.0 - hp_r) * 1.2
+	var dmg := float(hero["atk"]) * mul * (1.0 + 0.25 * float(partners["tietouseng"].get("dmg_lv", 0)))
+	var d := _apply_dmg(f, dmg, DMG_PHYS)
+	_push_float(float(f["x"]), float(f["y"]) - 30.0, "铁头 " + str(int(d)), Color(0.90, 0.86, 0.72), true)
+	_bursts.append({"x": float(f["x"]), "y": float(f["y"]) - 14.0, "t": 0.0, "col": Color(0.86, 0.82, 0.70), "scale": 1.2})
+	Audio.sfx("hit_heavy", -6.0)
+	if float(f["hp"]) <= 0.0:
+		_kill_foe(f)
+
+# ② 咳血：给最近敌人挂木系持续伤害（复用 _add_dot）
+func _cast_keshui() -> void:
+	var f := _nearest()
+	if f.is_empty():
+		return
+	var mul := (0.30 + 0.06 * float(partners["bingshusheng"].get("dmg_lv", 0))) * p_star_mul("bingshusheng")
+	var dur := 4.0 + 1.0 * float(partners["bingshusheng"].get("dur_lv", 0))
+	_add_dot(f, mul, dur, DMG_WOOD)
+	_push_float(float(f["x"]), float(f["y"]) - 28.0, "咳血", Color(0.62, 0.90, 0.44), true)
+	Audio.sfx("skill", -8.0)
+
+# ③ 金针：回血 + 定身最近敌人
+func _cast_jinzhen() -> void:
+	var heal := float(hero["hp_max"]) * (0.10 + 0.03 * float(partners["yaopozi"].get("heal_lv", 0))) * p_star_mul("yaopozi")
+	hero["hp"] = minf(float(hero["hp_max"]), float(hero["hp"]) + heal)
+	_push_float(hero_pos.x, hero_pos.y - 86.0, "金针 +" + str(int(heal)), Color(0.66, 0.94, 0.70), true)
+	var f := _nearest()
+	if not f.is_empty():
+		f["para"] = maxf(float(f.get("para", 0.0)), 1.5)
+		_push_float(float(f["x"]), float(f["y"]) - 30.0, "定身 1.5s", Color(0.78, 0.86, 0.98))
+	Audio.sfx("levelup", -8.0)
+
+# ④ 三昧真火：点燃最近 2 名敌人（火系持续）
+func _cast_sanmei() -> void:
+	var n := 2 + int(partners["huogong"].get("tgt_lv", 0))
+	var mul := (0.26 + 0.05 * float(partners["huogong"].get("dmg_lv", 0))) * p_star_mul("huogong")
+	var dur := 5.0 + 1.0 * float(partners["huogong"].get("dur_lv", 0))
+	var hit := 0
+	for f_v in foes:
+		var f: Dictionary = f_v
+		if hit >= n:
+			break
+		if float(f.get("dying", 0.0)) > 0.0 or float(f["hp"]) <= 0.0:
+			continue
+		_add_dot(f, mul, dur, DMG_FIRE)
+		_push_float(float(f["x"]), float(f["y"]) - 28.0, "三昧真火", Color(1.0, 0.62, 0.28), true)
+		hit += 1
+	Audio.sfx("skill", -7.0)
+
+# ⑤ 乱神曲：全场定身
+func _cast_luanshen() -> void:
+	var dur := 2.0 + 0.4 * float(partners["qinchi"].get("dur_lv", 0))
+	var n := 0
+	for f_v in foes:
+		var f: Dictionary = f_v
+		if float(f.get("dying", 0.0)) > 0.0 or bool(f.get("still", false)):
+			continue
+		f["para"] = maxf(float(f.get("para", 0.0)), dur)
+		n += 1
+	_push_float(hero_pos.x, hero_pos.y - 104.0, "乱神曲！定身 " + str(n) + " 名", Color(0.90, 0.86, 1.0), true)
+	Audio.sfx("tension", -5.0)
+
+# ⑥ 杀神：真实伤害，按目标已损失气血算（越残越致命）
+func _cast_shashen() -> void:
+	var f := _nearest()
+	if f.is_empty():
+		return
+	var lost := maxf(0.0, float(f["hp_max"]) - float(f["hp"]))
+	var mul := (0.18 + 0.05 * float(partners["baiqihouren"].get("dmg_lv", 0))) * p_star_mul("baiqihouren")
+	var dmg := maxf(float(hero["atk"]) * 0.8, lost * mul)
+	var d := _apply_dmg(f, dmg, DMG_TRUE)
+	_push_float(float(f["x"]), float(f["y"]) - 34.0, "杀神 " + str(int(d)), Color(0.94, 0.42, 0.36), true)
+	_bursts.append({"x": float(f["x"]), "y": float(f["y"]) - 12.0, "t": 0.0, "col": Color(0.90, 0.34, 0.30), "scale": 1.7})
+	Audio.sfx("hit_heavy", -4.0)
+	if float(f["hp"]) <= 0.0:
+		_kill_foe(f)
+
+# ⑦ 金甲校尉 / 大内供奉 的盾（先扣盾再扣血；走 hero 上那套 shield）
+func _cast_extra_shield(id: String) -> void:
+	var pct := 0.0
+	var elem := DMG_EARTH
+	var tag := ""
+	if id == "jinjiaxianwei":
+		pct = 0.12 + 0.04 * float(partners[id].get("cut_lv", 0))
+		tag = "拒马"
+	else:
+		pct = 0.15 + 0.05 * float(partners[id].get("shield_lv", 0))
+		elem = DMG_METAL
+		tag = "罡气"
+	var sv := float(hero["hp_max"]) * pct * p_star_mul(id)
+	hero["shield_max"] = float(hero.get("shield_max", 0.0)) + sv
+	hero["shield"] = float(hero.get("shield", 0.0)) + sv
+	hero["shield_elem"] = elem
+	_push_float(hero_pos.x, hero_pos.y - 92.0, tag + " +" + str(int(sv)), Color(0.86, 0.80, 0.52), true)
+	_bursts.append({"x": hero_pos.x, "y": hero_pos.y - 10.0, "t": 0.0, "col": Color(0.80, 0.72, 0.44), "scale": 1.5})
+	Audio.sfx("equip", -6.0)
 
 # 季沧海：每 3 秒（可减）自动烧一次，不吃内力
 # ---- v14b 新队员的一次性技能 ----
@@ -2876,6 +3052,14 @@ func _update_partners(delta: float) -> void:
 				hero["mp"] = float(hero["mp"]) - p_mp("fadu")
 				p["cd"] = fd_cd()
 				_cast_shield()
+			continue
+		# v15c：另外两个套盾型（金甲校尉 / 大内供奉）—— 同一套写法，各自的盾值与冷却
+		if str(id) == "jinjiaxianwei" or str(id) == "dagongfeng":
+			var sc := p_cost_of(str(id))
+			if float(p["cd"]) <= 0.0 and float(hero["mp"]) >= sc:
+				hero["mp"] = float(hero["mp"]) - sc
+				p["cd"] = p_cool_of(str(id))
+				_cast_extra_shield(str(id))
 			continue
 		var cost := p_cost_of(str(id))
 		var cool := p_cool_of(str(id))
