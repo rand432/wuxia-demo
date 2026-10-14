@@ -4523,27 +4523,43 @@ func _unlock_buy(id: String) -> void:
 		if _popup_kind == "存档":
 			_open_large("存档")
 		return
+var _save_tab := 0            # v14y：存档页三个页签（0 银两 · 1 名声 · 2 伙伴）
+
+func _set_save_tab(i: int) -> void:
+	_save_tab = i
+	if _popup_kind == "存档":
+		_open_large("存档")
+
 func _fill_save(p: Control, y: float, sz: Vector2) -> float:
 	var head := Label.new()
 	head.position = Vector2(24, y)
 	head.size = Vector2(660, 46)
 	head.add_theme_font_size_override("font_size", 28)
 	head.add_theme_color_override("font_color", INK)
-	head.text = "存档　银两 " + str(int(_money)) + "　·　已解锁 " + str(_unlocked.size()) + " / " + str(UNLOCKS.size())
+	head.text = "存档"
 	p.add_child(head)
+	# v14y（用户：这个界面会不会太杂乱）：存档页原来一页塞了两个货币、四条线、六种东西。
+	#   现在**拆三个页签，一页只干一件事**：银两（解锁 26 条）· 名声（跨局 4 件）· 伙伴（星级＋开局出战）
+	var tabs := ["银两 · 解锁", "名声", "伙伴"]
+	for ti in 3:
+		_pbtn(p, str(tabs[ti]), Vector2(24.0 + float(ti) * 216.0, y + 54.0), Vector2(208, 66), 22,
+			_save_tab == ti, _set_save_tab.bind(ti))
+	var ly := y + 136.0
+	if _save_tab == 1:
+		return _fill_fame_section(p, ly) + 8.0
+	if _save_tab == 2:
+		return _fill_mate_star_section(p, ly) + 8.0
+	# —— 银两页 ——
 	var tip := Label.new()
-	tip.position = Vector2(24, y + 48.0)
+	tip.position = Vector2(24, ly)
 	tip.size = Vector2(660, 34)
 	tip.add_theme_font_size_override("font_size", 19)
 	tip.add_theme_color_override("font_color", DIM)
-	tip.text = "花的就是主界面那个钱账（银两）· 解锁永久生效，下一局进池；另有［难度挑战］给出不重合的那批"
+	tip.text = "已解锁 " + str(_unlocked.size()) + " / " + str(UNLOCKS.size()) + "　·　花的是主界面那个钱账（银两）· 解锁永久生效，下一局进池"
 	p.add_child(tip)
-	_pbtn(p, "难度挑战（关卡 · 无尽）", Vector2(24, y + 96.0), Vector2(640, 68), 24, true, func(): _open_large("关卡"))
-	var ly := y + 180.0
-	# v14x：名声与伙伴星级**放在解锁清单前面** —— 26 条解锁清单很长（每条约 100px），
-	#   原来这两段被压在 3200px 以下，要拖半天；现在常用的一进来就在眼前
-	ly = _fill_fame_section(p, ly)
-	ly = _fill_mate_star_section(p, ly)
+	ly += 46.0
+	_pbtn(p, "难度挑战（关卡 · 无尽）", Vector2(24, ly), Vector2(640, 68), 24, true, func(): _open_large("关卡"))
+	ly += 82.0
 	var last_cat := ""
 	for u_v in UNLOCKS:
 		var u: Dictionary = u_v
@@ -4755,22 +4771,30 @@ func _fill_mate_star_section(p: Control, ly0: float) -> float:
 		mrow.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		p.add_child(mrow)
 		var mnl := Label.new()
-		mnl.position = Vector2(14, 8)
-		mnl.size = Vector2(410, 34)
-		mnl.add_theme_font_size_override("font_size", 22)
+		mnl.position = Vector2(14, 2)
+		mnl.size = Vector2(174, 30)      # v14y：x=196 起是两颗按钮，左边文字不许越界（截图抓到压字）
+		mnl.add_theme_font_size_override("font_size", 21)
 		mnl.add_theme_color_override("font_color", INK)
-		mnl.text = str(minfo["name"]) + "【" + str(minfo["quality"]) + "】 " + _mate_star_cn(mpid)
+		mnl.text = str(minfo["name"]) + "【" + str(minfo["quality"]) + "】"
 		mrow.add_child(mnl)
+		var msn := Label.new()
+		msn.position = Vector2(14, 32)
+		msn.size = Vector2(174, 24)
+		msn.add_theme_font_size_override("font_size", 18)
+		msn.add_theme_color_override("font_color", GOLD)
+		msn.text = _mate_star_cn(mpid)
+		mrow.add_child(msn)
 		var msl := Label.new()
-		msl.position = Vector2(14, 42)
-		msl.size = Vector2(410, 28)
-		msl.add_theme_font_size_override("font_size", 19)
+		msl.position = Vector2(14, 56)
+		msl.size = Vector2(174, 24)
+		msl.add_theme_font_size_override("font_size", 18)
 		msl.add_theme_color_override("font_color", DIM)
-		msl.text = "成长继承 ×" + str(snappedf(_mate_grow_mul(mpid), 0.01)) + "　技能威力 +" + str(12 * (mst - 1)) + "%"
+		msl.text = "成长×" + str(snappedf(_mate_grow_mul(mpid), 0.01)) + " 威力+" + str(12 * (mst - 1)) + "%"
 		mrow.add_child(msl)
 		# v14q：这颗按下去＝"开局自带的那位队员"（再按一次取消）；已入过队的才有资格
 		var msel := (_mate_start == mpid)
-		var mbb0 := _pbtn(mrow, ("开局出战 ✓" if msel else "设为开局出战"), Vector2(196, 8), Vector2(236, 62), 19,
+		# v14y：文案缩短 —— 原来"设为开局出战"6 个字，跟左边"陈石【中品】★★☆☆☆"顶在一起（截图抓到）
+		var mbb0 := _pbtn(mrow, ("开局出战 ✓" if msel else "开局出战"), Vector2(196, 8), Vector2(236, 62), 19,
 			true, _mate_set_start.bind(mpid))
 		if msel:
 			mbb0.add_theme_stylebox_override("normal", _flat(Color(0.30, 0.46, 0.32, 0.98)))
