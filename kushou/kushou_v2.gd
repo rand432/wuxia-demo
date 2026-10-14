@@ -657,7 +657,11 @@ func _ready() -> void:
 	visible = _want_open
 	# v13w：读成就档 ＋ 首次开局就把已解锁的加成发下去
 	_ach_load()
-	# v14z：这里原来就发了一次成就/宠物 —— 但 _extra 会在下面被重置，白写；挪到重置之后
+	# v15i（用户：不是从第一波开始的 等级也不是）：⚠ **原来整个启动流程里从来没调过 _restart_run()**，
+	#   所以开局直接吃的是变量声明处的假数据 —— `var _wave := 12` / `var _lv := 7`。
+	#   表现就是"一进场就是第 13 波、Lv8"。开一局必须走一次 _restart_run() 才是干净的第一波。
+	#   ⚠ 放在 _ach_load() 之后：那边读的是成就/名声档，_restart_run 里要把它们发下来。
+	_restart_run()
 	_sync_avatar()
 
 func open() -> void:
@@ -6445,7 +6449,8 @@ func _on_boss(tier: int) -> void:
 	_hint.text = ["", "一阶", "二阶", "三阶"][clampi(tier, 1, 3)] + " boss 下场了——打赢有额外名声"
 
 func _on_hero_down() -> void:
-	_bath_used += 1                  # v13w：成就「百战不死」看这一局有没有浴血
+	# v15i：⚠ 这里原来**连着加了两遍**（复制粘贴留下的），导致"浴血次数"翻倍 ——
+	#   成就「百战不死」跟名声结算的 ×0.6 都吃这个数，等于白扣一次。
 	_bath_used += 1                  # v13w：成就「百战不死」看这一局有没有浴血
 	# v13c：倒下过 →「撑过一波不倒下」这类任务进度清零重来（浴血免死也照样算倒下）
 	for q_v in _q_slots:
