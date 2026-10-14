@@ -26,7 +26,9 @@ static func attach() -> void:
 	var c := Control.new()
 	c.set_script(load("res://shared/ink_touch.gd"))
 	c.name = "InkTouch"
-	root.add_child(c)
+	# v15h：⚠ 根节点"正在建子节点"时 add_child 会直接失败（启动时报 Parent node is busy）。
+	#   这些都是被 _ready() 里调到的，所以必须 deferred 挂。
+	root.add_child.call_deferred(c)
 
 var _drops: Array = []
 var _t := 0.0

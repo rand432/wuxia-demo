@@ -216,8 +216,27 @@ static func sfx(key: String, vol_db := -6.0, pitch := 1.0) -> void:
 	p.stream = s
 	p.volume_db = vol_db + _vol_db(_sfx_vol)
 	p.pitch_scale = clampf(pitch, 0.5, 2.0)
-	root.add_child(p)
+	# v15h：⚠ 启动时如果有谁在 _ready() 里调 sfx()，根节点还在"建子节点"。
+	#   那时候 add_child 会**直接失败**，玩家节点没进树 → play() 报"Playback can only happen
+	#   when a node is inside the scene tree"（启动日志里那一串就是它）。
+	#   现在：进树了照旧；没进树就 deferred 补一脚（音效晚一帧，听不出来）。
 	p.finished.connect(p.queue_free)
+	# ⚠ 关键：add_child 失败时"补 deferred 的 play"是没用的 —— 节点压根没进树。
+	#   所以整串（入树 → 播放 → 起播兜底）都得放到父节点空闲之后再走。
+	if root.is_node_ready():
+		root.add_child(p)
+		p.play()
+		_ensure_playing(p)
+	else:
+		root.add_child.call_deferred(p)
+		_play_when_free.call_deferred(p)
+
+# v15h：延迟起播（父节点建完子节点之后再入树＋播放）
+static func _play_when_free(p: AudioStreamPlayer) -> void:
+	if p == null or not is_instance_valid(p):
+		return
+	if not p.is_inside_tree():
+		return
 	p.play()
 	_ensure_playing(p)
 

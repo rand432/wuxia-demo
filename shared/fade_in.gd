@@ -28,7 +28,8 @@ static func attach() -> void:
 	var c := Control.new()
 	c.set_script(load("res://shared/fade_in.gd"))
 	c.name = "FadeIn"
-	root.add_child(c)
+	# v15h：同上 —— 启动时根节点还在建子节点，直接 add_child 会失败
+	root.add_child.call_deferred(c)
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
