@@ -2690,11 +2690,11 @@ const PARTNER_INFO := {
 # ============================================================
 # ---- 下品 +4 ----
 	"tietouseng": {"name": "铁头僧", "quality": "下品", "skill": "铁头功", "dtype": "物理", "grow": {"arm": 4, "agi": 1, "wit": 0},
-	"desc": "每 6 秒一头撞向最近敌人（物理，一次重击；血越少撞得越狠）",
-	"mp0": 0.0, "cd0": 6.0, "dur0": 0.0},
+	"desc": "每 12 秒一头撞向最近敌人（物理重击；血越少撞得越狠 · 强化可减冷却/加伤）",
+	"mp0": 0.0, "cd0": 12, "dur0": 0.0},
 	"bingshusheng": {"name": "病书生", "quality": "下品", "skill": "咳血", "dtype": "木系（持续）", "grow": {"arm": 0, "agi": 2, "wit": 3},
-	"desc": "每 9 秒让最近敌人中毒（木系持续伤害，每秒跳一次，持续 4 秒）",
-	"mp0": 80.0, "cd0": 9.0, "dur0": 0.0},
+	"desc": "每 15 秒让最近敌人中毒（木系持续伤害，每秒跳一次，持续 4 秒 · 强化可减冷却/加毒）",
+	"mp0": 80.0, "cd0": 15, "dur0": 0.0},
 	"xiaoqier": {"name": "小乞儿", "quality": "下品", "skill": "顺手牵羊", "dtype": "无伤害", "grow": {"arm": 1, "agi": 3, "wit": 1},
 	"desc": "持续 6 秒内，每击杀一名敌人额外掉**少量灵晶**（0 级 1 颗 · 强化后最多 4 颗）",
 	"mp0": 90.0, "cd0": 18.0, "dur0": 6.0},
@@ -2737,14 +2737,14 @@ const PARTNER_INFO := {
 		"desc": "每 10 秒扎一针：回一小口血，并把伤害的一部分转成回血（持续 6 秒）",
 		"mp0": 80.0, "cd0": 10.0, "dur0": 6.0},
 	"qiaofu": {"name": "樵夫", "quality": "下品", "skill": "劈柴", "dtype": "物理", "grow": {"arm": 3, "agi": 1, "wit": 0},
-		"desc": "每 7 秒抡一斧：物理重击并把目标击退一段",
-		"mp0": 0.0, "cd0": 7.0, "dur0": 0.0},
+		"desc": "每 13 秒抡一斧：物理重击并把目标击退一段（强化可减冷却/加伤）",
+		"mp0": 0.0, "cd0": 13, "dur0": 0.0},
 	"pozhen": {"name": "破阵刀客", "quality": "下品", "skill": "破甲", "dtype": "物理", "grow": {"arm": 2, "agi": 2, "wit": 0},
-		"desc": "每 8 秒一刀：物理伤害并让目标护甲 −20%（持续 5 秒）",
-		"mp0": 0.0, "cd0": 8.0, "dur0": 0.0},
+		"desc": "每 14 秒一刀：物理伤害并让目标护甲 −20%（持续 5 秒 · 强化可减冷却/加伤）",
+		"mp0": 0.0, "cd0": 14, "dur0": 0.0},
 	"busheren": {"name": "捕蛇人", "quality": "下品", "skill": "蛇咬", "dtype": "木系", "grow": {"arm": 1, "agi": 3, "wit": 1},
-		"desc": "每 8 秒放蛇咬最近敌人：木系伤害，目标中毒时伤害翻倍",
-		"mp0": 90.0, "cd0": 8.0, "dur0": 0.0},
+		"desc": "每 14 秒放蛇咬最近敌人：木系伤害，目标中毒时伤害翻倍（强化可减冷却/加伤）",
+		"mp0": 90.0, "cd0": 14, "dur0": 0.0},
 	"gengfu": {"name": "更夫", "quality": "下品", "skill": "报更", "dtype": "无伤害", "grow": {"arm": 1, "agi": 2, "wit": 2},
 		"desc": "每 14 秒敲梆子：最近 2 名敌人致盲（命中降低，持续 5 秒）",
 		"mp0": 90.0, "cd0": 14.0, "dur0": 0.0},
@@ -3324,7 +3324,7 @@ func _cast_tietou() -> void:
 	if f.is_empty():
 		return
 	var hp_r := clampf(float(hero["hp"]) / maxf(1.0, float(hero["hp_max"])), 0.0, 1.0)
-	var mul := 1.4 + (1.0 - hp_r) * 1.2
+	var mul := 0.85 + (1.0 - hp_r) * 0.75
 	var dmg := float(hero["atk"]) * mul * (1.0 + 0.25 * float(partners["tietouseng"].get("dmg_lv", 0)))
 	var d := _apply_dmg(f, dmg, DMG_PHYS)
 	_push_float(float(f["x"]), float(f["y"]) - 30.0, "铁头 " + str(int(d)), Color(0.90, 0.86, 0.72), true)
@@ -3338,7 +3338,7 @@ func _cast_keshui() -> void:
 	var f := _nearest()
 	if f.is_empty():
 		return
-	var mul := (0.30 + 0.06 * float(partners["bingshusheng"].get("dmg_lv", 0))) * p_star_mul("bingshusheng")
+	var mul := (0.20 + 0.05 * float(partners["bingshusheng"].get("dmg_lv", 0))) * p_star_mul("bingshusheng")
 	var dur := 4.0 + 1.0 * float(partners["bingshusheng"].get("dur_lv", 0))
 	_add_dot(f, mul, dur, DMG_WOOD)
 	_push_float(float(f["x"]), float(f["y"]) - 28.0, "咳血", Color(0.62, 0.90, 0.44), true)
@@ -3441,7 +3441,7 @@ func _cast_pichai() -> void:
 	var f := _nearest()
 	if f.is_empty():
 		return
-	var base := float(hero["atk"]) * (1.6 + 0.25 * float(partners["qiaofu"].get("dmg_lv", 0))) * (1.0 + float(hero["dmg_pct"]))
+	var base := float(hero["atk"]) * (1.0 + 0.18 * float(partners["qiaofu"].get("dmg_lv", 0))) * (1.0 + float(hero["dmg_pct"]))
 	var dm := _apply_dmg(f, base, DMG_PHYS)
 	f["kb"] = 26.0
 	_push_float(float(f["x"]), float(f["y"]) - 30.0, "劈柴 " + str(int(dm)), Color(0.90, 0.82, 0.66), true)
@@ -3454,7 +3454,7 @@ func _cast_pojia() -> void:
 	var f := _nearest()
 	if f.is_empty():
 		return
-	var base := float(hero["atk"]) * (1.2 + 0.2 * float(partners["pozhen"].get("dmg_lv", 0))) * (1.0 + float(hero["dmg_pct"]))
+	var base := float(hero["atk"]) * (0.75 + 0.14 * float(partners["pozhen"].get("dmg_lv", 0))) * (1.0 + float(hero["dmg_pct"]))
 	var dm := _apply_dmg(f, base, DMG_PHYS)
 	f["armor_break_t"] = 5.0
 	_push_float(float(f["x"]), float(f["y"]) - 30.0, "破甲 " + str(int(dm)), Color(0.96, 0.72, 0.42), true)
@@ -3467,7 +3467,7 @@ func _cast_sheyao() -> void:
 	var f := _nearest()
 	if f.is_empty():
 		return
-	var mul := 1.1 + 0.2 * float(partners["busheren"].get("dmg_lv", 0))
+	var mul := 0.7 + 0.14 * float(partners["busheren"].get("dmg_lv", 0))
 	if float(f.get("dot_t", 0.0)) > 0.0:
 		mul *= 2.0                        # 中毒目标翻倍
 	var dm := _apply_dmg(f, float(hero["atk"]) * mul * (1.0 + float(hero["dmg_pct"])), DMG_WOOD)
