@@ -4638,9 +4638,15 @@ func _draw() -> void:
 		# v2g（用户："挑战怪 要和不同怪不同 比如文钱 就是文钱的样子等"）：
 		#   按 kind 各画各的——钱怪是铜钱、晶怪是晶石、甲士带盾、宝箱怪是箱子、boss 带肩甲
 		_foe_art(f, sc, fc)
-		var bw := 46.0 * sc
+		# v16w（用户："怪物血条厚一点"）：⚠ 原来高 6px、没有描边 —— 手机上看就是一条细线。
+		#   现在：高度 6 → **11**，再加一圈 1.5px 深色描边（高亮背景上也看得清）。
+		#   位置也往上挪一点，免得加厚之后压住怪的头顶。
+		var bw := 50.0 * sc
+		var bh := 11.0 * sc
+		var by := float(f["y"]) - 62.0 * sc
 		var bx := float(f["x"]) - bw * 0.5 + (randf_range(-2.0, 2.0) if flash > 0.0 else 0.0)
-		draw_rect(Rect2(bx, float(f["y"]) - 58.0 * sc, bw, 6.0), Color(0.28, 0.26, 0.28))
+		draw_rect(Rect2(bx, by, bw, bh), Color(0.20, 0.18, 0.20))          # 底槽
+		draw_rect(Rect2(bx, by, bw, bh), Color(0.06, 0.05, 0.06), false, 1.5)  # 描边
 		var ratio := clampf(float(f["hp"]) / maxf(1.0, float(f["hp_max"])), 0.0, 1.0)
 		var col := Color(0.62, 0.30, 0.28)
 		if str(f["kind"]) == "coin":
@@ -4649,7 +4655,8 @@ func _draw() -> void:
 			col = Color(0.42, 0.62, 0.78)
 		elif bool(f.get("boss", false)):
 			col = Color(0.72, 0.22, 0.20)
-		draw_rect(Rect2(bx, float(f["y"]) - 58.0 * sc, bw * ratio, 6.0), col)
+		# v16w：填充跟着加厚（用上面算好的 by / bh，别再写死 58/6）
+		draw_rect(Rect2(bx + 1.5, by + 1.5, (bw - 3.0) * ratio, bh - 3.0), col)
 		if bool(f.get("boss", false)) or str(f.get("kind", "")) == "champion":
 			var nm := str(f["name"])
 			draw_string(ThemeDB.fallback_font, Vector2(float(f["x"]) - 70.0, float(f["y"]) - 66.0 * sc), nm,
