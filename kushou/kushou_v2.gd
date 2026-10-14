@@ -2139,7 +2139,7 @@ func _wpn_refresh() -> void:
 	_wpn_refresh_n += 1
 	_wpn_roll_choices()
 	Audio.sfx("ui_click", -8.0)
-	if _popup_kind == "成长武器":
+	if _popup_kind == "成长武器" or _popup_kind == "成长武器详情":
 		_open_large("成长武器详情")
 # 贴上一条强化线（永久）
 func _wpn_take(i: int) -> void:
@@ -2153,7 +2153,7 @@ func _wpn_take(i: int) -> void:
 	_hint.text = "武器贴上：" + str(it["n"])
 	Audio.sfx("equip", -4.0)
 	_sync_battle_stats()
-	if _popup_kind == "成长武器":
+	if _popup_kind == "成长武器" or _popup_kind == "成长武器详情":
 		_open_large("成长武器详情")
 
 # 强化一次：钱够就升；到 10 的倍数进阶＋弹三选一
@@ -2198,7 +2198,7 @@ func _wpn_up() -> bool:
 		_hint.text = "进阶！武器升为【" + str(WPN_Q_CN[_wpn_q]) + "】，来选一条强化线"
 		Audio.sfx("levelup", -3.0)
 	_sync_battle_stats()
-	if _popup_kind == "成长武器":
+	if _popup_kind == "成长武器" or _popup_kind == "成长武器详情":
 		_open_large("成长武器详情")
 	return true
 
@@ -2219,7 +2219,7 @@ func _wpn_auto() -> void:
 	else:
 		_hint.text = "一键强化 " + str(n) + " 次：花了 " + str(spent) + " 文钱，现在 +" + str(_wpn_lv) + "（" + str(WPN_Q_CN[_wpn_q]) + "）"
 	Audio.sfx("coin", -6.0)
-	if _popup_kind == "成长武器":
+	if _popup_kind == "成长武器" or _popup_kind == "成长武器详情":
 		_open_large("成长武器详情")
 # ---- v12k 图鉴：宝物全部 ＋ 羁绊 16 件（用户："可以查看有什么宝物"）----
 func _fill_codex(p: Control, y: float, sz: Vector2) -> float:
@@ -7176,6 +7176,14 @@ func _fill_popup(p: Control, kind: String, y: float, sz: Vector2) -> float:
 		lines = ["牢中事件（三选一 · 4 秒不点自动随机）", "① 捡到钱袋：文钱 +150", "② 灵晶矿：灵晶 +8", "③ 武学残页：随机一张卡 +1 星"]
 	elif kind == "抽卡":
 		lines = ["抽卡 · 20 灵晶（现有 " + str(_crystal) + "）", "① 技能流 · 凝神（1★）", "② 技能流 · 疾风诀（1★）", "③ 技能流 · 破罡（1★）", "十格满时会先进「替换」模式"]
+	elif kind == "设置":
+		# v16n（用户："背景音有点吵"）：⚠ 原来这一页只有两行**死文本**"音乐：开/音效：开"，
+		#   点不了 —— 觉得吵也没地方调。现在给两排**真能点的音量档**。
+		return _fill_settings(p, y)
+	elif kind == "设置":
+		# v16n（用户："背景音有点吵"）：⚠ 原来这一页只有两行**死文本**"音乐：开/音效：开"，
+		#   点不了 —— 觉得吵也没地方调。现在给两排**真能点的音量档**。
+		return _fill_settings(p, y)
 	elif kind == "卡组合计":
 		# v15n：改成真正算出来的列表（已合成的套 ＋ 还在格里的卡，点开看详情）
 		return _fill_deck_total(p, y)
@@ -7243,6 +7251,44 @@ func _set_deck_tab(i: int) -> void:
 #     ① 已成型（合成掉了、已腾出占格的套）—— 每套一个框，点开看详情
 #     ② 还在十个格里的卡 —— 同样点开看详情
 #   弹窗正文本身在 ScrollContainer 里，所以列表长了可以直接手指上下拖。
+# v16n：设置页——音量两排（音乐 / 音效），每排 5 档
+func _fill_settings(p: Control, y: float) -> float:
+	var ly := y
+	var head := _lbl(Vector2(24, ly), Vector2(660, 38), 22, DIM)
+	head.text = "音量（点一下切档 · 会记进存档）"
+	p.add_child(head)
+	ly += 46.0
+	var names := ["关", "小声", "中", "偏大", "最大"]
+	var vals := [0.0, 0.25, 0.5, 0.75, 1.0]
+	for row in 2:
+		var is_bgm := row == 0
+		var cur: float = Audio.bgm_volume() if is_bgm else Audio.sfx_volume()
+		var lb := _lbl(Vector2(24, ly), Vector2(660, 36), 23, INK)
+		lb.text = ("音乐" if is_bgm else "音效") + "：现在 " + names[clampi(int(round(cur * 4.0)), 0, 4)]
+		p.add_child(lb)
+		ly += 42.0
+		for i in 5:
+			var v: float = vals[i]
+			var on: bool = absf(cur - v) < 0.13
+			var b := _mk_btn(names[i], Vector2(24.0 + float(i) * 136.0, ly), Vector2(128, 62), 22, on, _vol_pick.bind(is_bgm, v))
+			p.add_child(b)
+		ly += 76.0
+	ly += 6.0
+	var tip := _lbl(Vector2(24, ly), Vector2(660, 64), 20, DIM)
+	tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	tip.text = "默认音乐已经往下压过一档（-12dB → -18dB）。觉得还吵就往左点；「关」是完全静音。"
+	p.add_child(tip)
+	return ly + 80.0
+
+# 点某一档：设音量 → 存档 → 重画这一页
+func _vol_pick(is_bgm: bool, v: float) -> void:
+	if is_bgm:
+		Audio.set_bgm_volume(v)
+	else:
+		Audio.set_sfx_volume(v)
+	Audio.save_settings()
+	_open_large("设置")
+
 func _fill_deck_total(p: Control, y: float) -> float:
 	var ly := y
 	# ---- ① 已成型 ----

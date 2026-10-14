@@ -24,7 +24,10 @@ static var _bgm_a: AudioStreamPlayer = null
 static var _bgm_b: AudioStreamPlayer = null
 static var _use_a := true
 static var _cache := {}
-static var _bgm_db := -12.0     # BGM 基准音量（音效比它响，避免盖过打击声）
+static var _bgm_db := -18.0     # BGM 基准音量
+# v16n（用户："背景音有点吵"）：⚠ 原来是 -12dB —— 跟音效（-3~-14dB）几乎一样响，
+#   打着打着就嫌吵。压到 -18dB（约一半响度），音效仍然压得住它。
+#   玩家还能在［设置］里再调（音乐/音效各 5 档，存进设置文档）。
 
 static func _root() -> Node:
 	var ml := Engine.get_main_loop()

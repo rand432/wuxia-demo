@@ -636,6 +636,12 @@ func _process(delta: float) -> void:
 		# v13b P1：**走位指令优先**（自动追怪让位）——走到点、或 6 秒后自动撤销
 		var od := hero_pos.distance_to(_order_pos)
 		if od <= ORDER_STOP_DIST or _order_t > ORDER_MOVE_SEC:
+			# v16n（用户："我用临时指令绕后去打怪 但是要么不动 要么就回正了"）：
+			#   ⚠ 真因：指令走完只是 `_order_has_pos = false`，主角立刻回到**旧的 _home**（中间那条线）
+			#     —— 你特意绕到怪背后，它马上又飘回正中，等于"回正了"。
+			#   现在：**指令走到哪，哪儿就是新家**（就地驻守、从这儿打），不再回老位置。
+			#   想让它回正中：再点一下自己身后即可。
+			_home = hero_pos
 			_order_has_pos = false
 		else:
 			hero_pos += (_order_pos - hero_pos).normalized() * minf(HERO_SPD_FAR * delta, od)
