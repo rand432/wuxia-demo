@@ -68,6 +68,8 @@ var _attr := {"arm": 0, "agi": 0, "wit": 0}
 var _attr_pts := 0        # 属性点（v15k：界面不再给加点的地方，留着当储备）
 var _recruit_btn: Button = null   # v15k（用户：可以招募时主角头像闪动提示）—— 存一份用来做呼吸闪
 var _rec_flash := 0.0             # 上面那个呼吸闪的相位
+var _q_offer := {}                # v15p：掷出来但玩家还没决定接不接的事件（挂在这里）
+var _q_badge: Label = null        # 任务钮右上角那个"有事件"的红点
 var _main_attr := "str"   # str＝力量 · agi＝敏捷 · wit＝悟性
 # v6a 成长继承（用户："成长就是三属性了 根据角色不同特性 三属性成长也不同
 #   【但是继承取最高值 保证稳步提升】"）
@@ -771,7 +773,11 @@ func _build_field() -> void:
 	# 就绪数量做成圆钮右上角的小红点（原来靠底下那排显示"哪个能点"，现在得在这儿说）
 	_chal_badge = _lbl(Vector2(94, 384), Vector2(56, 36), 22, Color(1, 0.94, 0.88))
 	_chal_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_circle_btn("任务", Vector2(22, 530), func(): _open_large("任务"))
+	# v15p：有事件挂着的时候，点［任务］直接开**事件详情**（接受/放弃）；没有就照旧开任务栏
+	_circle_btn("任务", Vector2(22, 530), func(): _open_large("事件" if not _q_offer.is_empty() else "任务"))
+	# "ui特效提示"：有事件挂着时，任务钮右上角一个跳动的红点（跟挑战钮那个小红点同一套做法）
+	_q_badge = _lbl(Vector2(94, 518), Vector2(56, 36), 22, Color(1.0, 0.42, 0.36))
+	_q_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_circle_btn("卡组", Vector2(22, 664), func(): _open_large("卡组"))
 	_circle_btn("存档", Vector2(594, 236), func(): _open_large("存档"))
 	_circle_btn("成就", Vector2(594, 372), func(): _open_large("成就"))
@@ -3878,18 +3884,17 @@ func _q_event() -> void:
 	q["left"] = float(d.get("sec", -1.0))
 	q["base"] = _q_now(str(d["ck"]))
 	q["alive"] = 0.0
-	# v13h：即时型事件（赌局）——当场结算，不占任务栏
+	# v15p（用户："事件这个平时不出现 180s出现【ui特效提示】然后点击 说这个任务是什么 奖励是什么
+	#        接受还是放弃【放弃给10灵晶】"）：
+	#   ⚠ 原来是掷出来**直接塞进任务栏**（还不占满就一直挂着），等于"平时一直出现"。
+	#   现在：掷出来先**挂着**（_q_offer），只冒一条横幅提示；玩家点了才弹详情，
+	#   详情里说清"要做什么 / 给什么奖"，两颗按钮：接受 / 放弃（放弃给 10 灵晶）。
 	if bool(q.get("instant", false)):
-		_q_instant(q)
+		_q_instant(q)          # 即时型（赌局/破茧）：当场结算，不占任务栏，也不挂起
 		return
-	_q_slots.append(q)
-	_q_setup(q)
-	var tail := ""
-	if float(q["left"]) >= 0.0:
-		tail = "　限时 " + str(int(q["left"])) + " 秒"
-	_note("【事件·" + str(Q_TIER_CN[int(q["tier"])]) + "】" + str(q["n"]) + "　" + str(q["d"]) + tail
-		+ "　·　奖 " + _q_reward_cn(q) + "（不想做就在任务栏点放弃，给 10 灵晶）", 5.0)
-	_hint.text = "新任务：「" + str(q["n"]) + "」" + str(q["d"])
+	_q_offer = q
+	_note("【事件·" + str(Q_TIER_CN[int(q["tier"])]) + "】" + str(q["n"]) + "　—— 点这里看详情，决定接不接", 5.0)
+	_hint.text = "来了个事件：「" + str(q["n"]) + "」　点［任务］钮看详情（接受 / 放弃给 10 灵晶）"
 	Audio.sfx("bell", -6.0)
 
 # 任务的场上布置（石像 / 法阵）——P3
@@ -3983,6 +3988,111 @@ func _q_instant(q: Dictionary) -> void:
 			pass
 
 # 放弃：+10 灵晶
+# v15p：接下挂起的那个事件（真塞进任务栏 ＋ 做场上布置）
+# v15p（用户："说这个任务是什么 奖励是什么 接受还是放弃【放弃给10灵晶】"）：
+#   事件详情弹窗 —— 只有玩家点了那条横幅提示才会开（平时不占地方）。
+func _fill_event(p: Control, y: float, sz: Vector2) -> float:
+	if _q_offer.is_empty():
+		var none_lb := Label.new()
+		none_lb.position = Vector2(28, y + 10.0)
+		none_lb.size = Vector2(640, 60)
+		none_lb.add_theme_font_size_override("font_size", 22)
+		none_lb.add_theme_color_override("font_color", DIM)
+		none_lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		none_lb.text = "现在没有待定的事件 —— 每 180 秒会冒一次提示"
+		p.add_child(none_lb)
+		return y + 84.0
+	var q: Dictionary = _q_offer
+	var ly := y
+	# 档位 + 名字
+	var h1 := Label.new()
+	h1.position = Vector2(28, ly)
+	h1.size = Vector2(640, 52)
+	h1.add_theme_font_size_override("font_size", 30)
+	h1.add_theme_color_override("font_color", SEAL)
+	h1.text = "【事件·" + str(Q_TIER_CN[int(q["tier"])]) + "】" + str(q["n"])
+	p.add_child(h1)
+	ly += 62.0
+	# 要做的事
+	var h2 := Label.new()
+	h2.position = Vector2(28, ly)
+	h2.size = Vector2(640, 96)
+	h2.add_theme_font_size_override("font_size", 24)
+	h2.add_theme_color_override("font_color", INK)
+	h2.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	h2.text = "要做什么：" + str(q["d"])
+	p.add_child(h2)
+	ly += 104.0
+	# 限时
+	var need_t := ""
+	if float(q.get("left", -1.0)) >= 0.0:
+		need_t = "限时 " + str(int(q["left"])) + " 秒（到点没做完算失败）"
+	else:
+		need_t = "不限时（慢慢做）"
+	# 目标数量
+	var goal := int(q.get("goal", 1))
+	var h3 := Label.new()
+	h3.position = Vector2(28, ly)
+	h3.size = Vector2(640, 44)
+	h3.add_theme_font_size_override("font_size", 22)
+	h3.add_theme_color_override("font_color", DIM)
+	h3.text = "算完成：" + need_t + ("　需要 ×" + str(goal) if goal > 1 else "")
+	p.add_child(h3)
+	ly += 58.0
+	# 奖励
+	var h4 := Label.new()
+	h4.position = Vector2(28, ly)
+	h4.size = Vector2(640, 52)
+	h4.add_theme_font_size_override("font_size", 26)
+	h4.add_theme_color_override("font_color", GOLD)
+	h4.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	h4.text = "奖励：" + _q_reward_cn(q)
+	p.add_child(h4)
+	ly += 74.0
+	# 两颗按钮：接受 / 放弃
+	_pbtn(p, "接受（挂进任务栏）", Vector2(28, ly), Vector2(316, 84), 24, true, _q_accept)
+	_pbtn(p, "放弃（灵晶 +" + str(Q_GIVE_CRYSTAL) + "）", Vector2(356, ly), Vector2(316, 84), 24, false, _q_decline)
+	ly += 100.0
+	var tip := Label.new()
+	tip.position = Vector2(28, ly)
+	tip.size = Vector2(640, 60)
+	tip.add_theme_font_size_override("font_size", 20)
+	tip.add_theme_color_override("font_color", DIM)
+	tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	tip.text = "事件每 180 秒冒一次；接了以后进度在任务栏看，中途也能放弃（同样是 10 灵晶）。"
+	p.add_child(tip)
+	return ly + 76.0
+
+func _q_accept() -> void:
+	if _q_offer.is_empty():
+		return
+	var q: Dictionary = _q_offer
+	_q_offer = {}
+	if _q_slots.size() >= Q_MAX:
+		_hint.text = "任务栏满了（最多 " + str(Q_MAX) + " 个）—— 先做完或放弃一个再说"
+		return
+	_q_slots.append(q)
+	_q_setup(q)
+	var tail := ""
+	if float(q["left"]) >= 0.0:
+		tail = "　限时 " + str(int(q["left"])) + " 秒"
+	_hint.text = "接了：「" + str(q["n"]) + "」" + str(q["d"]) + tail + "　奖 " + _q_reward_cn(q)
+	Audio.sfx("ui_click", -8.0)
+	if _popup_kind == "事件" or _popup_kind == "任务":
+		_open_large("任务")
+
+# v15p：放弃挂起的那个事件（给 10 灵晶，跟任务栏里放弃同一个价）
+func _q_decline() -> void:
+	if _q_offer.is_empty():
+		return
+	var nm := str(_q_offer.get("n", ""))
+	_q_offer = {}
+	_crystal += Q_GIVE_CRYSTAL
+	_crystal_pop = 0.32
+	_hint.text = "放弃「" + nm + "」：灵晶 +" + str(Q_GIVE_CRYSTAL) + "（现在 " + str(int(_crystal)) + "）"
+	Audio.sfx("ui_click", -8.0)
+	_close_popup()
+
 func _q_give_up(i: int) -> void:
 	if i < 0 or i >= _q_slots.size():
 		return
@@ -4034,10 +4144,18 @@ func _q_tick(delta: float) -> void:
 				_note("【任务失败】" + str(q["n"]) + "　时间到——失败不给东西", 3.5)
 				Audio.sfx("fall_down", -6.0)
 	# v13f：清道夫 / 越狱——这一波里"场上的怪被清空过"就记一笔（换波时没清空的会归零）
-	if _field != null and _field.live_foes() <= 0:
+	# v15p（探针抓到的 bug）：⚠ 原来只看 live_foes() <= 0 —— 而**开局还没刷怪时它也是 0**，
+	#   于是"一波之内把场上的怪清空一次"这种任务一接上就当场判定完成（探针里第 4 帧就 prog=1）。
+	#   现在必须先**有过怪**、再清空才算（seen 标记）。
+	if _field != null:
+		var alive_now: int = _field.live_foes()
 		for qc_v in _q_slots:
 			var qc: Dictionary = qc_v
-			if str(qc["ck"]) == "clearwave" and not bool(qc.get("hit_this_wave", false)):
+			if str(qc["ck"]) != "clearwave":
+				continue
+			if alive_now > 0:
+				qc["seen"] = true                    # 场上有怪了，这一波才开始算
+			if alive_now <= 0 and bool(qc.get("seen", false)) and not bool(qc.get("hit_this_wave", false)):
 				qc["hit_this_wave"] = true
 				qc["alive"] = float(qc.get("alive", 0.0)) + 1.0
 				_hint.text = "场上清空了：「" + str(qc["n"]) + "」记一笔"
@@ -6033,6 +6151,13 @@ func _process(delta: float) -> void:
 	# v15k（用户：当可以招募伙伴的时候 主角人物头像 会闪动可招募伙伴）：
 	#   有招募机会时，那颗［招募 N］按钮做"呼吸闪"——一眼能看到该去招募了。
 	_rec_flash += delta
+	# v15p：有事件挂着 → 任务钮右上角红点跳动
+	if _q_badge != null and is_instance_valid(_q_badge):
+		if _q_offer.is_empty():
+			_q_badge.text = ""
+		else:
+			_q_badge.text = "!"
+			_q_badge.add_theme_color_override("font_color", Color(1.0, 0.42, 0.36, 0.55 + 0.45 * sin(_rec_flash * 6.0)))
 	if _recruit_btn != null and is_instance_valid(_recruit_btn) and _recruit_opens > 0:
 		var fk := 0.5 + 0.5 * sin(_rec_flash * 5.0)
 		_recruit_btn.add_theme_stylebox_override("normal", _flat(SEAL.lerp(Color(1.0, 0.86, 0.32), fk * 0.85)))
@@ -6085,6 +6210,7 @@ func _process(delta: float) -> void:
 				if not bool(qw.get("hit_this_wave", false)):
 					qw["alive"] = 0.0
 				qw["hit_this_wave"] = false
+				qw["seen"] = false                  # v15p：新的一波，重新等"先有怪"
 
 	var ready := 0
 	for i in _chal_cd.size():
@@ -6734,6 +6860,8 @@ func _fill_popup(p: Control, kind: String, y: float, sz: Vector2) -> float:
 		return _fill_over(p, y, sz)
 	if kind == "黑市":
 		return _fill_black(p, y, sz)
+	if kind == "事件":
+		return _fill_event(p, y, sz)
 	if kind == "任务":
 		return _fill_quest(p, y, sz)
 	if kind == "招募":
