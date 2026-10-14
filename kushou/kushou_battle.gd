@@ -1647,19 +1647,86 @@ const SKILL_POOL := [
 		"desc": "蛟龙多活 6 秒（现 <CL> 秒）【内力 +60/层】", "anim": "蛟龙身上的水光留得更久"},
 	{"id": "cuisanniang_cd", "name": "龙王·降冷却", "kind": "num", "max": 3, "req_p": "cuisanniang",
 		"desc": "冷却 −8 秒（现 <CC> 秒）", "anim": "蛟龙出得更勤"},
+	# ---- v15d：新增 12 位的强化档位（各 3 层，出现在升级三选一里）----
+	{"id": "tietouseng_cd", "name": "铁头·减冷却", "kind": "num", "max": 3, "req_p": "tietouseng",
+		"desc": "冷却 −1.5 秒（现 <CD> 秒）【内力消耗 +20/层】", "anim": "撞得更勤"},
+	{"id": "tietouseng_dmg", "name": "铁头·加伤", "kind": "num", "max": 3, "req_p": "tietouseng",
+		"desc": "撞击伤害 +25%/层【内力消耗 +20/层】", "anim": "撞出火星"},
+	{"id": "tietouseng_cost", "name": "铁头·减内力", "kind": "num", "max": 3, "req_p": "tietouseng",
+		"desc": "内力消耗 −15（现 <MP>，效果不变）", "anim": "更省力"},
+	{"id": "bingshusheng_cd", "name": "咳血·减冷却", "kind": "num", "max": 3, "req_p": "bingshusheng",
+		"desc": "冷却 −2 秒（现 <CD> 秒）【内力消耗 +20/层】", "anim": "咳得更频"},
+	{"id": "bingshusheng_dmg", "name": "咳血·加毒", "kind": "num", "max": 3, "req_p": "bingshusheng",
+		"desc": "毒伤 +25%/层【内力消耗 +20/层】", "anim": "血更绿"},
+	{"id": "bingshusheng_dur", "name": "咳血·加持续", "kind": "num", "max": 3, "req_p": "bingshusheng",
+		"desc": "毒持续 +1 秒（现 <DUR> 秒）【内力消耗 +20/层】", "anim": "毒留得久"},
+	{"id": "xiaoqier_dur", "name": "牵羊·加持续", "kind": "num", "max": 3, "req_p": "xiaoqier",
+		"desc": "持续 +2 秒（现 <DUR> 秒）【内力消耗 +20/层】", "anim": "摸得久"},
+	{"id": "xiaoqier_gold", "name": "牵羊·多掉钱", "kind": "num", "max": 3, "req_p": "xiaoqier",
+		"desc": "每杀一只多掉 2 文钱【内力消耗 +20/层】", "anim": "钱叮当响"},
+	{"id": "xiaoqier_cost", "name": "牵羊·减内力", "kind": "num", "max": 3, "req_p": "xiaoqier",
+		"desc": "内力消耗 −15（现 <MP>，效果不变）", "anim": "手更轻"},
+	{"id": "zuijianxian_cd", "name": "醉剑·减冷却", "kind": "num", "max": 3, "req_p": "zuijianxian",
+		"desc": "冷却 −1 秒（现 <CD> 秒）", "anim": "醉步更快"},
+	{"id": "zuijianxian_dmg", "name": "醉剑·加伤", "kind": "num", "max": 3, "req_p": "zuijianxian",
+		"desc": "两下伤害 +25%/层", "anim": "剑花更乱"},
+	{"id": "zuijianxian_cost", "name": "醉剑·减内力", "kind": "num", "max": 3, "req_p": "zuijianxian",
+		"desc": "内力消耗 −15（现 <MP>，效果不变）", "anim": "酒还是那壶"},
+	{"id": "yaopozi_cd", "name": "金针·减冷却", "kind": "num", "max": 3, "req_p": "yaopozi",
+		"desc": "冷却 −1.5 秒（现 <CD> 秒）【内力消耗 +20/层】", "anim": "针出得更快"},
+	{"id": "yaopozi_heal", "name": "金针·加治疗", "kind": "num", "max": 3, "req_p": "yaopozi",
+		"desc": "治疗 +3% 生命上限/层【内力消耗 +20/层】", "anim": "针上带光"},
+	{"id": "yaopozi_cost", "name": "金针·减内力", "kind": "num", "max": 3, "req_p": "yaopozi",
+		"desc": "内力消耗 −15（现 <MP>，效果不变）", "anim": "省着扎"},
+	{"id": "gushangzao_dur", "name": "踏鼓·加持续", "kind": "num", "max": 3, "req_p": "gushangzao",
+		"desc": "持续 +1.5 秒（现 <DUR> 秒）【内力消耗 +20/层】", "anim": "鼓点更长"},
+	{"id": "gushangzao_aspd", "name": "踏鼓·加攻速", "kind": "num", "max": 3, "req_p": "gushangzao",
+		"desc": "攻速 +10%/层【内力消耗 +20/层】", "anim": "鼓点更急"},
+	{"id": "gushangzao_cost", "name": "踏鼓·减内力", "kind": "num", "max": 3, "req_p": "gushangzao",
+		"desc": "内力消耗 −15（现 <MP>，效果不变）", "anim": "轻敲"},
+	{"id": "jinjiaxianwei_cut", "name": "拒马·加盾", "kind": "num", "max": 3, "req_p": "jinjiaxianwei",
+		"desc": "护盾 +4% 生命上限/层【内力消耗 +20/层】", "anim": "甲片更厚"},
+	{"id": "jinjiaxianwei_dur", "name": "拒马·加持续", "kind": "num", "max": 3, "req_p": "jinjiaxianwei",
+		"desc": "持续 +2 秒（现 <DUR> 秒）【内力消耗 +20/层】", "anim": "架势更稳"},
+	{"id": "jinjiaxianwei_cost", "name": "拒马·减内力", "kind": "num", "max": 3, "req_p": "jinjiaxianwei",
+		"desc": "内力消耗 −15（现 <MP>，效果不变）", "anim": "扛得更省"},
+	{"id": "huogong_cd", "name": "真火·减冷却", "kind": "num", "max": 3, "req_p": "huogong",
+		"desc": "冷却 −1.5 秒（现 <CD> 秒）【内力消耗 +20/层】", "anim": "火起得更勤"},
+	{"id": "huogong_dmg", "name": "真火·加伤", "kind": "num", "max": 3, "req_p": "huogong",
+		"desc": "火伤 +25%/层【内力消耗 +20/层】", "anim": "火苗更旺"},
+	{"id": "huogong_tgt", "name": "真火·多烧一个", "kind": "num", "max": 3, "req_p": "huogong",
+		"desc": "多点燃 1 名敌人/层【内力消耗 +20/层】", "anim": "火线铺开"},
+	{"id": "qinchi_dur", "name": "乱神·加持续", "kind": "num", "max": 3, "req_p": "qinchi",
+		"desc": "定身 +0.4 秒/层（现 <DUR> 秒）【内力消耗 +20/层】", "anim": "曲子更长"},
+	{"id": "qinchi_cd", "name": "乱神·减冷却", "kind": "num", "max": 3, "req_p": "qinchi",
+		"desc": "冷却 −2 秒（现 <CD> 秒）【内力消耗 +20/层】", "anim": "弹得更频"},
+	{"id": "qinchi_cost", "name": "乱神·减内力", "kind": "num", "max": 3, "req_p": "qinchi",
+		"desc": "内力消耗 −15（现 <MP>，效果不变）", "anim": "弦更松"},
+	{"id": "baiqihouren_dmg", "name": "杀神·加比例", "kind": "num", "max": 3, "req_p": "baiqihouren",
+		"desc": "已损失气血那一项 +5%/层【内力消耗 +20/层】", "anim": "刀气更冷"},
+	{"id": "baiqihouren_cd", "name": "杀神·减冷却", "kind": "num", "max": 3, "req_p": "baiqihouren",
+		"desc": "冷却 −1.5 秒（现 <CD> 秒）【内力消耗 +20/层】", "anim": "杀意更频"},
+	{"id": "baiqihouren_cost", "name": "杀神·减内力", "kind": "num", "max": 3, "req_p": "baiqihouren",
+		"desc": "内力消耗 −15（现 <MP>，效果不变）", "anim": "省着杀"},
+	{"id": "dagongfeng_shield", "name": "罡气·加护盾", "kind": "num", "max": 3, "req_p": "dagongfeng",
+		"desc": "护盾 +5% 生命上限/层【内力消耗 +20/层】", "anim": "罡气更厚"},
+	{"id": "dagongfeng_dur", "name": "罡气·加持续", "kind": "num", "max": 3, "req_p": "dagongfeng",
+		"desc": "持续 +2 秒（现 <DUR> 秒）【内力消耗 +20/层】", "anim": "罩得更久"},
+	{"id": "dagongfeng_cost", "name": "罡气·减内力", "kind": "num", "max": 3, "req_p": "dagongfeng",
+		"desc": "内力消耗 −15（现 <MP>，效果不变）", "anim": "引气更省"},
 ]
 
 func skill_lv(id: String) -> int:
 	if skill.has(id):
 		return int(skill[id])
-	var pid := ""
-	if id.begins_with("anying_"):
-		pid = "anying"
-	elif id.begins_with("chenshi_"):
-		pid = "chenshi"
-	if pid != "":
-		var key := id.substr(pid.length() + 1) + "_lv"
-		return int((partners[pid] as Dictionary).get(key, 0))
+	# v15d：⚠ 原来这里只硬编码了 anying/chenshi 两个前缀 —— 别的伙伴的强化项
+	#   **存进去了却读不出来**（apply_pick 是通用的，读的时候写死了，档位等于白升）。
+	#   现在跟 apply_pick 一个口径：谁的前缀对上就是谁。
+	for pid in partners.keys():
+		var ps := str(pid)
+		if id.begins_with(ps + "_"):
+			var key := id.substr(ps.length() + 1) + "_lv"
+			return int((partners[ps] as Dictionary).get(key, 0))
 	return 0
 
 func atk_mul() -> float:
