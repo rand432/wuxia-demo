@@ -3369,6 +3369,8 @@ func _quality_color(q: String) -> Color:
 # ============================================================
 const BM_SLOTS := 6
 const BM_DISC := [0.7, 0.5, 0.3, 0.2]
+# v17d（用户："杀敌数要求的太少了 原价*2.2"）：黑市基准价整体 ×2.2
+const BM_PRICE_MUL := 2.2
 const BM_DISC_CN := ["7折", "5折", "3折", "2折"]
 const BM_DISC_RATE := 0.30                                   # 每件 30% 概率打折
 const BM_GEAR_PRICE := [300, 400, 550, 750, 1000, 1400]      # 装备货品：按品级，300 起
@@ -3431,6 +3433,11 @@ func _bm_make_slot(g: Dictionary) -> Dictionary:
 			"atk": int(ceil(3.0 * mul)), "hp": int(ceil(14.0 * mul)),
 			"price": int(60.0 * mul * mul)}
 		base = int(BM_GEAR_PRICE[q])
+	# v17d（用户："杀敌数要求的太少了 原价*2.2"）：
+	#   ⚠ 乘在**算折扣之前** —— 这样 2.2 倍是"原价"，折扣（7/5/3/2 折）是在新原价上打的，
+	#     而不是把折后价再乘一遍（那会变成 ×4.84）。装备走 BM_GEAR_PRICE 的那条也一起吃。
+	#   实测：灵晶袋 原价 70 → 154（7折 108）· 卡组刷新 60 → 132（5折 66）。
+	base = maxi(1, int(round(float(base) * BM_PRICE_MUL)))
 	var disc := -1
 	# v13y：讨价卡——黑市每件必打折（原先是 30% 概率）
 	if randf() < BM_DISC_RATE or float(_extra.get("bm_disc", 0.0)) > 0.0:
