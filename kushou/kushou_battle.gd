@@ -237,13 +237,18 @@ func set_wave(w: int) -> void:
 	wave = maxi(1, w)
 
 # v14e：关卡难度倍率（外壳按所选关卡推进来）
+# v15s（用户："目前难度太低了 提升50%"）：
+#   全局难度系数 —— 乘在**每一处怪的血/攻**上（普通怪、boss、挑战怪）。
+#   ⚠ 没有去改 foe_mul：那个是"关卡难度倍率"，外壳每局会覆盖它（只剩一个赋值点），
+#     改它会被盖掉。这里单独一个系数，各处用量自行相乘。
+const DIFFICULTY := 1.5
 var foe_mul := 1.0
 
 func _foe_hp() -> float:
-	return BASE_FOE_HP * pow(WAVE_HP, float(wave - 1)) * foe_mul      # v14e：关卡难度倍率
+	return BASE_FOE_HP * pow(WAVE_HP, float(wave - 1)) * foe_mul * DIFFICULTY      # v14e：关卡难度倍率
 
 func _foe_atk() -> float:
-	return BASE_FOE_ATK * pow(WAVE_ATK, float(wave - 1)) * foe_mul    # v14e：关卡难度倍率
+	return BASE_FOE_ATK * pow(WAVE_ATK, float(wave - 1)) * foe_mul * DIFFICULTY    # v14e：关卡难度倍率
 
 func _spawn_foe(kind := "normal", hp_mul := 1.0, atk_mul := 1.0, big := false, tier := 1, nm := "") -> void:
 	if foes.size() >= MAX_FOES and kind == "normal":
@@ -299,8 +304,9 @@ func spawn_challenge(kind_i: int, n: int) -> void:
 	var i := clampi(kind_i, 0, 4)
 	var big := i >= 3
 	for k in maxi(1, n):
-		_spawn_foe("chal", float(CHAL_FOE_HP[i]) * chal_hp_mul(), float(CHAL_FOE_ATK[i]) * chal_atk_mul(),
-		big, 1, str(CHAL_FOE_NAME[i]))
+		# v15s：挑战怪也吃全局难度 +50%
+		_spawn_foe("chal", float(CHAL_FOE_HP[i]) * chal_hp_mul() * DIFFICULTY,
+			float(CHAL_FOE_ATK[i]) * chal_atk_mul() * DIFFICULTY, big, 1, str(CHAL_FOE_NAME[i]))
 		var f: Dictionary = foes[foes.size() - 1]
 		f["scale"] = float(CHAL_FOE_SCALE[i])
 		f["chal"] = i                              # 掉什么由这个字段决定（结算侧读它）
@@ -314,11 +320,11 @@ func spawn_challenge(kind_i: int, n: int) -> void:
 func start_boss(tier: int) -> void:
 	var tt := clampi(tier, 1, 3)
 	var d := _boss_pick(tt)                     # v14g：每阶 3 只随机一只（技能/大招/词缀都不同）
-	var mul := pow(WAVE_HP, float(wave - 1)) * foe_mul
+	var mul := pow(WAVE_HP, float(wave - 1)) * foe_mul * DIFFICULTY
 	_spawn_foe("boss", 1.0, 1.0, true, tt, str(d["name"]))
 	var f: Dictionary = foes[foes.size() - 1]
 	var hp_mul := mul
-	var atk_mul := pow(WAVE_ATK, float(wave - 1)) * foe_mul
+	var atk_mul := pow(WAVE_ATK, float(wave - 1)) * foe_mul * DIFFICULTY
 	# ---- 技能（登场写进字段，由各自逻辑读）----
 	#   v14t：只剩这两条没接了，补齐——召小怪（兽王号令）· 狐火（攻击带火系溅射）
 	match str(d.get("skill_k", "")):

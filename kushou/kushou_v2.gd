@@ -30,7 +30,7 @@ const DIM := Color(0.36, 0.33, 0.31)
 
 # ---------------- 假数据（第 2 步换成真账） ----------------
 var _wave := 12
-var _wave_max := 30
+var _wave_max := 35            # v15s（用户："波次改为35波"）
 var _boss_sec := 37.0
 var _boss_tier := 1
 # v13m（用户："还有玩家的初始文钱和灵晶"）：
@@ -5237,7 +5237,7 @@ const ACHS := [
 		"fx": "开局悟性 +5", "eff": {"wit": 5}},
 	{"id": "baizhan", "cat": "live", "n": "百战不死", "d": "打到第 20 波且一次没浴血", "ck": "nobath", "goal": 1,
 		"fx": "开局全伤害减免 +3%", "eff": {"cut_all_bonus": 0.03}},
-	{"id": "yuezhan", "cat": "live", "n": "越战越勇", "d": "单局打到第 30 波", "ck": "wave", "goal": 30,
+	{"id": "yuezhan", "cat": "live", "n": "越战越勇", "d": "单局打到第 35 波", "ck": "wave", "goal": 35,
 		"fx": "开局全伤害 +5%", "eff": {"dmg_all": 0.05}},
 	{"id": "fujia", "cat": "gold", "n": "富甲一方", "d": "一局赚到 5000 文钱", "ck": "money_earned", "goal": 5000,
 		"fx": "开局文钱 +300", "eff": {"money": 300}},
@@ -5586,7 +5586,7 @@ func _fill_over(p: Control, y: float, sz: Vector2) -> float:
 	head.text = "这一局到这儿"
 	p.add_child(head)
 	var rows := [
-		["打到", "第 " + str(_wave) + " 波 / 共 30 波" + ("（boss 波）" if _wave % 5 == 0 else "")],
+		["打到", "第 " + str(_wave) + " 波 / 共 " + str(_wave_max) + " 波" + ("（boss 波）" if _boss_on_wave(_wave) else "")],
 		["杀敌", str(_kills) + " 只"],
 		["文钱", str(_money) + "（这一局结束会清空，名声才留）"],
 		["灵晶", str(_crystal)],
@@ -6330,13 +6330,21 @@ func _process(delta: float) -> void:
 			_close_popup()
 			_hint.text = "血量告急——大弹窗自动收起了"
 
+# v15s（用户："第十波boss 后面每五波一个boss 结束通关"）：
+#   哪几波出 boss：第 10 波起，每 5 波一个（10/15/20/25/30/35）。
+#   ⚠ 原来是**每一波都叫**（_boss_arrive 无条件执行）——前 9 波不该有 boss。
+func _boss_on_wave(w: int) -> bool:
+	return w >= 10 and w % 5 == 0
+
 func _boss_arrive() -> void:
+	if not _boss_on_wave(_wave):
+		return                     # 不是 boss 波，安静过
 	if _popup_kind != "" and _is_large(_popup_kind):
 		_close_popup()
 	# 真叫一只 boss 下来（阶随波数涨）
 	_boss_seq += 1
-	_field.start_boss(clampi(1 + _boss_seq / 3, 1, 3))
-	_hint.text = "boss 入场——顶上那条是它的血条"
+	_field.start_boss(clampi(1 + _boss_seq / 2, 1, 3))
+	_hint.text = "boss 入场（第 " + str(_wave) + " 波）——顶上那条是它的血条"
 
 # ---- 战场信号 ----
 # v4e：给玩家的一条**醒目提醒**（横幅 ＋ 底部提示；横幅 5 秒后自己消失）
