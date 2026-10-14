@@ -6328,6 +6328,20 @@ func _circle_btn(txt: String, pos: Vector2, cb: Callable) -> Button:
 	add_child(b)
 	return b
 
+# v16y：血量比例 -> 颜色（跟战场那份同一套：满血绿 → 半血黄 → 残血红）
+#   残血（<30%）时亮度随呼吸波动，提醒"该喝药了"。
+func hp_color(ratio: float) -> Color:
+	var r := clampf(ratio, 0.0, 1.0)
+	var green := Color(0.32, 0.74, 0.34)
+	var yellow := Color(0.92, 0.78, 0.24)
+	var red := Color(0.88, 0.22, 0.18)
+	var c: Color = green.lerp(yellow, (1.0 - r) * 2.0) if r >= 0.5 else yellow.lerp(red, (0.5 - r) * 2.0)
+	if r < 0.30:
+		# ⚠ 外壳里没有战场的 _t，用系统时间当相位（这里只是呼吸闪，不需要跟战场同步）
+		var tp := float(Time.get_ticks_msec()) / 1000.0
+		c = c.lerp(Color(1.0, 0.50, 0.42), 0.25 + 0.25 * sin(tp * 6.0))
+	return c
+
 func _bar(r: Rect2, col: Color) -> ColorRect:
 	_panel(Rect2(r.position - Vector2(2, 2), r.size + Vector2(4, 4)), Color(0.10, 0.10, 0.11, 0.9), 8)
 	var c := ColorRect.new()
@@ -6506,7 +6520,10 @@ func _process(delta: float) -> void:
 		_mp = float(_field.hero["mp"])
 		_mp_max = float(_field.hero["mp_max"])
 	_hp_lb.text = "生命 " + str(int(_hp)) + " / " + str(int(_hp_max))
-	_hp_bar.size.x = 300.0 * clampf(_hp / maxf(1.0, _hp_max), 0.0, 1.0)
+	var hp_r := clampf(_hp / maxf(1.0, _hp_max), 0.0, 1.0)
+	_hp_bar.size.x = 300.0 * hp_r
+	# v16y（用户："血条可以变色…怪物和主角都加上"）：主角血条也走绿→黄→红
+	_hp_bar.color = hp_color(hp_r)
 	_mp_lb.text = "内力 " + str(int(_mp)) + " / " + str(int(_mp_max))
 	_mp_bar.size.x = 300.0 * clampf(_mp / maxf(1.0, _mp_max), 0.0, 1.0)
 	# v16f：右边两颗钮的文字跟着状态走（强化显示价格/进阶 · 玉壶显示冷却）

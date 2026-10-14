@@ -4652,13 +4652,14 @@ func _draw() -> void:
 		draw_rect(Rect2(bx, by, bw, bh), Color(0.20, 0.18, 0.20))          # 底槽
 		draw_rect(Rect2(bx, by, bw, bh), Color(0.06, 0.05, 0.06), false, 1.5)  # 描边
 		var ratio := clampf(float(f["hp"]) / maxf(1.0, float(f["hp_max"])), 0.0, 1.0)
-		var col := Color(0.62, 0.30, 0.28)
-		if str(f["kind"]) == "coin":
-			col = Color(0.86, 0.68, 0.26)
-		elif str(f["kind"]) == "crystal":
-			col = Color(0.42, 0.62, 0.78)
-		elif bool(f.get("boss", false)):
-			col = Color(0.72, 0.22, 0.20)
+		# v16y（用户："血条可以变色…满血绿色 然后黄色 红色 更加动态一点 怪物和主角都加上"）：
+		#   ⚠ 原来颜色是**按怪的种类**定的（钱怪金、晶怪蓝、boss 暗红）——
+		#     跟"还剩多少血"完全无关，一眼看不出谁快死了。
+		#   现在统一走 hp_color()：满血绿 → 半血黄 → 残血红（连续过渡，不是三档跳变）。
+		#   boss 额外加一点亮度，好从一群小怪里认出来。
+		var col := hp_color(ratio)
+		if bool(f.get("boss", false)):
+			col = col.lightened(0.12)
 		# v16w：填充跟着加厚（用上面算好的 by / bh，别再写死 58/6）
 		draw_rect(Rect2(bx + 1.5, by + 1.5, (bw - 3.0) * ratio, bh - 3.0), col)
 		if bool(f.get("boss", false)) or str(f.get("kind", "")) == "champion":
@@ -4888,6 +4889,20 @@ func _draw_book(c: Vector2, sc: float, fc: Color) -> void:
 		draw_line(Vector2(c.x + w * 0.2, yy), Vector2(c.x + w * 0.8, yy), Color(0.55, 0.48, 0.36), 1.6)
 	# 头顶一顶小方帽（读书人）
 	draw_rect(Rect2(c.x - 12.0 * sc, y - h * 0.5 - 14.0 * sc, 24.0 * sc, 9.0 * sc), Color(0.30, 0.26, 0.34))
+
+# v16y：血量比例 -> 颜色（满血绿 → 半血黄 → 残血红，中间连续过渡）
+#   分两段 lerp，保证在 100% / 50% / 0% 三个点上正好是绿/黄/红。
+#   另外：低血时**微微脉动**（残血的怪在呼吸），比纯静态更抓眼。
+func hp_color(ratio: float) -> Color:
+	var r := clampf(ratio, 0.0, 1.0)
+	var green := Color(0.32, 0.74, 0.34)
+	var yellow := Color(0.92, 0.78, 0.24)
+	var red := Color(0.88, 0.22, 0.18)
+	var c: Color = green.lerp(yellow, (1.0 - r) * 2.0) if r >= 0.5 else yellow.lerp(red, (0.5 - r) * 2.0)
+	if r < 0.30:
+		# 残血：亮度随呼吸波动（0.30 以下才开始，快死的时候最明显）
+		c = c.lerp(Color(1.0, 0.55, 0.45), 0.25 + 0.25 * sin(_t * 7.0))
+	return c
 
 # v16i 法师怪：宽袖长袍 ＋ 尖顶帽 ＋ 一根法杖（杖头一颗发光珠）
 func _draw_mage(c: Vector2, sc: float, fc: Color) -> void:
