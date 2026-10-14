@@ -921,6 +921,9 @@ func _build_plaques() -> void:
 	_plaques.add_hang("idle", 0.230, 0.0, "挂机", _on_idle_collect, "", "", {"hang_y": 148.0})
 	_plaques.add_hang("build", 0.335, 0.0, "建设", _build_once, "", "", {"hang_y": 148.0})
 	_plaques.add_ribbon("settings", 0.933, 0.040, "设置", _open_settings)
+	# v16z（用户："主界面加一个困兽【测试】按钮"）：跟［设置］同一排的**白纸牌**，点了直接进困兽
+	#   （原来只有 E 键能进，手机上没键盘进不去）
+	_plaques.add_ribbon("kushou_test", 0.700, 0.040, "困兽测试", _open_kushou_v2)
 	# v98（用户："商店固定"）：一直挂在那儿——不随风摆，也不再随剧情忽隐忽现
 	# v115：徽标换成铺子——铺子比六边形宽（104 vs 78），中心从 0.950 挪到 0.905 才不被屏幕切掉
 	_plaques.add_shop("shop", 0.905, 0.232, "商店", _open_shop)
@@ -1152,6 +1155,16 @@ func _confirm_name(n: String) -> void:
 		_name_ov.queue_free()
 	_name_ov = null
 	UiKit.float_text(self, "往后江湖上，你就是「" + str(GameState.role_data("player").get("name", "少侠")) + "」", UiKit.SEAL)
+
+# v16z（用户："可以再主界面加一个困兽【测试】按钮了"）：
+#   把"开困兽"抽成一个函数 —— **E 键和主界面那颗按钮共用**
+#   （原来只有 E 键能进，手机上没键盘根本进不去）。
+func _open_kushou_v2() -> void:
+	if _kushou_v2 == null:
+		_kushou_v2 = (preload("res://kushou/kushou_v2.gd") as GDScript).new()
+		add_child(_kushou_v2)
+	_kushou_v2.open()
+	_show_toast("[困兽·测试] 直接进——左侧抽卡/挑战/任务/卡组，右上存档/成就/黑市")
 
 func _open_settings() -> void:
 	if _settings_ov != null and is_instance_valid(_settings_ov):
@@ -1792,10 +1805,7 @@ func _unhandled_input(ev: InputEvent) -> void:
 			_kushou.move_to_front()
 			_show_toast("[困兽·v1 旧试玩] Shift+E 进的是旧版牌桌")
 			return
-		if _kushou_v2 == null:
-			_kushou_v2 = (preload("res://kushou/kushou_v2.gd") as GDScript).new()
-			add_child(_kushou_v2)
-		_kushou_v2.open()
+		_open_kushou_v2()
 		_show_toast("[困兽·v2] 主界面空壳——按钮/字都按大的排，H 扣血、B 叫 boss")
 		return
 	# ---- v63d（用户："给个快捷键让我直接过引子"）：U = 跳引子（已挪进 _input，v63j）----
