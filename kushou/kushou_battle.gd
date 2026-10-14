@@ -308,18 +308,26 @@ func _spawn_foe(kind := "normal", hp_mul := 1.0, atk_mul := 1.0, big := false, t
 		"scale": (1.9 if big else 0.86),
 		"stop": (FOE_STOP + 40.0 if big else FOE_STOP) + randf() * 30.0,
 	}
-	# v16h（用户："小怪可以有些弓箭手啊之类的 不能全是火柴人"）：
-	#   普通怪里约 **1/4 是弓箭手**：站得更远（stop 更大）、配色偏绿、手里一张弓。
-	#   ⚠ 只改**长相与站位**，伤害/血量跟普通怪同一套 —— 不动平衡，只是不再千人一面。
-	if kind == "normal" and randf() < 0.25:
-		f["ranged"] = true
-		f["stop"] = FOE_STOP + 90.0 + randf() * 40.0
-	# v16h（用户："小怪可以有些弓箭手啊之类的 不能全是火柴人"）：
-	#   普通怪里约 **1/4 是弓箭手**：站得更远（stop 更大）、配色偏绿、手里一张弓。
-	#   ⚠ 只改**长相与站位**，伤害/血量跟普通怪同一套 —— 不动平衡，只是不再千人一面。
-	if kind == "normal" and randf() < 0.25:
-		f["ranged"] = true
-		f["stop"] = FOE_STOP + 90.0 + randf() * 40.0
+	# v16h/i（用户："小怪可以有些弓箭手啊之类的 不能全是火柴人" → "还有法师怪 肌肉壮汉啊 等等"）：
+	#   普通怪按权重挑**长相类型**（弓手 22% / 法师 18% / 壮汉 18% / 盾兵 14% / 普通 28%）。
+	#   ⚠ 只改外形、体型与站位，血攻仍走同一套 —— 不动平衡，只是不再千人一面。
+	#   ⚠ v16i 曾留下**两块并存的 if**（旧的 25% 弓手块没删），导致法师/壮汉/盾兵
+	#     实际几乎不出现（旧的先命中就跳过了）—— 这里合成一块。
+	if kind == "normal":
+		var rr := randf()
+		if rr < 0.22:
+			f["ranged"] = true
+			f["stop"] = FOE_STOP + 90.0 + randf() * 40.0        # 弓手：站远
+		elif rr < 0.40:
+			f["mage"] = true
+			f["stop"] = FOE_STOP + 130.0 + randf() * 40.0       # 法师：站最远
+		elif rr < 0.58:
+			f["brute"] = true
+			f["scale"] = 1.22                                  # 壮汉：个头大一圈
+			f["stop"] = FOE_STOP - 20.0 + randf() * 20.0        # 贴得更近
+		elif rr < 0.72:
+			f["shield"] = true
+			f["stop"] = FOE_STOP + 20.0 + randf() * 20.0        # 盾兵：顶在前面
 	foes.append(f)
 
 
@@ -4752,9 +4760,15 @@ func _foe_art(f: Dictionary, sc: float, fc: Color) -> void:
 		"elite":
 			_draw_boss(c, sc, fc)
 		_:
-			# v16h：普通怪分两种长相——弓箭手（远程，偏绿）／近战小人
+			# v16h/i：普通怪分五种长相（弓手 / 法师 / 壮汉 / 盾兵 / 近战小人）
 			if bool(f.get("ranged", false)):
 				_draw_archer(c, sc, fc)
+			elif bool(f.get("mage", false)):
+				_draw_mage(c, sc, fc)
+			elif bool(f.get("brute", false)):
+				_draw_brute(c, sc, fc)
+			elif bool(f.get("shield", false)):
+				_draw_shieldman(c, sc, fc)
 			else:
 				_stick(c, sc, fc, false)
 	# 每只脚下一小片影子（站得住）
@@ -4774,6 +4788,69 @@ func _draw_book(c: Vector2, sc: float, fc: Color) -> void:
 		draw_line(Vector2(c.x + w * 0.2, yy), Vector2(c.x + w * 0.8, yy), Color(0.55, 0.48, 0.36), 1.6)
 	# 头顶一顶小方帽（读书人）
 	draw_rect(Rect2(c.x - 12.0 * sc, y - h * 0.5 - 14.0 * sc, 24.0 * sc, 9.0 * sc), Color(0.30, 0.26, 0.34))
+
+# v16i 法师怪：宽袖长袍 ＋ 尖顶帽 ＋ 一根法杖（杖头一颗发光珠）
+func _draw_mage(c: Vector2, sc: float, fc: Color) -> void:
+	var y := c.y + sin(_t * 3.2 + c.x * 0.1) * 3.0
+	var b := Vector2(c.x, y)
+	# 袍子：一个上窄下宽的梯形（比小人"厚"，一眼分得开）
+	draw_colored_polygon(PackedVector2Array([
+		b + Vector2(-9.0 * sc, -34.0 * sc), b + Vector2(9.0 * sc, -34.0 * sc),
+		b + Vector2(19.0 * sc, 10.0 * sc), b + Vector2(-19.0 * sc, 10.0 * sc)]), Color(0.34, 0.30, 0.48))
+	draw_polyline(PackedVector2Array([
+		b + Vector2(-9.0 * sc, -34.0 * sc), b + Vector2(9.0 * sc, -34.0 * sc),
+		b + Vector2(19.0 * sc, 10.0 * sc), b + Vector2(-19.0 * sc, 10.0 * sc), b + Vector2(-9.0 * sc, -34.0 * sc)]),
+		Color(0.20, 0.17, 0.28), 2.5)
+	# 头 ＋ 尖顶帽
+	draw_circle(b + Vector2(0, -46.0 * sc), 9.0 * sc, Color(0.90, 0.86, 0.78))
+	draw_colored_polygon(PackedVector2Array([
+		b + Vector2(-14.0 * sc, -52.0 * sc), b + Vector2(14.0 * sc, -52.0 * sc), b + Vector2(0, -80.0 * sc)]),
+		Color(0.30, 0.26, 0.44))
+	# 法杖 ＋ 杖头宝珠（呼吸发光）
+	draw_line(b + Vector2(20.0 * sc, 8.0 * sc), b + Vector2(26.0 * sc, -64.0 * sc), Color(0.52, 0.40, 0.26), 3.0)
+	var glow := 0.5 + 0.5 * sin(_t * 4.0)
+	draw_circle(b + Vector2(26.0 * sc, -68.0 * sc), (7.0 + 3.0 * glow) * sc, Color(0.60, 0.76, 1.0, 0.35))
+	draw_circle(b + Vector2(26.0 * sc, -68.0 * sc), 4.5 * sc, Color(0.80, 0.92, 1.0))
+
+# v16i 肌肉壮汉：肩膀很宽、胳膊粗、光着膀子（没有头发的圆头 ＋ 两条粗臂）
+func _draw_brute(c: Vector2, sc: float, fc: Color) -> void:
+	var y := c.y + sin(_t * 3.0 + c.x * 0.1) * 2.5
+	var b := Vector2(c.x, y)
+	var skin := Color(0.86, 0.68, 0.52)
+	# 躯干：一个倒梯形（肩宽腰窄）
+	draw_colored_polygon(PackedVector2Array([
+		b + Vector2(-22.0 * sc, -40.0 * sc), b + Vector2(22.0 * sc, -40.0 * sc),
+		b + Vector2(13.0 * sc, 4.0 * sc), b + Vector2(-13.0 * sc, 4.0 * sc)]), skin)
+	draw_polyline(PackedVector2Array([
+		b + Vector2(-22.0 * sc, -40.0 * sc), b + Vector2(22.0 * sc, -40.0 * sc),
+		b + Vector2(13.0 * sc, 4.0 * sc), b + Vector2(-13.0 * sc, 4.0 * sc), b + Vector2(-22.0 * sc, -40.0 * sc)]),
+		Color(0.48, 0.34, 0.22), 2.5)
+	# 胸肌两道（壮汉的标志）
+	draw_arc(b + Vector2(-8.0 * sc, -30.0 * sc), 8.0 * sc, PI * 0.1, PI * 0.9, 10, Color(0.62, 0.44, 0.30), 2.0)
+	draw_arc(b + Vector2(8.0 * sc, -30.0 * sc), 8.0 * sc, PI * 0.1, PI * 0.9, 10, Color(0.62, 0.44, 0.30), 2.0)
+	# 两条粗胳膊（垂在身侧）
+	draw_line(b + Vector2(-22.0 * sc, -36.0 * sc), b + Vector2(-30.0 * sc, 2.0 * sc), skin, 11.0 * sc)
+	draw_line(b + Vector2(22.0 * sc, -36.0 * sc), b + Vector2(30.0 * sc, 2.0 * sc), skin, 11.0 * sc)
+	# 小头 ＋ 两条腿
+	draw_circle(b + Vector2(0, -54.0 * sc), 10.0 * sc, skin)
+	draw_line(b + Vector2(-8.0 * sc, 4.0 * sc), b + Vector2(-10.0 * sc, 30.0 * sc), Color(0.34, 0.30, 0.40), 7.0 * sc)
+	draw_line(b + Vector2(8.0 * sc, 4.0 * sc), b + Vector2(10.0 * sc, 30.0 * sc), Color(0.34, 0.30, 0.40), 7.0 * sc)
+
+# v16i 盾兵：一面大盾挡在身前（铁灰 ＋ 正中一颗铆钉）
+func _draw_shieldman(c: Vector2, sc: float, fc: Color) -> void:
+	var b := Vector2(c.x, c.y)
+	_stick(c, sc, fc, false)
+	var sx := b.x - 20.0 * sc
+	var sy := b.y - 30.0 * sc
+	var w := 26.0 * sc
+	var h := 46.0 * sc
+	draw_colored_polygon(PackedVector2Array([
+		Vector2(sx, sy), Vector2(sx + w, sy), Vector2(sx + w, sy + h), Vector2(sx + w * 0.5, sy + h + 8.0 * sc),
+		Vector2(sx, sy + h)]), Color(0.56, 0.58, 0.62))
+	draw_polyline(PackedVector2Array([
+		Vector2(sx, sy), Vector2(sx + w, sy), Vector2(sx + w, sy + h), Vector2(sx + w * 0.5, sy + h + 8.0 * sc),
+		Vector2(sx, sy + h), Vector2(sx, sy)]), Color(0.26, 0.28, 0.32), 3.0)
+	draw_circle(Vector2(sx + w * 0.5, sy + h * 0.45), 5.0 * sc, Color(0.80, 0.74, 0.52))
 
 # v16h 弓箭手：站在远处放箭的那种（手里一把弓，身上背箭袋）
 func _draw_archer(c: Vector2, sc: float, fc: Color) -> void:
