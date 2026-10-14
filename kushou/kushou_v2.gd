@@ -2111,7 +2111,7 @@ func _wpn_refresh() -> void:
 	_wpn_roll_choices()
 	Audio.sfx("ui_click", -8.0)
 	if _popup_kind == "成长武器":
-		_open_large("成长武器")
+		_open_large("成长武器详情")
 # 贴上一条强化线（永久）
 func _wpn_take(i: int) -> void:
 	if i < 0 or i >= _wpn_choices.size():
@@ -2125,7 +2125,7 @@ func _wpn_take(i: int) -> void:
 	Audio.sfx("equip", -4.0)
 	_sync_battle_stats()
 	if _popup_kind == "成长武器":
-		_open_large("成长武器")
+		_open_large("成长武器详情")
 
 # 强化一次：钱够就升；到 10 的倍数进阶＋弹三选一
 func _wpn_up() -> bool:
@@ -2154,7 +2154,7 @@ func _wpn_up() -> bool:
 		Audio.sfx("levelup", -3.0)
 	_sync_battle_stats()
 	if _popup_kind == "成长武器":
-		_open_large("成长武器")
+		_open_large("成长武器详情")
 	return true
 
 # 一键强化：一直花文钱，碰到进阶（等三选一）或钱不够就停
@@ -2175,7 +2175,7 @@ func _wpn_auto() -> void:
 		_hint.text = "一键强化 " + str(n) + " 次：花了 " + str(spent) + " 文钱，现在 +" + str(_wpn_lv) + "（" + str(WPN_Q_CN[_wpn_q]) + "）"
 	Audio.sfx("coin", -6.0)
 	if _popup_kind == "成长武器":
-		_open_large("成长武器")
+		_open_large("成长武器详情")
 # ---- v12k 图鉴：宝物全部 ＋ 羁绊 16 件（用户："可以查看有什么宝物"）----
 func _fill_codex(p: Control, y: float, sz: Vector2) -> float:
 	var head := Label.new()
@@ -7900,8 +7900,11 @@ func _fill_wpn_detail(p: Control, y: float, sz: Vector2) -> float:
 		p.add_child(l)
 		ly += 46.0
 	ly += 20.0
+	# v15m（用户："直接换成这个界面"）：原来这里第二颗是"强化页（选线/详情）"——
+	#   指向那个**简单版**武器页；现在简单版整个改道到这一页了，那颗按钮会变成"点自己"（死循环）。
+	#   改成**强化一级**：详情页自己就是完整的强化界面（价格/进阶/已选线都在上面）。
 	_pbtn(p, "一键强化", Vector2(24, ly), Vector2(310, 80), 26, true, _wpn_auto)
-	_pbtn(p, "强化页（选线/详情）", Vector2(354, ly), Vector2(310, 80), 22, false, func(): _open_large("成长武器"))
+	_pbtn(p, "强化一级（" + str(_wpn_cost()) + " 文钱）", Vector2(354, ly), Vector2(310, 80), 20, false, func(): _wpn_up())
 	ly += 92.0
 	_pbtn(p, "关闭", Vector2(24, ly), Vector2(640, 72), 24, false, _close_popup)
 	return ly + 88.0
