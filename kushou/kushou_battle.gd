@@ -4654,7 +4654,10 @@ func _draw() -> void:
 		hero_col = Color(0.98, 0.62, 0.56)
 	# 出手那一下往上一冲（突刺），平时轻轻起伏
 	var hy2 := hy + sin(_t * 4.0) * 3.0 - _hero_lunge * 16.0
+	# v16l：主角专属装饰（披风在小人后面 → 小人 → 光环/发带/剑意在前面）
+	_hero_mark_back(Vector2(hx, hy2), 1.35)
 	_stick(Vector2(hx, hy2), 1.35, hero_col, true)
+	_hero_mark_front(Vector2(hx, hy2), 1.35, hero_col)
 	# v14s：出战那位放技能时，头顶冒一行"你的技能"
 	if hero_skill_t > 0.0 and hero_mate != "":
 		draw_string(ThemeDB.fallback_font, Vector2(hx - 90.0, hy2 - 108.0),
@@ -5084,6 +5087,43 @@ func _pet(c: Vector2, sh: Vector2) -> void:
 # v14s：hair / wpn 是"出战主角的长相"参数（空字符串＝原来那个默认小人，队友/怪都不受影响）
 var hair := ""
 var wpn := ""
+
+# v16l（用户："主角稍微有些装饰和改动吧 不然看起来跟小兵一样"）：
+#   主角的专属三件装饰（**不用素材，全是画出来的**）：
+#     ① 披风（画在小人**后面**，随呼吸轻摆）
+#     ② 发带 ＋ 两条飘带（系在头上，跑动时飘）
+#     ③ 脚下金色光环（战斗中一直转，一眼认出"这是我"）
+func _hero_mark_back(c: Vector2, s: float) -> void:
+	# 披风：上窄下宽的一片，底边随呼吸左右摆
+	var sway := sin(_t * 2.2) * 3.5
+	var cape := PackedVector2Array([
+		c + Vector2(-10.0 * s, -32.0 * s), c + Vector2(10.0 * s, -32.0 * s),
+		c + Vector2(21.0 * s + sway, -2.0 * s), c + Vector2(-21.0 * s + sway, -2.0 * s)])
+	draw_colored_polygon(cape, Color(0.56, 0.15, 0.19, 0.92))
+	draw_polyline(PackedVector2Array([cape[0], cape[1], cape[2], cape[3], cape[0]]),
+		Color(0.32, 0.08, 0.11, 0.95), 2.5)
+	# 领口一个金扣
+	draw_circle(c + Vector2(0, -31.0 * s), 4.0 * s, Color(0.86, 0.70, 0.28))
+
+func _hero_mark_front(c: Vector2, s: float, col: Color) -> void:
+	# 脚下的金色光环（虚线转圈）＋ 内圈呼吸
+	var rot := _t * 1.6
+	for i in 10:
+		var a0 := rot + TAU * float(i) / 10.0
+		draw_arc(c + Vector2(0, 26.0 * s), 26.0 * s, a0, a0 + 0.30, 12,
+			Color(0.94, 0.80, 0.38, 0.55 + 0.25 * sin(_t * 3.0)), 3.0)
+	# 发带 ＋ 两条飘带（往身后飘）
+	var head := c + Vector2(0, -34.0 * s)
+	draw_line(head + Vector2(-10.0 * s, -4.0 * s), head + Vector2(10.0 * s, -4.0 * s),
+		Color(0.88, 0.24, 0.22), 3.0 * s)
+	var fl := sin(_t * 5.0) * 5.0
+	draw_line(head + Vector2(-9.0 * s, -4.0 * s), head + Vector2(-20.0 * s, 10.0 * s + fl),
+		Color(0.88, 0.24, 0.22, 0.90), 2.2 * s)
+	draw_line(head + Vector2(-9.0 * s, -4.0 * s), head + Vector2(-26.0 * s, 2.0 * s - fl),
+		Color(0.94, 0.42, 0.34, 0.75), 2.0 * s)
+	# 手里那把刀加一层"剑意"冷光
+	var hd := c + Vector2(14.0 * s, -10.0 * s)
+	draw_line(hd, hd + Vector2(6.0 * s, 42.0 * s), Color(0.80, 0.90, 1.0, 0.30), 9.0 * s)
 
 func _stick(c: Vector2, s: float, col: Color, up: bool) -> void:
 	var w := 3.0 * s
