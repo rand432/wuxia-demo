@@ -2656,8 +2656,8 @@ const PARTNER_INFO := {
 		"mp0": 100.0, "cd0": 24.0, "dur0": 6.0},
 	# ---- 中品（共 4：陈石/法度 + 这两个）----
 	"leixiaoqi": {"name": "雷小七", "quality": "中品", "skill": "连环腿", "dtype": "物理", "grow": {"arm": 2, "agi": 4, "wit": 0},
-		"desc": "每 4 秒对最近敌人连踢两下（两次独立判定，可能一下暴一下不暴）",
-		"mp0": 0.0, "cd0": 4.0, "dur0": 0.0},
+		"desc": "每 10 秒对最近敌人连踢两下（两次独立判定 · 强化可减冷却/加伤）",
+		"mp0": 0.0, "cd0": 10.0, "dur0": 0.0},
 	"baipopo": {"name": "白婆婆", "quality": "中品", "skill": "续命", "dtype": "治疗", "grow": {"arm": 1, "agi": 1, "wit": 4},
 		"desc": "每 15 秒回一次血（生命上限 12%）；自己残血（低于 40%）时回血翻倍",
 		"mp0": 80.0, "cd0": 15.0, "dur0": 0.0},
@@ -2674,7 +2674,7 @@ const PARTNER_INFO := {
 	# ---- 极品（共 4：季沧海/苏青鸾 + 这两个）----
 	"ximenlie": {"name": "西门烈", "quality": "极品", "skill": "烈焰刀", "dtype": "火系", "grow": {"arm": 3, "agi": 2, "wit": 3},
 		"desc": "每 6 秒劈出一道火刃，横扫最近敌人身前 140 像素范围（火系范围）",
-		"mp0": 0.0, "cd0": 6.0, "dur0": 0.0},
+		"mp0": 0.0, "cd0": 12.0, "dur0": 0.0},
 	"duniangzi": {"name": "毒娘子", "quality": "极品", "skill": "万毒", "dtype": "木系（持续）", "grow": {"arm": 1, "agi": 2, "wit": 4},
 		"desc": "每 10 秒给**最近的 5 名**敌人挂毒（木系，每秒跳一次，持续 6 秒）",
 		"mp0": 200.0, "cd0": 10.0, "dur0": 0.0},
@@ -2752,8 +2752,8 @@ const PARTNER_INFO := {
 		"desc": "每 13 秒撒蛊：给最近 2 名敌人挂毒",
 		"mp0": 150.0, "cd0": 13.0, "dur0": 0.0},
 	"kuaidaoshou": {"name": "快刀手", "quality": "中品", "skill": "快刀", "dtype": "物理", "grow": {"arm": 1, "agi": 4, "wit": 1},
-		"desc": "每 6 秒连砍三刀（物理，三下各自判定）",
-		"mp0": 0.0, "cd0": 6.0, "dur0": 0.0},
+		"desc": "每 12 秒连砍三刀（物理，三下各自判定 · 强化可加伤）",
+		"mp0": 0.0, "cd0": 12.0, "dur0": 0.0},
 	"chuangong": {"name": "老船工", "quality": "中品", "skill": "撑篙", "dtype": "水系", "grow": {"arm": 3, "agi": 1, "wit": 2},
 		"desc": "每 11 秒一篙：水系伤害并把最近敌人推开",
 		"mp0": 110.0, "cd0": 11.0, "dur0": 0.0},
@@ -3514,7 +3514,7 @@ func _cast_kuaidao() -> void:
 		var f := _nearest()
 		if f.is_empty():
 			break
-		var base := float(hero["atk"]) * (0.55 + 0.08 * float(partners["kuaidaoshou"].get("dmg_lv", 0))) \
+		var base := float(hero["atk"]) * (0.34 + 0.05 * float(partners["kuaidaoshou"].get("dmg_lv", 0))) \
 			* (1.0 + float(hero["dmg_pct"]))
 		var dm := _apply_dmg(f, base, DMG_PHYS)
 		_push_float(float(f["x"]), float(f["y"]) - 22.0 - float(i) * 12.0, str(int(dm)), Color(0.94, 0.90, 0.74))
@@ -3663,7 +3663,8 @@ func _cast_timestop() -> void:
 	_push_float(hero_pos.x, hero_pos.y - 110.0, "时间停止！", Color(0.90, 0.86, 1.0), true)
 	# v16o（用户："背景喊杀声太多了 其实没必要有喊杀声"）：已去掉喊杀/战鼓声
 
-# v14b 雷小七「连环腿」：每 4 秒对最近敌人连踢两下（两次独立判定）
+# v17i（用户："雷小七和快刀手也是"）：CD 4 -> 10、伤害 0.55 -> 0.34
+# v14b 雷小七「连环腿」：对最近敌人连踢两下（两次独立判定）
 func _update_leixiaoqi(delta: float) -> void:
 	var p: Dictionary = partners["leixiaoqi"]
 	if not bool(p["owned"]):
@@ -3671,12 +3672,12 @@ func _update_leixiaoqi(delta: float) -> void:
 	p["cd"] = maxf(0.0, float(p["cd"]) - delta)
 	if float(p["cd"]) > 0.0:
 		return
-	p["cd"] = maxf(2.0, 4.0 - 0.3 * float(p.get("sec_lv", 0)))
+	p["cd"] = maxf(5.0, 10.0 - 0.8 * float(p.get("sec_lv", 0)))
 	for i in 2:
 		var tg := _nearest()
 		if tg.is_empty():
 			return
-		var base := float(hero["atk"]) * (0.55 + 0.10 * float(p.get("dmg_lv", 0))) * (1.0 + float(hero["dmg_pct"]))
+		var base := float(hero["atk"]) * (0.34 + 0.06 * float(p.get("dmg_lv", 0))) * (1.0 + float(hero["dmg_pct"]))
 		var dm := _apply_dmg(tg, base, DMG_PHYS)
 		tg["flash"] = 0.16
 		tg["kb"] = 10.0
