@@ -982,6 +982,28 @@ func _process(delta: float) -> void:
 			var dir2 := (hero_pos - Vector2(float(fb["x"]), float(fb["y"]))).normalized()
 			if dir2 == Vector2.ZERO:
 				dir2 = Vector2(0.0, 1.0)
+			# v16e：(用户：多段连招) 三阶那三只走**连招**：几招按顺序连着来，一段比一段紧
+			match ushape:
+				"combo_a":
+					# 牢狱威压 → 落雷 + 扇形横扫（先定住再扫）
+					self.queue_combo(float(fb["x"]), float(fb["y"]) - 10.0, dmg, DMG_PHYS, [
+						{"shape": "bolt", "warn": 1.1, "r": 60.0, "kind": "落雷", "dmg_mul": 0.9, "delay": 0.5},
+						{"shape": "sector", "warn": 1.2, "r": 320.0, "kind": "横扫", "dmg_mul": 1.1, "spread": PI * 0.6, "delay": 0.6},
+						{"shape": "ring", "warn": 1.1, "r": 150.0, "kind": "震荡", "dmg_mul": 0.8, "delay": 0.4},
+					])
+				"combo_b":
+					# 血海 → 毒圈（留在地上）＋ 连环火雨
+					self.queue_combo(float(fb["x"]), float(fb["y"]) - 10.0, dmg, DMG_WOOD, [
+						{"shape": "pool", "warn": 1.2, "r": 130.0, "kind": "血海", "dmg_mul": 1.0, "life": 5.0, "delay": 0.7},
+						{"shape": "chain", "warn": 1.2, "r": 84.0, "kind": "连环火雨", "dmg_mul": 0.7, "count": 5, "step": 100.0, "delay": 0.8},
+					])
+				"combo_c":
+					# 万兽奔踏 → 剑气 ＋ 跟随圈（一边冲一边追）
+					self.queue_combo(float(fb["x"]), float(fb["y"]) - 10.0, dmg, DMG_PHYS, [
+						{"shape": "beam", "warn": 1.2, "r": 54.0, "len": 460.0, "kind": "剑气", "dmg_mul": 1.0, "delay": 0.55},
+						{"shape": "follow", "warn": 1.5, "r": 92.0, "kind": "追猎", "dmg_mul": 0.9, "delay": 0.6},
+						{"shape": "ring", "warn": 1.1, "r": 170.0, "kind": "踏地", "dmg_mul": 0.8, "delay": 0.4},
+					])
 			match ushape:
 				"beam":
 					self.queue_delayed(float(fb["x"]), float(fb["y"]) - 10.0, 46.0, dmg, DMG_PHYS, 1.3, ult, "beam", dir2, 420.0)
@@ -1025,13 +1047,47 @@ var _delayed: Array = []            # 正在预警/即将落下的延迟技
 #     chain　＝ 多圈连爆（沿着 dir 一路排 N 个圈，依次落下 → 连环火雨）
 #     follow ＝ 跟随型（圈**追着主角跑**，落下前一直贴在它脚下）
 #   颜色：淡红 → 深红（alpha 与饱和度一起涨），到点闪一下再释放。
+# v16e（用户："更多形状 多段连招"）：再补三种 ——
+#   ring　＝从中心往外扩的冲击环（预警时是一圈细环，落下时环扫过去）
+#   bolt　＝落雷（一条竖着的细长条，从天上劈下来）
+#   pool　＝毒圈 / 火海（持续伤害区：落下后**留在地上**每秒跳一次）
 func queue_delayed(x: float, y: float, r: float, dmg: float, elem: String, warn := 1.2,
 	kind := "火雨", shape := "circle", dir := Vector2.RIGHT, len := 0.0,
-	spread := 0.0, count := 0, gap := 0.0) -> void:
+	spread := 0.0, count := 0, gap := 0.0, life := 0.0) -> void:
 	_delayed.append({"x": x, "y": y, "r": r, "t": 0.0, "warn": maxf(0.35, warn),
 		"dmg": dmg, "elem": elem, "kind": kind, "shape": shape, "dir": dir, "len": len,
-		"spread": spread, "count": count, "gap": gap})
+		"spread": spread, "count": count, "gap": gap, "life": life, "tick": 0.0})
 	Audio.sfx("tension", -10.0)
+
+# 多段连招：按顺序排同一只 boss 的几招（每段自带延迟，看着就是"连着来"）
+#   seq 里每项：{shape, warn, r, dmg_mul, kind, len, spread, count, step, gap}
+func queue_combo(fx: float, fy: float, dps: float, elem: String, seq: Array) -> void:
+	var acc := 0.0
+	for it_v in seq:
+		var it: Dictionary = it_v
+		var w := maxf(0.35, float(it.get("warn", 1.2))) + acc
+		var sh := str(it.get("shape", "circle"))
+		var rr := float(it.get("r", 96.0))
+		var dm := dps * float(it.get("dmg_mul", 1.0))
+		var kd := str(it.get("kind", "大招"))
+		var dir := (hero_pos - Vector2(fx, fy)).normalized()
+		if dir == Vector2.ZERO:
+			dir = Vector2(0.0, 1.0)
+		if sh == "chain":
+			queue_chain(fx, fy - 10.0, rr, dm * 0.75, elem, kd, dir,
+				int(it.get("count", 4)), float(it.get("step", 110.0)), 0.22, w)
+		elif sh == "beam":
+			queue_delayed(fx, fy - 10.0, float(it.get("hw", 46.0)), dm, elem, w, kd, "beam", dir, float(it.get("len", 420.0)))
+		elif sh == "sector":
+			queue_delayed(fx, fy - 10.0, rr, dm, elem, w, kd, "sector", dir, 0.0, float(it.get("spread", PI * 0.55)))
+		elif sh == "follow" or sh == "ring" or sh == "bolt":
+			queue_delayed(hero_pos.x, hero_pos.y - 6.0, rr, dm, elem, w, kd, sh)
+		elif sh == "pool":
+			queue_delayed(hero_pos.x, hero_pos.y - 6.0, rr, dm * 0.5, elem, w, kd, "pool", Vector2.RIGHT, 0.0, 0.0, 0, 0.0, float(it.get("life", 4.0)))
+		else:
+			queue_delayed(hero_pos.x, hero_pos.y - 6.0, rr, dm, elem, w, kd, "circle")
+		# 下一段往后推（"连招"的节奏）
+		acc += float(it.get("delay", 0.45))
 
 # 多圈连爆：把一条链展开成若干独立的 circle（间隔 gap 秒依次落下）
 func queue_chain(x: float, y: float, r: float, dmg: float, elem: String, kind: String,
@@ -1048,17 +1104,37 @@ func _delayed_tick(delta: float) -> void:
 		if str(d["shape"]) == "follow" and float(d["t"]) < float(d["warn"]) - 0.25:
 			d["x"] = hero_pos.x
 			d["y"] = hero_pos.y - 6.0
+		d["tick"] = float(d.get("tick", 0.0)) + delta
 		d["t"] = float(d["t"]) + delta
 		if float(d["t"]) < float(d["warn"]):
 			continue
+		# v16e：毒圈/火海这类**落下后不消失**，留在地上每秒跳一次
+		if float(d.get("life", 0.0)) > 0.0:
+			_delayed_hit(d)                       # 落点这一下（全额）
+			d["warn"] = 1.0e9                     # 不再"再落一次"
+			d["t"] = 0.0
+			d["life"] = float(d["life"]) - 1.0
+			d["shape"] = "pool"                  # 接下来按持续圈画
+			if float(d["life"]) <= 0.0:
+				_delayed.remove_at(i)
+			continue
+		if str(d.get("shape", "")) == "pool" and float(d.get("tick", 0.0)) >= 1.0:
+			d["tick"] = 0.0
+			if _delayed_in(d):
+				var dt2 := hero_in_dmg(float(d["dmg"]) * 0.5, str(d["elem"]))
+				hero["hp"] = maxf(0.0, float(hero["hp"]) - dt2)
+				_push_float(hero_pos.x, hero_pos.y - 96.0, str(d["kind"]) + " -" + str(int(dt2)), Color(0.66, 0.92, 0.44))
 		_delayed_hit(d)
 		_delayed.remove_at(i)
 
 # 落下结算：圈里的主角挨伤害；顺便一圈火 ＋ 震屏
-func _delayed_hit(d: Dictionary) -> void:
+# 主角在不在这一招的作用范围里（延迟技与持续圈共用这一套判定）
+func _delayed_in(d: Dictionary) -> bool:
 	var c := Vector2(float(d["x"]), float(d["y"]))
 	var r := float(d["r"])
-	var elem := str(d["elem"])
+	return _delayed_in_at(d, c, r)
+
+func _delayed_in_at(d: Dictionary, c: Vector2, r: float) -> bool:
 	var inr := false
 	var shape := str(d["shape"])
 	if shape == "beam":
@@ -1074,8 +1150,22 @@ func _delayed_hit(d: Dictionary) -> void:
 			var fwd := Vector2(d["dir"]).normalized()
 			var ang := absf(fwd.angle_to(rel2.normalized()))
 			inr = ang <= float(d["spread"]) * 0.5
+	elif shape == "ring":
+		# 冲击环：落下瞬间环扫过一圈——判定就是"到中心的距离 ≈ 半径"
+		#   （给一点容差，不然贴着边站的会被判成没打中）
+		inr = c.distance_to(hero_pos) <= r + 26.0
+	elif shape == "bolt":
+		# 落雷：一条**竖直**的细长柱（x 方向很窄，y 方向很长）
+		inr = absf(hero_pos.x - c.x) <= r and hero_pos.y >= c.y - 260.0 and hero_pos.y <= c.y + 60.0
 	else:
 		inr = c.distance_to(hero_pos) <= r
+	return inr
+
+func _delayed_hit(d: Dictionary) -> void:
+	var c := Vector2(float(d["x"]), float(d["y"]))
+	var r := float(d["r"])
+	var elem := str(d["elem"])
+	var inr := _delayed_in(d)
 	if inr:
 		var dm := hero_in_dmg(float(d["dmg"]), elem)
 		hero["hp"] = maxf(0.0, float(hero["hp"]) - dm)
@@ -4334,6 +4424,24 @@ func _draw() -> void:
 			draw_arc(dc, rr, a0, a1, 28, Color(fr, fg * 1.4, 0.18, ea), 3.0)
 			draw_line(dc, dc + Vector2(cos(a0), sin(a0)) * rr, Color(fr, fg * 1.4, 0.18, ea * 0.8), 2.0)
 			draw_line(dc, dc + Vector2(cos(a1), sin(a1)) * rr, Color(fr, fg * 1.4, 0.18, ea * 0.8), 2.0)
+		elif shape == "ring":
+			# 冲击环：预警时是一圈**细环**（中间几乎不填），越深越粗
+			draw_arc(dc, rr, 0.0, TAU, 48, Color(fr, fg * 1.4, 0.18, ea), 2.0 + 3.0 * pr)
+			draw_circle(dc, rr, Color(fr, fg, 0.10, fa * 0.35))
+		elif shape == "bolt":
+			# 落雷：一条**竖着的细长条**（从天上劈到脚下）
+			var bw := maxf(10.0, rr * 0.5)
+			draw_colored_polygon(PackedVector2Array([
+				dc + Vector2(-bw, -280.0), dc + Vector2(bw, -280.0),
+				dc + Vector2(bw * 0.7, 10.0), dc + Vector2(-bw * 0.7, 10.0)]), Color(fr, fg, 0.16, fa))
+			draw_line(dc + Vector2(-bw, -280.0), dc + Vector2(-bw * 0.7, 10.0), Color(fr, fg * 1.5, 0.22, ea), 2.0)
+			draw_line(dc + Vector2(bw, -280.0), dc + Vector2(bw * 0.7, 10.0), Color(fr, fg * 1.5, 0.22, ea), 2.0)
+			draw_circle(dc, rr * 0.6, Color(fr, fg, 0.14, fa))
+		elif shape == "pool":
+			# 毒圈 / 火海：**留在地上**的持续区（比别的更实一点，一眼看出"还在这儿"）
+			draw_circle(dc, rr, Color(fr * 0.8, fg, 0.16, 0.16 + 0.28 * pr))
+			draw_arc(dc, rr, 0.0, TAU, 40, Color(fr * 0.85, fg * 1.3, 0.20, 0.45 + 0.4 * pr), 3.0)
+			draw_arc(dc, rr * (0.5 + 0.4 * sin(_t * 4.0)), 0.0, TAU, 28, Color(fr, fg * 1.6, 0.24, 0.30), 2.0)
 		else:
 			# 圆（含跟随型：圈一路贴在主角脚下跑）
 			draw_circle(dc, rr, Color(fr, fg, 0.10, fa))
