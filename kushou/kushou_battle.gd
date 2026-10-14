@@ -3411,6 +3411,104 @@ func _draw_partner_fx(shk: Vector2) -> void:
 		var mid := (a3 + b3) * 0.5 + (b3 - a3).orthogonal().normalized() * 14.0
 		draw_line(a3 + shk, mid + shk, Color(0.94, 0.52, 0.78, la), 4.0)
 		draw_line(mid + shk, b3 + shk, Color(0.98, 0.78, 0.90, la), 3.0)
+	# ============================================================
+	# v15e：新增 12 位的**专属特效**（用户：所有角色的技能都是不同特效）
+	#   每人一套配色 + 一套画法，跟老 20 位不撞。
+	# ============================================================
+	# ① 铁头僧：土黄——身周放射撞痕 ＋ 一圈撞环
+	if p_active("tietouseng"):
+		var kt := 0.45 + 0.55 * p_ratio("tietouseng")
+		for i in 8:
+			var at := TAU * float(i) / 8.0 + _t * 0.4
+			var dt := Vector2(cos(at), sin(at) * 0.6)
+			draw_line(hp2 + Vector2(0, 10) + dt * 16.0, hp2 + Vector2(0, 10) + dt * 30.0, Color(0.86, 0.74, 0.44, 0.75 * kt), 3.0)
+		draw_arc(hp2 + Vector2(0, 12), 34.0, 0.0, TAU, 22, Color(0.82, 0.68, 0.36, 0.5 * kt), 3.0)
+	# ② 病书生：青绿——往上飘的血点（咳出来的）
+	if p_active("bingshusheng"):
+		var kb := 0.45 + 0.55 * p_ratio("bingshusheng")
+		for i in 5:
+			var pb := float(i) / 5.0
+			var yb := fmod(_t * 0.8 + pb, 1.0)
+			var xb := hp2.x + sin((_t + pb * 6.0) * 2.0) * 18.0
+			draw_circle(Vector2(xb, hp2.y - 20.0 - yb * 60.0), 3.2 * (1.0 - yb), Color(0.56, 0.88, 0.52, kb))
+	# ③ 小乞儿：金色——脚边跳动的钱光
+	if p_active("xiaoqier"):
+		var kx := 0.45 + 0.55 * p_ratio("xiaoqier")
+		for i in 4:
+			var hx := fmod(_t * 1.3 + float(i) * 1.7, 1.0)
+			var cx := hp2.x - 30.0 + float(i) * 20.0
+			var cy := hp2.y + 16.0 - absf(sin(hx * PI)) * 26.0
+			draw_circle(Vector2(cx, cy), 5.0, Color(1.0, 0.84, 0.34, 0.85 * kx))
+			draw_arc(Vector2(cx, cy), 8.0, 0.0, TAU, 12, Color(1.0, 0.92, 0.60, 0.4 * kx), 1.5)
+	# ④ 瘸腿老兵：暗红——残血时才亮起来的护命环（被动，没有 active）
+	if bool((partners["laobing"] as Dictionary)["owned"]):
+		var hp_r2 := float(hero["hp"]) / maxf(1.0, float(hero["hp_max"]))
+		if hp_r2 < 0.5:
+			var kl := (0.5 - hp_r2) * 2.4
+			draw_arc(hp2 + Vector2(0, 14), 42.0, -PI * 0.5, -PI * 0.5 + TAU * clampf(kl, 0.05, 1.0), 22, Color(0.90, 0.34, 0.30, 0.65), 4.0)
+			draw_circle(hp2 + Vector2(0, -66), 4.0 + sin(_t * 7.0) * 1.5, Color(1.0, 0.52, 0.44, 0.8))
+	# ⑤ 醉剑仙：粉白——歪斜的两道剑光绕着转
+	if p_active("zuijianxian"):
+		var kz := 0.45 + 0.55 * p_ratio("zuijianxian")
+		for i in 2:
+			var az := _t * 3.4 + PI * float(i) + sin(_t * 2.0) * 0.4
+			var oz := hp2 + Vector2(0, -6) + Vector2(cos(az), sin(az) * 0.5) * 40.0
+			draw_line(oz - Vector2(0, 16), oz + Vector2(0, 16), Color(0.98, 0.80, 0.86, 0.85 * kz), 4.0)
+		draw_arc(hp2 + Vector2(0, 8), 38.0, 0.0, TAU, 24, Color(0.96, 0.66, 0.76, 0.35 * kz), 2.0)
+	# ⑥ 药婆子：淡金——身周几根细针在走
+	if p_active("yaopozi"):
+		var ky := 0.45 + 0.55 * p_ratio("yaopozi")
+		for i in 4:
+			var ay2 := TAU * float(i) / 4.0 - _t * 1.4
+			var oy := hp2 + Vector2(cos(ay2), sin(ay2) * 0.7) * 32.0
+			draw_line(oy, oy + Vector2(0, -12.0), Color(0.98, 0.92, 0.70, 0.9 * ky), 2.0)
+		draw_arc(hp2 + Vector2(0, 10), 30.0, 0.0, TAU, 20, Color(0.92, 0.86, 0.58, 0.35 * ky), 2.0)
+	# ⑦ 鼓上蚤：橙黄——脚下往外扩的鼓点波纹
+	if p_active("gushangzao"):
+		var kg := 0.45 + 0.55 * p_ratio("gushangzao")
+		for i in 3:
+			var rg := fmod(_t * 1.1 + float(i) / 3.0, 1.0)
+			draw_arc(hp2 + Vector2(0, 20), 14.0 + rg * 42.0, 0.0, TAU, 24, Color(1.0, 0.72, 0.30, (1.0 - rg) * 0.7 * kg), 3.0)
+	# ⑧ 金甲校尉：土黄——六片旋转甲片 ＋ 一圈金环
+	if p_active("jinjiaxianwei"):
+		var kj := 0.45 + 0.55 * p_ratio("jinjiaxianwei")
+		for i in 6:
+			var aj := TAU * float(i) / 6.0 + _t * 0.9
+			var oj := hp2 + Vector2(0, 4) + Vector2(cos(aj), sin(aj) * 0.75) * 40.0
+			var dj := Vector2(cos(aj), sin(aj) * 0.75)
+			draw_colored_polygon(PackedVector2Array([oj + dj * 10.0, oj - dj * 6.0 + Vector2(-dj.y, dj.x) * 7.0, oj - dj * 6.0 - Vector2(-dj.y, dj.x) * 7.0]), Color(0.78, 0.66, 0.38, 0.9 * kj))
+		draw_arc(hp2 + Vector2(0, 12), 44.0, 0.0, TAU, 26, Color(0.92, 0.80, 0.44, 0.4 * kj), 2.0)
+	# ⑨ 火工道人：橙红——三簇火苗绕着转
+	if p_active("huogong"):
+		var kh := 0.45 + 0.55 * p_ratio("huogong")
+		for i in 3:
+			var ah := TAU * float(i) / 3.0 + _t * 1.8
+			var oh := hp2 + Vector2(0, 6) + Vector2(cos(ah), sin(ah) * 0.6) * 36.0
+			var fh := 10.0 + absf(sin(_t * 12.0 + float(i))) * 8.0
+			draw_colored_polygon(PackedVector2Array([oh + Vector2(0, 6), oh + Vector2(-4, -fh * 0.5), oh + Vector2(0, -fh), oh + Vector2(4, -fh * 0.5)]), Color(1.0, 0.56, 0.24, 0.9 * kh))
+		draw_arc(hp2 + Vector2(0, 14), 36.0, 0.0, TAU, 24, Color(1.0, 0.60, 0.26, 0.28 * kh), 2.0)
+	# ⑩ 琴痴：淡紫——音波往外荡 ＋ 几条弦线
+	if p_active("qinchi"):
+		var kq := 0.45 + 0.55 * p_ratio("qinchi")
+		for i in 3:
+			var rq := fmod(_t * 0.9 + float(i) / 3.0, 1.0)
+			draw_arc(hp2 + Vector2(0, 2), 12.0 + rq * 52.0, PI * 0.15, PI * 0.85, 18, Color(0.86, 0.72, 1.0, (1.0 - rq) * 0.65 * kq), 3.0)
+		for i in 4:
+			draw_line(hp2 + Vector2(-26.0 + float(i) * 17.0, -30.0), hp2 + Vector2(-26.0 + float(i) * 17.0, 4.0), Color(0.88, 0.80, 0.62, 0.35 * kq), 1.5)
+	# ⑪ 白起后人：暗红——杀意环 ＋ 身侧一串血点
+	if p_active("baiqihouren"):
+		var kqq := 0.45 + 0.55 * p_ratio("baiqihouren")
+		draw_arc(hp2 + Vector2(0, 16), 46.0, _t * 1.2, _t * 1.2 + 3.4, 26, Color(0.86, 0.20, 0.18, 0.6 * kqq), 4.0)
+		for i in 5:
+			draw_circle(hp2 + Vector2(24.0 + float(i) * 3.0, -18.0 - float(i) * 10.0), 2.6, Color(0.94, 0.36, 0.32, 0.8 * kqq))
+	# ⑫ 大内供奉：白金——身周一层罡气壳 ＋ 碎金片
+	if p_active("dagongfeng"):
+		var kd := 0.45 + 0.55 * p_ratio("dagongfeng")
+		draw_arc(hp2 + Vector2(0, -6), 34.0 + sin(_t * 4.0) * 2.0, 0.0, TAU, 28, Color(0.92, 0.90, 0.74, 0.55 * kd), 3.0)
+		draw_arc(hp2 + Vector2(0, -6), 40.0, 0.0, TAU, 28, Color(0.86, 0.84, 0.62, 0.28 * kd), 2.0)
+		for i in 6:
+			var ad := TAU * float(i) / 6.0 - _t * 1.1
+			draw_circle(hp2 + Vector2(0, -6) + Vector2(cos(ad), sin(ad)) * 46.0, 3.0, Color(0.96, 0.94, 0.72, 0.75 * kd))
 # ============================================================
 # v5f 伤害管线（用户：暴击/暴击伤害无上限 · 元素**不吃暴击也不吃护甲减伤** ·
 #   幸运一击上限 300% · 各元素抗性与元素加成 · 全伤害增加与减免）
