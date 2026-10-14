@@ -128,22 +128,22 @@ const BOSS_TIER := [
 		"skill": "铁背（减伤 30%）", "ult": "冲撞", "ult_shape": "beam", "affix": "铁壁（生命 +35%）",
 		"affix_k": "hp_up", "affix_v": 0.35, "ult_cd": 16.0},
 	{"name": "毒牙蟒", "hp": 1750.0, "atk": 20.0,
-		"skill": "剧毒（攻击带毒）", "ult": "毒雾喷吐", "ult_shape": "circle", "affix": "迅捷（移速 +30%）",
+		"skill": "剧毒（攻击带毒）", "ult": "毒雾喷吐", "ult_shape": "follow", "affix": "迅捷（移速 +30%）",
 		"affix_k": "spd_up", "affix_v": 0.30, "skill_k": "poison", "ult_cd": 12.0},
 	{"name": "双头狮", "hp": 5200.0, "atk": 40.0,
-		"skill": "双头夹击", "ult": "狮吼", "ult_shape": "circle", "affix": "嗜血（击中回血）",
+		"skill": "双头夹击", "ult": "狮吼", "ult_shape": "sector", "affix": "嗜血（击中回血）",
 		"affix_k": "lifesteal", "affix_v": 0.15, "ult_cd": 13.0},
 	{"name": "独眼狱卒", "hp": 6200.0, "atk": 36.0,
 		"skill": "锁链拖拽", "ult": "铁链横扫", "ult_shape": "beam", "affix": "重甲（减伤 40%）",
 		"affix_k": "cut_up", "affix_v": 0.40, "ult_cd": 15.0},
 	{"name": "火尾狐妖", "hp": 5600.0, "atk": 43.0,
-		"skill": "狐火（火系溅射）", "ult": "焚身爆", "ult_shape": "circle", "affix": "疾风（攻速 +30%）",
+		"skill": "狐火（火系溅射）", "ult": "焚身爆", "ult_shape": "chain", "affix": "疾风（攻速 +30%）",
 		"affix_k": "aspd_up", "affix_v": 0.30, "skill_k": "foxfire", "ult_cd": 11.0},
 	{"name": "场主亲养·狴犴", "hp": 14000.0, "atk": 64.0,
-		"skill": "牢狱威压", "ult": "断罪一击", "ult_shape": "beam", "affix": "王威（全属性 +30%）",
+		"skill": "牢狱威压", "ult": "断罪一击", "ult_shape": "sector", "affix": "王威（全属性 +30%）",
 		"affix_k": "all_up", "affix_v": 0.30, "ult_cd": 12.0},
 	{"name": "血手判官", "hp": 16500.0, "atk": 58.0,
-		"skill": "血判（吸血 25%）", "ult": "血海", "ult_shape": "circle", "affix": "再生（每秒回 1%）",
+		"skill": "血判（吸血 25%）", "ult": "血海", "ult_shape": "chain", "affix": "再生（每秒回 1%）",
 		"affix_k": "regen", "affix_v": 0.01, "ult_cd": 10.0},
 	{"name": "困兽之主", "hp": 19000.0, "atk": 70.0,
 		"skill": "兽王号令（召小怪）", "ult": "万兽奔踏", "ult_shape": "beam", "affix": "不死（濒死回血一次）",
@@ -978,16 +978,24 @@ func _process(delta: float) -> void:
 			#   circle＝火雨/血海/狮吼那种"地上红圈"（砸在主角脚下）
 			#   beam　＝剑气/冲撞/拖链那种"一条长柱"（从 boss 指向主角）
 			var ushape := str(fb.get("ult_shape", "circle"))
-			if ushape == "beam":
-				var dir2 := (hero_pos - Vector2(float(fb["x"]), float(fb["y"]))).normalized()
-				if dir2 == Vector2.ZERO:
-					dir2 = Vector2(0.0, 1.0)
-				queue_delayed(float(fb["x"]), float(fb["y"]) - 10.0, 46.0, dmg, DMG_PHYS, 1.3, ult, "beam", dir2, 420.0)
-			else:
-				queue_delayed(hero_pos.x, hero_pos.y - 6.0, 96.0, dmg, DMG_PHYS, 1.2, ult, "circle")
-			_shake = maxf(_shake, 9.0)
-			Audio.sfx("drum", -4.0)
-			# 大招同时给主角一个"威压"：短暂减攻速
+			# v16d：从 boss 指向主角的方向（beam / sector / chain 都要它）
+			var dir2 := (hero_pos - Vector2(float(fb["x"]), float(fb["y"]))).normalized()
+			if dir2 == Vector2.ZERO:
+				dir2 = Vector2(0.0, 1.0)
+			match ushape:
+				"beam":
+					self.queue_delayed(float(fb["x"]), float(fb["y"]) - 10.0, 46.0, dmg, DMG_PHYS, 1.3, ult, "beam", dir2, 420.0)
+				"sector":
+					# 扇形横扫：以 boss 为圆心、朝主角方向扫约 100°、半径 300
+					self.queue_delayed(float(fb["x"]), float(fb["y"]) - 10.0, 300.0, dmg, DMG_PHYS, 1.35, ult, "sector", dir2, 0.0, PI * 0.55)
+				"chain":
+					# 多圈连爆（连环火雨）：朝主角方向排 5 个圈，每 0.22 秒落一个
+					self.queue_chain(float(fb["x"]), float(fb["y"]) - 10.0, 86.0, dmg * 0.75, DMG_PHYS, ult, dir2, 5, 110.0, 0.22, 1.15)
+				"follow":
+					# 跟随型：圈追着主角跑（落下前 0.25 秒才定住）
+					self.queue_delayed(hero_pos.x, hero_pos.y - 6.0, 88.0, dmg, DMG_PHYS, 1.6, ult, "follow")
+				_:
+					self.queue_delayed(hero_pos.x, hero_pos.y - 6.0, 96.0, dmg, DMG_PHYS, 1.2, ult, "circle")
 			if float(fb["hp"]) <= 0.0:
 				_kill_foe(fb)
 	# 飘字
@@ -1011,16 +1019,35 @@ func _process(delta: float) -> void:
 var _delayed: Array = []            # 正在预警/即将落下的延迟技
 
 # 排一招延迟技（warn 秒后落下）
+# v16d（用户："接着做"＋"预警可以有个表现形式 就是由淡转深 深后就释放"）：
+#   再加三种形状，并把"由淡转深"做成统一的观感：
+#     sector ＝ 扇形横扫（给 dir 方向、spread 弧度）
+#     chain　＝ 多圈连爆（沿着 dir 一路排 N 个圈，依次落下 → 连环火雨）
+#     follow ＝ 跟随型（圈**追着主角跑**，落下前一直贴在它脚下）
+#   颜色：淡红 → 深红（alpha 与饱和度一起涨），到点闪一下再释放。
 func queue_delayed(x: float, y: float, r: float, dmg: float, elem: String, warn := 1.2,
-	kind := "火雨", shape := "circle", dir := Vector2.RIGHT, len := 0.0) -> void:
+	kind := "火雨", shape := "circle", dir := Vector2.RIGHT, len := 0.0,
+	spread := 0.0, count := 0, gap := 0.0) -> void:
 	_delayed.append({"x": x, "y": y, "r": r, "t": 0.0, "warn": maxf(0.35, warn),
-		"dmg": dmg, "elem": elem, "kind": kind, "shape": shape, "dir": dir, "len": len})
+		"dmg": dmg, "elem": elem, "kind": kind, "shape": shape, "dir": dir, "len": len,
+		"spread": spread, "count": count, "gap": gap})
 	Audio.sfx("tension", -10.0)
+
+# 多圈连爆：把一条链展开成若干独立的 circle（间隔 gap 秒依次落下）
+func queue_chain(x: float, y: float, r: float, dmg: float, elem: String, kind: String,
+	dir: Vector2, count: int, step: float, gap: float, warn := 1.2) -> void:
+	for i in maxi(1, count):
+		var off := dir.normalized() * (step * float(i))
+		queue_delayed(x + off.x, y + off.y, r, dmg, elem, warn + gap * float(i), kind, "circle")
 
 # 每帧：推进倒计时，到点就砸
 func _delayed_tick(delta: float) -> void:
 	for i in range(_delayed.size() - 1, -1, -1):
 		var d: Dictionary = _delayed[i]
+		# v16d：跟随型 —— 落下前**一直贴在主角脚下**（追着人跑），最后 0.25 秒才定住
+		if str(d["shape"]) == "follow" and float(d["t"]) < float(d["warn"]) - 0.25:
+			d["x"] = hero_pos.x
+			d["y"] = hero_pos.y - 6.0
 		d["t"] = float(d["t"]) + delta
 		if float(d["t"]) < float(d["warn"]):
 			continue
@@ -1033,12 +1060,20 @@ func _delayed_hit(d: Dictionary) -> void:
 	var r := float(d["r"])
 	var elem := str(d["elem"])
 	var inr := false
-	if str(d["shape"]) == "beam":
+	var shape := str(d["shape"])
+	if shape == "beam":
 		# 剑气：一条长条——判断主角在不在"沿 dir 的带子"里
 		var rel := hero_pos - c
 		var along := rel.dot(Vector2(d["dir"]))
 		var side := absf(rel.cross(Vector2(d["dir"])))
 		inr = along > -40.0 and along < float(d["len"]) and side < r
+	elif shape == "sector":
+		# 扇形横扫：距离在 r 内 ＋ 角度落在 dir 两侧 spread/2 里
+		var rel2 := hero_pos - c
+		if rel2.length() <= r:
+			var fwd := Vector2(d["dir"]).normalized()
+			var ang := absf(fwd.angle_to(rel2.normalized()))
+			inr = ang <= float(d["spread"]) * 0.5
 	else:
 		inr = c.distance_to(hero_pos) <= r
 	if inr:
@@ -4262,44 +4297,68 @@ func _draw() -> void:
 	draw_rect(Rect2(0, 0, w, 46), Color(1, 1, 1, 0.030))
 	draw_rect(Rect2(0, h - 84.0, w, 84), Color(1, 1, 1, 0.045))
 	draw_line(Vector2(24, h - 84.0), Vector2(w - 24, h - 84.0), Color(1, 1, 1, 0.06), 2.0)
-	# v16a：延迟技的地面预警（**画在最下面一层**，怪和主角都在它上面）
-	#   暗红圈 → 随倒计时越来越红/越来越亮 → 到点砸下来
+	# v16a/v16d：延迟技的地面预警（**画在最下面一层**，怪和主角都在它上面）
+	#   「由淡转深 深后就释放」（用户）：
+	#     · alpha 从很淡一路涨到接近实心（0.06 → 0.55）
+	#     · 颜色从暗红一路烧到亮红（红/绿通道一起抬）
+	#     · 最后 0.25 秒再压一层高亮 —— "深到发亮就该跑了"
 	for dv in _delayed:
 		var d: Dictionary = dv
 		var pr := clampf(float(d["t"]) / maxf(0.01, float(d["warn"])), 0.0, 1.0)
+		# "由淡转深"：alpha 与颜色同时推进
+		var fa := 0.06 + 0.49 * pr                       # 面填充：很淡 → 半实
+		var ea := 0.30 + 0.68 * pr                       # 边描线：暗 → 亮
+		var fr := 0.52 + 0.48 * pr                       # 红通道 0.52 → 1.0
+		var fg := 0.08 + 0.40 * pr                       # 绿通道 0.08 → 0.48（越深越"烫"）
 		var dc := Vector2(float(d["x"]), float(d["y"])) + shk
-		if str(d["shape"]) == "beam":
+		var rr := float(d["r"])
+		var shape := str(d["shape"])
+		if shape == "beam":
 			# 剑气：一条长柱（沿 dir 方向）
 			var dv2 := Vector2(d["dir"])
 			var nrm := Vector2(-dv2.y, dv2.x)
 			var ln := float(d["len"])
-			var hw := float(d["r"])
-			var p1 := dc + nrm * hw
-			var p2 := dc - nrm * hw
-			var p3 := dc - nrm * hw + dv2 * ln
-			var p4 := dc + nrm * hw + dv2 * ln
-			draw_colored_polygon(PackedVector2Array([p1, p2, p3, p4]),
-				Color(0.70, 0.12, 0.10, 0.10 + 0.35 * pr))
-			draw_line(p1, p4, Color(0.94, 0.24, 0.18, 0.45 + 0.5 * pr), 3.0)
-			draw_line(p2, p3, Color(0.94, 0.24, 0.18, 0.45 + 0.5 * pr), 3.0)
+			draw_colored_polygon(PackedVector2Array([dc + nrm * rr, dc - nrm * rr,
+				dc - nrm * rr + dv2 * ln, dc + nrm * rr + dv2 * ln]), Color(fr, fg, 0.10, fa))
+			draw_line(dc + nrm * rr, dc + nrm * rr + dv2 * ln, Color(fr, fg * 1.4, 0.18, ea), 3.0)
+			draw_line(dc - nrm * rr, dc - nrm * rr + dv2 * ln, Color(fr, fg * 1.4, 0.18, ea), 3.0)
+		elif shape == "sector":
+			# 扇形横扫：一段圆弧 ＋ 从圆心散出去的边线
+			var fwd := Vector2(d["dir"]).normalized()
+			var half := float(d["spread"]) * 0.5
+			var a0 := fwd.angle() - half
+			var a1 := fwd.angle() + half
+			draw_colored_polygon(PackedVector2Array([dc, dc + Vector2(cos(a0), sin(a0)) * rr,
+				dc + Vector2(cos((a0 + a1) * 0.5), sin((a0 + a1) * 0.5)) * rr, dc + Vector2(cos(a1), sin(a1)) * rr]),
+				Color(fr, fg, 0.10, fa))
+			draw_arc(dc, rr, a0, a1, 28, Color(fr, fg * 1.4, 0.18, ea), 3.0)
+			draw_line(dc, dc + Vector2(cos(a0), sin(a0)) * rr, Color(fr, fg * 1.4, 0.18, ea * 0.8), 2.0)
+			draw_line(dc, dc + Vector2(cos(a1), sin(a1)) * rr, Color(fr, fg * 1.4, 0.18, ea * 0.8), 2.0)
 		else:
-			var rr := float(d["r"])
-			draw_circle(dc, rr, Color(0.62, 0.10, 0.08, 0.08 + 0.30 * pr))
-			draw_arc(dc, rr, 0.0, TAU, 40, Color(0.94, 0.22, 0.16, 0.55 + 0.45 * pr), 3.0)
-			draw_arc(dc, rr * pr, 0.0, TAU, 32, Color(1.0, 0.42, 0.26, 0.35 + 0.5 * pr), 2.0)
-		# 倒计时最后 0.25 秒：圈里再压一层亮红（"就要砸了"）
+			# 圆（含跟随型：圈一路贴在主角脚下跑）
+			draw_circle(dc, rr, Color(fr, fg, 0.10, fa))
+			draw_arc(dc, rr, 0.0, TAU, 40, Color(fr, fg * 1.4, 0.18, ea), 3.0)
+			draw_arc(dc, rr * pr, 0.0, TAU, 32, Color(fr, fg * 1.6, 0.24, ea * 0.75), 2.0)
+		# "深到发亮"＝就快释放了：最后 0.25 秒再压一层高亮
 		if pr > 0.80:
 			var fl2 := (pr - 0.80) / 0.20
-			var col2 := Color(1.0, 0.46, 0.24, 0.30 * fl2)
-			if str(d["shape"]) == "beam":
+			var col2 := Color(1.0, 0.46, 0.24, 0.34 * fl2)
+			if shape == "beam":
 				var dv3 := Vector2(d["dir"])
 				var nrm2 := Vector2(-dv3.y, dv3.x)
 				var hw2 := float(d["r"])
 				var q1 := dc + nrm2 * hw2
 				var q2 := dc - nrm2 * hw2
 				draw_colored_polygon(PackedVector2Array([q1, q2, q2 + dv3 * float(d["len"]), q1 + dv3 * float(d["len"])]), col2)
+			elif shape == "sector":
+				var fw2 := Vector2(d["dir"]).normalized()
+				var hf2 := float(d["spread"]) * 0.5
+				var b0 := fw2.angle() - hf2
+				var b1 := fw2.angle() + hf2
+				draw_colored_polygon(PackedVector2Array([dc, dc + Vector2(cos(b0), sin(b0)) * rr,
+					dc + Vector2(cos((b0 + b1) * 0.5), sin((b0 + b1) * 0.5)) * rr, dc + Vector2(cos(b1), sin(b1)) * rr]), col2)
 			else:
-				draw_circle(dc, float(d["r"]), col2)
+				draw_circle(dc, rr, col2)
 	# v13d P3：法阵（占点）——画在怪下面一层
 	if not zone.is_empty() and bool(zone.get("on", false)):
 		var zc := Vector2(float(zone["x"]), float(zone["y"]))
