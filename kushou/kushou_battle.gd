@@ -2635,8 +2635,8 @@ const PARTNER_INFO := {
 		"desc": "治疗自己（回生命上限的一部分），同时让最近的敌人中毒——木系持续伤害，每秒跳一次",
 		"mp0": 120.0, "cd0": 12.0, "dur0": 0.0},
 	"jicanghai": {"name": "季沧海", "quality": "极品", "skill": "怒火焚身", "dtype": "火系", "grow": {"arm": 2, "agi": 2, "wit": 3},
-		"desc": "每 3 秒烧最近一名敌人（火系）；传火：会引燃它身边范围内的另一名敌人",
-		"mp0": 0.0, "cd0": 3.0, "dur0": 0.0},
+		"desc": "每 9 秒烧最近一名敌人（火系）；传火：会引燃它身边范围内的另一名敌人（强化可减冷却/加伤/多传一名）",
+		"mp0": 0.0, "cd0": 9.0, "dur0": 0.0},
 	"zhangdaoling": {"name": "张道陵", "quality": "绝品", "skill": "天雷道术", "dtype": "金系", "grow": {"arm": 0, "agi": 2, "wit": 5},
 		"desc": "落下一道天雷，砸在最近的敌人身上，**两个人身位**内的敌人一起吃金系伤害；有几率麻痹",
 		"mp0": 300.0, "cd0": 10.0, "dur0": 0.0},
@@ -2676,7 +2676,7 @@ const PARTNER_INFO := {
 		"desc": "每 6 秒劈出一道火刃，横扫最近敌人身前 140 像素范围（火系范围）",
 		"mp0": 0.0, "cd0": 12.0, "dur0": 0.0},
 	"duniangzi": {"name": "毒娘子", "quality": "极品", "skill": "万毒", "dtype": "木系（持续）", "grow": {"arm": 1, "agi": 2, "wit": 4},
-		"desc": "每 10 秒给**最近的 5 名**敌人挂毒（木系，每秒跳一次，持续 6 秒）",
+		"desc": "每 10 秒给**最近的 5 名**敌人挂毒（木系，每秒跳一次，持续 6 秒 · 强化可加毒/加持续）",
 		"mp0": 200.0, "cd0": 10.0, "dur0": 0.0},
 	# ---- 绝品（共 3：崔三娘/张道陵 + 这个）----
 	"xuanjizi": {"name": "玄机子", "quality": "绝品", "skill": "时间停止", "dtype": "无伤害", "grow": {"arm": 1, "agi": 3, "wit": 6},
@@ -3185,7 +3185,7 @@ func _cast_spring() -> void:
 # ---- 季沧海 ----
 func jc_dmg_mul() -> float:
 	# v4q 调伤害：0.70 → 0.60（无内力消耗、每 3 秒一发还带传火，收一点更稳）
-	return 0.60 * (1.0 + 0.25 * float(partners["jicanghai"]["dmg_lv"])) * p_star_mul("jicanghai")
+	return 0.38 * (1.0 + 0.25 * float(partners["jicanghai"]["dmg_lv"])) * p_star_mul("jicanghai")
 
 func jc_spread() -> int:
 	return 1 + int(partners["jicanghai"]["spread_lv"])          # 传火：多引燃几名
@@ -3194,7 +3194,7 @@ func jc_burn_mul() -> float:
 	return 0.12 * float(partners["jicanghai"]["burn_lv"])        # 灼烧：每秒额外火伤
 
 func jc_interval() -> float:
-	return maxf(1.2, 3.0 - 0.4 * float(partners["jicanghai"]["sec_lv"])) / p_star_mul("jicanghai")
+	return maxf(4.0, 9.0 - 0.6 * float(partners["jicanghai"]["sec_lv"])) / p_star_mul("jicanghai")
 
 func _cast_fire() -> void:
 	var tg := _nearest()
@@ -3667,7 +3667,7 @@ func _cast_vine() -> void:
 # 毒娘子：万毒（全场挂毒）
 # v17g（用户："毒娘子…群攻人太多了"）：**不再全场挂毒**，只挂最近的 5 名
 func _cast_poison_all() -> void:
-	var dmg := float(hero["atk"]) * (0.25 + 0.06 * float(partners["duniangzi"].get("dmg_lv", 0))) * p_star_mul("duniangzi")
+	var dmg := float(hero["atk"]) * (0.16 + 0.05 * float(partners["duniangzi"].get("dmg_lv", 0))) * p_star_mul("duniangzi")
 	var dur := 6.0 + 1.0 * float(partners["duniangzi"].get("dot_lv", 0))
 	var n := 0
 	for f_v in _nearest_n(5):
