@@ -5106,12 +5106,9 @@ func _hero_mark_back(c: Vector2, s: float) -> void:
 	draw_circle(c + Vector2(0, -31.0 * s), 4.0 * s, Color(0.86, 0.70, 0.28))
 
 func _hero_mark_front(c: Vector2, s: float, col: Color) -> void:
-	# 脚下的金色光环（虚线转圈）＋ 内圈呼吸
-	var rot := _t * 1.6
-	for i in 10:
-		var a0 := rot + TAU * float(i) / 10.0
-		draw_arc(c + Vector2(0, 26.0 * s), 26.0 * s, a0, a0 + 0.30, 12,
-			Color(0.94, 0.80, 0.38, 0.55 + 0.25 * sin(_t * 3.0)), 3.0)
+	# v16l-1（用户："脚下金色光环不要了"）：⚠ 原来这里有 10 段虚线金环在脚下转，
+	#   已按用户要求**去掉**（太抢眼、跟地面预警圈也容易混）。
+	#   现在主角靠 披风 ＋ 发带飘带 ＋ 剑光 三样区分，不再用脚下那圈。
 	# 发带 ＋ 两条飘带（往身后飘）
 	var head := c + Vector2(0, -34.0 * s)
 	draw_line(head + Vector2(-10.0 * s, -4.0 * s), head + Vector2(10.0 * s, -4.0 * s),
