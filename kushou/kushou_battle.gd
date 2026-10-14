@@ -217,10 +217,19 @@ const INTRO_WAIT := 3.0             # 开场先站几秒（让怪先走进画面
 const HERO_TOP := 0.25              # 主角/宠物能到的最高那条线（战场高度的比例）
 									#   v3j 从 0.40 收到 0.25；两条路都吃它：自动追击 与 点哪走哪
 									#   ⚠ v15j 一度改成 0.30，用户确认 25% 才是原设计 → 已改回
+# v15y（用户："我的意思是主角跑到中间就不跑了就等着怪过来"）：
+#   主角**只走到中间那条线就停住**，然后**等怪自己走下来**（怪会一直往下走到能打到主角）。
+#   这个值就是"怪要贴多近主角才动"：给小了（90）＝基本不追，怪到胸口才侧身一步。
+#   原来没有这个限制，主角会一路追到 25% 的天花板杵着（看着像"一直往前跑"）。
+const HERO_AGGRO := 90.0
+# 主角站哪一行：0.5 ＝ 战场正中（"跑到中间就不跑了，等怪过来"）
+const HERO_MID := 0.50
 const HERO_REACH := 74.0            # 进这个距离就出手
 const FOE_REACH := 66.0             # 怪进这个距离就停下开打
 const PET_SPD := 124.0              # 宠物"贴近了"的速度
 const PET_SPD_FAR := 196.0          # 宠物"离得远"的追击速度
+# v15y：宠物的"仇恨范围"——跟主角同一个道理，怪远了就不追
+const PET_AGGRO := 90.0
 const PET_REACH := 62.0
 var _sfx_t := 0.0                   # 距上一次播音效多久（节流用）
 var _combo := 0                     # 连杀（爽感：连着杀会喊"连杀 ×N"，抖屏也跟着加码）
@@ -594,9 +603,13 @@ func _process(delta: float) -> void:
 		else:
 			hero_pos += (_order_pos - hero_pos).normalized() * minf(HERO_SPD_FAR * delta, od)
 			_hero_step += delta * 8.0
-	elif not target.is_empty():
+	elif not target.is_empty() and dist <= HERO_AGGRO:
+		# v15y（用户："人物依旧一直往前跑 自动时会回到动画居中位置等人"）：
+		#   ⚠ 实测主角并不是"一直跑"，而是**稳定杵在 25% 那条最上面的线**上不动
+		#   （目标距离 66 < REACH 74 就站住了）—— 看着就像"一直往前顶"。
+		#   现在：**怪离得远（>HERO_AGGRO）就不追**，退回中间那条线等它下来。
+		#   实测：加上这条之后主角稳定在 50% 一带待命，而不是贴在顶上。
 		if dist > HERO_REACH + 10.0:
-			# 远快近慢：按当前距离取速度
 			var st_h := minf(_chase_spd(HERO_SPD, HERO_SPD_FAR, dist) * delta, dist - HERO_REACH)
 			hero_pos += to_t.normalized() * st_h
 			if st_h > 0.3:
@@ -626,14 +639,16 @@ func _process(delta: float) -> void:
 	var pet_home := hero_pos + Vector2(-92.0, 26.0)
 	if intro_wait > 0.0:
 		pass                                    # 开场同样陪着站
-	elif not target.is_empty():
+	elif not target.is_empty() and pet_pos.distance_to(tpos) <= PET_AGGRO:
+		# v15y（用户："宠物也是"）：跟主角同一条口径 —— **怪离得远就不追**，
+		#   回主人身边（左后侧）待命，等怪自己走下来。
+		#   原来它会一路追着目标跑到最上面，看着就是"宠物也一直往前冲"。
 		var pd0 := pet_pos.distance_to(tpos)
 		if pd0 > PET_REACH + 12.0:
 			var st_p := minf(_chase_spd(PET_SPD, PET_SPD_FAR, pd0) * delta, pd0 - PET_REACH)
 			pet_pos += (tpos - pet_pos).normalized() * st_p
 			if st_p > 0.3:
 				_pet_step += delta * 11.0         # 真在跑，腿才摆
-		# 够得着就**站住**——不再被 home 往回拽（这是"原地一直走"的根子）
 	elif pet_pos.distance_to(pet_home) > 8.0:
 		var st_q := minf(PET_SPD * 0.8 * delta, pet_pos.distance_to(pet_home))
 		pet_pos += (pet_home - pet_pos).normalized() * st_q
@@ -703,7 +718,7 @@ func _process(delta: float) -> void:
 		if _combo_t <= 0.0:
 			_combo = 0
 	# 主角的"家"跟着窗口尺寸走（没怪时退回这里）
-	_home = Vector2(size.x * 0.5, size.y - HERO_LINE)
+	_home = Vector2(size.x * 0.5, size.y * HERO_MID)
 	# v13d P3：这一帧"活着的石像"位置（给怪算 buff 用；碎一座立刻失效）
 	var live_st: Array = []
 	for fst_v in foes:
@@ -4104,6 +4119,11 @@ func clear_elite() -> void:
 	for i in range(foes.size() - 1, -1, -1):
 		if str((foes[i] as Dictionary).get("kind", "")) == "elite":
 			foes.remove_at(i)
+
+# v15y（用户："35波打完就通关了"）：这一波的 boss 打完了吗？
+#   外壳用它判"最后一波真的清干净了"才结算——否则一踏进就通关，boss 白叫一场。
+func boss_cleared() -> bool:
+	return not boss_alive
 
 func live_foes() -> int:
 	var n := 0

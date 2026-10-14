@@ -4568,25 +4568,25 @@ var _stage_done := {}                     # 已通关的关卡 id（永久，存
 
 const STAGES := [
 	# 第一章 · 入门
-	{"id": "1-1", "n": "牢门初开", "mul": 1.0, "waves": 10, "cat": "卡组", "un": "磐石心", "set": "panshixin"},
-	{"id": "1-2", "n": "铁栅血痕", "mul": 1.0, "waves": 15, "cat": "卡组", "un": "铁布衫", "set": "tiebushan"},
-	{"id": "1-3", "n": "断锁残灯", "mul": 1.1, "waves": 20, "cat": "队员", "un": "白婆婆", "pid": "baipopo"},
-	{"id": "1-4", "n": "监牢深处", "mul": 1.1, "waves": 25, "cat": "卡组", "un": "断岳", "set": "duanyue"},
+	{"id": "1-1", "n": "牢门初开", "mul": 1.0, "waves": 35, "cat": "卡组", "un": "磐石心", "set": "panshixin"},
+	{"id": "1-2", "n": "铁栅血痕", "mul": 1.0, "waves": 35, "cat": "卡组", "un": "铁布衫", "set": "tiebushan"},
+	{"id": "1-3", "n": "断锁残灯", "mul": 1.1, "waves": 35, "cat": "队员", "un": "白婆婆", "pid": "baipopo"},
+	{"id": "1-4", "n": "监牢深处", "mul": 1.1, "waves": 35, "cat": "卡组", "un": "断岳", "set": "duanyue"},
 	# 第二章 · 进阶
-	{"id": "2-1", "n": "典吏巡夜", "mul": 1.3, "waves": 20, "cat": "宝物", "un": "灵晶袋", "trea": "灵晶袋"},
-	{"id": "2-2", "n": "五行乱阵", "mul": 1.3, "waves": 25, "cat": "卡组", "un": "五行", "set": "wuxing"},
-	{"id": "2-3", "n": "贪墨之狱", "mul": 1.4, "waves": 30, "cat": "装备卡", "un": "聚财珠", "set": "jucaizhu"},
-	{"id": "2-4", "n": "藤萝缠狱", "mul": 1.4, "waves": 30, "cat": "队员", "un": "沈青萝", "pid": "shenqingluo"},
+	{"id": "2-1", "n": "典吏巡夜", "mul": 1.3, "waves": 35, "cat": "宝物", "un": "灵晶袋", "trea": "灵晶袋"},
+	{"id": "2-2", "n": "五行乱阵", "mul": 1.3, "waves": 35, "cat": "卡组", "un": "五行", "set": "wuxing"},
+	{"id": "2-3", "n": "贪墨之狱", "mul": 1.4, "waves": 35, "cat": "装备卡", "un": "聚财珠", "set": "jucaizhu"},
+	{"id": "2-4", "n": "藤萝缠狱", "mul": 1.4, "waves": 35, "cat": "队员", "un": "沈青萝", "pid": "shenqingluo"},
 	# 第三章 · 困难
-	{"id": "3-1", "n": "龙纹石壁", "mul": 1.7, "waves": 30, "cat": "宝物", "un": "龙纹佩", "trea": "龙纹佩"},
-	{"id": "3-2", "n": "雷罚天牢", "mul": 1.7, "waves": 30, "cat": "卡组", "un": "雷罚", "set": "leifa"},
-	{"id": "3-3", "n": "传家之秘", "mul": 1.8, "waves": 30, "cat": "装备卡", "un": "传家宝", "set": "chuanjiabao"},
-	{"id": "3-4", "n": "鹰唳九霄", "mul": 1.8, "waves": 30, "cat": "队员", "un": "燕无归", "pid": "yanwugui"},
+	{"id": "3-1", "n": "龙纹石壁", "mul": 1.7, "waves": 35, "cat": "宝物", "un": "龙纹佩", "trea": "龙纹佩"},
+	{"id": "3-2", "n": "雷罚天牢", "mul": 1.7, "waves": 35, "cat": "卡组", "un": "雷罚", "set": "leifa"},
+	{"id": "3-3", "n": "传家之秘", "mul": 1.8, "waves": 35, "cat": "装备卡", "un": "传家宝", "set": "chuanjiabao"},
+	{"id": "3-4", "n": "鹰唳九霄", "mul": 1.8, "waves": 35, "cat": "队员", "un": "燕无归", "pid": "yanwugui"},
 	# 第四章 · 地狱
-	{"id": "4-1", "n": "火麟熔狱", "mul": 2.2, "waves": 30, "cat": "宠物", "un": "火麟", "pet": "lin"},
-	{"id": "4-2", "n": "诛心绝境", "mul": 2.2, "waves": 30, "cat": "卡组", "un": "诛心", "set": "zhuxin"},
-	{"id": "4-3", "n": "连环杀狱", "mul": 2.4, "waves": 30, "cat": "队员", "un": "雷小七", "pid": "leixiaoqi"},
-	{"id": "4-4", "n": "困兽之斗", "mul": 2.6, "waves": 30, "cat": "宝物", "un": "悟道果", "trea": "悟道果"},
+	{"id": "4-1", "n": "火麟熔狱", "mul": 2.2, "waves": 35, "cat": "宠物", "un": "火麟", "pet": "lin"},
+	{"id": "4-2", "n": "诛心绝境", "mul": 2.2, "waves": 35, "cat": "卡组", "un": "诛心", "set": "zhuxin"},
+	{"id": "4-3", "n": "连环杀狱", "mul": 2.4, "waves": 35, "cat": "队员", "un": "雷小七", "pid": "leixiaoqi"},
+	{"id": "4-4", "n": "困兽之斗", "mul": 2.6, "waves": 35, "cat": "宝物", "un": "悟道果", "trea": "悟道果"},
 ]
 
 func _stage_info(id: String) -> Dictionary:
@@ -6299,9 +6299,16 @@ func _process(delta: float) -> void:
 	_yh_tick(delta)             # v12a：玲珑玉壶（冷却 ＋ 气血低于 50% 自动用）
 	_ach_tick(delta)            # v13w：成就达成检查（每半秒一次）
 	# v14e：打满这一关的波数上限 → 通关（首通给解锁）
+	# v15y（用户："35波打完就通关了"）：⚠ 原来只判 `_wave >= _wave_max` ——
+	#   那是**一踏进最后一波就结算**，那一波叫出来的 boss 白叫一场。
+	#   现在要求"最后一波的 boss 也清了"才算打完。
 	if not _stage_paid and _wave >= _wave_max:
-		_stage_paid = true
-		_stage_clear(_stage_sel)
+		var finale_ok := true
+		if _field != null and _boss_on_wave(_wave):
+			finale_ok = bool(_field.boss_cleared())
+		if finale_ok:
+			_stage_paid = true
+			_stage_clear(_stage_sel)
 	# v14f：无尽模式——波数爬到新高就记一笔
 	if _endless and _field != null and int(_field.wave) > _best_wave:
 		_best_wave = int(_field.wave)
@@ -8287,11 +8294,57 @@ func _fill_wpn_detail(p: Control, y: float, sz: Vector2) -> float:
 		p.add_child(l)
 		ly += 46.0
 	ly += 20.0
-	# v15m（用户："直接换成这个界面"）：原来这里第二颗是"强化页（选线/详情）"——
-	#   指向那个**简单版**武器页；现在简单版整个改道到这一页了，那颗按钮会变成"点自己"（死循环）。
-	#   改成**强化一级**：详情页自己就是完整的强化界面（价格/进阶/已选线都在上面）。
-	_pbtn(p, "一键强化", Vector2(24, ly), Vector2(310, 80), 26, true, _wpn_auto)
-	_pbtn(p, "强化一级（" + str(_wpn_cost()) + " 文钱）", Vector2(354, ly), Vector2(310, 80), 20, false, func(): _wpn_up())
+	# v15y（用户："进阶三选一 还是没有"）：⚠ 上一版我把那个"简单版武器页"整个改道跳过了，
+	#   而**进阶三选一（_wpn_take 的"选它"）就长在那一页里** —— 于是到了 10 的倍数就卡死：
+	#   `_wpn_await` 挂着、`_wpn_choices` 有三个，但**没有任何界面能选**。
+	#   现在把三选一直接做进详情页：进阶时这里换成三张卡 ＋ 每张一颗［选它］。
+	if _wpn_await and _wpn_choices.size() > 0:
+		var advh := Label.new()
+		advh.position = Vector2(24, ly)
+		advh.size = Vector2(660, 42)
+		advh.add_theme_font_size_override("font_size", 25)
+		advh.add_theme_color_override("font_color", SEAL)
+		advh.text = "进阶！武器升为【" + str(WPN_Q_CN[_wpn_q]) + "】—— 三选一（选完才能继续强化）"
+		p.add_child(advh)
+		ly += 50.0
+		var cwid := 204.0
+		for i in _wpn_choices.size():
+			var it: Dictionary = _wpn_choices[i]
+			var cx := 24.0 + float(i) * (cwid + 12.0)
+			var sb2 := StyleBoxFlat.new()
+			sb2.bg_color = Color(0.99, 0.97, 0.92)
+			sb2.set_corner_radius_all(12)
+			sb2.border_color = _quality_color(str(WPN_Q_CN[int(it["q"])]))
+			sb2.set_border_width_all(3)
+			var cb := Panel.new()
+			cb.position = Vector2(cx, ly)
+			cb.size = Vector2(cwid, 250)
+			cb.add_theme_stylebox_override("panel", sb2)
+			cb.mouse_filter = Control.MOUSE_FILTER_STOP
+			p.add_child(cb)
+			var cn := Label.new()
+			cn.position = Vector2(10, 12)
+			cn.size = Vector2(cwid - 20, 76)
+			cn.add_theme_font_size_override("font_size", 22)
+			cn.add_theme_color_override("font_color", INK)
+			cn.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			cn.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			cn.text = str(it["n"]) + "\n【" + str(WPN_Q_CN[int(it["q"])]) + "】"
+			cb.add_child(cn)
+			var cd := Label.new()
+			cd.position = Vector2(10, 94)
+			cd.size = Vector2(cwid - 20, 90)
+			cd.add_theme_font_size_override("font_size", 19)
+			cd.add_theme_color_override("font_color", DIM)
+			cd.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			cd.text = str(it["fx"])
+			cb.add_child(cd)
+			_pbtn(cb, "选它", Vector2(10, 196), Vector2(cwid - 20, 44), 22, true, _wpn_take.bind(i))
+		ly += 262.0
+	else:
+		_pbtn(p, "一键强化", Vector2(24, ly), Vector2(310, 80), 26, true, _wpn_auto)
+		_pbtn(p, "强化一级（" + str(_wpn_cost()) + " 文钱）", Vector2(354, ly), Vector2(310, 80), 20, false, func(): _wpn_up())
+		ly += 92.0
 	ly += 92.0
 	_pbtn(p, "关闭", Vector2(24, ly), Vector2(640, 72), 24, false, _close_popup)
 	return ly + 88.0
