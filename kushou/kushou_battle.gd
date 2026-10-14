@@ -122,31 +122,31 @@ const FOE_SPD := 74.0               # 怪往下走的速度（像素/秒）
 #   · 大招＝周期性范围技（ult_cd 秒一次，砸一圈 + 震屏）
 const BOSS_TIER := [
 	{"name": "看门恶犬", "hp": 1600.0, "atk": 22.0,
-		"skill": "撕咬连击", "ult": "狂吠震地", "affix": "狂暴（攻击 +25%）",
+		"skill": "撕咬连击", "ult": "狂吠震地", "ult_shape": "circle", "affix": "狂暴（攻击 +25%）",
 		"affix_k": "atk_up", "affix_v": 0.25, "ult_cd": 14.0},
 	{"name": "铁背苍狼", "hp": 2000.0, "atk": 19.0,
-		"skill": "铁背（减伤 30%）", "ult": "冲撞", "affix": "铁壁（生命 +35%）",
+		"skill": "铁背（减伤 30%）", "ult": "冲撞", "ult_shape": "beam", "affix": "铁壁（生命 +35%）",
 		"affix_k": "hp_up", "affix_v": 0.35, "ult_cd": 16.0},
 	{"name": "毒牙蟒", "hp": 1750.0, "atk": 20.0,
-		"skill": "剧毒（攻击带毒）", "ult": "毒雾喷吐", "affix": "迅捷（移速 +30%）",
+		"skill": "剧毒（攻击带毒）", "ult": "毒雾喷吐", "ult_shape": "circle", "affix": "迅捷（移速 +30%）",
 		"affix_k": "spd_up", "affix_v": 0.30, "skill_k": "poison", "ult_cd": 12.0},
 	{"name": "双头狮", "hp": 5200.0, "atk": 40.0,
-		"skill": "双头夹击", "ult": "狮吼", "affix": "嗜血（击中回血）",
+		"skill": "双头夹击", "ult": "狮吼", "ult_shape": "circle", "affix": "嗜血（击中回血）",
 		"affix_k": "lifesteal", "affix_v": 0.15, "ult_cd": 13.0},
 	{"name": "独眼狱卒", "hp": 6200.0, "atk": 36.0,
-		"skill": "锁链拖拽", "ult": "铁链横扫", "affix": "重甲（减伤 40%）",
+		"skill": "锁链拖拽", "ult": "铁链横扫", "ult_shape": "beam", "affix": "重甲（减伤 40%）",
 		"affix_k": "cut_up", "affix_v": 0.40, "ult_cd": 15.0},
 	{"name": "火尾狐妖", "hp": 5600.0, "atk": 43.0,
-		"skill": "狐火（火系溅射）", "ult": "焚身爆", "affix": "疾风（攻速 +30%）",
+		"skill": "狐火（火系溅射）", "ult": "焚身爆", "ult_shape": "circle", "affix": "疾风（攻速 +30%）",
 		"affix_k": "aspd_up", "affix_v": 0.30, "skill_k": "foxfire", "ult_cd": 11.0},
 	{"name": "场主亲养·狴犴", "hp": 14000.0, "atk": 64.0,
-		"skill": "牢狱威压", "ult": "断罪一击", "affix": "王威（全属性 +30%）",
+		"skill": "牢狱威压", "ult": "断罪一击", "ult_shape": "beam", "affix": "王威（全属性 +30%）",
 		"affix_k": "all_up", "affix_v": 0.30, "ult_cd": 12.0},
 	{"name": "血手判官", "hp": 16500.0, "atk": 58.0,
-		"skill": "血判（吸血 25%）", "ult": "血海", "affix": "再生（每秒回 1%）",
+		"skill": "血判（吸血 25%）", "ult": "血海", "ult_shape": "circle", "affix": "再生（每秒回 1%）",
 		"affix_k": "regen", "affix_v": 0.01, "ult_cd": 10.0},
 	{"name": "困兽之主", "hp": 19000.0, "atk": 70.0,
-		"skill": "兽王号令（召小怪）", "ult": "万兽奔踏", "affix": "不死（濒死回血一次）",
+		"skill": "兽王号令（召小怪）", "ult": "万兽奔踏", "ult_shape": "beam", "affix": "不死（濒死回血一次）",
 		"affix_k": "revive", "affix_v": 1.0, "skill_k": "summon", "ult_cd": 9.0},
 ]
 
@@ -936,6 +936,7 @@ func _process(delta: float) -> void:
 			hero["shield_t"] = 6.0
 			_push_float(hero_pos.x, hero_pos.y - 84.0, "护盾 " + str(int(sv)), Color(0.66, 0.86, 1.0))
 	_update_quake(dt)
+	_delayed_tick(dt)            # v16a：延迟技（预警 → 落下）
 	for i6 in range(_fire_lines.size() - 1, -1, -1):
 		var fl2: Dictionary = _fire_lines[i6]
 		fl2["t"] = float(fl2["t"]) + delta
@@ -967,12 +968,23 @@ func _process(delta: float) -> void:
 		if float(fb["ult_t"]) <= 0.0:
 			# ⚠ v14t：这里原来写死 14 秒 —— 表里每只 boss 自己的 ult_cd（9~16）全被吃掉了
 			fb["ult_t"] = float(fb.get("ult_cd", 14.0))
+			# v16a（用户："技能和大招可以做成那种延迟形…先是地上会出现逐渐变红的红圈"）：
+			#   ⚠ 原来是**瞬间**结算（一帧内扣血＋出特效），玩家没有反应时间。
+			#   现在改成**延迟技**：先在主角脚下画一个逐渐变红的圈，1.2 秒后才砸下来 ——
+			#   这 1.2 秒就是"该挪开了"的窗口（点了走位的玩家能躲掉）。
 			var ult := str(fb.get("bult", "大招"))
 			var dmg := float(fb["atk"]) * 1.6
-			var d2 := hero_in_dmg(dmg, DMG_PHYS)
-			hero["hp"] = maxf(0.0, float(hero["hp"]) - d2)
-			_push_float(hero_pos.x, hero_pos.y - 104.0, ult + "！", Color(1.0, 0.48, 0.38), true)
-			_bursts.append({"x": hero_pos.x, "y": hero_pos.y - 10.0, "t": 0.0, "col": Color(1.0, 0.46, 0.34), "scale": 2.0})
+			# v16a：按这只 boss 的**招牌形状**排延迟技 ——
+			#   circle＝火雨/血海/狮吼那种"地上红圈"（砸在主角脚下）
+			#   beam　＝剑气/冲撞/拖链那种"一条长柱"（从 boss 指向主角）
+			var ushape := str(fb.get("ult_shape", "circle"))
+			if ushape == "beam":
+				var dir2 := (hero_pos - Vector2(float(fb["x"]), float(fb["y"]))).normalized()
+				if dir2 == Vector2.ZERO:
+					dir2 = Vector2(0.0, 1.0)
+				queue_delayed(float(fb["x"]), float(fb["y"]) - 10.0, 46.0, dmg, DMG_PHYS, 1.3, ult, "beam", dir2, 420.0)
+			else:
+				queue_delayed(hero_pos.x, hero_pos.y - 6.0, 96.0, dmg, DMG_PHYS, 1.2, ult, "circle")
 			_shake = maxf(_shake, 9.0)
 			Audio.sfx("drum", -4.0)
 			# 大招同时给主角一个"威压"：短暂减攻速
@@ -986,6 +998,59 @@ func _process(delta: float) -> void:
 		if float(fl["t"]) > 0.75:
 			_floats.remove_at(j)
 	queue_redraw()
+
+# ============================================================
+# v16a（用户："技能和大招可以做成那种延迟形 比如群攻的火雨 先是地上会出现逐渐变红的红圈
+#        然后火雨砸下来 剑气也是一条红色长柱子 然后一个剑气过去"）：
+#   延迟技（预警 → 落下）框架。
+#   · 记一笔 {x, y, r, t, warn, dmg, elem, kind, dir}：t 从 0 数到 warn
+#   · 画法：**地面先冒出暗红圈 → 随倒计时越来越亮（越来越红）** → 到点砸下来
+#   · 到点结算：圈里的人挨伤害 ＋ 一圈火 ＋ 震屏
+#   shape：circle＝火雨/地裂那种圆 ／ beam＝剑气那种长条（沿 dir 方向）
+# ============================================================
+var _delayed: Array = []            # 正在预警/即将落下的延迟技
+
+# 排一招延迟技（warn 秒后落下）
+func queue_delayed(x: float, y: float, r: float, dmg: float, elem: String, warn := 1.2,
+	kind := "火雨", shape := "circle", dir := Vector2.RIGHT, len := 0.0) -> void:
+	_delayed.append({"x": x, "y": y, "r": r, "t": 0.0, "warn": maxf(0.35, warn),
+		"dmg": dmg, "elem": elem, "kind": kind, "shape": shape, "dir": dir, "len": len})
+	Audio.sfx("tension", -10.0)
+
+# 每帧：推进倒计时，到点就砸
+func _delayed_tick(delta: float) -> void:
+	for i in range(_delayed.size() - 1, -1, -1):
+		var d: Dictionary = _delayed[i]
+		d["t"] = float(d["t"]) + delta
+		if float(d["t"]) < float(d["warn"]):
+			continue
+		_delayed_hit(d)
+		_delayed.remove_at(i)
+
+# 落下结算：圈里的主角挨伤害；顺便一圈火 ＋ 震屏
+func _delayed_hit(d: Dictionary) -> void:
+	var c := Vector2(float(d["x"]), float(d["y"]))
+	var r := float(d["r"])
+	var elem := str(d["elem"])
+	var inr := false
+	if str(d["shape"]) == "beam":
+		# 剑气：一条长条——判断主角在不在"沿 dir 的带子"里
+		var rel := hero_pos - c
+		var along := rel.dot(Vector2(d["dir"]))
+		var side := absf(rel.cross(Vector2(d["dir"])))
+		inr = along > -40.0 and along < float(d["len"]) and side < r
+	else:
+		inr = c.distance_to(hero_pos) <= r
+	if inr:
+		var dm := hero_in_dmg(float(d["dmg"]), elem)
+		hero["hp"] = maxf(0.0, float(hero["hp"]) - dm)
+		_push_float(hero_pos.x, hero_pos.y - 100.0, str(d["kind"]) + "！ -" + str(int(dm)),
+			Color(1.0, 0.52, 0.34), true)
+	_bursts.append({"x": c.x, "y": c.y, "t": 0.0, "col": Color(1.0, 0.52, 0.26), "scale": maxf(1.2, r / 60.0)})
+	_shake = maxf(_shake, 12.0)
+	Audio.sfx("drum", -3.0)
+	if _hitstop < 0.10:
+		_hitstop = 0.10
 
 # 场上活着的那只 boss（给顶上的专属血条用）
 func _boss_foe() -> Dictionary:
@@ -4197,6 +4262,44 @@ func _draw() -> void:
 	draw_rect(Rect2(0, 0, w, 46), Color(1, 1, 1, 0.030))
 	draw_rect(Rect2(0, h - 84.0, w, 84), Color(1, 1, 1, 0.045))
 	draw_line(Vector2(24, h - 84.0), Vector2(w - 24, h - 84.0), Color(1, 1, 1, 0.06), 2.0)
+	# v16a：延迟技的地面预警（**画在最下面一层**，怪和主角都在它上面）
+	#   暗红圈 → 随倒计时越来越红/越来越亮 → 到点砸下来
+	for dv in _delayed:
+		var d: Dictionary = dv
+		var pr := clampf(float(d["t"]) / maxf(0.01, float(d["warn"])), 0.0, 1.0)
+		var dc := Vector2(float(d["x"]), float(d["y"])) + shk
+		if str(d["shape"]) == "beam":
+			# 剑气：一条长柱（沿 dir 方向）
+			var dv2 := Vector2(d["dir"])
+			var nrm := Vector2(-dv2.y, dv2.x)
+			var ln := float(d["len"])
+			var hw := float(d["r"])
+			var p1 := dc + nrm * hw
+			var p2 := dc - nrm * hw
+			var p3 := dc - nrm * hw + dv2 * ln
+			var p4 := dc + nrm * hw + dv2 * ln
+			draw_colored_polygon(PackedVector2Array([p1, p2, p3, p4]),
+				Color(0.70, 0.12, 0.10, 0.10 + 0.35 * pr))
+			draw_line(p1, p4, Color(0.94, 0.24, 0.18, 0.45 + 0.5 * pr), 3.0)
+			draw_line(p2, p3, Color(0.94, 0.24, 0.18, 0.45 + 0.5 * pr), 3.0)
+		else:
+			var rr := float(d["r"])
+			draw_circle(dc, rr, Color(0.62, 0.10, 0.08, 0.08 + 0.30 * pr))
+			draw_arc(dc, rr, 0.0, TAU, 40, Color(0.94, 0.22, 0.16, 0.55 + 0.45 * pr), 3.0)
+			draw_arc(dc, rr * pr, 0.0, TAU, 32, Color(1.0, 0.42, 0.26, 0.35 + 0.5 * pr), 2.0)
+		# 倒计时最后 0.25 秒：圈里再压一层亮红（"就要砸了"）
+		if pr > 0.80:
+			var fl2 := (pr - 0.80) / 0.20
+			var col2 := Color(1.0, 0.46, 0.24, 0.30 * fl2)
+			if str(d["shape"]) == "beam":
+				var dv3 := Vector2(d["dir"])
+				var nrm2 := Vector2(-dv3.y, dv3.x)
+				var hw2 := float(d["r"])
+				var q1 := dc + nrm2 * hw2
+				var q2 := dc - nrm2 * hw2
+				draw_colored_polygon(PackedVector2Array([q1, q2, q2 + dv3 * float(d["len"]), q1 + dv3 * float(d["len"])]), col2)
+			else:
+				draw_circle(dc, float(d["r"]), col2)
 	# v13d P3：法阵（占点）——画在怪下面一层
 	if not zone.is_empty() and bool(zone.get("on", false)):
 		var zc := Vector2(float(zone["x"]), float(zone["y"]))
