@@ -2623,7 +2623,7 @@ const PARTNER_INFO := {
 		"desc": "给自己套一层护盾（先扣盾再扣血）；护盾被击破时，对周围造成等于护盾值的土系范围伤害",
 		"mp0": 150.0, "cd0": 20.0, "dur0": 8.0},
 	"duyanbiao": {"name": "独眼彪", "quality": "下品", "skill": "杀气", "dtype": "无伤害", "grow": {"arm": 3, "agi": 2, "wit": 0},
-		"desc": "持续时间内每杀一名敌人，攻击 +1（每层强化再 +0.5）——一生二、二生三的滚雪球",
+		"desc": "持续内每杀一名敌人攻击 +1（滚雪球）；并召唤 **2 名影卫**（快而脆 · 补它打 boss 没小怪可杀的短板）",
 		"mp0": 100.0, "cd0": 25.0, "dur0": 5.0},
 	"kurong": {"name": "枯荣", "quality": "下品", "skill": "纳气", "dtype": "无伤害", "grow": {"arm": 1, "agi": 1, "wit": 3},
 		"desc": "持续时间内每杀一名敌人，内力上限 +3（并回同样多内力）——越打越能放法术",
@@ -2659,7 +2659,7 @@ const PARTNER_INFO := {
 		"desc": "每 10 秒对最近敌人连踢两下（两次独立判定 · 强化可减冷却/加伤）",
 		"mp0": 0.0, "cd0": 10.0, "dur0": 0.0},
 	"baipopo": {"name": "白婆婆", "quality": "中品", "skill": "续命", "dtype": "治疗", "grow": {"arm": 1, "agi": 1, "wit": 4},
-		"desc": "每 15 秒回一次血（生命上限 12%）；自己残血（低于 40%）时回血翻倍",
+		"desc": "每 15 秒回一次血（生命上限 12%）；并召唤一只**纸人**（速快体弱的辅助召唤）",
 		"mp0": 80.0, "cd0": 15.0, "dur0": 0.0},
 	# ---- 上品（共 4：柳卿卿 + 这三个）----
 	"tiexinwu": {"name": "铁无心", "quality": "上品", "skill": "铁壁", "dtype": "无伤害", "grow": {"arm": 4, "agi": 2, "wit": 1},
@@ -2764,7 +2764,7 @@ const PARTNER_INFO := {
 		"desc": "每 12 秒撒霜：最近 3 名敌人受水系伤害并被减速（6 秒）",
 		"mp0": 140.0, "cd0": 12.0, "dur0": 0.0},
 	"guijianchou": {"name": "鬼见愁", "quality": "极品", "skill": "斩首", "dtype": "真实", "grow": {"arm": 4, "agi": 3, "wit": 1},
-		"desc": "每 18 秒斩血量最低的那个：血越少伤害越高；击杀则冷却立刻减半",
+		"desc": "每 18 秒斩血量最低的那个（血越少越致命，击杀则冷却减半）；并召唤一位**刽子手**（慢而重的处决型）",
 		"mp0": 200.0, "cd0": 18.0, "dur0": 0.0},
 	"zuitaisui": {"name": "醉太岁", "quality": "极品", "skill": "酒气", "dtype": "无伤害", "grow": {"arm": 3, "agi": 2, "wit": 3},
 		"desc": "每 22 秒灌一口：接下来 8 秒攻击 +25% 且每次命中回 2 点内力",
@@ -3290,8 +3290,10 @@ func _cast_partner(id: String) -> void:
 				_cast_tianlei(tl_multi_mul(), "多重天雷")     # 不同伤害比例，也是金系
 		"liuqingqing":
 			_cast_spring()
+		# v17m（用户点名）：白婆婆再加一只**纸人**（治疗型 · 速快体弱）
 		"baipopo":
 			_cast_heal()
+			summon_minion("纸人", Color(0.94, 0.93, 0.86), 0.70, 0.55, 0.9, 0.7, 6.0, 1)
 		"shenqingluo":
 			_cast_vine()
 		"duniangzi":
@@ -3318,6 +3320,9 @@ func _cast_partner(id: String) -> void:
 			summon_minion("音灵", Color(0.82, 0.74, 1.0), 0.70, 0.6, 0.9, 0.7, 5.0, 2)
 		# v17l：下面三位原来**没有分派**（技能全是常驻被动），给它们各加一个召唤。
 		#   纯增量：不动它们已有的被动（减伤/反伤/暴击）。
+		# v17m：独眼彪原来**没有分派**（杀气是常驻被动），给它加一位**影卫**（快 · 脆）
+		"duyanbiao":
+			summon_minion("影卫", Color(0.46, 0.42, 0.58), 0.80, 0.7, 0.9, 0.6, 6.0, 2)
 		"shigandang":
 			summon_minion("石人", Color(0.68, 0.64, 0.56), 1.30, 2.2, 1.3, 1.6, 9.0, 1)
 		"jinjiaxianwei":
@@ -3350,8 +3355,10 @@ func _cast_partner(id: String) -> void:
 			_cast_tiemian()
 		"lengyueniang":
 			_cast_hanshuang()
+		# v17m：鬼见愁再加一位**刽子手**（处决型 · 慢而重）
 		"guijianchou":
 			_cast_zhenshou()
+			summon_minion("刽子手", Color(0.42, 0.20, 0.24), 1.05, 1.1, 1.1, 1.8, 8.0, 1)
 		"zuitaisui":
 			_cast_jiuqi()
 		_:
