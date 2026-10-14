@@ -1853,7 +1853,14 @@ const WPN_COST_MAX := 200000000    # 单级价格上限（2 亿）——别让�
 func _wpn_cost() -> int:
 	if _wpn_lv >= WPN_LV_MAX:
 		return WPN_COST_MAX
-	var c := 60.0 * pow(1.22, float(_wpn_lv)) * pow(1.6, float(_wpn_tier()))
+	# v15l（用户：后期费用太高 根本赚不到那么多文钱 · 我这个模式打一局就重置了，按一局的来）：
+	#   ⚠ 原式 1.22^等级 × 1.6^阶 在**每局重置**的模式下是死的：
+	#     Lv30→31 要 4.9 万、Lv50→51 要 670 万、升满 81 亿，而一局总共才万把文钱。
+	#   现在按"一局能赚多少"倒推（1.08^ / 1.20^阶）：
+	#     累计 Lv10 869 · Lv20 3,121 · Lv30 8,955 · Lv40 24,069 · Lv50 63,224
+	#     实测：穷局能到 Lv16，肥局能到 Lv34（吃 3 次进阶三选一）
+	#   Lv99 满级留作天花板（够不着是对的，但不是像原来那样差 5 个数量级）。
+	var c := 60.0 * pow(1.08, float(_wpn_lv)) * pow(1.20, float(_wpn_tier()))
 	return int(minf(c, float(WPN_COST_MAX)))
 
 func _wpn_refresh_cost() -> int:
@@ -5128,7 +5135,7 @@ const ACHS := [
 		"fx": "开局文钱 +200", "eff": {"money": 200}},
 	{"id": "chouka", "cat": "collect", "n": "手气不错", "d": "一局抽卡 50 次", "ck": "draws", "goal": 50,
 		"fx": "开局灵晶 +20", "eff": {"crystal": 20}},
-	{"id": "qianghua", "cat": "fight", "n": "百炼成钢", "d": "一局把成长武器强化到 +30", "ck": "wpn_lv", "goal": 30,
+	{"id": "qianghua", "cat": "fight", "n": "百炼成钢", "d": "一局把成长武器强化到 +20", "ck": "wpn_lv", "goal": 20,
 		"fx": "开局攻击 +3", "eff": {"atk_flat": 3}},
 	{"id": "huoban", "cat": "collect", "n": "呼朋唤友", "d": "一局招募 10 次伙伴", "ck": "recruits", "goal": 10,
 		"fx": "开局文钱 +150", "eff": {"money": 150}},
