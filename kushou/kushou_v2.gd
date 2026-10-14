@@ -5636,6 +5636,15 @@ func _restart_run() -> void:
 	_revive = 1 + int(_extra.get("revive_add", 0.0))       # v13y：不屈卡多给一次浴血
 	_boss_sec = 60.0
 	_boss_seq = 0
+	# v15q（用户：成长武器"每局重置"）：武器改回**本局的东西** —— 等级/品质/强化线/进阶待选 全清。
+	#   （改之前是跨局保留，注释还写着"故意不重置"；用户确认口径是每局重置。
+	#    价格曲线按"一局能赚多少"倒推，一局大概点到 Lv30 出头、吃 2~3 次进阶三选一。）
+	_wpn_lv = 0
+	_wpn_q = 0
+	_wpn_lines.clear()
+	_wpn_await = false
+	_wpn_refresh_n = 0
+	_wpn_choices.clear()
 	_over = false
 	_field.reset_run()
 	_field.reset_partners()          # v6b：伙伴退回未入队（招募是这一局的事）
@@ -5646,7 +5655,7 @@ func _restart_run() -> void:
 	#     · 局内货币清零：文钱、灵晶（防跨局通胀）
 	#     · 卡组/抽卡「重开一局本身就是重新开始，不做跨局保留」→ 十格、已拥有、星级、成型的套 全清
 	#     · 装备/宝物/道具是「这一局打出来的」→ 清
-	#     · 跨局保留的只有：**成长武器**（无限强化那件）· 解锁 · 成就 · 名声 · 星级 · 关卡选择
+	#     · 跨局保留的只有：解锁 · 成就 · 名声 · 伙伴星级 · 关卡选择 · 出战队员 · 破茧·终
 	#   ⚠ 之前漏了这一整段：钱、卡、宝物、道具、羁绊原来都跨局留着（探针实测确认）
 	# ============================================================
 	_money = START_MONEY                 # 设计稿：局终清零，防跨局通胀（跟新开 App 同源）
@@ -5703,7 +5712,8 @@ func _restart_run() -> void:
 	_bm_roll()                       # v13a：新的一局，黑市货架重摆
 	# v13m（用户："刚开始是自带那个成长武器和玉壶"）：
 	#   玉壶是**开局自带**的——新的一局当然是"就绪"，不该把上一局的冷却带过来。
-	#   成长武器（_wpn_lv/_wpn_q）**故意不重置**：那是跨局的那一件，无限强化。
+	#   成长武器（_wpn_lv/_wpn_q）v15q 起**也每局重置**（用户："每局重置"）——
+#   所以它是"这一局花文钱养起来的那件"，不是跨局长线。
 	_yh_cd = 0.0
 	# v13c：新的一局——任务栏清空、行为计数清零、事件计时重来
 	_q_slots.clear()
@@ -5724,7 +5734,7 @@ func _restart_run() -> void:
 	_apply_achievements()                # 成就（永久，每局开局发一次）
 	_apply_pet_bonus()                   # 宠物被动（每局开局发一次）
 	_gear_sync()                         # 六格装备/黑市买的那点属性（本局是空的，重算一遍保证干净）
-	_wpn_sync()                          # 成长武器（跨局的那一件）
+	_wpn_sync()                          # 成长武器（这一局养的那件；每局从 +0 重来）
 	# v14e：所选关卡——难度倍率 ＋ 波数上限（打满即通关）
 	var st := _stage_info(_stage_sel)
 	_wave_max = int(st["waves"])
@@ -7916,7 +7926,7 @@ func _fill_equip(p: Control, y: float, sz: Vector2) -> float:
 			var bx2 := 24.0 + float(col) * 330.0
 			var by3 := ly + float(row) * 266.0
 			if i == 0:
-				# 第一格：成长武器（自带 · 跨局保留）
+				# 第一格：成长武器（自带 · 每局重置 · 文钱强化）
 				_gear_box(p, Vector2(bx2, by3), Vector2(310, 232), "weapon", 0)
 			else:
 				var gi2 := i - 1
@@ -8130,7 +8140,7 @@ func _fill_wpn_detail(p: Control, y: float, sz: Vector2) -> float:
 	head.text = "『" + WPN_NAME + "』　+" + str(_wpn_lv) + "　【" + str(WPN_Q_CN[_wpn_q]) + "】"
 	p.add_child(head)
 	var ly := y + 64.0
-	var rows := ["开局自带 · 跨局保留——它占着六格里的第一格（剩下 5 格放装备）",
+	var rows := ["开局自带 · **每局重置**——它占着六格里的第一格（剩下 5 格放装备）；这一局花文钱养它，下局从 +0 重来",
 		"每级：攻击 +" + str(_wpn_flat_atk()) + "　气血 +" + str(_wpn_flat_hp()),
 		"下一级价：" + str(_wpn_cost()) + " 文钱（现有 " + str(int(_money)) + "）",
 		"进阶：每 10 级升一档品质 ＋ 掷一次三选一（现在 " + str(_wpn_tier()) + " 阶）"]
