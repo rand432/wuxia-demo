@@ -3180,6 +3180,9 @@ const BM_GOODS := [
 	{"id": "gear", "n": "装备", "cost": 300, "lv": 2, "w": 12, "d": "按品级随机一件（六格满则进仓库）"},
 	{"id": "gear_s", "n": "消耗型装备·小", "cost": 80, "lv": 3, "w": 15, "d": "点击即用：攻 +3 · 血 +15（可重复买，叠加）"},
 	{"id": "eat_pill", "n": "吞噬丹", "cost": 200, "lv": 5, "w": 14, "d": "随机吞掉十格一张卡：腾位，效果与成套计数保留"},
+	# v15f（用户：进化符也可以加进黑市；当前是什么角色就加入什么进化符）：
+	#   名字与说明按"当前出战的主角"生成，见 _bm_make_slot / _bm_slot_desc
+	{"id": "evo_token", "n": "进化符", "cost": 260, "lv": 2, "w": 13, "d": "本局角色专属的进化机会：伙伴进化 +1 档"},
 # v13n：这一格**花灵晶**（别的货品还是花杀敌数）——价目见 YUHU_UP_PRICE
 	{"id": "yuhu_up", "n": "玉壶升级", "cost": 0, "lv": 3, "w": 11, "d": "玲珑玉壶 +1 档（回复更高、冷却更短）"},
 ]
@@ -3211,6 +3214,13 @@ func _bm_gear_q() -> int:
 func _bm_make_slot(g: Dictionary) -> Dictionary:
 	var base := int(g["cost"])
 	var gear: Dictionary = {}
+	# v15f：进化符按"当前出战的主角"换个名字
+	var sname := str(g["n"])
+	var sdesc := str(g["d"])
+	if str(g["id"]) == "evo_token":
+		var who := _mate_start_short()
+		sname = who + "·进化符"
+		sdesc = "【" + who + "专属】伙伴进化 +1 档（绝品只能这么养出来）"
 	if str(g["id"]) == "gear":
 		var q := _bm_gear_q()
 		var mul := float(WPN_Q_MUL[q])
@@ -3233,7 +3243,7 @@ func _bm_make_slot(g: Dictionary) -> Dictionary:
 	var cost: int = base
 	if disc >= 0:
 		cost = maxi(1, int(floor(float(base) * float(BM_DISC[disc]))))
-	return {"id": str(g["id"]), "n": str(g["n"]), "d": str(g["d"]), "base": base,
+	return {"id": str(g["id"]), "n": sname, "d": sdesc, "base": base,
 		"disc": disc, "cost": cost, "q": int(gear.get("q", 0)), "gear": gear, "bought": false}
 
 # 重掷六格：先尽量不重样（Lv1 只有 5 种货，凑不满 6 格时才允许重样）
@@ -3294,6 +3304,8 @@ func _bm_slot_desc(s: Dictionary) -> String:
 		if up < 0:
 			return "玲珑玉壶已是【绝品】（最高档）"
 		return "玲珑玉壶 +1 档（现【" + str(WPN_Q_CN[clampi(_yh_q, 0, 5)]) + "】）· 要灵晶 " + str(up)
+	if str(s["id"]) == "evo_token":
+		return "当前主角：" + _mate_start_short() + "　已有进化符 " + str(_evo_token) + " 个"
 	if str(s["id"]) == "gear":
 		var g: Dictionary = s.get("gear", {})
 		return "【" + str(WPN_Q_CN[int(g.get("q", 0))]) + "】攻 +" + str(int(g.get("atk", 0))) \
@@ -3502,6 +3514,9 @@ func _bm_buy(i: int) -> void:
 			_crystal += 40
 			_crystal_pop = 0.32
 			msg = "灵晶 +40（现有 " + str(int(_crystal)) + "）"
+		"evo_token":
+			_evo_token_add(1, "黑市：" + _mate_start_short() + "·进化符")
+			msg = "买到进化符（现有 " + str(_evo_token) + " 个）—— 去伙伴页点［进化］"
 		"yuhu_up":
 			_yh_upgrade()
 		# v15：两件进化道具
@@ -3652,6 +3667,9 @@ func _q_reward_cn(d: Dictionary) -> String:
 
 	if int(d.get("wpnlv", 0)) > 0:
 		parts.append("武器 +" + str(int(d["wpnlv"])) + " 级")
+	# v15f：进化符也能当事件奖励（用户：或者完成什么进化任务）
+	if int(d.get("evo", 0)) > 0:
+		parts.append("进化符 ×" + str(int(d["evo"])))
 	if parts.is_empty():
 		return "—"
 	return "、".join(PackedStringArray(parts))
@@ -4156,6 +4174,12 @@ func _mate_start_name() -> String:
 	if _mate_start == "" or not _field.PARTNER_INFO.has(_mate_start):
 		return "少侠（默认）"
 	return str((_field.PARTNER_INFO[_mate_start] as Dictionary)["name"]) + "（替换主角）"
+
+# v15f：只取名字（黑市道具名之类用这个，别带上"（替换主角）"）
+func _mate_start_short() -> String:
+	if _mate_start == "" or not _field.PARTNER_INFO.has(_mate_start):
+		return "少侠"
+	return str((_field.PARTNER_INFO[_mate_start] as Dictionary)["name"])
 
 # 开局出战时：入队 ＋ 成长并进继承 ＋ 告诉战场"这一局的主角长他这样"
 func _mate_restore() -> String:
