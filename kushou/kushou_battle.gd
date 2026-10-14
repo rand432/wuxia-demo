@@ -869,7 +869,29 @@ func _process(delta: float) -> void:
 						_break_guard()
 					continue
 				# v5f：怪打主角走 hero_in_dmg()（物理吃护甲＋全减；元素吃抗性不吃护甲；真实不吃）
-				var d2 := hero_in_dmg(float(f["atk"]), DMG_PHYS)
+				# v16j（用户："都可以 全加"）：三种怪各打各的——
+				#   法师＝元素伤（吃抗性不吃护甲）＋ 一颗法球
+				#   壮汉＝物理伤 ＋ **把主角撞开**（体型大，推得动）
+				#   弓手＝物理伤 ＋ 一支从它那儿射过来的箭
+				#   （只改"打出来的花样"，伤害数值仍走同一套 atk，不动平衡）
+				var dmg_elem := DMG_PHYS
+				if bool(f.get("mage", false)):
+					dmg_elem = DMG_FIRE
+					_bursts.append({"x": float(f["x"]), "y": float(f["y"]) - 44.0, "t": 0.0,
+						"col": Color(0.72, 0.62, 1.0), "scale": 1.1})
+				elif bool(f.get("brute", false)):
+					# 壮汉：把主角撞开一段（往远离它的方向推）
+					var pdx := 16.0 if hero_pos.x < float(f["x"]) else -16.0
+					hero_pos.x = clampf(hero_pos.x + pdx, 70.0, size.x - 70.0)
+					hero_pos.y = clampf(hero_pos.y + 22.0, 40.0, size.y - HERO_LINE * 0.5)
+					_push_float(hero_pos.x, hero_pos.y - 78.0, "撞开", Color(1.0, 0.72, 0.42))
+					_shake = maxf(_shake, 5.0)
+				elif bool(f.get("ranged", false)):
+					# 弓手：一支箭从它那儿射过来
+					var adir := (hero_pos - Vector2(float(f["x"]), float(f["y"]))).normalized()
+					_bursts.append({"x": float(f["x"]) + adir.x * 26.0, "y": float(f["y"]) - 30.0 + adir.y * 26.0,
+						"t": 0.0, "col": Color(0.92, 0.86, 0.62), "scale": 0.9})
+				var d2 := hero_in_dmg(float(f["atk"]), dmg_elem)
 				# v15w 更夫「报更」：被致盲的怪有 35% 概率打空
 				if float(f.get("blind_t", 0.0)) > 0.0 and randf() < 0.35:
 					_push_float(hero_pos.x, hero_pos.y - 70.0, "打空", Color(0.86, 0.86, 0.62))
