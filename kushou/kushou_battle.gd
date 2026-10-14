@@ -919,9 +919,9 @@ func _process(delta: float) -> void:
 					_bursts.append({"x": float(f["x"]), "y": float(f["y"]) - 44.0, "t": 0.0,
 						"col": Color(0.72, 0.62, 1.0), "scale": 1.1})
 					# v16p（用户："还有就是 类似吹笛的声音 陆陆续续的"）：
-			#   ⚠ 那是我给法师配的 flute（笛声）—— 法师一多就"陆陆续续"吹个不停，很烦。
-			#   换成 dart（短促的暗器破空声）：**短、脆、一下就完**，不拖尾巴。
-			Audio.sfx("dart", -13.0)                    # 法师：短促一声
+					#   ⚠ 那是我给法师配的 flute（笛声）—— 法师一多就"陆陆续续"吹个不停，很烦。
+					#   换成 dart（短促的暗器破空声）：**短、脆、一下就完**，不拖尾巴。
+					Audio.sfx("dart", -13.0)                    # 法师：短促一声
 					# 法师有 1/3 概率**不近身打，改成放一发小号火雨**（预警 → 砸下）
 					if randf() < 0.33:
 						self.queue_delayed(hero_pos.x, hero_pos.y - 6.0, 70.0, float(f["atk"]) * 1.1,
