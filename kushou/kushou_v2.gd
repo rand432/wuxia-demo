@@ -67,6 +67,7 @@ var _skill_pts := 0       # 技能点（每升 1 级 1 点）
 var _attr := {"arm": 0, "agi": 0, "wit": 0}
 var _attr_pts := 0        # 属性点（v15k：界面不再给加点的地方，留着当储备）
 var _avatar_btn: Button = null    # v16s：底栏那颗头像（可招募时它闪）
+var _recruit_lb: Label = null      # v16t（用户："再加一个头像里面显示 一闪一闪的可招募【红色字体】"）
 var _recruit_btn: Button = null   # v15k（用户：可以招募时主角头像闪动提示）—— 存一份用来做呼吸闪
 var _rec_flash := 0.0             # 上面那个呼吸闪的相位
 var _q_offer := {}                # v15p：掷出来但玩家还没决定接不接的事件（挂在这里）
@@ -818,6 +819,11 @@ func _build_hero_bar() -> void:
 	add_child(av)
 	var av_btn := _mk_btn("", Vector2(24, 984), Vector2(176, 176), 20, false, func(): _open_large("角色"))
 	_avatar_btn = av_btn                # v16s：留着做"可招募"呼吸闪
+	# v16t：头像**里面**那行红字（一闪一闪），压在人像下半部
+	_recruit_lb = _lbl(Vector2(24, 1094), Vector2(176, 38), 23, Color(0.94, 0.16, 0.14))
+	_recruit_lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_recruit_lb.mouse_filter = Control.MOUSE_FILTER_IGNORE   # 别挡住点头像
+	_recruit_lb.text = ""
 	av_btn.flat = true
 	av_btn.add_theme_stylebox_override("normal", _flat(Color(0, 0, 0, 0)))
 	av_btn.add_theme_stylebox_override("hover", _flat(Color(1, 1, 1, 0.06)))
@@ -6356,9 +6362,16 @@ func _process(delta: float) -> void:
 			ab.set_border_width_all(5)
 			_avatar_btn.add_theme_stylebox_override("normal", ab)
 			_avatar_btn.flat = false
-		else:
-			_avatar_btn.add_theme_stylebox_override("normal", _flat(Color(0, 0, 0, 0)))
-			_avatar_btn.flat = true
+		if _recruit_lb != null and is_instance_valid(_recruit_lb):
+			if _recruit_opens > 0:
+				# 红字一闪一闪：透明度 0.25~1.0 来回（比金边快一点，更抓眼）
+				_recruit_lb.text = "可招募"
+				_recruit_lb.modulate.a = 0.25 + 0.75 * (0.5 + 0.5 * sin(_rec_flash * 6.0))
+			else:
+				_recruit_lb.text = ""
+	else:
+		_avatar_btn.add_theme_stylebox_override("normal", _flat(Color(0, 0, 0, 0)))
+		_avatar_btn.flat = true
 	if _recruit_btn != null and is_instance_valid(_recruit_btn) and _recruit_opens > 0:
 		var fk := 0.5 + 0.5 * sin(_rec_flash * 5.0)
 		_recruit_btn.add_theme_stylebox_override("normal", _flat(SEAL.lerp(Color(1.0, 0.86, 0.32), fk * 0.85)))
