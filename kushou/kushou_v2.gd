@@ -829,8 +829,10 @@ func _build_hero_bar() -> void:
 	_mp_bar = _bar(Rect2(216, 1126, 300, 38), Color(0.30, 0.42, 0.62))
 	# ---- v16f：右边那两颗常用钮（强化 / 玉壶）----
 	#   强化：点一下就升一级；**到了 10 的倍数（进阶待选）直接开三选一窗口**
-	_wpn_quick = _mk_btn("强化", Vector2(528, 988), Vector2(168, 76), 24, true, _wpn_quick_tap)
-	_yh_quick = _mk_btn("玉壶", Vector2(528, 1074), Vector2(168, 76), 24, false, _yh_use)
+		# v16o：玉壶钮去掉后，强化钮**拉高占满**右列（原来 76 高、下面还留着一颗玉壶）
+	_wpn_quick = _mk_btn("强化", Vector2(528, 988), Vector2(168, 162), 26, true, _wpn_quick_tap)
+	# v16o（用户："上面那个玉壶按钮可以去掉了"）：已去掉底栏那颗玉壶钮。
+	#   玉壶仍能从［装备·宝物］页里用（那里本来就有大按钮 ＋ 自动开关）。
 	# 技能 / 装备：底部两颗**大**钮（用户："按钮和字一定不要很小"）
 	_mk_btn("技能 ＋", Vector2(24, 1174), Vector2(336, 74), 26, false, func(): _open_large("技能"))
 	# 有技能点没花的时候，钮右上角亮个红点（"＋"号）
@@ -6455,8 +6457,7 @@ func _process(delta: float) -> void:
 			_wpn_quick.text = "进阶三选一"
 		else:
 			_wpn_quick.text = "强化 " + str(_wpn_cost())
-	if _yh_quick != null and is_instance_valid(_yh_quick):
-		_yh_quick.text = ("玉壶 就绪" if _yh_cd <= 0.0 else "玉壶 " + str(int(ceil(_yh_cd))) + "s")
+	# v16o：玉壶钮已从底栏移除，不再刷新它的文字
 	if _field != null:
 		_field.queue_redraw()
 	_update_coins(delta)

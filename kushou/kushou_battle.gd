@@ -389,12 +389,15 @@ func spawn_challenge(kind_i: int, n: int) -> void:
 		var f: Dictionary = foes[foes.size() - 1]
 		f["scale"] = float(CHAL_FOE_SCALE[i])
 		f["chal"] = i                              # 掉什么由这个字段决定（结算侧读它）
-		f["stop"] = (FOE_STOP + 60.0 if big else FOE_STOP) + randf() * 20.0
+		# v16m 补漏：这里原来写的是 FOE_STOP(150) —— stop 真被读之后就变成"挑战怪隔空打"了，
+		#   跟默认一样改用 FOE_REACH（上面那批我改漏了这一处）。
+		f["stop"] = (FOE_REACH + 60.0 if big else FOE_REACH) + randf() * 20.0
 	_banner = ("挑战：" + str(CHAL_FOE_NAME[i]) + ("　大怪" if big else ("　一群 " + str(n) + " 只")))
 	_banner_t = 2.0
 	Audio.sfx("bell", -8.0)
-	if big:
-		Audio.sfx("drum", -6.0)
+	# v16o（用户："背景喊杀声太多了 其实没必要有喊杀声"）：
+	#   原来这里 `if big:` 里只有一声 drum（战鼓）—— 现在整块去掉了。
+	#   （替换脚本把唯一语句换成注释，导致 if 空块报错，这里连同 if 一起清掉。）
 # 叫 boss（阶 1~3）
 func start_boss(tier: int) -> void:
 	var tt := clampi(tier, 1, 3)
@@ -449,7 +452,7 @@ func start_boss(tier: int) -> void:
 	_banner = ["", "一阶 boss", "二阶 boss", "三阶 boss"][tt] + "　" + str(d["name"])
 	_banner_t = 2.4
 	_push_float(hero_pos.x + 80.0, hero_pos.y - 120.0, str(d.get("affix", "")), Color(0.96, 0.72, 0.42), true)
-	Audio.sfx("drum", -2.0)
+	# v16o（用户："背景喊杀声太多了 其实没必要有喊杀声"）：已去掉喊杀/战鼓声
 	if ResourceLoader.exists("res://assets/audio/bgm_boss_intro.ogg"):
 		Audio.sfx("bgm_boss_intro", 0.0)
 	else:
@@ -646,7 +649,12 @@ func _process(delta: float) -> void:
 		else:
 			hero_pos += (_order_pos - hero_pos).normalized() * minf(HERO_SPD_FAR * delta, od)
 			_hero_step += delta * 8.0
-	elif not target.is_empty() and dist <= HERO_AGGRO:
+	elif not target.is_empty() and (dist <= HERO_AGGRO or bool(target.get("ranged", false)) or bool(target.get("mage", false))):
+		# v16o（用户："比如这种的 我集火他不过去"）：
+		#   ⚠ 弓手/法师现在会停在 250~290 外**不动**，而 HERO_AGGRO=90 让主角"怪远就不追"
+		#     → 它们永远走不过来、主角也永远不过去 = **远程怪打不到**。
+		#   现在：对**不会过来的**远程怪（ranged/mage）**照样追上去**；
+		#   近战怪仍按老规矩（等它自己走下来），保持"主角守中间"的手感。
 		# v15y（用户："人物依旧一直往前跑 自动时会回到动画居中位置等人"）：
 		#   ⚠ 实测主角并不是"一直跑"，而是**稳定杵在 25% 那条最上面的线**上不动
 		#   （目标距离 66 < REACH 74 就站住了）—— 看着就像"一直往前顶"。
@@ -928,7 +936,7 @@ func _process(delta: float) -> void:
 						var cdir := (hero_pos - Vector2(float(f["x"]), float(f["y"]))).normalized()
 						self.queue_delayed(float(f["x"]), float(f["y"]) - 10.0, 52.0, float(f["atk"]) * 1.4,
 							DMG_PHYS, 1.15, "冲锋", "beam", cdir, 300.0)
-						Audio.sfx("warcry", -9.0)
+						# v16o（用户："背景喊杀声太多了 其实没必要有喊杀声"）：已去掉喊杀/战鼓声
 				elif bool(f.get("ranged", false)):
 					# 弓手：一支箭从它那儿射过来
 					var adir := (hero_pos - Vector2(float(f["x"]), float(f["y"]))).normalized()
@@ -1015,7 +1023,7 @@ func _process(delta: float) -> void:
 				if not bool(fr.get("still", false)) and float(fr.get("dying", 0.0)) <= 0.0:
 					fr["para"] = maxf(float(fr.get("para", 0.0)), 1.5)
 			_push_float(hero_pos.x, hero_pos.y - 100.0, "定身！", Color(0.74, 0.88, 1.0), true)
-			Audio.sfx("drum", -6.0)
+			# v16o（用户："背景喊杀声太多了 其实没必要有喊杀声"）：已去掉喊杀/战鼓声
 	if float(hero.get("mech_shield", 0.0)) > 0.0:
 		_shield_t -= dt
 		if _shield_t <= 0.0:
@@ -1263,7 +1271,7 @@ func _delayed_hit(d: Dictionary) -> void:
 			Color(1.0, 0.52, 0.34), true)
 	_bursts.append({"x": c.x, "y": c.y, "t": 0.0, "col": Color(1.0, 0.52, 0.26), "scale": maxf(1.2, r / 60.0)})
 	_shake = maxf(_shake, 12.0)
-	Audio.sfx("drum", -3.0)
+	# v16o（用户："背景喊杀声太多了 其实没必要有喊杀声"）：已去掉喊杀/战鼓声
 	if _hitstop < 0.10:
 		_hitstop = 0.10
 
@@ -1588,7 +1596,7 @@ func spawn_champion() -> void:
 	champion = 1
 	_banner = "单挑：高手来了——" + str(f["name"])
 	_banner_t = 2.8
-	Audio.sfx("drum", -3.0)
+	# v16o（用户："背景喊杀声太多了 其实没必要有喊杀声"）：已去掉喊杀/战鼓声
 	_shake = 12.0
 
 func clear_champion() -> void:
@@ -1607,7 +1615,7 @@ func _death_sfx(kind: String, is_boss: bool) -> void:
 	var pt := randf_range(0.92, 1.14)          # 每只高一点低一点，听着不机械
 	if is_boss:
 		Audio.sfx("hit_heavy", -1.0, 0.72)
-		Audio.sfx("drum", -2.0, 0.85)
+		# v16o（用户："背景喊杀声太多了 其实没必要有喊杀声"）：已去掉喊杀/战鼓声
 		Audio.sfx("fall_down", -3.0, 0.8)
 		return
 	if _death_sfx_t > 0.0:
@@ -1668,7 +1676,7 @@ func _kill_foe(f: Dictionary) -> void:
 			_shards.append({"x": float(f["x"]), "y": float(f["y"]) - 24.0,
 				"vx": randf_range(-230.0, 230.0), "vy": randf_range(-340.0, -90.0), "t": 0.0})
 		_push_float(float(f["x"]), float(f["y"]) - 76.0, "不死之身！", Color(1.0, 0.62, 0.58), true)
-		Audio.sfx("drum", -3.0)
+		# v16o（用户："背景喊杀声太多了 其实没必要有喊杀声"）：已去掉喊杀/战鼓声
 		return
 	# v13f：元素/伙伴技打死的（百步任务）——普通刀砍是物理，不算
 	if str(f.get("last_dtype", "")) in ELEMS:
@@ -1689,7 +1697,7 @@ func _kill_foe(f: Dictionary) -> void:
 				"vx": randf_range(-200.0, 200.0), "vy": randf_range(-320.0, -100.0), "t": 0.0})
 		_bursts.append({"x": float(f["x"]), "y": float(f["y"]), "t": 0.0, "col": Color(0.92, 0.72, 0.36), "scale": 1.6})
 		Audio.sfx("hit_heavy", -4.0, 1.2)
-		Audio.sfx("drum", -6.0, 0.9)
+		# v16o（用户："背景喊杀声太多了 其实没必要有喊杀声"）：已去掉喊杀/战鼓声
 		_push_float(float(f["x"]), float(f["y"]) - 64.0, "高手倒地！", Color(1.0, 0.88, 0.46), true)
 		kill.emit(1)
 		champion_down.emit()
@@ -2793,7 +2801,7 @@ func _cast_shield() -> void:
 	hero["shield_t"] = fd_dur()
 	_push_float(hero_pos.x, hero_pos.y - 84.0, "怒目金刚　盾 " + str(int(sv)), Color(0.86, 0.72, 0.42), true)
 	_quake_fx.append({"x": hero_pos.x, "y": hero_pos.y + 6.0, "r": 70.0, "t": 0.0, "big": false})
-	Audio.sfx("drum", -8.0)
+	# v16o（用户："背景喊杀声太多了 其实没必要有喊杀声"）：已去掉喊杀/战鼓声
 
 # 土系**范围**震荡：主角周围一圈敌人一起吃
 func _earth_quake(dmg: float, big: bool) -> void:
@@ -3605,7 +3613,7 @@ func _cast_timestop() -> void:
 			f["para"] = maxf(float(f.get("para", 0.0)), dur)
 	_p_aspd = maxf(_p_aspd, dur)          # 攻速翻倍（战场自己的临时通道）
 	_push_float(hero_pos.x, hero_pos.y - 110.0, "时间停止！", Color(0.90, 0.86, 1.0), true)
-	Audio.sfx("drum", -4.0)
+	# v16o（用户："背景喊杀声太多了 其实没必要有喊杀声"）：已去掉喊杀/战鼓声
 
 # v14b 雷小七「连环腿」：每 4 秒对最近敌人连踢两下（两次独立判定）
 func _update_leixiaoqi(delta: float) -> void:
@@ -3702,7 +3710,7 @@ func _cast_tianlei(ratio: float, tag: String) -> void:
 	_bolts.append({"x": center.x, "y": center.y, "t": 0.0, "segs": segs})
 	_shake = maxf(_shake, 16.0)
 	_hitstop = maxf(_hitstop, 0.10)
-	Audio.sfx("drum", -3.0)
+	# v16o（用户："背景喊杀声太多了 其实没必要有喊杀声"）：已去掉喊杀/战鼓声
 	Audio.sfx("bell", -8.0, 0.8)
 
 func _update_bolts(delta: float) -> void:
@@ -4395,7 +4403,7 @@ func spawn_elite(n := 1) -> void:
 		fe["stop"] = FOE_REACH + 10.0         # v16m：同默认，跟着 FOE_REACH 走
 	_banner = ("猎杀：混进来一只精英——" if n <= 1 else "三英：来了 " + str(n) + " 只精英") + ("" if n > 1 else ELITE_NAME)
 	_banner_t = 2.6
-	Audio.sfx("drum", -6.0)
+	# v16o（用户："背景喊杀声太多了 其实没必要有喊杀声"）：已去掉喊杀/战鼓声
 
 func clear_elite() -> void:
 	for i in range(foes.size() - 1, -1, -1):
