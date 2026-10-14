@@ -608,8 +608,13 @@ func _process(delta: float) -> void:
 			_pet_step += delta * 8.0
 	# v3g（用户："宠物也是"）：宠物同样**不许越过主角那条线**——它是跟着主人的，
 	#   不往前冲；怪得自己走下来才咬得到（原来它会独自冲到最上面去）。
+	# v15u（用户："还有主角和宠物还是会往上跑"）：⚠ 原来这里上限是**写死**的
+	#   `size.y * HERO_TOP + 12` —— 两个毛病：
+	#     ① 主角手动走位时那条线已经放开（v15j），宠物却还被卡在老位置 → 主人上去了它上不去；
+	#     ② `+12` 是"往上加"，让宠物比主角还靠上 12px，反而更早探出战场框。
+	#   现在：跟主角**共用同一条 top_line**（上面刚算过），并且往下收 6px 而不是往上加。
 	pet_pos.x = clampf(pet_pos.x, 44.0, size.x - 44.0)
-	pet_pos.y = clampf(pet_pos.y, size.y * HERO_TOP + 12.0, size.y - HERO_LINE * 0.4)
+	pet_pos.y = clampf(pet_pos.y, top_line + 6.0, size.y - HERO_LINE * 0.4)
 	_pet_cd -= delta
 	if _pet_cd <= 0.0 and not target.is_empty() and pet_pos.distance_to(tpos) <= PET_REACH + 18.0:
 		# v14d（用户："宠物在困兽里面毕竟是没有生命的…给他一个加成效果【或者特效技能】和攻击伤害即可

@@ -5928,13 +5928,52 @@ func _fill_skill(p: Control, y: float, sz: Vector2) -> float:
 		p.add_child(l1)
 		var l2 := Label.new()
 		l2.position = Vector2(186, ly)
-		l2.size = Vector2(480, 44)
+		# v15t（用户："显示字数重叠了"）：⚠ 原来行高写死 44 —— "剑光"那一行文字要 2 行（约 70px），
+		#   溢出就把下一行压住了。现在高度给够、并**按实际行数推进 ly**。
+		l2.size = Vector2(480, 78)
 		l2.add_theme_font_size_override("font_size", 22)
 		l2.add_theme_color_override("font_color", INK)
 		l2.text = str(r[1])
 		l2.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		p.add_child(l2)
-		ly += 52.0
+		ly += maxf(52.0, l2.get_minimum_size().y + 12.0)
+		# ---- v15t：队友技能（用户："技能详情页 不能只有主角的 还有队友的"）----
+	#   已经入队的每位：名字 + 技能名 + 伤害类型 + 当前档位与冷却
+	ly += 18.0
+	var mtitle := Label.new()
+	mtitle.position = Vector2(28, ly)
+	mtitle.size = Vector2(640, 44)
+	mtitle.add_theme_font_size_override("font_size", 25)
+	mtitle.add_theme_color_override("font_color", SEAL)
+	var owned2: Array = []
+	for pid2 in _field.PARTNER_INFO.keys():
+		if bool((_field.partners[str(pid2)] as Dictionary)["owned"]):
+			owned2.append(str(pid2))
+	mtitle.text = "队友技能（已入队 " + str(owned2.size()) + " 位）"
+	p.add_child(mtitle)
+	ly += 50.0
+	if owned2.is_empty():
+		var nl := Label.new()
+		nl.position = Vector2(28, ly)
+		nl.size = Vector2(640, 40)
+		nl.add_theme_font_size_override("font_size", 21)
+		nl.add_theme_color_override("font_color", DIM)
+		nl.text = "还没招到队友——每升 5 级给一次招募机会"
+		p.add_child(nl)
+		ly += 50.0
+	for pid3 in owned2:
+		var mi: Dictionary = _field.PARTNER_INFO[pid3]
+		var mrow := Label.new()
+		mrow.position = Vector2(28, ly)
+		mrow.size = Vector2(640, 76)
+		mrow.add_theme_font_size_override("font_size", 21)
+		mrow.add_theme_color_override("font_color", INK)
+		mrow.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		mrow.text = _mate_name_of(pid3) + "【" + _mate_q_of(pid3) + "】技能「" + str(mi["skill"]) + "」　" \
+			+ str(mi["dtype"]) + "　冷却 " + str(int(ceil(_field.p_cool_of(pid3)))) + " 秒" \
+			+ "　" + str(mi["desc"])
+		p.add_child(mrow)
+		ly += maxf(52.0, mrow.get_minimum_size().y + 12.0)
 	return ly + 10.0
 
 func _pick_skill(id: String) -> void:
@@ -6561,7 +6600,10 @@ func _on_chal_drop(kind_i: int, at: Vector2) -> void:
 			else:
 				_hint.text = "钱怪掉了 " + str(g0) + " 文钱"
 		1:
-			var g1 := int(float(6 + randi() % 5) * _field.chal_crystal_mul())
+			# v15s（用户："灵晶给的太多了 灵晶挑战给个一两次抽数就可以了"）：
+			#   一次抽卡 = 20 灵晶，"一两次抽数"≈ 20~40。原来一群 3 只 × (6~10) = 18~30，
+			#   但一局 30 波每波都能刷 → 一局能攒 700+ 灵晶（36 抽）。现在压到每只 4~7。
+			var g1 := int(float(4 + randi() % 4) * _field.chal_crystal_mul())
 			_crystal += g1
 			_hint.text = "晶怪掉了 " + str(g1) + " 灵晶"
 		2:
@@ -6569,17 +6611,15 @@ func _on_chal_drop(kind_i: int, at: Vector2) -> void:
 			_gain_exp(e1)
 			_hint.text = "书怪：经验 +" + str(int(e1 * 100.0)) + "%"
 		3:
-			# v12d：宝物挑战 → 送 1 次宝物刷新 ＋ 开三选一
-			_trea_refresh += 1
+			# v15s（用户："击败宝物怪挑战 只给一个宝物三选一"）：
+			#   ⚠ 原来是**三重给**：刷新 +1、开三选一、**还直接爆一件**（太肥）。
+			#   现在只给"一次三选一"——刷新那 1 次也去掉（不然等于白送一次重抽）。
 			_trea_choices.clear()
 			_open_large("宝物三选一")
-			# v11f：宝物挑战真的爆一件宝物（大怪掉得更好）
-			var g3 := _gen_gear(true, true)
-			_treasures.append(str(g3["name"]) + "（" + str(WPN_Q_CN[int(g3["q"])]) + "）")
-			_hint.text = "宝箱大怪爆出：" + str(g3["name"]) + "【" + str(WPN_Q_CN[int(g3["q"])]) + "】"
+			_hint.text = "宝箱大怪倒了：开一次宝物三选一（挑一件）"
 			Audio.sfx("chest", -3.0)
 		4:
-			_trea_refresh += 2            # v12d：boss 首杀送 2 次宝物刷新
+			_trea_refresh += 1            # v15s：2 → 1（宝物整体收敛；boss 本身已经给名声 ＋ 掉落）
 			# 名声是"局外"的（跨局保留），这里先记一笔本局战绩
 			_run_fame += 20
 			_hint.text = "挑战 boss 拿下：本局名声 +20（现在 " + str(_run_fame) + "）"
