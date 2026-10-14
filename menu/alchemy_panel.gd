@@ -189,6 +189,10 @@ func _build() -> void:
 	_fr_scroll.position = Vector2(32, FR_VIEW_Y)
 	_fr_scroll.size = Vector2(PANEL_W - 64.0, FR_VIEW_H)
 	_fr_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	# v15x（用户："所有滑动不要滑动进度条 用指尖滑动那种就可以了"）：
+	#   强制藏掉滚动条（Godot 默认主题在内容超出时会冒出来）——拖拽滚动不受影响。
+	_fr_scroll.get_v_scroll_bar().visible = false
+	_fr_scroll.get_h_scroll_bar().visible = false
 	_panel.add_child(_fr_scroll)
 	_fr_list = VBoxContainer.new()
 	_fr_list.custom_minimum_size = Vector2(FR_INNER_W, 0)

@@ -466,7 +466,15 @@ func _open_hold(i: int) -> void:
 	_pop_scroll.position = Vector2(GRID_VIEW_PAD, POP_GRID_Y)
 	_pop_scroll.size = _grid_vp
 	_pop_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	# v15x（用户："所有滑动不要滑动进度条 用指尖滑动那种就可以了"）：
+	#   强制藏掉滚动条（Godot 默认主题在内容超出时会冒出来）——拖拽滚动不受影响。
+	_pop_scroll.get_v_scroll_bar().visible = false
+	_pop_scroll.get_h_scroll_bar().visible = false
 	_pop_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	# v15x（用户："所有滑动不要滑动进度条 用指尖滑动那种就可以了"）：
+	#   强制藏掉滚动条（Godot 默认主题在内容超出时会冒出来）——拖拽滚动不受影响。
+	_pop_scroll.get_v_scroll_bar().visible = false
+	_pop_scroll.get_h_scroll_bar().visible = false
 	_pop_scroll.mouse_filter = Control.MOUSE_FILTER_PASS
 	_pop.add_child(_pop_scroll)
 	_pop_cells = Control.new()
@@ -619,6 +627,10 @@ func _fill_tool_win() -> void:
 		sc6.position = Vector2(26, 78)
 		sc6.size = Vector2(w - 52.0, h - 192.0)
 		sc6.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		# v15x（用户："所有滑动不要滑动进度条 用指尖滑动那种就可以了"）：
+		#   强制藏掉滚动条（Godot 默认主题在内容超出时会冒出来）——拖拽滚动不受影响。
+		sc6.get_v_scroll_bar().visible = false
+		sc6.get_h_scroll_bar().visible = false
 		_tool_win.add_child(sc6)
 		var box6 := VBoxContainer.new()
 		box6.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -645,6 +657,10 @@ func _fill_tool_win() -> void:
 		sc.position = Vector2(26, 76)
 		sc.size = Vector2(w - 52.0, h - 190.0)
 		sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		# v15x（用户："所有滑动不要滑动进度条 用指尖滑动那种就可以了"）：
+		#   强制藏掉滚动条（Godot 默认主题在内容超出时会冒出来）——拖拽滚动不受影响。
+		sc.get_v_scroll_bar().visible = false
+		sc.get_h_scroll_bar().visible = false
 		_tool_win.add_child(sc)
 		var box := VBoxContainer.new()
 		box.size_flags_horizontal = Control.SIZE_EXPAND_FILL

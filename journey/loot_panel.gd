@@ -216,7 +216,15 @@ func _build() -> void:
 	_bag_scroll.position = Vector2(34, 260)     # v8：252→260（给上面两行让出 8 像素）
 	_bag_scroll.size = Vector2(BAG_VIEW_W, BAG_VIEW_H)
 	_bag_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	# v15x（用户："所有滑动不要滑动进度条 用指尖滑动那种就可以了"）：
+	#   强制藏掉滚动条（Godot 默认主题在内容超出时会冒出来）——拖拽滚动不受影响。
+	_bag_scroll.get_v_scroll_bar().visible = false
+	_bag_scroll.get_h_scroll_bar().visible = false
 	_bag_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	# v15x（用户："所有滑动不要滑动进度条 用指尖滑动那种就可以了"）：
+	#   强制藏掉滚动条（Godot 默认主题在内容超出时会冒出来）——拖拽滚动不受影响。
+	_bag_scroll.get_v_scroll_bar().visible = false
+	_bag_scroll.get_h_scroll_bar().visible = false
 	_bag_scroll.mouse_filter = Control.MOUSE_FILTER_PASS
 	panel.add_child(_bag_scroll)
 	_chips = Control.new()

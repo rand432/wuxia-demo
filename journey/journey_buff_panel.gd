@@ -186,6 +186,10 @@ func _build_mine() -> void:
 	sc.position = Vector2(30, 176)
 	sc.size = Vector2(620, 462)
 	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	# v15x（用户："所有滑动不要滑动进度条 用指尖滑动那种就可以了"）：
+	#   强制藏掉滚动条（Godot 默认主题在内容超出时会冒出来）——拖拽滚动不受影响。
+	sc.get_v_scroll_bar().visible = false
+	sc.get_h_scroll_bar().visible = false
 	_body.add_child(sc)
 	var list := VBoxContainer.new()
 	list.custom_minimum_size = Vector2(604, 0)
@@ -247,6 +251,10 @@ func _build_fate() -> void:
 	sc2.position = Vector2(30, 176)
 	sc2.size = Vector2(620, 446)
 	sc2.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	# v15x（用户："所有滑动不要滑动进度条 用指尖滑动那种就可以了"）：
+	#   强制藏掉滚动条（Godot 默认主题在内容超出时会冒出来）——拖拽滚动不受影响。
+	sc2.get_v_scroll_bar().visible = false
+	sc2.get_h_scroll_bar().visible = false
 	_body.add_child(sc2)
 	var flist := VBoxContainer.new()
 	flist.custom_minimum_size = Vector2(604, 0)

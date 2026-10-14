@@ -149,6 +149,10 @@ func _build() -> void:
 	_scroll.position = Vector2(28, LIST_Y)
 	_scroll.size = Vector2(PANEL_W - 56.0, LIST_H)
 	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	# v15x（用户："所有滑动不要滑动进度条 用指尖滑动那种就可以了"）：
+	#   强制藏掉滚动条（Godot 默认主题在内容超出时会冒出来）——拖拽滚动不受影响。
+	_scroll.get_v_scroll_bar().visible = false
+	_scroll.get_h_scroll_bar().visible = false
 	_panel.add_child(_scroll)
 	_list = VBoxContainer.new()
 	_list.custom_minimum_size = Vector2(PANEL_W - 72.0, 0)
@@ -187,6 +191,10 @@ func _build() -> void:
 	dscroll.position = Vector2(8, 6)
 	dscroll.size = Vector2(PANEL_W - 56.0 - 16.0, 218)
 	dscroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	# v15x（用户："所有滑动不要滑动进度条 用指尖滑动那种就可以了"）：
+	#   强制藏掉滚动条（Godot 默认主题在内容超出时会冒出来）——拖拽滚动不受影响。
+	dscroll.get_v_scroll_bar().visible = false
+	dscroll.get_h_scroll_bar().visible = false
 	dbox.add_child(dscroll)
 	_detail_lb = _label("", 16, Color(INK.r, INK.g, INK.b, 0.88))
 	_detail_lb.custom_minimum_size = Vector2(PANEL_W - 56.0 - 16.0 - 16.0, 0)

@@ -1084,6 +1084,10 @@ func _ask_fate_pick() -> void:
 	scroll.position = Vector2(20, 80)
 	scroll.size = Vector2(pw - 40.0, ph - 80.0 - 78.0)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	# v15x（用户："所有滑动不要滑动进度条 用指尖滑动那种就可以了"）：
+	#   强制藏掉滚动条（Godot 默认主题在内容超出时会冒出来）——拖拽滚动不受影响。
+	scroll.get_v_scroll_bar().visible = false
+	scroll.get_h_scroll_bar().visible = false
 	panel.add_child(scroll)
 	var box := VBoxContainer.new()
 	box.custom_minimum_size = Vector2(pw - 40.0, 0)
@@ -1310,6 +1314,10 @@ func _ask_art_pick() -> void:
 	scroll.position = Vector2(20, 104)
 	scroll.size = Vector2(pw - 40.0, ph - 104.0 - 78.0)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	# v15x（用户："所有滑动不要滑动进度条 用指尖滑动那种就可以了"）：
+	#   强制藏掉滚动条（Godot 默认主题在内容超出时会冒出来）——拖拽滚动不受影响。
+	scroll.get_v_scroll_bar().visible = false
+	scroll.get_h_scroll_bar().visible = false
 	panel.add_child(scroll)
 	var box := VBoxContainer.new()
 	box.custom_minimum_size = Vector2(pw - 40.0, 0)

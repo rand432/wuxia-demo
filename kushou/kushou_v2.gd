@@ -3537,8 +3537,13 @@ func _bm_tile(p: Control, pos: Vector2, sz: Vector2, i: int) -> void:
 		pr.text = "[color=#ad2620][font_size=26]" + ("满档" if _yh_up_price() < 0 else str(cost)) \
 			+ "[/font_size][/color][color=#6b625c] 灵晶[/color]"
 	elif int(s["disc"]) >= 0:
-		pr.text = "[color=#6b625c][s]原价 " + str(int(s["base"])) + "[/s][/color] → [color=#ad2620][font_size=26]" \
-			+ str(BM_DISC_CN[int(s["disc"])]) + " " + str(cost) + "[/font_size][/color]"
+		# v15x（用户："黑市没有价格吗"）：⚠ 这里原来是两行**连着赋值**——
+		#   第一行算了"原价划掉 → 折扣价"，第二行立刻用"只有价 + 杀敌数"把它**覆盖掉**，
+		#   所以界面上永远看不到折扣（看着就像"没有价格"）。现在合成一行说清。
+		pr.text = "[color=#6b625c][s]原价 " + str(int(s["base"])) + "[/s] " \
+			+ str(BM_DISC_CN[int(s["disc"])]) + "[/color] → [color=#ad2620][font_size=26]" \
+			+ str(cost) + "[/font_size][/color][color=#6b625c] 杀敌数[/color]"
+	else:
 		pr.text = "[color=#ad2620][font_size=26]" + str(cost) + "[/font_size][/color][color=#6b625c] 杀敌数[/color]"
 	box.add_child(pr)
 	var bb := _pbtn(box, "买", Vector2(14, 144), Vector2(sz.x - 28.0, 50), 26, can, _bm_buy.bind(i))
@@ -6961,6 +6966,10 @@ func _open_popup(kind: String, large: bool) -> void:
 	body.position = Vector2(6, body_y)
 	body.size = Vector2(r.size.x - 12, body_h)
 	body.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	# v15x（用户："所有滑动不要滑动进度条 用指尖滑动那种就可以了"）：
+	#   强制藏掉滚动条（Godot 默认主题在内容超出时会冒出来）——拖拽滚动不受影响。
+	body.get_v_scroll_bar().visible = false
+	body.get_h_scroll_bar().visible = false
 	body.scroll_deadzone = 8
 	p.add_child(body)
 	_cp = Control.new()

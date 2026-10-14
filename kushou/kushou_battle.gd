@@ -264,14 +264,24 @@ func set_wave(w: int) -> void:
 #   全局难度系数 —— 乘在**每一处怪的血/攻**上（普通怪、boss、挑战怪）。
 #   ⚠ 没有去改 foe_mul：那个是"关卡难度倍率"，外壳每局会覆盖它（只剩一个赋值点），
 #     改它会被盖掉。这里单独一个系数，各处用量自行相乘。
-const DIFFICULTY := 1.5
+const DIFFICULTY := 1.5           # 第 10 波起的难度倍率（满值）
 var foe_mul := 1.0
 
+# v15y（用户："前十波难度下调"）：
+#   原来 DIFFICULTY 是**常数**、所有波都 ×1.5 —— 开局十波也被抬了 50%。
+#   而现在前十波本来不出 boss（boss 从第 10 波起），等于"最难的开头配最弱的奖励"。
+#   现在：**前十波从 ×1.0 线性爬到 ×1.5**（波1 就是加强前的原样），第 10 波起保持 ×1.5。
+func diff_mul() -> float:
+	var w := maxi(1, wave)
+	if w >= 10:
+		return DIFFICULTY
+	return 1.0 + (DIFFICULTY - 1.0) * float(w - 1) / 9.0
+
 func _foe_hp() -> float:
-	return BASE_FOE_HP * pow(WAVE_HP, float(wave - 1)) * foe_mul * DIFFICULTY      # v14e：关卡难度倍率
+	return BASE_FOE_HP * pow(WAVE_HP, float(wave - 1)) * foe_mul * diff_mul()      # v14e：关卡难度倍率
 
 func _foe_atk() -> float:
-	return BASE_FOE_ATK * pow(WAVE_ATK, float(wave - 1)) * foe_mul * DIFFICULTY    # v14e：关卡难度倍率
+	return BASE_FOE_ATK * pow(WAVE_ATK, float(wave - 1)) * foe_mul * diff_mul()    # v14e：关卡难度倍率
 
 func _spawn_foe(kind := "normal", hp_mul := 1.0, atk_mul := 1.0, big := false, tier := 1, nm := "") -> void:
 	if foes.size() >= MAX_FOES and kind == "normal":
@@ -328,8 +338,8 @@ func spawn_challenge(kind_i: int, n: int) -> void:
 	var big := i >= 3
 	for k in maxi(1, n):
 		# v15s：挑战怪也吃全局难度 +50%
-		_spawn_foe("chal", float(CHAL_FOE_HP[i]) * chal_hp_mul() * DIFFICULTY,
-			float(CHAL_FOE_ATK[i]) * chal_atk_mul() * DIFFICULTY, big, 1, str(CHAL_FOE_NAME[i]))
+		_spawn_foe("chal", float(CHAL_FOE_HP[i]) * chal_hp_mul() * diff_mul(),
+			float(CHAL_FOE_ATK[i]) * chal_atk_mul() * diff_mul(), big, 1, str(CHAL_FOE_NAME[i]))
 		var f: Dictionary = foes[foes.size() - 1]
 		f["scale"] = float(CHAL_FOE_SCALE[i])
 		f["chal"] = i                              # 掉什么由这个字段决定（结算侧读它）
@@ -343,11 +353,11 @@ func spawn_challenge(kind_i: int, n: int) -> void:
 func start_boss(tier: int) -> void:
 	var tt := clampi(tier, 1, 3)
 	var d := _boss_pick(tt)                     # v14g：每阶 3 只随机一只（技能/大招/词缀都不同）
-	var mul := pow(WAVE_HP, float(wave - 1)) * foe_mul * DIFFICULTY
+	var mul := pow(WAVE_HP, float(wave - 1)) * foe_mul * diff_mul()
 	_spawn_foe("boss", 1.0, 1.0, true, tt, str(d["name"]))
 	var f: Dictionary = foes[foes.size() - 1]
 	var hp_mul := mul
-	var atk_mul := pow(WAVE_ATK, float(wave - 1)) * foe_mul * DIFFICULTY
+	var atk_mul := pow(WAVE_ATK, float(wave - 1)) * foe_mul * diff_mul()
 	# ---- 技能（登场写进字段，由各自逻辑读）----
 	#   v14t：只剩这两条没接了，补齐——召小怪（兽王号令）· 狐火（攻击带火系溅射）
 	match str(d.get("skill_k", "")):
