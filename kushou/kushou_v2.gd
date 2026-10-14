@@ -6807,7 +6807,8 @@ func _fill_popup(p: Control, kind: String, y: float, sz: Vector2) -> float:
 	elif kind == "抽卡":
 		lines = ["抽卡 · 20 灵晶（现有 " + str(_crystal) + "）", "① 技能流 · 凝神（1★）", "② 技能流 · 疾风诀（1★）", "③ 技能流 · 破罡（1★）", "十格满时会先进「替换」模式"]
 	elif kind == "卡组合计":
-		lines = ["当前流派：技能流（本流派出现率 ×3）", "十格用了 " + str(_deck.size()) + " / 10", "　内力上限 +60　技能冷却 −15%", "　技能伤害 +40%　技能击杀 冷却 −1 秒", "（正式版这里按卡的标签逐条汇总；空壳先写死）"]
+		# v15n：改成真正算出来的列表（已合成的套 ＋ 还在格里的卡，点开看详情）
+		return _fill_deck_total(p, y)
 	elif kind == "技能":
 		lines = ["技能点：3", "　" + "、".join(PackedStringArray(_skills)), "升级消耗：1★→2★ 1 点 · 2★→3★ 2 点 · 3★→4★ 3 点"]
 	elif kind == "装备":
@@ -6842,27 +6843,19 @@ func _fill_popup(p: Control, kind: String, y: float, sz: Vector2) -> float:
 
 # ---- 卡组页：流派页签 ＋ **两种查询**（十格 / 吞噬记录）＋ 操作钮 ----
 func _fill_cards(p: Control, y: float, sz: Vector2) -> float:
-	# 清爽一点（用户："尽量做到清理明了"）：页签只写流派名，当前流派改用一行小字说清
-	var tabs := ["技能流", "攻击流", "盾牌流"]
-	for i in 3:
-		_pbtn(p, tabs[i], Vector2(28.0 + float(i) * 218.0, y), Vector2(206, 62), 24, i == 0, func(): pass)
-	var cur := Label.new()
-	cur.position = Vector2(28, y + 68.0)
-	cur.size = Vector2(640, 30)
-	cur.add_theme_font_size_override("font_size", 20)
-	cur.add_theme_color_override("font_color", DIM)
-	cur.text = "本局流派：技能流（该流派卡出现率 ×3）"
-	p.add_child(cur)
+	# v15n（用户："把这三个流派的按钮去了"）：那三个流派页签本来就是**空壳**
+	#   （cb 写的是 func(): pass），点了没反应还占地方 —— 直接撤掉，卡组页从"十格"开始。
+	#   下面那两颗查询页签上移，顶到最上面。
 	# 两种查询（用户："第一种是10格的卡组 另一种是吞噬后的卡组"）
 	var qs := ["十格卡组", "吞噬记录"]
 	for i in 2:
-		_pbtn(p, qs[i], Vector2(28.0 + float(i) * 162.0, y + 106.0), Vector2(150, 60), 24, _deck_tab == i, _set_deck_tab.bind(i))
+		_pbtn(p, qs[i], Vector2(28.0 + float(i) * 162.0, y), Vector2(150, 60), 24, _deck_tab == i, _set_deck_tab.bind(i))
 	# ⚠ 按钮必须**跟着内容走**：十格放大后写死偏移会压到卡上（截图抓到过）
 	var grid_bottom := 0.0
 	if _deck_tab == 0:
-		grid_bottom = _fill_deck_slots(p, y + 182.0)
+		grid_bottom = _fill_deck_slots(p, y + 76.0)
 	else:
-		grid_bottom = _fill_deck_ate(p, y + 182.0)
+		grid_bottom = _fill_deck_ate(p, y + 76.0)
 	var by := maxf(640.0, grid_bottom + 96.0)
 	_pbtn(p, "查合计", Vector2(28, by), Vector2(180, 72), 24, false, func(): _open_large("卡组合计"))
 	_pbtn(p, "放弃（换 1 次刷新）", Vector2(220, by), Vector2(284, 72), 22, false, func(): pass)
@@ -6873,6 +6866,118 @@ func _set_deck_tab(i: int) -> void:
 	_deck_tab = i
 	if _popup_kind == "卡组":
 		_open_large("卡组")     # 重开一次＝重画（空壳阶段够用）
+
+# v15n（用户："卡面合计就是你清理掉那些合成卡 会在这里显示 然后也给框 点击就是详情 然后可上下滑动"）：
+#   原来的「卡组合计」只是一页写死的假文案（"本流派出现率×3 / 十格用了4/10 / …"）。
+#   现在改成**真正算出来的账**，两部分：
+#     ① 已成型（合成掉了、已腾出占格的套）—— 每套一个框，点开看详情
+#     ② 还在十个格里的卡 —— 同样点开看详情
+#   弹窗正文本身在 ScrollContainer 里，所以列表长了可以直接手指上下拖。
+func _fill_deck_total(p: Control, y: float) -> float:
+	var ly := y
+	# ---- ① 已成型 ----
+	var done_ids: Array = []
+	for sv in CARD_SETS:
+		var sid := str((sv as Dictionary)["set"])
+		if bool(_sets_done.get(sid, false)):
+			done_ids.append(sid)
+	ly = _deck_total_head(p, ly, "已合成 " + str(done_ids.size()) + " 套（效果已常驻 · 不再占格）")
+	if done_ids.is_empty():
+		ly = _deck_total_note(p, ly, "还没凑齐过任何一套 —— 同一套的卡摸齐就给组合效果，并把这几张腾出占格")
+	for did in done_ids:
+		ly = _deck_total_row(p, ly, str(did) + "_0")
+	ly += 14.0
+	# ---- ② 十格里的卡 ----
+	var in_hand: Array = []
+	for cv in _deck_cards:
+		if str(cv) != "":
+			in_hand.append(str(cv))
+	ly = _deck_total_head(p, ly, "还在格子里 " + str(in_hand.size()) + " 张")
+	if in_hand.is_empty():
+		ly = _deck_total_note(p, ly, "十个格子都空着 —— 去抽卡（20 灵晶一次，三选一）")
+	for cid2 in in_hand:
+		ly = _deck_total_row(p, ly, str(cid2))
+	return ly
+
+func _deck_total_head(p: Control, y: float, txt: String) -> float:
+	var l := Label.new()
+	l.position = Vector2(24, y)
+	l.size = Vector2(640, 44)
+	l.add_theme_font_size_override("font_size", 24)
+	l.add_theme_color_override("font_color", SEAL)
+	l.text = txt
+	p.add_child(l)
+	return y + 54.0
+
+func _deck_total_note(p: Control, y: float, txt: String) -> float:
+	var l := Label.new()
+	l.position = Vector2(32, y)
+	l.size = Vector2(630, 40)
+	l.add_theme_font_size_override("font_size", 20)
+	l.add_theme_color_override("font_color", DIM)
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l.text = txt
+	p.add_child(l)
+	return y + 50.0
+
+# 一行卡：框 ／ 系列名 ／ 卡名 ／ 单卡属性 ／ 组合效果 ／ 进度；整行可点开详情
+func _deck_total_row(p: Control, y: float, cid: String) -> float:
+	var s := card_set_of(cid)
+	if s.is_empty():
+		return y
+	var set_id := str(s.get("set", ""))
+	var need := int(s.get("size", 1))
+	var got := 0
+	for i in need:
+		if _card_have.has(card_id(set_id, i)):
+			got += 1
+	var is_done := bool(_sets_done.get(set_id, false))
+	var h := 132.0
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.99, 0.97, 0.92)
+	sb.set_corner_radius_all(12)
+	sb.border_color = Color(0.92, 0.74, 0.28, 1.0) if is_done else _quality_color(str(s.get("quality", "下品")))
+	sb.set_border_width_all(3 if is_done else 2)
+	var box := Panel.new()
+	box.position = Vector2(24, y)
+	box.size = Vector2(640, h)
+	box.add_theme_stylebox_override("panel", sb)
+	box.mouse_filter = Control.MOUSE_FILTER_STOP
+	p.add_child(box)
+	var l1 := Label.new()
+	l1.position = Vector2(14, 8)
+	l1.size = Vector2(614, 34)
+	l1.add_theme_font_size_override("font_size", 23)
+	l1.add_theme_color_override("font_color", INK)
+	# 系列名跟卡名一样时就别写两遍（"力量祝福 力量祝福" 看着像 bug）
+	var nm1 := str(s.get("name", ""))
+	var nm2 := card_name(cid)
+	l1.text = (nm1 if nm1 == nm2 else nm1 + "　" + nm2) + "　【" + str(s.get("quality", "")) + "】"
+	box.add_child(l1)
+	var l2 := Label.new()
+	l2.position = Vector2(14, 44)
+	l2.size = Vector2(614, 30)
+	l2.add_theme_font_size_override("font_size", 20)
+	l2.add_theme_color_override("font_color", DIM)
+	l2.text = "卡面：" + card_prop(cid) + "　进度 " + str(got) + "/" + str(need) + ("　已成" if is_done else "")
+	box.add_child(l2)
+	var l3 := Label.new()
+	l3.position = Vector2(14, 76)
+	l3.size = Vector2(614, 48)
+	l3.add_theme_font_size_override("font_size", 19)
+	l3.add_theme_color_override("font_color", SEAL if is_done else Color(INK.r, INK.g, INK.b, 0.72))
+	l3.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l3.text = ("组合：" + str(s.get("combo", "—")) + "　（已生效）") if is_done else ("凑齐 " + str(need) + " 张给：" + str(s.get("combo", "—")))
+	box.add_child(l3)
+	var hit := _pbtn(p, "", Vector2(24, y), Vector2(640, h), 16, false, _deck_total_open.bind(cid))
+	hit.add_theme_stylebox_override("normal", _flat(Color(1, 1, 1, 0.001)))
+	hit.add_theme_stylebox_override("hover", _flat(Color(1, 1, 1, 0.10)))
+	hit.add_theme_stylebox_override("pressed", _flat(Color(1, 1, 1, 0.18)))
+	return y + h + 12.0
+
+func _deck_total_open(cid: String) -> void:
+	_detail_card = cid
+	_open_small("卡牌详情")
 
 # 视图①：十格（5×2）
 func _fill_deck_slots(p: Control, y: float) -> float:
@@ -7089,9 +7194,9 @@ func _refresh_band() -> void:
 	# ⚠ 上一版这里把"内力"拼了两遍（截图里看到两段一样的）——现在只写一遍
 	_band.text = "波 " + str(_wave) + "/" + str(_wave_max) + "　❤ " + str(int(_hp)) + "/" + str(int(_hp_max)) + "　内力 " + str(int(_mp)) + "/" + str(int(_mp_max))
 
-# ---- 角色页：详细属性 ＋ 一颗［队员］钮 ----
+# ---- 角色页：详细属性 ＋ 一颗［伙伴］钮（v15n：用户"队员改为伙伴"）----
 func _fill_role(p: Control, y: float, sz: Vector2) -> float:
-	var tabs := ["属性", "队员"]
+	var tabs := ["属性", "伙伴"]
 	for i in 2:
 		_pbtn(p, tabs[i], Vector2(28.0 + float(i) * 130.0, y), Vector2(120, 58), 24, _role_tab == i, _set_role_tab.bind(i))
 	var rows := [
@@ -7123,11 +7228,24 @@ func _fill_role(p: Control, y: float, sz: Vector2) -> float:
 		+ "　（继承 " + str(int(_grow_inherit["arm"])) + "/" + str(int(_grow_inherit["agi"])) \
 		+ "/" + str(int(_grow_inherit["wit"])) + "）"
 	p.add_child(mtip)
+	# v15n（用户："虽然是三种属性但是主属性只有一种 不能切换的"）：
+	#   这三块原来是可以点着**换主属性**的按钮 —— 现在改成**只显示**：
+	#   当前主属性那块描金高亮，其余两块暗着，点了不会有任何反应。
 	var names := ["力量", "敏捷", "悟性"]
 	var ids := ["str", "agi", "wit"]
 	for i in 3:
-		_pbtn(p, names[i], Vector2(28.0 + float(i) * 138.0, y + 104.0), Vector2(126, 56), 22,
-			_main_attr == str(ids[i]), _set_main_attr.bind(str(ids[i])))
+		var on2 := _main_attr == str(ids[i])
+		var ab := Button.new()
+		ab.text = names[i] + ("（主）" if on2 else "")
+		ab.position = Vector2(28.0 + float(i) * 138.0, y + 104.0)
+		ab.size = Vector2(126, 56)
+		ab.add_theme_font_size_override("font_size", 21)
+		ab.focus_mode = Control.FOCUS_NONE
+		ab.disabled = true                       # ← 不可点，这就是"不能切换"
+		var acol: Color = SEAL if on2 else Color(0.62, 0.60, 0.58, 0.95)
+		ab.add_theme_stylebox_override("disabled", _flat(acol))
+		ab.add_theme_color_override("font_disabled_color", Color(0.97, 0.94, 0.88) if on2 else Color(0.85, 0.83, 0.80))
+		p.add_child(ab)
 	var arows := [
 		["arm", "臂力", _attr_arm(), "气血 +" + str(int(12.0 * float(_attr_arm()) * _boost_for("arm")))
 			+ "　生命恢复 " + str(snappedf(_hp_regen(), 0.1)) + "/秒"
@@ -7591,7 +7709,7 @@ func _refresh_partner_live() -> void:
 			lb.add_theme_color_override("font_color", SEAL)
 # ---- 旧版队友页（假数据；v4a 起被"伙伴页"取代，**留着当参照**，别再往外调）----
 func _fill_mates_old(p: Control, y: float, sz: Vector2) -> float:
-	var tabs := ["属性", "队员"]
+	var tabs := ["属性", "伙伴"]
 	for i in 2:
 		_pbtn(p, tabs[i], Vector2(28.0 + float(i) * 130.0, y), Vector2(120, 58), 24, _role_tab == i, _set_role_tab.bind(i))
 	var head := Label.new()
