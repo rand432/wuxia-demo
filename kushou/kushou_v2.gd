@@ -66,6 +66,7 @@ var _skill_pts := 0       # 技能点（每升 1 级 1 点）
 #   主属性（力量/敏捷/悟性）决定"哪一条额外转攻击 / 转元素攻击"
 var _attr := {"arm": 0, "agi": 0, "wit": 0}
 var _attr_pts := 0        # 属性点（v15k：界面不再给加点的地方，留着当储备）
+var _avatar_btn: Button = null    # v16s：底栏那颗头像（可招募时它闪）
 var _recruit_btn: Button = null   # v15k（用户：可以招募时主角头像闪动提示）—— 存一份用来做呼吸闪
 var _rec_flash := 0.0             # 上面那个呼吸闪的相位
 var _q_offer := {}                # v15p：掷出来但玩家还没决定接不接的事件（挂在这里）
@@ -816,6 +817,7 @@ func _build_hero_bar() -> void:
 	_sync_avatar()                       # v14s：出战那位是谁，头像就是谁
 	add_child(av)
 	var av_btn := _mk_btn("", Vector2(24, 984), Vector2(176, 176), 20, false, func(): _open_large("角色"))
+	_avatar_btn = av_btn                # v16s：留着做"可招募"呼吸闪
 	av_btn.flat = true
 	av_btn.add_theme_stylebox_override("normal", _flat(Color(0, 0, 0, 0)))
 	av_btn.add_theme_stylebox_override("hover", _flat(Color(1, 1, 1, 0.06)))
@@ -831,7 +833,11 @@ func _build_hero_bar() -> void:
 	# ---- v16f：右边那两颗常用钮（强化 / 玉壶）----
 	#   强化：点一下就升一级；**到了 10 的倍数（进阶待选）直接开三选一窗口**
 		# v16o：玉壶钮去掉后，强化钮**拉高占满**右列（原来 76 高、下面还留着一颗玉壶）
-	_wpn_quick = _mk_btn("强化", Vector2(528, 988), Vector2(168, 162), 26, true, _wpn_quick_tap)
+	_wpn_quick = _mk_btn("强化", Vector2(528, 988), Vector2(168, 76), 25, true, _wpn_quick_tap)
+	# v16r（用户："你怎么把血条旁边玉壶删了…把先前玉壶按钮加上 点击是使用 长按是自动"）：
+	#   加回来，并且**点击＝喝 / 长按＝切自动**（跟黑市下面那颗同一套操作）。
+	_yh_quick = _mk_btn("玉壶", Vector2(528, 1072), Vector2(168, 78), 24, false, func(): pass)
+	_bind_yh_button(_yh_quick)
 	# v16o（用户："上面那个玉壶按钮可以去掉了"）：已去掉底栏那颗玉壶钮。
 	#   玉壶仍能从［装备·宝物］页里用（那里本来就有大按钮 ＋ 自动开关）。
 	# 技能 / 装备：底部两颗**大**钮（用户："按钮和字一定不要很小"）
@@ -855,14 +861,11 @@ func _build_hero_bar() -> void:
 	# v13l（用户指着截图说："我说的玉壶框是这个玉壶框"）：
 	#   要的是**这个信息小方框**，不是大红按钮。方框整块可点＝喝一口；
 	#   自动开关和详细状态在［装备·宝物］页那张卡里。
-	_yh_btn = _mk_btn("", Vector2(500, 698), Vector2(198, 68), 20, false, _yh_use)
-	_yh_btn.add_theme_stylebox_override("normal", _flat(Color(0.16, 0.15, 0.17, 0.92)))
-	_yh_btn.add_theme_stylebox_override("hover", _flat(Color(0.25, 0.23, 0.26, 0.95)))
-	_yh_btn.add_theme_stylebox_override("pressed", _flat(Color(0.33, 0.31, 0.34, 0.95)))
-	_yh_lb = _lbl(Vector2(508, 702), Vector2(182, 32), 21, Color(0.62, 0.92, 0.86))
-	_yh_lb.text = "玉壶 就绪"
-	_yh_auto_lb = _lbl(Vector2(508, 736), Vector2(182, 26), 16, DIM)
-	_yh_auto_lb.text = "自动：开 · 宝物页里用"
+	# v16s（用户："黑市下面的玉壶删掉"）：
+	#   ⚠ 这组（大按钮 ＋「玉壶 就绪」＋「自动：开」两行小字）已**整块删掉**。
+	#   玉壶现在只在**底栏**那一颗（在［强化］下面）：点击＝喝，长按＝切自动。
+	#   战场右列因此空出来了 —— 黑市往下不再有东西。
+	#   （下面 _yh_lb / _yh_auto_lb 的刷新都带 null 判断，删了创建也不会报错。）
 var _avatar: AvatarArt = null
 
 # v14s：左上角头像跟着"开局出战"那位走
@@ -3146,6 +3149,23 @@ func _yh_upgrade() -> bool:
 
 func _yh_ready() -> bool:
 	return _yh_cd <= 0.0
+
+# v16r：给玉壶按钮装"点击＝使用 / 长按＝切自动"
+#   Godot 的 Button 只有 pressed；用 button_down/up 自己算按了多久。
+#   长按判定 0.45 秒（比"没点准"长、比"按住不放"短）。
+var _yh_press_t := 0.0
+
+func _bind_yh_button(b: Button) -> void:
+	if b == null:
+		return
+	b.button_down.connect(func(): _yh_press_t = float(Time.get_ticks_msec()) / 1000.0)
+	b.button_up.connect(func():
+		var held := float(Time.get_ticks_msec()) / 1000.0 - _yh_press_t
+		if held >= 0.45:
+			_yh_toggle_auto()            # 长按：切自动
+		else:
+			_yh_use()                    # 短按：喝一口
+	)
 
 func _yh_use() -> void:
 	if not _yh_ready():
@@ -6323,6 +6343,22 @@ func _process(delta: float) -> void:
 		else:
 			_q_badge.text = "!"
 			_q_badge.add_theme_color_override("font_color", Color(1.0, 0.42, 0.36, 0.55 + 0.45 * sin(_rec_flash * 6.0)))
+	# v16s（用户："5级了 人物头像怎么没有显示可招募 那种一闪一闪的"）：
+	#   ⚠ 原来闪的是**角色页弹窗里**那颗［招募］钮（_recruit_btn）—— 弹窗不开根本看不见。
+	#   现在改成闪**底栏那颗头像**（用户点名的位置）。
+	if _avatar_btn != null and is_instance_valid(_avatar_btn):
+		if _recruit_opens > 0:
+			var ak := 0.5 + 0.5 * sin(_rec_flash * 5.0)
+			var ab := StyleBoxFlat.new()
+			ab.bg_color = Color(1.0, 0.86, 0.32, 0.10 + 0.22 * ak)
+			ab.set_corner_radius_all(88)
+			ab.border_color = Color(1.0, 0.82, 0.28, 0.45 + 0.55 * ak)
+			ab.set_border_width_all(5)
+			_avatar_btn.add_theme_stylebox_override("normal", ab)
+			_avatar_btn.flat = false
+		else:
+			_avatar_btn.add_theme_stylebox_override("normal", _flat(Color(0, 0, 0, 0)))
+			_avatar_btn.flat = true
 	if _recruit_btn != null and is_instance_valid(_recruit_btn) and _recruit_opens > 0:
 		var fk := 0.5 + 0.5 * sin(_rec_flash * 5.0)
 		_recruit_btn.add_theme_stylebox_override("normal", _flat(SEAL.lerp(Color(1.0, 0.86, 0.32), fk * 0.85)))
