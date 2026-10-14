@@ -308,6 +308,18 @@ func _spawn_foe(kind := "normal", hp_mul := 1.0, atk_mul := 1.0, big := false, t
 		"scale": (1.9 if big else 0.86),
 		"stop": (FOE_STOP + 40.0 if big else FOE_STOP) + randf() * 30.0,
 	}
+	# v16h（用户："小怪可以有些弓箭手啊之类的 不能全是火柴人"）：
+	#   普通怪里约 **1/4 是弓箭手**：站得更远（stop 更大）、配色偏绿、手里一张弓。
+	#   ⚠ 只改**长相与站位**，伤害/血量跟普通怪同一套 —— 不动平衡，只是不再千人一面。
+	if kind == "normal" and randf() < 0.25:
+		f["ranged"] = true
+		f["stop"] = FOE_STOP + 90.0 + randf() * 40.0
+	# v16h（用户："小怪可以有些弓箭手啊之类的 不能全是火柴人"）：
+	#   普通怪里约 **1/4 是弓箭手**：站得更远（stop 更大）、配色偏绿、手里一张弓。
+	#   ⚠ 只改**长相与站位**，伤害/血量跟普通怪同一套 —— 不动平衡，只是不再千人一面。
+	if kind == "normal" and randf() < 0.25:
+		f["ranged"] = true
+		f["stop"] = FOE_STOP + 90.0 + randf() * 40.0
 	foes.append(f)
 
 
@@ -4702,6 +4714,26 @@ func _draw() -> void:
 # ---- 各类挑战怪的长相（"不同怪不同样子"）----
 func _foe_art(f: Dictionary, sc: float, fc: Color) -> void:
 	var c := Vector2(float(f["x"]), float(f["y"]) + float(f.get("lunge", 0.0)) * 12.0)
+	# v16h（用户："文钱怪 经验怪 灵晶怪做点区分"）：
+	#   ⚠ 下面那套 _draw_coin/_draw_crystal/... 早就写好了，但**挑战怪全被漏在 _ 分支**——
+	#   因为它们的 kind 是 "chal"、真正的类别在 f["chal"] 里（0钱 1晶 2书 3宝箱 4boss）。
+	#   所以三种挑战怪长得一模一样（全是火柴人）。这里按 f["chal"] 分派。
+	if str(f["kind"]) == "chal":
+		match int(f.get("chal", 0)):
+			0:
+				_draw_coin(c, sc, fc)
+			1:
+				_draw_crystal(c, sc, fc)
+			2:
+				_draw_book(c, sc, fc)
+			3:
+				_draw_chest(c, sc, fc)
+			4:
+				_draw_boss(c, sc, fc)
+			_:
+				_stick(c, sc, fc, false)
+		draw_circle(Vector2(c.x, c.y + 30.0 * sc), 16.0 * sc, Color(0, 0, 0, 0.18))
+		return
 	match str(f["kind"]):
 		"coin":
 			_draw_coin(c, sc, fc)
@@ -4720,9 +4752,45 @@ func _foe_art(f: Dictionary, sc: float, fc: Color) -> void:
 		"elite":
 			_draw_boss(c, sc, fc)
 		_:
-			_stick(c, sc, fc, false)
+			# v16h：普通怪分两种长相——弓箭手（远程，偏绿）／近战小人
+			if bool(f.get("ranged", false)):
+				_draw_archer(c, sc, fc)
+			else:
+				_stick(c, sc, fc, false)
 	# 每只脚下一小片影子（站得住）
 	draw_circle(Vector2(c.x, c.y + 30.0 * sc), 16.0 * sc, Color(0, 0, 0, 0.18))
+
+# v16h 书怪：一摞摊开的书（经验怪）
+func _draw_book(c: Vector2, sc: float, fc: Color) -> void:
+	var y := c.y + sin(_t * 5.0 + c.x * 0.1) * 3.0
+	var w := 26.0 * sc
+	var h := 20.0 * sc
+	draw_rect(Rect2(c.x - w, y - h * 0.5, w * 2.0, h), Color(0.86, 0.82, 0.70))
+	draw_rect(Rect2(c.x - w, y - h * 0.5, w * 2.0, h), Color(0.42, 0.34, 0.24), false, 3.0)
+	draw_line(Vector2(c.x, y - h * 0.5), Vector2(c.x, y + h * 0.5), Color(0.42, 0.34, 0.24), 2.0)
+	for i in 3:
+		var yy := y - h * 0.32 + float(i) * h * 0.30
+		draw_line(Vector2(c.x - w * 0.8, yy), Vector2(c.x - w * 0.2, yy), Color(0.55, 0.48, 0.36), 1.6)
+		draw_line(Vector2(c.x + w * 0.2, yy), Vector2(c.x + w * 0.8, yy), Color(0.55, 0.48, 0.36), 1.6)
+	# 头顶一顶小方帽（读书人）
+	draw_rect(Rect2(c.x - 12.0 * sc, y - h * 0.5 - 14.0 * sc, 24.0 * sc, 9.0 * sc), Color(0.30, 0.26, 0.34))
+
+# v16h 弓箭手：站在远处放箭的那种（手里一把弓，身上背箭袋）
+func _draw_archer(c: Vector2, sc: float, fc: Color) -> void:
+	var y := c.y + sin(_t * 4.0 + c.x * 0.1) * 2.0
+	var b := Vector2(c.x, y)
+	# 弓身（一弧）＋ 弦
+	draw_arc(b + Vector2(-16.0 * sc, -6.0 * sc), 22.0 * sc, -PI * 0.45, PI * 0.45, 14, Color(0.62, 0.44, 0.24), 3.0)
+	draw_line(b + Vector2(-16.0 * sc, -6.0 * sc) + Vector2(cos(-PI * 0.45), sin(-PI * 0.45)) * 22.0 * sc,
+		b + Vector2(-16.0 * sc, -6.0 * sc) + Vector2(cos(PI * 0.45), sin(PI * 0.45)) * 22.0 * sc,
+		Color(0.86, 0.84, 0.76), 1.5)
+	# 背后的箭袋
+	draw_rect(Rect2(b.x + 12.0 * sc, b.y - 40.0 * sc, 12.0 * sc, 30.0 * sc), Color(0.48, 0.34, 0.22))
+	for i in 3:
+		draw_line(Vector2(b.x + 14.0 * sc + float(i) * 4.0 * sc, b.y - 40.0 * sc),
+			Vector2(b.x + 14.0 * sc + float(i) * 4.0 * sc, b.y - 50.0 * sc), Color(0.90, 0.86, 0.72), 2.0)
+	# 人本体用小人（但**配色偏绿**＝远程一类，一眼分得开）
+	_stick(c, sc, Color(fc.r * 0.72, fc.g * 0.92, fc.b * 0.66), false)
 
 # 钱怪：一枚会蹦的铜钱（外圆内方，跟 HUD 那个图标一套）
 func _draw_coin(c: Vector2, sc: float, fc: Color) -> void:
