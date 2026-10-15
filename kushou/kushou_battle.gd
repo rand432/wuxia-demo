@@ -4363,6 +4363,35 @@ const HERO_ART := {
 "ironward": {"hair": "hood", "wpn": "shield", "col": Color(0.60, 0.62, 0.58)},
 "qihealer": {"hair": "crown", "wpn": "fan", "col": Color(0.72, 0.86, 0.94)},
 "shieldlord": {"hair": "crown", "wpn": "shield", "col": Color(0.58, 0.62, 0.70)},
+# ===== v17u（用户："外形全补齐"）：剩下 24 位也配上（原来都是默认小人）=====
+# 下品
+"tietouseng": {"hair": "", "wpn": "", "col": Color(0.74, 0.72, 0.68)},
+"bingshusheng": {"hair": "topknot", "wpn": "fan", "col": Color(0.86, 0.88, 0.84)},
+"xiaoqier": {"hair": "", "wpn": "", "col": Color(0.82, 0.72, 0.46)},
+"laobing": {"hair": "", "wpn": "blade", "col": Color(0.62, 0.52, 0.42)},
+"xinglin": {"hair": "long", "wpn": "staff", "col": Color(0.66, 0.90, 0.70)},
+"qiaofu": {"hair": "", "wpn": "blade", "col": Color(0.72, 0.56, 0.36)},
+"pozhen": {"hair": "topknot", "wpn": "blade", "col": Color(0.48, 0.54, 0.72)},
+"busheren": {"hair": "hood", "wpn": "blade", "col": Color(0.44, 0.62, 0.40)},
+"gengfu": {"hair": "hood", "wpn": "fan", "col": Color(0.50, 0.44, 0.38)},
+# 中品
+"zuijianxian": {"hair": "long", "wpn": "blade", "col": Color(0.88, 0.84, 0.62)},
+"yaopozi": {"hair": "long", "wpn": "staff", "col": Color(0.84, 0.78, 0.58)},
+"gushangzao": {"hair": "topknot", "wpn": "fan", "col": Color(0.92, 0.70, 0.34)},
+"gushi": {"hair": "hood", "wpn": "staff", "col": Color(0.40, 0.58, 0.36)},
+"kuaidaoshou": {"hair": "topknot", "wpn": "blade", "col": Color(0.80, 0.82, 0.84)},
+"chuangong": {"hair": "topknot", "wpn": "staff", "col": Color(0.56, 0.66, 0.74)},
+# 上品
+"jinjiaxianwei": {"hair": "crown", "wpn": "shield", "col": Color(0.90, 0.76, 0.36)},
+"huogong": {"hair": "topknot", "wpn": "staff", "col": Color(0.94, 0.52, 0.26)},
+"qinchi": {"hair": "long", "wpn": "fan", "col": Color(0.76, 0.72, 0.94)},
+"tiemianseng": {"hair": "hood", "wpn": "shield", "col": Color(0.66, 0.66, 0.62)},
+"lengyueniang": {"hair": "long", "wpn": "staff", "col": Color(0.70, 0.86, 0.96)},
+# 极品
+"baiqihouren": {"hair": "red", "wpn": "blade", "col": Color(0.72, 0.24, 0.26)},
+"dagongfeng": {"hair": "crown", "wpn": "staff", "col": Color(0.86, 0.78, 0.44)},
+"guijianchou": {"hair": "hood", "wpn": "blade", "col": Color(0.42, 0.18, 0.22)},
+"zuitaisui": {"hair": "topknot", "wpn": "fan", "col": Color(0.84, 0.44, 0.36)},
 }
 
 func set_hero_mate(id: String) -> void:
