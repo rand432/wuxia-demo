@@ -801,8 +801,11 @@ func _build_field() -> void:
 	_q_badge = _lbl(Vector2(94, 518), Vector2(56, 36), 22, Color(1.0, 0.42, 0.36))
 	_q_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_circle_btn("卡组", Vector2(22, 664), func(): _open_large("卡组"))
-	_circle_btn("存档", Vector2(594, 236), func(): _open_large("存档"))
-	_circle_btn("成就", Vector2(594, 372), func(): _open_large("成就"))
+	# v17w（用户："困兽主界面的成就和存档可以去掉了"）：
+	#   ⚠ 这两颗已挪到**主界面【困兽测试】的选关窗**里（点一下直接进游戏并弹出该窗），
+	#     战场右列不再重复放。右列现在是：设置 / 黑市（存档/成就的位置空出来）。
+	# _circle_btn("存档", Vector2(594, 236), func(): _open_large("存档"))
+	# _circle_btn("成就", Vector2(594, 372), func(): _open_large("成就"))
 	# v4b（用户："成就下面增加按钮 黑市【用于杀敌数兑换东西的 内容暂定】"）
 	_circle_btn("黑市", Vector2(594, 508), func(): _open_large("黑市"))
 	# v4c（用户："黑市下面加一个小型经验条 和等级"）——黑市钮正下方一条小经验条
@@ -4665,25 +4668,25 @@ var _stage_done := {}                     # 已通关的关卡 id（永久，存
 
 const STAGES := [
 	# 第一章 · 入门
-	{"id": "1-1", "n": "牢门初开", "mul": 1.0, "waves": 35, "cat": "卡组", "un": "磐石心", "set": "panshixin"},
-	{"id": "1-2", "n": "铁栅血痕", "mul": 1.0, "waves": 35, "cat": "卡组", "un": "铁布衫", "set": "tiebushan"},
-	{"id": "1-3", "n": "断锁残灯", "mul": 1.1, "waves": 35, "cat": "队员", "un": "白婆婆", "pid": "baipopo"},
-	{"id": "1-4", "n": "监牢深处", "mul": 1.1, "waves": 35, "cat": "卡组", "un": "断岳", "set": "duanyue"},
+	{"id": "1-1", "n": "牢门初开", "mul": 1.0, "waves": 20, "cat": "卡组", "un": "磐石心", "set": "panshixin"},
+	{"id": "1-2", "n": "铁栅血痕", "mul": 1.15, "waves": 20, "cat": "卡组", "un": "铁布衫", "set": "tiebushan"},
+	{"id": "1-3", "n": "断锁残灯", "mul": 1.3, "waves": 20, "cat": "队员", "un": "白婆婆", "pid": "baipopo"},
+	{"id": "1-4", "n": "监牢深处", "mul": 1.45, "waves": 20, "cat": "卡组", "un": "断岳", "set": "duanyue"},
 	# 第二章 · 进阶
-	{"id": "2-1", "n": "典吏巡夜", "mul": 1.3, "waves": 35, "cat": "宝物", "un": "灵晶袋", "trea": "灵晶袋"},
-	{"id": "2-2", "n": "五行乱阵", "mul": 1.3, "waves": 35, "cat": "卡组", "un": "五行", "set": "wuxing"},
-	{"id": "2-3", "n": "贪墨之狱", "mul": 1.4, "waves": 35, "cat": "装备卡", "un": "聚财珠", "set": "jucaizhu"},
-	{"id": "2-4", "n": "藤萝缠狱", "mul": 1.4, "waves": 35, "cat": "队员", "un": "沈青萝", "pid": "shenqingluo"},
+	{"id": "2-1", "n": "典吏巡夜", "mul": 1.9, "waves": 25, "cat": "宝物", "un": "灵晶袋", "trea": "灵晶袋"},
+	{"id": "2-2", "n": "五行乱阵", "mul": 2.1, "waves": 25, "cat": "卡组", "un": "五行", "set": "wuxing"},
+	{"id": "2-3", "n": "贪墨之狱", "mul": 2.3, "waves": 25, "cat": "装备卡", "un": "聚财珠", "set": "jucaizhu"},
+	{"id": "2-4", "n": "藤萝缠狱", "mul": 2.5, "waves": 25, "cat": "队员", "un": "沈青萝", "pid": "shenqingluo"},
 	# 第三章 · 困难
-	{"id": "3-1", "n": "龙纹石壁", "mul": 1.7, "waves": 35, "cat": "宝物", "un": "龙纹佩", "trea": "龙纹佩"},
-	{"id": "3-2", "n": "雷罚天牢", "mul": 1.7, "waves": 35, "cat": "卡组", "un": "雷罚", "set": "leifa"},
-	{"id": "3-3", "n": "传家之秘", "mul": 1.8, "waves": 35, "cat": "装备卡", "un": "传家宝", "set": "chuanjiabao"},
-	{"id": "3-4", "n": "鹰唳九霄", "mul": 1.8, "waves": 35, "cat": "队员", "un": "燕无归", "pid": "yanwugui"},
+	{"id": "3-1", "n": "龙纹石壁", "mul": 3.0, "waves": 30, "cat": "宝物", "un": "龙纹佩", "trea": "龙纹佩"},
+	{"id": "3-2", "n": "雷罚天牢", "mul": 3.3, "waves": 30, "cat": "卡组", "un": "雷罚", "set": "leifa"},
+	{"id": "3-3", "n": "传家之秘", "mul": 3.6, "waves": 30, "cat": "装备卡", "un": "传家宝", "set": "chuanjiabao"},
+	{"id": "3-4", "n": "鹰唳九霄", "mul": 3.9, "waves": 30, "cat": "队员", "un": "燕无归", "pid": "yanwugui"},
 	# 第四章 · 地狱
-	{"id": "4-1", "n": "火麟熔狱", "mul": 2.2, "waves": 35, "cat": "宠物", "un": "火麟", "pet": "lin"},
-	{"id": "4-2", "n": "诛心绝境", "mul": 2.2, "waves": 35, "cat": "卡组", "un": "诛心", "set": "zhuxin"},
-	{"id": "4-3", "n": "连环杀狱", "mul": 2.4, "waves": 35, "cat": "队员", "un": "雷小七", "pid": "leixiaoqi"},
-	{"id": "4-4", "n": "困兽之斗", "mul": 2.6, "waves": 35, "cat": "宝物", "un": "悟道果", "trea": "悟道果"},
+	{"id": "4-1", "n": "火麟熔狱", "mul": 4.4, "waves": 35, "cat": "宠物", "un": "火麟", "pet": "lin"},
+	{"id": "4-2", "n": "诛心绝境", "mul": 4.8, "waves": 35, "cat": "卡组", "un": "诛心", "set": "zhuxin"},
+	{"id": "4-3", "n": "连环杀狱", "mul": 5.2, "waves": 35, "cat": "队员", "un": "雷小七", "pid": "leixiaoqi"},
+	{"id": "4-4", "n": "困兽之斗", "mul": 5.6, "waves": 35, "cat": "宝物", "un": "悟道果", "trea": "悟道果"},
 ]
 
 func _stage_info(id: String) -> Dictionary:
