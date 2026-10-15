@@ -4349,6 +4349,20 @@ const HERO_ART := {
 	"ximenlie": {"hair": "red", "wpn": "blade", "col": Color(0.86, 0.48, 0.32)},
 	"duniangzi": {"hair": "long", "wpn": "fan", "col": Color(0.66, 0.56, 0.80)},
 	"xuanjizi": {"hair": "crown", "wpn": "staff", "col": Color(0.72, 0.78, 0.90)},
+# ===== v17t：v17q/v17r 新做的 10 位配外形（原来都是默认小人，认不出来）=====
+#   颜色按"干什么的"分：药系绿、气系青、阴系紫、血系红、盾系铁灰、鼓系金。
+# 换算系 5 位
+"yaowang": {"hair": "crown", "wpn": "staff", "col": Color(0.62, 0.88, 0.62)},
+"qizong": {"hair": "topknot", "wpn": "fan", "col": Color(0.66, 0.88, 0.92)},
+"xuanyin": {"hair": "long", "wpn": "staff", "col": Color(0.68, 0.56, 0.92)},
+"xuesha": {"hair": "red", "wpn": "blade", "col": Color(0.88, 0.28, 0.30)},
+"dunwei": {"hair": "hood", "wpn": "shield", "col": Color(0.70, 0.72, 0.74)},
+# 团队增益 5 位
+"drummaster": {"hair": "topknot", "wpn": "fan", "col": Color(0.94, 0.78, 0.38)},
+"medic": {"hair": "long", "wpn": "staff", "col": Color(0.72, 0.92, 0.78)},
+"ironward": {"hair": "hood", "wpn": "shield", "col": Color(0.60, 0.62, 0.58)},
+"qihealer": {"hair": "crown", "wpn": "fan", "col": Color(0.72, 0.86, 0.94)},
+"shieldlord": {"hair": "crown", "wpn": "shield", "col": Color(0.58, 0.62, 0.70)},
 }
 
 func set_hero_mate(id: String) -> void:
