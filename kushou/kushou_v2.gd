@@ -652,6 +652,14 @@ var _chal_cd := [12.0, 0.0, 40.0, 90.0, 0.0]      # 五个挑战的冷却（0＝
 # v2c：第一格从"金币挑战"改名"**文钱挑战**"（用户："金币挑战换成文钱挑战 名字改一下即可"）——
 #   本作里那门钱就叫"文钱"，别混着两种叫法。
 var _chal_names := ["文钱挑战", "灵晶挑战", "经验挑战", "宝物挑战", "boss挑战"]
+# v18a（用户："挑战关卡不是一开始就全部解锁的 就是根据波次逐步解锁
+#        第五波解锁宝物 第10波解锁boss 经验灵晶金币 初始解锁"）：
+#   每种挑战的**解锁波数**（1 = 开局就能用）
+const CHAL_MIN_WAVE := [1, 1, 1, 5, 10]
+
+# 这一种挑战解锁了吗
+func _chal_unlocked(i: int) -> bool:
+	return _wave >= int(CHAL_MIN_WAVE[clampi(i, 0, CHAL_MIN_WAVE.size() - 1)])
 var _chal_descs := ["一群钱怪（6 只），掉 30~60 文钱", "一群晶怪（3 只），每只掉 6~10 灵晶", "一群书怪（4 只），掉一大笔经验", "一只大宝箱怪（大怪），掉宝物或大钱", "boss 亲自来（大怪），赢额外名声）"]
 var _auto_chal := false                            # 自动挑战开关（弹窗底部那颗）
 var _chal_lbs: Array = []
@@ -3135,7 +3143,9 @@ const YUHU_NAME := "玲珑玉壶"
 # v13z（用户："玉壶改为 凡品 10%内力生命恢复 20s冷却 自动改为冷却好就用"）：
 #   凡品＝回复 10% · 冷却 20 秒；后面每档 +2~3% 回复、−1 秒冷却
 const YUHU_HEAL := [0.10, 0.12, 0.14, 0.16, 0.19, 0.22]
-const YUHU_CD := [20.0, 19.0, 18.0, 17.0, 16.0, 15.0]
+# v18a（用户："玉壶冷却提升至90s"）：原来是 20~15 秒（太勤了，等于无限奶）
+#   现在 90 秒起，靠升档降到 50 秒（升档仍然有意义）
+const YUHU_CD := [90.0, 82.0, 74.0, 66.0, 58.0, 50.0]
 # v13n（用户："玉壶都加"）：升档价——**花灵晶，越升越贵**（5 次升满：凡→下→中→上→极→绝）
 const YUHU_UP_PRICE := [80, 160, 280, 450, 700]
 const YUHU_UP_NAME := "玉壶秘卷"
@@ -6256,6 +6266,11 @@ func _chal_amount_cn(i: int) -> String:
 func _chal_press(i: int) -> void:
 	if i >= _chal_cd.size():
 		return
+	# v18a（用户："挑战关卡不是一开始就全部解锁的 就是根据波次逐步解锁"）：
+	#   没解锁的挑战点了没反应，只提示几波开
+	if not _chal_unlocked(i):
+		_hint.text = "「" + str(_chal_names[i]) + "」还没解锁——打到第 " + str(int(CHAL_MIN_WAVE[i])) + " 波才开"
+		return
 	var cd := float(_chal_cd[i])
 	if cd > 0.0:
 		_hint.text = "「" + str(_chal_names[i]) + "」冷却中（还要 " + str(int(ceil(cd))) + " 秒）"
@@ -6506,7 +6521,8 @@ func _process(delta: float) -> void:
 		if _auto_chal and i == 0 and not _over and _field != null and bool(_field.running):
 			var pressed: Array = []
 			for aci in _chal_cd.size():
-				if float(_chal_cd[aci]) <= 0.0:
+				# v18a：没解锁的挑战不自动打
+				if float(_chal_cd[aci]) <= 0.0 and _chal_unlocked(aci):
 					_chal_press(aci)
 					pressed.append(str(_chal_names[aci]))
 			if not pressed.is_empty():
