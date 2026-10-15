@@ -680,10 +680,19 @@ func _ready() -> void:
 	_restart_run()
 	_sync_avatar()
 
+# v17v（用户："存档和成就按钮放在困兽测试按钮出的窗口里"）：
+#   主界面选关窗里点［存档］/［成就］时，先设这个，困兽开屏后自动把那个窗弹出来。
+static var boot_popup := ""
+
 func open() -> void:
 	_want_open = true
 	visible = true
 	move_to_front()
+		# v17v：带着指定的窗进来就直接弹（主界面选关窗的［存档］/［成就］走这条）
+	if boot_popup != "":
+		var bp := boot_popup
+		boot_popup = ""
+		_open_large.call_deferred(bp)
 	# v16q（用户："换一首吧"）：战斗曲改成**可换**的（原来写死 bgm_battle，那首里有呐喊）
 	Audio.play_bgm(Audio.battle_track(), 0.6)
 

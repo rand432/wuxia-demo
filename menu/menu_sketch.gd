@@ -1251,10 +1251,31 @@ func _open_stage_pick() -> void:
 	cb.text = "取消"
 	cb.add_theme_font_size_override("font_size", 22)
 	cb.pressed.connect(func(): _stage_ov.queue_free())
+	# v17v（用户："存档和成就按钮放在困兽测试按钮出的窗口里"）：
+	#   不用先选关 —— 这两颗点了直接进困兽并弹出对应的窗。
+	var by := gy + 4.0 * (ch + 14.0) + 10.0
+	for bi in 2:
+		var bx2 := Button.new()
+		bx2.position = Vector2(vp.x * 0.5 - 350.0 + float(bi) * 480.0, by)
+		bx2.size = Vector2(220, 62)
+		bx2.text = "存档" if bi == 0 else "成就"
+		bx2.add_theme_font_size_override("font_size", 22)
+		bx2.pressed.connect(_pick_popup.bind("存档" if bi == 0 else "成就"))
+		ov.add_child(bx2)
 	ov.add_child(cb)
 	add_child(ov)
 	move_child(ov, get_child_count() - 1)
 	_stage_ov = ov
+
+# v17v：从主界面选关窗直接开困兽的某个窗（存档/成就）
+func _pick_popup(which: String) -> void:
+	var kz = load("res://kushou/kushou_v2.gd")
+	if kz != null:
+		kz.boot_popup = which
+	if _stage_ov != null and is_instance_valid(_stage_ov):
+		_stage_ov.queue_free()
+		_stage_ov = null
+	_open_kushou_v2()
 
 func _pick_stage(id: String, nm: String) -> void:
 	var kz = load("res://kushou/kushou_v2.gd")
