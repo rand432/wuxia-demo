@@ -448,7 +448,7 @@ func spawn_challenge(kind_i: int, n: int) -> void:
 	#   （替换脚本把唯一语句换成注释，导致 if 空块报错，这里连同 if 一起清掉。）
 # 叫 boss（阶 1~3）
 func start_boss(tier: int) -> void:
-	var tt := clampi(tier, 1, 3)
+	var tt := clampi(tier, 1, 4)          # v18b：阶上限 3 → 4（第 4 阶 4 只 boss 原来永远选不到）
 	var d := _boss_pick(tt)                     # v14g：每阶 3 只随机一只（技能/大招/词缀都不同）
 	var mul := pow(WAVE_HP, float(wave - 1)) * foe_mul * diff_mul()
 	_spawn_foe("boss", 1.0, 1.0, true, tt, str(d["name"]))
@@ -497,7 +497,7 @@ func start_boss(tier: int) -> void:
 	f["baffix"] = str(d.get("affix", ""))
 	f["ult_t"] = float(d.get("ult_cd", 14.0))     # v14g：大招计时
 	boss_alive = true
-	_banner = ["", "一阶 boss", "二阶 boss", "三阶 boss"][tt] + "　" + str(d["name"])
+	_banner = ["", "一阶 boss", "二阶 boss", "三阶 boss", "四阶 boss"][tt] + "　" + str(d["name"])
 	_banner_t = 2.4
 	_push_float(hero_pos.x + 80.0, hero_pos.y - 120.0, str(d.get("affix", "")), Color(0.96, 0.72, 0.42), true)
 	# v16o（用户："背景喊杀声太多了 其实没必要有喊杀声"）：已去掉喊杀/战鼓声
@@ -525,7 +525,7 @@ func spawn_pack(kind: String) -> void:
 			_spawn_foe("treasure", 9.0, 1.0, false, 1, "宝箱怪")
 		"boss":
 			_boss_seq += 1
-			start_boss(clampi(1 + _boss_seq / 2, 1, 3))
+			start_boss(clampi(1 + _boss_seq / 2, 1, 4))
 	_banner = "挑战：刷出 " + str(foes.size()) + " 只"
 	_banner_t = 1.6
 
@@ -5296,7 +5296,7 @@ func _draw() -> void:
 		var r3 := clampf(float(bo["hp"]) / maxf(1.0, float(bo["hp_max"])), 0.0, 1.0)
 		draw_rect(Rect2(bx3 + 3.0, 11.0, (bw3 - 6.0) * r3, 24.0), Color(0.70, 0.18, 0.16))
 		draw_rect(Rect2(bx3, 8.0, bw3, 30.0), Color(0.86, 0.72, 0.40, 0.85), false, 2.0)
-		var tag: String = str(["", "一阶", "二阶", "三阶"][clampi(int(bo["tier"]), 1, 3)])
+		var tag: String = str(["", "一阶", "二阶", "三阶", "四阶"][clampi(int(bo["tier"]), 1, 4)])
 		draw_string(ThemeDB.fallback_font, Vector2(bx3 + 12.0, 30.0), tag + "　" + str(bo["name"]),
 			HORIZONTAL_ALIGNMENT_LEFT, bw3 - 24.0, 22, Color(0.98, 0.94, 0.88))
 	# 开场等待：屏幕上写清"为什么还没动"

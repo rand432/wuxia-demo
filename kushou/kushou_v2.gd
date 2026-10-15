@@ -6490,7 +6490,9 @@ func _process(delta: float) -> void:
 		if _wave % 10 == 0:
 			_trea_refresh += 1
 			_hint.text = "宝物刷新 +1（每 10 波一次 · 现有 " + str(_trea_refresh) + " 次）"
-		_boss_tier = clampi(1 + _wave / 10, 1, 3)
+		# v18b（交接文档 §3 ⑤ 真 bug）：阶上限 **3 → 4** ——
+		#   原来封在 3，第 4 阶那 4 只 boss（九幽魔君/血海罗刹/万蛊虫母/困兽·终焉）**永远出不了场**。
+		_boss_tier = clampi(1 + _wave / 10, 1, 4)
 		# v9a：商路/财神套——**每过一波额外给灵晶**（用户："都可"里的经济线）
 		var wc := int(_extra.get("wave_crystal", 0.0))
 		if wc > 0:
@@ -6542,7 +6544,7 @@ func _process(delta: float) -> void:
 			lb.text = ("就绪" if cd <= 0.0 else "冷却 " + str(int(ceil(cd))) + "s")
 			lb.add_theme_color_override("font_color", GREEN if cd <= 0.0 else DIM)
 	_wave_lb.text = "波 " + str(_wave) + "/" + str(_wave_max)
-	var tier_cn: String = str(["", "一阶", "二阶", "三阶"][clampi(_boss_tier, 1, 3)])
+	var tier_cn: String = str(["", "一阶", "二阶", "三阶", "四阶"][clampi(_boss_tier, 1, 4)])
 	# v4e：倒计时按"分:秒"走——浴血把 boss 推到 180 秒后，原来那套 "00:180" 就露馅了
 	var bs := int(ceil(maxf(0.0, _boss_sec)))
 	_boss_lb.text = tier_cn + " boss " + ("%02d:%02d" % [bs / 60, bs % 60])
@@ -6645,7 +6647,7 @@ func _boss_arrive() -> void:
 		_close_popup()
 	# 真叫一只 boss 下来（阶随波数涨）
 	_boss_seq += 1
-	_field.start_boss(clampi(1 + _boss_seq / 2, 1, 3))
+	_field.start_boss(clampi(1 + _boss_seq / 2, 1, 4))
 	_hint.text = "boss 入场（第 " + str(_wave) + " 波）——顶上那条是它的血条"
 
 # ---- 战场信号 ----
@@ -7044,7 +7046,7 @@ func _on_special(kind: String, n: int, pos: Vector2) -> void:
 			_hint.text = "宝箱怪掉宝物——飞进［装备·宝物］"
 
 func _on_boss(tier: int) -> void:
-	_hint.text = ["", "一阶", "二阶", "三阶"][clampi(tier, 1, 3)] + " boss 下场了——打赢有额外名声"
+	_hint.text = ["", "一阶", "二阶", "三阶", "四阶"][clampi(tier, 1, 4)] + " boss 下场了——打赢有额外名声"
 
 func _on_hero_down() -> void:
 	# v15i：⚠ 这里原来**连着加了两遍**（复制粘贴留下的），导致"浴血次数"翻倍 ——
