@@ -4946,59 +4946,32 @@ const UNLOCKS := [
 	{"id": "u_set_suozijia", "cat": "装备卡", "n": "锁子甲", "d": "护盾型防具", "price": 1000, "set": "suozijia"},
 	{"id": "u_set_yubanzhi", "cat": "装备卡", "n": "玉扳指", "d": "全属性 +8%", "price": 1400, "set": "yubanzhi"},
 	{"id": "u_set_shenbing", "cat": "装备卡", "n": "神兵", "d": "开局自带一件上品装备", "price": 1400, "set": "shenbing"},
-	{"id": "u_part_jicanghai", "cat": "队员", "n": "季沧海", "d": "火系传火", "price": 1400, "pid": "jicanghai"},
-	{"id": "u_part_suqingluan", "cat": "队员", "n": "苏青鸾", "d": "飞匕物理", "price": 1400, "pid": "suqingluan"},
-	{"id": "u_part_ximenlie", "cat": "队员", "n": "西门烈", "d": "烈焰刀范围", "price": 1800, "pid": "ximenlie"},
-	{"id": "u_part_duniangzi", "cat": "队员", "n": "毒娘子", "d": "全场挂毒", "price": 1800, "pid": "duniangzi"},
-# v17f（用户："存档的伙伴 不要给绝品"）：绝品只能靠进化/事件养出来，不在存档里卖 —— {"id": "u_part_cuisanniang", "cat": "队员", "n": "崔三娘", "d": "召唤蛟龙", "price": 2400, "pid": "cuisanniang"},
-# v17f（用户："存档的伙伴 不要给绝品"）：绝品只能靠进化/事件养出来，不在存档里卖 —— {"id": "u_part_xuanjizi", "cat": "队员", "n": "玄机子", "d": "时间停止", "price": 2400, "pid": "xuanjizi"},
-	# v15v（用户："这个伙伴也不是招募的 也是解锁选择初始出战的"）：
-	#   把剩下 22 位补上银两解锁条目 —— 这样**全部 32 位都能"解锁 → 选初始出战"**，
-	#   不必靠局内随机招募（随机招募那条线保留，但只是"局内临时多一位"）。
-	#   按品质定价：下品 400 · 中品 600 · 上品 800 · 极品 1100（对照现有 700~1200 的档）。
-	#   全解锁合计 ≈ 20,000 银两 ≈ 4 局（35 波一局约 5,700）。
-	{"id": "u_part_anying", "cat": "队员", "n": "暗影裁决", "d": "肝·暗影持续期杀敌涨生命上限", "price": 800, "pid": "anying"},
-	{"id": "u_part_chenshi", "cat": "队员", "n": "陈石", "d": "刺骨·持续期挨打反真实伤害", "price": 1200, "pid": "chenshi"},
-	{"id": "u_part_duyanbiao", "cat": "队员", "n": "独眼彪", "d": "杀气·持续期攻击大幅提升", "price": 800, "pid": "duyanbiao"},
-	{"id": "u_part_kurong", "cat": "队员", "n": "枯荣", "d": "纳气·持续期内力上限提高", "price": 800, "pid": "kurong"},
-	{"id": "u_part_tietouseng", "cat": "队员", "n": "铁头僧", "d": "铁头功·一头撞上去，血越少撞得越狠", "price": 800, "pid": "tietouseng"},
-	{"id": "u_part_bingshusheng", "cat": "队员", "n": "病书生", "d": "咳血·给敌人挂木系持续伤害", "price": 800, "pid": "bingshusheng"},
-	{"id": "u_part_xiaoqier", "cat": "队员", "n": "小乞儿", "d": "顺手牵羊·持续期每杀一只多掉文钱", "price": 800, "pid": "xiaoqier"},
-	{"id": "u_part_laobing", "cat": "队员", "n": "瘸腿老兵", "d": "死撑·血低于一半时全伤害减免", "price": 800, "pid": "laobing"},
-	# v15v：补上漏掉的 3 位（探针查出来的「没有解锁条目」）
-	{"id": "u_part_fadu", "cat": "队员", "n": "法度", "d": "怒目金刚·给自己套盾并炸一圈", "price": 1600, "pid": "fadu"},
-	{"id": "u_part_liuqingqing", "cat": "队员", "n": "柳青青", "d": "回春·持续治疗", "price": 1600, "pid": "liuqingqing"},
-# v17f（用户："存档的伙伴 不要给绝品"）：绝品只能靠进化/事件养出来，不在存档里卖 —— {"id": "u_part_zhangdaoling", "cat": "队员", "n": "张道陵", "d": "天雷·范围雷击", "price": 2400, "pid": "zhangdaoling"},
-	# v15w 新增 12 位的解锁条目
-	{"id": "u_part_xinglin", "cat": "队员", "n": "杏林医女", "d": "回春针·小治疗并暂时吸血", "price": 800, "pid": "xinglin"},
-	{"id": "u_part_qiaofu", "cat": "队员", "n": "樵夫", "d": "劈柴·重击并击退", "price": 800, "pid": "qiaofu"},
-	{"id": "u_part_pozhen", "cat": "队员", "n": "破阵刀客", "d": "破甲·减防并伤害", "price": 800, "pid": "pozhen"},
-	{"id": "u_part_busheren", "cat": "队员", "n": "捕蛇人", "d": "蛇咬·对中毒目标翻倍", "price": 800, "pid": "busheren"},
-	{"id": "u_part_gengfu", "cat": "队员", "n": "更夫", "d": "报更·致盲最近的敌人", "price": 800, "pid": "gengfu"},
-	{"id": "u_part_gushi", "cat": "队员", "n": "蛊师", "d": "蛊毒·给最近两名挂毒", "price": 1200, "pid": "gushi"},
-	{"id": "u_part_kuaidaoshou", "cat": "队员", "n": "快刀手", "d": "快刀·连砍三刀", "price": 1200, "pid": "kuaidaoshou"},
-	{"id": "u_part_chuangong", "cat": "队员", "n": "老船工", "d": "撑篙·水系伤害并推开", "price": 1200, "pid": "chuangong"},
-	{"id": "u_part_tiemianseng", "cat": "队员", "n": "铁面僧", "d": "铁面·减伤并回血", "price": 1600, "pid": "tiemianseng"},
-	{"id": "u_part_lengyueniang", "cat": "队员", "n": "冷月娘", "d": "寒霜·范围伤害并减速", "price": 1600, "pid": "lengyueniang"},
-	{"id": "u_part_guijianchou", "cat": "队员", "n": "鬼见愁", "d": "斩首·打残血、击杀减冷却", "price": 2200, "pid": "guijianchou"},
-	{"id": "u_part_zuitaisui", "cat": "队员", "n": "醉太岁", "d": "酒气·加攻并命中回内力", "price": 2200, "pid": "zuitaisui"},
-	{"id": "u_part_shigandang", "cat": "队员", "n": "石敢当", "d": "坚守·替主角扛伤并减伤", "price": 1200, "pid": "shigandang"},
-	{"id": "u_part_qianduoduo", "cat": "队员", "n": "钱多多", "d": "点金·持续期每杀一只掉文钱", "price": 1200, "pid": "qianduoduo"},
-	{"id": "u_part_baipopo", "cat": "队员", "n": "白婆婆", "d": "续命·定期回血", "price": 1200, "pid": "baipopo"},
-	{"id": "u_part_zuijianxian", "cat": "队员", "n": "醉剑仙", "d": "醉里挑灯·晃上去连刺两下", "price": 1200, "pid": "zuijianxian"},
-	{"id": "u_part_yaopozi", "cat": "队员", "n": "药婆子", "d": "金针·回血并定身最近敌人", "price": 1200, "pid": "yaopozi"},
-	{"id": "u_part_gushangzao", "cat": "队员", "n": "鼓上蚤", "d": "踏鼓·持续期攻速提高", "price": 1200, "pid": "gushangzao"},
-	{"id": "u_part_leixiaoqi", "cat": "队员", "n": "雷小七", "d": "连环腿·定期连踢两脚", "price": 1600, "pid": "leixiaoqi"},
-	{"id": "u_part_tiexinwu", "cat": "队员", "n": "铁无心", "d": "铁壁·格挡窗口内免伤", "price": 1600, "pid": "tiexinwu"},
-	{"id": "u_part_shenqingluo", "cat": "队员", "n": "沈青萝", "d": "藤缚·缠住最近的敌人并造成木系伤害", "price": 1600, "pid": "shenqingluo"},
-	{"id": "u_part_yanwugui", "cat": "队员", "n": "燕无归", "d": "鹰眼·持续期暴击率提高", "price": 1600, "pid": "yanwugui"},
-	{"id": "u_part_jinjiaxianwei", "cat": "队员", "n": "金甲校尉", "d": "拒马·挨打减伤并反弹", "price": 1600, "pid": "jinjiaxianwei"},
-	{"id": "u_part_huogong", "cat": "队员", "n": "火工道人", "d": "三昧真火·点燃最近的敌人", "price": 1600, "pid": "huogong"},
-	{"id": "u_part_qinchi", "cat": "队员", "n": "琴痴", "d": "乱神曲·全场定身", "price": 1600, "pid": "qinchi"},
-	{"id": "u_part_ximenlie", "cat": "队员", "n": "西门烈", "d": "烈焰刀·劈出火刃横扫身前", "price": 2200, "pid": "ximenlie"},
-	{"id": "u_part_duniangzi", "cat": "队员", "n": "毒娘子", "d": "万毒·给全场敌人挂毒", "price": 2200, "pid": "duniangzi"},
-	{"id": "u_part_baiqihouren", "cat": "队员", "n": "白起后人", "d": "杀神·按目标已损失气血打真实伤害", "price": 2200, "pid": "baiqihouren"},
-	{"id": "u_part_dagongfeng", "cat": "队员", "n": "大内供奉", "d": "罡气·给自己罩一层护盾", "price": 2200, "pid": "dagongfeng"},
+	# ============================================================
+	# v18d（③"存档只留中品/上品 · 不同类型不重复"）：
+	#   存档卖的伙伴**只留中品/上品**，并且**按定位类型去重**——同一类定位只留 1 位（9 类 9 位）。
+	#   下面是"从哪儿来、到哪儿去"的账（下一轮要调数值先看这里）：
+	#     · 下架的 14 位**下品**：暗影裁决/独眼彪/枯荣/铁头僧/病书生/小乞儿/瘸腿老兵/
+	#       杏林医女/樵夫/破阵刀客/捕蛇人/更夫/石敢当/钱多多
+	#       → 不进存档、不进关卡；局内随机招募照旧能碰上，也能直接当初始出战
+	#         （_mate_is_unlocked()：没有解锁条目 = 不靠解锁拿，当作已解锁）
+	#     · 下架的 8 位**极品**：季沧海/苏青鸾/西门烈/毒娘子/鬼见愁/醉太岁/白起后人/大内供奉
+	#       → 改由**关卡首通**送出（见 STAGES 的 un2/un3），不再花银两
+	#     · 去重挤掉的 6 位（中品/上品，定位被别人顶了）：
+	#       醉剑仙(物理·快刀手顶) · 老船工(元素·冷月娘顶) · 药婆子(治疗·柳卿卿顶) ·
+	#       蛊师(召唤·火工道人顶) · 铁无心+法度(防御·铁面僧/金甲校尉顶)
+	#     · 3 位**绝品**（崔三娘/玄机子/张道陵）v17f 就已下架：绝品只从进化/特殊事件来
+	#     · 关卡首通已经给的 4 位（白婆婆/沈青萝/燕无归/雷小七）在本表里也摘掉了
+	#       —— 两条线不重合，见 STAGES 与 _stage_grant_ids()
+	# ============================================================
+	{"id": "u_part_chenshi", "cat": "队员", "n": "陈石", "d": "刺骨·持续期挨打反真实伤害", "role": "反伤坦克", "price": 1200, "pid": "chenshi"},
+	{"id": "u_part_kuaidaoshou", "cat": "队员", "n": "快刀手", "d": "快刀·连砍三刀", "role": "物理输出", "price": 1200, "pid": "kuaidaoshou"},
+	{"id": "u_part_gushangzao", "cat": "队员", "n": "鼓上蚤", "d": "踏鼓·持续期攻速提高", "role": "增益", "price": 1200, "pid": "gushangzao"},
+	{"id": "u_part_liuqingqing", "cat": "队员", "n": "柳卿卿", "d": "回春·治疗自己并给敌人挂毒", "role": "治疗", "price": 1600, "pid": "liuqingqing"},
+	{"id": "u_part_lengyueniang", "cat": "队员", "n": "冷月娘", "d": "寒霜·范围伤害并减速", "role": "元素输出", "price": 1600, "pid": "lengyueniang"},
+	{"id": "u_part_tiemianseng", "cat": "队员", "n": "铁面僧", "d": "铁面·减伤并回血", "role": "格挡减伤", "price": 1600, "pid": "tiemianseng"},
+	{"id": "u_part_jinjiaxianwei", "cat": "队员", "n": "金甲校尉", "d": "拒马·挨打减伤并反弹", "role": "护盾", "price": 1600, "pid": "jinjiaxianwei"},
+	{"id": "u_part_huogong", "cat": "队员", "n": "火工道人", "d": "三昧真火·放 2 只火鸦", "role": "召唤", "price": 1600, "pid": "huogong"},
+	{"id": "u_part_qinchi", "cat": "队员", "n": "琴痴", "d": "乱神曲·定身最近 5 名", "role": "控场", "price": 1600, "pid": "qinchi"},
 	{"id": "u_trea_tianlei", "cat": "宝物", "n": "天雷符", "d": "全场 300% 雷伤", "price": 800, "trea": "天雷符"},
 	{"id": "u_trea_dingshen", "cat": "宝物", "n": "定身符", "d": "全场定身 5 秒", "price": 800, "trea": "定身符"},
 	{"id": "u_trea_kuangxue", "cat": "宝物", "n": "狂血丹", "d": "15 秒攻击 +150%", "price": 1100, "trea": "狂血丹"},
@@ -5114,7 +5087,8 @@ func _fill_save(p: Control, y: float, sz: Vector2) -> float:
 			cl.size = Vector2(660, 34)
 			cl.add_theme_font_size_override("font_size", 22)
 			cl.add_theme_color_override("font_color", SEAL)
-			cl.text = "—— " + last_cat + " ——"
+			# v18d（③）：队员那一段把"只卖中品/上品 · 每类定位一位"写在标题上
+			cl.text = ("—— 队员（只卖中品/上品 · 每类定位一位）——" if last_cat == "队员" else "—— " + last_cat + " ——")
 			p.add_child(cl)
 			ly += 40.0
 		var qc := GOLD if got else Color(INK.r, INK.g, INK.b, 0.75)
@@ -5135,6 +5109,10 @@ func _fill_save(p: Control, y: float, sz: Vector2) -> float:
 		l1.add_theme_font_size_override("font_size", 24)
 		l1.add_theme_color_override("font_color", qc)
 		l1.text = str(u["n"])
+		# v18d（③）：队员行把品级与定位挂在名字后面 —— 一眼看得出"每类定位只有一位"
+		if u.has("pid") and _field != null:
+			var pq := str((_field.PARTNER_INFO[str(u["pid"])] as Dictionary).get("quality", ""))
+			l1.text = str(u["n"]) + "　" + pq + ("·" + str(u["role"]) if u.has("role") else "")
 		box.add_child(l1)
 		var l2 := Label.new()
 		l2.position = Vector2(14, 48)
