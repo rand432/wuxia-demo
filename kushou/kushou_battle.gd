@@ -2269,6 +2269,38 @@ const SKILL_POOL := [
 		"desc": "攻击 +3%/层【内力消耗 +20/层】", "anim": "酒更烈"},
 	{"id": "zuitaisui_cd", "name": "酒气·减冷却", "kind": "num", "max": 3, "req_p": "zuitaisui",
 		"desc": "冷却 −3 秒（现 <CD> 秒）【内力消耗 +20/层】", "anim": "喝得更勤"},
+	# ===== v17s：v17q/v17r 新做的 10 位补强化档位 =====
+	#   ⚠ 之前漏了 —— 换算系的 grp_lv 永远是 0，"单体→群体"的进化根本不会触发。
+	{"id": "yaowang_grp", "name": "回春诀·群体化", "kind": "mech", "max": 1, "req_p": "yaowang",
+		"desc": "伤害从**单体**变**最近 3 名**", "anim": "花开满堂"},
+	{"id": "qizong_grp", "name": "归元劲·群体化", "kind": "mech", "max": 1, "req_p": "qizong",
+		"desc": "伤害从**单体**变**最近 3 名**", "anim": "气贯长虹"},
+	{"id": "xuanyin_grp", "name": "阴煞诀·群体化", "kind": "mech", "max": 1, "req_p": "xuanyin",
+		"desc": "伤害从**单体**变**最近 3 名**", "anim": "阴风四起"},
+	{"id": "xuesha_grp", "name": "血魔功·群体化", "kind": "mech", "max": 1, "req_p": "xuesha",
+		"desc": "伤害从**单体**变**最近 3 名**", "anim": "血染八方"},
+	{"id": "dunwei_grp", "name": "铁壁反震·群体化", "kind": "mech", "max": 1, "req_p": "dunwei",
+		"desc": "伤害从**单体**变**最近 3 名**", "anim": "盾震四方"},
+	{"id": "drummaster_pow", "name": "战鼓·加攻速", "kind": "num", "max": 3, "req_p": "drummaster",
+		"desc": "攻速 +2%/层", "anim": "鼓声更急"},
+	{"id": "drummaster_dur", "name": "战鼓·加持续", "kind": "num", "max": 3, "req_p": "drummaster",
+		"desc": "持续 +1 秒/层", "anim": "余音绕梁"},
+	{"id": "medic_pow", "name": "回春阵·加回复", "kind": "num", "max": 3, "req_p": "medic",
+		"desc": "回血 +1.5%/层", "anim": "药香更浓"},
+	{"id": "medic_dur", "name": "回春阵·加持续", "kind": "num", "max": 3, "req_p": "medic",
+		"desc": "持续 +1 秒/层", "anim": "春意更久"},
+	{"id": "ironward_pow", "name": "铁壁阵·加反伤", "kind": "num", "max": 3, "req_p": "ironward",
+		"desc": "反伤 +2%/层", "anim": "棘刺更利"},
+	{"id": "ironward_dur", "name": "铁壁阵·加持续", "kind": "num", "max": 3, "req_p": "ironward",
+		"desc": "持续 +1 秒/层", "anim": "阵脚更稳"},
+	{"id": "qihealer_pow", "name": "归元阵·加回气", "kind": "num", "max": 3, "req_p": "qihealer",
+		"desc": "回内 +2%/层", "anim": "气旋更盛"},
+	{"id": "qihealer_dur", "name": "归元阵·加持续", "kind": "num", "max": 3, "req_p": "qihealer",
+		"desc": "持续 +1 秒/层", "anim": "绵延不绝"},
+	{"id": "shieldlord_pow", "name": "玄武阵·加减伤", "kind": "num", "max": 3, "req_p": "shieldlord",
+		"desc": "减伤 +1.5%/层", "anim": "龟甲更厚"},
+	{"id": "shieldlord_dur", "name": "玄武阵·加持续", "kind": "num", "max": 3, "req_p": "shieldlord",
+		"desc": "持续 +1 秒/层", "anim": "玄武长守"},
 
 ]
 func skill_lv(id: String) -> int:
@@ -3873,7 +3905,7 @@ func _cast_ironward() -> void:
 func _cast_qihealer() -> void:
 	var p: Dictionary = partners["qihealer"]
 	var v := team_buff("wit", 0.06 + 0.02 * float(p.get("pow_lv", 0)), 0.02)
-	team_buff_apply("mpregen", v, 6.0 + 1.0 * float(p.get("dur_lv", 0)), "归元阵·回气", Color(0.66, 0.86, 1.0))
+	team_buff_apply("mp_regen", v, 6.0 + 1.0 * float(p.get("dur_lv", 0)), "归元阵·回气", Color(0.66, 0.86, 1.0))
 
 # 盾令官：全队减伤（随臂力）
 func _cast_shieldlord() -> void:
