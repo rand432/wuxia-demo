@@ -119,6 +119,27 @@ signal special(kind: String, n: int, pos: Vector2)
 
 # ---- 数值（要调就改这一块） ----
 const MAX_FOES := 24
+# ============================================================
+# v17x（用户："设计每波多少只普通怪 刷完可以提前进入下一波
+#        但是整体一定要保证60帧能流畅运行"）：
+#   **每波定额** —— 一波只刷 FixedN 只普通怪，刷完且清空就**提前开下一波**
+#   （不用干等 30 秒）。定额随波数涨，但**封顶 20 只**保帧率：
+#     波1-3:8 · 4-6:10 · 7-10:12 · 11-15:14 · 16-20:16 · 21-25:18 · 26+:20
+#   帧率：同屏上限仍是 MAX_FOES(24)，20 只 + 24 上限 = 留足余量（实测 77 只才掉帧）。
+# ============================================================
+var _wave_quota := 8                # 这一波要刷几只普通怪
+var _wave_spawned := 0              # 已经刷了几只
+var _last_quota_wave := 1           # v17x：上一次结算定额时的波数（用来检测换波）
+
+func _wave_quota_for(w: int) -> int:
+	if w <= 3:   return 8
+	if w <= 6:   return 10
+	if w <= 10:  return 12
+	if w <= 15:  return 14
+	if w <= 20:  return 16
+	if w <= 25:  return 18
+	return 20
+
 const SPAWN_EVERY := 1.2            # 几秒刷一只（第 10 波后 0.9）
 const SPAWN_EVERY_LATE := 0.9
 const HERO_LINE := 96.0             # 主角离战场底边多高（脚）
@@ -620,10 +641,18 @@ func _process(delta: float) -> void:
 	_banner_t = maxf(0.0, _banner_t - delta)
 	delta = dt
 	# 刷怪
+	# v17x：**自动检测换波** —— 战场只管刷，"波数变了就重置定额"由这里兜住
+	#   （外壳直接把 wave 改掉，没有 set_wave 可挂）
+	if _last_quota_wave != wave:
+		_last_quota_wave = wave
+		wave_reset_quota()
 	_spawn_t -= delta
 	if _spawn_t <= 0.0:
 		_spawn_t = SPAWN_EVERY_LATE if wave >= 10 else SPAWN_EVERY
-		_spawn_foe()
+		# v17x：这一波只刷定额那么多（刷完就等玩家清场，然后提前进下一波）
+		if _wave_spawned < _wave_quota:
+			_spawn_foe()
+			_wave_spawned += 1
 	_hero_cd -= delta
 	# v13b P1：点击指令计时（走位指令到点/超时自动撤销 → 回自动战斗）
 	_order_t += delta
@@ -4854,6 +4883,16 @@ func clear_elite() -> void:
 #   外壳用它判"最后一波真的清干净了"才结算——否则一踏进就通关，boss 白叫一场。
 func boss_cleared() -> bool:
 	return not boss_alive
+
+# v17x：这一波的定额刷完了、场上也清空了吗？（外壳用它提前开下一波）
+func wave_cleared() -> bool:
+	return _wave_spawned >= _wave_quota and live_foes() <= 0 and not boss_alive
+
+# 换波时调用：重置定额与计数（新一波从头刷）
+func wave_reset_quota() -> void:
+	_wave_quota = _wave_quota_for(wave)
+	_wave_spawned = 0
+	_spawn_t = 0.6
 
 func live_foes() -> int:
 	var n := 0

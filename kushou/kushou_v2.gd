@@ -6460,6 +6460,11 @@ func _process(delta: float) -> void:
 		_ach_save()
 	_card_time_tick(delta)      # v11e：时间进化（淬火剑这类）
 	_boss_sec -= delta
+	# v17x（用户："刷完可以提前进入下一波"）：
+	#   这一波的定额刷完 ＋ 场上清空 → **不等满 30 秒**，立刻开下一波。
+	#   （boss 波不提前：boss 没死就清不了，wave_cleared 里已经排除 boss_alive）
+	if _boss_sec > 0.0 and _field != null and _field.wave_cleared() and _wave < _wave_max:
+		_boss_sec = 0.0
 	if _boss_sec <= 0.0:
 		_boss_sec = 30.0            # v16v（用户："每波时长降低为30s"）：原来 60 秒一波
 		_wave = mini(_wave_max, _wave + 1)
