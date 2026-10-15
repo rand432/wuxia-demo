@@ -4574,6 +4574,44 @@ func _mate_is_unlocked(id: String) -> bool:
 			return bool(_unlocked.get(str(g["id"]), false))
 	return true
 
+# ============================================================
+# v18g（④"存档伙伴不和事件/招募重复"）：一位伙伴**从哪儿来** —— 四条线：
+#   · 存档：UNLOCKS 里有 u_part_xxx → 花银两买
+#   · 关卡：STAGES 首通奖励里有 → 打通那一关送（16 位，一关一位）
+#   · 绝品：崔三娘/玄机子/张道陵 —— 只从进化/特殊事件来，两条表里都没有
+#   · 招募：没有解锁条目 → 不靠解锁拿，直接能选初始出战
+#   存档表与关卡表**一条都不重合**（探针 k964 每轮都查）——这就是 ④ 要的那件事。
+# ============================================================
+func _mate_source(pid: String) -> Dictionary:
+	for u_v in UNLOCKS:
+		var u: Dictionary = u_v
+		if str(u.get("pid", "")) == pid:
+			return {"from": "存档", "price": int(u["price"]), "id": str(u["id"])}
+	for s_v in STAGES:
+		var s: Dictionary = s_v
+		for r_v in _stage_rewards(s):
+			var r: Dictionary = r_v
+			if str(r.get("pid", "")) == pid:
+				return {"from": "关卡", "stage": str(s["id"]), "stage_n": str(s["n"]), "id": _grant_id(r)}
+	var q := ""
+	if _field != null and _field.PARTNER_INFO.has(pid):
+		q = str((_field.PARTNER_INFO[pid] as Dictionary).get("quality", ""))
+	if q == "绝品":
+		return {"from": "绝品"}
+	return {"from": "招募"}
+
+func _mate_source_cn(pid: String) -> String:
+	var sc := _mate_source(pid)
+	match str(sc["from"]):
+		"存档":
+			return "存档页花 " + str(sc["price"]) + " 文钱买"
+		"关卡":
+			return "打通 " + str(sc["stage"]) + "「" + str(sc["stage_n"]) + "」首通就送"
+		"绝品":
+			return "绝品 · 只有进化/特殊事件能给"
+		_:
+			return "招募（不用解锁）"
+
 func _mate_set_start(id: String) -> void:
 	var nm := str((_field.PARTNER_INFO[id] as Dictionary)["name"])
 	if _mate_start == id:
@@ -4584,7 +4622,7 @@ func _mate_set_start(id: String) -> void:
 		#   ⚠ 原来卡的是"**这一局里招募到**"（局内随机招募那条线）。现在改成看**解锁**：
 		#   在存档页花银两（或打关卡）解锁过，就能选他当初始出战，不用再靠随机招募。
 		if not _mate_is_unlocked(id):
-			_hint.text = "「" + nm + "」还没解锁——去存档页花银两（或打对应关卡）解锁后才能当初始出战"
+			_hint.text = "「" + nm + "」还没解锁——来路：" + _mate_source_cn(id) + "；解锁后才能当初始出战"
 			return
 		_mate_start = id
 		_hint.text = "开局出战：「" + nm + "」下一局**替换主角**（画的是他、他的技能归你）"
@@ -5177,7 +5215,7 @@ func _fill_save(p: Control, y: float, sz: Vector2) -> float:
 			cl.add_theme_font_size_override("font_size", 22)
 			cl.add_theme_color_override("font_color", SEAL)
 			# v18d（③）：队员那一段把"只卖中品/上品 · 每类定位一位"写在标题上
-			cl.text = ("—— 队员（只卖中品/上品 · 每类定位一位）——" if last_cat == "队员" else "—— " + last_cat + " ——")
+			cl.text = ("—— 队员（中品/上品 · 每类定位一位 · 不含关卡奖励）——" if last_cat == "队员" else "—— " + last_cat + " ——")
 			p.add_child(cl)
 			ly += 40.0
 		var qc := GOLD if got else Color(INK.r, INK.g, INK.b, 0.75)
