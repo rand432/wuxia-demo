@@ -4568,10 +4568,10 @@ func _mate_grant(id: String) -> Array:
 # 存档页那颗［开局自带］按下去：设成他／取消
 # v15v：这位伙伴"解锁"了吗？没解锁条目 = 不靠解锁拿（走关卡/招募那条线），当作已解锁
 func _mate_is_unlocked(id: String) -> bool:
-	for u_v in UNLOCKS:
-		var u: Dictionary = u_v
-		if str(u.get("pid", "")) == id:
-			return bool(_unlocked.get(str(u["id"]), false))
+	for g_v in _all_grants():
+		var g: Dictionary = g_v
+		if str(g["pid"]) == id:
+			return bool(_unlocked.get(str(g["id"]), false))
 	return true
 
 func _mate_set_start(id: String) -> void:
@@ -4680,25 +4680,57 @@ const STAGES := [
 	# v18c（用户："不同难度不同 boss"）：**一关一只专属 boss**（boss 名 ＋ btier 阶）。
 	#   表跟 battle 的 BOSS_TIER 一条一条对着排（4 阶 × 4 只）——
 	#   这一关所有 boss 波（第 10/15/20/25/30/35 波）下来的都是同一只。
-	{"id": "1-1", "n": "牢门初开", "mul": 1.0, "waves": 20, "boss": "看门恶犬", "btier": 1, "cat": "卡组", "un": "磐石心", "set": "panshixin"},
-	{"id": "1-2", "n": "铁栅血痕", "mul": 1.15, "waves": 20, "boss": "铁背苍狼", "btier": 1, "cat": "卡组", "un": "铁布衫", "set": "tiebushan"},
-	{"id": "1-3", "n": "断锁残灯", "mul": 1.3, "waves": 20, "boss": "毒牙蟒", "btier": 1, "cat": "队员", "un": "白婆婆", "pid": "baipopo"},
-	{"id": "1-4", "n": "监牢深处", "mul": 1.45, "waves": 20, "boss": "石甲巨猿", "btier": 1, "cat": "卡组", "un": "断岳", "set": "duanyue"},
+	{"id": "1-1", "n": "牢门初开", "mul": 1.0, "waves": 20, "boss": "看门恶犬", "btier": 1, "cat": "卡组", "un": "磐石心", "set": "panshixin",
+		"un2": {"cat": "队员", "n": "法度", "pid": "fadu"},
+		"un3": {"cat": "宝物", "n": "虎符", "trea": "虎符"}},
+	{"id": "1-2", "n": "铁栅血痕", "mul": 1.15, "waves": 20, "boss": "铁背苍狼", "btier": 1, "cat": "卡组", "un": "铁布衫", "set": "tiebushan",
+		"un2": {"cat": "队员", "n": "铁无心", "pid": "tiexinwu"},
+		"un3": {"cat": "宠物", "n": "雷鹫", "pet": "jiu"}},
+	{"id": "1-3", "n": "断锁残灯", "mul": 1.3, "waves": 20, "boss": "毒牙蟒", "btier": 1, "cat": "队员", "un": "白婆婆", "pid": "baipopo",
+		"un2": {"cat": "卡组", "n": "磐石", "set": "panshi"},
+		"un3": {"cat": "装备卡", "n": "兵器·刀", "set": "dao"}},
+	{"id": "1-4", "n": "监牢深处", "mul": 1.45, "waves": 20, "boss": "石甲巨猿", "btier": 1, "cat": "卡组", "un": "断岳", "set": "duanyue",
+		"un2": {"cat": "队员", "n": "药婆子", "pid": "yaopozi"},
+		"un3": {"cat": "宝物", "n": "玄龟甲", "trea": "玄龟甲"}},
 	# 第二章 · 进阶
-	{"id": "2-1", "n": "典吏巡夜", "mul": 1.9, "waves": 25, "boss": "双头狮", "btier": 2, "cat": "宝物", "un": "灵晶袋", "trea": "灵晶袋"},
-	{"id": "2-2", "n": "五行乱阵", "mul": 2.1, "waves": 25, "boss": "独眼狱卒", "btier": 2, "cat": "卡组", "un": "五行", "set": "wuxing"},
-	{"id": "2-3", "n": "贪墨之狱", "mul": 2.3, "waves": 25, "boss": "火尾狐妖", "btier": 2, "cat": "装备卡", "un": "聚财珠", "set": "jucaizhu"},
-	{"id": "2-4", "n": "藤萝缠狱", "mul": 2.5, "waves": 25, "boss": "赤焰蛟", "btier": 2, "cat": "队员", "un": "沈青萝", "pid": "shenqingluo"},
+	{"id": "2-1", "n": "典吏巡夜", "mul": 1.9, "waves": 25, "boss": "双头狮", "btier": 2, "cat": "宝物", "un": "灵晶袋", "trea": "灵晶袋",
+		"un2": {"cat": "队员", "n": "蛊师", "pid": "gushi"},
+		"un3": {"cat": "卡组", "n": "灵犀", "set": "lingxi"}},
+	{"id": "2-2", "n": "五行乱阵", "mul": 2.1, "waves": 25, "boss": "独眼狱卒", "btier": 2, "cat": "卡组", "un": "五行", "set": "wuxing",
+		"un2": {"cat": "队员", "n": "季沧海", "pid": "jicanghai"},
+		"un3": {"cat": "宠物", "n": "金蟾", "pet": "chan"}},
+	{"id": "2-3", "n": "贪墨之狱", "mul": 2.3, "waves": 25, "boss": "火尾狐妖", "btier": 2, "cat": "装备卡", "un": "聚财珠", "set": "jucaizhu",
+		"un2": {"cat": "队员", "n": "苏青鸾", "pid": "suqingluan"},
+		"un3": {"cat": "卡组", "n": "聚宝", "set": "jubao"}},
+	{"id": "2-4", "n": "藤萝缠狱", "mul": 2.5, "waves": 25, "boss": "赤焰蛟", "btier": 2, "cat": "队员", "un": "沈青萝", "pid": "shenqingluo",
+		"un2": {"cat": "卡组", "n": "迅影", "set": "xunying"},
+		"un3": {"cat": "装备卡", "n": "软甲", "set": "ruanjia"}},
 	# 第三章 · 困难
-	{"id": "3-1", "n": "龙纹石壁", "mul": 3.0, "waves": 30, "boss": "场主亲养·狴犴", "btier": 3, "cat": "宝物", "un": "龙纹佩", "trea": "龙纹佩"},
-	{"id": "3-2", "n": "雷罚天牢", "mul": 3.3, "waves": 30, "boss": "血手判官", "btier": 3, "cat": "卡组", "un": "雷罚", "set": "leifa"},
-	{"id": "3-3", "n": "传家之秘", "mul": 3.6, "waves": 30, "boss": "困兽之主", "btier": 3, "cat": "装备卡", "un": "传家宝", "set": "chuanjiabao"},
-	{"id": "3-4", "n": "鹰唳九霄", "mul": 3.9, "waves": 30, "boss": "幽冥判官", "btier": 3, "cat": "队员", "un": "燕无归", "pid": "yanwugui"},
+	{"id": "3-1", "n": "龙纹石壁", "mul": 3.0, "waves": 30, "boss": "场主亲养·狴犴", "btier": 3, "cat": "宝物", "un": "龙纹佩", "trea": "龙纹佩",
+		"un2": {"cat": "队员", "n": "西门烈", "pid": "ximenlie"},
+		"un3": {"cat": "卡组", "n": "飞羽", "set": "feiyu"}},
+	{"id": "3-2", "n": "雷罚天牢", "mul": 3.3, "waves": 30, "boss": "血手判官", "btier": 3, "cat": "卡组", "un": "雷罚", "set": "leifa",
+		"un2": {"cat": "队员", "n": "毒娘子", "pid": "duniangzi"},
+		"un3": {"cat": "装备卡", "n": "护心镜", "set": "huxinjing"}},
+	{"id": "3-3", "n": "传家之秘", "mul": 3.6, "waves": 30, "boss": "困兽之主", "btier": 3, "cat": "装备卡", "un": "传家宝", "set": "chuanjiabao",
+		"un2": {"cat": "队员", "n": "鬼见愁", "pid": "guijianchou"},
+		"un3": {"cat": "卡组", "n": "猎杀", "set": "liesha"}},
+	{"id": "3-4", "n": "鹰唳九霄", "mul": 3.9, "waves": 30, "boss": "幽冥判官", "btier": 3, "cat": "队员", "un": "燕无归", "pid": "yanwugui",
+		"un2": {"cat": "卡组", "n": "金刚", "set": "jingang"},
+		"un3": {"cat": "装备卡", "n": "饮血刀", "set": "yinxue"}},
 	# 第四章 · 地狱
-	{"id": "4-1", "n": "火麟熔狱", "mul": 4.4, "waves": 35, "boss": "九幽魔君", "btier": 4, "cat": "宠物", "un": "火麟", "pet": "lin"},
-	{"id": "4-2", "n": "诛心绝境", "mul": 4.8, "waves": 35, "boss": "血海罗刹", "btier": 4, "cat": "卡组", "un": "诛心", "set": "zhuxin"},
-	{"id": "4-3", "n": "连环杀狱", "mul": 5.2, "waves": 35, "boss": "万蛊虫母", "btier": 4, "cat": "队员", "un": "雷小七", "pid": "leixiaoqi"},
-	{"id": "4-4", "n": "困兽之斗", "mul": 5.6, "waves": 35, "boss": "困兽·终焉", "btier": 4, "cat": "宝物", "un": "悟道果", "trea": "悟道果"},
+	{"id": "4-1", "n": "火麟熔狱", "mul": 4.4, "waves": 35, "boss": "九幽魔君", "btier": 4, "cat": "宠物", "un": "火麟", "pet": "lin",
+		"un2": {"cat": "队员", "n": "醉太岁", "pid": "zuitaisui"},
+		"un3": {"cat": "卡组", "n": "悟道", "set": "wudao"}},
+	{"id": "4-2", "n": "诛心绝境", "mul": 4.8, "waves": 35, "boss": "血海罗刹", "btier": 4, "cat": "卡组", "un": "诛心", "set": "zhuxin",
+		"un2": {"cat": "队员", "n": "白起后人", "pid": "baiqihouren"},
+		"un3": {"cat": "宝物", "n": "灵石", "trea": "灵石"}},
+	{"id": "4-3", "n": "连环杀狱", "mul": 5.2, "waves": 35, "boss": "万蛊虫母", "btier": 4, "cat": "队员", "un": "雷小七", "pid": "leixiaoqi",
+		"un2": {"cat": "卡组", "n": "流星", "set": "liuxing"},
+		"un3": {"cat": "宝物", "n": "聚宝盆", "trea": "聚宝盆"}},
+	{"id": "4-4", "n": "困兽之斗", "mul": 5.6, "waves": 35, "boss": "困兽·终焉", "btier": 4, "cat": "宝物", "un": "悟道果", "trea": "悟道果",
+		"un2": {"cat": "队员", "n": "大内供奉", "pid": "dagongfeng"},
+		"un3": {"cat": "卡组", "n": "天命", "set": "tianming"}},
 ]
 
 func _stage_info(id: String) -> Dictionary:
@@ -4717,26 +4749,79 @@ func _stage_open(id: String) -> bool:
 		return true
 	return bool(_stage_done.get(str((STAGES[idx - 1] as Dictionary)["id"]), false))
 
-# 首通：把奖励记进 _unlocked（跟存档共用一张解锁表，但池子不重合）
+# ============================================================
+# v18e（②"每个难度解锁 3 个（不同类型）"）：
+#   · 每关首通给 **3 个**奖励：第 1 个还是老的扁平字段（cat/un/set|pid|trea|pet），
+#     第 2、3 个是新加的 un2 / un3 —— 一关的 3 个**类型互不相同**
+#     （卡组 / 装备卡 / 队员 / 宝物 / 宠物）。
+#   · 一条内容"锁没锁"＝**两条线合起来看**：存档（UNLOCKS）＋ 关卡首通（STAGES）。
+#     ⚠ 以前只读 UNLOCKS —— 关卡写进去的 u_set_xxx / u_trea_xxx / u_pet_xxx
+#       根本没人读（那些奖励等于是摆设），只有 4 位同时在存档表里的伙伴被顺手送掉。
+# ============================================================
+func _stage_rewards(s: Dictionary) -> Array:
+	var out: Array = []
+	if s.has("set") or s.has("pid") or s.has("trea") or s.has("pet"):
+		out.append({"cat": str(s.get("cat", "")), "n": str(s.get("un", "")),
+			"set": str(s.get("set", "")), "pid": str(s.get("pid", "")),
+			"trea": str(s.get("trea", "")), "pet": str(s.get("pet", ""))})
+	for k in ["un2", "un3"]:
+		if s.has(k):
+			var r: Dictionary = s[k]
+			out.append({"cat": str(r.get("cat", "")), "n": str(r.get("n", "")),
+				"set": str(r.get("set", "")), "pid": str(r.get("pid", "")),
+				"trea": str(r.get("trea", "")), "pet": str(r.get("pet", ""))})
+	return out
+
+func _grant_id(r: Dictionary) -> String:
+	if str(r.get("set", "")) != "":
+		return "u_set_" + str(r["set"])
+	if str(r.get("pid", "")) != "":
+		return "u_part_" + str(r["pid"])
+	if str(r.get("trea", "")) != "":
+		return "u_trea_" + str(r["trea"])
+	if str(r.get("pet", "")) != "":
+		return "u_pet_" + str(r["pet"])
+	return ""
+
+# 两条线合起来的解锁条目（惰性建一次：UNLOCKS 与 STAGES 都是 const，建完不会再变）
+var _grant_rows: Array = []
+
+func _all_grants() -> Array:
+	if not _grant_rows.is_empty():
+		return _grant_rows
+	for u_v in UNLOCKS:
+		var u: Dictionary = u_v
+		_grant_rows.append({"id": str(u["id"]), "cat": str(u["cat"]), "n": str(u["n"]),
+			"set": str(u.get("set", "")), "pid": str(u.get("pid", "")),
+			"trea": str(u.get("trea", "")), "pet": str(u.get("pet", "")), "from": "存档"})
+	for s_v in STAGES:
+		var s: Dictionary = s_v
+		for r_v in _stage_rewards(s):
+			var r: Dictionary = r_v
+			var uid := _grant_id(r)
+			if uid == "":
+				continue
+			_grant_rows.append({"id": uid, "cat": str(r.get("cat", "")), "n": str(r.get("n", "")),
+				"set": str(r.get("set", "")), "pid": str(r.get("pid", "")),
+				"trea": str(r.get("trea", "")), "pet": str(r.get("pet", "")), "from": str(s.get("id", ""))})
+	return _grant_rows
+
+# 首通：把**三个**奖励一起记进 _unlocked（跟存档共用一套 id 命名，但两条线不重合）
 func _stage_clear(id: String) -> void:
 	if bool(_stage_done.get(id, false)):
 		return
 	var s := _stage_info(id)
 	_stage_done[id] = true
-	var uid := ""
-	if s.has("set"):
-		uid = "u_set_" + str(s["set"])
-	elif s.has("pid"):
-		uid = "u_part_" + str(s["pid"])
-	elif s.has("trea"):
-		uid = "u_trea_" + str(s["trea"])
-	elif s.has("pet"):
-		uid = "u_pet_" + str(s["pet"])
-	if uid != "":
-		_unlocked[uid] = true
+	var got: Array = []
+	for r_v in _stage_rewards(s):
+		var r: Dictionary = r_v
+		var uid := _grant_id(r)
+		if uid != "":
+			_unlocked[uid] = true
+		got.append(str(r.get("cat", "")) + "「" + str(r.get("n", "")) + "」")
 	_ach_save()
 	_bm_roll()
-	_note("【通关】" + id + " " + str(s["n"]) + "　首通奖励：" + str(s["cat"]) + "「" + str(s["un"]) + "」已解锁", 6.0)
+	_note("【通关】" + id + " " + str(s["n"]) + "　首通 3 项：" + " ＋ ".join(PackedStringArray(got)) + " 已解锁", 7.0)
 	Audio.sfx("levelup", -2.0)
 
 func _endless_open() -> bool:
@@ -4782,7 +4867,7 @@ func _fill_stage(p: Control, y: float, sz: Vector2) -> float:
 	tip.add_theme_color_override("font_color", DIM)
 	tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	tip.text = "怪强度 ×" + str(s0["mul"]) + "　波数上限 " + str(s0["waves"]) + "　本关 boss：" + str(s0.get("boss", "—")) + "（" + _tier_cn(int(s0.get("btier", 1))) + "）\n" \
-		+ "打满即通关，给首通奖励；首通奖励与［存档］那批不重合"
+		+ "打满即通关，给 3 项首通奖励（一关 3 项类型各不相同）；首通奖励与［存档］那批不重合"
 	p.add_child(tip)
 	var ly := y + 116.0
 	var last_ch := ""
@@ -4836,7 +4921,11 @@ func _fill_stage(p: Control, y: float, sz: Vector2) -> float:
 		l3.add_theme_font_size_override("font_size", 18)
 		l3.add_theme_color_override("font_color", SEAL if done else DIM)
 		l3.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		l3.text = "首通：" + str(s["cat"]) + "「" + str(s["un"]) + "」"
+		var rw: Array = []
+		for r_v in _stage_rewards(s):
+			var r: Dictionary = r_v
+			rw.append(str(r["cat"]) + "「" + str(r["n"]) + "」")
+		l3.text = "首通 " + str(rw.size()) + " 项：" + " · ".join(PackedStringArray(rw))
 		box.add_child(l3)
 		if open:
 			var bb := _pbtn(box, ("已选" if cur else "选它"), Vector2(460, 10), Vector2(166, 62), 22, true, _set_stage.bind(id))
@@ -4984,33 +5073,33 @@ const UNLOCKS := [
 
 func _locked_sets() -> Array:
 	var out: Array = []
-	for u_v in UNLOCKS:
-		var u: Dictionary = u_v
-		if u.has("set") and not bool(_unlocked.get(str(u["id"]), false)):
-			out.append(str(u["set"]))
+	for g_v in _all_grants():
+		var g: Dictionary = g_v
+		if str(g["set"]) != "" and not bool(_unlocked.get(str(g["id"]), false)):
+			out.append(str(g["set"]))
 	return out
 
 func _set_locked(set_id: String) -> bool:
 	return _locked_sets().has(set_id)
 
 func _partner_locked(pid: String) -> bool:
-	for u_v in UNLOCKS:
-		var u: Dictionary = u_v
-		if str(u.get("pid", "")) == pid and not bool(_unlocked.get(str(u["id"]), false)):
+	for g_v in _all_grants():
+		var g: Dictionary = g_v
+		if str(g["pid"]) == pid and not bool(_unlocked.get(str(g["id"]), false)):
 			return true
 	return false
 
 func _trea_locked(nm: String) -> bool:
-	for u_v in UNLOCKS:
-		var u: Dictionary = u_v
-		if str(u.get("trea", "")) == nm and not bool(_unlocked.get(str(u["id"]), false)):
+	for g_v in _all_grants():
+		var g: Dictionary = g_v
+		if str(g["trea"]) == nm and not bool(_unlocked.get(str(g["id"]), false)):
 			return true
 	return false
 
 func _pet_locked(kind: String) -> bool:
-	for u_v in UNLOCKS:
-		var u: Dictionary = u_v
-		if str(u.get("pet", "")) == kind and not bool(_unlocked.get(str(u["id"]), false)):
+	for g_v in _all_grants():
+		var g: Dictionary = g_v
+		if str(g["pet"]) == kind and not bool(_unlocked.get(str(g["id"]), false)):
 			return true
 	return false
 
