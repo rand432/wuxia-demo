@@ -2613,6 +2613,12 @@ var partners := {
 	"xuanyin": {"owned": false, "mp": 0.0, "cd": 0.0, "active": 0.0, "grp_lv": 0},
 	"xuesha": {"owned": false, "mp": 0.0, "cd": 0.0, "active": 0.0, "grp_lv": 0},
 	"dunwei": {"owned": false, "mp": 0.0, "cd": 0.0, "active": 0.0, "grp_lv": 0},
+	# v17r：五位"团队增益"辅助（比例 = 基础 + 三属性之一换算）
+	"drummaster": {"owned": false, "mp": 0.0, "cd": 0.0, "active": 0.0, "pow_lv": 0, "dur_lv": 0},
+	"medic": {"owned": false, "mp": 0.0, "cd": 0.0, "active": 0.0, "pow_lv": 0, "dur_lv": 0},
+	"ironward": {"owned": false, "mp": 0.0, "cd": 0.0, "active": 0.0, "pow_lv": 0, "dur_lv": 0},
+	"qihealer": {"owned": false, "mp": 0.0, "cd": 0.0, "active": 0.0, "pow_lv": 0, "dur_lv": 0},
+	"shieldlord": {"owned": false, "mp": 0.0, "cd": 0.0, "active": 0.0, "pow_lv": 0, "dur_lv": 0},
 }
 var _dg_list: Array = []            # 飞匕：{pos, dir, tgt, dmg, pierce, bounce, hits, t}
 const PARTNER_INFO := {
@@ -2793,6 +2799,23 @@ const PARTNER_INFO := {
 	"dunwei": {"name": "盾卫", "quality": "上品", "skill": "铁壁反震", "dtype": "护盾换算", "grow": {"arm": 4, "agi": 1, "wit": 3},
 		"desc": "先给自己上一层护盾，再按**盾值**换算真实伤害（强化后打 3 名）",
 		"mp0": 160.0, "cd0": 16.0, "dur0": 0.0},
+	# ===== v17r：五位"团队增益"辅助（用户："增加攻速buff/恢复buff/反伤buff/气血内力回复buff/减伤buff，
+	#   加成比例随三属性之一影响"）—— 比例 = 低基础值 + 属性/100×k（初始不夸张，靠属性堆）=====
+	"drummaster": {"name": "鼓师", "quality": "上品", "skill": "战鼓令", "dtype": "无伤害", "grow": {"arm": 1, "agi": 4, "wit": 2},
+		"desc": "擂鼓助威：全队**攻速 +**（比例随**身法**涨 · 每 100 身法 +2%）",
+		"mp0": 150.0, "cd0": 18.0, "dur0": 8.0},
+	"medic": {"name": "医仙", "quality": "上品", "skill": "回春阵", "dtype": "无伤害", "grow": {"arm": 0, "agi": 2, "wit": 5},
+		"desc": "布回春阵：全队**命中回复气血**（比例随**悟性**涨 · 每 100 悟性 +1.5%）",
+		"mp0": 160.0, "cd0": 20.0, "dur0": 9.0},
+	"ironward": {"name": "铁卫", "quality": "上品", "skill": "铁壁阵", "dtype": "无伤害", "grow": {"arm": 5, "agi": 1, "wit": 1},
+		"desc": "立铁壁阵：全队**反伤 +**（比例随**臂力**涨 · 每 100 臂力 +2%）",
+		"mp0": 150.0, "cd0": 20.0, "dur0": 8.0},
+	"qihealer": {"name": "气疗师", "quality": "中品", "skill": "归元阵", "dtype": "无伤害", "grow": {"arm": 0, "agi": 2, "wit": 4},
+		"desc": "布归元阵：全队**命中回复内力**（比例随**悟性**涨 · 每 100 悟性 +2%）",
+		"mp0": 120.0, "cd0": 17.0, "dur0": 8.0},
+	"shieldlord": {"name": "盾令官", "quality": "极品", "skill": "玄武阵", "dtype": "无伤害", "grow": {"arm": 4, "agi": 2, "wit": 2},
+		"desc": "开玄武阵：全队**减伤 +**（比例随**臂力**涨 · 每 100 臂力 +1.5%）",
+		"mp0": 200.0, "cd0": 24.0, "dur0": 10.0},
 }
 const PARTNER_UP_STEP_MP := 20.0      # 每个"提升内力消耗"的强化 +20 内力
 const PARTNER_DOWN_STEP_MP := 15.0    # "减内力消耗"每层 −15
@@ -2973,6 +2996,32 @@ var _waves_fx: Array = []           # 大浪拍击的水浪：{x, y, r, t}
 #   ⚠ 系数**刻意压低**：这些量都是"顺带就有"的（不像攻击力要专门堆），不压就成无脑流。
 #   单体→群体：0 级打最近 1 名；**强化「群体化」1 级起打最近 3 名**。
 # ============================================================
+# ============================================================
+# v17r（用户："做一些辅助类的…基于友方群体buff 加成比例会随着三属性之一的属性影响"）：
+#   **团队增益**机制 —— 强度分两部分：
+#     基础值（低，0.05~0.10）＋ **属性换算**（三属性之一，每 100 点 +k）
+#   三属性取战斗里已被折算进 hero 的三项（跟外壳口径一致）：
+#     臂力 → atk ｜ 身法 → dodge ｜ 悟性 → mp_max
+#   ⚠ 基础值刻意压低（"初始不要太变态"），主要靠属性堆出来。
+# ============================================================
+func stat_of(attr: String) -> float:
+	match attr:
+		"arm": return float(hero.get("atk", 0.0))
+		"agi": return float(hero.get("dodge", 0.0)) * 100.0
+		"wit": return float(hero.get("mp_max", 0.0))
+		_:     return 0.0
+
+func team_buff(attr: String, base: float, k: float) -> float:
+	return base + stat_of(attr) / 100.0 * k
+
+# 挂一个限时团队 buff
+func team_buff_apply(key: String, val: float, dur: float, nm: String, col: Color) -> void:
+	hero[key + "_t"] = maxf(float(hero.get(key + "_t", 0.0)), dur)
+	hero[key] = maxf(float(hero.get(key, 0.0)), val)
+	_push_float(hero_pos.x, hero_pos.y - 96.0, nm + " +" + str(snappedf(val * 100.0, 0.1)) + "%", col, true)
+	_bursts.append({"x": hero_pos.x, "y": hero_pos.y - 10.0, "t": 0.0, "col": col, "scale": 1.4})
+	Audio.sfx("levelup", -8.0)
+
 func special_dmg(kind: String, amount: float, lvl: int) -> float:
 	var k := 0.0
 	match kind:
@@ -3504,6 +3553,17 @@ func _cast_partner(id: String) -> void:
 			_cast_xuesha()
 		"dunwei":
 			_cast_dunwei()
+		# v17r：五位团队增益辅助
+		"drummaster":
+			_cast_drummaster()
+		"medic":
+			_cast_medic()
+		"ironward":
+			_cast_ironward()
+		"qihealer":
+			_cast_qihealer()
+		"shieldlord":
+			_cast_shieldlord()
 		_:
 			pass
 
@@ -3789,6 +3849,38 @@ func _cast_jiuqi() -> void:
 # 季沧海：每 3 秒（可减）自动烧一次，不吃内力
 # ---- v14b 新队员的一次性技能 ----
 # 白婆婆：续命（回血；自己残血翻倍）
+# ===== v17r 五位团队增益辅助 =====
+# 鼓师：全队攻速（随身法）
+func _cast_drummaster() -> void:
+	var p: Dictionary = partners["drummaster"]
+	var v := team_buff("agi", 0.08 + 0.02 * float(p.get("pow_lv", 0)), 0.02)
+	hero["aspd"] = float(hero["aspd"]) * (1.0 + v)
+	team_buff_apply("team_aspd", v, 6.0 + 1.0 * float(p.get("dur_lv", 0)), "战鼓·攻速", Color(0.96, 0.78, 0.36))
+
+# 医仙：全队命中回血（随悟性）
+func _cast_medic() -> void:
+	var p: Dictionary = partners["medic"]
+	var v := team_buff("wit", 0.05 + 0.015 * float(p.get("pow_lv", 0)), 0.015)
+	team_buff_apply("lifesteal", v, 7.0 + 1.0 * float(p.get("dur_lv", 0)), "回春阵·回血", Color(0.72, 0.94, 0.72))
+
+# 铁卫：全队反伤（随臂力）
+func _cast_ironward() -> void:
+	var p: Dictionary = partners["ironward"]
+	var v := team_buff("arm", 0.08 + 0.02 * float(p.get("pow_lv", 0)), 0.02)
+	team_buff_apply("thorns", v, 6.0 + 1.0 * float(p.get("dur_lv", 0)), "铁壁阵·反伤", Color(0.78, 0.74, 0.66))
+
+# 气疗师：全队命中回内力（随悟性）
+func _cast_qihealer() -> void:
+	var p: Dictionary = partners["qihealer"]
+	var v := team_buff("wit", 0.06 + 0.02 * float(p.get("pow_lv", 0)), 0.02)
+	team_buff_apply("mpregen", v, 6.0 + 1.0 * float(p.get("dur_lv", 0)), "归元阵·回气", Color(0.66, 0.86, 1.0))
+
+# 盾令官：全队减伤（随臂力）
+func _cast_shieldlord() -> void:
+	var p: Dictionary = partners["shieldlord"]
+	var v := team_buff("arm", 0.05 + 0.015 * float(p.get("pow_lv", 0)), 0.015)
+	team_buff_apply("dr", v, 8.0 + 1.0 * float(p.get("dur_lv", 0)), "玄武阵·减伤", Color(0.74, 0.78, 0.80))
+
 # ===== v17q 五位换算系（不吃攻击力；伤害见 special_dmg）=====
 # 药王：回血 → 按治疗量换算伤害
 func _cast_yaowang() -> void:
