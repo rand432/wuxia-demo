@@ -2941,6 +2941,20 @@ const MINION_MAX := 6
 var _minions: Array = []            # 蛟龙：{pos, tgt, atk_cd, skill_cd, born}
 var _waves_fx: Array = []           # 大浪拍击的水浪：{x, y, r, t}
 
+# v17p：召唤物的普攻基数 —— 按它吃的**那一门**属性算（空 = 蛟龙，走老的"全属性"口径）
+func _minion_atk(m: Dictionary) -> float:
+	match str(m.get("attr", "")):
+		"hp":                              # 气血系（肉盾型：血越厚打得越疼）
+			return float(hero["hp_max"]) * 0.07
+		"mp":                              # 内力系（法系）
+			return float(hero["mp_max"]) * 0.13
+		"agi":                             # 身法系（快攻型：单下低但频率高）
+			return float(hero["atk"]) * 0.30
+		"":                               # 空 = 蛟龙（绝品：全属性 25%）
+			return float(hero["atk"]) * cn_inherit() * 0.5
+		_:                                # 默认臂力系
+			return float(hero["atk"]) * 0.5
+
 func cn_inherit() -> float:
 	return 0.25 + 0.05 * float(partners["cuisanniang"]["inherit_lv"])
 
@@ -2972,7 +2986,7 @@ func cn_hp() -> float:
 #   参数：名字、颜色、体型倍率、血量/存在时长倍率、普攻间隔、技能间隔
 #   （蛟龙仍是单独那条 _summon_dragon，参数最猛）
 func summon_minion(nm: String, col: Color, sc: float, hp_m: float, life_m: float,
-	atk_cd: float, skill_cd: float, max_n: int, sk := "") -> void:
+	atk_cd: float, skill_cd: float, max_n: int, sk := "", at := "") -> void:
 	var cnt := 0
 	for m_v in _minions:
 		if str((m_v as Dictionary).get("kind", "")) == nm:
@@ -2981,7 +2995,10 @@ func summon_minion(nm: String, col: Color, sc: float, hp_m: float, life_m: float
 		return
 	# v17n（用户："不同召唤物配不同技能 有的可以没有技能 就纯攻击也可以"）：
 	#   sk 留空 = **纯攻击**（只有普攻，不放技能）；非空见 _update_minions 的分支。
-	_minions.append({"kind": nm, "col": col, "sc": sc, "skill": sk,
+	# v17p（用户："继承属性由全属性 改为某个主属性 或者其他属性 跟绝品区分开"）：
+	#   at = 这只召唤物吃**哪一项**主角属性（arm臂力/hp气血/mp内力/agi身法）——
+	#   蛟龙是"全属性"的绝品待遇，其余各自只吃一门，形成分工。
+	_minions.append({"kind": nm, "col": col, "sc": sc, "skill": sk, "attr": at,
 		"pos": hero_pos + Vector2(randf_range(-70.0, 70.0), randf_range(-20.0, 30.0)),
 		"tgt": {}, "atk_cd": atk_cd, "skill_cd": skill_cd, "born": _t,
 		"hp": cn_hp() * hp_m, "hp_max": cn_hp() * hp_m,
@@ -3043,7 +3060,7 @@ func _update_minions(delta: float) -> void:
 			# 够得着：普攻（物理）——继承主角攻击的一部分
 			if float(m["atk_cd"]) <= 0.0:
 				m["atk_cd"] = 1.1
-				var dm := _apply_dmg(tg, float(hero["atk"]) * cn_inherit() * 0.5, DMG_PHYS)
+				var dm := _apply_dmg(tg, _minion_atk(m), DMG_PHYS)
 				tg["flash"] = 0.10
 				_push_float(float(tg["x"]) - 20.0, float(tg["y"]) - 20.0, str(int(dm)), Color(0.66, 0.90, 1.0))
 				if float(tg["hp"]) <= 0.0:
@@ -3341,7 +3358,7 @@ func _cast_partner(id: String) -> void:
 		# v17m（用户点名）：白婆婆再加一只**纸人**（治疗型 · 速快体弱）
 		"baipopo":
 			_cast_heal()
-			summon_minion("纸人", Color(0.94, 0.93, 0.86), 0.70, 0.55, 0.9, 0.7, 6.0, 1, "heal")
+			summon_minion("纸人", Color(0.94, 0.93, 0.86), 0.70, 0.55, 0.9, 0.7, 6.0, 1, "heal", "mp")
 		"shenqingluo":
 			_cast_vine()
 		"duniangzi":
@@ -3361,22 +3378,25 @@ func _cast_partner(id: String) -> void:
 			_cast_jinzhen()
 		# v17j：火工道人改成**召唤系**——放 2 只火鸦（原来只是"点燃 2 名敌人"）
 		"huogong":
-			summon_minion("火鸦", Color(0.96, 0.52, 0.22), 0.85, 0.9, 1.1, 0.8, 7.0, 2)
+			# v17p：火鸦 2 -> 1（蛟龙之外都收到 1~2）
+				summon_minion("火鸦", Color(0.96, 0.52, 0.22), 0.85, 0.9, 1.1, 0.8, 7.0, 1, "", "mp")
 		# v17l（用户点名四位）：琴痴再加一只**音灵**（不打架、只减速的那种）
 		"qinchi":
 			_cast_luanshen()
-			summon_minion("音灵", Color(0.82, 0.74, 1.0), 0.70, 0.6, 0.9, 0.7, 5.0, 2, "shock")
+			summon_minion("音灵", Color(0.82, 0.74, 1.0), 0.70, 0.6, 0.9, 0.7, 5.0, 2, "shock", "mp")
 		# v17l：下面三位原来**没有分派**（技能全是常驻被动），给它们各加一个召唤。
 		#   纯增量：不动它们已有的被动（减伤/反伤/暴击）。
 		# v17m：独眼彪原来**没有分派**（杀气是常驻被动），给它加一位**影卫**（快 · 脆）
 		"duyanbiao":
-			summon_minion("影卫", Color(0.46, 0.42, 0.58), 0.80, 0.7, 0.9, 0.6, 6.0, 2)
+			summon_minion("影卫", Color(0.46, 0.42, 0.58), 0.80, 0.7, 0.9, 0.6, 6.0, 2, "", "agi")
 		"shigandang":
-			summon_minion("石人", Color(0.68, 0.64, 0.56), 1.30, 2.2, 1.3, 1.6, 9.0, 1)
-		"jinjiaxianwei":
-			summon_minion("兵马俑", Color(0.74, 0.56, 0.38), 1.10, 1.7, 1.2, 1.4, 9.0, 2)
-		"yanwugui":
-			summon_minion("鹰", Color(0.74, 0.60, 0.38), 0.75, 0.7, 0.9, 0.7, 7.0, 2)
+			summon_minion("石人", Color(0.68, 0.64, 0.56), 1.30, 2.2, 1.3, 1.6, 9.0, 1, "", "hp")
+		# v17p：兵马俑删掉（跟石人定位重复：都是肉盾）
+		# "jinjiaxianwei":
+		#	summon_minion("兵马俑", Color(0.74, 0.56, 0.38), 1.10, 1.7, 1.2, 1.4, 9.0, 2)
+		# v17p（用户："纯攻击的删掉几个 有点多了"）：鹰删掉（跟影卫定位重复：都快都脆）
+		# "yanwugui":
+		#	summon_minion("鹰", Color(0.74, 0.60, 0.38), 0.75, 0.7, 0.9, 0.7, 7.0, 2)
 		"baiqihouren":
 			_cast_shashen()
 		"xinglin":
@@ -3388,13 +3408,14 @@ func _cast_partner(id: String) -> void:
 		# v17j（用户："新做一些召唤系"）：捕蛇人改成**召唤系**——放一条蛇
 		#   （原来只是"咬一口"，而且"目标中毒才翻倍"要别人先上毒，单上就是半残）
 		"busheren":
-			summon_minion("蛇", Color(0.34, 0.66, 0.30), 0.78, 0.8, 1.0, 1.1, 8.0, 1)
+			summon_minion("蛇", Color(0.34, 0.66, 0.30), 0.78, 0.8, 1.0, 1.1, 8.0, 1, "", "arm")
 		"gengfu":
 			_cast_baogeng()
 		# v17j（用户："新做一些召唤系"）：蛊师改成**召唤系**——一次放 3 只蛊虫
 		#   （原来只是"给 2 名敌人挂毒"，跟病书生/火工道人重复）
 		"gushi":
-			summon_minion("蛊虫", Color(0.46, 0.82, 0.36), 0.62, 0.5, 0.8, 0.9, 6.0, 3)
+			# v17p（用户："只有蛟龙可以多招 其他只能招一个或者两个"）：蛊虫 3 -> 2
+				summon_minion("蛊虫", Color(0.46, 0.82, 0.36), 0.62, 0.5, 0.8, 0.9, 6.0, 2, "", "agi")
 		"kuaidaoshou":
 			_cast_kuaidao()
 		"chuangong":
@@ -3406,7 +3427,7 @@ func _cast_partner(id: String) -> void:
 		# v17m：鬼见愁再加一位**刽子手**（处决型 · 慢而重）
 		"guijianchou":
 			_cast_zhenshou()
-			summon_minion("刽子手", Color(0.42, 0.20, 0.24), 1.05, 1.1, 1.1, 1.8, 8.0, 1, "exec")
+			summon_minion("刽子手", Color(0.42, 0.20, 0.24), 1.05, 1.1, 1.1, 1.8, 8.0, 1, "exec", "arm")
 		"zuitaisui":
 			_cast_jiuqi()
 		_:
