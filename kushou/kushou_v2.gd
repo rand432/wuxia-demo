@@ -5197,7 +5197,9 @@ func _fill_save(p: Control, y: float, sz: Vector2) -> float:
 	tip.size = Vector2(660, 34)
 	tip.add_theme_font_size_override("font_size", 19)
 	tip.add_theme_color_override("font_color", DIM)
-	tip.text = "已解锁 " + str(_unlocked.size()) + " / " + str(UNLOCKS.size()) + "　·　花的是主界面那个钱账（银两）· 解锁永久生效，下一局进池"
+	# v18g：原文案实测**正好 660px / 框 660px（余量 0）** —— 右边贴着边框，尾字像被吃掉。
+	#   砍掉几个字（"花的是…解锁…" → "花…· 永久生效"），留出 80px 余量。
+	tip.text = "已解锁 " + str(_unlocked.size()) + " / " + str(UNLOCKS.size()) + "　·　花主界面那个钱账（银两）· 永久生效，下一局进池"
 	p.add_child(tip)
 	ly += 46.0
 	_pbtn(p, "难度挑战（关卡 · 无尽）", Vector2(24, ly), Vector2(640, 68), 24, true, func(): _open_large("关卡"))
