@@ -3054,16 +3054,26 @@ func _update_minions(delta: float) -> void:
 				"wave":                       # 蛟龙：大浪拍击（水系范围）
 					m["skill_cd"] = 20.0
 					_cast_wave(tp)
-				"slow":                       # 音灵：一圈减速（真·辅助，不打伤害）
+				"shock":                      # 音灵：震荡环（击退 ＋ 伤害）
+					# v17o（用户："改为震荡环 击退和伤害 目前减速没有什么用"）：
+					#   ⚠ 原来放的是"减速 3 秒"—— 实测没用（怪本来就慢慢走下来，减速看不出差别）。
+					#   改成**把周围 150px 的怪震开**（kb 往上推 120）＋ 一圈金系伤害。
 					m["skill_cd"] = 5.0
 					var ns := 0
-					for f_v in foes:
+					for f_v in foes.duplicate():
 						var ff: Dictionary = f_v
+						if float(ff.get("dying", 0.0)) > 0.0 or bool(ff.get("still", false)):
+							continue
 						if mp2.distance_to(Vector2(float(ff["x"]), float(ff["y"]))) <= 150.0:
-							ff["slow_t"] = maxf(float(ff.get("slow_t", 0.0)), 3.0)
+							var dms := _apply_dmg(ff, float(hero["atk"]) * 0.45, DMG_METAL)
+							ff["kb"] = 120.0                       # 震开（往上推）
+							ff["flash"] = 0.12
 							ns += 1
+							if float(ff["hp"]) <= 0.0:
+								_kill_foe(ff)
 					if ns > 0:
-						_push_float(mp2.x, mp2.y - 30.0, "音灵·滞 " + str(ns), Color(0.82, 0.74, 1.0))
+						_push_float(mp2.x, mp2.y - 30.0, "音灵·震荡 " + str(ns), Color(0.82, 0.74, 1.0))
+						_bursts.append({"x": mp2.x, "y": mp2.y - 8.0, "t": 0.0, "col": Color(0.86, 0.78, 1.0), "scale": 1.5})
 				"heal":                       # 纸人：给主角回一小口
 					m["skill_cd"] = 6.0
 					var hh := float(hero["hp_max"]) * 0.03
@@ -3355,7 +3365,7 @@ func _cast_partner(id: String) -> void:
 		# v17l（用户点名四位）：琴痴再加一只**音灵**（不打架、只减速的那种）
 		"qinchi":
 			_cast_luanshen()
-			summon_minion("音灵", Color(0.82, 0.74, 1.0), 0.70, 0.6, 0.9, 0.7, 5.0, 2, "slow")
+			summon_minion("音灵", Color(0.82, 0.74, 1.0), 0.70, 0.6, 0.9, 0.7, 5.0, 2, "shock")
 		# v17l：下面三位原来**没有分派**（技能全是常驻被动），给它们各加一个召唤。
 		#   纯增量：不动它们已有的被动（减伤/反伤/暴击）。
 		# v17m：独眼彪原来**没有分派**（杀气是常驻被动），给它加一位**影卫**（快 · 脆）
