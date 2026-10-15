@@ -2972,14 +2972,16 @@ func cn_hp() -> float:
 #   参数：名字、颜色、体型倍率、血量/存在时长倍率、普攻间隔、技能间隔
 #   （蛟龙仍是单独那条 _summon_dragon，参数最猛）
 func summon_minion(nm: String, col: Color, sc: float, hp_m: float, life_m: float,
-	atk_cd: float, skill_cd: float, max_n: int) -> void:
+	atk_cd: float, skill_cd: float, max_n: int, sk := "") -> void:
 	var cnt := 0
 	for m_v in _minions:
 		if str((m_v as Dictionary).get("kind", "")) == nm:
 			cnt += 1
 	if cnt >= max_n or _minions.size() >= MINION_MAX:
 		return
-	_minions.append({"kind": nm, "col": col, "sc": sc,
+	# v17n（用户："不同召唤物配不同技能 有的可以没有技能 就纯攻击也可以"）：
+	#   sk 留空 = **纯攻击**（只有普攻，不放技能）；非空见 _update_minions 的分支。
+	_minions.append({"kind": nm, "col": col, "sc": sc, "skill": sk,
 		"pos": hero_pos + Vector2(randf_range(-70.0, 70.0), randf_range(-20.0, 30.0)),
 		"tgt": {}, "atk_cd": atk_cd, "skill_cd": skill_cd, "born": _t,
 		"hp": cn_hp() * hp_m, "hp_max": cn_hp() * hp_m,
@@ -2991,7 +2993,7 @@ func summon_minion(nm: String, col: Color, sc: float, hp_m: float, life_m: float
 func _summon_dragon() -> void:
 	if _minions.size() >= MINION_MAX:
 		return
-	_minions.append({"kind": "蛟龙", "col": Color(0.42, 0.76, 0.96), "sc": 1.0,
+	_minions.append({"kind": "蛟龙", "col": Color(0.42, 0.76, 0.96), "sc": 1.0, "skill": "wave",
 		"pos": hero_pos + Vector2(randf_range(-70.0, 70.0), randf_range(-20.0, 30.0)),
 		"tgt": {}, "atk_cd": 0.6, "skill_cd": 20.0, "born": _t,
 		"hp": cn_hp(), "hp_max": cn_hp(), "life": cn_life(), "life_max": cn_life(), "dying": 0.0})
@@ -3046,10 +3048,46 @@ func _update_minions(delta: float) -> void:
 				_push_float(float(tg["x"]) - 20.0, float(tg["y"]) - 20.0, str(int(dm)), Color(0.66, 0.90, 1.0))
 				if float(tg["hp"]) <= 0.0:
 					_kill_foe(tg)
-		# 大浪拍击：到点就放（水系；升级后带范围）
+		# v17n：按召唤物的 skill 分支放不同技能（空 = 纯攻击，什么都不放）
 		if float(m["skill_cd"]) <= 0.0:
-			m["skill_cd"] = 20.0
-			_cast_wave(tp)
+			match str(m.get("skill", "")):
+				"wave":                       # 蛟龙：大浪拍击（水系范围）
+					m["skill_cd"] = 20.0
+					_cast_wave(tp)
+				"slow":                       # 音灵：一圈减速（真·辅助，不打伤害）
+					m["skill_cd"] = 5.0
+					var ns := 0
+					for f_v in foes:
+						var ff: Dictionary = f_v
+						if mp2.distance_to(Vector2(float(ff["x"]), float(ff["y"]))) <= 150.0:
+							ff["slow_t"] = maxf(float(ff.get("slow_t", 0.0)), 3.0)
+							ns += 1
+					if ns > 0:
+						_push_float(mp2.x, mp2.y - 30.0, "音灵·滞 " + str(ns), Color(0.82, 0.74, 1.0))
+				"heal":                       # 纸人：给主角回一小口
+					m["skill_cd"] = 6.0
+					var hh := float(hero["hp_max"]) * 0.03
+					hero["hp"] = minf(float(hero["hp_max"]), float(hero["hp"]) + hh)
+					_push_float(hero_pos.x, hero_pos.y - 84.0, "纸人 +" + str(int(hh)), Color(0.94, 0.93, 0.86))
+				"exec":                       # 刽子手：给最近的残血敌人补一刀（真实伤害）
+					m["skill_cd"] = 9.0
+					var best: Dictionary = {}
+					var bl := 1.0e12
+					for f_v2 in foes:
+						var f2: Dictionary = f_v2
+						if float(f2.get("dying", 0.0)) > 0.0:
+							continue
+						if float(f2["hp"]) < bl:
+							bl = float(f2["hp"])
+							best = f2
+					if not best.is_empty():
+						var dm2 := _apply_dmg(best, float(hero["atk"]) * 1.2, DMG_TRUE)
+						_push_float(float(best["x"]), float(best["y"]) - 34.0, "刽子手·斩 " + str(int(dm2)), Color(0.92, 0.60, 0.60))
+						_bursts.append({"x": float(best["x"]), "y": float(best["y"]) - 10.0, "t": 0.0, "col": Color(0.72, 0.26, 0.28), "scale": 1.1})
+						if float(best["hp"]) <= 0.0:
+							_kill_foe(best)
+				_:                            # 空 = 纯攻击（只有普攻）
+					m["skill_cd"] = 99.0
 		# 别跑出战场
 		var p2: Vector2 = m["pos"]
 		m["pos"] = Vector2(clampf(p2.x, 40.0, size.x - 40.0), clampf(p2.y, size.y * 0.10, size.y - 40.0))
@@ -3293,7 +3331,7 @@ func _cast_partner(id: String) -> void:
 		# v17m（用户点名）：白婆婆再加一只**纸人**（治疗型 · 速快体弱）
 		"baipopo":
 			_cast_heal()
-			summon_minion("纸人", Color(0.94, 0.93, 0.86), 0.70, 0.55, 0.9, 0.7, 6.0, 1)
+			summon_minion("纸人", Color(0.94, 0.93, 0.86), 0.70, 0.55, 0.9, 0.7, 6.0, 1, "heal")
 		"shenqingluo":
 			_cast_vine()
 		"duniangzi":
@@ -3317,7 +3355,7 @@ func _cast_partner(id: String) -> void:
 		# v17l（用户点名四位）：琴痴再加一只**音灵**（不打架、只减速的那种）
 		"qinchi":
 			_cast_luanshen()
-			summon_minion("音灵", Color(0.82, 0.74, 1.0), 0.70, 0.6, 0.9, 0.7, 5.0, 2)
+			summon_minion("音灵", Color(0.82, 0.74, 1.0), 0.70, 0.6, 0.9, 0.7, 5.0, 2, "slow")
 		# v17l：下面三位原来**没有分派**（技能全是常驻被动），给它们各加一个召唤。
 		#   纯增量：不动它们已有的被动（减伤/反伤/暴击）。
 		# v17m：独眼彪原来**没有分派**（杀气是常驻被动），给它加一位**影卫**（快 · 脆）
@@ -3358,7 +3396,7 @@ func _cast_partner(id: String) -> void:
 		# v17m：鬼见愁再加一位**刽子手**（处决型 · 慢而重）
 		"guijianchou":
 			_cast_zhenshou()
-			summon_minion("刽子手", Color(0.42, 0.20, 0.24), 1.05, 1.1, 1.1, 1.8, 8.0, 1)
+			summon_minion("刽子手", Color(0.42, 0.20, 0.24), 1.05, 1.1, 1.1, 1.8, 8.0, 1, "exec")
 		"zuitaisui":
 			_cast_jiuqi()
 		_:
