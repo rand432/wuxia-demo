@@ -211,7 +211,25 @@ const BOSS_TIER := [
 		"affix_k": "all_up", "affix_v": 0.50, "skill_k": "summon", "ult_cd": 8.0},
 ]
 
-# v14g：每阶 3 只里随机挑一只出场（词缀/大招各不相同）
+# v18c（用户："不同难度不同 boss"）：**这一个难度点名的那只 boss**（空 = 老行为：阶内随机）。
+#   外壳每局开局用 set_stage_boss() 设进来；挑战叫出来的 boss 也走它 ——
+#   同一个难度只有一只 boss，不管从哪条路叫下来。
+var stage_boss := ""
+var stage_btier := 0
+
+func set_stage_boss(nm: String, tier: int) -> void:
+	stage_boss = nm
+	stage_btier = clampi(tier, 0, 4)
+
+func _boss_index(nm: String) -> int:
+	if nm == "":
+		return -1
+	for i in BOSS_TIER.size():
+		if str((BOSS_TIER[i] as Dictionary)["name"]) == nm:
+			return i
+	return -1
+
+# v14g：每阶随机挑一只出场（词缀/大招各不相同）
 func _boss_pick(tier: int) -> Dictionary:
 	# v17y：改成 **4 阶 × 4 只**（表已按阶排好：0-3 一阶 / 4-7 二阶 / 8-11 三阶 / 12-15 四阶）
 	var lo := (tier - 1) * 4
@@ -446,10 +464,23 @@ func spawn_challenge(kind_i: int, n: int) -> void:
 	# v16o（用户："背景喊杀声太多了 其实没必要有喊杀声"）：
 	#   原来这里 `if big:` 里只有一声 drum（战鼓）—— 现在整块去掉了。
 	#   （替换脚本把唯一语句换成注释，导致 if 空块报错，这里连同 if 一起清掉。）
-# 叫 boss（阶 1~3）
-func start_boss(tier: int) -> void:
-	var tt := clampi(tier, 1, 4)          # v18b：阶上限 3 → 4（第 4 阶 4 只 boss 原来永远选不到）
-	var d := _boss_pick(tt)                     # v14g：每阶 3 只随机一只（技能/大招/词缀都不同）
+# 叫 boss（阶 1~4）
+#   v18c：**可以点名一只**（关卡专属 boss）。点名时阶由它在 BOSS_TIER 里的位置决定
+#   （表按 4 阶 × 4 只排好，与 STAGES 一关一只对应）；没点名 = 阶内随机。
+func start_boss(tier: int, boss_name := "") -> void:
+	var nm := boss_name
+	if nm == "":
+		nm = stage_boss
+	var idx := _boss_index(nm)
+	var d: Dictionary = {}
+	if idx >= 0:
+		d = BOSS_TIER[idx]
+		tier = idx / 4 + 1                   # 表里位置 → 阶（0-3 一阶 / 4-7 二阶 / 8-11 三阶 / 12-15 四阶）
+	else:
+		if stage_btier > 0:
+			tier = stage_btier               # 点名了但表里没有（防手滑）：阶至少跟着关卡走
+		d = _boss_pick(tier)
+	var tt := clampi(tier, 1, 4)              # v18b：阶上限 3 → 4（第 4 阶 4 只 boss 原来永远选不到）
 	var mul := pow(WAVE_HP, float(wave - 1)) * foe_mul * diff_mul()
 	_spawn_foe("boss", 1.0, 1.0, true, tt, str(d["name"]))
 	var f: Dictionary = foes[foes.size() - 1]

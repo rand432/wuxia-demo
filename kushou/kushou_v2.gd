@@ -4677,26 +4677,28 @@ var _best_wave := 0                        # 无尽模式最高波（永久记�
 var _stage_done := {}                     # 已通关的关卡 id（永久，存 meta）
 
 const STAGES := [
-	# 第一章 · 入门
-	{"id": "1-1", "n": "牢门初开", "mul": 1.0, "waves": 20, "cat": "卡组", "un": "磐石心", "set": "panshixin"},
-	{"id": "1-2", "n": "铁栅血痕", "mul": 1.15, "waves": 20, "cat": "卡组", "un": "铁布衫", "set": "tiebushan"},
-	{"id": "1-3", "n": "断锁残灯", "mul": 1.3, "waves": 20, "cat": "队员", "un": "白婆婆", "pid": "baipopo"},
-	{"id": "1-4", "n": "监牢深处", "mul": 1.45, "waves": 20, "cat": "卡组", "un": "断岳", "set": "duanyue"},
+	# v18c（用户："不同难度不同 boss"）：**一关一只专属 boss**（boss 名 ＋ btier 阶）。
+	#   表跟 battle 的 BOSS_TIER 一条一条对着排（4 阶 × 4 只）——
+	#   这一关所有 boss 波（第 10/15/20/25/30/35 波）下来的都是同一只。
+	{"id": "1-1", "n": "牢门初开", "mul": 1.0, "waves": 20, "boss": "看门恶犬", "btier": 1, "cat": "卡组", "un": "磐石心", "set": "panshixin"},
+	{"id": "1-2", "n": "铁栅血痕", "mul": 1.15, "waves": 20, "boss": "铁背苍狼", "btier": 1, "cat": "卡组", "un": "铁布衫", "set": "tiebushan"},
+	{"id": "1-3", "n": "断锁残灯", "mul": 1.3, "waves": 20, "boss": "毒牙蟒", "btier": 1, "cat": "队员", "un": "白婆婆", "pid": "baipopo"},
+	{"id": "1-4", "n": "监牢深处", "mul": 1.45, "waves": 20, "boss": "石甲巨猿", "btier": 1, "cat": "卡组", "un": "断岳", "set": "duanyue"},
 	# 第二章 · 进阶
-	{"id": "2-1", "n": "典吏巡夜", "mul": 1.9, "waves": 25, "cat": "宝物", "un": "灵晶袋", "trea": "灵晶袋"},
-	{"id": "2-2", "n": "五行乱阵", "mul": 2.1, "waves": 25, "cat": "卡组", "un": "五行", "set": "wuxing"},
-	{"id": "2-3", "n": "贪墨之狱", "mul": 2.3, "waves": 25, "cat": "装备卡", "un": "聚财珠", "set": "jucaizhu"},
-	{"id": "2-4", "n": "藤萝缠狱", "mul": 2.5, "waves": 25, "cat": "队员", "un": "沈青萝", "pid": "shenqingluo"},
+	{"id": "2-1", "n": "典吏巡夜", "mul": 1.9, "waves": 25, "boss": "双头狮", "btier": 2, "cat": "宝物", "un": "灵晶袋", "trea": "灵晶袋"},
+	{"id": "2-2", "n": "五行乱阵", "mul": 2.1, "waves": 25, "boss": "独眼狱卒", "btier": 2, "cat": "卡组", "un": "五行", "set": "wuxing"},
+	{"id": "2-3", "n": "贪墨之狱", "mul": 2.3, "waves": 25, "boss": "火尾狐妖", "btier": 2, "cat": "装备卡", "un": "聚财珠", "set": "jucaizhu"},
+	{"id": "2-4", "n": "藤萝缠狱", "mul": 2.5, "waves": 25, "boss": "赤焰蛟", "btier": 2, "cat": "队员", "un": "沈青萝", "pid": "shenqingluo"},
 	# 第三章 · 困难
-	{"id": "3-1", "n": "龙纹石壁", "mul": 3.0, "waves": 30, "cat": "宝物", "un": "龙纹佩", "trea": "龙纹佩"},
-	{"id": "3-2", "n": "雷罚天牢", "mul": 3.3, "waves": 30, "cat": "卡组", "un": "雷罚", "set": "leifa"},
-	{"id": "3-3", "n": "传家之秘", "mul": 3.6, "waves": 30, "cat": "装备卡", "un": "传家宝", "set": "chuanjiabao"},
-	{"id": "3-4", "n": "鹰唳九霄", "mul": 3.9, "waves": 30, "cat": "队员", "un": "燕无归", "pid": "yanwugui"},
+	{"id": "3-1", "n": "龙纹石壁", "mul": 3.0, "waves": 30, "boss": "场主亲养·狴犴", "btier": 3, "cat": "宝物", "un": "龙纹佩", "trea": "龙纹佩"},
+	{"id": "3-2", "n": "雷罚天牢", "mul": 3.3, "waves": 30, "boss": "血手判官", "btier": 3, "cat": "卡组", "un": "雷罚", "set": "leifa"},
+	{"id": "3-3", "n": "传家之秘", "mul": 3.6, "waves": 30, "boss": "困兽之主", "btier": 3, "cat": "装备卡", "un": "传家宝", "set": "chuanjiabao"},
+	{"id": "3-4", "n": "鹰唳九霄", "mul": 3.9, "waves": 30, "boss": "幽冥判官", "btier": 3, "cat": "队员", "un": "燕无归", "pid": "yanwugui"},
 	# 第四章 · 地狱
-	{"id": "4-1", "n": "火麟熔狱", "mul": 4.4, "waves": 35, "cat": "宠物", "un": "火麟", "pet": "lin"},
-	{"id": "4-2", "n": "诛心绝境", "mul": 4.8, "waves": 35, "cat": "卡组", "un": "诛心", "set": "zhuxin"},
-	{"id": "4-3", "n": "连环杀狱", "mul": 5.2, "waves": 35, "cat": "队员", "un": "雷小七", "pid": "leixiaoqi"},
-	{"id": "4-4", "n": "困兽之斗", "mul": 5.6, "waves": 35, "cat": "宝物", "un": "悟道果", "trea": "悟道果"},
+	{"id": "4-1", "n": "火麟熔狱", "mul": 4.4, "waves": 35, "boss": "九幽魔君", "btier": 4, "cat": "宠物", "un": "火麟", "pet": "lin"},
+	{"id": "4-2", "n": "诛心绝境", "mul": 4.8, "waves": 35, "boss": "血海罗刹", "btier": 4, "cat": "卡组", "un": "诛心", "set": "zhuxin"},
+	{"id": "4-3", "n": "连环杀狱", "mul": 5.2, "waves": 35, "boss": "万蛊虫母", "btier": 4, "cat": "队员", "un": "雷小七", "pid": "leixiaoqi"},
+	{"id": "4-4", "n": "困兽之斗", "mul": 5.6, "waves": 35, "boss": "困兽·终焉", "btier": 4, "cat": "宝物", "un": "悟道果", "trea": "悟道果"},
 ]
 
 func _stage_info(id: String) -> Dictionary:
@@ -4779,7 +4781,8 @@ func _fill_stage(p: Control, y: float, sz: Vector2) -> float:
 	tip.add_theme_font_size_override("font_size", 19)
 	tip.add_theme_color_override("font_color", DIM)
 	tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	tip.text = "怪强度 ×" + str(s0["mul"]) + "　波数上限 " + str(s0["waves"]) + "（打满即通关，给首通奖励）· 首通奖励与［存档］那批不重合"
+	tip.text = "怪强度 ×" + str(s0["mul"]) + "　波数上限 " + str(s0["waves"]) + "　本关 boss：" + str(s0.get("boss", "—")) + "（" + _tier_cn(int(s0.get("btier", 1))) + "）\n" \
+		+ "打满即通关，给首通奖励；首通奖励与［存档］那批不重合"
 	p.add_child(tip)
 	var ly := y + 116.0
 	var last_ch := ""
@@ -4808,7 +4811,7 @@ func _fill_stage(p: Control, y: float, sz: Vector2) -> float:
 		sb.set_border_width_all(3 if cur else 2)
 		var box := Panel.new()
 		box.position = Vector2(24, ly)
-		box.size = Vector2(640, 92)
+		box.size = Vector2(640, 132)              # v18c：多一行"本关 boss"（92 → 132）
 		box.add_theme_stylebox_override("panel", sb)
 		box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		p.add_child(box)
@@ -4820,18 +4823,26 @@ func _fill_stage(p: Control, y: float, sz: Vector2) -> float:
 		l1.text = id + "　" + str(s["n"]) + ("　（已通关）" if done else ("" if open else "　（未解锁）"))
 		box.add_child(l1)
 		var l2 := Label.new()
-		l2.position = Vector2(14, 48)
-		l2.size = Vector2(430, 36)
+		l2.position = Vector2(14, 46)
+		l2.size = Vector2(430, 28)
 		l2.add_theme_font_size_override("font_size", 18)
 		l2.add_theme_color_override("font_color", INK if open else DIM)
 		l2.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		l2.text = "怪 ×" + str(s["mul"]) + " · " + str(s["waves"]) + " 波　首通：" + str(s["cat"]) + "「" + str(s["un"]) + "」"
+		l2.text = "怪 ×" + str(s["mul"]) + " · " + str(s["waves"]) + " 波　boss：" + str(s.get("boss", "—")) + "（" + _tier_cn(int(s.get("btier", 1))) + "）"
 		box.add_child(l2)
+		var l3 := Label.new()
+		l3.position = Vector2(14, 80)
+		l3.size = Vector2(600, 44)
+		l3.add_theme_font_size_override("font_size", 18)
+		l3.add_theme_color_override("font_color", SEAL if done else DIM)
+		l3.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		l3.text = "首通：" + str(s["cat"]) + "「" + str(s["un"]) + "」"
+		box.add_child(l3)
 		if open:
-			var bb := _pbtn(box, ("已选" if cur else "选它"), Vector2(460, 16), Vector2(166, 62), 22, true, _set_stage.bind(id))
+			var bb := _pbtn(box, ("已选" if cur else "选它"), Vector2(460, 10), Vector2(166, 62), 22, true, _set_stage.bind(id))
 			if cur:
 				bb.add_theme_stylebox_override("normal", _flat(Color(0.55, 0.20, 0.18, 0.95)))
-		ly += 100.0
+		ly += 142.0
 	# v14f：无尽模式那一行（破 4-4 解锁）
 	var eo := _endless_open()
 	var ec := GOLD if eo else Color(0.55, 0.53, 0.51)
@@ -5931,6 +5942,12 @@ func _restart_run() -> void:
 		_hint.text = "无尽模式：怪 ×1.6，波数不封顶——最高纪录 " + str(_best_wave) + " 波"
 	if _field != null:
 		_field.foe_mul = float(st["mul"])
+		# v18c（用户："不同难度不同 boss"）：把这一关点名的那只 boss 交给战场 ——
+		#   波次 boss 与「boss 挑战」叫出来的都是它。无尽模式不点名（按阶内随机）。
+		if _endless:
+			_field.set_stage_boss("", 0)
+		else:
+			_field.set_stage_boss(str(st.get("boss", "")), int(st.get("btier", 0)))
 	_stage_paid = false
 	_hint.text = "关卡 " + _stage_sel + " " + str(st["n"]) + "：怪 ×" + str(st["mul"]) + " · " + str(st["waves"]) + " 波通关"
 	_close_popup()
@@ -6490,9 +6507,10 @@ func _process(delta: float) -> void:
 		if _wave % 10 == 0:
 			_trea_refresh += 1
 			_hint.text = "宝物刷新 +1（每 10 波一次 · 现有 " + str(_trea_refresh) + " 次）"
-		# v18b（交接文档 §3 ⑤ 真 bug）：阶上限 **3 → 4** ——
-		#   原来封在 3，第 4 阶那 4 只 boss（九幽魔君/血海罗刹/万蛊虫母/困兽·终焉）**永远出不了场**。
-		_boss_tier = clampi(1 + _wave / 10, 1, 4)
+		# v18b：阶上限 3 → 4（第 4 阶那 4 只 boss 原来永远出不了场）
+		# v18c：阶现在跟着**关卡**走（一关一只 boss），只有无尽模式还按波数涨
+		var bn_w: Array = _boss_now()
+		_boss_tier = int(bn_w[0])
 		# v9a：商路/财神套——**每过一波额外给灵晶**（用户："都可"里的经济线）
 		var wc := int(_extra.get("wave_crystal", 0.0))
 		if wc > 0:
@@ -6544,7 +6562,7 @@ func _process(delta: float) -> void:
 			lb.text = ("就绪" if cd <= 0.0 else "冷却 " + str(int(ceil(cd))) + "s")
 			lb.add_theme_color_override("font_color", GREEN if cd <= 0.0 else DIM)
 	_wave_lb.text = "波 " + str(_wave) + "/" + str(_wave_max)
-	var tier_cn: String = str(["", "一阶", "二阶", "三阶", "四阶"][clampi(_boss_tier, 1, 4)])
+	var tier_cn: String = _tier_cn(_boss_tier)
 	# v4e：倒计时按"分:秒"走——浴血把 boss 推到 180 秒后，原来那套 "00:180" 就露馅了
 	var bs := int(ceil(maxf(0.0, _boss_sec)))
 	_boss_lb.text = tier_cn + " boss " + ("%02d:%02d" % [bs / 60, bs % 60])
@@ -6640,15 +6658,30 @@ func _process(delta: float) -> void:
 func _boss_on_wave(w: int) -> bool:
 	return w >= 10 and w % 5 == 0
 
+# v18c（用户："不同难度不同 boss"）：这一关点名的那只 boss → [阶, 名字]。
+#   无尽模式没有关卡 boss：按波数涨阶、阶内随机（名字给空）。
+func _boss_now() -> Array:
+	if _endless:
+		return [clampi(1 + _wave / 10, 1, 4), ""]
+	var s := _stage_info(_stage_sel)
+	return [clampi(int(s.get("btier", 1)), 1, 4), str(s.get("boss", ""))]
+
+func _tier_cn(t: int) -> String:
+	return str(["", "一阶", "二阶", "三阶", "四阶"][clampi(t, 1, 4)])
+
 func _boss_arrive() -> void:
 	if not _boss_on_wave(_wave):
 		return                     # 不是 boss 波，安静过
 	if _popup_kind != "" and _is_large(_popup_kind):
 		_close_popup()
-	# 真叫一只 boss 下来（阶随波数涨）
+	# 真叫一只 boss 下来（v18c：这一关点名的那只）
+	var bn: Array = _boss_now()
+	_boss_tier = int(bn[0])
 	_boss_seq += 1
-	_field.start_boss(clampi(1 + _boss_seq / 2, 1, 4))
-	_hint.text = "boss 入场（第 " + str(_wave) + " 波）——顶上那条是它的血条"
+	_field.start_boss(int(bn[0]), str(bn[1]))
+	var bnm := str(bn[1])
+	_hint.text = "boss 入场（第 " + str(_wave) + " 波）：" + _tier_cn(_boss_tier) \
+		+ ("「" + bnm + "」" if bnm != "" else "") + "——顶上那条是它的血条"
 
 # ---- 战场信号 ----
 # v4e：给玩家的一条**醒目提醒**（横幅 ＋ 底部提示；横幅 5 秒后自己消失）
@@ -7046,7 +7079,7 @@ func _on_special(kind: String, n: int, pos: Vector2) -> void:
 			_hint.text = "宝箱怪掉宝物——飞进［装备·宝物］"
 
 func _on_boss(tier: int) -> void:
-	_hint.text = ["", "一阶", "二阶", "三阶", "四阶"][clampi(tier, 1, 4)] + " boss 下场了——打赢有额外名声"
+	_hint.text = _tier_cn(tier) + " boss 下场了——打赢有额外名声"
 
 func _on_hero_down() -> void:
 	# v15i：⚠ 这里原来**连着加了两遍**（复制粘贴留下的），导致"浴血次数"翻倍 ——
