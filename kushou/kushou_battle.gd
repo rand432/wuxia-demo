@@ -2607,6 +2607,12 @@ var partners := {
 	"lengyueniang": {"owned": false, "mp": 0.0, "cd": 0.0, "active": 0.0, "dmg_lv": 0, "dur_lv": 0, "cost_lv": 0},
 	"guijianchou": {"owned": false, "mp": 0.0, "cd": 0.0, "active": 0.0, "dmg_lv": 0, "cost_lv": 0},
 	"zuitaisui": {"owned": false, "mp": 0.0, "cd": 0.0, "active": 0.0, "dmg_lv": 0},
+	# v17q：五位"换算系"（吃治疗/回气/内力/生命/护盾，**不吃攻击力**）
+	"yaowang": {"owned": false, "mp": 0.0, "cd": 0.0, "active": 0.0, "grp_lv": 0},
+	"qizong": {"owned": false, "mp": 0.0, "cd": 0.0, "active": 0.0, "grp_lv": 0},
+	"xuanyin": {"owned": false, "mp": 0.0, "cd": 0.0, "active": 0.0, "grp_lv": 0},
+	"xuesha": {"owned": false, "mp": 0.0, "cd": 0.0, "active": 0.0, "grp_lv": 0},
+	"dunwei": {"owned": false, "mp": 0.0, "cd": 0.0, "active": 0.0, "grp_lv": 0},
 }
 var _dg_list: Array = []            # 飞匕：{pos, dir, tgt, dmg, pierce, bounce, hits, t}
 const PARTNER_INFO := {
@@ -2769,6 +2775,24 @@ const PARTNER_INFO := {
 	"zuitaisui": {"name": "醉太岁", "quality": "极品", "skill": "酒气", "dtype": "无伤害", "grow": {"arm": 3, "agi": 2, "wit": 3},
 		"desc": "每 22 秒灌一口：接下来 8 秒攻击 +25% 且每次命中回 2 点内力",
 		"mp0": 180.0, "cd0": 22.0, "dur0": 8.0},
+	# ===== v17q：五位"换算系"（用户点名：治疗/内力恢复/内力/生命/护盾 算伤害）=====
+	#   伤害倍率**刻意压低**（见 special_dmg）—— 它们吃的是"顺带就有"的量。
+	#   强化「群体化」1 级起：0 级打 1 名 → 3 名。
+	"yaowang": {"name": "药王", "quality": "上品", "skill": "回春诀", "dtype": "治疗换算", "grow": {"arm": 0, "agi": 2, "wit": 5},
+		"desc": "回一口血，并把**治疗量的一部分转成真实伤害**（0 级打 1 名 · 强化后打 3 名）",
+		"mp0": 150.0, "cd0": 12.0, "dur0": 0.0},
+	"qizong": {"name": "气宗", "quality": "上品", "skill": "归元劲", "dtype": "回气换算", "grow": {"arm": 1, "agi": 3, "wit": 4},
+		"desc": "回一口内力，并把**回复量的一部分转成真实伤害**（强化后打 3 名）",
+		"mp0": 140.0, "cd0": 13.0, "dur0": 0.0},
+	"xuanyin": {"name": "玄阴", "quality": "极品", "skill": "阴煞诀", "dtype": "内力换算", "grow": {"arm": 1, "agi": 2, "wit": 6},
+		"desc": "按**内力上限**换算真实伤害（堆蓝就强 · 强化后打 3 名）",
+		"mp0": 200.0, "cd0": 14.0, "dur0": 0.0},
+	"xuesha": {"name": "血煞", "quality": "极品", "skill": "血魔功", "dtype": "生命换算", "grow": {"arm": 5, "agi": 1, "wit": 2},
+		"desc": "按**生命上限**换算真实伤害（自己先掉 4% 血 · 堆血就强 · 强化后打 3 名）",
+		"mp0": 220.0, "cd0": 15.0, "dur0": 0.0},
+	"dunwei": {"name": "盾卫", "quality": "上品", "skill": "铁壁反震", "dtype": "护盾换算", "grow": {"arm": 4, "agi": 1, "wit": 3},
+		"desc": "先给自己上一层护盾，再按**盾值**换算真实伤害（强化后打 3 名）",
+		"mp0": 160.0, "cd0": 16.0, "dur0": 0.0},
 }
 const PARTNER_UP_STEP_MP := 20.0      # 每个"提升内力消耗"的强化 +20 内力
 const PARTNER_DOWN_STEP_MP := 15.0    # "减内力消耗"每层 −15
@@ -2940,6 +2964,45 @@ func _draw_shield(shk: Vector2) -> void:
 const MINION_MAX := 6
 var _minions: Array = []            # 蛟龙：{pos, tgt, atk_cd, skill_cd, born}
 var _waves_fx: Array = []           # 大浪拍击的水浪：{x, y, r, t}
+
+# ============================================================
+# v17q（用户："做几个 可以根据治疗算伤害的…内力恢复…内力…生命…护盾…
+#        【单体演化为群体】这种特殊的伤害倍率普遍较低"）：
+#   五种"换算系"伤害 —— **不吃攻击力**，改吃别的量：
+#     治=本次治疗量 · 回=本次回内力量 · 内=内力上限 · 生=生命上限 · 盾=本次护盾值
+#   ⚠ 系数**刻意压低**：这些量都是"顺带就有"的（不像攻击力要专门堆），不压就成无脑流。
+#   单体→群体：0 级打最近 1 名；**强化「群体化」1 级起打最近 3 名**。
+# ============================================================
+func special_dmg(kind: String, amount: float, lvl: int) -> float:
+	var k := 0.0
+	match kind:
+		"heal":   k = 0.45
+		"mpreg":  k = 0.40
+		"mp":     k = 0.05
+		"hp":     k = 0.025
+		"shield": k = 0.50
+		_:        k = 0.0
+	return maxf(1.0, amount * k * (1.0 + 0.20 * float(lvl)))
+
+func special_targets(lvl: int) -> Array:
+	return _nearest_n(1) if lvl <= 0 else _nearest_n(3)
+
+func special_hit(kind: String, amount: float, lvl: int, nm: String, col: Color) -> int:
+	var d := special_dmg(kind, amount, lvl)
+	var n := 0
+	for f_v in special_targets(lvl):
+		var f: Dictionary = f_v
+		var dm := _apply_dmg(f, d, DMG_TRUE)
+		_push_float(float(f["x"]), float(f["y"]) - 30.0, str(int(dm)), col)
+		f["flash"] = 0.12
+		n += 1
+		if float(f["hp"]) <= 0.0:
+			_kill_foe(f)
+	if n > 0:
+		_push_float(hero_pos.x, hero_pos.y - 92.0, nm + " ×" + str(n), col, true)
+		_bursts.append({"x": hero_pos.x, "y": hero_pos.y - 10.0, "t": 0.0, "col": col, "scale": 1.3})
+	Audio.sfx("skill", -9.0)
+	return n
 
 # v17p：召唤物的普攻基数 —— 按它吃的**那一门**属性算（空 = 蛟龙，走老的"全属性"口径）
 func _minion_atk(m: Dictionary) -> float:
@@ -3430,6 +3493,17 @@ func _cast_partner(id: String) -> void:
 			summon_minion("刽子手", Color(0.42, 0.20, 0.24), 1.05, 1.1, 1.1, 1.8, 8.0, 1, "exec", "arm")
 		"zuitaisui":
 			_cast_jiuqi()
+		# v17q：五位"换算系"（吃治疗/回气/内力/生命/护盾，不吃攻击力）
+		"yaowang":
+			_cast_yaowang()
+		"qizong":
+			_cast_qizong()
+		"xuanyin":
+			_cast_xuanyin()
+		"xuesha":
+			_cast_xuesha()
+		"dunwei":
+			_cast_dunwei()
 		_:
 			pass
 
@@ -3715,6 +3789,38 @@ func _cast_jiuqi() -> void:
 # 季沧海：每 3 秒（可减）自动烧一次，不吃内力
 # ---- v14b 新队员的一次性技能 ----
 # 白婆婆：续命（回血；自己残血翻倍）
+# ===== v17q 五位换算系（不吃攻击力；伤害见 special_dmg）=====
+# 药王：回血 → 按治疗量换算伤害
+func _cast_yaowang() -> void:
+	var h := float(hero["hp_max"]) * 0.06
+	hero["hp"] = minf(float(hero["hp_max"]), float(hero["hp"]) + h)
+	_push_float(hero_pos.x, hero_pos.y - 80.0, "回春 +" + str(int(h)), Color(0.72, 0.94, 0.72))
+	special_hit("heal", h, int(partners["yaowang"].get("grp_lv", 0)), "回春诀", Color(0.72, 0.94, 0.72))
+
+# 气宗：回内力 → 按回复量换算伤害
+func _cast_qizong() -> void:
+	var m := float(hero["mp_max"]) * 0.15
+	hero["mp"] = minf(float(hero["mp_max"]), float(hero["mp"]) + m)
+	_push_float(hero_pos.x, hero_pos.y - 80.0, "归元 +" + str(int(m)), Color(0.66, 0.86, 1.0))
+	special_hit("mpreg", m, int(partners["qizong"].get("grp_lv", 0)), "归元劲", Color(0.66, 0.86, 1.0))
+
+# 玄阴：按内力上限换算伤害
+func _cast_xuanyin() -> void:
+	special_hit("mp", float(hero["mp_max"]), int(partners["xuanyin"].get("grp_lv", 0)), "阴煞诀", Color(0.70, 0.60, 0.96))
+
+# 血煞：按生命上限换算伤害（自己先掉 4%）
+func _cast_xuesha() -> void:
+	hero["hp"] = maxf(1.0, float(hero["hp"]) - float(hero["hp_max"]) * 0.04)
+	special_hit("hp", float(hero["hp_max"]), int(partners["xuesha"].get("grp_lv", 0)), "血魔功", Color(0.90, 0.30, 0.32))
+
+# 盾卫：先上盾 → 按盾值换算伤害
+func _cast_dunwei() -> void:
+	var sh := float(hero["hp_max"]) * 0.10
+	hero["dr"] = maxf(float(hero.get("dr", 0.0)), sh)
+	hero["dr_t"] = maxf(float(hero.get("dr_t", 0.0)), 6.0)
+	_push_float(hero_pos.x, hero_pos.y - 80.0, "铁壁 +" + str(int(sh)), Color(0.74, 0.78, 0.80))
+	special_hit("shield", sh, int(partners["dunwei"].get("grp_lv", 0)), "铁壁反震", Color(0.74, 0.78, 0.80))
+
 func _cast_heal() -> void:
 	var ratio := (0.12 + 0.02 * float(partners["baipopo"].get("heal_lv", 0))) * p_star_mul("baipopo")
 	if float(hero["hp"]) / maxf(1.0, float(hero["hp_max"])) < 0.40:
