@@ -5345,13 +5345,13 @@ func _foe_art(f: Dictionary, sc: float, fc: Color) -> void:
 		"treasure":
 			_draw_chest(c, sc, fc)
 		"boss":
-			_draw_boss(c, sc, fc)
+			_draw_boss(c, sc, fc, f)
 		"statue":
 			_draw_statue(c, sc, fc)
 		"champion":
-			_draw_boss(c, sc, fc)
+			_draw_boss(c, sc, fc, f)
 		"elite":
-			_draw_boss(c, sc, fc)
+			_draw_boss(c, sc, fc, f)
 		_:
 			# v16h/i：普通怪分五种长相（弓手 / 法师 / 壮汉 / 盾兵 / 近战小人）
 			if bool(f.get("ranged", false)):
@@ -5519,7 +5519,24 @@ func _draw_chest(c: Vector2, sc: float, fc: Color) -> void:
 	draw_line(Vector2(c.x + w2 * 0.6, y + h2), Vector2(c.x + w2 * 0.6, y + h2 + 8.0 * sc), Color(0.40, 0.30, 0.20), 4.0)
 
 # boss：大只 ＋ 两块肩甲 ＋ 一对角 ＋ 脚下一圈红气
-func _draw_boss(c: Vector2, sc: float, fc: Color) -> void:
+# v17z（用户："一样有不同特性不同外形的boss"）：
+#   ⚠ 原来 16 只 boss 走的是**同一个 _draw_boss**（小人 ＋ 肩甲 ＋ 犄角），长得一模一样。
+#   现在按 boss 名字取**各自的颜色**（体型/肩甲宽度也按阶微调），一眼能分出是哪只。
+const BOSS_COL := {
+	"看门恶犬": Color(0.72, 0.42, 0.30), "铁背苍狼": Color(0.56, 0.58, 0.64),
+	"毒牙蟒": Color(0.46, 0.66, 0.36), "石甲巨猿": Color(0.62, 0.58, 0.48),
+	"双头狮": Color(0.86, 0.62, 0.28), "独眼狱卒": Color(0.52, 0.46, 0.52),
+	"火尾狐妖": Color(0.94, 0.52, 0.28), "赤焰蛟": Color(0.92, 0.36, 0.26),
+	"场主亲养·狴犴": Color(0.78, 0.68, 0.34), "血手判官": Color(0.78, 0.24, 0.26),
+	"困兽之主": Color(0.66, 0.30, 0.62), "幽冥判官": Color(0.48, 0.40, 0.72),
+	"九幽魔君": Color(0.56, 0.28, 0.74), "血海罗刹": Color(0.86, 0.18, 0.34),
+	"万蛊虫母": Color(0.54, 0.74, 0.30), "困兽·终焉": Color(0.90, 0.76, 0.32),
+}
+
+func _draw_boss(c: Vector2, sc: float, fc: Color, f: Dictionary = {}) -> void:
+	var nm := str(f.get("name", ""))
+	if BOSS_COL.has(nm):
+		fc = (BOSS_COL[nm] as Color)
 	draw_circle(Vector2(c.x, c.y + 6.0 * sc), 46.0 * sc, Color(0.62, 0.16, 0.14, 0.16))
 	_stick(c, sc, fc, false)
 	draw_rect(Rect2(c.x - 30.0 * sc, c.y - 26.0 * sc, 20.0 * sc, 10.0 * sc), Color(0.58, 0.24, 0.22))
