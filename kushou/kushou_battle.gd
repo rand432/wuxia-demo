@@ -168,6 +168,10 @@ const BOSS_TIER := [
 	{"name": "毒牙蟒", "hp": 1750.0, "atk": 30,
 		"skill": "剧毒（攻击带毒）", "ult": "毒雾喷吐", "ult_shape": "follow", "affix": "迅捷（移速 +30%）",
 		"affix_k": "spd_up", "affix_v": 0.30, "skill_k": "poison", "ult_cd": 12.0},
+	# v17y（用户："新增 7 只 boss"）：9 -> 16 只，改成 **4 阶 × 4 只**（正好 16 关一关一只）
+	{"name": "石甲巨猿", "hp": 2600.0, "atk": 26,
+		"skill": "石甲（减伤 35%）", "ult": "裂地拳", "ult_shape": "ring", "affix": "磐石（生命 +45%）",
+		"affix_k": "hp_up", "affix_v": 0.45, "ult_cd": 15.0},
 	{"name": "双头狮", "hp": 5200.0, "atk": 60,
 		"skill": "双头夹击", "ult": "狮吼", "ult_shape": "sector", "affix": "嗜血（击中回血）",
 		"affix_k": "lifesteal", "affix_v": 0.15, "ult_cd": 13.0},
@@ -177,6 +181,9 @@ const BOSS_TIER := [
 	{"name": "火尾狐妖", "hp": 5600.0, "atk": 64.5,
 		"skill": "狐火（火系溅射）", "ult": "焚身爆", "ult_shape": "chain", "affix": "疾风（攻速 +30%）",
 		"affix_k": "aspd_up", "affix_v": 0.30, "skill_k": "foxfire", "ult_cd": 11.0},
+	{"name": "赤焰蛟", "hp": 6800.0, "atk": 58,
+		"skill": "炎息（火系溅射）", "ult": "烽火连天", "ult_shape": "chain", "affix": "炽烈（攻击 +40%）",
+		"affix_k": "atk_up", "affix_v": 0.40, "ult_cd": 12.0},
 	{"name": "场主亲养·狴犴", "hp": 14000.0, "atk": 96,
 		"skill": "牢狱威压", "ult": "断罪一击", "ult_shape": "sector", "affix": "王威（全属性 +30%）",
 		"affix_k": "all_up", "affix_v": 0.30, "ult_cd": 12.0},
@@ -186,12 +193,29 @@ const BOSS_TIER := [
 	{"name": "困兽之主", "hp": 19000.0, "atk": 105,
 		"skill": "兽王号令（召小怪）", "ult": "万兽奔踏", "ult_shape": "beam", "affix": "不死（濒死回血一次）",
 		"affix_k": "revive", "affix_v": 1.0, "skill_k": "summon", "ult_cd": 9.0},
+	{"name": "幽冥判官", "hp": 21000.0, "atk": 98,
+		"skill": "勾魂（真实伤害）", "ult": "幽冥斩", "ult_shape": "sector", "affix": "夺魂（吸血 30%）",
+		"affix_k": "lifesteal", "affix_v": 0.30, "ult_cd": 11.0},
+	# ---- 四阶（地狱 · 4 只）----
+	{"name": "九幽魔君", "hp": 26000.0, "atk": 118,
+		"skill": "魔威（全属性 +40%）", "ult": "九幽落雷", "ult_shape": "chain", "affix": "魔王（全属性 +40%）",
+		"affix_k": "all_up", "affix_v": 0.40, "ult_cd": 10.0},
+	{"name": "血海罗刹", "hp": 29000.0, "atk": 126,
+		"skill": "血海（每秒回 1.5%）", "ult": "血浪滔天", "ult_shape": "ring", "affix": "再生（每秒回 1.5%）",
+		"affix_k": "regen", "affix_v": 0.015, "ult_cd": 9.0},
+	{"name": "万蛊虫母", "hp": 24000.0, "atk": 112,
+		"skill": "虫群（召小怪）", "ult": "万蛊噬心", "ult_shape": "follow", "affix": "孵化（濒死回血）",
+		"affix_k": "revive", "affix_v": 1.0, "skill_k": "summon", "ult_cd": 8.0},
+	{"name": "困兽·终焉", "hp": 34000.0, "atk": 140,
+		"skill": "终焉（综合最强）", "ult": "万兽终章", "ult_shape": "sector", "affix": "终焉（全属性 +50%）",
+		"affix_k": "all_up", "affix_v": 0.50, "skill_k": "summon", "ult_cd": 8.0},
 ]
 
 # v14g：每阶 3 只里随机挑一只出场（词缀/大招各不相同）
 func _boss_pick(tier: int) -> Dictionary:
-	var lo := (tier - 1) * 3
-	var idx := lo + (randi() % 3)
+	# v17y：改成 **4 阶 × 4 只**（表已按阶排好：0-3 一阶 / 4-7 二阶 / 8-11 三阶 / 12-15 四阶）
+	var lo := (tier - 1) * 4
+	var idx := lo + (randi() % 4)
 	return BOSS_TIER[clampi(idx, 0, BOSS_TIER.size() - 1)]
 const FOE_NAMES := ["狱狼", "疯牛", "毒蝎", "牢鼠"]
 
