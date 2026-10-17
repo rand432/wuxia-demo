@@ -1659,11 +1659,23 @@ func _card_big(p: Control, pos: Vector2, sz: Vector2, id: String) -> void:
 	pr.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	pr.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(pr)
-	# ④ 组合（这一段最长，给足行数）
+	# ④ v18o（用户："组合前面得加上这个组合名 这样更容易分辨【组合名换个颜色更显眼】"）：
+	#   组合**名**单独一行、单独颜色（深金）—— 三张卡并排时一眼能看出这一手是冲着哪套去的
 	var cm_y := pr_y + 62.0
+	var cnm := Label.new()
+	cnm.position = Vector2(6, cm_y)
+	cnm.size = Vector2(sz.x - 12, 28)
+	cnm.add_theme_font_size_override("font_size", 21)
+	cnm.add_theme_color_override("font_color", Color(0.74, 0.54, 0.12))
+	cnm.text = "【" + str(s.get("name", "")) + "】"
+	cnm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	cnm.autowrap_mode = TextServer.AUTOWRAP_OFF
+	box.add_child(cnm)
+	# ⑤ 组合效果（这一段最长，把剩下的高度都给它）
+	var cm2_y := cm_y + 30.0
 	var cm := Label.new()
-	cm.position = Vector2(8, cm_y)
-	cm.size = Vector2(sz.x - 16, maxf(80.0, sz.y - cm_y - 56.0))
+	cm.position = Vector2(8, cm2_y)
+	cm.size = Vector2(sz.x - 16, maxf(60.0, sz.y - cm2_y - 56.0))
 	cm.add_theme_font_size_override("font_size", 19)
 	cm.add_theme_color_override("font_color", DIM)
 	cm.text = "组合：" + str(s.get("combo", ""))
