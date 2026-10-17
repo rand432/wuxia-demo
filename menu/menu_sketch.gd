@@ -1305,10 +1305,14 @@ func _open_settings() -> void:
 	ov.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(ov)
 	_settings_ov = ov
-	var veil := UiKit.make_veil(ov, size, 0.50)
+	# v19a：困兽开着时面板要压在战场上，面纱给深一点，字才看得清
+	var veil := UiKit.make_veil(ov, size, 0.66 if in_kz else 0.50)
 	veil.mouse_filter = Control.MOUSE_FILTER_STOP
 	var pw := 560.0
-	var ph := 486.0
+	# v19a（用户："设置就设置成主界面模式的设置一样 加一个退出就行了"）：
+	#   困兽开着的时候，这个面板里多一颗［退出困兽 · 回主界面］，面板也长一点
+	var in_kz: bool = _kushou_v2 != null and is_instance_valid(_kushou_v2) and _kushou_v2.visible
+	var ph: float = 486.0 + (74.0 if in_kz else 0.0)
 	var px := (size.x - pw) * 0.5
 	var py := (size.y - ph) * 0.5
 	var panel := UiKit.make_paper_panel(ov, Rect2(px, py, pw, ph))
@@ -1345,6 +1349,9 @@ func _open_settings() -> void:
 			sb.bg_color = Color(0.28, 0.24, 0.20, 0.95)
 			sb.set_corner_radius_all(6)
 			tb.add_theme_stylebox_override("normal", sb)
+	if in_kz:
+		var xb := UiKit.make_button(panel, Vector2((pw - 340.0) * 0.5, ph - 130.0), Vector2(340, 48), "退出困兽 · 回主界面", 20)
+		xb.pressed.connect(_exit_kushou)
 	# ---- 关闭 ----
 	var cb := UiKit.make_button(panel, Vector2((pw - 200.0) * 0.5, ph - 66.0), Vector2(200, 48), "关　闭", 20)
 	cb.pressed.connect(_close_settings)
@@ -1374,6 +1381,14 @@ func _pick_menu_track(key: String) -> void:
 	Audio.set_menu_track(key)
 	_close_settings()
 	_open_settings()     # 重开一次，把选中的高亮刷新掉
+
+# 从设置面板直接退出困兽：收面板 → 藏起困兽 → 回主界面
+func _exit_kushou() -> void:
+	_close_settings()
+	if _kushou_v2 != null and is_instance_valid(_kushou_v2):
+		_kushou_v2.close()
+	Audio.ui_click()
+	_show_toast("已退出困兽，回到主界面")
 
 func _close_settings() -> void:
 	if _settings_ov != null and is_instance_valid(_settings_ov):

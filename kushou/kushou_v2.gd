@@ -859,7 +859,7 @@ func _build_hud() -> void:
 	_wave_lb.text = "波 12/30"
 	_boss_lb = _lbl(Vector2(226, 26), Vector2(300, 46), 22, GOLD)
 	_boss_lb.text = "一阶 boss 00:37"      # 开局静态文本；_process 里会按 分:秒 覆写
-	_mk_btn("设置", Vector2(560, 14), Vector2(140, 68), 24, false, func(): _open_small("设置"))
+	_mk_btn("设置", Vector2(560, 14), Vector2(140, 68), 24, false, _open_game_settings)
 
 	# v2b：三个钱账**带图标**（用户："货币记得加图标"）——图标是画出来的，不新增素材
 	var r2 := _panel(Rect2(8, 94, 704, 74), Color(0.18, 0.17, 0.19, 0.96), 12)
@@ -7127,6 +7127,18 @@ func _flat(c: Color) -> StyleBoxFlat:
 	sb.set_corner_radius_all(12)
 	return sb
 
+# v18z：弹窗页专用 —— _lbl() 是**自动挂到外壳根节点**的（HUD 用），
+#   弹窗里再 p.add_child() 会报「already has a parent」而整页控件全掉到主界面上（设置页就是这么错的）。
+func _plbl(parent: Node, pos: Vector2, sz: Vector2, fs: int, col: Color) -> Label:
+	var l := Label.new()
+	l.position = pos
+	l.size = sz
+	l.add_theme_font_size_override("font_size", fs)
+	l.add_theme_color_override("font_color", col)
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(l)
+	return l
+
 func _mk_btn(txt: String, pos: Vector2, sz: Vector2, fs: int, seal: bool, cb: Callable) -> Button:
 	var b := Button.new()
 	b.text = txt
@@ -8214,62 +8226,62 @@ func _set_deck_tab(i: int) -> void:
 #   弹窗正文本身在 ScrollContainer 里，所以列表长了可以直接手指上下拖。
 # v16n：设置页——音量两排（音乐 / 音效），每排 5 档
 func _fill_settings(p: Control, y: float) -> float:
+	# v18z：这一页原来是 `_lbl() + p.add_child()` 混着用的 —— _lbl 已经自动挂到外壳了，
+	#   p.add_child 全部失败（already has a parent），于是控件全画在主界面上（截图里的错位/重叠）。
+	#   现在一律用 _plbl(p, ...) / _pbtn(p, ...)，父节点就是弹窗内容区。
 	var ly := y
-	var head := _lbl(Vector2(24, ly), Vector2(660, 38), 22, DIM)
+	var head := _plbl(p, Vector2(24, ly), Vector2(660, 38), 22, DIM)
 	head.text = "音量（点一下切档 · 会记进存档）"
-	p.add_child(head)
 	ly += 46.0
 	var names := ["关", "小声", "中", "偏大", "最大"]
 	var vals := [0.0, 0.25, 0.5, 0.75, 1.0]
 	for row in 2:
 		var is_bgm := row == 0
 		var cur: float = Audio.bgm_volume() if is_bgm else Audio.sfx_volume()
-		var lb := _lbl(Vector2(24, ly), Vector2(660, 36), 23, INK)
+		var lb := _plbl(p, Vector2(24, ly), Vector2(660, 36), 23, INK)
 		lb.text = ("音乐" if is_bgm else "音效") + "：现在 " + names[clampi(int(round(cur * 4.0)), 0, 4)]
-		p.add_child(lb)
 		ly += 42.0
 		for i in 5:
 			var v: float = vals[i]
 			var on: bool = absf(cur - v) < 0.13
-			var b := _mk_btn(names[i], Vector2(24.0 + float(i) * 136.0, ly), Vector2(128, 62), 22, on, _vol_pick.bind(is_bgm, v))
-			p.add_child(b)
+			_pbtn(p, names[i], Vector2(24.0 + float(i) * 136.0, ly), Vector2(128, 62), 22, on, _vol_pick.bind(is_bgm, v))
 		ly += 76.0
 	ly += 6.0
-	var tip := _lbl(Vector2(24, ly), Vector2(660, 64), 20, DIM)
-	tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	# v16q：战斗曲选择器（原来那首 bgm_battle 带呐喊，用户要换）
-	var bh := _lbl(Vector2(24, ly), Vector2(660, 38), 22, DIM)
+	var bh := _plbl(p, Vector2(24, ly), Vector2(660, 38), 22, DIM)
 	bh.text = "战斗曲（点一首立刻换 · 会记住）"
-	p.add_child(bh)
 	ly += 46.0
 	var cur_b := Audio.battle_track()
 	var btracks: Array = Audio.BATTLE_TRACKS
 	for i in btracks.size():
 		var tk: Dictionary = btracks[i]
 		var on2: bool = str(tk["key"]) == cur_b
-		var bb := _mk_btn(str(tk["name"]), Vector2(24.0 + float(i % 2) * 336.0, ly + float(i / 2) * 70.0), Vector2(320, 62), 21, on2, _pick_battle_track.bind(str(tk["key"])))
-		p.add_child(bb)
+		_pbtn(p, str(tk["name"]), Vector2(24.0 + float(i % 2) * 336.0, ly + float(i / 2) * 70.0), Vector2(320, 62), 21, on2, _pick_battle_track.bind(str(tk["key"])))
 	ly += float((btracks.size() + 1) / 2) * 70.0 + 8.0
-	# ⚠ 不能也叫 tip —— 上面已经有一个（同名会报 "already declared in this scope"）
-	var tip2 := _lbl(Vector2(24, ly), Vector2(660, 64), 20, DIM)
+	var tip2 := _plbl(p, Vector2(24, ly), Vector2(660, 64), 20, DIM)
 	tip2.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	tip2.text = "默认音乐已压到 -18dB。觉得还吵就把上面「音乐」往左点；「关」是完全静音。"
-	p.add_child(tip2)
 	# v18y（用户："设置里面加一个退出游戏【指退出困兽回到主界面】"）
 	ly += 68.0
-	var eh := _lbl(Vector2(24, ly), Vector2(660, 38), 22, DIM)
+	var eh := _plbl(p, Vector2(24, ly), Vector2(660, 38), 22, DIM)
 	eh.text = "回主界面"
-	p.add_child(eh)
 	ly += 44.0
 	_pbtn(p, "退出困兽（回主界面）", Vector2(24, ly), Vector2(640, 78), 26, true, _exit_to_menu)
 	ly += 86.0
-	var etip := _lbl(Vector2(24, ly), Vector2(660, 64), 20, DIM)
+	var etip := _plbl(p, Vector2(24, ly), Vector2(660, 64), 20, DIM)
 	etip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	etip.text = "进度自动存着 —— 回主界面后再点［进困兽］就接着打。"
-	p.add_child(etip)
 	return ly + 76.0
-
 # 退出困兽：存一下 → 收弹窗 → 回主界面（主界面就一直垫在下面）
+# v19a（用户："设置就设置成主界面模式的设置一样 加一个退出就行了 点击退出按钮回到原有游戏的主界面"）：
+#   困兽的［设置］不再自己画一套，直接调**主界面那套设置面板**（menu_sketch._open_settings）；
+#   那面板在困兽开着时会多一颗［退出困兽 · 回主界面］。
+func _open_game_settings() -> void:
+	var par := get_parent()
+	if par != null and par.has_method("_open_settings"):
+		par._open_settings()
+		return
+	_open_small("设置")      # 单独跑（探针 / 独立实例）时的兜底，仍是本地这一页
+
 func _exit_to_menu() -> void:
 	_ach_save()
 	Audio.sfx("ui_click", -8.0)
