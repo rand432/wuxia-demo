@@ -1,7 +1,6 @@
 # Godot 4+ specific ignores
 .godot/
 /android/
-
 # ---- 构建产物：每次导出都会变，不进版本库 ----
 *.apk
 *.idsig
@@ -10,38 +9,31 @@
 export/*
 !export/开场_成片.mp4
 !export/样片_*.mp4
-
 # ---- 开发期临时/取证文件 ----
 twitch_dump.csv
 twitch_dump.*
 *.bak
 *.bak-*
 .installer.*
-
 # ---- 搜狗输入法会往进程工作目录里写日志/缓存（CWD=工程目录时）----
 debug.log
 %SystemDrive%/
-
 # ---- 系统/编辑器 ----
 Thumbs.db
 desktop.ini
 .DS_Store
-
 # ---- 本会话脚本产生的临时文件（不进版本库）----
 .*-out.txt
 probe_*
-
 # ---- 凭证：绝不进版本库，更不能被自动推到 Gitee ----
 .liblib.json
 *.local.json
-
 # ---- 第三方素材库（922 MB！）----
 #   素材/ 是用户自己收集的拆包资源（烟雨江湖 / 影之刃），体量太大，
 #   而且每 30 分钟一次的 autocommit 会把它整个推到 Gitee——必须挡在库外。
 #   真要用哪个，**挑出来放进 assets/**，那部分才进库。
 素材/
 .yanyu/
-
 # ---- 探针截图 / 视频合成中间图（不进版本库）----
 #   ⚠ 上一轮自动提交把 .qa/ 里的探针截图一起推上去了——这几条是补的
 .qa/
@@ -52,36 +44,27 @@ assets/gen/aivideo/clip_*.mp4
 assets/gen/aivideo/clip_*.ogv
 assets/gen/aivideo/clip_*.ogv.uid
 assets/gen/bg_*.png
-
 # ---- 临时拼图（不进版本库）----
 .res*.png
 .sheet*.png
-
 # ---- 临时拼图 / 备份（不进版本库）----
 .sk*.png
 .look*.png
 .film*.png
-.sheet*.png
 .stylecheck.png
-*.bak
 *.bak-v2
 *.damaged
 *.probe-bak
-
 # 探针截图（probe_shots.gd 的输出，工作用，不进库）
 .shots/
-
 # Godot 导入副产物
 *.import
 .ark.json
-
 docs/交接_给下一个AI.md
-
 # 外部参考图（第三方作品，只作垫图/取向参考，不进库）
 qiuyuan-study/refs/
-
-
-# ---- ֻ�����õĴ�Ŀ¼�������⣩----
+# ---- ֻ�����õĴ�Ŀ¼�������⣩----
 assets/gen/audio/
 tools/ai-cutout/
 tools/spine-bake/
+assets/gen/char/
