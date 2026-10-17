@@ -191,8 +191,8 @@ const FAME_EXCHANGE := [
 	{"id": "x_jiu", "n": "一坛好酒", "price": 30, "d": "随机一坛【上品~极品】酒，直接进主游戏的酒窖"},
 	{"id": "x_frag", "n": "一叠角色碎片", "price": 40, "d": "随机一位角色 3~6 片碎片（升星用）"},
 	{"id": "x_card", "n": "一页功法残页", "price": 55, "d": "随机一门武学/功法的残页 1 页（凑齐可合成）"},
-	{"id": "x_wpn", "n": "一件兵器", "price": 80, "d": "随机一件成品兵器，直接进主游戏的仓库"},
-	{"id": "x_gear", "n": "一件防具", "price": 80, "d": "随机一件成品护甲/玉佩/披风，直接进仓库"},
+	{"id": "x_wpn", "n": "兵器残片 ×2", "price": 45, "d": "随机一件兵器的残片 2 片（凑齐可在合成台合出成器）"},
+	{"id": "x_gear", "n": "防具残片 ×2", "price": 45, "d": "随机一件护甲/玉佩/披风的残片 2 片"},
 ]
 
 # v18y 那批「开局 buff」已下线（保留常量名，老存档里买过的 id 只是不再生效）
@@ -290,6 +290,8 @@ func _fame_exchange(id: String) -> void:
 				GS.vault_deposit({sid: {p: 1}})
 				msg = "换到「" + str(e2["name"]) + "」第 " + str(p + 1) + " 页残页（" + str(CARDS.quality_of(sid)) + "）"
 		"x_wpn", "x_gear":
+			# v19c（用户："武器和防具也是碎片"）：主游戏里兵器/防具是**收残片再合成**的，
+			#   所以这里也发残片，不再直接塞成品
 			var pool := "weapon"
 			if id == "x_gear":
 				var pools := ["armor", "helm", "cloak"]
@@ -300,8 +302,13 @@ func _fame_exchange(id: String) -> void:
 			else:
 				var e3: Dictionary = list[randi() % list.size()]
 				var sid2 := str(e3["id"])
-				GS.vault_add_item(sid2, 1)
-				msg = "换到「" + str(CARDS.item_name(sid2)) + "」（" + str(CARDS.quality_of(sid2)) + "）已进主游戏仓库"
+				var parts: Array = e3.get("parts", [""])
+				var got: Dictionary = {}
+				for i in 2:
+					var p2 := randi() % maxi(1, parts.size())
+					got[p2] = int(got.get(p2, 0)) + 1
+				GS.vault_deposit({sid2: got})
+				msg = "换到「" + str(e3["name"]) + "」残片 ×2（" + str(CARDS.quality_of(sid2)) + "）已进主游戏仓库"
 		_:
 			pass
 	if msg == "":
