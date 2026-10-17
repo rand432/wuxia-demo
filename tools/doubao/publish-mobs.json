@@ -1,0 +1,9 @@
+[
+  {
+    "src": ".ark-out/mobs2",
+    "dst": "assets/char",
+    "mode": "height",
+    "height": 340,
+    "suffix": "_q"
+  }
+]

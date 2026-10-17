@@ -1,0 +1,37 @@
+[
+  {
+    "src": ".ark-out/icons",
+    "dst": "assets/items",
+    "mode": "square",
+    "size": 128
+  },
+  {
+    "src": ".ark-out/arts",
+    "dst": "assets/items",
+    "mode": "square",
+    "size": 128
+  },
+  {
+    "src": ".ark-out/img",
+    "dst": "assets/char",
+    "mode": "height",
+    "height": 340,
+    "suffix": "_q",
+    "only": [
+      "mob_lou",
+      "mob_chief"
+    ]
+  },
+  {
+    "src": ".ark-out/chars_full",
+    "dst": "assets/char",
+    "mode": "height",
+    "height": 1000
+  },
+  {
+    "src": ".ark-out/chars_q",
+    "dst": "assets/char",
+    "mode": "height",
+    "height": 340
+  }
+]

@@ -217,7 +217,7 @@ export function renameToActualExt(file) {
   try { buf = fs.readFileSync(file); } catch { return file; }
   const ext = sniffImageExt(buf);
   if (!ext) return file;
-  const want = path.join(path.dirname(file), path.basename(file) + '.' + ext);
+  const want = path.join(path.dirname(file), path.basename(file, path.extname(file)) + '.' + ext);
   if (want === file || fs.existsSync(want)) return file;
   fs.renameSync(file, want);
   return want;

@@ -1,0 +1,12 @@
+[
+  {
+    "src": ".ark-out/img",
+    "dst": "assets/char",
+    "mode": "height",
+    "height": 340,
+    "suffix": "_q",
+    "only": [
+      "mob_one_arm"
+    ]
+  }
+]

@@ -112,6 +112,21 @@ node tools/doubao/search.mjs --query "2026 武侠手游买量素材的趋势"
 | 视频一直 queued | 排队 | 别重复提交，稍后控制台取 |
 | 语音 code 3006 | appid/token 与语音应用不匹配 | 两个值一起换 |
 
+## 图标批量（材料 / 宝箱 / 装备）
+
+Q版可爱风道具图标由 `icons.mjs` 批量出，清单在 `icon-plan.json`（公共风格前缀 + 逐条物件），产物落 `.ark-out/icons/`。
+
+```powershell
+node tools/doubao/icons.mjs                    # 出清单里所有还没出的
+node tools/doubao/icons.mjs --only mat_zhi,chest_wood   # 只出指定的
+node tools/doubao/icons.mjs --force            # 已有的也重出
+node tools/doubao/icons.mjs --concurrency 3    # 并发（默认 2）
+```
+
+特性：**已存在的自动跳过**（失败/中断后重跑即断点续传）、每轮写 `summary.json`（含耗时与预估花费）、单张 1024×1024 / 0.12 元。
+
+清单里的 id 尽量沿用工程既有键名（`it_wood` / `mat_zhi` / `it_sword` …，见 `shared/item_icons.gd`），以后进 `assets/items/` 可直接对上取图口。
+
 ## 文件
 
 ```
