@@ -140,8 +140,8 @@ func _wave_quota_for(w: int) -> int:
 	if w <= 25:  return 18
 	return 20
 
-const SPAWN_EVERY := 1.2            # 几秒刷一只（第 10 波后 0.9）
-const SPAWN_EVERY_LATE := 0.9
+var SPAWN_EVERY := 1.2               # 几秒刷一只（第 10 波后 0.9）· v18j 改 var：调参口
+var SPAWN_EVERY_LATE := 0.9
 const HERO_LINE := 96.0             # 主角离战场底边多高（脚）
 const FOE_STOP := 150.0             # 怪走到离主角多近就停下开打
 # v16x（用户："波数和难度的血量成长也加强"）：每波 ×1.12 -> ×1.14
@@ -149,10 +149,15 @@ const FOE_STOP := 150.0             # 怪走到离主角多近就停下开打
 #   · 波35 2121->4389(×2.07)；35 波总血量 ×1.82。**开局几乎不变、后期明显吃紧**。
 # v18j：这两条从 const 改成 var —— 是**调参口**（探针扫一组值跑同一关，选最顺手的那条）。
 #   定下来之后可以直接改回 const（搜索 "WAVE_HP" 只有 _foe_hp/start_boss/召唤物那几处读它）。
-var WAVE_HP := 1.14                 # 每波怪血 ×
+# v18j：击杀回血（占上限的比例）—— 调参口，默认 0 = 不回。
+#   修掉"属性同步=满血"之后，游戏等于**一点续航都没有**（玉壶 90 秒才回 10%），
+#   而怪的伤害是按"随时满血"那套调的 → 前期就磨死。这条是最自然的续航：
+#   砍死一只回一小口，而且它会跟着"血上限↑、击杀速度↑"自己变强。
+var kill_heal := 0.08               # 击杀回血 = 上限的 8%（v18j 定值：见交接文档 §3.6 的实测表）
+var WAVE_HP := 1.08                 # 每波怪血 ×（v18j：1.14 → 1.08，实测同一套续航下 1-1 能多撑 2 波）
 var WAVE_ATK := 1.08                # 每波怪攻 ×
 const BASE_FOE_HP := 34.0           # v16x：30 -> 34（第 1 波怪血 +13%）
-const BASE_FOE_ATK := 4.5            # v17c（用户："调整怪伤害略微增加"）：4.0 -> 4.5
+var BASE_FOE_ATK := 4.5              # v17c（用户："调整怪伤害略微增加"）：4.0 -> 4.5　·　v18j 改 var：调参口
 const FOE_ASPD := 0.6               # 怪每秒打几下
 const FOE_SPD := 74.0               # 怪往下走的速度（像素/秒）
 #   v3i 用户"怪可以稍微再快一点"：42 → 58；v3k 用户"怪再快一点"：58 → 74
@@ -1810,6 +1815,9 @@ func _kill_foe(f: Dictionary) -> void:
 		_push_float(float(f["x"]), float(f["y"]) - 76.0, "不死之身！", Color(1.0, 0.62, 0.58), true)
 		# v16o（用户："背景喊杀声太多了 其实没必要有喊杀声"）：已去掉喊杀/战鼓声
 		return
+	# v18j：击杀回血（默认 0 = 不回）
+	if kill_heal > 0.0:
+		hero["hp"] = minf(float(hero["hp_max"]), float(hero["hp"]) + float(hero["hp_max"]) * kill_heal)
 	# v13f：元素/伙伴技打死的（百步任务）——普通刀砍是物理，不算
 	if str(f.get("last_dtype", "")) in ELEMS:
 		skill_kills += 1

@@ -61,6 +61,9 @@ var _boss_seq := 0        # v2j：叫过几个 boss
 var _revive := 1          # 浴血：免死次数（战场上真的会倒下）
 # v3a 技能（基础剑法）——见 docs/困兽_技能设计稿.md
 var _skill_pts := 0       # 技能点（每升 1 级 1 点）
+# v18j：升级回复一部分气血（占上限的比例）。**默认 0 = 不回**（保持"改属性不回血"的口径），
+#   留着当调参口：探针扫 0 / 0.15 / 0.30 看前期续航；定了再决定要不要开。
+var lv_heal := 0.15
 # v5a 主属性（见 docs/困兽_属性设计稿.md）
 #   臂力：气血+生命恢复；身法：攻速+护甲；悟性：内力+内力恢复
 #   主属性（力量/敏捷/悟性）决定"哪一条额外转攻击 / 转元素攻击"
@@ -3145,7 +3148,10 @@ const YUHU_NAME := "玲珑玉壶"
 const YUHU_HEAL := [0.10, 0.12, 0.14, 0.16, 0.19, 0.22]
 # v18a（用户："玉壶冷却提升至90s"）：原来是 20~15 秒（太勤了，等于无限奶）
 #   现在 90 秒起，靠升档降到 50 秒（升档仍然有意义）
-const YUHU_CD := [90.0, 82.0, 74.0, 66.0, 58.0, 50.0]
+# v18j：改成 var —— 调参口（探针扫"冷却 90 / 30"看续航够不够）。定下来可以改回 const。
+# v18j：90/82/… → 30/27/…（÷3）。v18a 把它抬到 90 秒是在"改属性就满血"那个 bug 底下调的；
+#   那个 bug 修掉之后 90 秒才回 10% 等于没有续航（实测见 §3.6）。
+var YUHU_CD := [30.0, 27.0, 24.0, 21.0, 18.0, 15.0]
 # v13n（用户："玉壶都加"）：升档价——**花灵晶，越升越贵**（5 次升满：凡→下→中→上→极→绝）
 const YUHU_UP_PRICE := [80, 160, 280, 450, 700]
 const YUHU_UP_NAME := "玉壶秘卷"
@@ -7173,6 +7179,10 @@ func _gain_exp(amount: float) -> void:
 			_hint.text = "升级！Lv " + str(_lv) + "　招募 +1（第 " + str(_recruit_opens) + " 次，去角色页点［招募］）"
 		Audio.sfx("levelup", -6.0)
 		_sync_battle_stats()
+		if lv_heal > 0.0 and _field != null:
+			# ⚠ 必须在 _sync_battle_stats() **之后**：上限刚涨过，按新上限算
+			var mx := float(_field.hero["hp_max"])
+			_field.hero["hp"] = minf(mx, float(_field.hero["hp"]) + mx * lv_heal)
 		_evo_check()                     # v14m：到 5/10/20/40 级就进化
 
 func _on_special(kind: String, n: int, pos: Vector2) -> void:
