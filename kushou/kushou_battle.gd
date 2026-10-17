@@ -387,11 +387,24 @@ func diff_mul() -> float:
 		return DIFFICULTY
 	return 1.0 + (DIFFICULTY - 1.0) * float(w - 1) / 9.0
 
+# v18r（用户："前十波难度降低 尤其是攻击力"）：
+#   前十波再额外乘一个"开局软"系数（第 10 波起不乘）：
+#     · 攻击 ×0.55 → ×1.0（削得最狠 —— 用户点名"尤其是攻击力"）
+#     · 气血 ×0.85 → ×1.0（稍微软一点，别让前期变成砍木桩）
+#   ⚠ 只乘**普通/挑战/精英/冠军**（它们都走 _foe_hp/_foe_atk）；
+#     boss 从第 10 波才来，那时系数已经是 1.0，不受影响。
+var EARLY_ATK := 0.55
+var EARLY_HP := 0.85
+
+func early_mul(atk: bool) -> float:
+	var k := clampf(float(maxi(1, wave) - 1) / 9.0, 0.0, 1.0)     # 波1 → 0；波10 → 1
+	return lerpf(EARLY_ATK if atk else EARLY_HP, 1.0, k)
+
 func _foe_hp() -> float:
-	return BASE_FOE_HP * pow(WAVE_HP, float(wave - 1)) * foe_mul * diff_mul()      # v14e：关卡难度倍率
+	return BASE_FOE_HP * pow(WAVE_HP, float(wave - 1)) * foe_mul * diff_mul() * early_mul(false)      # v14e：关卡难度倍率
 
 func _foe_atk() -> float:
-	return BASE_FOE_ATK * pow(WAVE_ATK, float(wave - 1)) * foe_mul * diff_mul()    # v14e：关卡难度倍率
+	return BASE_FOE_ATK * pow(WAVE_ATK, float(wave - 1)) * foe_mul * diff_mul() * early_mul(true)     # v14e：关卡难度倍率
 
 func _spawn_foe(kind := "normal", hp_mul := 1.0, atk_mul := 1.0, big := false, tier := 1, nm := "") -> void:
 	if foes.size() >= MAX_FOES and kind == "normal":
@@ -1725,9 +1738,9 @@ func spawn_champion() -> void:
 	var mul := pow(WAVE_HP, float(wave - 1))
 	_spawn_foe("champion", 1.0, 1.0, false, 1, str(CHAMPION_NAMES[randi() % CHAMPION_NAMES.size()]))
 	var f: Dictionary = foes[foes.size() - 1]
-	f["hp"] = 420.0 * mul
-	f["hp_max"] = 420.0 * mul
-	f["atk"] = 12.0 * pow(WAVE_ATK, float(wave - 1))
+	f["hp"] = 420.0 * mul * early_mul(false)          # v18r：前十波也吃开局软
+	f["hp_max"] = 420.0 * mul * early_mul(false)
+	f["atk"] = 12.0 * pow(WAVE_ATK, float(wave - 1)) * early_mul(true)
 	f["scale"] = 1.6
 	f["stop"] = FOE_REACH + 20.0          # v16m：同默认，跟着 FOE_REACH 走
 	champion = 1
@@ -4944,9 +4957,9 @@ func spawn_elite(n := 1) -> void:
 	for ei in n:
 		_spawn_foe("elite", 1.0, 1.0, false, 1, ELITE_NAME)
 		var fe: Dictionary = foes[foes.size() - 1]
-		fe["hp"] = 300.0 * mul
-		fe["hp_max"] = 300.0 * mul
-		fe["atk"] = 10.0 * pow(WAVE_ATK, float(wave - 1))
+		fe["hp"] = 300.0 * mul * early_mul(false)        # v18r：前十波也吃开局软
+		fe["hp_max"] = 300.0 * mul * early_mul(false)
+		fe["atk"] = 10.0 * pow(WAVE_ATK, float(wave - 1)) * early_mul(true)
 		fe["scale"] = 1.3
 		fe["stop"] = FOE_REACH + 10.0         # v16m：同默认，跟着 FOE_REACH 走
 	_banner = ("猎杀：混进来一只精英——" if n <= 1 else "三英：来了 " + str(n) + " 只精英") + ("" if n > 1 else ELITE_NAME)
