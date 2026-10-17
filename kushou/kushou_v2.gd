@@ -1936,21 +1936,10 @@ func _fill_draw_page() -> void:
 		c.queue_free()
 	if _draw_choices.is_empty():
 		_draw_choices = _roll_cards()
-	# ① 纸底：把战场盖住（上下两条 HUD 不在这一层，不受影响）
-	var bg := ColorRect.new()
-	bg.position = Vector2.ZERO
-	bg.size = Vector2(704, 704)
-	bg.color = Color(PAPER.r, PAPER.g, PAPER.b, 0.985)
-	bg.mouse_filter = Control.MOUSE_FILTER_STOP
-	_draw_page.add_child(bg)
-	# ② 顶上那行状态
-	var st := Label.new()
-	st.position = Vector2(134, 8)
-	st.size = Vector2(556, 30)
-	st.add_theme_font_size_override("font_size", 19)
-	st.add_theme_color_override("font_color", DIM)
-	st.text = "抽卡 " + str(DRAW_COST) + " 灵晶　现有 " + str(int(_crystal)) + "　·　点卡面直接选"
-	_draw_page.add_child(st)
+	# v18l（用户："把窗口去掉 只留下卡牌和按钮"）：**不铺纸底**了 —— 卡面和按钮直接浮在战场上。
+	#   ⚠ _draw_page 这层仍然是 MOUSE_FILTER_STOP（不然卡片之间的空隙会把点击漏给战场，
+	#     变成"点空白处主角就跑"）；但它**什么都不画**。
+	# v18l：状态行也去掉了（灵晶数在顶上那条资源条里；价钱写在［刷新］按钮与卡片未解锁时的提示上）
 	# ③ 三张大卡面（点哪张就是选哪张）
 	for i in _draw_choices.size():
 		var cid := str(_draw_choices[i])
