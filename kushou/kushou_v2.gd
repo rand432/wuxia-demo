@@ -94,8 +94,23 @@ var _draw_fly: Control = null
 # v18k：抽卡页铺满战场区时，右列那三件（黑市圆钮 ＋ 小经验条）会压在第三张卡上 → 临时收起
 var _bm_btn: Button = null
 var _bm_mini_panel: Panel = null
+# v18p（用户："我只是让你把左侧的按钮可以盖住"）：卡面可以铺到左边缘 ——
+#   开页时把会跟卡面打架的那几颗圆钮（抽卡/挑战/任务）收起来；［卡组］留着（飞卡落点＋草图上有它）
+var _draw_btn: Button = null
+var _task_btn: Button = null
+var _deck_btn: Button = null
 
 func _set_draw_hud(on: bool) -> void:
+	if _draw_btn != null and is_instance_valid(_draw_btn):
+		_draw_btn.visible = on
+	if _chal_btn != null and is_instance_valid(_chal_btn):
+		_chal_btn.visible = on
+	if _task_btn != null and is_instance_valid(_task_btn):
+		_task_btn.visible = on
+	if _chal_badge != null and is_instance_valid(_chal_badge):
+		_chal_badge.visible = on
+	if _q_badge != null and is_instance_valid(_q_badge):
+		_q_badge.visible = on
 	if _bm_btn != null and is_instance_valid(_bm_btn):
 		_bm_btn.visible = on
 	if _bm_mini_panel != null and is_instance_valid(_bm_mini_panel):
@@ -837,17 +852,17 @@ func _build_field() -> void:
 	_draw_fly.visible = false
 	add_child(_draw_fly)
 
-	_circle_btn("抽卡", Vector2(22, 262), _open_draw_page)
+	_draw_btn = _circle_btn("抽卡", Vector2(22, 262), _open_draw_page)
 	_chal_btn = _circle_btn("挑战", Vector2(22, 396), func(): _open_large("挑战"))
 	# 就绪数量做成圆钮右上角的小红点（原来靠底下那排显示"哪个能点"，现在得在这儿说）
 	_chal_badge = _lbl(Vector2(94, 384), Vector2(56, 36), 22, Color(1, 0.94, 0.88))
 	_chal_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	# v15p：有事件挂着的时候，点［任务］直接开**事件详情**（接受/放弃）；没有就照旧开任务栏
-	_circle_btn("任务", Vector2(22, 530), func(): _open_large("事件" if not _q_offer.is_empty() else "任务"))
+	_task_btn = _circle_btn("任务", Vector2(22, 530), func(): _open_large("事件" if not _q_offer.is_empty() else "任务"))
 	# "ui特效提示"：有事件挂着时，任务钮右上角一个跳动的红点（跟挑战钮那个小红点同一套做法）
 	_q_badge = _lbl(Vector2(94, 518), Vector2(56, 36), 22, Color(1.0, 0.42, 0.36))
 	_q_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_circle_btn("卡组", Vector2(22, 664), func(): _open_large("卡组"))
+	_deck_btn = _circle_btn("卡组", Vector2(22, 664), func(): _open_large("卡组"))
 	# v17w（用户："困兽主界面的成就和存档可以去掉了"）：
 	#   ⚠ 这两颗已挪到**主界面【困兽测试】的选关窗**里（点一下直接进游戏并弹出该窗），
 	#     战场右列不再重复放。右列现在是：设置 / 黑市（存档/成就的位置空出来）。
@@ -1857,7 +1872,7 @@ func _close_draw_page() -> void:
 
 # v18m：卡面从 172×552 缩到 **160×468**（用户："如果太大了可以稍微缩小一点"），三张在可玩区居中
 func _draw_card_x(i: int) -> float:
-	return 159.0 + float(i) * 176.0
+	return 16.0 + float(i) * 230.0
 
 func _draw_page_pick(i: int) -> void:
 	if i < 0 or i >= _draw_choices.size():
@@ -1867,7 +1882,7 @@ func _draw_page_pick(i: int) -> void:
 		return
 	var cid := str(_draw_choices[i])
 	var nm := card_name(cid)
-	var from := Vector2(_draw_card_x(i) + 32.0, 40.0 + 180.0)
+	var from := Vector2(_draw_card_x(i) + 58.0, 40.0 + 180.0)
 	_draw_card(cid)                     # 花灵晶 ＋ 进卡组（逻辑不动）
 	if _pending_card != "":
 		return                          # 十格满了：先去卡组页换一张（_draw_card 已经开好了）
@@ -1948,18 +1963,19 @@ func _fill_draw_page() -> void:
 	for i in _draw_choices.size():
 		var cid := str(_draw_choices[i])
 		var x := _draw_card_x(i)
-		_card_big(_draw_page, Vector2(x, 40.0), Vector2(160, 468), cid)
-		var hit := _pbtn(_draw_page, "", Vector2(x, 40.0), Vector2(160, 466), 16,
+		_card_big(_draw_page, Vector2(x, 40.0), Vector2(212, 440), cid)
+		var hit := _pbtn(_draw_page, "", Vector2(x, 40.0), Vector2(212, 438), 16,
 			int(_crystal) >= DRAW_COST, _draw_page_pick.bind(i))
 		hit.add_theme_stylebox_override("normal", _flat(Color(1, 1, 1, 0.001)))
 		hit.add_theme_stylebox_override("hover", _flat(Color(1, 1, 1, 0.10)))
 		hit.add_theme_stylebox_override("pressed", _flat(Color(1, 1, 1, 0.20)))
 	# ④ 两颗按钮（草图上就这两颗）
-	_pbtn(_draw_page, "稍后再选", Vector2(159, 526), Vector2(240, 80), 24, true, _close_draw_page)
+	# v18p：两颗按钮挪到［卡组］圆钮**下面那一行**（圆钮在页内 y 488~592，卡面到 480 为止）
+	_pbtn(_draw_page, "稍后再选", Vector2(16, 600), Vector2(330, 80), 24, true, _close_draw_page)
 	var rt := "刷新 " + str(REFRESH_ALL) + " 灵晶"
 	if _card_refresh > 0:
 		rt = "刷新（免 " + str(_card_refresh) + "）"
-	_pbtn(_draw_page, rt, Vector2(415, 526), Vector2(256, 80), 22,
+	_pbtn(_draw_page, rt, Vector2(356, 600), Vector2(330, 80), 24,
 		_card_refresh > 0 or int(_crystal) >= REFRESH_ALL, _draw_page_refresh)
 # v11a 成长武器：自带一件 · 无限强化（文钱）· 每 10 级进阶（品质升档 ＋ 三选一）
 #   强化等级保留 · 一键强化用大按钮（手机不做键盘热键）· 三选一可刷新（按次数计价）
