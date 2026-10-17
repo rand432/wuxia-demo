@@ -99,6 +99,40 @@ var _bm_mini_panel: Panel = null
 var _draw_btn: Button = null
 var _task_btn: Button = null
 var _deck_btn: Button = null
+# v18s（用户："黑市按钮上面增加按钮 宝物…强化点到三选一 也是跟抽卡一样 都是一个模版"）：
+#   **一个三选一页**（_draw_page）按 _pick_kind 切内容：抽卡 / 宝物 / 进阶 / 技能
+var _pick_kind := "抽卡"
+var _trea_btn: Button = null          # 右列新加的［宝物］圆钮（在黑市上面）
+var _trea_badge: Label = null         # 它旁边那个"还剩几次刷新"的数字
+var _skill_btn: Button = null         # 底栏［技能 ＋］（要给它做发光提示）
+var _glow_t := 0.0
+
+# v18s（用户："抽卡满足抽卡条件会发光…强化/宝物/技能 也是 — 不需要任何说明，就是让玩家知道有个提示可以点"）：
+#   满足条件的那颗钮**呼吸发光**（modulate 往金色推），不满足就恢复正常。
+func _tick_glow(delta: float) -> void:
+	_glow_t += delta
+	var k := 0.5 + 0.5 * sin(_glow_t * 5.2)
+	var warm := Color(1.0 + 0.34 * k, 1.0 + 0.22 * k, 1.0 - 0.06 * k)
+	var norm := Color(1, 1, 1, 1)
+	var can_draw := int(_crystal) >= DRAW_COST
+	var can_trea := (int(_trea_refresh) > 0) or (not bool(_trea_pick_used) and not _trea_choices.is_empty())
+	var can_wpn := bool(_wpn_await)
+	var can_skill := int(_skill_pts) > 0
+	if _draw_btn != null and is_instance_valid(_draw_btn):
+		_draw_btn.modulate = warm if can_draw else norm
+	if _trea_btn != null and is_instance_valid(_trea_btn):
+		_trea_btn.modulate = warm if can_trea else norm
+	if _wpn_quick != null and is_instance_valid(_wpn_quick):
+		_wpn_quick.modulate = warm if can_wpn else norm
+	if _skill_btn != null and is_instance_valid(_skill_btn):
+		_skill_btn.modulate = warm if can_skill else norm
+	# 宝物钮旁边那个"还剩几次刷新"的数字
+	if _trea_badge != null and is_instance_valid(_trea_badge):
+		if int(_trea_refresh) > 0:
+			_trea_badge.text = str(int(_trea_refresh))
+			_trea_badge.modulate.a = 0.55 + 0.45 * k
+		else:
+			_trea_badge.text = ""
 
 func _set_draw_hud(on: bool) -> void:
 	if _draw_btn != null and is_instance_valid(_draw_btn):
@@ -111,6 +145,10 @@ func _set_draw_hud(on: bool) -> void:
 		_chal_badge.visible = on
 	if _q_badge != null and is_instance_valid(_q_badge):
 		_q_badge.visible = on
+	if _trea_btn != null and is_instance_valid(_trea_btn):
+		_trea_btn.visible = on
+	if _trea_badge != null and is_instance_valid(_trea_badge):
+		_trea_badge.visible = on
 	if _bm_btn != null and is_instance_valid(_bm_btn):
 		_bm_btn.visible = on
 	if _bm_mini_panel != null and is_instance_valid(_bm_mini_panel):
@@ -870,6 +908,11 @@ func _build_field() -> void:
 	# _circle_btn("存档", Vector2(594, 236), func(): _open_large("存档"))
 	# _circle_btn("成就", Vector2(594, 372), func(): _open_large("成就"))
 	# v4b（用户："成就下面增加按钮 黑市【用于杀敌数兑换东西的 内容暂定】"）
+	# v18s（用户："黑市按钮上面增加按钮 宝物"）：黑市上面那颗圆钮（原来是存档/成就的位置）
+	_trea_btn = _circle_btn("宝物", Vector2(594, 372), func(): _open_pick_page("宝物"))
+	_trea_badge = _lbl(Vector2(654, 344), Vector2(52, 34), 22, Color(1.0, 0.86, 0.36))
+	_trea_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_trea_badge.text = ""
 	_bm_btn = _circle_btn("黑市", Vector2(594, 508), func(): _open_large("黑市"))
 	# v4c（用户："黑市下面加一个小型经验条 和等级"）——黑市钮正下方一条小经验条
 	_bm_mini_panel = _panel(Rect2(500, 620, 198, 66), Color(0.18, 0.17, 0.19, 0.96), 10)
@@ -924,11 +967,12 @@ func _build_hero_bar() -> void:
 	# v16o（用户："上面那个玉壶按钮可以去掉了"）：已去掉底栏那颗玉壶钮。
 	#   玉壶仍能从［装备·宝物］页里用（那里本来就有大按钮 ＋ 自动开关）。
 	# 技能 / 装备：底部两颗**大**钮（用户："按钮和字一定不要很小"）
-	_mk_btn("技能 ＋", Vector2(24, 1174), Vector2(336, 74), 26, false, func(): _open_large("技能"))
+	_skill_btn = _mk_btn("技能 ＋", Vector2(24, 1174), Vector2(336, 74), 26, false, _skill_tap)
 	# 有技能点没花的时候，钮右上角亮个红点（"＋"号）
 	_skill_badge = _lbl(Vector2(318, 1162), Vector2(36, 32), 24, Color(1.0, 0.84, 0.34))
 	_skill_badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_skill_badge.text = ""
+	# v18s（用户后来改口："下面的装备/宝物按钮就不去了"）→ 底栏这颗**保持原名不动**
 	_mk_btn("装备·宝物 ＋", Vector2(372, 1174), Vector2(336, 74), 26, false, func(): _open_large("装备"))
 	# v12a：玲珑玉壶（主动宝物）——战场右下角一颗大按钮 ＋ 一颗自动开关
 	# v13i（用户：玉壶看着重合了，直接丢进宝物里面设置）：
@@ -1951,14 +1995,7 @@ func _draw_card(id: String) -> void:
 #   · 选完 → 那张卡**飞向左边那颗［卡组］圆钮**（像卡进包裹）
 #   ⚠ 布局给左列圆钮留出 x<126：卡从 x=134 起，3×172 ＋ 2×12 = 540 宽
 # ============================================================
-func _open_draw_page() -> void:
-	if _draw_page == null:
-		return
-	_draw_page.visible = true
-	_set_draw_hud(false)
-	_fill_draw_page()
-	Audio.sfx("paper", -10.0)
-
+# v18s：_open_draw_page 现在只是 _open_pick_page("抽卡") 的别名（定义在下面那一块）
 func _close_draw_page() -> void:
 	if _draw_page == null:
 		return
@@ -2045,35 +2082,232 @@ func _clear_fly() -> void:
 		c.queue_free()
 	_draw_fly.visible = false
 
+# ---- v18s：一个三选一页，按 kind 切内容（抽卡 / 宝物 / 进阶 / 技能）----
+func _open_pick_page(kind: String) -> void:
+	_pick_kind = kind
+	match kind:
+		"抽卡":
+			if _draw_choices.is_empty():
+				_draw_choices = _roll_cards()
+		"宝物":
+			# 右列那颗［宝物］钮＝抽（三选一）；没拿过才补候选（拿过了就显示已拿走）
+			if _trea_choices.is_empty() and not bool(_trea_pick_used):
+				_trea_roll()
+		"进阶":
+			if _wpn_choices.is_empty():
+				_wpn_roll_choices()
+		"技能":
+			if _skill_choices.is_empty() and _field != null:
+				_skill_choices = _field.roll_choices()
+	if _draw_page == null:
+		return
+	_draw_page.visible = true
+	_set_draw_hud(false)
+	_fill_draw_page()
+	Audio.sfx("paper", -10.0)
+
+func _open_draw_page() -> void:
+	_open_pick_page("抽卡")
+
+# 底栏［技能 ＋］：有点就走三选一页，没点就照旧开技能页看账
+func _skill_tap() -> void:
+	if int(_skill_pts) > 0:
+		_open_pick_page("技能")
+	else:
+		_open_large("技能")
+
 func _fill_draw_page() -> void:
 	if _draw_page == null:
 		return
 	for c in _draw_page.get_children():
 		c.queue_free()
+	if _pick_kind == "抽卡":
+		_fill_page_cards()
+	else:
+		_fill_page_generic()
+	_fill_page_buttons()
+
+# 抽卡那一手：三张大卡面（点哪张就是选哪张）
+func _fill_page_cards() -> void:
 	if _draw_choices.is_empty():
 		_draw_choices = _roll_cards()
-	# v18l（用户："把窗口去掉 只留下卡牌和按钮"）：**不铺纸底**了 —— 卡面和按钮直接浮在战场上。
-	#   ⚠ _draw_page 这层仍然是 MOUSE_FILTER_STOP（不然卡片之间的空隙会把点击漏给战场，
-	#     变成"点空白处主角就跑"）；但它**什么都不画**。
-	# v18l：状态行也去掉了（灵晶数在顶上那条资源条里；价钱写在［刷新］按钮与卡片未解锁时的提示上）
-	# ③ 三张大卡面（点哪张就是选哪张）
 	for i in _draw_choices.size():
 		var cid := str(_draw_choices[i])
 		var x := _draw_card_x(i)
 		_card_big(_draw_page, Vector2(x, 40.0), Vector2(212, 440), cid)
 		var hit := _pbtn(_draw_page, "", Vector2(x, 40.0), Vector2(212, 438), 16,
-			int(_crystal) >= DRAW_COST, _draw_page_pick.bind(i))
+			int(_crystal) >= DRAW_COST, _page_pick.bind(i))
 		hit.add_theme_stylebox_override("normal", _flat(Color(1, 1, 1, 0.001)))
 		hit.add_theme_stylebox_override("hover", _flat(Color(1, 1, 1, 0.10)))
 		hit.add_theme_stylebox_override("pressed", _flat(Color(1, 1, 1, 0.20)))
-	# ④ 两颗按钮（草图上就这两颗）
-	# v18p：两颗按钮挪到［卡组］圆钮**下面那一行**（圆钮在页内 y 488~592，卡面到 480 为止）
+
+# 宝物 / 进阶 / 技能：同一个三格模版（名字＋档位＋效果＋代价）
+func _fill_page_generic() -> void:
+	var opts: Array = _pick_opts()
+	for i in opts.size():
+		var o: Dictionary = opts[i]
+		var x := _draw_card_x(i)
+		var col: Color = o.get("col", INK)
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.98, 0.95, 0.86)
+		sb.set_corner_radius_all(12)
+		sb.border_color = col
+		sb.set_border_width_all(3)
+		var box := Panel.new()
+		box.position = Vector2(x, 40.0)
+		box.size = Vector2(212, 440)
+		box.add_theme_stylebox_override("panel", sb)
+		box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_draw_page.add_child(box)
+		var band := ColorRect.new()
+		band.position = Vector2(12, 10)
+		band.size = Vector2(188, 46)
+		band.color = col
+		band.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		box.add_child(band)
+		var nm := Label.new()
+		nm.position = Vector2(12, 14)
+		nm.size = Vector2(188, 42)
+		nm.add_theme_font_size_override("font_size", 24)
+		nm.add_theme_color_override("font_color", Color(0.98, 0.96, 0.90))
+		nm.text = str(o.get("title", ""))
+		nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		nm.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		box.add_child(nm)
+		var sub := Label.new()
+		sub.position = Vector2(12, 68)
+		sub.size = Vector2(188, 34)
+		sub.add_theme_font_size_override("font_size", 20)
+		sub.add_theme_color_override("font_color", col)
+		sub.text = str(o.get("sub", ""))
+		sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		box.add_child(sub)
+		var bd := Label.new()
+		bd.position = Vector2(12, 110)
+		bd.size = Vector2(188, 258)
+		bd.add_theme_font_size_override("font_size", 20)
+		bd.add_theme_color_override("font_color", INK)
+		bd.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		bd.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		bd.text = str(o.get("body", ""))
+		box.add_child(bd)
+		var pr := Label.new()
+		pr.position = Vector2(12, 388)
+		pr.size = Vector2(188, 34)
+		pr.add_theme_font_size_override("font_size", 19)
+		pr.add_theme_color_override("font_color", SEAL)
+		pr.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		pr.text = str(o.get("price", ""))
+		box.add_child(pr)
+		var can := bool(o.get("can", true))
+		var hit := _pbtn(_draw_page, "", Vector2(x, 40.0), Vector2(212, 438), 16, can, _page_pick.bind(i))
+		hit.add_theme_stylebox_override("normal", _flat(Color(1, 1, 1, 0.001)))
+		hit.add_theme_stylebox_override("hover", _flat(Color(1, 1, 1, 0.10)))
+		hit.add_theme_stylebox_override("pressed", _flat(Color(1, 1, 1, 0.20)))
+
+# 三种页面的候选 → 统一的长相（title / sub / body / price / col / can）
+func _pick_opts() -> Array:
+	var out: Array = []
+	match _pick_kind:
+		"宝物":
+			for it_v in _trea_choices:
+				var it: Dictionary = it_v
+				out.append({"title": str(it.get("n", "")), "sub": "【" + str(it.get("q", "")) + "】",
+					"body": str(it.get("fx", "")), "price": ("已拿走" if bool(_trea_pick_used) else "点它就拿走"),
+					"col": _quality_color(str(it.get("q", "下品"))), "can": not bool(_trea_pick_used)})
+		"进阶":
+			# v18s：武器三选一的条目只有 n/t/v/q 四个键（没有说明文字），
+			#   所以这里把"这条线管什么"写出来，别再显示空着一大块
+			var kind_desc := {
+				"atk_flat": "固定攻击：直接加在伤害上（吃全伤/暴击）",
+				"hp_flat": "气血上限：跟着当前上限一起涨",
+				"aspd": "攻速：出手更快（每秒伤害跟着涨）",
+				"crit": "暴击率：更容易打出暴击",
+				"critdmg": "暴击伤害：暴击那一下更狠",
+				"arm": "臂力：主属性的攻击/气血都跟着涨",
+				"agi": "身法：攻速与护甲都跟着涨",
+				"wit": "悟性：内力上限与元素都跟着涨",
+				"cut": "减伤：挨打时按百分比扣掉",
+				"elem": "元素攻击：火/水/金/木/土的伤害加成",
+			}
+			for it_v in _wpn_choices:
+				var it2: Dictionary = it_v
+				var qi := clampi(int(it2.get("q", 0)), 0, 5)
+				out.append({"title": str(it2.get("n", "")),
+					"sub": str(WPN_Q_CN[qi]) + " · 强化线",
+					"body": str(kind_desc.get(str(it2.get("t", "")), "贴上永久生效")),
+					"price": "选它（永久）", "col": GOLD, "can": true})
+		"技能":
+			for e_v in _skill_choices:
+				var e: Dictionary = e_v
+				var lv_txt := ("机制" if str(e.get("kind", "")) == "mech" else "数值") + "　" + str(_field.skill_lv(str(e.get("id", "")))) + "/" + str(e.get("max", 1))
+				out.append({"title": str(e.get("name", "")), "sub": lv_txt,
+					"body": _skill_desc_txt(e), "price": "选它（花 1 技能点）",
+					"col": (SEAL if str(e.get("kind", "")) == "mech" else Color(0.55, 0.50, 0.44)),
+					"can": int(_skill_pts) > 0})
+	return out
+
+# 两颗按钮：［稍后再选］＋［刷新］（文案/可用态按 kind 变）
+func _fill_page_buttons() -> void:
 	_pbtn(_draw_page, "稍后再选", Vector2(16, 600), Vector2(330, 80), 24, true, _close_draw_page)
-	var rt := "刷新 " + str(REFRESH_ALL) + " 灵晶"
-	if _card_refresh > 0:
-		rt = "刷新（免 " + str(_card_refresh) + "）"
-	_pbtn(_draw_page, rt, Vector2(356, 600), Vector2(330, 80), 24,
-		_card_refresh > 0 or int(_crystal) >= REFRESH_ALL, _draw_page_refresh)
+	var rt := "刷新"
+	var can := true
+	match _pick_kind:
+		"抽卡":
+			rt = "刷新 " + str(REFRESH_ALL) + " 灵晶"
+			can = _card_refresh > 0 or int(_crystal) >= REFRESH_ALL
+			if _card_refresh > 0:
+				rt = "刷新（免 " + str(_card_refresh) + "）"
+		"宝物":
+			rt = "刷新（剩 " + str(_trea_refresh) + "）"
+			can = int(_trea_refresh) > 0
+		"进阶":
+			rt = "刷新 " + str(_wpn_refresh_cost()) + " 文钱"
+			can = int(_money) >= _wpn_refresh_cost()
+		"技能":
+			rt = "刷新"
+			can = true
+	_pbtn(_draw_page, rt, Vector2(356, 600), Vector2(330, 80), 24, can, _page_refresh)
+
+# 点卡面 = 选它（四种页面同一个入口）
+func _page_pick(i: int) -> void:
+	match _pick_kind:
+		"抽卡":
+			_draw_page_pick(i)
+		"宝物":
+			if bool(_trea_pick_used):
+				_hint.text = "这一手已经拿过一件了 —— 想再要就按［刷新］"
+				return
+			_trea_take(i)
+			_fill_draw_page()
+		"进阶":
+			_wpn_take(i)
+			_close_draw_page()
+		"技能":
+			if i < 0 or i >= _skill_choices.size() or int(_skill_pts) <= 0:
+				return
+			_pick_skill(str((_skill_choices[i] as Dictionary)["id"]))
+			_skill_choices.clear()
+			if int(_skill_pts) > 0 and _field != null:
+				_skill_choices = _field.roll_choices()
+				_fill_draw_page()
+			else:
+				_close_draw_page()
+
+func _page_refresh() -> void:
+	match _pick_kind:
+		"抽卡":
+			_draw_page_refresh()
+		"宝物":
+			_trea_refresh_now()
+			_fill_draw_page()
+		"进阶":
+			_wpn_refresh()
+			_fill_draw_page()
+		"技能":
+			if _field != null:
+				_skill_choices = _field.roll_choices()
+			_fill_draw_page()
 # v11a 成长武器：自带一件 · 无限强化（文钱）· 每 10 级进阶（品质升档 ＋ 三选一）
 #   强化等级保留 · 一键强化用大按钮（手机不做键盘热键）· 三选一可刷新（按次数计价）
 # ============================================================
@@ -2384,14 +2618,13 @@ func _wpn_take(i: int) -> void:
 #     · 进阶待选（_wpn_await）→ **直接开详情页**，那页顶上就是三选一
 #     · 否则 → 花文钱升一级；升到 10 的倍数会自动变成待选，下次点就弹三选一
 func _wpn_quick_tap() -> void:
+	# v18s（用户："强化点到三选一 也是跟抽卡一样 都是一个模版"）：进阶待选时**开三选一页**
 	if _wpn_await:
-		_open_large("成长武器详情")
-		_hint.text = "进阶三选一：挑一条强化线（选完才能继续强化）"
+		_open_pick_page("进阶")
 		return
 	if _wpn_up():
 		if _wpn_await:
-			_open_large("成长武器详情")
-			_hint.text = "进阶！三选一挑一条强化线"
+			_open_pick_page("进阶")
 
 func _wpn_up() -> bool:
 	# v15k（用户：装备无限强化 钱都成负数了）：⚠ 这里原来是三个 bug 摞在一起——
@@ -6264,6 +6497,71 @@ func _restart_run() -> void:
 
 # ---- 技能页：三选一（有技能点时）／当前招式（没点时）----
 #   数据与效果都在战场（kushou_battle.gd）里：roll_choices() 抽、apply_pick() 落。
+# v18s：技能说明里那一堆 <R>/<C>/… 的实时替换抽成函数（技能三选一页也要用）
+func _skill_desc_txt(e: Dictionary) -> String:
+	var txt := str(e["desc"])
+	txt = txt.replace("<R>", str(int(_field.splash_radius())) + " 像素")
+	txt = txt.replace("<C>", str(int(_field.jg_chance() * 100.0)) + "%")
+	txt = txt.replace("<D>", str(snappedf(_field.jg_dmg_mul(), 0.01)))
+	txt = txt.replace("<W>", str(snappedf(_field.jg_width(), 0.01)))
+	txt = txt.replace("<P>", str(_field.jg_pierce()))
+	txt = txt.replace("<S>", str(int(_field.jg_speed())))
+	# 飞匕那一套的实时数值
+	txt = txt.replace("<DP>", str(_field.dg_pierce()))
+	txt = txt.replace("<DD>", str(snappedf(_field.dg_dmg_mul(), 0.01)))
+	txt = txt.replace("<DB>", str(_field.dg_bounce()))
+	txt = txt.replace("<DM>", str(_field.dg_multi()))
+	txt = txt.replace("<DBM>", str(snappedf(_field.dg_bounce_mul(), 0.01)))
+	txt = txt.replace("<MD>", str(snappedf(_field.dg_multi_mul(), 0.01)))
+	# 天雷那一套
+	txt = txt.replace("<TD>", str(snappedf(_field.tl_dmg_mul(), 0.01)))
+	txt = txt.replace("<TR>", str(int(_field.tl_radius())))
+	txt = txt.replace("<TP>", str(int(_field.tl_para_chance() * 100.0)) + "%")
+	txt = txt.replace("<TPD>", str(snappedf(_field.tl_para_dur(), 0.1)))
+	txt = txt.replace("<TM>", str(int(_field.tl_multi_chance() * 100.0)) + "%")
+	txt = txt.replace("<TMD>", str(snappedf(_field.tl_multi_mul(), 0.01)))
+	txt = txt.replace("<TMP>", str(int(_field.tl_mp())))
+	txt = txt.replace("<TCD>", str(snappedf(_field.tl_cd(), 0.1)))
+	# 回春 / 怒火
+	txt = txt.replace("<LH>", str(int(_field.lq_heal() * 100.0)))
+	txt = txt.replace("<LP>", str(snappedf(_field.lq_poison_mul(), 0.01)))
+	txt = txt.replace("<LPD>", str(snappedf(_field.lq_poison_dur(), 0.1)))
+	txt = txt.replace("<LS>", str(_field.lq_spread()))
+	txt = txt.replace("<LCD>", str(snappedf(_field.lq_cd(), 0.1)))
+	txt = txt.replace("<LMP>", str(int(_field.lq_mp())))
+	txt = txt.replace("<JD>", str(snappedf(_field.jc_dmg_mul(), 0.01)))
+	txt = txt.replace("<JS>", str(_field.jc_spread()))
+	txt = txt.replace("<JB>", str(snappedf(_field.jc_burn_mul(), 0.01)))
+	txt = txt.replace("<JCD>", str(snappedf(_field.jc_interval(), 0.1)))
+	# 崔三娘·龙王
+	txt = txt.replace("<CI>", str(int(_field.cn_inherit() * 100.0)))
+	txt = txt.replace("<CS>", str(snappedf(_field.cn_skill_mul(), 0.01)))
+	txt = txt.replace("<CR>", str(int(_field.cn_skill_radius())))
+	txt = txt.replace("<CM>", str(int(_field.cn_mp())))
+	txt = txt.replace("<CC>", str(snappedf(_field.cn_cd(), 0.1)))
+	txt = txt.replace("<CL>", str(int(_field.cn_life())))
+	# 杀气 / 纳气
+	txt = txt.replace("<SBC>", str(snappedf(_field.sb_cd(), 0.1)))
+	txt = txt.replace("<SBD>", str(snappedf(_field.sb_dur(), 0.1)))
+	txt = txt.replace("<SBA>", str(snappedf(_field.sb_atk_add(), 0.1)))
+	txt = txt.replace("<SBM>", str(int(_field.p_mp("duyanbiao"))))
+	txt = txt.replace("<KRC>", str(snappedf(_field.kr_cd(), 0.1)))
+	txt = txt.replace("<KRD>", str(snappedf(_field.kr_dur(), 0.1)))
+	txt = txt.replace("<KRA>", str(int(_field.kr_mp_add())))
+	txt = txt.replace("<KRP>", str(int(_field.kr_mp_pct() * 100.0)) + "%")
+	# 法度·怒目金刚
+	txt = txt.replace("<FDS>", str(int((0.40 + 0.15 * _field.skill_lv("fadu_shield")) * 100.0)))
+	txt = txt.replace("<FDB>", str(snappedf(_field.fd_break_mul(), 0.01)))
+	txt = txt.replace("<FDP>", str(int(_field.fd_step_pct() * 100.0)))
+	txt = txt.replace("<FDR>", str(int(_field.fd_range())))
+	txt = txt.replace("<FDD>", str(snappedf(_field.fd_dur(), 0.1)))
+	txt = txt.replace("<FDC>", str(snappedf(_field.fd_cd(), 0.1)))
+	txt = txt.replace("<FDM>", str(int(_field.p_mp("fadu"))))
+	txt = txt.replace("<KRM>", str(int(_field.p_mp("kurong"))))
+	txt = txt.replace("<DS>", str(int(_field.dg_interval())))
+	txt = txt.replace("**", "")
+	return txt
+
 func _fill_skill(p: Control, y: float, sz: Vector2) -> float:
 	var head := Label.new()
 	head.position = Vector2(28, y)
@@ -6324,67 +6622,7 @@ func _fill_skill(p: Control, y: float, sz: Vector2) -> float:
 			ds.add_theme_color_override("font_color", INK)
 			# <R> 是范围技的实时半径（学了才显示数字）
 			# <R>/<C>/<D>/<W>/<P>/<S> 都是"实时数值"，让玩家点之前就看见当前档位
-			var txt := str(e["desc"])
-			txt = txt.replace("<R>", str(int(_field.splash_radius())) + " 像素")
-			txt = txt.replace("<C>", str(int(_field.jg_chance() * 100.0)) + "%")
-			txt = txt.replace("<D>", str(snappedf(_field.jg_dmg_mul(), 0.01)))
-			txt = txt.replace("<W>", str(snappedf(_field.jg_width(), 0.01)))
-			txt = txt.replace("<P>", str(_field.jg_pierce()))
-			txt = txt.replace("<S>", str(int(_field.jg_speed())))
-			# 飞匕那一套的实时数值
-			txt = txt.replace("<DP>", str(_field.dg_pierce()))
-			txt = txt.replace("<DD>", str(snappedf(_field.dg_dmg_mul(), 0.01)))
-			txt = txt.replace("<DB>", str(_field.dg_bounce()))
-			txt = txt.replace("<DM>", str(_field.dg_multi()))
-			txt = txt.replace("<DBM>", str(snappedf(_field.dg_bounce_mul(), 0.01)))
-			txt = txt.replace("<MD>", str(snappedf(_field.dg_multi_mul(), 0.01)))
-			# 天雷那一套
-			txt = txt.replace("<TD>", str(snappedf(_field.tl_dmg_mul(), 0.01)))
-			txt = txt.replace("<TR>", str(int(_field.tl_radius())))
-			txt = txt.replace("<TP>", str(int(_field.tl_para_chance() * 100.0)) + "%")
-			txt = txt.replace("<TPD>", str(snappedf(_field.tl_para_dur(), 0.1)))
-			txt = txt.replace("<TM>", str(int(_field.tl_multi_chance() * 100.0)) + "%")
-			txt = txt.replace("<TMD>", str(snappedf(_field.tl_multi_mul(), 0.01)))
-			txt = txt.replace("<TMP>", str(int(_field.tl_mp())))
-			txt = txt.replace("<TCD>", str(snappedf(_field.tl_cd(), 0.1)))
-			# 回春 / 怒火
-			txt = txt.replace("<LH>", str(int(_field.lq_heal() * 100.0)))
-			txt = txt.replace("<LP>", str(snappedf(_field.lq_poison_mul(), 0.01)))
-			txt = txt.replace("<LPD>", str(snappedf(_field.lq_poison_dur(), 0.1)))
-			txt = txt.replace("<LS>", str(_field.lq_spread()))
-			txt = txt.replace("<LCD>", str(snappedf(_field.lq_cd(), 0.1)))
-			txt = txt.replace("<LMP>", str(int(_field.lq_mp())))
-			txt = txt.replace("<JD>", str(snappedf(_field.jc_dmg_mul(), 0.01)))
-			txt = txt.replace("<JS>", str(_field.jc_spread()))
-			txt = txt.replace("<JB>", str(snappedf(_field.jc_burn_mul(), 0.01)))
-			txt = txt.replace("<JCD>", str(snappedf(_field.jc_interval(), 0.1)))
-			# 崔三娘·龙王
-			txt = txt.replace("<CI>", str(int(_field.cn_inherit() * 100.0)))
-			txt = txt.replace("<CS>", str(snappedf(_field.cn_skill_mul(), 0.01)))
-			txt = txt.replace("<CR>", str(int(_field.cn_skill_radius())))
-			txt = txt.replace("<CM>", str(int(_field.cn_mp())))
-			txt = txt.replace("<CC>", str(snappedf(_field.cn_cd(), 0.1)))
-			txt = txt.replace("<CL>", str(int(_field.cn_life())))
-			# 杀气 / 纳气
-			txt = txt.replace("<SBC>", str(snappedf(_field.sb_cd(), 0.1)))
-			txt = txt.replace("<SBD>", str(snappedf(_field.sb_dur(), 0.1)))
-			txt = txt.replace("<SBA>", str(snappedf(_field.sb_atk_add(), 0.1)))
-			txt = txt.replace("<SBM>", str(int(_field.p_mp("duyanbiao"))))
-			txt = txt.replace("<KRC>", str(snappedf(_field.kr_cd(), 0.1)))
-			txt = txt.replace("<KRD>", str(snappedf(_field.kr_dur(), 0.1)))
-			txt = txt.replace("<KRA>", str(int(_field.kr_mp_add())))
-			txt = txt.replace("<KRP>", str(int(_field.kr_mp_pct() * 100.0)) + "%")
-			# 法度·怒目金刚
-			txt = txt.replace("<FDS>", str(int((0.40 + 0.15 * _field.skill_lv("fadu_shield")) * 100.0)))
-			txt = txt.replace("<FDB>", str(snappedf(_field.fd_break_mul(), 0.01)))
-			txt = txt.replace("<FDP>", str(int(_field.fd_step_pct() * 100.0)))
-			txt = txt.replace("<FDR>", str(int(_field.fd_range())))
-			txt = txt.replace("<FDD>", str(snappedf(_field.fd_dur(), 0.1)))
-			txt = txt.replace("<FDC>", str(snappedf(_field.fd_cd(), 0.1)))
-			txt = txt.replace("<FDM>", str(int(_field.p_mp("fadu"))))
-			txt = txt.replace("<KRM>", str(int(_field.p_mp("kurong"))))
-			txt = txt.replace("<DS>", str(int(_field.dg_interval())))
-			txt = txt.replace("**", "")
+			var txt := _skill_desc_txt(e)
 			ds.text = txt
 			ds.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 			box.add_child(ds)
@@ -6781,6 +7019,8 @@ func _process(delta: float) -> void:
 		_bond_t = 0.0
 		_bond_check()            # v12b：羁绊宝物每秒查一次
 	_yh_tick(delta)             # v12a：玲珑玉壶（冷却 ＋ 气血低于 50% 自动用）
+	_tick_glow(delta)           # v18s：抽卡/宝物/强化/技能 满足条件就呼吸发光
+	# v18s（用户："当有宝物时【按钮旁边标明次数】"）：宝物钮上那颗数字也在 _tick_glow 里刷
 	_ach_tick(delta)            # v13w：成就达成检查（每半秒一次）
 	# v14e：打满这一关的波数上限 → 通关（首通给解锁）
 	# v15y（用户："35波打完就通关了"）：⚠ 原来只判 `_wave >= _wave_max` ——
@@ -7266,7 +7506,7 @@ func _on_chal_drop(kind_i: int, at: Vector2) -> void:
 			#   现在只给"一次三选一"——刷新那 1 次也去掉（不然等于白送一次重抽）。
 			_trea_choices.clear()
 			_trea_roll()                  # v16b：开新的一手（会解掉"已拿过"）
-			_open_large("宝物三选一")
+			_open_pick_page("宝物")       # v18s：走新的三选一页（不再弹窗）
 			_hint.text = "宝箱大怪倒了：开一次宝物三选一（挑一件）"
 			Audio.sfx("chest", -3.0)
 		4:
@@ -8731,13 +8971,12 @@ func _fill_equip(p: Control, y: float, sz: Vector2) -> float:
 		return ly + 50.0
 	if _equip_tab == 2:
 		return _fill_vault(p, ly, sz, "仓库")
-	# ---- 宝物页：玉壶卡 → 宝物列表 → 宝物三选一 ----
+	# ---- 宝物页：玉壶卡 → 宝物列表 ----
+	#   v18s（用户："宝物窗口就只显示详情就可以了 上面的宝物就是抽"）：
+	#   这一页**不再有"去三选一"的入口** —— 抽宝物走右列那颗［宝物］圆钮（同一个三选一页）
 	ly = _fill_yuhu_card(p, ly)
 	ly = _fill_trea_list(p, ly, sz)
-	ly += 12.0
-	_pbtn(p, "宝物三选一（刷新 " + str(_trea_refresh) + " 次）", Vector2(24, ly), Vector2(640, 76), 24, true,
-		func(): _open_large("宝物三选一"))
-	return ly + 92.0
+	return ly + 12.0
 # v13u（用户："玉壶这种描述太多了 就当前效果显示就可以了 然后品质 没了"）：
 #   卡片只留——名字 ＋【品质】＋ 当前效果（回复/冷却）＋ 两颗按钮。别的全砍。
 func _fill_yuhu_card(p: Control, y: float) -> float:

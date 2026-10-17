@@ -55,10 +55,17 @@ func _process(_d: float) -> bool:
 	if _phase == 0:
 		if _i >= _kinds.size():
 			# v18k：抽卡页（铺在战场区那层，不是弹窗）也量一遍
+			# v18s：四种三选一页（抽卡/宝物/进阶/技能）都量一遍
 			if _k._draw_page != null:
-				_k._open_draw_page()
-				_walk(_k._draw_page, "抽卡页")
-				_k._close_draw_page()
+				for pk in ["抽卡", "宝物", "进阶", "技能"]:
+					if pk == "技能":
+						_k._skill_pts = 1
+					if pk == "进阶":
+						_k._wpn_await = true
+						_k._wpn_roll_choices()
+					_k._open_pick_page(str(pk))
+					_walk(_k._draw_page, str(pk) + "页")
+					_k._close_draw_page()
 			print("=== UI 巡检结果 ===")
 			print("[k950] 查了 " + str(_kinds.size()) + " 个弹窗 ＋ 抽卡页 / " + str(_nlabel) + " 个 Label · 最小字号 " + str(_minsize))
 			print("[k950] 问题 " + str(_bad.size()) + " 处：")
