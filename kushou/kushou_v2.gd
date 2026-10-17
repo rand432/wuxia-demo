@@ -2031,8 +2031,10 @@ func _draw_page_pick(i: int) -> void:
 	if _pending_card != "":
 		return                          # 十格满了：先去卡组页换一张（_draw_card 已经开好了）
 	_fly_card_to_deck(from, nm)
-	_draw_choices = _roll_cards()       # 换一手新的
-	_fill_draw_page()
+	# v18u（用户："点击完卡面…选择了之后不就回到困兽主界面了吗"）：
+	#   选完**直接收起这一页**回主界面（飞卡动画在单独一层，照常演）
+	_close_draw_page()
+	_hint.text = "抽到「" + nm + "」—— 想再抽就再点［抽卡］"
 
 func _draw_page_refresh() -> void:
 	# 有黑市给的「卡组刷新」次数就先用免费的，没有才花 5 灵晶
@@ -2289,7 +2291,7 @@ func _page_pick(i: int) -> void:
 				_hint.text = "这一手已经拿过一件了 —— 想再要就按［刷新］"
 				return
 			_trea_take(i)
-			_fill_draw_page()
+			_close_draw_page()
 		"进阶":
 			_wpn_take(i)
 			_close_draw_page()
@@ -2298,11 +2300,9 @@ func _page_pick(i: int) -> void:
 				return
 			_pick_skill(str((_skill_choices[i] as Dictionary)["id"]))
 			_skill_choices.clear()
-			if int(_skill_pts) > 0 and _field != null:
-				_skill_choices = _field.roll_choices()
-				_fill_draw_page()
-			else:
-				_close_draw_page()
+			_close_draw_page()
+			if int(_skill_pts) > 0:
+				_hint.text = "技能已升级 —— 还剩 " + str(int(_skill_pts)) + " 点，再点［技能 ＋］继续选"
 
 func _page_refresh() -> void:
 	match _pick_kind:
