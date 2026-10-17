@@ -51,7 +51,8 @@ const SETS := [
 	# v138（用户："第一节 幸运的是你在某个风干的尸骨上寻觅了一把生锈的铁剑"）：**引子专用的破剑**。
 	#   ⚠ 挂 `intro_only`：pool_sets / data_ladder.sets_of_q 都跳过它 → 事件三选一、搜刮、货郎、
 	#     开局行装**永远抽不到**"生锈的铁剑"。全游戏只有引子第一节按 id 直接发这三片
-	#     （journey_stage._intro_kit），三片凑齐合成后就是玩家的第一把兵器。
+	#     （journey_stage._intro_kit），而且给的是**整把·成品**——第一节只教"装备"，
+	#     "三片凑一套 → 合成"那套等茅屋床底的疾风剑法再教。
 	#   数值故意比同档长剑（青锋剑 15 攻）低一档——它本来就锈了。
 	{"id": "sword_rusty", "name": "生锈的铁剑", "pool": "weapon", "weapon": "sword",
 		"parts": ["锋", "柄", "鞘"], "item": "生锈的铁剑", "intro_only": true,

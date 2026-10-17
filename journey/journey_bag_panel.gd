@@ -256,15 +256,14 @@ func _cell_box(kind: String, is_ready: bool, q_col = null) -> StyleBoxFlat:
 func _update_tip() -> void:
 	if _tip_label == null or _state == null:
 		return
-	var synthables: Array = _state.ready_sets()
+	# v139（用户："凑齐一套会提示点上面［合成］那行，收掉"）：**不再主动教合成**——
+	#   凑齐了按钮自己会写"合成 <名>"，让玩家自己看见；这里只留一句通用说明。
 	if _state.bag_full():
 		UiKit.set_text(_tip_label, "包裹已满：点包裹里的东西可查看／丢弃／装备")
-	elif not synthables.is_empty():
-		UiKit.set_text(_tip_label, "有 " + str(synthables.size()) + " 套凑齐了 → 点上面［合成］，合成后选装备或放包裹")
 	elif _host._just_synth:
 		UiKit.set_text(_tip_label, "成品装好后：功法实战自动放，兵器改普攻招式。点包裹里的东西也能装备／丢弃")
 	else:
-		UiKit.set_text(_tip_label, "左上角［角色］可开合面板；点包裹里东西可查看／丢弃／装备；凑齐一套（页数随品质）点［合成］")
+		UiKit.set_text(_tip_label, "左上角［角色］可开合面板；点包裹里东西可查看／丢弃／装备")
 
 
 # ---- 点格：正在"换卡"就先换卡，否则弹详情 ----

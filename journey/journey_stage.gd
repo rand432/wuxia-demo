@@ -51,6 +51,11 @@ const JourneyData := preload("res://journey/data_journey.gd")
 const RunState := preload("res://shared/run_state.gd")
 const UiKit := preload("res://shared/ui_kit.gd")
 const CreationFlow := preload("res://journey/creation_flow.gd")
+# v138：引子第一节尸骨上那把锈剑（data_cards.sword_rusty 挂了 intro_only，任何掉落池都抽不到）
+const SWORD_SID := "sword_rusty"
+# v139（用户定："半血真砍"）：引子起手的气血比例——"一身武艺只剩不到三成"的数值落点。
+#   气血**上限**不动，只把当前血压到这一档（想改手感就改这一个数）。
+const INTRO_HP_PCT := 0.5
 const DuelBattle := preload("res://journey/duel_battle.gd")
 const StickFighter := preload("res://journey/stick_fighter.gd")
 const ActorFactory := preload("res://journey/actor_factory.gd")   # Q版纸片人 / 火柴人 二选一
@@ -148,6 +153,8 @@ var _detail_idx := -1          # 包裹详情用（弹窗内容由包裹件填�
 var _synth_queue: Array = []   # 合成件持它（待放的成品队列；开新趟清）
 var _shop_active := false      # 拆件后仍留舞台：DropPanel 认这个名字（接口，别删）
 var _told_card := false        # 事件流件读它（首次收卡提示只看一次）
+var _tut_seen: Dictionary = {} # v139：教学页看过的（tip id → true）——每条只教一次
+var _hut := false              # v139：当前这一节是不是"茅屋"（背景改走 Backdrop.draw_hut）
 var _just_synth := false       # 包裹件读它（合成后的提示行分支）
 var _run_dead := false         # R4：本趟已殒命（结算/回村分叉用；_reset_run_hud 复位）
 var _run_fates: Array = []     # v62r（用户："开局命数可多选"）：出征屏选的**全部**命数（重开一趟沿用）
@@ -739,10 +746,11 @@ func _start_formal_run() -> void:
 
 # ============ 创建完成 → 开局 ============
 
-func _on_created(talents: Array, gift_sid: String) -> void:
-	print("[游历] 创建完成：天赋=", talents, " 礼物=", gift_sid)
+func _on_created(talents: Array) -> void:
+	print("[游历] 创建完成：天赋=", talents)
 	_phase = "journey"
-	_state.reset(talents, gift_sid)
+	_state.reset(talents)
+	_intro_kit()   # v138：起手只有那三片锈剑（疾风剑法改由茅屋床底那本秘籍给，暂未接线）
 	_snapshot_player()
 	# ㊿g：［下山］即落盘——首趟"开跑"这一刻的全局账当场写进文件，后面任何死法都不亏
 	GameState.save_game()
@@ -756,11 +764,180 @@ func _on_created(talents: Array, gift_sid: String) -> void:
 	_reset_run_hud()
 	_told_card = false
 	_refresh_all()
-	if gift_sid != "":
-		UiKit.float_text(self, "三张残卡已入包裹 · 行前盘缠 " + str(RunState.START_MONEY) + " 文", UiKit.SEAL)
-	else:
-		UiKit.float_text(self, "行前盘缠 " + str(RunState.START_MONEY) + " 文 · 左上角［角色］可开合面板", UiKit.INK)
+	UiKit.float_text(self, "身无长物 · 行前盘缠 " + str(RunState.START_MONEY) + " 文", UiKit.SEAL)
 	_enter_node()
+
+# ============================================================
+# v138（用户："剧情是雨下的很大、身负重伤、实力十不存一，佩剑早不知跌落何处
+#   → 第一节在某个风干的尸骨上寻到一把生锈的铁剑【点击装备进行合成的教学】"）：
+#   v139（用户定："第一节只教装备，合成留给秘籍"）：起手给的是**整把**锈剑（成品，进包裹）——
+#   就是第一节尸骨上那把；"合成"那套挪到茅屋床底的三卷疾风剑法再教。
+#   ⚠ 疾风剑法**不在这里发**：新剧情里它是茅屋里从床底搜出来的（那一段还没接线）。
+#   "装备"的教学放在**第一节 story 点下去的那一刻**（_tutorial_tip / _show_tip）——
+#   五问的临别页不再教合成：那时候玩家还没见过包裹。
+#   重开一趟（_start_run）要重发，所以两处都调它。
+# ============================================================
+func _intro_kit() -> void:
+	if _state == null or str(_state.mode) != "intro":
+		return
+	# v139（用户定："第一节只教装备，合成留给秘籍"）：起手给的是**整把**（成品），不是三片残片——
+	#   第一节的功课只有"装备"一样；"三片凑一套 → 合成"那套等茅屋床底那三卷疾风剑法再教。
+	if _state.add_item(SWORD_SID):
+		print("[游历] 引子起手：", Cards.item_name(SWORD_SID), "（整把·成品）进包裹")
+	else:
+		print("[游历] 引子起手：包裹满了，", Cards.item_name(SWORD_SID), " 没能放进包裹")
+	# v139（用户定："半血真砍"）："实力十不存一"落到数值上——起手只剩半条命（上限不动）。
+	_state.party_hp_pct(INTRO_HP_PCT)
+	print("[游历] 引子起手：气血压到 ", int(INTRO_HP_PCT * 100.0), "%（剩 ", _state.hp, "/", _state.hp_max, "）")
+
+# ---- 教学页（v139）----
+#   全部由节点自己挂 tip="..." 触发；每条只教一次（_tut_seen）。
+#   用户口径："不用提示玩家，让玩家自己摸索；就教学的时候教学一下。"
+const TIPS := {
+	"intro_equip": {
+		"title": "包裹 · 第一课",
+		"body": "右上角［包裹］里躺着一把「生锈的铁剑」。\n点它 →［装备］，这把剑就成了你的兵器。",
+	},
+	"intro_synth": {
+		"title": "包裹 · 第二课",
+		"body": "那三张散页凑齐了。\n点包裹底下那颗［合成］——拼成一门功法；\n它会问放哪儿：选［装备］，就进功法栏。",
+	},
+}
+
+func _tutorial_tip(tid: String) -> bool:
+	if tid == "" or _state == null or str(_state.mode) != "intro":
+		return false
+	if not TIPS.has(tid) or _tut_seen.has(tid):
+		return false
+	_tut_seen[tid] = true
+	var t: Dictionary = TIPS[tid]
+	_show_tip(str(t.get("title", "")), str(t.get("body", "")))
+	return true
+
+func _show_tip(title: String, body: String) -> void:
+	_busy = true
+	_close_overlay()
+	var veil := _make_popup_veil(true)
+	veil.mouse_filter = Control.MOUSE_FILTER_STOP
+	var panel := UiKit.make_paper_panel(veil, Rect2(60, POPUP_TOP, 600, 356))
+	var t1 := UiKit.make_label(panel, Vector2(0, 16), Vector2(600, 40), 28, UiKit.INK)
+	UiKit.set_text(t1, title)
+	t1.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var bd := UiKit.make_label(panel, Vector2(34, 66), Vector2(532, 200), 19,
+		Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.92))
+	UiKit.set_text(bd, body)
+	bd.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	var go := UiKit.make_button(panel, Vector2(200, 280), Vector2(200, 58), "知道了", 22)
+	go.pressed.connect(_on_tip_ok)
+
+func _on_tip_ok() -> void:
+	_close_popup()
+	_busy = false
+	_advance()
+
+# ============================================================
+# v139（用户："茅屋床底发现一本皱巴巴的武功秘籍"＋"那个翻床底要有动画啊"）：
+#   引子里的**固定翻找**——只有一个地方可翻、一定出东西（不走概率）。
+#   正式的搜刮（容器／警戒／临时仓库）照旧要通关凡品之后才开，这里只教"屋里也有东西可以翻"。
+#   动画：压暗 → 床板从底下升起 → 布包弹出 → 三张散页飞向右上角的包裹。
+# ============================================================
+func _open_search(node: Dictionary) -> void:
+	if _busy or _loot_panel_open:
+		return
+	_busy = true
+	_close_overlay()
+	var veil := _make_popup_veil(true)
+	veil.mouse_filter = Control.MOUSE_FILTER_STOP
+	var panel := UiKit.make_paper_panel(veil, Rect2(70, POPUP_TOP, 580, 300))
+	var t1 := UiKit.make_label(panel, Vector2(0, 18), Vector2(580, 40), 28, UiKit.INK)
+	UiKit.set_text(t1, str(node.get("title", "翻找")))
+	t1.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var bd := UiKit.make_label(panel, Vector2(36, 68), Vector2(508, 110), 19,
+		Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.86))
+	UiKit.set_text(bd, "（伸手进去摸摸看。）")
+	bd.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	var go := UiKit.make_button(panel, Vector2(190, 216), Vector2(200, 58), "翻一翻", 22)
+	go.pressed.connect(_on_search_take.bind(node))
+
+func _on_search_take(node: Dictionary) -> void:
+	var host: Control = _popup if (_popup != null and is_instance_valid(_popup)) else self
+	for c in host.get_children():
+		if c is Button:
+			(c as Button).disabled = true
+	var tw := create_tween()
+	# ① 压暗
+	var dark := ColorRect.new()
+	dark.color = Color(0, 0, 0, 0.0)
+	dark.size = size
+	dark.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	host.add_child(dark)
+	tw.tween_property(dark, "color:a", 0.58, 0.16)
+	# ② 床板从底下升上来
+	var board := Panel.new()
+	board.position = Vector2(40.0, size.y)
+	board.size = Vector2(size.x - 80.0, 340.0)
+	var bsb := StyleBoxFlat.new()
+	bsb.bg_color = Color(0.15, 0.12, 0.10, 0.96)
+	bsb.set_corner_radius_all(12)
+	bsb.border_color = Color(0.36, 0.28, 0.20, 1.0)
+	bsb.set_border_width_all(2)
+	board.add_theme_stylebox_override("panel", bsb)
+	board.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	host.add_child(board)
+	tw.parallel().tween_property(board, "position:y", size.y - 420.0, 0.32).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	# ③ 布包弹一下
+	var bundle := Panel.new()
+	bundle.position = Vector2(size.x * 0.5 - 36.0, size.y - 330.0)
+	bundle.size = Vector2(72, 56)
+	var pob := StyleBoxFlat.new()
+	pob.bg_color = Color(0.35, 0.29, 0.21, 1)
+	pob.set_corner_radius_all(9)
+	pob.border_color = Color(0.55, 0.45, 0.32, 1)
+	pob.set_border_width_all(2)
+	bundle.add_theme_stylebox_override("panel", pob)
+	bundle.pivot_offset = bundle.size * 0.5
+	bundle.scale = Vector2(0.01, 0.01)
+	bundle.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	host.add_child(bundle)
+	tw.tween_property(bundle, "scale", Vector2(1.12, 1.12), 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(bundle, "scale", Vector2(1.0, 1.0), 0.08)
+	# ④ 三张散页：先散开，再飞向右上角的包裹
+	for i in 3:
+		var paper := Panel.new()
+		paper.position = bundle.position + Vector2(10.0 + float(i) * 9.0, 4.0 + float(i) * 5.0)
+		paper.size = Vector2(34, 44)
+		var psb := StyleBoxFlat.new()
+		psb.bg_color = Color(0.96, 0.93, 0.85, 1)
+		psb.border_color = Color(0.58, 0.40, 0.22, 1)
+		psb.set_border_width_all(2)
+		paper.add_theme_stylebox_override("panel", psb)
+		paper.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		host.add_child(paper)
+		var to := Vector2(432.0 + float(i) * 14.0, 66.0 + float(i) * 14.0)
+		tw.parallel().tween_property(paper, "position", to, 0.55).set_delay(0.10 + 0.07 * float(i))
+		tw.parallel().tween_property(paper, "modulate:a", 0.0, 0.30).set_delay(0.46)
+	tw.tween_interval(0.40)
+	await tw.finished
+	_search_grant(node)
+
+func _search_grant(node: Dictionary) -> void:
+	var got: Array = []
+	for e_v in (node.get("cards", []) as Array):
+		var e: Dictionary = e_v
+		var sid := str(e.get("set", ""))
+		for p_v in (e.get("parts", []) as Array):
+			var p := int(p_v)
+			if _state.add_card(sid, p):
+				got.append(str(Cards.card_name(sid, p)))
+	_close_popup()
+	_busy = false
+	if got.is_empty():
+		UiKit.float_text(self, "什么也没有", UiKit.DIM)
+	else:
+		UiKit.float_text(self, "摸出：" + "、".join(PackedStringArray(got)), UiKit.GOLD)
+	_refresh_all()
+	JourneySave.save_run(self)
+	_advance()
 
 func _start_run() -> void:
 	if _state.mode == "formal":
@@ -776,7 +953,8 @@ func _start_run() -> void:
 		_state.begin_formal(_state.party_role_ids(), int(_state.diff), _run_fates)   # ㉛：重开沿用同一批命数
 	else:
 		var keep: Array = _state.talents.duplicate()
-		_state.reset(keep, "")
+		_state.reset(keep)
+		_intro_kit()   # v138：重开一趟也照发那三片锈剑
 	_shop_active = false
 	_shop._reset()
 	_event._reset()
@@ -915,6 +1093,8 @@ func _enter_node() -> void:
 	_node_done = false
 	_node_entered = true    # 本节内容即将摆出——先记下（存档点就跟着这条走）
 	_cur_node = _nodes[_node]
+	# v139：茅屋那几节换成室内背景（没有图，程序化画出来）
+	_hut = str(_cur_node.get("scene", "")) == "hut"
 	print("[游历] 第 ", _node + 1, " / ", _nodes.size(), " 节：", str(_cur_node.get("t", "")))
 	UiKit.set_text(_node_label, "第 " + str(_node + 1) + " / " + str(_nodes.size()) + " 节")
 	_type_full = str(_cur_node.get("text", "……"))
@@ -983,7 +1163,12 @@ func _continue() -> void:
 		return
 	match str(_cur_node.get("t", "")):
 		"story":
+			# v139：教学页统一由**节点自己**挂标记（tip=...）触发——开场拆几拍都好改，接档回来也不会重复教。
+			if _tutorial_tip(str(_cur_node.get("tip", ""))):
+				return
 			_advance()
+		"search":
+			_open_search(_cur_node)
 		"gain":
 			_open_gain(_cur_node)
 		"rest_shop":
@@ -2564,6 +2749,9 @@ func _snapshot_player() -> void:
 # ============ 背景绘制（已拆件：全套搬去 journey_backdrop.gd） ============
 
 func _draw() -> void:
+	if _hut:
+		Backdrop.draw_hut(self, size, _walk_t)
+		return
 	Backdrop.draw_all(self, size, _scroll_far, _scroll_mid, _scroll_road)
 
 # ㊿h：切场即存——离开游历场（回村/殒命/放弃/直接关窗）时把全局账落一次盘。

@@ -122,3 +122,46 @@ static func _ink_capsule(ctrl: Control, a: Vector2, b: Vector2, ra: float, rb: f
 		var ang2 := th + PI * 0.5 + PI * float(i) / 5.0
 		pts.append(a + Vector2(cos(ang2), sin(ang2)) * ra)
 	ctrl.draw_colored_polygon(pts, col)
+
+# ============================================================
+# v139（用户："茅屋背景没有图"）：**茅屋是现画的**——没有美术也能读成"屋里"：
+#   暗墙、顶梁、漏顶的一道光柱与一滴水、药炉的一点火、右下床板、左下门缝。
+#   全部程序化；t（走路的累计秒数）只用来让那滴水往下走。
+#   以后有图就把这里整段换成 draw_texture_rect 铺一张。
+# ============================================================
+static func draw_hut(ctrl: Control, sz: Vector2, t: float) -> void:
+	var w: float = sz.x
+	var h: float = sz.y
+	# 墙：上亮下暗
+	ctrl.draw_rect(Rect2(0, 0, w, h), Color(0.105, 0.092, 0.088))
+	ctrl.draw_rect(Rect2(0, 0, w, h * 0.55), Color(0.135, 0.118, 0.108))
+	# 顶梁
+	ctrl.draw_rect(Rect2(0, 96, w, 26), Color(0.075, 0.065, 0.060))
+	ctrl.draw_rect(Rect2(0, 122, w, 8), Color(0.058, 0.050, 0.046))
+	# 门（左下）：门板 + 门缝一线光
+	ctrl.draw_rect(Rect2(28, 620, 132, 330), Color(0.088, 0.076, 0.070))
+	ctrl.draw_line(Vector2(160, 620), Vector2(160, 950), Color(0.85, 0.80, 0.66, 0.22), 2.0)
+	# 床（右下）：板 + 床沿 + 床腿
+	ctrl.draw_rect(Rect2(392, 838, 300, 42), Color(0.145, 0.120, 0.098))
+	ctrl.draw_rect(Rect2(392, 880, 300, 14), Color(0.095, 0.078, 0.062))
+	ctrl.draw_rect(Rect2(392, 894, 300, 56), Color(0.125, 0.105, 0.088))
+	# 漏顶：一道斜光柱 + 一滴正在落的水
+	var hole := Vector2(w * 0.70, 130.0)
+	ctrl.draw_colored_polygon(PackedVector2Array([
+		hole + Vector2(-26, 0), hole + Vector2(26, 0),
+		hole + Vector2(120, 700), hole + Vector2(20, 700),
+	]), Color(0.86, 0.82, 0.68, 0.055))
+	ctrl.draw_circle(hole, 5.0, Color(0.90, 0.86, 0.72, 0.35))
+	var drip := fposmod(t * 260.0, 700.0)
+	ctrl.draw_circle(hole + Vector2(0, drip), 2.6, Color(0.86, 0.82, 0.70, 0.55))
+	if drip > 690.0:
+		ctrl.draw_circle(Vector2(hole.x + 60, 900), 10.0, Color(0.86, 0.82, 0.70, 0.10))
+	# 药炉（右下偏中）：一点火
+	var fire := Vector2(300, 900)
+	for i in 3:
+		ctrl.draw_circle(fire, 26.0 + float(i) * 16.0, Color(0.92, 0.55, 0.20, 0.05))
+	ctrl.draw_circle(fire, 12.0, Color(0.95, 0.62, 0.26, 0.55))
+	ctrl.draw_circle(fire, 5.0, Color(1.0, 0.86, 0.55, 0.85))
+	# 四边压角
+	ctrl.draw_rect(Rect2(0, 0, w, 70), Color(0, 0, 0, 0.22))
+	ctrl.draw_rect(Rect2(0, h - 120.0, w, 120.0), Color(0, 0, 0, 0.28))

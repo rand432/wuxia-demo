@@ -110,6 +110,9 @@ var _foe: Node2D = null
 var _p_base := Vector2(210, 950)   # 当前聚焦那名我方的站位（由 _p_focus_on 换）
 var _e_base := Vector2(510, 950)
 var _skip_enemy := false
+# v139（用户："主角半血状态对战小兵且只能使用普攻卡"）：这一场**封哪几类牌**——
+#   节点上写 seal=["arts","ult"] 就只摊普攻。剧情用的闸，不走状态系统（那是给玩家看的 debuff）。
+var _seal: Array = []
 
 # ============================================================
 # ㊿：三人成队——我方成员表
@@ -1566,7 +1569,7 @@ func _cards_for(ai: int) -> Array:
 	})
 	# 武学：冷却好了的才有
 	# v53：「沉默」——武学牌这一会儿直接不摊出来（手动/自动两条路都从这份牌里挑，一处就够）
-	if not St.blocks_arts(al):
+	if not St.blocks_arts(al) and not _seal.has("arts"):
 		for sid_v in _state.arts:
 			var sid := str(sid_v)
 			if int(_state.art_cd.get(sid, 0)) > 0:
@@ -1585,7 +1588,7 @@ func _cards_for(ai: int) -> Array:
 			})
 	# 大招：怒气满了才有
 	# v53：「封招」——大招牌不摊出来（怒气留着，卡面也不给）
-	if rg >= 100 and not ult.is_empty() and not St.blocks_ult(al):
+	if rg >= 100 and not ult.is_empty() and not St.blocks_ult(al) and not _seal.has("ult"):
 		out.append({
 			"k": "ult", "sid": "",
 			"name": str(ult.get("name", "大招")),
@@ -2265,6 +2268,7 @@ func _pick_player_target(art: Dictionary) -> int:
 
 func run(state, player: Node2D, fx: Control, node: Dictionary, foe_first := false, party_nodes: Array = []) -> Dictionary:
 	_state = state
+	_seal = (node.get("seal", []) as Array).duplicate() if node.get("seal", null) is Array else []
 	_fx = fx
 	Audio.play_bgm("bgm_battle", 0.6)   # v65：遭遇战 BGM
 	InkTouch.attach()

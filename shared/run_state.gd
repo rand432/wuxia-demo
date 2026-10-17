@@ -457,6 +457,22 @@ func party_full_heal() -> void:
 			hp = mini(hp_max, hp + maxi(1, int(round(float(hp_max) * sc))))
 	use_member(keep)
 
+# v139（用户定："半血真砍"）：把全队**当前**气血压到上限的 pct（0~1），上限不动。
+#   引子起手就靠这一口把"一身武艺只剩不到三成"落到数值上。
+#   ⚠ 只往下压、不回血（真要回血走 party_heal / party_full_heal，那两条才吃 heal_scale）。
+func party_hp_pct(pct: float) -> int:
+	var keep := active_i
+	var total := 0
+	var k := clampf(pct, 0.0, 1.0)
+	for i in members.size():
+		use_member(i)
+		var want := maxi(1, int(round(float(hp_max) * k)))
+		if want < hp:
+			total += hp - want
+			hp = want
+	use_member(keep)
+	return total
+
 func has_talent(t: String) -> bool:
 	return talents.has(t)
 

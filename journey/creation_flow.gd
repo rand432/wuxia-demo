@@ -8,7 +8,7 @@ extends Control
 #   逻辑零变化。
 # v3：每一步打"面包屑"（输出面板可见）：开场页/第N问/临别/下山；
 #   修"一次点击跳两页"（同一次点击只算一次）。
-# 结束时发 done(talents)，然后自毁（v138：不再带 gift——第五问固定给疾风剑法，由游历那边发）
+# 结束时发 done(talents)，然后自毁（v138：不再带 gift——第五问只出风味，不发东西）
 # ============================================================
 
 signal done(talents: Array)
@@ -156,10 +156,10 @@ func _show_verdict() -> void:
 		for t in _talents:
 			body += "　· " + str(t) + " —— " + str(Creation.talent_desc(str(t))) + "\n"
 	# v138：临别页不再讲"三张残卡／怎么合成"——那套教学整个挪到了引子第一节
-	#   （尸骨上那把锈剑：journey_stage._show_intro_kit_tip）。这里只交代身世与仅剩的功法。
-	body += "\n你身负重伤，一身武艺十不存一。\n"
-	body += "身上只剩一门「" + str(Cards.item_name(Creation.FIXED_ART)) + "」，就在包裹里。\n"
-	body += "佩剑早不知跌落在何处——路上再寻一把。"
+	#   （尸骨上那把锈剑：journey_stage._tutorial_tip）。这里只交代身世。
+	body += "\n崖底的雨还没停。\n"
+	body += "你撑着一口气站起来——武艺剩不到三成，佩剑不知丢在哪里。\n"
+	body += "先活过今晚。"
 
 	var bd := UiKit.make_label(panel, Vector2(40, 90), Vector2(600, 280), 20, Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.92))
 	UiKit.set_text(bd, body)
