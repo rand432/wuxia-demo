@@ -1305,13 +1305,12 @@ func _open_settings() -> void:
 	ov.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(ov)
 	_settings_ov = ov
-	# v19a：困兽开着时面板要压在战场上，面纱给深一点，字才看得清
+	# v19a（用户："设置就设置成主界面模式的设置一样 加一个退出就行了"）：
+	#   困兽开着的时候，这个面板里多一颗［退出困兽 · 回主界面］，面纱也压深一点，面板长一点
+	var in_kz: bool = _kushou_v2 != null and is_instance_valid(_kushou_v2) and _kushou_v2.visible
 	var veil := UiKit.make_veil(ov, size, 0.66 if in_kz else 0.50)
 	veil.mouse_filter = Control.MOUSE_FILTER_STOP
 	var pw := 560.0
-	# v19a（用户："设置就设置成主界面模式的设置一样 加一个退出就行了"）：
-	#   困兽开着的时候，这个面板里多一颗［退出困兽 · 回主界面］，面板也长一点
-	var in_kz: bool = _kushou_v2 != null and is_instance_valid(_kushou_v2) and _kushou_v2.visible
 	var ph: float = 486.0 + (74.0 if in_kz else 0.0)
 	var px := (size.x - pw) * 0.5
 	var py := (size.y - ph) * 0.5
