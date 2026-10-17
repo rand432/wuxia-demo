@@ -114,7 +114,7 @@ func _tick_glow(delta: float) -> void:
 	var k := 0.5 + 0.5 * sin(_glow_t * 5.2)
 	var warm := Color(1.0 + 0.34 * k, 1.0 + 0.22 * k, 1.0 - 0.06 * k)
 	var norm := Color(1, 1, 1, 1)
-	var can_draw := int(_crystal) >= DRAW_COST
+	var can_draw := int(_crystal) >= draw_cost()
 	var can_trea := (int(_trea_refresh) > 0) or (not bool(_trea_pick_used) and not _trea_choices.is_empty())
 	var can_wpn := bool(_wpn_await)
 	var can_skill := int(_skill_pts) > 0
@@ -1770,9 +1770,23 @@ func _card_big(p: Control, pos: Vector2, sz: Vector2, id: String) -> void:
 	pg.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(pg)
 # ---- v8a 抽卡本体（用户：20 灵晶三选一 ＋ 重抽 5 灵晶）----
-const DRAW_COST := 20
+const DRAW_COST := 20            # 第 1~9 波的价（后面按波涨，见 draw_cost()）
+# v18w（用户："灵晶抽卡 十波后 提升至30 25波提升至40"）
+func draw_cost() -> int:
+	if _wave >= 25:
+		return 40
+	if _wave >= 10:
+		return 30
+	return DRAW_COST
 const REROLL_ONE := 5
-const REFRESH_ALL := 5
+const REFRESH_ALL := 5           # 第 1~9 波的刷新价（后面按波涨，见 refresh_cost()）
+# v18w（用户："刷新也得变"）：刷新跟抽卡同一条曲线，约等于抽卡价的 1/4
+func refresh_cost() -> int:
+	if _wave >= 25:
+		return 10
+	if _wave >= 10:
+		return 8
+	return REFRESH_ALL
 # v13o（用户："抽卡有优先级"）：
 #   ① **锁定了某套**（在抽卡页卡面点［优先这套］）→ 这套还没拿到的卡**大幅加权 ×6**（大概率就是它）
 #   ② 没锁定时按**品质分档**，权重随波次在锚点之间**线性插值**——过渡丝滑，不跳档
@@ -1979,10 +1993,10 @@ func _roll_cards() -> Array:
 
 # 抽一张（花 20 灵晶）；十格满了会先弹卡组页让你腾位置
 func _draw_card(id: String) -> void:
-	if int(_crystal) < DRAW_COST:
-		_hint.text = "灵晶不够（要 " + str(DRAW_COST) + "，现有 " + str(int(_crystal)) + "）"
+	if int(_crystal) < draw_cost():
+		_hint.text = "灵晶不够（要 " + str(draw_cost()) + "，现有 " + str(int(_crystal)) + "）"
 		return
-	_crystal -= DRAW_COST
+	_crystal -= draw_cost()
 	_qc("draw")                       # v13c：任务进度（抽卡）
 	_draw_choices.clear()
 	Audio.sfx("paper", -6.0)
@@ -2022,8 +2036,8 @@ func _draw_card_x(i: int) -> float:
 func _draw_page_pick(i: int) -> void:
 	if i < 0 or i >= _draw_choices.size():
 		return
-	if int(_crystal) < DRAW_COST:
-		_hint.text = "灵晶不够（要 " + str(DRAW_COST) + "，现有 " + str(int(_crystal)) + "）"
+	if int(_crystal) < draw_cost():
+		_hint.text = "灵晶不够（要 " + str(draw_cost()) + "，现有 " + str(int(_crystal)) + "）"
 		return
 	var cid := str(_draw_choices[i])
 	var nm := card_name(cid)
@@ -2046,10 +2060,10 @@ func _draw_page_refresh() -> void:
 		_hint.text = "用了一次「卡组刷新」（还剩 " + str(_card_refresh) + " 次）"
 		Audio.sfx("ui_click", -8.0)
 		return
-	if int(_crystal) < REFRESH_ALL:
-		_hint.text = "刷新要 " + str(REFRESH_ALL) + " 灵晶（现有 " + str(int(_crystal)) + "）"
+	if int(_crystal) < refresh_cost():
+		_hint.text = "刷新要 " + str(refresh_cost()) + " 灵晶（现有 " + str(int(_crystal)) + "）"
 		return
-	_crystal -= REFRESH_ALL
+	_crystal -= refresh_cost()
 	_draw_choices = _roll_cards()
 	_fill_draw_page()
 	Audio.sfx("ui_click", -8.0)
@@ -2117,6 +2131,15 @@ func _open_pick_page(kind: String) -> void:
 	_draw_page.visible = true
 	_set_draw_hud(false)
 	_fill_draw_page()
+	# v18w：价钱现在按波涨，所以开页时在底部提示条把**当前价**写清楚
+	if kind == "抽卡":
+		_hint.text = "抽卡：一张 " + str(draw_cost()) + " 灵晶 · 刷新 " + str(refresh_cost()) + " 灵晶（有免费次数先用）"
+	elif kind == "宝物":
+		_hint.text = "宝物：点一张拿走 · 刷新吃「宝物刷新次数」（剩 " + str(int(_trea_refresh)) + " 次）"
+	elif kind == "进阶":
+		_hint.text = "进阶：挑一条强化线（永久）· 刷新吃「强化刷新次数」（剩 " + str(int(_wpn_reroll)) + " 次）"
+	elif kind == "技能":
+		_hint.text = "技能：点一张学它（花 1 技能点）· 刷新吃「技能刷新次数」（剩 " + str(int(_skill_reroll)) + " 次）"
 	Audio.sfx("paper", -10.0)
 
 func _open_draw_page() -> void:
@@ -2149,7 +2172,7 @@ func _fill_page_cards() -> void:
 		var x := _draw_card_x(i)
 		_card_big(_draw_page, Vector2(x, 40.0), Vector2(212, 440), cid)
 		var hit := _pbtn(_draw_page, "", Vector2(x, 40.0), Vector2(212, 438), 16,
-			int(_crystal) >= DRAW_COST, _page_pick.bind(i))
+			int(_crystal) >= draw_cost(), _page_pick.bind(i))
 		hit.add_theme_stylebox_override("normal", _flat(Color(1, 1, 1, 0.001)))
 		hit.add_theme_stylebox_override("hover", _flat(Color(1, 1, 1, 0.10)))
 		hit.add_theme_stylebox_override("pressed", _flat(Color(1, 1, 1, 0.20)))
@@ -2267,8 +2290,8 @@ func _fill_page_buttons() -> void:
 	var can := true
 	match _pick_kind:
 		"抽卡":
-			rt = "刷新 " + str(REFRESH_ALL) + " 灵晶"
-			can = _card_refresh > 0 or int(_crystal) >= REFRESH_ALL
+			rt = "刷新 " + str(refresh_cost()) + " 灵晶"
+			can = _card_refresh > 0 or int(_crystal) >= refresh_cost()
 			if _card_refresh > 0:
 				rt = "刷新（免 " + str(_card_refresh) + "）"
 		"宝物":
