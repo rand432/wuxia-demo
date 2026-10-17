@@ -177,17 +177,26 @@ var _fame := 0                                        # 跨局名声（永久）
 var _fame_own := {}                                   # 已买的名声解锁：id → true
 # v18y（用户："名声奖励改为原有游戏的奖励 比如酒啊 功法啊 装备啊 武器之类的"）：
 #   原来是四条抽象数值（灵晶/卡/攻/血），现在换成**具体的东西**——酒、功法、装备、武器。
-const FAME_UNLOCKS := [
-	{"id": "f_jiu_shaodao", "n": "酒 · 烧刀子", "price": 25, "d": "开局带一壶烈酒：气血上限 +60（本局）"},
-	{"id": "f_material", "n": "材料 · 玄铁", "price": 45, "d": "开局拿一块玄铁：成长武器直接 +5 级"},
-	{"id": "f_jiu_nverhong", "n": "酒 · 女儿红", "price": 50, "d": "开局带一壶女儿红：攻击 +3（本局）"},
-	{"id": "f_chest", "n": "宝箱 · 黑木匣", "price": 60, "d": "开局开一只宝箱：随机一件宝物直接到手"},
-	{"id": "f_gong_tiebu", "n": "功法 · 铁布衫", "price": 70, "d": "开局习得：全伤害减免 +3%（本局）"},
-	{"id": "f_shard", "n": "角色碎片 ×3", "price": 90, "d": "开局多 1 个进化符（伙伴进化 +1 档）"},
-	{"id": "f_gong_jingang", "n": "功法 · 金刚诀", "price": 95, "d": "开局习得：全伤害 +5%（本局）"},
-	{"id": "f_gear_zhong", "n": "装备 · 中品行头", "price": 120, "d": "开局自带一件【中品】装备（随机，直接穿上空格）"},
-	{"id": "f_wpn_edge", "n": "武器 · 百炼刃", "price": 150, "d": "开局成长武器直接是【下品】档（不用从凡品爬）"},
+# v19b（用户："名声兑换是换成主界面游戏的道具"）：名声改成**跨模式货币** ——
+#   兑换的东西直接进**主游戏**（江湖游历）的仓库/酒窖/材料/碎片，主游戏那边就是真的多了一件。
+const GS := preload("res://shared/game_state.gd")
+const CARDS := preload("res://shared/data_cards.gd")
+const LOOT := preload("res://shared/data_loot.gd")
+
+# v19b（用户："名声兑换是换成主界面游戏的道具"）：**名声 = 跨模式货币**，
+#   兑换的东西直接落到主游戏（江湖游历）的仓库 / 酒窖 / 材料 / 碎片里 —— 那边就是真多了一件。
+#   ⚠ 这是**可重复兑换**的，不再是一次性永久加成。
+const FAME_EXCHANGE := [
+	{"id": "x_mat", "n": "一包炼丹材料", "price": 25, "d": "随机两种材料各 2 份（木料/朱果/紫芝/雪参/兽骨碎/灵米/金髓）"},
+	{"id": "x_jiu", "n": "一坛好酒", "price": 30, "d": "随机一坛【上品~极品】酒，直接进主游戏的酒窖"},
+	{"id": "x_frag", "n": "一叠角色碎片", "price": 40, "d": "随机一位角色 3~6 片碎片（升星用）"},
+	{"id": "x_card", "n": "一页功法残页", "price": 55, "d": "随机一门武学/功法的残页 1 页（凑齐可合成）"},
+	{"id": "x_wpn", "n": "一件兵器", "price": 80, "d": "随机一件成品兵器，直接进主游戏的仓库"},
+	{"id": "x_gear", "n": "一件防具", "price": 80, "d": "随机一件成品护甲/玉佩/披风，直接进仓库"},
 ]
+
+# v18y 那批「开局 buff」已下线（保留常量名，老存档里买过的 id 只是不再生效）
+const FAME_UNLOCKS := []
 
 func _fame_own_get(id: String) -> bool:
 	return bool(_fame_own.get(id, false))
@@ -207,25 +216,8 @@ func _fame_settle() -> int:
 
 # 买一件名声解锁
 func _fame_buy(id: String) -> void:
-	for u_v in FAME_UNLOCKS:
-		var u: Dictionary = u_v
-		if str(u["id"]) != id:
-			continue
-		if _fame_own_get(id):
-			_hint.text = "「" + str(u["n"]) + "」已经买过了"
-			return
-		var price := int(u["price"])
-		if int(_fame) < price:
-			_hint.text = "名声不够（「" + str(u["n"]) + "」要 " + str(price) + "，现有 " + str(int(_fame)) + "）"
-			return
-		_fame -= price
-		_fame_own[id] = true
-		_ach_save()
-		_hint.text = "买下「" + str(u["n"]) + "」——下一局开局生效（剩余名声 " + str(int(_fame)) + "）"
-		Audio.sfx("levelup", -4.0)
-		if _popup_kind == "存档":
-			_open_large("存档")
-		return
+	# v19b：老入口保留，直接转发到"换主游戏道具"
+	_fame_exchange(id)
 
 # v14z：这个"减法收回"整个删掉了 —— 它是漏掉进化那 +4 的根源（只收自己发的那几笔，
 #   别的来源往同一个容器里写的收不到）。现在改成：**开局 _extra/_attr 直接重置，跨局三源当场重发**。
@@ -235,46 +227,93 @@ func _ach_rollback() -> void:
 
 # 开局把名声解锁发下去（在 _restart_run 里、_sync_battle_stats 之前调）
 func _apply_fame() -> void:
-	# v18y：名声买的东西换成酒 / 功法 / 装备 / 武器（_extra 每局已经重置过，这里直接加）
-	if _fame_own_get("f_jiu_shaodao"):
-		_extra["extra_hp"] = float(_extra.get("extra_hp", 0.0)) + 60.0
-	if _fame_own_get("f_jiu_nverhong"):
-		_extra["extra_atk"] = float(_extra.get("extra_atk", 0.0)) + 3.0
-	if _fame_own_get("f_gong_tiebu"):
-		_extra["cut_all_bonus"] = float(_extra.get("cut_all_bonus", 0.0)) + 0.03
-	if _fame_own_get("f_gong_jingang"):
-		_extra["dmg_all"] = float(_extra.get("dmg_all", 0.0)) + 0.05
-	if _fame_own_get("f_gear_zhong"):
-		# 开局自带一件【中品】装备（随机名 · 按中品倍率算攻/血）
-		var gm := float(WPN_Q_MUL[2])
-		var gd := {"name": str(GEAR_EQ_NAMES[randi() % GEAR_EQ_NAMES.size()]), "q": 2,
-			"atk": int(ceil(3.0 * gm)), "hp": int(ceil(14.0 * gm)), "price": int(60.0 * gm * gm)}
-		_equip_add(gd)
-	if _fame_own_get("f_material"):
-		_wpn_lv = maxi(_wpn_lv, 5)                  # 材料·玄铁：成长武器开局 +5 级
-	if _fame_own_get("f_chest"):
-		# 宝箱：开局直接开一件宝物（走正常的三选一取件逻辑，但不占用玩家手上的那一手）
-		#   ⚠ 手里那三张里如果有"当场结算"的（钱/晶/经验/属性点），开箱子就变成发钱了 ——
-		#     所以这里**优先挑一件真宝物**，连着三张都是即时的就重摇（最多 6 次）
-		_trea_choices.clear()
-		_trea_roll()
-		for _try in 6:
-			var pick := -1
-			for i in _trea_choices.size():
-				if str((_trea_choices[i] as Dictionary).get("t", "")) != "instant":
-					pick = i
+	# v19b：名声不再是"每局开局的永久 buff"，改成**跨模式兑换**（见 FAME_EXCHANGE / _fame_exchange）。
+	#   这个函数留着是因为 _restart_run 里还按"名声 → 成就 → 宠物"的顺序发东西，删掉会打乱那段。
+	pass
+
+# 主游戏（江湖游历）那边的表：随机取一件成品
+func _fame_pool_of(pool: String) -> Array:
+	var out: Array = []
+	for s_v in CARDS.SETS:
+		var s: Dictionary = s_v
+		if str(s.get("pool", "")) == pool:
+			out.append(s)
+	return out
+
+# 兑换：花名声 → 主游戏那边真入账 → 存主游戏的档
+func _fame_exchange(id: String) -> void:
+	var it: Dictionary = {}
+	for e_v in FAME_EXCHANGE:
+		var e: Dictionary = e_v
+		if str(e["id"]) == id:
+			it = e
+			break
+	if it.is_empty():
+		return
+	var price := int(it["price"])
+	if int(_fame) < price:
+		_hint.text = "名声不够（要 " + str(price) + "，现有 " + str(int(_fame)) + "）"
+		return
+	_fame -= price
+	var msg := ""
+	match id:
+		"x_mat":
+			var keys := ["wood", "guo", "zhi", "shen", "bone", "rice", "jin"]
+			var mat_cn := {"wood": "木料", "guo": "朱果", "zhi": "紫芝", "shen": "雪参", "bone": "兽骨碎", "rice": "灵米", "jin": "金髓"}
+			var a := str(keys[randi() % keys.size()])
+			var b := a
+			for _try in 8:
+				if b != a:
 					break
-			if pick >= 0:
-				_trea_take(pick)
-				break
-			_trea_choices.clear()
-			_trea_roll()
-		_trea_choices.clear()
-		_trea_pick_used = false                     # 玩家的那一手还留着
-	if _fame_own_get("f_shard"):
-		_evo_token_add(1, "名声 · 角色碎片")          # 碎片：开局多一个进化符
-	if _fame_own_get("f_wpn_edge"):
-		_wpn_q = maxi(_wpn_q, 1)                    # 开局就是【下品】
+				b = str(keys[randi() % keys.size()])
+			GS.add_material(a, 2)
+			GS.add_material(b, 2)
+			msg = "换到材料：" + str(mat_cn.get(a, a)) + "×2 · " + str(mat_cn.get(b, b)) + "×2"
+		"x_jiu":
+			var wn := GS.add_wine_of_grade(randi_range(2, 4))
+			msg = "换到一坛「" + wn + "」——主游戏的酒窖里"
+		"x_frag":
+			var fr: Array = LOOT.FRAGMENTS
+			var pick: Dictionary = fr[randi() % fr.size()]
+			var n := randi_range(3, 6)
+			GS.add_fragment(str(pick["id"]), n)
+			msg = "换到「" + str(pick["name"]) + "」×" + str(n) + "（现在一共 " + str(GS.fragment_count(str(pick["id"]))) + " 片）"
+		"x_card":
+			var arts := _fame_pool_of("arts")
+			if arts.is_empty():
+				msg = "主游戏里没查到武学表"
+			else:
+				var e2: Dictionary = arts[randi() % arts.size()]
+				var sid := str(e2["id"])
+				var parts: Array = e2.get("parts", [""])
+				var p := randi() % maxi(1, parts.size())
+				GS.vault_deposit({sid: {p: 1}})
+				msg = "换到「" + str(e2["name"]) + "」第 " + str(p + 1) + " 页残页（" + str(CARDS.quality_of(sid)) + "）"
+		"x_wpn", "x_gear":
+			var pool := "weapon"
+			if id == "x_gear":
+				var pools := ["armor", "helm", "cloak"]
+				pool = str(pools[randi() % pools.size()])
+			var list := _fame_pool_of(pool)
+			if list.is_empty():
+				msg = "主游戏里没查到装备表"
+			else:
+				var e3: Dictionary = list[randi() % list.size()]
+				var sid2 := str(e3["id"])
+				GS.vault_add_item(sid2, 1)
+				msg = "换到「" + str(CARDS.item_name(sid2)) + "」（" + str(CARDS.quality_of(sid2)) + "）已进主游戏仓库"
+		_:
+			pass
+	if msg == "":
+		_fame += price
+		_hint.text = "兑换失败：主游戏那边没有对应数据"
+		return
+	GS.save_game()
+	_ach_save()
+	_hint.text = "名声 −" + str(price) + "　" + msg + "（剩余名声 " + str(int(_fame)) + "）"
+	Audio.sfx("levelup", -3.0)
+	if _popup_kind == "存档":
+		_open_large("存档")
 
 var _realm := 0                                       # v10a：境界 0 凡人 · 1 筑基 · 2 金丹 · 3 元婴 · 4 化神
 var _meditate_acc := 0.0                              # v10a：打坐累积（每秒加，攒够 1 点进主属性）
@@ -5893,78 +5932,44 @@ func _evo_token_add(n: int, why: String) -> void:
 # v14w：名声那一段（从 _fill_save 拆出来，便于调顺序）
 func _fill_fame_section(p: Control, ly0: float) -> float:
 	var ly := ly0
-	# ============================================================
-	# v14w 名声（跨局）：一局结束按波数结算，在这儿花
-	# ============================================================
 	ly += 12.0
-	var fhead := Label.new()
-	fhead.position = Vector2(24, ly)
-	fhead.size = Vector2(660, 36)
-	fhead.add_theme_font_size_override("font_size", 24)
-	fhead.add_theme_color_override("font_color", SEAL)
-	fhead.text = "—— 名声（跨局 · 现有 " + str(int(_fame)) + "）——"
-	p.add_child(fhead)
+	var fhead := _plbl(p, Vector2(24, ly), Vector2(660, 36), 24, SEAL)
+	fhead.text = "—— 名声兑换（跨模式 · 现有 " + str(int(_fame)) + "）——"
 	ly += 42.0
-	var fnote := Label.new()
-	fnote.position = Vector2(24, ly)
-	fnote.size = Vector2(660, 56)
-	fnote.add_theme_font_size_override("font_size", 19)
-	fnote.add_theme_color_override("font_color", DIM)
+	var fnote := _plbl(p, Vector2(24, ly), Vector2(660, 76), 19, DIM)
 	fnote.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	fnote.text = "一局结束按打到的波数结算（每波 +2，杀敌每 50 只再 +1，靠浴血续命的 ×0.6）。名声跟上面的银两是两条独立的线，买了一次永久生效、下一局开局就发。"
-	p.add_child(fnote)
-	ly += 64.0
-	for fu_v in FAME_UNLOCKS:
-		var fu: Dictionary = fu_v
-		var fid := str(fu["id"])
-		var fgot := _fame_own_get(fid)
-		var fq := GOLD if fgot else Color(INK.r, INK.g, INK.b, 0.75)
-		var fsb := StyleBoxFlat.new()
-		fsb.bg_color = Color(0.99, 0.97, 0.92) if fgot else Color(0.93, 0.91, 0.88)
-		fsb.set_corner_radius_all(10)
-		fsb.border_color = fq
-		fsb.set_border_width_all(2)
-		var fbox := Panel.new()
-		fbox.position = Vector2(24, ly)
-		fbox.size = Vector2(640, 92)
-		fbox.add_theme_stylebox_override("panel", fsb)
-		fbox.mouse_filter = Control.MOUSE_FILTER_STOP
-		p.add_child(fbox)
-		var fl1 := Label.new()
-		fl1.position = Vector2(14, 8)
-		fl1.size = Vector2(420, 36)
-		fl1.add_theme_font_size_override("font_size", 24)
-		fl1.add_theme_color_override("font_color", fq)
-		fl1.text = str(fu["n"])
-		fbox.add_child(fl1)
-		var fl2 := Label.new()
-		fl2.position = Vector2(14, 48)
-		fl2.size = Vector2(420, 36)
-		fl2.add_theme_font_size_override("font_size", 19)
-		fl2.add_theme_color_override("font_color", INK if fgot else DIM)
+	fnote.text = "一局结束按打到的波数结算（每波 +2，杀敌每 50 只再 +1，靠浴血续命的 ×0.6）。" \
+		+ "兑换是**可重复**的：花名声换主游戏（江湖游历）里的东西——酒 / 材料 / 碎片 / 功法残页 / 兵器 / 防具，" \
+		+ "换到就直接进那边的酒窖或仓库，回主界面就能看到。"
+	ly += 84.0
+	for e_v in FAME_EXCHANGE:
+		var it: Dictionary = e_v
+		var eid := str(it["id"])
+		var price := int(it["price"])
+		var can := int(_fame) >= price
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.99, 0.97, 0.92) if can else Color(0.94, 0.92, 0.89)
+		sb.set_corner_radius_all(10)
+		sb.border_color = GOLD if can else Color(INK.r, INK.g, INK.b, 0.35)
+		sb.set_border_width_all(2)
+		var box := Panel.new()
+		box.position = Vector2(24, ly)
+		box.size = Vector2(640, 92)
+		box.add_theme_stylebox_override("panel", sb)
+		box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		p.add_child(box)
+		var fl1 := _plbl(box, Vector2(14, 8), Vector2(430, 36), 24, INK if can else DIM)
+		fl1.text = str(it["n"])
+		var fl2 := _plbl(box, Vector2(14, 48), Vector2(430, 40), 19, INK if can else DIM)
 		fl2.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		fl2.text = str(fu["d"])
-		fbox.add_child(fl2)
-		if fgot:
-			var fok := Label.new()
-			fok.position = Vector2(470, 26)
-			fok.size = Vector2(156, 44)
-			fok.add_theme_font_size_override("font_size", 22)
-			fok.add_theme_color_override("font_color", GOLD)
-			fok.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			fok.text = "✓ 已有"
-			fbox.add_child(fok)
-		else:
-			var fprice := int(fu["price"])
-			var fcan := int(_fame) >= fprice
-			var fbb := _pbtn(fbox, "名声 " + str(fprice), Vector2(456, 16), Vector2(170, 62), 22, fcan, _fame_buy.bind(fid))
-			if not fcan:
-				fbb.add_theme_stylebox_override("normal", _flat(Color(0.55, 0.53, 0.51, 0.95)))
-				fbb.add_theme_stylebox_override("hover", _flat(Color(0.60, 0.58, 0.56, 0.95)))
-				fbb.add_theme_stylebox_override("pressed", _flat(Color(0.48, 0.46, 0.44, 0.95)))
+		fl2.text = str(it["d"])
+		var btn := _pbtn(box, "名声 " + str(price), Vector2(456, 16), Vector2(170, 62), 22, can, _fame_exchange.bind(eid))
+		if not can:
+			btn.add_theme_stylebox_override("normal", _flat(Color(0.55, 0.53, 0.51, 0.95)))
+			btn.add_theme_stylebox_override("hover", _flat(Color(0.60, 0.58, 0.56, 0.95)))
+			btn.add_theme_stylebox_override("pressed", _flat(Color(0.48, 0.46, 0.44, 0.95)))
 		ly += 100.0
 	return ly + 8.0
-
 # v14o：伙伴星级那一段（拆出来，便于调顺序）
 func _fill_mate_star_section(p: Control, ly0: float) -> float:
 	var ly := ly0
