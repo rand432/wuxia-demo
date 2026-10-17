@@ -5046,8 +5046,13 @@ func _mate_grant(id: String) -> Array:
 func _mate_is_unlocked(id: String) -> bool:
 	for g_v in _all_grants():
 		var g: Dictionary = g_v
-		if str(g["pid"]) == id:
-			return bool(_unlocked.get(str(g["id"]), false))
+		if str(g["pid"]) != id:
+			continue
+		# v18x（用户："没放进去的伙伴可以随着关卡进度解锁"）：带 stage 的行 = **打通那一关**自动解锁
+		var stg := str(g.get("stage", ""))
+		if stg != "":
+			return bool(_stage_done.get(stg, false))
+		return bool(_unlocked.get(str(g["id"]), false))
 	return true
 
 # ============================================================
@@ -5061,8 +5066,17 @@ func _mate_is_unlocked(id: String) -> bool:
 func _mate_source(pid: String) -> Dictionary:
 	for u_v in UNLOCKS:
 		var u: Dictionary = u_v
-		if str(u.get("pid", "")) == pid:
-			return {"from": "存档", "price": int(u["price"]), "id": str(u["id"])}
+		if str(u.get("pid", "")) != pid:
+			continue
+		var stg := str(u.get("stage", ""))
+		if stg != "":
+			var sn := ""
+			for sv in STAGES:
+				if str((sv as Dictionary)["id"]) == stg:
+					sn = str((sv as Dictionary)["n"])
+					break
+			return {"from": "关卡解锁", "stage": stg, "stage_n": sn, "id": str(u["id"])}
+		return {"from": "存档", "price": int(u["price"]), "id": str(u["id"])}
 	for s_v in STAGES:
 		var s: Dictionary = s_v
 		for r_v in _stage_rewards(s):
@@ -5079,6 +5093,8 @@ func _mate_source(pid: String) -> Dictionary:
 func _mate_source_cn(pid: String) -> String:
 	var sc := _mate_source(pid)
 	match str(sc["from"]):
+		"关卡解锁":
+			return "打通 " + str(sc["stage"]) + "「" + str(sc["stage_n"]) + "」后解锁（免费）"
 		"存档":
 			return "存档页花 " + str(sc["price"]) + " 文钱买"
 		"关卡":
@@ -5307,7 +5323,8 @@ func _all_grants() -> Array:
 		var u: Dictionary = u_v
 		_grant_rows.append({"id": str(u["id"]), "cat": str(u["cat"]), "n": str(u["n"]),
 			"set": str(u.get("set", "")), "pid": str(u.get("pid", "")),
-			"trea": str(u.get("trea", "")), "pet": str(u.get("pet", "")), "from": "存档"})
+			"trea": str(u.get("trea", "")), "pet": str(u.get("pet", "")),
+			"stage": str(u.get("stage", "")), "from": "存档"})
 	for s_v in STAGES:
 		var s: Dictionary = s_v
 		for r_v in _stage_rewards(s):
@@ -5584,6 +5601,34 @@ const UNLOCKS := [
 	{"id": "u_trea_cuihuo", "cat": "宝物", "n": "淬火石", "d": "武器立刻 +3 级", "price": 900, "trea": "淬火石"},
 	{"id": "u_pet_gui", "cat": "宠物", "n": "玄武龟", "d": "血厚、攻击慢、自带减伤", "price": 1800, "pet": "gui"},
 	{"id": "u_pet_bao", "cat": "宠物", "n": "赤豹", "d": "攻击快、伤害高、血薄", "price": 1800, "pet": "bao"},
+	# ---- v18x（用户："没放进去的伙伴可以随着关卡进度解锁"）：26 位**按关卡进度**解锁 ----
+	#   带 "stage" 的行不进存档页、不花银两：**打通那一关**就永久可用（_mate_is_unlocked 里判 _stage_done）
+	{"id": "u_part_1_1_anying", "cat": "队员", "n": "暗影裁决", "pid": "anying", "stage": "1-1", "price": 0},
+	{"id": "u_part_1_1_duyanbiao", "cat": "队员", "n": "独眼彪", "pid": "duyanbiao", "stage": "1-1", "price": 0},
+	{"id": "u_part_1_2_kurong", "cat": "队员", "n": "枯荣", "pid": "kurong", "stage": "1-2", "price": 0},
+	{"id": "u_part_1_2_shigandang", "cat": "队员", "n": "石敢当", "pid": "shigandang", "stage": "1-2", "price": 0},
+	{"id": "u_part_1_3_qianduoduo", "cat": "队员", "n": "钱多多", "pid": "qianduoduo", "stage": "1-3", "price": 0},
+	{"id": "u_part_1_3_tietouseng", "cat": "队员", "n": "铁头僧", "pid": "tietouseng", "stage": "1-3", "price": 0},
+	{"id": "u_part_1_4_bingshusheng", "cat": "队员", "n": "病书生", "pid": "bingshusheng", "stage": "1-4", "price": 0},
+	{"id": "u_part_1_4_xiaoqier", "cat": "队员", "n": "小乞儿", "pid": "xiaoqier", "stage": "1-4", "price": 0},
+	{"id": "u_part_2_1_laobing", "cat": "队员", "n": "瘸腿老兵", "pid": "laobing", "stage": "2-1", "price": 0},
+	{"id": "u_part_2_1_xinglin", "cat": "队员", "n": "杏林医女", "pid": "xinglin", "stage": "2-1", "price": 0},
+	{"id": "u_part_2_2_qiaofu", "cat": "队员", "n": "樵夫", "pid": "qiaofu", "stage": "2-2", "price": 0},
+	{"id": "u_part_2_2_pozhen", "cat": "队员", "n": "破阵刀客", "pid": "pozhen", "stage": "2-2", "price": 0},
+	{"id": "u_part_2_3_busheren", "cat": "队员", "n": "捕蛇人", "pid": "busheren", "stage": "2-3", "price": 0},
+	{"id": "u_part_2_3_gengfu", "cat": "队员", "n": "更夫", "pid": "gengfu", "stage": "2-3", "price": 0},
+	{"id": "u_part_2_4_zuijianxian", "cat": "队员", "n": "醉剑仙", "pid": "zuijianxian", "stage": "2-4", "price": 0},
+	{"id": "u_part_3_1_chuangong", "cat": "队员", "n": "老船工", "pid": "chuangong", "stage": "3-1", "price": 0},
+	{"id": "u_part_3_2_qihealer", "cat": "队员", "n": "气疗师", "pid": "qihealer", "stage": "3-2", "price": 0},
+	{"id": "u_part_3_3_yaowang", "cat": "队员", "n": "药王", "pid": "yaowang", "stage": "3-3", "price": 0},
+	{"id": "u_part_3_4_qizong", "cat": "队员", "n": "气宗", "pid": "qizong", "stage": "3-4", "price": 0},
+	{"id": "u_part_4_1_dunwei", "cat": "队员", "n": "盾卫", "pid": "dunwei", "stage": "4-1", "price": 0},
+	{"id": "u_part_4_1_drummaster", "cat": "队员", "n": "鼓师", "pid": "drummaster", "stage": "4-1", "price": 0},
+	{"id": "u_part_4_2_medic", "cat": "队员", "n": "医仙", "pid": "medic", "stage": "4-2", "price": 0},
+	{"id": "u_part_4_2_ironward", "cat": "队员", "n": "铁卫", "pid": "ironward", "stage": "4-2", "price": 0},
+	{"id": "u_part_4_3_xuanyin", "cat": "队员", "n": "玄阴", "pid": "xuanyin", "stage": "4-3", "price": 0},
+	{"id": "u_part_4_3_xuesha", "cat": "队员", "n": "血煞", "pid": "xuesha", "stage": "4-3", "price": 0},
+	{"id": "u_part_4_4_shieldlord", "cat": "队员", "n": "盾令官", "pid": "shieldlord", "stage": "4-4", "price": 0},
 ]
 
 func _locked_sets() -> Array:
@@ -5684,6 +5729,8 @@ func _fill_save(p: Control, y: float, sz: Vector2) -> float:
 	var last_cat := ""
 	for u_v in UNLOCKS:
 		var u: Dictionary = u_v
+		if str(u.get("stage", "")) != "":
+			continue                       # v18x：关卡解锁的那批不进存档页（不花银两）
 		var id := str(u["id"])
 		var got := bool(_unlocked.get(id, false))
 		if str(u["cat"]) != last_cat:
