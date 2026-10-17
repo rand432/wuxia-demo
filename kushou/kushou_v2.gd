@@ -1538,15 +1538,9 @@ func card_prop(id: String) -> String:
 #   插画没有美术素材——**用代码画简笔图标**（剑/盾/拳/符/箭/钱 六种，按套名猜）
 #   风味小字按"线"给（40 套逐句太占，先按类给一句）
 # ============================================================
-const FLAVOR := {
-	"剑": "手上没家伙，就靠这口气。",
-	"盾": "站住了，就是赢。",
-	"拳": "一寸短，一寸险。",
-	"符": "五行相生，气随意走。",
-	"箭": "先到的是箭，后到的是人。",
-	"钱": "有钱能使鬼推磨。",
-	"宝": "捡着的，都是命。",
-}
+# v18n（用户："不要给最后一条的说明 什么 一寸强一寸长 这个是无用的 不需要"）：
+#   卡面底部那句风味小字去掉了，这张表也就没人读了 → 整张删掉（要恢复从 git 里翻，
+#   在 v18n 这次提交之前都还在）。
 
 func _card_icon_of(set_id: String) -> String:
 	var nm := ""
@@ -1606,7 +1600,10 @@ class CardIcon extends Control:
 		if host != null:
 			host._draw_card_icon(self, size * 0.5, kind)
 
-# 大卡面（抽卡页用）：锦旗卡名 → 图标 → 单卡属性 → 组合 → 进度 → 风味
+# 大卡面（抽卡页用）：锦旗卡名 → 图标 → 单卡属性 → 组合 → 风味 → 进度
+#   v18m（用户：如果太大了可以稍微缩小一点）：竖向改成**按卡高自适应**——
+#   原来是写死的绝对坐标（只能配 560 高），缩卡就会把风味压到进度上。
+#   现在给多高都能自己排开（抽卡页用的是 160×468）。
 func _card_big(p: Control, pos: Vector2, sz: Vector2, id: String) -> void:
 	var s := card_set_of(id)
 	var sb := StyleBoxFlat.new()
@@ -1620,76 +1617,70 @@ func _card_big(p: Control, pos: Vector2, sz: Vector2, id: String) -> void:
 	box.add_theme_stylebox_override("panel", sb)
 	box.mouse_filter = Control.MOUSE_FILTER_STOP
 	p.add_child(box)
-	# ① 锦旗：一个下缘带尖角的横幅（卡面拉长后旗子也放大）
+	# ① 锦旗：带色条 ＋ 卡名的横幅
 	var bw := sz.x - 24.0
 	var banner := Control.new()
-	banner.position = Vector2(12, 10)
-	banner.size = Vector2(bw, 56)
+	banner.position = Vector2(12, 9)
+	banner.size = Vector2(bw, 52)
 	banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	box.add_child(banner)
+	var band := ColorRect.new()
+	band.position = Vector2.ZERO
+	band.size = Vector2(bw, 46)
+	band.color = _quality_color(str(s.get("quality", "下品")))
+	band.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	banner.add_child(band)
 	var bn := Label.new()
-	bn.position = Vector2(0, 6)
-	bn.size = Vector2(bw, 46)
-	bn.add_theme_font_size_override("font_size", 25)
+	bn.position = Vector2(0, 4)
+	bn.size = Vector2(bw, 42)
+	bn.add_theme_font_size_override("font_size", 24)
 	bn.add_theme_color_override("font_color", Color(0.98, 0.96, 0.90))
 	bn.text = card_name(id)
 	bn.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	bn.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	banner.add_child(bn)
-	var band := ColorRect.new()
-	band.position = Vector2(0, 0)
-	band.size = Vector2(bw, 50)
-	band.color = _quality_color(str(s.get("quality", "下品")))
-	band.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	banner.add_child(band)
-	banner.move_child(band, 0)
-	# ② 简笔图标
+	# ② 简笔图标（尺寸跟着卡宽走）
+	var icon_s := minf(92.0, sz.x - 40.0)
 	var ic := CardIcon.new()
 	ic.host = self
 	ic.kind = _card_icon_of(str(s.get("set", "")))
-	ic.position = Vector2(sz.x * 0.5 - 52.0, 84.0)
-	ic.size = Vector2(104, 104)
+	ic.position = Vector2((sz.x - icon_s) * 0.5, 68.0)
+	ic.size = Vector2(icon_s, icon_s)
 	ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	box.add_child(ic)
 	# ③ 单卡属性（大字）
+	var pr_y := 68.0 + icon_s + 4.0
 	var pr := Label.new()
-	pr.position = Vector2(6, 206.0)
-	pr.size = Vector2(sz.x - 12, 76)
-	pr.add_theme_font_size_override("font_size", 26)
+	pr.position = Vector2(6, pr_y)
+	pr.size = Vector2(sz.x - 12, 60)
+	pr.add_theme_font_size_override("font_size", 22)
 	pr.add_theme_color_override("font_color", SEAL)
 	pr.text = card_prop(id)
 	pr.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	pr.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(pr)
-	# ④ 组合 ＋ 进度（大字）
-	var got := 0
-	for i in int(s.get("size", 1)):
-		if _card_have.has(card_id(str(s.get("set", "")), i)):
-			got += 1
+	# ④ 组合（这一段最长，给足行数）
+	var cm_y := pr_y + 62.0
 	var cm := Label.new()
-	cm.position = Vector2(8, 292.0)
-	cm.size = Vector2(sz.x - 16, 120)
+	cm.position = Vector2(8, cm_y)
+	cm.size = Vector2(sz.x - 16, maxf(80.0, sz.y - cm_y - 56.0))
 	cm.add_theme_font_size_override("font_size", 19)
 	cm.add_theme_color_override("font_color", DIM)
 	cm.text = "组合：" + str(s.get("combo", ""))
 	cm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	cm.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	box.add_child(cm)
-	# 风味小字（按图标类给一句）
-	var fl := Label.new()
-	fl.position = Vector2(8, 420.0)
-	fl.size = Vector2(sz.x - 16, 90)
-	fl.add_theme_font_size_override("font_size", 19)
-	fl.add_theme_color_override("font_color", Color(0.48, 0.44, 0.40))
-	fl.text = str(FLAVOR.get(_card_icon_of(str(s.get("set", ""))), ""))
-	fl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	fl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	box.add_child(fl)
-	# 进度：大字（卡面拉长后放到底部）
+	# ⑤ v18n（用户："不要给最后一条的说明 什么 一寸长一寸险 这个是无用的"）：
+	#   **风味小字整段去掉了** —— 腾出来的高度直接给"组合"用（底部给进度留 56）
+	# ⑥ 进度：贴底
+	var got := 0
+	for i in int(s.get("size", 1)):
+		if _card_have.has(card_id(str(s.get("set", "")), i)):
+			got += 1
 	var pg := Label.new()
-	pg.position = Vector2(6, sz.y - 74.0)
-	pg.size = Vector2(sz.x - 12, 52)
-	pg.add_theme_font_size_override("font_size", 30)
+	pg.position = Vector2(6, sz.y - 54.0)
+	pg.size = Vector2(sz.x - 12, 46)
+	pg.add_theme_font_size_override("font_size", 26)
 	pg.add_theme_color_override("font_color", SEAL)
 	pg.text = str(got) + "/" + str(int(s.get("size", 1)))
 	pg.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -1852,8 +1843,9 @@ func _close_draw_page() -> void:
 	_hint.text = "抽卡：这一手先留着 —— 想选再点左边的［抽卡］"
 	Audio.sfx("ui_click", -8.0)
 
+# v18m：卡面从 172×552 缩到 **160×468**（用户："如果太大了可以稍微缩小一点"），三张在可玩区居中
 func _draw_card_x(i: int) -> float:
-	return 134.0 + float(i) * 184.0
+	return 159.0 + float(i) * 176.0
 
 func _draw_page_pick(i: int) -> void:
 	if i < 0 or i >= _draw_choices.size():
@@ -1863,7 +1855,7 @@ func _draw_page_pick(i: int) -> void:
 		return
 	var cid := str(_draw_choices[i])
 	var nm := card_name(cid)
-	var from := Vector2(_draw_card_x(i) + 38.0, 42.0 + 190.0)
+	var from := Vector2(_draw_card_x(i) + 32.0, 40.0 + 180.0)
 	_draw_card(cid)                     # 花灵晶 ＋ 进卡组（逻辑不动）
 	if _pending_card != "":
 		return                          # 十格满了：先去卡组页换一张（_draw_card 已经开好了）
@@ -1944,18 +1936,18 @@ func _fill_draw_page() -> void:
 	for i in _draw_choices.size():
 		var cid := str(_draw_choices[i])
 		var x := _draw_card_x(i)
-		_card_big(_draw_page, Vector2(x, 42.0), Vector2(172, 552), cid)
-		var hit := _pbtn(_draw_page, "", Vector2(x, 42.0), Vector2(172, 550), 16,
+		_card_big(_draw_page, Vector2(x, 40.0), Vector2(160, 468), cid)
+		var hit := _pbtn(_draw_page, "", Vector2(x, 40.0), Vector2(160, 466), 16,
 			int(_crystal) >= DRAW_COST, _draw_page_pick.bind(i))
 		hit.add_theme_stylebox_override("normal", _flat(Color(1, 1, 1, 0.001)))
 		hit.add_theme_stylebox_override("hover", _flat(Color(1, 1, 1, 0.10)))
 		hit.add_theme_stylebox_override("pressed", _flat(Color(1, 1, 1, 0.20)))
 	# ④ 两颗按钮（草图上就这两颗）
-	_pbtn(_draw_page, "稍后再选", Vector2(134, 606), Vector2(250, 84), 26, true, _close_draw_page)
+	_pbtn(_draw_page, "稍后再选", Vector2(159, 526), Vector2(240, 80), 24, true, _close_draw_page)
 	var rt := "刷新 " + str(REFRESH_ALL) + " 灵晶"
 	if _card_refresh > 0:
 		rt = "刷新（免 " + str(_card_refresh) + "）"
-	_pbtn(_draw_page, rt, Vector2(400, 606), Vector2(290, 84), 24,
+	_pbtn(_draw_page, rt, Vector2(415, 526), Vector2(256, 80), 22,
 		_card_refresh > 0 or int(_crystal) >= REFRESH_ALL, _draw_page_refresh)
 # v11a 成长武器：自带一件 · 无限强化（文钱）· 每 10 级进阶（品质升档 ＋ 三选一）
 #   强化等级保留 · 一键强化用大按钮（手机不做键盘热键）· 三选一可刷新（按次数计价）
