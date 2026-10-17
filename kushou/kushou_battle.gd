@@ -317,10 +317,24 @@ var _combo_t := 0.0
 var _heavy := 0                     # 每第 3 下算"重击"（更重的手感）
 
 func setup(stats: Dictionary) -> void:
+	# v18i（用户："有问题 强化时 血量变满了"）：
+	#   ⚠ 原来这里**无条件** `hero["hp"] = hero["hp_max"]` —— 但 setup() 不是"只在开局调"：
+	#   外壳的 _sync_battle_stats() 有 30 来个调用点（抽卡成套 / 升级 / 属性加点 / 装备 /
+	#   宝物 / 黑市 / 宠物 / 进化 / 打坐每秒 / **强化** …），于是"只要改一项属性 = 当场满血"，
+	#   连"血已经 0、人已经倒下"的时候同步一次都会被**复活**。
+	#   现在：血**按比例**跟着血上限走 —— 上限涨了多少百分比，当前血就涨同样的百分比
+	#   （满血还是满血；残血还是那个残血比例；血 0 还是 0）。要真回血只有三条正路：
+	#   玉壶 / 吸血与治疗类技能 / 浴血（复活给半血）。
+	var ratio := -1.0
+	if float(hero["hp_max"]) > 0.0:
+		ratio = clampf(float(hero["hp"]) / float(hero["hp_max"]), 0.0, 1.0)
 	for k in stats.keys():
 		if hero.has(str(k)):
 			hero[str(k)] = stats[k]
-	hero["hp"] = float(hero["hp_max"])
+	if ratio < 0.0:
+		hero["hp"] = float(hero["hp_max"])                     # 第一次 setup（还没有上限）→ 满血开局
+	else:
+		hero["hp"] = clampf(ratio * float(hero["hp_max"]), 0.0, float(hero["hp_max"]))
 	_mp_base = float(hero["mp_max"])       # 纳气按"原本内力"的百分比涨，先记下基数
 
 # 重开一局：伙伴全部退回未入队（招募是这一局的事）
