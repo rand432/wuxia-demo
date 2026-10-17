@@ -660,6 +660,7 @@ var _bm_eaten: Array = []         # 被吞噬丹吞掉的卡（id；效果与成
 var _card_refresh := 0            # 卡组刷新次数（黑市货品，抽卡页免费全刷用）
 # v18t（用户："强化的刷新 技能的刷新 宝物的刷新 招募伙伴的刷新都是次数型【黑市卖】"）：
 #   四种刷新全部改成**次数型**，次数都从黑市买（宝物那个本来就吃 _trea_refresh）
+var _yh_up_run := 0               # v18v：玉壶**本局**升档次数（成就「玉壶圆满」改成当局口径）
 var _wpn_reroll := 0              # 强化（武器进阶）刷新次数
 var _skill_reroll := 0            # 技能刷新次数
 var _mate_reroll := 0             # 招募伙伴刷新次数
@@ -3606,6 +3607,7 @@ func _yh_upgrade() -> bool:
 		_hint.text = "玲珑玉壶已经是【绝品】了（最高档）"
 		return false
 	_yh_q += 1
+	_yh_up_run += 1                   # v18v：本局升了几档（成就用，每局清零）
 	var q := clampi(_yh_q, 0, 5)
 	_hint.text = "玲珑玉壶升档：【" + str(WPN_Q_CN[q]) + "】回复 " + str(int(float(YUHU_HEAL[q]) * 100.0))         + "% · 冷却 " + str(int(YUHU_CD[q])) + " 秒"
 	if _field != null:
@@ -5992,7 +5994,9 @@ const ACHS := [
 		"fx": "开局灵晶 +20", "eff": {"crystal": 20}},
 	{"id": "cangbao", "cat": "collect", "n": "藏宝之家", "d": "一局拥有 10 种宝物", "ck": "trea", "goal": 10,
 		"fx": "开局文钱 +200", "eff": {"money": 200}},
-	{"id": "yuhu", "cat": "collect", "n": "玉壶圆满", "d": "把玲珑玉壶升到绝品", "ck": "yuhu", "goal": 5,
+	# v18v（用户："改为当局统计方式"）：玉壶档位是跨局保留的 → 原来读 _yh_q 等于白送
+	#   改成"**一局**把玉壶升 2 档"（_yh_up_run 每局清零）
+	{"id": "yuhu", "cat": "collect", "n": "玉壶圆满", "d": "一局把玲珑玉壶升 2 档", "ck": "yh_up", "goal": 2,
 		"fx": "玉壶开局就是就绪状态（不带上一局的冷却）", "eff": {"yh_ready": 1}},
 {"id": "youqiu", "cat": "collect", "n": "有求必应", "d": "一局完成 8 个任务", "ck": "quests", "goal": 8,
 		"fx": "开局灵晶 +25", "eff": {"crystal": 25}},
@@ -6075,6 +6079,31 @@ const ACHS := [
 		"fx": "开局杀敌数 +250", "eff": {"kills": 250}},
 	{"id": "zhongji2", "cat": "collect", "n": "器成绝品", "d": "把成长武器强化到绝品", "ck": "wpn_q", "goal": 5,
 		"fx": "开局攻击 +5 · 气血 +100", "eff": {"atk_flat": 5, "hp_flat": 100}},
+	# ---- v18v（用户："再加一点成就 难一点的"）：12 条硬骨头 ----
+	{"id": "shashen", "cat": "fight", "n": "杀神", "d": "一局击杀 4000 只普通怪", "ck": "kill_normal", "goal": 4000,
+		"fx": "开局杀敌数 +400", "eff": {"kills": 400}},
+	{"id": "pojun2", "cat": "fight", "n": "破军之势", "d": "一局打出 80000 点伤害", "ck": "dmg", "goal": 80000,
+		"fx": "开局全伤害 +5%", "eff": {"dmg_all": 0.05}},
+	{"id": "fujia2", "cat": "gold", "n": "富甲天下", "d": "一局赚到 100000 文钱", "ck": "money_earned", "goal": 100000,
+		"fx": "开局文钱 +800", "eff": {"money": 800}},
+	{"id": "dacheng", "cat": "collect", "n": "大成", "d": "一局凑齐 30 套卡", "ck": "sets", "goal": 30,
+		"fx": "开局灵晶 +60", "eff": {"crystal": 60}},
+	{"id": "bingqi", "cat": "fight", "n": "兵器谱", "d": "一局把成长武器强化到 +80", "ck": "wpn_lv", "goal": 80,
+		"fx": "开局攻击 +6", "eff": {"atk_flat": 6}},
+	{"id": "budao", "cat": "live", "n": "不倒擂主", "d": "打到第 40 波且一次没浴血", "ck": "nobath40", "goal": 1,
+		"fx": "开局全伤害减免 +4%", "eff": {"cut_all_bonus": 0.04}},
+	{"id": "qianren", "cat": "fight", "n": "千人斩", "d": "一局累计击杀 2500 只", "ck": "kill_total", "goal": 2500,
+		"fx": "开局杀敌数 +300", "eff": {"kills": 300}},
+	{"id": "shuangbai", "cat": "collect", "n": "双百", "d": "一局抽卡 200 次", "ck": "draws", "goal": 200,
+		"fx": "开局灵晶 +50", "eff": {"crystal": 50}},
+	{"id": "baowuquan", "cat": "collect", "n": "宝物全书", "d": "一局拥有 24 种宝物", "ck": "trea", "goal": 24,
+		"fx": "开局文钱 +500", "eff": {"money": 500}},
+	{"id": "heishi3", "cat": "gold", "n": "黑市巨贾", "d": "一局黑市成交 35 件", "ck": "bm", "goal": 35,
+		"fx": "开局灵晶 +40", "eff": {"crystal": 40}},
+	{"id": "changpao", "cat": "time", "n": "长跑", "d": "单局存活 60 分钟", "ck": "run_time", "goal": 3600,
+		"fx": "开局气血上限 +150", "eff": {"hp_flat": 150}},
+	{"id": "tiaozhan4", "cat": "fight", "n": "挑战极限", "d": "一局按 60 次挑战", "ck": "chals", "goal": 60,
+		"fx": "开局杀敌数 +250", "eff": {"kills": 250}},
 ]
 const ACH_CAT_CN := {"fight": "战斗", "live": "生存", "gold": "经济", "collect": "收集", "time": "时长"}
 
@@ -6234,6 +6263,10 @@ func _ach_val(ck: String) -> float:
 			return float(_bm_lv)
 		"kill_total":
 			return float(_kills)
+		"yh_up":
+			return float(_yh_up_run)                   # 玉壶**本局**升了几档
+		"nobath40":
+			return 1.0 if (_wave >= 40 and _bath_used == 0) else 0.0
 	# v15k：这一句是 match 之后的兜底（原来它上面还重复了一句，已删）
 	return 0.0
 
@@ -6531,6 +6564,7 @@ func _restart_run() -> void:
 	_run_time = 0.0                      # v13x：本局存活时间（「初入江湖 / 老江湖」）
 	_recruit_choices.clear()
 	_draw_choices.clear()                # v18k：抽卡的三张每局重掷
+	_yh_up_run = 0                       # v18v：玉壶本局升档次数
 	_card_open_reset()                   # v18q：卡池阶梯每局从头开
 	# v18t（用户："初始开局会全部送三次"）：五种刷新次数开局各送 3 次（黑市还能再买）
 	_card_refresh = 3
