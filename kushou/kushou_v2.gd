@@ -86,7 +86,11 @@ var _main_attr := "str"   # str＝力量 · agi＝敏捷 · wit＝悟性
 var _grow_inherit := {"arm": 0, "agi": 0, "wit": 0}   # 继承到的成长（每项取所有已招募伙伴的最高）
 var _recruit_opens := 0                               # 还有几次招募（每 5 级一次）
 var _recruit_choices: Array = []                      # 本次招募的三个候选
-var _draw_choices: Array = []                         # v8a：抽卡的三张候选
+var _draw_choices: Array = []                         # v8a：抽卡的三张候选（**跨次保留**：稍后再选不丢）
+# v18k（用户草图"主界面抽卡UI"）：抽卡不再弹窗 —— 直接铺在战场区那一块的两层：
+#   _draw_page 页面本体（纸底＋三张卡＋两颗按钮）· _draw_fly 卡片飞向［卡组］的动画层
+var _draw_page: Control = null
+var _draw_fly: Control = null
 var _pending_card := ""                               # v8b：十格满了、等着"换哪张"的那张卡
 var _detail_card := ""                                # v8c：正在看详情的那张卡
 var _run_fame := 0                                    # 本局名声（跨局那套见 v14w 的 _fame）
@@ -801,7 +805,22 @@ func _build_field() -> void:
 	_field.set_wave(_wave)
 	_field.start_run()          # v3h：开场先站几秒（怪先走进画面），再"远快近慢"地压上去
 
-	_circle_btn("抽卡", Vector2(22, 262), func(): _open_small("抽卡"))
+	# v18k（用户草图）：抽卡页 —— 直接盖在**战场区**上（顶上的波数/资源条、底下的面板都不动）
+	#   ⚠ 必须插在 _field 之后、圆钮之前：这样左右两列圆钮仍然画在页面**上面**（还能点）
+	_draw_page = Control.new()
+	_draw_page.position = Vector2(8, 176)
+	_draw_page.size = Vector2(704, 704)
+	_draw_page.mouse_filter = Control.MOUSE_FILTER_STOP
+	_draw_page.visible = false
+	add_child(_draw_page)
+	_draw_fly = Control.new()
+	_draw_fly.position = Vector2(8, 176)
+	_draw_fly.size = Vector2(704, 704)
+	_draw_fly.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_draw_fly.visible = false
+	add_child(_draw_fly)
+
+	_circle_btn("抽卡", Vector2(22, 262), _open_draw_page)
 	_chal_btn = _circle_btn("挑战", Vector2(22, 396), func(): _open_large("挑战"))
 	# 就绪数量做成圆钮右上角的小红点（原来靠底下那排显示"哪个能点"，现在得在这儿说）
 	_chal_badge = _lbl(Vector2(94, 384), Vector2(56, 36), 22, Color(1, 0.94, 0.88))
@@ -1788,107 +1807,148 @@ func _draw_card(id: String) -> void:
 		return
 	_card_gain(id)
 	_hint.text = "抽到「" + card_name(id) + "」： " + card_prop(id)
-	if _popup_kind == "抽卡":
-		_open_large("抽卡")
 
-func _reroll_one(idx: int) -> void:
-	if int(_crystal) < REROLL_ONE:
-		_hint.text = "重抽要 " + str(REROLL_ONE) + " 灵晶"
+# ⚠ v18k：原来这里还有 _reroll_one / _refresh_all / _refresh_all_free 三个函数 ——
+#   它们只服务于**弹窗版**抽卡页（都靠 _open_large("抽卡") 刷新画面），
+#   现在抽卡页是 _draw_page 那一套（_draw_page_pick / _draw_page_refresh），三个都删了。
+# ============================================================
+# v18k（用户草图「主界面抽卡UI」）：抽卡页 —— **不弹窗**，直接铺在战场区
+#   · 三张大卡面：点卡面直接选（花 20 灵晶）
+#   · ［稍后再选］：收起这一页，**三张留着**（下次点［抽卡］还是它们，不花灵晶）
+#   · ［刷新］：换三张。有「卡组刷新」次数（黑市给的）先用免费的，没有就花 5 灵晶
+#   · 选完 → 那张卡**飞向左边那颗［卡组］圆钮**（像卡进包裹）
+#   ⚠ 布局给左列圆钮留出 x<126：卡从 x=134 起，3×172 ＋ 2×12 = 540 宽
+# ============================================================
+func _open_draw_page() -> void:
+	if _draw_page == null:
 		return
-	_crystal -= REROLL_ONE
-	var fresh := _roll_cards()
-	for cid in fresh:
-		if not _draw_choices.has(cid):
-			_draw_choices[idx] = cid
-			break
-	Audio.sfx("ui_click", -8.0)
-	_open_large("抽卡")
+	_draw_page.visible = true
+	_fill_draw_page()
+	Audio.sfx("paper", -10.0)
 
-func _refresh_all() -> void:
+func _close_draw_page() -> void:
+	if _draw_page == null:
+		return
+	_draw_page.visible = false
+	_hint.text = "抽卡：这一手先留着 —— 想选再点左边的［抽卡］"
+	Audio.sfx("ui_click", -8.0)
+
+func _draw_card_x(i: int) -> float:
+	return 134.0 + float(i) * 184.0
+
+func _draw_page_pick(i: int) -> void:
+	if i < 0 or i >= _draw_choices.size():
+		return
+	if int(_crystal) < DRAW_COST:
+		_hint.text = "灵晶不够（要 " + str(DRAW_COST) + "，现有 " + str(int(_crystal)) + "）"
+		return
+	var cid := str(_draw_choices[i])
+	var nm := card_name(cid)
+	var from := Vector2(_draw_card_x(i) + 38.0, 42.0 + 190.0)
+	_draw_card(cid)                     # 花灵晶 ＋ 进卡组（逻辑不动）
+	if _pending_card != "":
+		return                          # 十格满了：先去卡组页换一张（_draw_card 已经开好了）
+	_fly_card_to_deck(from, nm)
+	_draw_choices = _roll_cards()       # 换一手新的
+	_fill_draw_page()
+
+func _draw_page_refresh() -> void:
+	# 有黑市给的「卡组刷新」次数就先用免费的，没有才花 5 灵晶
+	if _card_refresh > 0:
+		_card_refresh -= 1
+		_draw_choices = _roll_cards()
+		_fill_draw_page()
+		_hint.text = "用了一次「卡组刷新」（还剩 " + str(_card_refresh) + " 次）"
+		Audio.sfx("ui_click", -8.0)
+		return
 	if int(_crystal) < REFRESH_ALL:
-		_hint.text = "刷新要 " + str(REFRESH_ALL) + " 灵晶"
+		_hint.text = "刷新要 " + str(REFRESH_ALL) + " 灵晶（现有 " + str(int(_crystal)) + "）"
 		return
 	_crystal -= REFRESH_ALL
 	_draw_choices = _roll_cards()
+	_fill_draw_page()
 	Audio.sfx("ui_click", -8.0)
-	_open_large("抽卡")
 
-# v13a：卡组刷新次数（黑市 60 杀敌数一件）——免费把三选一全刷一次
-func _refresh_all_free() -> void:
-	if _card_refresh <= 0:
-		_hint.text = "没有卡组刷新次数了（黑市 60 杀敌数一件）"
+# 卡片飞向［卡组］圆钮（圆钮在 (22,664)·104×104 → 页内坐标 (66,540)）
+func _fly_card_to_deck(from: Vector2, nm: String) -> void:
+	if _draw_fly == null:
 		return
-	_card_refresh -= 1
-	_draw_choices = _roll_cards()
-	Audio.sfx("ui_click", -8.0)
-	_hint.text = "用掉 1 次卡组刷新（剩 " + str(_card_refresh) + " 次）"
-	_open_large("抽卡")
+	_draw_fly.visible = true
+	var card := Panel.new()
+	card.position = from
+	card.size = Vector2(96, 132)
+	card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	card.pivot_offset = Vector2(48, 66)
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.98, 0.95, 0.86)
+	sb.set_corner_radius_all(8)
+	sb.border_color = GOLD
+	sb.set_border_width_all(3)
+	card.add_theme_stylebox_override("panel", sb)
+	_draw_fly.add_child(card)
+	var lb := Label.new()
+	lb.position = Vector2(4, 28)
+	lb.size = Vector2(88, 76)
+	lb.add_theme_font_size_override("font_size", 18)
+	lb.add_theme_color_override("font_color", INK)
+	lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	lb.text = nm
+	card.add_child(lb)
+	var target := Vector2(66.0 - 48.0, 540.0 - 66.0)
+	var tw := create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(card, "position", target, 0.42).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tw.tween_property(card, "scale", Vector2(0.30, 0.30), 0.42)
+	tw.tween_property(card, "modulate:a", 0.10, 0.42)
+	tw.chain().tween_callback(_clear_fly)
 
-# 三选一页：三张大卡面（大的先做"信息区"，插画下一轮补）
-func _fill_draw(p: Control, y: float, sz: Vector2) -> float:
-	var head := Label.new()
-	head.position = Vector2(24, y)
-	head.size = Vector2(660, 44)
-	head.add_theme_font_size_override("font_size", 24)
-	head.add_theme_color_override("font_color", INK)
-	head.text = "抽卡　" + str(DRAW_COST) + " 灵晶　现有 " + str(int(_crystal)) + " 灵晶"
-	p.add_child(head)
-	# v13p：抽卡优先是**自动**的（用户："不用加锁定按钮 你知道有锁定就行了"）——
-	#   这里只写一行"本手偏向哪一套"，不设任何开关；重开一局自然重新开始
-	var tip := Label.new()
-	tip.position = Vector2(24, y + 46.0)
-	tip.size = Vector2(660, 36)
-	tip.add_theme_font_size_override("font_size", 19)
-	tip.add_theme_color_override("font_color", DIM)
-	var tip2 := "本手偏向：按品质分档"
-	var foc0 := _auto_draw_focus()
-	if foc0 != "":
-		var fgot := 0
-		var fsize := 1
-		var fnm := foc0
-		for s_v in CARD_SETS:
-			if str((s_v as Dictionary)["set"]) == foc0:
-				fsize = int((s_v as Dictionary).get("size", 1))
-				fnm = str((s_v as Dictionary).get("name", foc0))
-				for i in fsize:
-					if _card_have.has(card_id(foc0, i)):
-						fgot += 1
-		tip2 = "本手偏向：你正在攒的【" + fnm + "】" + str(fgot) + "/" + str(fsize)
-	tip.text = tip2 + "　·　点卡面直接选（" + str(DRAW_COST) + " 灵晶）"
-	p.add_child(tip)
+func _clear_fly() -> void:
+	if _draw_fly == null:
+		return
+	for c in _draw_fly.get_children():
+		c.queue_free()
+	_draw_fly.visible = false
+
+func _fill_draw_page() -> void:
+	if _draw_page == null:
+		return
+	for c in _draw_page.get_children():
+		c.queue_free()
 	if _draw_choices.is_empty():
 		_draw_choices = _roll_cards()
-	var cw := 204.0
-	var ly := y + 92.0
+	# ① 纸底：把战场盖住（上下两条 HUD 不在这一层，不受影响）
+	var bg := ColorRect.new()
+	bg.position = Vector2.ZERO
+	bg.size = Vector2(704, 704)
+	bg.color = Color(PAPER.r, PAPER.g, PAPER.b, 0.985)
+	bg.mouse_filter = Control.MOUSE_FILTER_STOP
+	_draw_page.add_child(bg)
+	# ② 顶上那行状态
+	var st := Label.new()
+	st.position = Vector2(134, 8)
+	st.size = Vector2(556, 30)
+	st.add_theme_font_size_override("font_size", 19)
+	st.add_theme_color_override("font_color", DIM)
+	st.text = "抽卡 " + str(DRAW_COST) + " 灵晶　现有 " + str(int(_crystal)) + "　·　点卡面直接选"
+	_draw_page.add_child(st)
+	# ③ 三张大卡面（点哪张就是选哪张）
 	for i in _draw_choices.size():
 		var cid := str(_draw_choices[i])
-		var x := 24.0 + float(i) * (cw + 12.0)      # 三张大卡并排（v8d）
-		_card_big(p, Vector2(x, ly), Vector2(cw, 560), cid)
-		# v13t（用户："抽卡 就点击选取就可以了 选他/重抽去掉"）：**点卡面本身就是选它**
-		var hit := _pbtn(p, "", Vector2(x, ly), Vector2(cw, 558), 16, int(_crystal) >= DRAW_COST, _draw_card.bind(cid))
+		var x := _draw_card_x(i)
+		_card_big(_draw_page, Vector2(x, 42.0), Vector2(172, 552), cid)
+		var hit := _pbtn(_draw_page, "", Vector2(x, 42.0), Vector2(172, 550), 16,
+			int(_crystal) >= DRAW_COST, _draw_page_pick.bind(i))
 		hit.add_theme_stylebox_override("normal", _flat(Color(1, 1, 1, 0.001)))
-		hit.add_theme_stylebox_override("hover", _flat(Color(1, 1, 1, 0.08)))
-		hit.add_theme_stylebox_override("pressed", _flat(Color(1, 1, 1, 0.18)))
-	ly += 578.0
-	_pbtn(p, "全部刷新 " + str(REFRESH_ALL) + " 灵晶", Vector2(24, ly), Vector2(310, 72), 22, int(_crystal) >= REFRESH_ALL, _refresh_all)
-	# v13t：多一颗「查看当前卡组」（用户："增加一个按钮查看当前卡组"）
-	_pbtn(p, "查看当前卡组", Vector2(354, ly), Vector2(310, 72), 22, true, func(): _open_large("卡组"))
-	ly += 84.0
-	# v13a：黑市买的「卡组刷新」在这里免费花（一次用 1 个）
-	var fb := _pbtn(p, "用卡组刷新 ×" + str(_card_refresh), Vector2(205, ly), Vector2(310, 72), 22, _card_refresh > 0, _refresh_all_free)
-	if _card_refresh <= 0:
-		fb.add_theme_stylebox_override("normal", _flat(Color(0.55, 0.53, 0.51, 0.95)))
-		fb.add_theme_stylebox_override("hover", _flat(Color(0.60, 0.58, 0.56, 0.95)))
-		fb.add_theme_stylebox_override("pressed", _flat(Color(0.48, 0.46, 0.44, 0.95)))
-	var done := Label.new()
-	done.position = Vector2(24, ly + 78.0)
-	done.size = Vector2(620, 40)
-	done.add_theme_font_size_override("font_size", 20)
-	done.add_theme_color_override("font_color", DIM)
-	done.text = "已拿到 " + str(_card_have.size()) + " / " + str(card_pool_size()) + " 张　·　黑市卖「卡组刷新」60 杀敌数一件"
-	p.add_child(done)
-	return ly + 128.0
-# ============================================================
+		hit.add_theme_stylebox_override("hover", _flat(Color(1, 1, 1, 0.10)))
+		hit.add_theme_stylebox_override("pressed", _flat(Color(1, 1, 1, 0.20)))
+	# ④ 两颗按钮（草图上就这两颗）
+	_pbtn(_draw_page, "稍后再选", Vector2(134, 606), Vector2(250, 84), 26, true, _close_draw_page)
+	var rt := "刷新 " + str(REFRESH_ALL) + " 灵晶"
+	if _card_refresh > 0:
+		rt = "刷新（免 " + str(_card_refresh) + "）"
+	_pbtn(_draw_page, rt, Vector2(400, 606), Vector2(290, 84), 24,
+		_card_refresh > 0 or int(_crystal) >= REFRESH_ALL, _draw_page_refresh)
 # v11a 成长武器：自带一件 · 无限强化（文钱）· 每 10 级进阶（品质升档 ＋ 三选一）
 #   强化等级保留 · 一键强化用大按钮（手机不做键盘热键）· 三选一可刷新（按次数计价）
 # ============================================================
@@ -6021,6 +6081,10 @@ func _restart_run() -> void:
 	_yh_uses = 0                         # v13x：本局喝玉壶次数
 	_run_time = 0.0                      # v13x：本局存活时间（「初入江湖 / 老江湖」）
 	_recruit_choices.clear()
+	_draw_choices.clear()                # v18k：抽卡的三张每局重掷
+	if _draw_page != null:
+		_draw_page.visible = false
+	_clear_fly()
 	_bm_roll()                       # v13a：新的一局，黑市货架重摆
 	# v13m（用户："刚开始是自带那个成长武器和玉壶"）：
 	#   玉壶是**开局自带**的——新的一局当然是"就绪"，不该把上一局的冷却带过来。
@@ -7387,8 +7451,7 @@ func _fill_popup(p: Control, kind: String, y: float, sz: Vector2) -> float:
 	# 卡组 / 抽卡这两页**不用文字列表**，直接用格子摆（探针抓到过：长句换行会压到下一行上）
 	if kind == "卡组":
 		return _fill_cards(p, y, sz)
-	if kind == "抽卡":
-		return _fill_draw(p, y, sz)
+	# v18k：抽卡不再是弹窗（改成战场区里的一页，见 _open_draw_page）
 	if kind == "挑战":
 		return _fill_chal(p, y, sz)
 	if kind == "技能":
@@ -7476,8 +7539,6 @@ func _fill_popup(p: Control, kind: String, y: float, sz: Vector2) -> float:
 			"本局规则：凑齐一套 → 给组合效果并把这几张腾出占位（效果常驻）；重复抽到回收 5 灵晶"]
 	elif kind == "事件":
 		lines = ["牢中事件（三选一 · 4 秒不点自动随机）", "① 捡到钱袋：文钱 +150", "② 灵晶矿：灵晶 +8", "③ 武学残页：随机一张卡 +1 星"]
-	elif kind == "抽卡":
-		lines = ["抽卡 · 20 灵晶（现有 " + str(_crystal) + "）", "① 技能流 · 凝神（1★）", "② 技能流 · 疾风诀（1★）", "③ 技能流 · 破罡（1★）", "十格满时会先进「替换」模式"]
 	elif kind == "设置":
 		# v16n（用户："背景音有点吵"）：⚠ 原来这一页只有两行**死文本**"音乐：开/音效：开"，
 		#   点不了 —— 觉得吵也没地方调。现在给两排**真能点的音量档**。

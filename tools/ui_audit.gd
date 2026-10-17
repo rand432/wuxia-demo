@@ -21,7 +21,8 @@ func _initialize() -> void:
 	_layer.add_child(_k)
 	_k._meta_path = "user://probe_meta.cfg"
 	_k.open()
-	_kinds = ["设置", "抽卡", "挑战", "任务", "卡组", "存档", "成就", "黑市", "角色", "技能", "装备",
+	# ⚠ v18k：抽卡**不是弹窗**了（改成战场区里的一页）→ 从这个清单里拿掉，另在最后单独量它
+	_kinds = ["设置", "挑战", "任务", "卡组", "存档", "成就", "黑市", "角色", "技能", "装备",
 		"招募", "成长武器", "图鉴", "羁绊详情", "装备详情", "宝物详情", "当前宝物", "宝物三选一",
 		"关卡", "局终", "卡组合计", "卡牌详情", "成长武器详情", "仓库"]
 
@@ -53,8 +54,13 @@ func _process(_d: float) -> bool:
 		return false
 	if _phase == 0:
 		if _i >= _kinds.size():
+			# v18k：抽卡页（铺在战场区那层，不是弹窗）也量一遍
+			if _k._draw_page != null:
+				_k._open_draw_page()
+				_walk(_k._draw_page, "抽卡页")
+				_k._close_draw_page()
 			print("=== UI 巡检结果 ===")
-			print("[k950] 查了 " + str(_kinds.size()) + " 个弹窗 / " + str(_nlabel) + " 个 Label · 最小字号 " + str(_minsize))
+			print("[k950] 查了 " + str(_kinds.size()) + " 个弹窗 ＋ 抽卡页 / " + str(_nlabel) + " 个 Label · 最小字号 " + str(_minsize))
 			print("[k950] 问题 " + str(_bad.size()) + " 处：")
 			for b_v in _bad:
 				print("[k950]   " + str(b_v))
