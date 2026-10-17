@@ -658,6 +658,11 @@ var _bm_atk := 0                  # 「消耗型装备·小」累积的攻（可
 var _bm_hp := 0                   # 「消耗型装备·小」累积的血
 var _bm_eaten: Array = []         # 被吞噬丹吞掉的卡（id；效果与成套计数照留）
 var _card_refresh := 0            # 卡组刷新次数（黑市货品，抽卡页免费全刷用）
+# v18t（用户："强化的刷新 技能的刷新 宝物的刷新 招募伙伴的刷新都是次数型【黑市卖】"）：
+#   四种刷新全部改成**次数型**，次数都从黑市买（宝物那个本来就吃 _trea_refresh）
+var _wpn_reroll := 0              # 强化（武器进阶）刷新次数
+var _skill_reroll := 0            # 技能刷新次数
+var _mate_reroll := 0             # 招募伙伴刷新次数
 # ============================================================
 # v13c P2：事件 / 任务（规格：docs/困兽_事件与任务_设计稿.md）
 #   · 每 180 秒触发一次事件 → **自动挂进任务栏**（最多 2 个，挂满就顺延）
@@ -1038,7 +1043,7 @@ func _fill_recruit(p: Control, y: float, sz: Vector2) -> float:
 		ly += 312.0
 	# 底部两颗大按钮（跟抽卡页一个套路：全部刷新 ＋ 看账）
 	ly += 6.0
-	_pbtn(p, "全部刷新", Vector2(28, ly), Vector2(310, 72), 24, true, _recruit_refresh)
+	_pbtn(p, "全部刷新（剩 " + str(_mate_reroll) + "）", Vector2(28, ly), Vector2(310, 72), 24, int(_mate_reroll) > 0, _recruit_refresh)
 	_pbtn(p, "查看当前伙伴", Vector2(354, ly), Vector2(314, 72), 24, true, _goto_mates_page)
 	ly += 86.0
 	var foot := Label.new()
@@ -1047,7 +1052,7 @@ func _fill_recruit(p: Control, y: float, sz: Vector2) -> float:
 	foot.add_theme_font_size_override("font_size", 19)
 	foot.add_theme_color_override("font_color", DIM)
 	foot.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	foot.text = "点卡面上的［招募］直接选它（不花灵晶）。刷新不要钱，但一局里的候选是有限的——三张都入过队就不再出新的。"
+	foot.text = "点卡面上的［招募］直接选它（不花灵晶）。刷新吃「招募刷新次数」（黑市买），三张都入过队就不再出新的。"
 	p.add_child(foot)
 	return ly + 70.0
 
@@ -1058,6 +1063,11 @@ func _goto_mates_page() -> void:
 
 # v14p：把候选全刷一遍（不要钱；还是"没入过队的"里抽）
 func _recruit_refresh() -> void:
+	# v18t（用户："…招募伙伴的刷新都是次数型【黑市卖】"）：改成吃招募刷新次数
+	if int(_mate_reroll) <= 0:
+		_hint.text = "没有招募刷新次数了（黑市买「招募刷新」）"
+		return
+	_mate_reroll -= 1
 	_recruit_choices = _roll_recruits()
 	Audio.sfx("ui_click", -8.0)
 	if _popup_kind == "招募":
@@ -2262,11 +2272,11 @@ func _fill_page_buttons() -> void:
 			rt = "刷新（剩 " + str(_trea_refresh) + "）"
 			can = int(_trea_refresh) > 0
 		"进阶":
-			rt = "刷新 " + str(_wpn_refresh_cost()) + " 文钱"
-			can = int(_money) >= _wpn_refresh_cost()
+			rt = "刷新（剩 " + str(_wpn_reroll) + "）"
+			can = int(_wpn_reroll) > 0
 		"技能":
-			rt = "刷新"
-			can = true
+			rt = "刷新（剩 " + str(_skill_reroll) + "）"
+			can = int(_skill_reroll) > 0
 	_pbtn(_draw_page, rt, Vector2(356, 600), Vector2(330, 80), 24, can, _page_refresh)
 
 # 点卡面 = 选它（四种页面同一个入口）
@@ -2305,6 +2315,10 @@ func _page_refresh() -> void:
 			_wpn_refresh()
 			_fill_draw_page()
 		"技能":
+			if int(_skill_reroll) <= 0:
+				_hint.text = "没有技能刷新次数了（黑市买「技能刷新」）"
+				return
+			_skill_reroll -= 1
 			if _field != null:
 				_skill_choices = _field.roll_choices()
 			_fill_draw_page()
@@ -2587,11 +2601,11 @@ func _wpn_roll_choices() -> void:
 	_wpn_choices = out
 
 func _wpn_refresh() -> void:
-	var c := _wpn_refresh_cost()
-	if int(_money) < c:
-		_hint.text = "刷新要 " + str(c) + " 文钱（现有 " + str(int(_money)) + "）"
+	# v18t（用户："强化的刷新…都是次数型【黑市卖】"）：改成吃**强化刷新次数**，不再花文钱
+	if int(_wpn_reroll) <= 0:
+		_hint.text = "没有强化刷新次数了（黑市买「强化刷新」）"
 		return
-	_money -= c
+	_wpn_reroll -= 1
 	_wpn_refresh_n += 1
 	_wpn_roll_choices()
 	Audio.sfx("ui_click", -8.0)
@@ -3826,6 +3840,10 @@ const BM_GOODS := [
 	{"id": "crystal_bag", "n": "灵晶袋", "cost": 70, "lv": 1, "w": 14, "d": "灵晶 +40（抽卡用的晶）"},
 	{"id": "trea_refresh", "n": "宝物刷新", "cost": 60, "lv": 1, "w": 12, "d": "宝物刷新次数 +1"},
 	{"id": "card_refresh", "n": "卡组刷新", "cost": 60, "lv": 1, "w": 12, "d": "卡组刷新次数 +1（抽卡页免费用）"},
+	# v18t：另外三种刷新也改成次数型，同样在黑市卖
+	{"id": "wpn_reroll", "n": "强化刷新", "cost": 50, "lv": 1, "w": 12, "d": "强化（武器进阶）刷新次数 +1"},
+	{"id": "skill_reroll", "n": "技能刷新", "cost": 55, "lv": 2, "w": 11, "d": "技能刷新次数 +1"},
+	{"id": "mate_reroll", "n": "招募刷新", "cost": 45, "lv": 1, "w": 12, "d": "招募伙伴刷新次数 +1"},
 	{"id": "wpn_stone", "n": "强化石", "cost": 120, "lv": 2, "w": 13, "d": "成长武器直接 +2 级"},
 	{"id": "gear", "n": "装备", "cost": 300, "lv": 2, "w": 12, "d": "按品级随机一件（六格满则进仓库）"},
 	{"id": "gear_s", "n": "消耗型装备·小", "cost": 80, "lv": 3, "w": 15, "d": "点击即用：攻 +3 · 血 +15（可重复买，叠加）"},
@@ -4199,6 +4217,15 @@ func _bm_buy(i: int) -> void:
 		"card_refresh":
 			_card_refresh += 1
 			msg = "卡组刷新 +1（现有 " + str(_card_refresh) + " 次，去抽卡页用）"
+		"wpn_reroll":
+			_wpn_reroll += 1
+			msg = "强化刷新 +1（现有 " + str(_wpn_reroll) + " 次，进阶三选一页用）"
+		"skill_reroll":
+			_skill_reroll += 1
+			msg = "技能刷新 +1（现有 " + str(_skill_reroll) + " 次，技能三选一页用）"
+		"mate_reroll":
+			_mate_reroll += 1
+			msg = "招募刷新 +1（现有 " + str(_mate_reroll) + " 次，招募页用）"
 		"wpn_stone":
 			var adv := _bm_wpn_add(2)
 			msg = "成长武器 +2 级 → +" + str(_wpn_lv) + "（" + str(WPN_Q_CN[_wpn_q]) + "）"
@@ -6442,6 +6469,12 @@ func _restart_run() -> void:
 	_recruit_choices.clear()
 	_draw_choices.clear()                # v18k：抽卡的三张每局重掷
 	_card_open_reset()                   # v18q：卡池阶梯每局从头开
+	# v18t（用户："初始开局会全部送三次"）：五种刷新次数开局各送 3 次（黑市还能再买）
+	_card_refresh = 3
+	_trea_refresh = 3
+	_wpn_reroll = 3
+	_skill_reroll = 3
+	_mate_reroll = 3
 	if _draw_page != null:
 		_draw_page.visible = false
 	_set_draw_hud(true)
