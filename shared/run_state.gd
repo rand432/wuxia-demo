@@ -246,7 +246,10 @@ var weapon_kind: String:
 		_m()["weapon_kind"] = str(v)
 
 
-func reset(talent_list: Array, gift_sid: String) -> void:
+# v138（用户："最后一问还是固定给一个功法【不给武器】"）：起手的东西**不再由这里发**——
+#   疾风剑法（成品）与那三片锈剑都由 journey_stage._intro_kit() 直接放进包裹
+#   （那边要出提示、也要能被"再来一趟"重发），这里只管把一趟的状态清干净。
+func reset(talent_list: Array) -> void:
 	mode = "intro"
 	diff = 0
 	Loot.set_red_phase(GameState.ladder_phase())   # R4：搜刮红档随开趟同步
@@ -273,10 +276,6 @@ func reset(talent_list: Array, gift_sid: String) -> void:
 	last_foe.clear()
 	money = START_MONEY
 	talents = talent_list.duplicate()
-	if gift_sid != "":
-		var parts: Array = Cards.parts_of(gift_sid)
-		for i in parts.size():
-			add_card(gift_sid, i)
 	recalc()
 
 # ---- 正式趟（R1）----

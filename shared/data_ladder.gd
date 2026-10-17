@@ -714,6 +714,9 @@ static func _pick_of_q(pool: String, q: int, rng: RandomNumberGenerator) -> Stri
 			continue                 # 专武不落货仓
 		if bool(d.get("no_drop", false)):
 			continue
+		# v138：引子专用件（生锈的铁剑）不进任何按品级抽的池——它只从引子第一节出
+		if bool(d.get("intro_only", false)):
+			continue
 		if Cards.q_idx(str(d.get("id", ""))) == q:
 			cand.append(str(d.get("id", "")))
 	if cand.is_empty():
@@ -745,6 +748,9 @@ static func sets_of_q(pool: String, q: int) -> Array:
 		if str(d.get("role", "")) != "":
 			continue                 # 专武不落货仓
 		if bool(d.get("no_drop", false)):
+			continue
+		# v138：同上——引子专用件不进货仓/补缺/开局行装
+		if bool(d.get("intro_only", false)):
 			continue
 		if Cards.q_idx(str(d.get("id", ""))) == clampi(q, 0, Cards.QUALITY_ORDER.size() - 1):
 			out.append(str(d.get("id", "")))

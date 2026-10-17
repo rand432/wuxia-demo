@@ -48,6 +48,14 @@ const SETS := [
 	#   **卡 id（staff / staff_tie / …）一个字没动**——id 是存档键（仓库 vault_cards /
 	#   三人的 equipped），改了老档的棍就变空气；残片按**下标**存，所以 parts 换名也安全。
 	{"id": "staff", "name": "暗器", "pool": "weapon", "weapon": "anqi", "parts": ["锋", "柄", "囊"], "item": "飞蝗石", "item_stats": {"atk": 15, "phys_dmg": 2}},
+	# v138（用户："第一节 幸运的是你在某个风干的尸骨上寻觅了一把生锈的铁剑"）：**引子专用的破剑**。
+	#   ⚠ 挂 `intro_only`：pool_sets / data_ladder.sets_of_q 都跳过它 → 事件三选一、搜刮、货郎、
+	#     开局行装**永远抽不到**"生锈的铁剑"。全游戏只有引子第一节按 id 直接发这三片
+	#     （journey_stage._intro_kit），三片凑齐合成后就是玩家的第一把兵器。
+	#   数值故意比同档长剑（青锋剑 15 攻）低一档——它本来就锈了。
+	{"id": "sword_rusty", "name": "生锈的铁剑", "pool": "weapon", "weapon": "sword",
+		"parts": ["锋", "柄", "鞘"], "item": "生锈的铁剑", "intro_only": true,
+		"item_stats": {"atk": 12}},
 	{"id": "sword_qiu", "name": "秋水剑", "pool": "weapon", "weapon": "sword", "parts": ["锋", "柄", "鞘", "穗"], "item": "秋水剑", "quality": "良品", "item_stats": {"atk": 24, "phys_dmg": 3}},
 	{"id": "spear_han", "name": "寒铁枪", "pool": "weapon", "weapon": "spear", "parts": ["锋", "柄", "鞘", "缨"], "item": "寒铁枪", "quality": "良品", "item_stats": {"atk": 24, "phys_dmg": 3}},
 	{"id": "sword_shuang", "name": "霜刃剑", "pool": "weapon", "weapon": "sword", "parts": ["锋", "柄", "鞘", "穗", "铭"], "item": "霜刃剑", "quality": "上品", "item_stats": {"atk": 34, "dmg": 4}},
@@ -761,6 +769,9 @@ static func pool_sets(pool: String, max_q := 4) -> Array:
 			continue
 		# ㊿z5：专武（no_drop）永不进任何掉落池——只走它自己的来路
 		if bool(s.get("no_drop", false)):
+			continue
+		# v138：引子专用的东西（生锈的铁剑）同理——只由引子第一节按 id 直接发
+		if bool(s.get("intro_only", false)):
 			continue
 		out.append(str(s["id"]))
 	return out

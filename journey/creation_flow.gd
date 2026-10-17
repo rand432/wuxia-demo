@@ -8,10 +8,10 @@ extends Control
 #   逻辑零变化。
 # v3：每一步打"面包屑"（输出面板可见）：开场页/第N问/临别/下山；
 #   修"一次点击跳两页"（同一次点击只算一次）。
-# 结束时发 done(talents, gift_sid)，然后自毁
+# 结束时发 done(talents)，然后自毁（v138：不再带 gift——第五问固定给疾风剑法，由游历那边发）
 # ============================================================
 
-signal done(talents: Array, gift_sid: String)
+signal done(talents: Array)
 
 const Cards := preload("res://shared/data_cards.gd")
 const Creation := preload("res://journey/data_creation.gd")
@@ -21,7 +21,6 @@ const Voice := preload("res://shared/voice.gd")   # v82：剧情配音
 var _intro_idx := 0
 var _q_idx := 0
 var _talents: Array = []
-var _gift_sid := ""
 var _intro_active := false
 var _intro_guard := false
 
@@ -127,22 +126,10 @@ func _on_answer(opt: Dictionary) -> void:
 		var t: Dictionary = Creation.pick_talent(str(opt.get("aff", "")), _talents)
 		if not t.is_empty():
 			_talents.append(str(t.get("name", "")))
-	if opt.has("gift"):
-		var pool := str(opt.get("gift", "arts"))
-		# ㊿t：**点明了的**礼物（手抄拳谱／没开锋的旧剑）定签——同一选项两次开局给同一套残卡。
-		#   只有"布包"留着随机：它的选项文案本来就写着"不知装的什么"，那是这里唯一的赌一把。
-		var gamble := pool == "random"
-		if gamble:
-			pool = "arts" if randf() < 0.5 else "weapon"
-			# ㊿d：礼物封顶凡品（全是 3 页套）——原先没封顶，会摇到 4~7 页的高品套（含绝品）
-		var sets: Array = Cards.pool_sets(pool, 0)
-		if not sets.is_empty():
-			# ⚠ 别写成三元表达式塞进 :=（GDScript 对它的类型推断不稳），分行写
-			var gi := 0
-			if gamble:
-				gi = randi() % sets.size()
-			_gift_sid = str(sets[gi])
-	print("[游历] 已作答第 ", _q_idx + 1, " 问；天赋=", _talents, " 行囊礼物=", _gift_sid)
+	# v138（用户："最后一问还是固定给一个功法【不给武器】"）：第五问**什么都不发**——
+	#   以前这里按 opt.gift 摇一套凡品残卡（拳谱／旧剑／布包），现在 opt 里只放一句风味。
+	#   固定的那门疾风剑法在引子起手时由 journey_stage._intro_kit 发（不经过五问这一页）。
+	print("[游历] 已作答第 ", _q_idx + 1, " 问；天赋=", _talents)
 	_q_idx += 1
 	if _q_idx >= Creation.QUESTIONS.size():
 		_show_verdict()
@@ -168,14 +155,11 @@ func _show_verdict() -> void:
 	else:
 		for t in _talents:
 			body += "　· " + str(t) + " —— " + str(Creation.talent_desc(str(t))) + "\n"
-	body += "\n你从死人身上翻出三张残卡：\n"
-	if _gift_sid != "":
-		var names: Array = []
-		var parts: Array = Cards.parts_of(_gift_sid)
-		for i in parts.size():
-			names.append(str(Cards.card_name(_gift_sid, i)))
-		body += "　" + "、".join(PackedStringArray(names)) + "\n"
-		body += "　三张凑齐 → 点右上角［合成］，之后可以选装备或放包裹\n"
+	# v138：临别页不再讲"三张残卡／怎么合成"——那套教学整个挪到了引子第一节
+	#   （尸骨上那把锈剑：journey_stage._show_intro_kit_tip）。这里只交代身世与仅剩的功法。
+	body += "\n你身负重伤，一身武艺十不存一。\n"
+	body += "身上只剩一门「" + str(Cards.item_name(Creation.FIXED_ART)) + "」，就在包裹里。\n"
+	body += "佩剑早不知跌落在何处——路上再寻一把。"
 
 	var bd := UiKit.make_label(panel, Vector2(40, 90), Vector2(600, 280), 20, Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.92))
 	UiKit.set_text(bd, body)
@@ -186,6 +170,6 @@ func _show_verdict() -> void:
 
 func _on_go() -> void:
 	print("[游历] 按下［上路］，开始交棒")
-	done.emit(_talents.duplicate(), _gift_sid)
+	done.emit(_talents.duplicate())
 	print("[游历] 交棒信号已发出（若上面没有『创建完成』一行，说明问题在这一侧）")
 	queue_free()
