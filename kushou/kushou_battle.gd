@@ -607,6 +607,7 @@ func reset_run() -> void:
 	for k in skill.keys():
 		skill[k] = 0
 	kills_total = 0
+	dmg_done = 0.0                    # v18u（用户：成就都是"当局"的挑战）—— 这行原来漏了，跨局会累加
 	wave = 1
 	_combo = 0
 	_combo_t = 0.0

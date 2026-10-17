@@ -6040,6 +6040,41 @@ const ACHS := [
 		"fx": "玉壶冷却 −10%（永久）", "eff": {"yh_cd_mul": -0.10}},
 	{"id": "jixian", "cat": "live", "n": "极限挑战", "d": "通关第 4 章任意一关", "ck": "stage4", "goal": 1,
 		"fx": "开局全伤害 +8%", "eff": {"dmg_all": 0.08}},
+	# ---- v18u（用户："多做一些成就"）：再扩 16 条，前中后期都铺开 ----
+	{"id": "chushou", "cat": "fight", "n": "出手不凡", "d": "一局击杀 300 只普通怪", "ck": "kill_normal", "goal": 300,
+		"fx": "开局文钱 +120", "eff": {"money": 120}},
+	{"id": "huaxing", "cat": "fight", "n": "器成上品", "d": "把成长武器强化到上品", "ck": "wpn_q", "goal": 3,
+		"fx": "开局攻击 +2", "eff": {"atk_flat": 2}},
+	{"id": "kaizhi", "cat": "collect", "n": "开枝散叶", "d": "一局开出 25 套卡", "ck": "card_open", "goal": 25,
+		"fx": "开局灵晶 +25", "eff": {"crystal": 25}},
+	{"id": "cheka", "cat": "collect", "n": "抽卡成瘾", "d": "一局抽卡 100 次", "ck": "draws", "goal": 100,
+		"fx": "开局灵晶 +35", "eff": {"crystal": 35}},
+	{"id": "tiaozhan3", "cat": "fight", "n": "挑战狂人", "d": "一局按 40 次挑战", "ck": "chals", "goal": 40,
+		"fx": "开局杀敌数 +150", "eff": {"kills": 150}},
+	{"id": "caifu", "cat": "gold", "n": "财源滚滚", "d": "一局赚到 40000 文钱", "ck": "money_earned", "goal": 40000,
+		"fx": "开局文钱 +500", "eff": {"money": 500}},
+	{"id": "baowuduo", "cat": "collect", "n": "宝物如山", "d": "一局拿 12 次宝物", "ck": "trea_n", "goal": 12,
+		"fx": "开局灵晶 +25", "eff": {"crystal": 25}},
+	{"id": "zhongji", "cat": "fight", "n": "重击如雷", "d": "一局打出 20000 点伤害", "ck": "dmg", "goal": 20000,
+		"fx": "开局全伤害 +3%", "eff": {"dmg_all": 0.03}},
+	{"id": "changshou", "cat": "time", "n": "长命百岁", "d": "单局存活 45 分钟", "ck": "run_time", "goal": 2700,
+		"fx": "开局气血上限 +80", "eff": {"hp_flat": 80}},
+	{"id": "wudi", "cat": "live", "n": "屹立不倒", "d": "打到第 25 波且一次没浴血", "ck": "nobath25", "goal": 1,
+		"fx": "开局全伤害减免 +2%", "eff": {"cut_all_bonus": 0.02}},
+	{"id": "dandou3", "cat": "fight", "n": "单挑三杰", "d": "一局打死 3 名单挑高手", "ck": "champion", "goal": 3,
+		"fx": "开局全伤害 +2%", "eff": {"dmg_all": 0.02}},
+	{"id": "luesha2", "cat": "fight", "n": "猎杀成群", "d": "一局杀掉 6 只精英", "ck": "elite", "goal": 6,
+		"fx": "开局灵晶 +20", "eff": {"crystal": 20}},
+	{"id": "shenglu", "cat": "live", "n": "步步高升", "d": "单局升到 Lv 25", "ck": "lv", "goal": 25,
+		"fx": "开局文钱 +200", "eff": {"money": 200}},
+	# v18u（用户："成就基本没有圈外线 就是当局的各种挑战"）：
+	#   黑市等级是**跨局**涨的，不能拿来当成就 → 换成"一局成交 20 件"（_q_ctr 每局清零）
+	{"id": "heishi2", "cat": "gold", "n": "黑市扫货", "d": "一局黑市成交 20 件", "ck": "bm", "goal": 20,
+		"fx": "开局灵晶 +20", "eff": {"crystal": 20}},
+	{"id": "wanren", "cat": "fight", "n": "万人斩", "d": "一局累计击杀 1500 只", "ck": "kill_total", "goal": 1500,
+		"fx": "开局杀敌数 +250", "eff": {"kills": 250}},
+	{"id": "zhongji2", "cat": "collect", "n": "器成绝品", "d": "把成长武器强化到绝品", "ck": "wpn_q", "goal": 5,
+		"fx": "开局攻击 +5 · 气血 +100", "eff": {"atk_flat": 5, "hp_flat": 100}},
 ]
 const ACH_CAT_CN := {"fight": "战斗", "live": "生存", "gold": "经济", "collect": "收集", "time": "时长"}
 
@@ -6175,6 +6210,30 @@ func _ach_val(ck: String) -> float:
 				if str(sid).begins_with("4-"):
 					return 1.0
 			return 0.0
+		# ---- v18u 扩充成就用的判定键 ----
+		"wpn_q":
+			return float(_wpn_q)                       # 成长武器品质档 0~5（凡品~绝品）
+		"card_open":
+			return float(_card_open.size())            # 本局开出来的卡组套数
+		"trea_n":
+			var tn := 0
+			for k in _trea_taken.keys():
+				tn += int(_trea_taken[k])
+			return float(tn)                           # 本局拿过几次宝物（含重复）
+		"dmg":
+			return float(_field.dmg_done) if _field != null else 0.0
+		"nobath25":
+			return 1.0 if (_wave >= 25 and _bath_used == 0) else 0.0
+		"champion":
+			return float(_q_ctr.get("champion", 0))
+		"elite":
+			return float(_q_ctr.get("elite", 0))
+		"lv":
+			return float(_lv)
+		"bm_lv":
+			return float(_bm_lv)
+		"kill_total":
+			return float(_kills)
 	# v15k：这一句是 match 之后的兜底（原来它上面还重复了一句，已删）
 	return 0.0
 
@@ -6222,6 +6281,10 @@ func _apply_achievements() -> void:
 		if e.has("wit"):
 			_attr["wit"] = int(_attr["wit"]) + int(e["wit"])
 			_ach_sum["wit"] = int(_ach_sum.get("wit", 0)) + int(e["wit"])
+		# v18u 顺手修的坑：原来没有 atk_flat 这一支 —— 写 "eff": {"atk_flat": N} 的成就（百炼成钢/器成上品/器成绝品）效果一直是空的
+		if e.has("atk_flat"):
+			_extra["atk_flat"] = float(_extra.get("atk_flat", 0.0)) + float(e["atk_flat"])
+			_ach_sum["atk_flat"] = float(_ach_sum.get("atk_flat", 0.0)) + float(e["atk_flat"])
 		if e.has("hp_flat"):
 			_extra["hp_flat"] = float(_extra.get("hp_flat", 0.0)) + float(e["hp_flat"])
 			_ach_sum["hp_flat"] = float(_ach_sum.get("hp_flat", 0.0)) + float(e["hp_flat"])
