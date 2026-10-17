@@ -56,6 +56,8 @@ const Roles := preload("res://journey/data_roles.gd")   # ㊳：自带天赋的�
 const GameData := preload("res://shared/game_data.gd")  # ㊷：招式作用范围（target_reach）
 const Buffs := preload("res://shared/data_buffs.gd")   # ㊿：运签卡的封顶值（回气卡/冰心卡）
 const StickFighter := preload("res://journey/stick_fighter.gd")
+const QteSlash := preload("res://journey/qte_slash.gd")   # v139：大招·滑动演出（引子 boss 专用）
+const Voice := preload("res://shared/voice.gd")          # v139：boss 台词配音
 const ActorFactory := preload("res://journey/actor_factory.gd")   # Q版纸片人 / 火柴人 二选一
 const CharArt := preload("res://shared/char_art.gd")
 const ArtClip := preload("res://shared/art_clip.gd")
@@ -113,6 +115,12 @@ var _skip_enemy := false
 # v139（用户："主角半血状态对战小兵且只能使用普攻卡"）：这一场**封哪几类牌**——
 #   节点上写 seal=["arts","ult"] 就只摊普攻。剧情用的闸，不走状态系统（那是给玩家看的 debuff）。
 var _seal: Array = []
+# v139（用户："boss 的剧本战先做呗"）：node["script"] 挂上就是剧本战——
+#   harden（前 N 手打不动＋嘲讽）→ ult（强制满怒、切手动、大招牌亮）→ QTE → 一刀两断。
+var _script_on := false
+var _script_cfg: Dictionary = {}
+var _script_acts := 0
+var _script_phase := "none"
 
 # ============================================================
 # ㊿：三人成队——我方成员表
@@ -2269,6 +2277,17 @@ func _pick_player_target(art: Dictionary) -> int:
 func run(state, player: Node2D, fx: Control, node: Dictionary, foe_first := false, party_nodes: Array = []) -> Dictionary:
 	_state = state
 	_seal = (node.get("seal", []) as Array).duplicate() if node.get("seal", null) is Array else []
+	_script_on = false
+	_script_cfg = {}
+	_script_acts = 0
+	_script_phase = "none"
+	var sc_v = node.get("script", null)
+	if sc_v is Dictionary and not (sc_v as Dictionary).is_empty():
+		_script_cfg = (sc_v as Dictionary).duplicate(true)
+		_script_on = true
+		_script_phase = "harden"
+		print("[战斗] 剧本战：", node.get("name", ""), " · 前 ", int(_script_cfg.get("turns", 3)), " 手打不动；QTE 划 ",
+			int(_script_cfg.get("qte_need", 3)), " 下")
 	_fx = fx
 	Audio.play_bgm("bgm_battle", 0.6)   # v65：遭遇战 BGM
 	InkTouch.attach()
@@ -2407,6 +2426,8 @@ func run(state, player: Node2D, fx: Control, node: Dictionary, foe_first := fals
 				if _last_ai >= 0:
 					_used.append(str(_last_ai) + "|" + _last_k + "|" + _last_sid)
 				_tick_bless(act_i)   # ㊿：加持按"自己的手"计数（用明确下标，别靠 _a()）
+				if _script_on and _script_phase == "harden":
+					await _script_count_action()
 			else:
 				var fi := int(slot)
 				if not _foe_alive(fi):
@@ -2877,6 +2898,10 @@ func _update_bars() -> void:
 
 func _player_ult() -> void:
 	if _player == null or not is_instance_valid(_player) or _foe == null or not is_instance_valid(_foe):
+		return
+	# v139：剧本战里这一手大招＝演出（放大居中 → 滑动 → 一刀两断）
+	if _script_phase == "ult":
+		await _script_ult_finish()
 		return
 	var un := str(_ult.get("name", "大招"))
 	var uk := str(_ult.get("kind", "hit"))
@@ -4529,3 +4554,76 @@ func _extras_after_plain(is_player: bool, art: Dictionary) -> void:
 				_player.play_hit()
 			_update_bars()
 		await _wait(0.16)
+
+# ============================================================
+# v139（用户："boss 的剧本战先做呗"）：引子 boss 的三段式。
+#   ① 前 N 手"打不动"——怪的血厚到根本砍不死（表里 2000），每手出一句嘲讽；
+#   ② 到点强制满怒、切手动、大招牌亮起（提示"点那张牌"）；
+#   ③ 放出来 → 敌人放大居中 → 滑动 QTE（不可跳过）→ 一刀两断。
+#   ⚠ 只在 node["script"] 存在的那一场跑，别处一个字都不碰。
+# ============================================================
+func _script_count_action() -> void:
+	_script_acts += 1
+	var taunts: Array = _script_cfg.get("taunts", [])
+	var i := _script_acts - 1
+	if i >= 0 and i < taunts.size():
+		var tv: Array = _script_cfg.get("taunt_voices", [])
+		if i < tv.size():
+			Voice.say_file(str(tv[i]))
+		_banner("「" + str(taunts[i]) + "」", Color(0.72, 0.24, 0.18))
+		_blog("敌方：「" + str(taunts[i]) + "」", "bomb")
+		await _wait(0.85)
+	if _script_acts >= int(_script_cfg.get("turns", 3)):
+		await _script_arm()
+
+func _script_arm() -> void:
+	if _script_phase != "harden":
+		return
+	_script_phase = "ult"
+	_manual = true
+	var al := _a()
+	if not al.is_empty():
+		al["rage"] = 100
+	_update_bars()
+	_banner("你忽然想起那一手。", UiKit.SEAL)
+	_blog("怒气满了——大招牌亮了（点它）", "crit")
+	UiKit.float_text(self, "「" + str(_ult.get("name", "大招")) + "」亮了——点那张牌", UiKit.GOLD, 200.0)
+	await _wait(1.0)
+
+func _script_ult_finish() -> void:
+	_script_phase = "done"
+	var un := str(_ult.get("name", "大招"))
+	_cur_move = "大招『" + un + "』"
+	_banner("『" + un + "』", UiKit.SEAL)
+	FadeIn.buzz(140)
+	if _fx != null:
+		_fx.shake(10.0, 0.45)
+		_fx.flash(Color(UiKit.SEAL.r, UiKit.SEAL.g, UiKit.SEAL.b, 0.32))
+	if _player != null and is_instance_valid(_player):
+		var tw0: Tween = _player.push_move_to(_p_base + Vector2(120.0, 0.0), 0.20)
+		await tw0.finished
+	# ① 敌人放大居中
+	if _foe != null and is_instance_valid(_foe):
+		var sc0: Vector2 = _foe.scale
+		var tw := create_tween()
+		tw.parallel().tween_property(_foe, "position", Vector2(360.0, 640.0), 0.45).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+		tw.parallel().tween_property(_foe, "scale", sc0 * 1.9, 0.45)
+		# 压暗层在 QTE 那边，把 boss 自己提亮一点——不然"放大居中"是一片暗
+		_foe.modulate = Color(1.40, 1.32, 1.24)
+		await tw.finished
+	# ② 滑动演出（不可跳过）
+	var q = QteSlash.new()
+	add_child(q)
+	q.start(int(_script_cfg.get("qte_need", 3)))
+	await q.qte_done
+	q.queue_free()
+	# ③ 一刀两断
+	if _foes.size() > 0:
+		(_foes[0] as Dictionary)["hp"] = 0
+		_focus_on(0)
+		_foe_fall_if_dead()
+	if _fx != null:
+		_fx.big_word("斩", UiKit.SEAL)
+	_banner("一刀两断", Color(0.15, 0.14, 0.16))
+	_update_bars()
+	await _wait(0.7)

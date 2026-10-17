@@ -29,10 +29,15 @@ static func _root() -> Node:
 static func _stream(file_key: String) -> AudioStream:
 	if _cache.has(file_key):
 		return _cache[file_key]
-	var p := DIR + file_key + ".ogg"
+	# v139：**三种后缀都认**——.ogg 优先（原来的口径），再试 .mp3 / .wav。
+	#   占位配音很多是 Windows 自带语音直出的 wav，不能因为后缀就不播。
 	var s: AudioStream = null
-	if ResourceLoader.exists(p):
-		s = load(p) as AudioStream
+	for ext in [".ogg", ".mp3", ".wav"]:
+		var p: String = DIR + file_key + str(ext)
+		if ResourceLoader.exists(p):
+			s = load(p) as AudioStream
+			if s != null:
+				break
 	_cache[file_key] = s
 	return s
 

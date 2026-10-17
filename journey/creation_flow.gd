@@ -97,6 +97,8 @@ func _ask_question(i: int) -> void:
 	_clear()
 	_intro_active = false
 	_q_idx = i
+	# v139（用户："五问的独白是解说的声音"）：五问也由**旁白**念——narr_06 ~ narr_10 对应第 1~5 问。
+	Voice.say("narr", 6 + i)
 	print("[游历] 第 ", i + 1, " 问 / 共 ", Creation.QUESTIONS.size(), " 问")
 	var q: Dictionary = Creation.QUESTIONS[i]
 	var opts: Array = q.get("opts", [])
@@ -139,6 +141,7 @@ func _on_answer(opt: Dictionary) -> void:
 func _show_verdict() -> void:
 	_clear()
 	_intro_active = false
+	Voice.say("narr", 11)   # v139：临别页那句也归旁白（narr_11）
 	print("[游历] 到临别页（接下来按［上路］）")
 	var veil := UiKit.make_veil(self, size, 0.52)
 	var panel := UiKit.make_paper_panel(veil, Rect2(20, 390, 680, 500))

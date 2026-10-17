@@ -60,6 +60,7 @@ const DuelBattle := preload("res://journey/duel_battle.gd")
 const StickFighter := preload("res://journey/stick_fighter.gd")
 const ActorFactory := preload("res://journey/actor_factory.gd")   # Q版纸片人 / 火柴人 二选一
 const Audio := preload("res://shared/audio.gd")   # v65：BGM / 音效总管
+const Voice := preload("res://shared/voice.gd")   # v139：剧情配音（节点上的 voice 字段）
 const InkTouch := preload("res://shared/ink_touch.gd")   # v65：点击水墨扩散
 const FadeIn := preload("res://shared/fade_in.gd")      # v68：进场淡入 + 震动
 const PetActor := preload("res://journey/pet_actor.gd")   # ㊿z11：随行宠物（只画，不参战）
@@ -155,6 +156,8 @@ var _shop_active := false      # 拆件后仍留舞台：DropPanel 认这个名�
 var _told_card := false        # 事件流件读它（首次收卡提示只看一次）
 var _tut_seen: Dictionary = {} # v139：教学页看过的（tip id → true）——每条只教一次
 var _hut := false              # v139：当前这一节是不是"茅屋"（背景改走 Backdrop.draw_hut）
+var _steps_on := false         # v139：这一节要不要同步伐声（下山那种"走着"的节点）
+var _step_t := 0.0
 var _just_synth := false       # 包裹件读它（合成后的提示行分支）
 var _run_dead := false         # R4：本趟已殒命（结算/回村分叉用；_reset_run_hud 复位）
 var _run_fates: Array = []     # v62r（用户："开局命数可多选"）：出征屏选的**全部**命数（重开一趟沿用）
@@ -872,20 +875,21 @@ func _on_search_take(node: Dictionary) -> void:
 	dark.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	host.add_child(dark)
 	tw.tween_property(dark, "color:a", 0.58, 0.16)
-	# ② 床板从底下升上来
-	var board := Panel.new()
-	board.position = Vector2(40.0, size.y)
-	board.size = Vector2(size.x - 80.0, 340.0)
-	var bsb := StyleBoxFlat.new()
-	bsb.bg_color = Color(0.15, 0.12, 0.10, 0.96)
-	bsb.set_corner_radius_all(12)
-	bsb.border_color = Color(0.36, 0.28, 0.20, 1.0)
-	bsb.set_border_width_all(2)
-	board.add_theme_stylebox_override("panel", bsb)
-	board.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	host.add_child(board)
-	tw.parallel().tween_property(board, "position:y", size.y - 420.0, 0.32).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-	# ③ 布包弹一下
+	# ② 床底那几节：床板从底下升上来（摸尸没有这一下）
+	if bool(node.get("bed", false)):
+		var board := Panel.new()
+		board.position = Vector2(40.0, size.y)
+		board.size = Vector2(size.x - 80.0, 340.0)
+		var bsb := StyleBoxFlat.new()
+		bsb.bg_color = Color(0.15, 0.12, 0.10, 0.96)
+		bsb.set_corner_radius_all(12)
+		bsb.border_color = Color(0.36, 0.28, 0.20, 1.0)
+		bsb.set_border_width_all(2)
+		board.add_theme_stylebox_override("panel", bsb)
+		board.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		host.add_child(board)
+		tw.parallel().tween_property(board, "position:y", size.y - 420.0, 0.32).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	# ③ 那团东西：弹一下
 	var bundle := Panel.new()
 	bundle.position = Vector2(size.x * 0.5 - 36.0, size.y - 330.0)
 	bundle.size = Vector2(72, 56)
@@ -901,40 +905,81 @@ func _on_search_take(node: Dictionary) -> void:
 	host.add_child(bundle)
 	tw.tween_property(bundle, "scale", Vector2(1.12, 1.12), 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	tw.tween_property(bundle, "scale", Vector2(1.0, 1.0), 0.08)
-	# ④ 三张散页：先散开，再飞向右上角的包裹
-	for i in 3:
-		var paper := Panel.new()
-		paper.position = bundle.position + Vector2(10.0 + float(i) * 9.0, 4.0 + float(i) * 5.0)
-		paper.size = Vector2(34, 44)
-		var psb := StyleBoxFlat.new()
-		psb.bg_color = Color(0.96, 0.93, 0.85, 1)
-		psb.border_color = Color(0.58, 0.40, 0.22, 1)
-		psb.set_border_width_all(2)
-		paper.add_theme_stylebox_override("panel", psb)
-		paper.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		host.add_child(paper)
-		var to := Vector2(432.0 + float(i) * 14.0, 66.0 + float(i) * 14.0)
-		tw.parallel().tween_property(paper, "position", to, 0.55).set_delay(0.10 + 0.07 * float(i))
-		tw.parallel().tween_property(paper, "modulate:a", 0.0, 0.30).set_delay(0.46)
-	tw.tween_interval(0.40)
+	# ④ 摸出来的东西一件件飞出去：银两飞向左上角的盘缠，书/散页飞向右上角的包裹
+	var toks := _search_tokens(node)
+	var idx := 0
+	for t_v in toks:
+		var t: Dictionary = t_v
+		var tok := _make_search_token(t)
+		host.add_child(tok)
+		var to := Vector2(432.0 + float(idx % 3) * 12.0, 66.0 + float(idx % 3) * 12.0)
+		if str(t.get("kind", "")) == "money":
+			to = Vector2(120.0, 30.0)
+		tw.parallel().tween_property(tok, "position", to, 0.55).set_delay(0.10 + 0.09 * float(idx))
+		tw.parallel().tween_property(tok, "modulate:a", 0.0, 0.30).set_delay(0.52 + 0.09 * float(idx))
+		idx += 1
+	tw.tween_interval(0.45)
 	await tw.finished
 	_search_grant(node)
 
-func _search_grant(node: Dictionary) -> void:
-	var got: Array = []
+# 这一页会摸出什么（银两 / 成品 / 残卡三样都认）
+func _search_tokens(node: Dictionary) -> Array:
+	var out: Array = []
+	var m := int(node.get("money", 0))
+	if m > 0:
+		out.append({"kind": "money", "n": m})
+	for sid_v in (node.get("items", []) as Array):
+		out.append({"kind": "item", "sid": str(sid_v)})
 	for e_v in (node.get("cards", []) as Array):
 		var e: Dictionary = e_v
-		var sid := str(e.get("set", ""))
+		for p_v in (e.get("parts", []) as Array):
+			out.append({"kind": "card", "sid": str(e.get("set", "")), "part": int(p_v)})
+	return out
+
+func _make_search_token(t: Dictionary) -> Panel:
+	var p := Panel.new()
+	var k := str(t.get("kind", ""))
+	var sb := StyleBoxFlat.new()
+	if k == "money":
+		p.size = Vector2(30, 30)
+		sb.bg_color = Color(0.88, 0.72, 0.32, 1)
+		sb.set_corner_radius_all(15)
+		sb.border_color = Color(0.62, 0.48, 0.18, 1)
+	else:
+		p.size = Vector2(34, 46)
+		sb.bg_color = Color(0.96, 0.93, 0.85, 1)
+		sb.border_color = Color(0.58, 0.40, 0.22, 1)
+	sb.set_border_width_all(2)
+	p.add_theme_stylebox_override("panel", sb)
+	p.position = Vector2(size.x * 0.5 - p.size.x * 0.5 + randf_range(-16.0, 16.0),
+		size.y - 330.0 + randf_range(-10.0, 10.0))
+	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return p
+
+func _search_grant(node: Dictionary) -> void:
+	var got: Array = []
+	var money := int(node.get("money", 0))
+	if money > 0:
+		_state.money += money
+		got.append(str(money) + " 文")
+	for sid_v in (node.get("items", []) as Array):
+		var sid := str(sid_v)
+		if _state.add_item(sid):
+			got.append(str(Cards.item_name(sid)))
+	for e_v in (node.get("cards", []) as Array):
+		var e: Dictionary = e_v
+		var csid := str(e.get("set", ""))
 		for p_v in (e.get("parts", []) as Array):
 			var p := int(p_v)
-			if _state.add_card(sid, p):
-				got.append(str(Cards.card_name(sid, p)))
+			if _state.add_card(csid, p):
+				got.append(str(Cards.card_name(csid, p)))
 	_close_popup()
 	_busy = false
 	if got.is_empty():
 		UiKit.float_text(self, "什么也没有", UiKit.DIM)
 	else:
 		UiKit.float_text(self, "摸出：" + "、".join(PackedStringArray(got)), UiKit.GOLD)
+	_money()
 	_refresh_all()
 	JourneySave.save_run(self)
 	_advance()
@@ -1095,6 +1140,13 @@ func _enter_node() -> void:
 	_cur_node = _nodes[_node]
 	# v139：茅屋那几节换成室内背景（没有图，程序化画出来）
 	_hut = str(_cur_node.get("scene", "")) == "hut"
+	# v139：走着的那几节（下山）同步伐声
+	_steps_on = bool(_cur_node.get("steps", false))
+	_step_t = 0.0
+	# v139：这一节挂了配音就念（缺文件静默跳过，不会卡）
+	var vk := str(_cur_node.get("voice", ""))
+	if vk != "":
+		Voice.say_file(vk)
 	print("[游历] 第 ", _node + 1, " / ", _nodes.size(), " 节：", str(_cur_node.get("t", "")))
 	UiKit.set_text(_node_label, "第 " + str(_node + 1) + " / " + str(_nodes.size()) + " 节")
 	_type_full = str(_cur_node.get("text", "……"))
@@ -1201,6 +1253,12 @@ func _process(delta: float) -> void:
 		size = get_viewport_rect().size
 		print("[游历] 尺寸异常，已按视口修正=", size)
 	if _phase == "journey":
+		# v139（用户："下山要有那个步伐的声音"）：挂了 steps 的节点，走路声隔一会儿响一下
+		if _steps_on:
+			_step_t += delta
+			if _step_t >= 0.62:
+				_step_t = 0.0
+				Audio.sfx("step", -15.0, randf_range(0.94, 1.08))
 		# ㊿z11：宠物跟着主人（lerp 追，不挂主人身上）——主人被战斗的补间推出去/退回来时，
 		#   它慢半拍跟上，看着像"跟在脚边"，也不用去动 duel_battle 的位移队列。
 		if _pet_actor != null and is_instance_valid(_pet_actor) and _walker != null and is_instance_valid(_walker):
