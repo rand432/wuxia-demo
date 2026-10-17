@@ -175,11 +175,18 @@ var _run_fame := 0                                    # 本局名声（跨局那
 var _ach_sum := {}                                    # v14w：上一局成就发下去的那份账（下一局收回用）
 var _fame := 0                                        # 跨局名声（永久）
 var _fame_own := {}                                   # 已买的名声解锁：id → true
+# v18y（用户："名声奖励改为原有游戏的奖励 比如酒啊 功法啊 装备啊 武器之类的"）：
+#   原来是四条抽象数值（灵晶/卡/攻/血），现在换成**具体的东西**——酒、功法、装备、武器。
 const FAME_UNLOCKS := [
-	{"id": "f_crystal", "n": "开局灵晶 +20", "price": 30, "d": "每一局开局多 20 灵晶（多抽一张）"},
-	{"id": "f_card", "n": "开局带一张卡", "price": 60, "d": "每一局开局白送一张卡（从已解锁的池子里随机）"},
-	{"id": "f_atk", "n": "基础攻 +2", "price": 80, "d": "每一局开局攻击 +2（跟装备/卡是一样的加法）"},
-	{"id": "f_hp", "n": "基础血 +40", "price": 80, "d": "每一局开局气血上限 +40"},
+	{"id": "f_jiu_shaodao", "n": "酒 · 烧刀子", "price": 25, "d": "开局带一壶烈酒：气血上限 +60（本局）"},
+	{"id": "f_material", "n": "材料 · 玄铁", "price": 45, "d": "开局拿一块玄铁：成长武器直接 +5 级"},
+	{"id": "f_jiu_nverhong", "n": "酒 · 女儿红", "price": 50, "d": "开局带一壶女儿红：攻击 +3（本局）"},
+	{"id": "f_chest", "n": "宝箱 · 黑木匣", "price": 60, "d": "开局开一只宝箱：随机一件宝物直接到手"},
+	{"id": "f_gong_tiebu", "n": "功法 · 铁布衫", "price": 70, "d": "开局习得：全伤害减免 +3%（本局）"},
+	{"id": "f_shard", "n": "角色碎片 ×3", "price": 90, "d": "开局多 1 个进化符（伙伴进化 +1 档）"},
+	{"id": "f_gong_jingang", "n": "功法 · 金刚诀", "price": 95, "d": "开局习得：全伤害 +5%（本局）"},
+	{"id": "f_gear_zhong", "n": "装备 · 中品行头", "price": 120, "d": "开局自带一件【中品】装备（随机，直接穿上空格）"},
+	{"id": "f_wpn_edge", "n": "武器 · 百炼刃", "price": 150, "d": "开局成长武器直接是【下品】档（不用从凡品爬）"},
 ]
 
 func _fame_own_get(id: String) -> bool:
@@ -228,24 +235,47 @@ func _ach_rollback() -> void:
 
 # 开局把名声解锁发下去（在 _restart_run 里、_sync_battle_stats 之前调）
 func _apply_fame() -> void:
-	if _fame_own_get("f_crystal"):
-		_crystal += 20
-	# ⚠ _extra 是**跨局不清**的（每局只叠加、不重置）——所以这里必须写成"设成某个值"，
-	#   不能 +=（那样第 2 局就变 +4，第 3 局 +6……）。把"上一次发下去的那份"减掉再发新的。
-	var prev_a := float(_extra.get("fame_atk", 0.0))
-	var prev_h := float(_extra.get("fame_hp", 0.0))
-	var now_a := 2.0 if _fame_own_get("f_atk") else 0.0
-	var now_h := 40.0 if _fame_own_get("f_hp") else 0.0
-	_extra["atk_flat"] = float(_extra.get("atk_flat", 0.0)) - prev_a + now_a
-	_extra["hp_flat"] = float(_extra.get("hp_flat", 0.0)) - prev_h + now_h
-	_extra["fame_atk"] = now_a
-	_extra["fame_hp"] = now_h
-	if _fame_own_get("f_card"):
-		var pool := _card_pool_available()
-		if pool.size() > 0:
-			var cid := str(pool[randi() % pool.size()])
-			_card_gain(cid)
-			_hint.text = "名声：开局自带一张「" + card_name(cid) + "」"
+	# v18y：名声买的东西换成酒 / 功法 / 装备 / 武器（_extra 每局已经重置过，这里直接加）
+	if _fame_own_get("f_jiu_shaodao"):
+		_extra["extra_hp"] = float(_extra.get("extra_hp", 0.0)) + 60.0
+	if _fame_own_get("f_jiu_nverhong"):
+		_extra["extra_atk"] = float(_extra.get("extra_atk", 0.0)) + 3.0
+	if _fame_own_get("f_gong_tiebu"):
+		_extra["cut_all_bonus"] = float(_extra.get("cut_all_bonus", 0.0)) + 0.03
+	if _fame_own_get("f_gong_jingang"):
+		_extra["dmg_all"] = float(_extra.get("dmg_all", 0.0)) + 0.05
+	if _fame_own_get("f_gear_zhong"):
+		# 开局自带一件【中品】装备（随机名 · 按中品倍率算攻/血）
+		var gm := float(WPN_Q_MUL[2])
+		var gd := {"name": str(GEAR_EQ_NAMES[randi() % GEAR_EQ_NAMES.size()]), "q": 2,
+			"atk": int(ceil(3.0 * gm)), "hp": int(ceil(14.0 * gm)), "price": int(60.0 * gm * gm)}
+		_equip_add(gd)
+	if _fame_own_get("f_material"):
+		_wpn_lv = maxi(_wpn_lv, 5)                  # 材料·玄铁：成长武器开局 +5 级
+	if _fame_own_get("f_chest"):
+		# 宝箱：开局直接开一件宝物（走正常的三选一取件逻辑，但不占用玩家手上的那一手）
+		#   ⚠ 手里那三张里如果有"当场结算"的（钱/晶/经验/属性点），开箱子就变成发钱了 ——
+		#     所以这里**优先挑一件真宝物**，连着三张都是即时的就重摇（最多 6 次）
+		_trea_choices.clear()
+		_trea_roll()
+		for _try in 6:
+			var pick := -1
+			for i in _trea_choices.size():
+				if str((_trea_choices[i] as Dictionary).get("t", "")) != "instant":
+					pick = i
+					break
+			if pick >= 0:
+				_trea_take(pick)
+				break
+			_trea_choices.clear()
+			_trea_roll()
+		_trea_choices.clear()
+		_trea_pick_used = false                     # 玩家的那一手还留着
+	if _fame_own_get("f_shard"):
+		_evo_token_add(1, "名声 · 角色碎片")          # 碎片：开局多一个进化符
+	if _fame_own_get("f_wpn_edge"):
+		_wpn_q = maxi(_wpn_q, 1)                    # 开局就是【下品】
+
 var _realm := 0                                       # v10a：境界 0 凡人 · 1 筑基 · 2 金丹 · 3 元婴 · 4 化神
 var _meditate_acc := 0.0                              # v10a：打坐累积（每秒加，攒够 1 点进主属性）
 var _card_kills := {}                                 # v10b：杀意这类"按杀敌进化"的卡：id → 已杀数
@@ -507,11 +537,11 @@ func _set_check(set_id: String) -> void:
 			_extra["cut_all_bonus"] = float(_extra.get("cut_all_bonus", 0.0)) + 0.10
 		"cut_all_12":
 			_extra["cut_all_bonus"] = float(_extra.get("cut_all_bonus", 0.0)) + 0.12
-			_extra["hp_flat"] = float(_extra.get("hp_flat", 0.0)) + 200.0
+			_extra["extra_hp"] = float(_extra.get("extra_hp", 0.0)) + 200.0
 		"hp_flat_150":
-			_extra["hp_flat"] = float(_extra.get("hp_flat", 0.0)) + 150.0
+			_extra["extra_hp"] = float(_extra.get("extra_hp", 0.0)) + 150.0
 		"hp_flat_250":
-			_extra["hp_flat"] = float(_extra.get("hp_flat", 0.0)) + 250.0
+			_extra["extra_hp"] = float(_extra.get("extra_hp", 0.0)) + 250.0
 		"true_15":
 			_extra["dmg_true"] = float(_extra.get("dmg_true", 0.0)) + 15.0
 		"true_30":
@@ -535,7 +565,7 @@ func _set_check(set_id: String) -> void:
 				_field.set_skill_lv("splash", 3)
 		"shield_equip":
 			_extra["cut_all_bonus"] = float(_extra.get("cut_all_bonus", 0.0)) + 0.05
-			_extra["hp_flat"] = float(_extra.get("hp_flat", 0.0)) + 120.0
+			_extra["extra_hp"] = float(_extra.get("extra_hp", 0.0)) + 120.0
 		"money_equip":
 			_extra["money_bonus"] = float(_extra.get("money_bonus", 0.0)) + 0.30
 			_extra["crystal_bonus"] = float(_extra.get("crystal_bonus", 0.0)) + 0.20
@@ -2569,11 +2599,12 @@ func _wpn_line_total(t: String) -> float:
 	return sum
 
 func _wpn_sync() -> void:
-	# ⚠ v14w：这两行是**覆盖**写。名声（f_atk/f_hp）也走这两个通道，
-	#   如果不把名声那一份加上，每局开头都会被这里冲掉 —— 然后 _apply_fame 又加一遍，
-	#   于是第 2 局 +4、第 3 局 +6……（探针 k960 抓到：412 → 426 → 480）
-	_extra["atk_flat"] = float(_wpn_flat_atk()) + _wpn_line_total("atk_flat") + float(_extra.get("fame_atk", 0.0))
-	_extra["hp_flat"] = float(_wpn_flat_hp()) + _wpn_line_total("hp_flat") + float(_extra.get("fame_hp", 0.0))
+	# ⚠ v14w 的老坑，v18y 根因修掉了：这两行是**覆盖**写。
+	#   以前名声/成就/卡 都往 _extra["atk_flat"] / ["hp_flat"] 里加 —— 一调用这里就被冲掉
+	#   （探针抓到：名声 412→426→480 越垒越高；后期又变成"成就/卡的血量白给"）。
+	#   现在：**武器以外的固定攻/血全部记在 extra_atk / extra_hp**，这里只负责把三段加起来。
+	_extra["atk_flat"] = float(_wpn_flat_atk()) + _wpn_line_total("atk_flat") + float(_extra.get("extra_atk", 0.0))
+	_extra["hp_flat"] = float(_wpn_flat_hp()) + _wpn_line_total("hp_flat") + float(_extra.get("extra_hp", 0.0))
 	_extra["wpn_aspd"] = _wpn_line_total("aspd") / 100.0
 	_extra["wpn_crit"] = _wpn_line_total("crit") / 100.0
 	_extra["wpn_critdmg"] = _wpn_line_total("critdmg") / 100.0
@@ -6386,10 +6417,10 @@ func _apply_achievements() -> void:
 			_ach_sum["wit"] = int(_ach_sum.get("wit", 0)) + int(e["wit"])
 		# v18u 顺手修的坑：原来没有 atk_flat 这一支 —— 写 "eff": {"atk_flat": N} 的成就（百炼成钢/器成上品/器成绝品）效果一直是空的
 		if e.has("atk_flat"):
-			_extra["atk_flat"] = float(_extra.get("atk_flat", 0.0)) + float(e["atk_flat"])
+			_extra["extra_atk"] = float(_extra.get("extra_atk", 0.0)) + float(e["atk_flat"])
 			_ach_sum["atk_flat"] = float(_ach_sum.get("atk_flat", 0.0)) + float(e["atk_flat"])
 		if e.has("hp_flat"):
-			_extra["hp_flat"] = float(_extra.get("hp_flat", 0.0)) + float(e["hp_flat"])
+			_extra["extra_hp"] = float(_extra.get("extra_hp", 0.0)) + float(e["hp_flat"])
 			_ach_sum["hp_flat"] = float(_ach_sum.get("hp_flat", 0.0)) + float(e["hp_flat"])
 		if e.has("dmg_all"):
 			_extra["dmg_all"] = float(_extra.get("dmg_all", 0.0)) + float(e["dmg_all"])
@@ -8062,9 +8093,10 @@ func _fill_popup(p: Control, kind: String, y: float, sz: Vector2) -> float:
 	if kind == "仓库" or kind == "公共仓库":
 		return _fill_vault(p, y, sz, kind)
 	var lines: Array = []
-	if kind == "设置":
-		lines = ["音乐：开", "音效：开", "（这一版只有开关，曲子后补）"]
-	elif kind == "羁绊详情":
+	# v18y 抓到并删掉的死分支：这里原本有一句「if kind == 设置 → lines = 三行死文本」，
+	#   把下面 elif 里的 return _fill_settings(...) 整段挡住了 ——
+	#   于是 v16n 做的调音量 / 换战斗曲（还有这次的退出钮）一直点不到，设置页只有三行死文本。
+	if kind == "羁绊详情":
 		var b: Dictionary = BONDS[clampi(_detail_bond, 0, BONDS.size() - 1)]
 		var pr := _bond_progress(b)
 		var done := bool(_bonds_locked.get(str(b["id"]), false))
@@ -8110,12 +8142,8 @@ func _fill_popup(p: Control, kind: String, y: float, sz: Vector2) -> float:
 	elif kind == "事件":
 		lines = ["牢中事件（三选一 · 4 秒不点自动随机）", "① 捡到钱袋：文钱 +150", "② 灵晶矿：灵晶 +8", "③ 武学残页：随机一张卡 +1 星"]
 	elif kind == "设置":
-		# v16n（用户："背景音有点吵"）：⚠ 原来这一页只有两行**死文本**"音乐：开/音效：开"，
-		#   点不了 —— 觉得吵也没地方调。现在给两排**真能点的音量档**。
-		return _fill_settings(p, y)
-	elif kind == "设置":
-		# v16n（用户："背景音有点吵"）：⚠ 原来这一页只有两行**死文本**"音乐：开/音效：开"，
-		#   点不了 —— 觉得吵也没地方调。现在给两排**真能点的音量档**。
+		# v16n（用户："背景音有点吵"）：原来这一页只有两行死文本，点不了。
+		#   现在给两排真能点的音量档 ＋ 战斗曲选择 ＋ v18y 的［退出困兽］。
 		return _fill_settings(p, y)
 	elif kind == "卡组合计":
 		# v15n：改成真正算出来的列表（已合成的套 ＋ 还在格里的卡，点开看详情）
@@ -8227,7 +8255,25 @@ func _fill_settings(p: Control, y: float) -> float:
 	tip2.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	tip2.text = "默认音乐已压到 -18dB。觉得还吵就把上面「音乐」往左点；「关」是完全静音。"
 	p.add_child(tip2)
-	return ly + 80.0
+	# v18y（用户："设置里面加一个退出游戏【指退出困兽回到主界面】"）
+	ly += 68.0
+	var eh := _lbl(Vector2(24, ly), Vector2(660, 38), 22, DIM)
+	eh.text = "回主界面"
+	p.add_child(eh)
+	ly += 44.0
+	_pbtn(p, "退出困兽（回主界面）", Vector2(24, ly), Vector2(640, 78), 26, true, _exit_to_menu)
+	ly += 86.0
+	var etip := _lbl(Vector2(24, ly), Vector2(660, 64), 20, DIM)
+	etip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	etip.text = "进度自动存着 —— 回主界面后再点［进困兽］就接着打。"
+	p.add_child(etip)
+	return ly + 76.0
+
+# 退出困兽：存一下 → 收弹窗 → 回主界面（主界面就一直垫在下面）
+func _exit_to_menu() -> void:
+	_ach_save()
+	Audio.sfx("ui_click", -8.0)
+	close()
 
 # 点一首战斗曲：立刻换 ＋ 重画设置页
 func _pick_battle_track(key: String) -> void:
