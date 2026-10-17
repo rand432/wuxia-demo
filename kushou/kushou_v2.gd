@@ -374,6 +374,7 @@ func _set_check(set_id: String) -> void:
 		if not _card_have.has(card_id(set_id, i)):
 			return
 	_sets_done[set_id] = true
+	_card_open_next(set_id)       # v18q：合成一套 → 同类下一档开 1~3 套
 	_sync_battle_stats()          # ⚠ 成套后立刻同步（不然新效果要等下一次受伤才生效）
 	# v11e：装备卡成型 → **自动穿上六格**
 	if str(s.get("cat", "")) == "装备":
@@ -1194,198 +1195,198 @@ func _roll_recruits() -> Array:
 #   长线（5 张）与短线（2~3 张）都有。
 # ============================================================
 const CARD_SETS := [
-	{"set": "liliang", "name": "力量祝福", "quality": "下品", "size": 3,
+	{"set": "liliang", "name": "力量祝福", "quality": "下品", "kind": "成长", "size": 3,
 		"combo": "每杀一名敌人 → 臂力 +0.2（本局永久叠加）", "combo_id": "kill_arm", "grow": "arm"},
-	{"set": "tayun", "name": "踏云步", "quality": "下品", "size": 3,
+	{"set": "tayun", "name": "踏云步", "quality": "下品", "kind": "成长", "size": 3,
 		"combo": "每杀一名敌人 → 身法 +0.2（本局永久叠加）", "combo_id": "kill_agi", "grow": "agi"},
-	{"set": "jingxin", "name": "静心诀", "quality": "中品", "size": 3,
+	{"set": "jingxin", "name": "静心诀", "quality": "中品", "kind": "成长", "size": 3,
 		"combo": "每杀一名敌人 → 悟性 +0.2（本局永久叠加）", "combo_id": "kill_wit", "grow": "wit"},
-	{"set": "tiebi", "name": "铁壁", "quality": "中品", "size": 2,
+	{"set": "tiebi", "name": "铁壁", "quality": "中品", "kind": "防御", "size": 2,
 		"combo": "全伤害减免 +5%", "combo_id": "cut_all_5"},
-	{"set": "jifeng", "name": "疾风", "quality": "中品", "size": 2,
+	{"set": "jifeng", "name": "疾风", "quality": "中品", "kind": "成长", "size": 2,
 		"combo": "攻速 +10%", "combo_id": "aspd_10"},
-	{"set": "jubao", "name": "聚宝", "quality": "上品", "size": 3, "star_cost": [3, 6, 8, 8],
+	{"set": "jubao", "name": "聚宝", "quality": "上品", "kind": "成长", "size": 3, "star_cost": [3, 6, 8, 8],
 		"combo": "幸运一击 +15%", "combo_id": "lucky_15"},
-	{"set": "shanglu", "name": "商路", "quality": "上品", "size": 2,
+	{"set": "shanglu", "name": "商路", "quality": "上品", "kind": "收益", "size": 2,
 		"combo": "每波额外 +2 灵晶", "combo_id": "wave_crystal"},
-	{"set": "lianzhan", "name": "连战", "quality": "极品", "size": 2,
+	{"set": "lianzhan", "name": "连战", "quality": "极品", "kind": "特殊", "size": 2,
 		"combo": "挑战冷却 −15%", "combo_id": "chal_cd"},
 	# v7c（用户："还有增加挑战怪的卡也要 招募队员会增强的卡也要"）
-	{"set": "zhaoguai", "name": "招怪", "quality": "上品", "size": 3, "star_cost": [3, 6, 8, 8],
+	{"set": "zhaoguai", "name": "招怪", "quality": "上品", "kind": "特殊", "size": 3, "star_cost": [3, 6, 8, 8],
 		"combo": "挑战一次多刷 3 只怪（挑战怪也吃这条）", "combo_id": "chal_spawn"},
-	{"set": "tongxin", "name": "同心", "quality": "极品", "size": 3, "star_cost": [3, 6, 8, 8],
+	{"set": "tongxin", "name": "同心", "quality": "极品", "kind": "特殊", "size": 3, "star_cost": [3, 6, 8, 8],
 		"combo": "招募时伙伴成长 +1（三属性各 +1 后再并入继承）", "combo_id": "partner_grow"},
 	# ---- v7g（用户："多加一些卡 3合的 2合的啊 毕竟还有元素的 攻击的 额外特效的"）----
 	# 元素线
-	{"set": "wuxing", "name": "五行", "quality": "上品", "size": 3,
+	{"set": "wuxing", "name": "五行", "quality": "上品", "kind": "成长", "size": 3,
 		"combo": "全元素伤害 +15%", "combo_id": "elem_all_15"},
-	{"set": "lieyan", "name": "烈焰", "quality": "中品", "size": 2,
+	{"set": "lieyan", "name": "烈焰", "quality": "中品", "kind": "成长", "size": 2,
 		"combo": "火系伤害 +20%", "combo_id": "elem_fire_20"},
-	{"set": "hanshui", "name": "寒水", "quality": "中品", "size": 2,
+	{"set": "hanshui", "name": "寒水", "quality": "中品", "kind": "成长", "size": 2,
 		"combo": "水系伤害 +20%", "combo_id": "elem_water_20"},
-	{"set": "jinglei", "name": "惊雷", "quality": "上品", "size": 2,
+	{"set": "jinglei", "name": "惊雷", "quality": "上品", "kind": "成长", "size": 2,
 		"combo": "金系伤害 +20%", "combo_id": "elem_metal_20"},
 	# 攻击线
-	{"set": "cuifeng", "name": "淬锋", "quality": "下品", "size": 3,
+	{"set": "cuifeng", "name": "淬锋", "quality": "下品", "kind": "成长", "size": 3,
 		"combo": "攻击 +12%", "combo_id": "atk_all_12"},
-	{"set": "liebo", "name": "裂帛", "quality": "中品", "size": 2,
+	{"set": "liebo", "name": "裂帛", "quality": "中品", "kind": "成长", "size": 2,
 		"combo": "暴击伤害 +40%", "combo_id": "critdmg_40"},
 	# 额外特效线（触发型，等战场接）
-	{"set": "feiyu", "name": "飞羽", "quality": "上品", "size": 2,
+	{"set": "feiyu", "name": "飞羽", "quality": "上品", "kind": "特殊", "size": 2,
 		"combo": "飞羽改为**穿透**（一支箭穿两个）", "combo_id": "arrow_pierce"},
-	{"set": "leiting", "name": "雷霆", "quality": "极品", "size": 2,
+	{"set": "leiting", "name": "雷霆", "quality": "极品", "kind": "特殊", "size": 2,
 		"combo": "暴击落雷必定麻痹 1 秒", "combo_id": "thunder_para"},
 	# v7h（用户："暂定50张吧"）——补两套 3 合的，凑满 **50 张**
-	{"set": "panshi", "name": "磐石", "quality": "中品", "size": 3,
+	{"set": "panshi", "name": "磐石", "quality": "中品", "kind": "防御", "size": 3,
 		"combo": "全伤害减免 +6%", "combo_id": "cut_all_6"},
-	{"set": "lingxi", "name": "灵犀", "quality": "上品", "size": 3,
+	{"set": "lingxi", "name": "灵犀", "quality": "上品", "kind": "特殊", "size": 3,
 		"combo": "技能冷却 −12%", "combo_id": "skill_cd_12"},
 	# ---- v7i（用户："100张吧"）：再补 50 张 → 合计 40 套 / 100 张 ----
-	{"set": "muling", "name": "木灵", "quality": "中品", "size": 3, "combo": "木系伤害 +20%", "combo_id": "elem_wood_20"},
-	{"set": "houtu", "name": "厚土", "quality": "中品", "size": 3, "combo": "土系伤害 +20%", "combo_id": "elem_earth_20"},
-	{"set": "bingxin", "name": "冰心", "quality": "上品", "size": 3, "combo": "技能冷却 −12%", "combo_id": "skill_cd_12b"},
-	{"set": "xuezhan", "name": "血战", "quality": "中品", "size": 3, "combo": "攻击 +12%", "combo_id": "atk_all_12"},
-	{"set": "xunying", "name": "迅影", "quality": "上品", "size": 3, "combo": "攻速 +15%", "combo_id": "aspd_15"},
-	{"set": "jingang", "name": "金刚", "quality": "上品", "size": 3, "combo": "全伤害减免 +8%", "combo_id": "cut_all_6"},
-	{"set": "liesha", "name": "猎杀", "quality": "极品", "size": 3, "combo": "幸运一击 +20%", "combo_id": "lucky_20"},
-	{"set": "wudao", "name": "悟道", "quality": "极品", "size": 3, "combo": "属性点 +3", "combo_id": "attr_pts_3"},
-	{"set": "shouhun", "name": "兽魂", "quality": "上品", "size": 3, "combo": "伙伴技能伤害 +20%", "combo_id": "partner_dmg_20"},
-	{"set": "leifa", "name": "雷罚", "quality": "绝品", "size": 3, "combo": "暴击落雷必定麻痹 1 秒", "combo_id": "thunder_para"},
-	{"set": "tieqi", "name": "铁骑", "quality": "中品", "size": 2, "combo": "攻击 +10%", "combo_id": "atk_all_12"},
-	{"set": "pojun", "name": "破军", "quality": "上品", "size": 2, "combo": "暴击伤害 +50%", "combo_id": "critdmg_40"},
-	{"set": "lingmao", "name": "灵猫", "quality": "中品", "size": 2, "combo": "闪避 +8%", "combo_id": "dodge_8"},
-	{"set": "jinzhong", "name": "金钟", "quality": "上品", "size": 2, "combo": "全伤害减免 +6%", "combo_id": "cut_all_6"},
-	{"set": "caishen", "name": "财神", "quality": "上品", "size": 2, "combo": "每波额外 +3 灵晶", "combo_id": "wave_crystal"},
-	{"set": "zhangu", "name": "战鼓", "quality": "极品", "size": 2, "combo": "挑战多刷 2 只", "combo_id": "chal_spawn"},
-	{"set": "shuangxiu", "name": "双修", "quality": "极品", "size": 2, "combo": "招募时伙伴成长 +1", "combo_id": "partner_grow"},
-	{"set": "liuxing", "name": "流星", "quality": "极品", "size": 2, "combo": "落星改为范围", "combo_id": "star_aoe"},
-	{"set": "jingji", "name": "荆棘", "quality": "上品", "size": 2, "combo": "反伤 +50%", "combo_id": "thorns_50"},
-	{"set": "tianming", "name": "天命", "quality": "绝品", "size": 2, "combo": "幸运一击 +30%", "combo_id": "lucky_20"},
+	{"set": "muling", "name": "木灵", "quality": "中品", "kind": "成长", "size": 3, "combo": "木系伤害 +20%", "combo_id": "elem_wood_20"},
+	{"set": "houtu", "name": "厚土", "quality": "中品", "kind": "成长", "size": 3, "combo": "土系伤害 +20%", "combo_id": "elem_earth_20"},
+	{"set": "bingxin", "name": "冰心", "quality": "上品", "kind": "特殊", "size": 3, "combo": "技能冷却 −12%", "combo_id": "skill_cd_12b"},
+	{"set": "xuezhan", "name": "血战", "quality": "中品", "kind": "成长", "size": 3, "combo": "攻击 +12%", "combo_id": "atk_all_12"},
+	{"set": "xunying", "name": "迅影", "quality": "上品", "kind": "成长", "size": 3, "combo": "攻速 +15%", "combo_id": "aspd_15"},
+	{"set": "jingang", "name": "金刚", "quality": "上品", "kind": "防御", "size": 3, "combo": "全伤害减免 +8%", "combo_id": "cut_all_6"},
+	{"set": "liesha", "name": "猎杀", "quality": "极品", "kind": "成长", "size": 3, "combo": "幸运一击 +20%", "combo_id": "lucky_20"},
+	{"set": "wudao", "name": "悟道", "quality": "极品", "kind": "成长", "size": 3, "combo": "属性点 +3", "combo_id": "attr_pts_3"},
+	{"set": "shouhun", "name": "兽魂", "quality": "上品", "kind": "特殊", "size": 3, "combo": "伙伴技能伤害 +20%", "combo_id": "partner_dmg_20"},
+	{"set": "leifa", "name": "雷罚", "quality": "绝品", "kind": "特殊", "size": 3, "combo": "暴击落雷必定麻痹 1 秒", "combo_id": "thunder_para"},
+	{"set": "tieqi", "name": "铁骑", "quality": "中品", "kind": "成长", "size": 2, "combo": "攻击 +10%", "combo_id": "atk_all_12"},
+	{"set": "pojun", "name": "破军", "quality": "上品", "kind": "成长", "size": 2, "combo": "暴击伤害 +50%", "combo_id": "critdmg_40"},
+	{"set": "lingmao", "name": "灵猫", "quality": "中品", "kind": "防御", "size": 2, "combo": "闪避 +8%", "combo_id": "dodge_8"},
+	{"set": "jinzhong", "name": "金钟", "quality": "上品", "kind": "防御", "size": 2, "combo": "全伤害减免 +6%", "combo_id": "cut_all_6"},
+	{"set": "caishen", "name": "财神", "quality": "上品", "kind": "收益", "size": 2, "combo": "每波额外 +3 灵晶", "combo_id": "wave_crystal"},
+	{"set": "zhangu", "name": "战鼓", "quality": "极品", "kind": "特殊", "size": 2, "combo": "挑战多刷 2 只", "combo_id": "chal_spawn"},
+	{"set": "shuangxiu", "name": "双修", "quality": "极品", "kind": "特殊", "size": 2, "combo": "招募时伙伴成长 +1", "combo_id": "partner_grow"},
+	{"set": "liuxing", "name": "流星", "quality": "极品", "kind": "特殊", "size": 2, "combo": "落星改为范围", "combo_id": "star_aoe"},
+	{"set": "jingji", "name": "荆棘", "quality": "上品", "kind": "防御", "size": 2, "combo": "反伤 +50%", "combo_id": "thorns_50"},
+	{"set": "tianming", "name": "天命", "quality": "绝品", "kind": "成长", "size": 2, "combo": "幸运一击 +30%", "combo_id": "lucky_20"},
 	# ---- v9e（用户："然后加入装备卡"）：**装备卡**这一类 ----
 	#   单卡给装备向的数值；组合给"装备槽/开局装备"这类**元效果**
-	{"set": "dao", "name": "兵器·刀", "quality": "中品", "size": 2, "cat": "装备",
+	{"set": "dao", "name": "兵器·刀", "quality": "中品", "kind": "装备", "size": 2, "cat": "装备",
 		"combo": "攻击 +10%", "combo_id": "atk_all_12"},
-	{"set": "ruanjia", "name": "软甲", "quality": "中品", "size": 2, "cat": "装备",
+	{"set": "ruanjia", "name": "软甲", "quality": "中品", "kind": "装备", "size": 2, "cat": "装备",
 		"combo": "全伤害减免 +5%", "combo_id": "cut_all_6"},
-	{"set": "shenbing", "name": "神兵", "quality": "极品", "size": 2, "cat": "装备",
+	{"set": "shenbing", "name": "神兵", "quality": "极品", "kind": "装备", "size": 2, "cat": "装备",
 		"combo": "开局自带一件上品装备", "combo_id": "start_equip_up"},
-	{"set": "huxinjing", "name": "护心镜", "quality": "上品", "size": 2, "cat": "装备",
+	{"set": "huxinjing", "name": "护心镜", "quality": "上品", "kind": "装备", "size": 2, "cat": "装备",
 		"combo": "反伤 +30%", "combo_id": "thorns_50"},
 	# ---- v10a（用户："打坐 是每秒主属性增加 然后 卡池会出 筑基境 金丹等等境界 一个个出现
 	#       当拿筑基会有多少几率突破失败 拿金丹也是；失败了会重新进入卡池"）----
 	#   打坐：每秒涨主属性（本局永久叠加）；境界卡一个个解锁，拿了当场掷成败，失败即回池。
-	{"set": "dazuo", "name": "打坐", "quality": "下品", "size": 1, "solo": true,
+	{"set": "dazuo", "name": "打坐", "quality": "下品", "kind": "成长", "size": 1, "solo": true,
 		"combo": "每秒 主属性 +0.02（本局永久叠加）", "combo_id": "meditate"},
-	{"set": "zhuji", "name": "筑基境", "quality": "中品", "size": 1, "solo": true, "realm": 1,
+	{"set": "zhuji", "name": "筑基境", "quality": "中品", "kind": "特殊", "size": 1, "solo": true, "realm": 1,
 		"combo": "突破 75%（失败回池）→ 打坐效率 ×2", "combo_id": "realm_1"},
-	{"set": "jindan", "name": "金丹境", "quality": "上品", "size": 1, "solo": true, "realm": 2,
+	{"set": "jindan", "name": "金丹境", "quality": "上品", "kind": "特殊", "size": 1, "solo": true, "realm": 2,
 		"combo": "突破 60%（失败退筑基）→ 打坐 ×3 · 气血 +15%", "combo_id": "realm_2"},
-	{"set": "yuanying", "name": "元婴境", "quality": "极品", "size": 1, "solo": true, "realm": 3,
+	{"set": "yuanying", "name": "元婴境", "quality": "极品", "kind": "特殊", "size": 1, "solo": true, "realm": 3,
 		"combo": "突破 45%（失败退金丹）→ 打坐 ×5 · 全属性 +25%", "combo_id": "realm_3"},
-	{"set": "huashen", "name": "化神境", "quality": "绝品", "size": 1, "solo": true, "realm": 4,
+	{"set": "huashen", "name": "化神境", "quality": "绝品", "kind": "特殊", "size": 1, "solo": true, "realm": 4,
 		"combo": "突破 30%（失败退元婴）→ 打坐 ×8 · 全属性 +50% · 元素 +30%", "combo_id": "realm_4"},
 	# ---- v10b（用户："杀敌进化的卡也要"）：**杀意**——杀敌到阈值就**换成下一形态**（同一个格子）----
-	{"set": "sayi0", "name": "杀意·初", "quality": "下品", "size": 1, "solo": true,
+	{"set": "sayi0", "name": "杀意·初", "quality": "下品", "kind": "特殊", "size": 1, "solo": true,
 		"evo_next": "sayi1", "evo_kills": 60, "combo": "杀敌 60 → 杀意·成", "combo_id": "sayi1"},
-	{"set": "sayi1", "name": "杀意·成", "quality": "中品", "size": 1, "solo": true, "evo_from": true,
+	{"set": "sayi1", "name": "杀意·成", "quality": "中品", "kind": "特殊", "size": 1, "solo": true, "evo_from": true,
 		"evo_next": "sayi2", "evo_kills": 200, "combo": "杀敌 200 → 杀意·极", "combo_id": "sayi2"},
-	{"set": "sayi2", "name": "杀意·极", "quality": "上品", "size": 1, "solo": true, "evo_from": true,
+	{"set": "sayi2", "name": "杀意·极", "quality": "上品", "kind": "特殊", "size": 1, "solo": true, "evo_from": true,
 		"evo_next": "sayi3", "evo_kills": 500, "combo": "杀敌 500 → 杀意·绝", "combo_id": "sayi3"},
-	{"set": "sayi3", "name": "杀意·绝", "quality": "极品", "size": 1, "solo": true, "evo_from": true,
+	{"set": "sayi3", "name": "杀意·绝", "quality": "极品", "kind": "特殊", "size": 1, "solo": true, "evo_from": true,
 		# v16b：⚠ 原来写"攻击 +40% · 暴击 +15%"——那是**没实现的**数字（combo_id sayi4 是死键）。
 		#   实际生效的是下面这组（在 _apply_solo_effect 的 "sayi3" 里），文案跟着改对。
 		"combo": "已是极致：攻击 +14% · 暴击 +7% · 暴伤 +20%"},
 	# ---- v11d（用户：装备卡三类 × 五用途）①杀怪提升 ②固定特效 ③时间进化 ----
 	# ① 杀怪提升（单卡，复用 evo_kills：到点原地进化）
-	{"set": "yinxue", "name": "饮血刀", "quality": "中品", "size": 1, "solo": true, "cat": "装备",
+	{"set": "yinxue", "name": "饮血刀", "quality": "中品", "kind": "装备", "size": 1, "solo": true, "cat": "装备",
 		"evo_next": "yinxue2", "evo_kills": 80, "combo": "杀敌 80 → 进化（吸血）", "combo_id": "yinxue1"},
-	{"set": "yinxue2", "name": "饮血·嗜", "quality": "上品", "size": 1, "solo": true, "cat": "装备", "evo_from": true,
+	{"set": "yinxue2", "name": "饮血·嗜", "quality": "上品", "kind": "装备", "size": 1, "solo": true, "cat": "装备", "evo_from": true,
 		"evo_next": "yinxue3", "evo_kills": 300, "combo": "杀敌 300 → 进化（大吸血）", "combo_id": "yinxue2"},
-	{"set": "yinxue3", "name": "饮血·狂", "quality": "极品", "size": 1, "solo": true, "cat": "装备", "evo_from": true,
+	{"set": "yinxue3", "name": "饮血·狂", "quality": "极品", "kind": "装备", "size": 1, "solo": true, "cat": "装备", "evo_from": true,
 		"combo": "攻击 +18% · 吸血 8%", "combo_id": "yinxue3"},
-	{"set": "pojunq", "name": "破军枪", "quality": "上品", "size": 1, "solo": true, "cat": "装备",
+	{"set": "pojunq", "name": "破军枪", "quality": "上品", "kind": "装备", "size": 1, "solo": true, "cat": "装备",
 		"evo_next": "pojunq2", "evo_kills": 120, "combo": "杀敌 120 → 进化（溅射）", "combo_id": "pojun1"},
-	{"set": "pojunq2", "name": "破军·裂", "quality": "极品", "size": 1, "solo": true, "cat": "装备", "evo_from": true,
+	{"set": "pojunq2", "name": "破军·裂", "quality": "极品", "kind": "装备", "size": 1, "solo": true, "cat": "装备", "evo_from": true,
 		"combo": "攻击 +14% · 攻击溅射", "combo_id": "pojun2"},
 	# ② 固定特效（成套，凑齐才生效）
-	{"set": "chixiao", "name": "赤霄剑", "quality": "上品", "size": 2, "cat": "装备",
+	{"set": "chixiao", "name": "赤霄剑", "quality": "上品", "kind": "装备", "size": 2, "cat": "装备",
 		"combo": "成型：攻击溅射（打周围）", "combo_id": "splash_equip"},
-	{"set": "suozijia", "name": "锁子甲", "quality": "中品", "size": 2, "cat": "装备",
+	{"set": "suozijia", "name": "锁子甲", "quality": "中品", "kind": "装备", "size": 2, "cat": "装备",
 		"combo": "成型：每 5 秒一层护盾", "combo_id": "shield_equip"},
-	{"set": "jucaizhu", "name": "聚财珠", "quality": "上品", "size": 2, "cat": "装备",
+	{"set": "jucaizhu", "name": "聚财珠", "quality": "上品", "kind": "装备", "size": 2, "cat": "装备",
 		"combo": "成型：文钱 +25% · 灵晶 +15%", "combo_id": "money_equip"},
-	{"set": "yubanzhi", "name": "玉扳指", "quality": "极品", "size": 3, "cat": "装备",
+	{"set": "yubanzhi", "name": "玉扳指", "quality": "极品", "kind": "装备", "size": 3, "cat": "装备",
 		"combo": "成型：全属性 +8%", "combo_id": "allattr_equip"},
 	# ③ 时间进化（单卡，每秒 tick，到点进化）
-	{"set": "cuihuo", "name": "淬火剑", "quality": "中品", "size": 1, "solo": true, "cat": "装备",
+	{"set": "cuihuo", "name": "淬火剑", "quality": "中品", "kind": "装备", "size": 1, "solo": true, "cat": "装备",
 		"evo_time": 120, "evo_next": "cuihuo2", "combo": "每 60 秒 +1 攻击；120 秒 → 进化", "combo_id": "cuihuo"},
-	{"set": "cuihuo2", "name": "淬火·利", "quality": "上品", "size": 1, "solo": true, "cat": "装备", "evo_from": true,
+	{"set": "cuihuo2", "name": "淬火·利", "quality": "上品", "kind": "装备", "size": 1, "solo": true, "cat": "装备", "evo_from": true,
 		"evo_time": 300, "evo_next": "cuihuo3", "combo": "每 60 秒 +1 攻击；300 秒 → 进化", "combo_id": "cuihuo2"},
-	{"set": "cuihuo3", "name": "淬火·绝", "quality": "极品", "size": 1, "solo": true, "cat": "装备", "evo_from": true,
+	{"set": "cuihuo3", "name": "淬火·绝", "quality": "极品", "kind": "装备", "size": 1, "solo": true, "cat": "装备", "evo_from": true,
 		"combo": "攻击 +10% · 每 60 秒 +2 攻击（封顶）", "combo_id": "cuihuo3"},
 	# ============================================================
 	# v13y：卡组扩到 **100 套**（用户："再多一点卡组" → "做到一百套吧"）
 	#   下面 33 套全部有实际效果（combo_id 在 _set_check 里都接了线）
 	# ============================================================
 	# ---- 防御线 ----
-	{"set": "jinzhong2", "name": "金钟罩", "quality": "中品", "size": 2, "combo": "全伤害减免 +7%", "combo_id": "cut_all_7"},
-	{"set": "xuantie", "name": "玄铁甲", "quality": "上品", "size": 3, "star_cost": [3, 6, 8, 8], "combo": "全伤害减免 +10%", "combo_id": "cut_all_10"},
-	{"set": "tiebushan", "name": "铁布衫", "quality": "中品", "size": 2, "combo": "气血上限 +150", "combo_id": "hp_flat_150"},
-	{"set": "guixi", "name": "龟息", "quality": "上品", "size": 2, "combo": "气血上限 +250", "combo_id": "hp_flat_250"},
-	{"set": "panshixin", "name": "磐石心", "quality": "极品", "size": 3, "star_cost": [3, 6, 8, 8], "combo": "全伤害减免 +12% · 气血上限 +200", "combo_id": "cut_all_12"},
+	{"set": "jinzhong2", "name": "金钟罩", "quality": "中品", "kind": "防御", "size": 2, "combo": "全伤害减免 +7%", "combo_id": "cut_all_7"},
+	{"set": "xuantie", "name": "玄铁甲", "quality": "上品", "kind": "防御", "size": 3, "star_cost": [3, 6, 8, 8], "combo": "全伤害减免 +10%", "combo_id": "cut_all_10"},
+	{"set": "tiebushan", "name": "铁布衫", "quality": "中品", "kind": "防御", "size": 2, "combo": "气血上限 +150", "combo_id": "hp_flat_150"},
+	{"set": "guixi", "name": "龟息", "quality": "上品", "kind": "防御", "size": 2, "combo": "气血上限 +250", "combo_id": "hp_flat_250"},
+	{"set": "panshixin", "name": "磐石心", "quality": "极品", "kind": "防御", "size": 3, "star_cost": [3, 6, 8, 8], "combo": "全伤害减免 +12% · 气血上限 +200", "combo_id": "cut_all_12"},
 	# ---- 攻速 / 暴击线 ----
-	{"set": "jifengxue", "name": "疾风靴", "quality": "上品", "size": 2, "combo": "攻速 +18%", "combo_id": "aspd_18"},
-	{"set": "zhuixing", "name": "追星", "quality": "极品", "size": 2, "combo": "攻速 +25%", "combo_id": "aspd_25"},
-	{"set": "ruimu", "name": "锐目", "quality": "中品", "size": 2, "combo": "暴击 +6%", "combo_id": "crit_6"},
-	{"set": "yingyan", "name": "鹰眼", "quality": "上品", "size": 3, "combo": "暴击 +10%", "combo_id": "crit_10"},
-	{"set": "duanyue", "name": "断岳", "quality": "极品", "size": 3, "star_cost": [3, 6, 8, 8], "combo": "暴击伤害 +60%", "combo_id": "critdmg_60"},
+	{"set": "jifengxue", "name": "疾风靴", "quality": "上品", "kind": "成长", "size": 2, "combo": "攻速 +18%", "combo_id": "aspd_18"},
+	{"set": "zhuixing", "name": "追星", "quality": "极品", "kind": "成长", "size": 2, "combo": "攻速 +25%", "combo_id": "aspd_25"},
+	{"set": "ruimu", "name": "锐目", "quality": "中品", "kind": "成长", "size": 2, "combo": "暴击 +6%", "combo_id": "crit_6"},
+	{"set": "yingyan", "name": "鹰眼", "quality": "上品", "kind": "成长", "size": 3, "combo": "暴击 +10%", "combo_id": "crit_10"},
+	{"set": "duanyue", "name": "断岳", "quality": "极品", "kind": "成长", "size": 3, "star_cost": [3, 6, 8, 8], "combo": "暴击伤害 +60%", "combo_id": "critdmg_60"},
 	# ---- 真伤 / 反伤 / 范围 ----
-	{"set": "powang", "name": "破妄", "quality": "上品", "size": 2, "combo": "真实伤害 +15", "combo_id": "true_15"},
-	{"set": "zhuxin", "name": "诛心", "quality": "极品", "size": 3, "star_cost": [3, 6, 8, 8], "combo": "真实伤害 +30", "combo_id": "true_30"},
-	{"set": "xueyin2", "name": "血饮", "quality": "上品", "size": 2, "combo": "反伤 +40%", "combo_id": "thorns_40"},
-	{"set": "liuxingg", "name": "流星赶月", "quality": "极品", "size": 2, "combo": "落星改为范围伤害", "combo_id": "star_aoe"},
+	{"set": "powang", "name": "破妄", "quality": "上品", "kind": "成长", "size": 2, "combo": "真实伤害 +15", "combo_id": "true_15"},
+	{"set": "zhuxin", "name": "诛心", "quality": "极品", "kind": "成长", "size": 3, "star_cost": [3, 6, 8, 8], "combo": "真实伤害 +30", "combo_id": "true_30"},
+	{"set": "xueyin2", "name": "血饮", "quality": "上品", "kind": "防御", "size": 2, "combo": "反伤 +40%", "combo_id": "thorns_40"},
+	{"set": "liuxingg", "name": "流星赶月", "quality": "极品", "kind": "特殊", "size": 2, "combo": "落星改为范围伤害", "combo_id": "star_aoe"},
 	# ---- 元素线 ----
-	{"set": "muling2", "name": "木灵·生", "quality": "上品", "size": 3, "combo": "木系伤害 +25%", "combo_id": "elem_wood_25"},
-	{"set": "houtu2", "name": "厚土·承", "quality": "上品", "size": 3, "combo": "土系伤害 +25%", "combo_id": "elem_earth_25"},
-	{"set": "wuxing2", "name": "五行圆满", "quality": "绝品", "size": 3, "star_cost": [4, 8, 10, 10], "combo": "全元素伤害 +25%", "combo_id": "elem_all_25"},
-	{"set": "bihuo", "name": "辟火", "quality": "中品", "size": 2, "combo": "火系抗性 +20%", "combo_id": "res_fire"},
-	{"set": "yushui", "name": "御水", "quality": "中品", "size": 2, "combo": "水系抗性 +20%", "combo_id": "res_water"},
+	{"set": "muling2", "name": "木灵·生", "quality": "上品", "kind": "成长", "size": 3, "combo": "木系伤害 +25%", "combo_id": "elem_wood_25"},
+	{"set": "houtu2", "name": "厚土·承", "quality": "上品", "kind": "成长", "size": 3, "combo": "土系伤害 +25%", "combo_id": "elem_earth_25"},
+	{"set": "wuxing2", "name": "五行圆满", "quality": "绝品", "kind": "成长", "size": 3, "star_cost": [4, 8, 10, 10], "combo": "全元素伤害 +25%", "combo_id": "elem_all_25"},
+	{"set": "bihuo", "name": "辟火", "quality": "中品", "kind": "防御", "size": 2, "combo": "火系抗性 +20%", "combo_id": "res_fire"},
+	{"set": "yushui", "name": "御水", "quality": "中品", "kind": "防御", "size": 2, "combo": "水系抗性 +20%", "combo_id": "res_water"},
 	# ---- 经济线 ----
-	{"set": "cailu", "name": "财路", "quality": "中品", "size": 2, "combo": "成型立刻 +400 文钱", "combo_id": "money_now_400"},
-	{"set": "jingmai", "name": "晶脉", "quality": "上品", "size": 2, "combo": "成型立刻 +25 灵晶", "combo_id": "crystal_now_25"},
-	{"set": "taojia", "name": "讨价", "quality": "中品", "size": 2, "combo": "黑市每件必打折", "combo_id": "bm_disc_1"},
-	{"set": "xuanshang", "name": "悬赏", "quality": "上品", "size": 3, "combo": "任务奖励 +25%（灵晶）", "combo_id": "q_bonus_25"},
-	{"set": "jucaizhu2", "name": "聚财珠·改", "quality": "上品", "size": 2, "combo": "文钱 +30% · 灵晶 +20%", "combo_id": "money_equip"},
-	{"set": "jinsuanpan", "name": "金算盘", "quality": "极品", "size": 3, "star_cost": [3, 6, 8, 8], "combo": "灵晶 +25% · 每波额外 +2 灵晶", "combo_id": "crystal_equip"},
+	{"set": "cailu", "name": "财路", "quality": "中品", "kind": "收益", "size": 2, "combo": "成型立刻 +400 文钱", "combo_id": "money_now_400"},
+	{"set": "jingmai", "name": "晶脉", "quality": "上品", "kind": "收益", "size": 2, "combo": "成型立刻 +25 灵晶", "combo_id": "crystal_now_25"},
+	{"set": "taojia", "name": "讨价", "quality": "中品", "kind": "收益", "size": 2, "combo": "黑市每件必打折", "combo_id": "bm_disc_1"},
+	{"set": "xuanshang", "name": "悬赏", "quality": "上品", "kind": "收益", "size": 3, "combo": "任务奖励 +25%（灵晶）", "combo_id": "q_bonus_25"},
+	{"set": "jucaizhu2", "name": "聚财珠·改", "quality": "上品", "kind": "收益", "size": 2, "combo": "文钱 +30% · 灵晶 +20%", "combo_id": "money_equip"},
+	{"set": "jinsuanpan", "name": "金算盘", "quality": "极品", "kind": "收益", "size": 3, "star_cost": [3, 6, 8, 8], "combo": "灵晶 +25% · 每波额外 +2 灵晶", "combo_id": "crystal_equip"},
 	# ---- 伙伴 / 技能线 ----
-	{"set": "shouwang", "name": "兽王", "quality": "极品", "size": 3, "star_cost": [3, 6, 8, 8], "combo": "伙伴技能伤害 +25%", "combo_id": "partner_dmg_25"},
-	{"set": "tongxinjie", "name": "同心结", "quality": "上品", "size": 2, "combo": "招募时伙伴成长 +1", "combo_id": "partner_grow"},
-	{"set": "mingxiang", "name": "冥想", "quality": "中品", "size": 2, "combo": "技能冷却 −15%", "combo_id": "skill_cd_15"},
-	{"set": "neiliquan", "name": "内力泉", "quality": "上品", "size": 2, "combo": "内力上限 +150", "combo_id": "mp_flat_150"},
+	{"set": "shouwang", "name": "兽王", "quality": "极品", "kind": "特殊", "size": 3, "star_cost": [3, 6, 8, 8], "combo": "伙伴技能伤害 +25%", "combo_id": "partner_dmg_25"},
+	{"set": "tongxinjie", "name": "同心结", "quality": "上品", "kind": "特殊", "size": 2, "combo": "招募时伙伴成长 +1", "combo_id": "partner_grow"},
+	{"set": "mingxiang", "name": "冥想", "quality": "中品", "kind": "特殊", "size": 2, "combo": "技能冷却 −15%", "combo_id": "skill_cd_15"},
+	{"set": "neiliquan", "name": "内力泉", "quality": "上品", "kind": "特殊", "size": 2, "combo": "内力上限 +150", "combo_id": "mp_flat_150"},
 	# ---- 装备 / 开局线 ----
-	{"set": "yuheng", "name": "玉衡", "quality": "极品", "size": 3, "star_cost": [3, 6, 8, 8], "combo": "玉壶冷却 −25%", "combo_id": "yh_cd_25"},
-	{"set": "buqu", "name": "不屈", "quality": "极品", "size": 2, "combo": "浴血免死次数 +1（每局）", "combo_id": "revive_1"},
-	{"set": "chuanjiabao", "name": "传家宝", "quality": "上品", "size": 3, "combo": "开局自带一件上品装备", "combo_id": "start_equip_up"},
+	{"set": "yuheng", "name": "玉衡", "quality": "极品", "kind": "特殊", "size": 3, "star_cost": [3, 6, 8, 8], "combo": "玉壶冷却 −25%", "combo_id": "yh_cd_25"},
+	{"set": "buqu", "name": "不屈", "quality": "极品", "kind": "特殊", "size": 2, "combo": "浴血免死次数 +1（每局）", "combo_id": "revive_1"},
+	{"set": "chuanjiabao", "name": "传家宝", "quality": "上品", "kind": "特殊", "size": 3, "combo": "开局自带一件上品装备", "combo_id": "start_equip_up"},
 	# ============================================================
 	# v14a 机制卡（用户："加一些新机制的卡组"）——都带战场新玩法，不是单纯加数值
 	# ============================================================
-	{"set": "liansuo", "name": "连锁", "quality": "上品", "size": 2,
+	{"set": "liansuo", "name": "连锁", "quality": "上品", "kind": "特殊", "size": 2,
 		"combo": "击杀时对周围 110 像素造成 70% 攻击的溅射（能连着炸）", "combo_id": "mech_chain"},
-	{"set": "xixue", "name": "吸血", "quality": "上品", "size": 2,
+	{"set": "xixue", "name": "吸血", "quality": "上品", "kind": "特殊", "size": 2,
 		"combo": "造成伤害的 6% 回复为气血", "combo_id": "mech_lifesteal"},
-	{"set": "beishui", "name": "背水", "quality": "极品", "size": 3, "star_cost": [3, 6, 8, 8],
+	{"set": "beishui", "name": "背水", "quality": "极品", "kind": "特殊", "size": 3, "star_cost": [3, 6, 8, 8],
 		"combo": "气血低于 35% 时全伤害 +50%（越残越猛）", "combo_id": "mech_laststand"},
-	{"set": "hudun", "name": "护盾", "quality": "上品", "size": 3,
+	{"set": "hudun", "name": "护盾", "quality": "上品", "kind": "特殊", "size": 3,
 		"combo": "每 8 秒获得吸收 8% 气血上限的护盾（持续 6 秒）", "combo_id": "mech_shield"},
-	{"set": "huiliu", "name": "回流", "quality": "极品", "size": 2,
+	{"set": "huiliu", "name": "回流", "quality": "极品", "kind": "特殊", "size": 2,
 		"combo": "护盾破碎时回复 10% 气血上限", "combo_id": "mech_shieldheal"},
-	{"set": "liansha", "name": "连杀", "quality": "中品", "size": 2,
+	{"set": "liansha", "name": "连杀", "quality": "中品", "kind": "特殊", "size": 2,
 		"combo": "连杀每 10 层 → 攻速 +5%（上限 +50%）", "combo_id": "mech_comboaspd"},
-	{"set": "dingshen", "name": "定身", "quality": "极品", "size": 3, "star_cost": [3, 6, 8, 8],
+	{"set": "dingshen", "name": "定身", "quality": "极品", "kind": "特殊", "size": 3, "star_cost": [3, 6, 8, 8],
 		"combo": "每 25 秒把全场敌人定身 1.5 秒（不动也不打）", "combo_id": "mech_root"},
-	{"set": "zhanyi", "name": "战意", "quality": "极品", "size": 2,
+	{"set": "zhanyi", "name": "战意", "quality": "极品", "kind": "特殊", "size": 2,
 		"combo": "每击杀一名敌人 → 本局攻击永久 +0.4", "combo_id": "mech_killatk"},
-	{"set": "xunbao", "name": "寻宝", "quality": "中品", "size": 2,
+	{"set": "xunbao", "name": "寻宝", "quality": "中品", "kind": "收益", "size": 2,
 		"combo": "掉落的文钱 +35%", "combo_id": "money_bonus_35"},
 ]
 # 每一张卡的"单卡属性"（按编号从小到大）
@@ -1682,7 +1683,8 @@ func _card_big(p: Control, pos: Vector2, sz: Vector2, id: String) -> void:
 	cnm.size = Vector2(sz.x - 12, 28)
 	cnm.add_theme_font_size_override("font_size", 21)
 	cnm.add_theme_color_override("font_color", Color(0.74, 0.54, 0.12))
-	cnm.text = "【" + str(s.get("name", "")) + "】"
+	# v18q：把**类别**也挂在这行上（成长/收益/防御/特殊/装备）—— 现在池子是按类别分档的
+	cnm.text = "【" + str(s.get("kind", "")) + "·" + str(s.get("name", "")) + "】"
 	cnm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	cnm.autowrap_mode = TextServer.AUTOWRAP_OFF
 	box.add_child(cnm)
@@ -1741,7 +1743,7 @@ func _auto_draw_focus() -> String:
 			best_score = score
 			best = sid
 	return best
-const DRAW_FOCUS_MUL := 6
+const DRAW_FOCUS_MUL := 12          # v18q（用户："优先级可以更高 但不用强制锁定"）：6 → 12
 const QUALITY_KEYS := ["下品", "中品", "上品", "极品", "绝品"]
 const QUALITY_CURVE := [                                # 波次 → 五档权重（中间连续插值）
 	{"w": 1, "v": [45.0, 30.0, 17.0, 6.0, 2.0]},
@@ -1776,8 +1778,98 @@ func _quality_w(q: String) -> float:
 	return float(_quality_weights()[idx])
 
 
+# ============================================================
+# v18q（用户：卡池按类别分档 —— "合成完一个下品 解锁 1~3 中品"）：
+#   5 类（成长 / 收益 / 防御 / 特殊 / 装备）× 5 档（下品→中品→上品→极品→绝品）。
+#   · 开局：每类把**最低那一档**全开（下品有就下品；某类没有下品就退到它最低的非空档）
+#   · **合成一套** → 同类下一档开 1~3 套（看池子里还剩什么；这就是"慢慢见到卡池"）
+#   · **长线**（进化链 / 境界）不算进阶梯 → 每通**一关**开一种
+#   · 存档/关卡花代价解锁过的套 → 直接开（那是换来的，不压在阶梯底下）
+# ============================================================
+var _card_open: Dictionary = {}          # set_id → true：本局已经"开出来"的套
+
+func _set_kind_of(set_id: String) -> String:
+	return str(card_set_of(set_id + "_0").get("kind", "成长"))
+
+func _is_long_line(s: Dictionary) -> bool:
+	return s.has("evo_next") or s.has("evo_from") or s.has("realm")
+
+func _card_open_reset() -> void:
+	_card_open.clear()
+	for k in ["成长", "收益", "防御", "特殊", "装备"]:
+		var best := 99
+		for s_v in CARD_SETS:
+			var s: Dictionary = s_v
+			if str(s.get("kind", "")) != k or _is_long_line(s):
+				continue
+			var qi := QUALITY_KEYS.find(str(s.get("quality", "")))
+			if qi >= 0 and qi < best:
+				best = qi
+		if best > 90:
+			continue
+		for s_v in CARD_SETS:
+			var s2: Dictionary = s_v
+			if str(s2.get("kind", "")) != k or _is_long_line(s2):
+				continue
+			if QUALITY_KEYS.find(str(s2.get("quality", ""))) == best:
+				_card_open[str(s2["set"])] = true
+	for uid_v in _unlocked.keys():
+		var uid := str(uid_v)
+		if uid.begins_with("u_set_"):
+			_card_open[uid.substr(6)] = true
+
+# 合成一套 → 同类下一档开 1~3 套
+func _card_open_next(set_id: String) -> void:
+	var s := card_set_of(set_id + "_0")
+	if s.is_empty() or _is_long_line(s):
+		return
+	var kind := str(s.get("kind", ""))
+	var qi := QUALITY_KEYS.find(str(s.get("quality", "")))
+	if qi < 0 or qi + 1 >= QUALITY_KEYS.size():
+		return
+	var cand: Array = []
+	for s_v in CARD_SETS:
+		var s2: Dictionary = s_v
+		if str(s2.get("kind", "")) != kind or _is_long_line(s2):
+			continue
+		if QUALITY_KEYS.find(str(s2.get("quality", ""))) != qi + 1:
+			continue
+		var sid2 := str(s2["set"])
+		if bool(_card_open.get(sid2, false)):
+			continue
+		cand.append(sid2)
+	if cand.is_empty():
+		return
+	cand.shuffle()
+	var n := mini(1 + (randi() % 3), cand.size())
+	var names: Array = []
+	for i in n:
+		var sid3 := str(cand[i])
+		_card_open[sid3] = true
+		names.append(str(card_set_of(sid3 + "_0").get("name", sid3)))
+	_note("【卡池】" + kind + " 开出 " + str(n) + " 套" + str(QUALITY_KEYS[qi + 1]) + "：" + "、".join(PackedStringArray(names)), 4.5)
+
+# 通关一关 → 开一种长线（进化链 / 境界）
+func _card_open_long() -> void:
+	var cand: Array = []
+	for s_v in CARD_SETS:
+		var s: Dictionary = s_v
+		var sid := str(s["set"])
+		if bool(_card_open.get(sid, false)):
+			continue
+		if not _is_long_line(s) or bool(s.get("evo_from", false)):
+			continue                      # 只从链条**头上**那一种开
+		cand.append(sid)
+	if cand.is_empty():
+		return
+	var pick := str(cand[randi() % cand.size()])
+	_card_open[pick] = true
+	_note("【卡池】这一关开了一种长线卡：" + str(card_set_of(pick + "_0").get("name", pick)), 4.5)
+
 # 候选池：还没拿到、且这套没成型的卡（每张卡只能"拿一次"；成型后整套出池）
 func _card_pool_available() -> Array:
+	if _card_open.is_empty():
+		_card_open_reset()
 	var out: Array = []
 	var foc := _auto_draw_focus()          # v13p：本手偏向哪一套（自动算，只算一次）
 	for s_v in CARD_SETS:
@@ -1793,10 +1885,14 @@ func _card_pool_available() -> Array:
 		# v10b：杀意的进阶形态只靠"进化"拿到，不进池
 		if bool(s.get("evo_from", false)):
 			continue
-		# v13o/v13p：品质权重按波次插值；本手偏向的那套再 ×6（"大概率就是这个合成的卡"）
-		var w: int = int(maxf(1.0, round(_quality_w(str(s["quality"])))))
+		# v18q：只有**已经开出来**的套能抽（合成一套 → 开下一档 1~3 套，见 _card_open_next）
+		if not bool(_card_open.get(set_id, false)):
+			continue
+		# v18q（用户："优先级更高 但是不用强制锁定 有一个了[就够]"）：
+		#   品质权重不再按波次插值（同一档里全是同品质），偏向那套直接给 DRAW_FOCUS_MUL 倍
+		var w: int = 1
 		if foc != "" and set_id == foc:
-			w *= DRAW_FOCUS_MUL
+			w = DRAW_FOCUS_MUL
 		for i in int(s["size"]):
 			var cid := card_id(set_id, i)
 			if _card_have.has(cid):
@@ -1809,20 +1905,21 @@ func _roll_cards() -> Array:
 	var pool := _card_pool_available()
 	var out: Array = []
 	var foc := _auto_draw_focus()
-	# v13o/v13p：正在攒的那套 → **先保底放一张**（"后面抽卡大概率就是这个合成的卡"）
-	if foc != "":
-		var fp: Array = []
-		for cid_v in pool:
-			if str(str(cid_v).split("_")[0]) == foc:
-				fp.append(str(cid_v))
-		if not fp.is_empty():
-			out.append(str(fp[randi() % fp.size()]))
+	# v18q（用户："优先级可以更高 但是不用强制锁定 有一个了"）：
+	#   ① 原来那股"先保底塞一张偏向套"的**硬保底取消了** —— 全靠 _card_pool_available 里的权重
+	#   ② 同一手**最多出一张**偏向套的卡（有一个就够了，不再堆）
+	var foc_n := 0
 	var guard := 0
 	while out.size() < 3 and pool.size() > 0 and guard < 400:
 		guard += 1
 		var pick := str(pool[randi() % pool.size()])
-		if not out.has(pick):
-			out.append(pick)
+		if out.has(pick):
+			continue
+		if foc != "" and foc_n > 0 and str(pick.split("_")[0]) == foc:
+			continue
+		if foc != "" and str(pick.split("_")[0]) == foc:
+			foc_n += 1
+		out.append(pick)
 	return out
 
 # 抽一张（花 20 灵晶）；十格满了会先弹卡组页让你腾位置
@@ -4953,6 +5050,7 @@ func _stage_clear(id: String) -> void:
 		got.append(str(r.get("cat", "")) + "「" + str(r.get("n", "")) + "」")
 	_ach_save()
 	_bm_roll()
+	_card_open_long()             # v18q：通关一关 → 开一种长线（进化链 / 境界）
 	_note("【通关】" + id + " " + str(s["n"]) + "　首通 3 项：" + " ＋ ".join(PackedStringArray(got)) + " 已解锁", 7.0)
 	Audio.sfx("levelup", -2.0)
 
@@ -6110,6 +6208,7 @@ func _restart_run() -> void:
 	_run_time = 0.0                      # v13x：本局存活时间（「初入江湖 / 老江湖」）
 	_recruit_choices.clear()
 	_draw_choices.clear()                # v18k：抽卡的三张每局重掷
+	_card_open_reset()                   # v18q：卡池阶梯每局从头开
 	if _draw_page != null:
 		_draw_page.visible = false
 	_set_draw_hud(true)
