@@ -2,7 +2,7 @@
 //   node tools/doubao/image.mjs --prompt "水墨山门，晨雾" [--size 2K] [--name shanmen]
 //   node tools/doubao/image.mjs --prompt "改成水墨风" --ref 参考.png --ref 另一张.png
 // 产物落到 .ark-out/img/（不进版本库）；要进库自己挑进 assets/
-import { ark, cli, flag, list, fileToDataUri, config, outPath, download, rel, say, die, slug } from './lib.mjs';
+import { ark, cli, flag, list, fileToDataUri, config, outPath, download, rel, say, die, slug, renameToActualExt } from './lib.mjs';
 import fs from 'node:fs';
 
 const a = cli();
@@ -33,12 +33,14 @@ for (let i = 0; i < n; i++) {
     const file = outPath(name, 'png');
     if (item.url) {
       const bytes = await download(item.url, file);
-      say.ok(rel(file) + '   ' + (bytes / 1024).toFixed(0) + ' KB');
-      saved.push(file);
+      const fixed = renameToActualExt(file);
+      say.ok(rel(fixed) + '   ' + (bytes / 1024).toFixed(0) + ' KB');
+      saved.push(fixed);
     } else if (item.b64_json) {
       fs.writeFileSync(file, Buffer.from(item.b64_json, 'base64'));
-      say.ok(rel(file));
-      saved.push(file);
+      const fixed = renameToActualExt(file);
+      say.ok(rel(fixed));
+      saved.push(fixed);
     }
   }
   if (res.json?.usage) say.info('usage ' + JSON.stringify(res.json.usage));

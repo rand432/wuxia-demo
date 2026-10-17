@@ -204,4 +204,23 @@ export function fileToDataUri(file) {
   return 'data:image/' + mime + ';base64,' + fs.readFileSync(abs).toString('base64');
 }
 
+export function sniffImageExt(buf) {
+  if (buf[0] === 0x89 && buf[1] === 0x50) return 'png';
+  if (buf[0] === 0xff && buf[1] === 0xd8) return 'jpg';
+  if (buf.length > 12 && buf.subarray(0, 4).toString() === 'RIFF' && buf.subarray(8, 12).toString() === 'WEBP') return 'webp';
+  return '';
+}
+
+/** 方舟出图可能是 JPEG 却按 .png 命名；按真实字节改名，免得导入器/读图报格式不符 */
+export function renameToActualExt(file) {
+  let buf;
+  try { buf = fs.readFileSync(file); } catch { return file; }
+  const ext = sniffImageExt(buf);
+  if (!ext) return file;
+  const want = path.join(path.dirname(file), path.basename(file) + '.' + ext);
+  if (want === file || fs.existsSync(want)) return file;
+  fs.renameSync(file, want);
+  return want;
+}
+
 export function rel(file) { return path.relative(WS, file).replace(/\\/g, '/'); }
