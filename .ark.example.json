@@ -1,0 +1,19 @@
+{
+  "apiKey": "",
+  "baseURL": "https://ark.cn-beijing.volces.com/api/v3",
+  "models": {
+    "vision": "doubao-seed-1-6-250615",
+    "image": "doubao-seedream-4-0-250828",
+    "video": "doubao-seedance-2-5-260628",
+    "tts": ""
+  },
+  "tts": {
+    "appid": "",
+    "token": "",
+    "voice": "zh_female_shuangkuaisisi_moon_bigtts",
+    "cluster": "volcano_tts"
+  },
+  "search": {
+    "botId": ""
+  }
+}

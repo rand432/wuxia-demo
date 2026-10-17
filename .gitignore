@@ -60,6 +60,7 @@ assets/gen/bg_*.png
 # Godot 导入副产物
 *.import
 .ark.json
+.ark-out/
 docs/交接_给下一个AI.md
 # 外部参考图（第三方作品，只作垫图/取向参考，不进库）
 qiuyuan-study/refs/
