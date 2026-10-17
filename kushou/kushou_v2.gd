@@ -91,6 +91,23 @@ var _draw_choices: Array = []                         # v8a：抽卡的三张候
 #   _draw_page 页面本体（纸底＋三张卡＋两颗按钮）· _draw_fly 卡片飞向［卡组］的动画层
 var _draw_page: Control = null
 var _draw_fly: Control = null
+# v18k：抽卡页铺满战场区时，右列那三件（黑市圆钮 ＋ 小经验条）会压在第三张卡上 → 临时收起
+var _bm_btn: Button = null
+var _bm_mini_panel: Panel = null
+
+func _set_draw_hud(on: bool) -> void:
+	if _bm_btn != null and is_instance_valid(_bm_btn):
+		_bm_btn.visible = on
+	if _bm_mini_panel != null and is_instance_valid(_bm_mini_panel):
+		_bm_mini_panel.visible = on
+	if _mini_lv != null and is_instance_valid(_mini_lv):
+		_mini_lv.visible = on
+	if _mini_exp != null and is_instance_valid(_mini_exp):
+		_mini_exp.visible = on
+		if _mini_exp.has_meta("bg"):
+			var bgx: Node = _mini_exp.get_meta("bg")
+			if bgx != null and is_instance_valid(bgx):
+				(bgx as CanvasItem).visible = on
 var _pending_card := ""                               # v8b：十格满了、等着"换哪张"的那张卡
 var _detail_card := ""                                # v8c：正在看详情的那张卡
 var _run_fame := 0                                    # 本局名声（跨局那套见 v14w 的 _fame）
@@ -837,9 +854,9 @@ func _build_field() -> void:
 	# _circle_btn("存档", Vector2(594, 236), func(): _open_large("存档"))
 	# _circle_btn("成就", Vector2(594, 372), func(): _open_large("成就"))
 	# v4b（用户："成就下面增加按钮 黑市【用于杀敌数兑换东西的 内容暂定】"）
-	_circle_btn("黑市", Vector2(594, 508), func(): _open_large("黑市"))
+	_bm_btn = _circle_btn("黑市", Vector2(594, 508), func(): _open_large("黑市"))
 	# v4c（用户："黑市下面加一个小型经验条 和等级"）——黑市钮正下方一条小经验条
-	_panel(Rect2(500, 620, 198, 66), Color(0.18, 0.17, 0.19, 0.96), 10)
+	_bm_mini_panel = _panel(Rect2(500, 620, 198, 66), Color(0.18, 0.17, 0.19, 0.96), 10)
 	_mini_lv = _lbl(Vector2(508, 624), Vector2(182, 28), 19, PAPER)
 	_mini_lv.text = "黑市 Lv 1"
 	_mini_exp = _bar(Rect2(510, 660, 178, 14), Color(0.56, 0.44, 0.72))
@@ -1823,6 +1840,7 @@ func _open_draw_page() -> void:
 	if _draw_page == null:
 		return
 	_draw_page.visible = true
+	_set_draw_hud(false)
 	_fill_draw_page()
 	Audio.sfx("paper", -10.0)
 
@@ -1830,6 +1848,7 @@ func _close_draw_page() -> void:
 	if _draw_page == null:
 		return
 	_draw_page.visible = false
+	_set_draw_hud(true)
 	_hint.text = "抽卡：这一手先留着 —— 想选再点左边的［抽卡］"
 	Audio.sfx("ui_click", -8.0)
 
@@ -6084,6 +6103,7 @@ func _restart_run() -> void:
 	_draw_choices.clear()                # v18k：抽卡的三张每局重掷
 	if _draw_page != null:
 		_draw_page.visible = false
+	_set_draw_hud(true)
 	_clear_fly()
 	_bm_roll()                       # v13a：新的一局，黑市货架重摆
 	# v13m（用户："刚开始是自带那个成长武器和玉壶"）：
@@ -6585,13 +6605,15 @@ func hp_color(ratio: float) -> Color:
 	return c
 
 func _bar(r: Rect2, col: Color) -> ColorRect:
-	_panel(Rect2(r.position - Vector2(2, 2), r.size + Vector2(4, 4)), Color(0.10, 0.10, 0.11, 0.9), 8)
+	# v18k：底那块 Panel 也记在色条身上（probe 要连底一起收起来，不然只收色条会留一条黑杠）
+	var bgp := _panel(Rect2(r.position - Vector2(2, 2), r.size + Vector2(4, 4)), Color(0.10, 0.10, 0.11, 0.9), 8)
 	var c := ColorRect.new()
 	c.position = r.position
 	c.size = r.size
 	c.color = col
 	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(c)
+	c.set_meta("bg", bgp)
 	return c
 
 # ============================================================
