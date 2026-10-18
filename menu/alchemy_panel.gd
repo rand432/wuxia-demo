@@ -26,6 +26,7 @@ extends Control
 # ============================================================
 
 const GameState := preload("res://shared/game_state.gd")
+const Audio := preload("res://shared/audio.gd")   # v223：动作音效
 const UiKit := preload("res://shared/ui_kit.gd")   # v61：tap_in_scroll（滚动区里可滑可点）
 const SceneArt := preload("res://shared/scene_art.gd")   # v77：内景垫图
 
@@ -141,6 +142,7 @@ var _mat_lb: Label
 var _gold_lb: Label
 var _brew_btn: Button            # v6：［炼制丹药］（开弹窗）
 var _fr_rows: Array = []         # v6：一行一炉（v7：多出一行给"下一炉"）
+var _fr_ready := {}              # v223：每炉上一次是否"丹成"（用来只在刚成时响一声/闪一下）
 var _fr_scroll: ScrollContainer  # v7：炉位列可上下滑
 var _fr_list: VBoxContainer
 var _slot := 0                   # 当前选中的炉位
@@ -642,6 +644,8 @@ func _on_dlg_go() -> void:
 	var slot := _slot if not GameState.furnace_is_busy(_slot) else GameState.furnace_free()
 	var msg := GameState.alchemy_start(_dlg_pick, _tender, n, slot)
 	_msg_lb.text = msg
+	if msg.contains("号炉开火"):
+		Audio.sfx("wood_down", -11.0, 0.90)   # v223：炉门一合
 	_close_dlg()
 	refresh()
 
@@ -774,6 +778,7 @@ func refresh() -> void:
 			continue
 		var f: Dictionary = GameState.furnace_at(i)
 		no.text = str(i + 1) + "号炉"
+		var now_ready := (not f.is_empty()) and GameState.alchemy_remain_sec(i) <= 0
 		if f.is_empty():
 			st.text = "空闲" + ("　现在选的是这一炉" if i == _slot else "　点［选中］把新丹下到这一炉")
 			st.add_theme_color_override("font_color", Color(INK.r, INK.g, INK.b, 0.55))
@@ -800,6 +805,14 @@ func refresh() -> void:
 				st.add_theme_color_override("font_color", SEAL)
 				btn.text = "收丹"
 				btn.disabled = false
+			# v223：刚成的那一下——金闪 + 升级音，不是"字一换就完事"
+			if now_ready and not bool(_fr_ready.get(i, false)):
+				Audio.sfx("levelup", -10.0, 1.04)
+				row.modulate = Color(1.30, 1.14, 0.72)
+				var ftw := row.create_tween()
+				ftw.tween_property(row, "modulate", Color.WHITE, 0.55).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+				_msg_lb.text = "第 " + str(i + 1) + " 号炉丹成——点［收丹］"
+		_fr_ready[i] = now_ready
 		_style_tab(btn, i == _slot)
 	# 炉火小景：按选中的那一炉画三态 + 看火人
 	var busy := GameState.furnace_is_busy(_slot)
@@ -873,6 +886,11 @@ func open() -> void:
 	_msg_lb.text = ""
 	if _tender == "":
 		_tender = _auto_tender()
+	# v223：先按当前状态静默种一遍，免得一开门就把"早就成了"的炉子当成刚成
+	_fr_ready.clear()
+	for i in GameState.furnace_count():
+		var f0: Dictionary = GameState.furnace_at(i)
+		_fr_ready[i] = (not f0.is_empty()) and GameState.alchemy_remain_sec(i) <= 0
 	refresh()
 	visible = true
 	_sync_scroll()
@@ -881,7 +899,7 @@ func close() -> void:
 	if not visible:
 		return
 	_close_dlg()
-	visible = false
+	UiKit.hide_panel(self)
 	closed.emit()
 
 func _gui_input(event: InputEvent) -> void:

@@ -477,8 +477,19 @@ func _icon_for(it: Dictionary) -> Texture2D:
 # ---- 点击 ----
 
 func _on_tab(i: int) -> void:
+	if i == _tab:
+		return
 	_tab = i
 	refresh()
+	# v224：切页时货架轻轻淡入（0.15s）——不是"啪"地换一屏
+	if visible and _list != null:
+		_list.pivot_offset = Vector2(_list.size.x * 0.5, 0.0)
+		_list.modulate.a = 0.0
+		_list.scale = Vector2(0.985, 0.985)
+		var tw := _list.create_tween()
+		tw.set_parallel(true)
+		tw.tween_property(_list, "modulate:a", 1.0, 0.14)
+		tw.tween_property(_list, "scale", Vector2.ONE, 0.16).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 
 func _on_buy(key: String) -> void:
 	var r := GameState.buy_material(key, 1)
@@ -557,7 +568,7 @@ func close() -> void:
 	if not visible:
 		return
 	_close_result()
-	visible = false
+	UiKit.hide_panel(self)
 	closed.emit()
 
 func _gui_input(event: InputEvent) -> void:

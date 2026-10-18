@@ -141,6 +141,35 @@ static func font_states(btn: Button, col: Color) -> void:
 const TAP_SLOP := 14.0      # 允许的抖动像素
 const TAP_MS := 700         # 最长算"点击"的按压时长（毫秒）
 
+# ============================================================
+# v221：面板统一收起——scale 0.975 + alpha 0，0.13 秒。
+#   收起期间面板仍然 visible（_any_panel_open 多保持 0.13s），
+#   免得动画还没走完底下的按钮就能点。
+#   用法：把 close() 里的 `visible = false` 换成 `UiKit.hide_panel(self)`。
+# ============================================================
+static func hide_panel(p: Control, on_hidden := Callable()) -> void:
+	if p == null or not is_instance_valid(p) or not p.visible:
+		return
+	if p.has_meta("panel_closing"):
+		return
+	Audio.sfx("ui_close", -16.0, 0.98)
+	p.set_meta("panel_closing", true)
+	p.pivot_offset = p.size * 0.5
+	var tw := p.create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(p, "modulate:a", 0.0, 0.13)
+	tw.tween_property(p, "scale", Vector2(0.975, 0.975), 0.13).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tw.chain().tween_callback(func() -> void:
+		if p == null or not is_instance_valid(p):
+			return
+		p.remove_meta("panel_closing")
+		p.visible = false
+		p.modulate.a = 1.0
+		p.scale = Vector2.ONE
+		if on_hidden.is_valid():
+			on_hidden.call()
+	)
+
 static func tap_in_scroll(c: Control, on_tap: Callable, swallow := false) -> void:
 	if c == null:
 		return

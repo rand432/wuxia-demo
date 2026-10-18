@@ -766,7 +766,7 @@ func open() -> void:
 func close() -> void:
 	if not visible or _busy:
 		return
-	visible = false
+	UiKit.hide_panel(self)
 	closed.emit()
 
 func _gui_input(event: InputEvent) -> void:

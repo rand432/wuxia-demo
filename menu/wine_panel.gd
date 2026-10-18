@@ -16,8 +16,10 @@ extends Control
 # ============================================================
 
 const GameState := preload("res://shared/game_state.gd")
+const Audio := preload("res://shared/audio.gd")   # v223：动作音效
 const SceneArt := preload("res://shared/scene_art.gd")   # v90：酒坛换成素材里的真图
 const Ui := preload("res://menu/menu_theme.gd")          # v218：影之刃皮肤（与门厅/炼丹统一）
+const UiKit := preload("res://shared/ui_kit.gd")        # v221：统一收起
 
 const INK := Color(0.14, 0.13, 0.15)
 const PAPER := Color(0.905, 0.878, 0.795)
@@ -387,6 +389,7 @@ func _on_seat(i: int) -> void:
 	_anim_t = 0.0
 	_anim_phase = 1
 	_spark_t = 0.0
+	Audio.sfx("ink_drop", -17.0, 1.35)   # v223：酒滴落杯
 	_refresh_texts()
 
 func _finish_pour() -> void:
@@ -396,6 +399,7 @@ func _finish_pour() -> void:
 	var r: Dictionary = GameState.wine_taste(_wi, _anim_seat)
 	_last_say = str(r.get("say", "……"))
 	_last_stars = int(r.get("stars", 0))
+	Audio.sfx("drink", -10.0, 1.05)   # v223：一口下肚
 	_anim_seat = -1
 	print("[品酒坊] 斟给 #", _last_seat, "：", _last_say, " ", _last_stars, " 星")
 	_refresh_texts()
@@ -659,7 +663,7 @@ func open() -> void:
 func close() -> void:
 	if not visible:
 		return
-	visible = false
+	UiKit.hide_panel(self)
 	closed.emit()
 
 func _gui_input(event: InputEvent) -> void:

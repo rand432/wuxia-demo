@@ -17,6 +17,7 @@ extends Control
 
 const GameState := preload("res://shared/game_state.gd")
 const DataPets := preload("res://shared/data_pets.gd")
+const UiKit := preload("res://shared/ui_kit.gd")   # v221：统一收起
 
 const INK := Color(0.14, 0.13, 0.15)
 const PAPER := Color(0.905, 0.878, 0.795)
@@ -838,7 +839,7 @@ func open() -> void:
 func close() -> void:
 	if not visible:
 		return
-	visible = false
+	UiKit.hide_panel(self)
 	closed.emit()
 
 func _gui_input(event: InputEvent) -> void:

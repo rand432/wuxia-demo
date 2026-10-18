@@ -10,6 +10,7 @@ extends Control
 
 const GameState := preload("res://shared/game_state.gd")
 const Chase := preload("res://shared/data_chase.gd")
+const UiKit := preload("res://shared/ui_kit.gd")   # v221：统一收起
 
 signal challenge(i: int)
 signal config_pressed
@@ -609,7 +610,7 @@ func open() -> void:
 func close() -> void:
 	if not visible:
 		return
-	visible = false
+	UiKit.hide_panel(self)
 	closed.emit()
 
 func _gui_input(event: InputEvent) -> void:

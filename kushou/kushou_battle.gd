@@ -564,6 +564,9 @@ func start_boss(tier: int, boss_name := "") -> void:
 	boss_alive = true
 	_banner = ["", "一阶 boss", "二阶 boss", "三阶 boss", "四阶 boss"][tt] + "　" + str(d["name"])
 	_banner_t = 2.4
+	# v226：入场一记闷鼓 + 震一下；bgm_boss_intro 随后接上
+	Audio.sfx("drum", -5.0, 0.82)
+	_shake = maxf(_shake, 9.0)
 	_push_float(hero_pos.x + 80.0, hero_pos.y - 120.0, str(d.get("affix", "")), Color(0.96, 0.72, 0.42), true)
 	# v16o（用户："背景喊杀声太多了 其实没必要有喊杀声"）：已去掉喊杀/战鼓声
 	if ResourceLoader.exists("res://assets/audio/bgm_boss_intro.ogg"):
@@ -1485,6 +1488,9 @@ func _hero_strike(tgt: Dictionary) -> void:
 		_aspd_flash = 0.12                      # 攻速叠起来以后，刀光留久一点＝残影
 	if _sfx_t <= 0.0:
 		Audio.sfx("hit_heavy" if (crit or heavy) else "hit_slash", -5.0 if (crit or heavy) else -8.0)
+		if crit:
+			# v226：暴击单独的"利刃"高音，跟普通重击分开
+			Audio.sfx("slash_light2", -8.0, randf_range(1.12, 1.24))
 		_sfx_t = SFX_MIN_GAP
 	# 命中后弹剑气（**已从池子里撤下**，代码留着：将来想放回来，把 SKILL_POOL 那三条加回即可）
 	if not tgt.is_empty():

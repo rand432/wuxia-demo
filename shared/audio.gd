@@ -20,6 +20,8 @@ const DIR_BGM := "res://assets/audio/"
 const DIR_SFX := "res://assets/audio/sfx/"
 
 static var _cur_bgm := ""
+static var _amb: AudioStreamPlayer = null   # v230：循环环境音（风/雨）
+static var _amb_key := ""
 static var _bgm_a: AudioStreamPlayer = null
 static var _bgm_b: AudioStreamPlayer = null
 static var _use_a := true
@@ -28,6 +30,35 @@ static var _bgm_db := -18.0     # BGM 基准音量
 # v16n（用户："背景音有点吵"）：⚠ 原来是 -12dB —— 跟音效（-3~-14dB）几乎一样响，
 #   打着打着就嫌吵。压到 -18dB（约一半响度），音效仍然压得住它。
 #   玩家还能在［设置］里再调（音乐/音效各 5 档，存进设置文档）。
+
+# v230：循环环境音——挂到 root，跨场景不回收；换 key 时先停旧的
+static func play_ambient(key: String, vol_db := -26.0) -> void:
+	if key == _amb_key and _amb != null and is_instance_valid(_amb) and _amb.playing:
+		return
+	stop_ambient()
+	var s := _stream(DIR_SFX + key + ".ogg")
+	if s == null:
+		return
+	if s is AudioStreamOggVorbis:
+		(s as AudioStreamOggVorbis).loop = true
+	elif s is AudioStreamWAV:
+		(s as AudioStreamWAV).loop_mode = AudioStreamWAV.LOOP_FORWARD
+	var root := _root()
+	if root == null:
+		return
+	_amb = AudioStreamPlayer.new()
+	_amb.stream = s
+	_amb.volume_db = vol_db + _vol_db(_sfx_vol)
+	root.add_child(_amb)
+	_amb.play()
+	_ensure_playing(_amb)   # 跟 sfx 一样：偶发第一下没起播时补两脚
+	_amb_key = key
+
+static func stop_ambient() -> void:
+	if _amb != null and is_instance_valid(_amb):
+		_amb.queue_free()
+	_amb = null
+	_amb_key = ""
 
 static func _root() -> Node:
 	var ml := Engine.get_main_loop()

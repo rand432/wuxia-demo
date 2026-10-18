@@ -1517,7 +1517,7 @@ func begin_pick(cat: String) -> void:
 func close() -> void:
 	if not visible:
 		return
-	visible = false
+	UiKit.hide_panel(self)
 	_pick_cat = ""
 	_close_drawer(true)
 	_exit_multi(false)

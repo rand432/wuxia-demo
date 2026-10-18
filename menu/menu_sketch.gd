@@ -61,7 +61,8 @@ const PIN_CAM := true
 const MountLayer := preload("res://menu/menu_mount.gd")
 const HudLayer := preload("res://menu/menu_hud.gd")
 const Ui := preload("res://menu/menu_theme.gd")   # v200：影之刃皮肤
-const UiKit := preload("res://shared/ui_kit.gd")   # v72：设置面板用（标签/按钮/纸张面板工厂）
+const UiKit := preload("res://shared/ui_kit.gd")
+const MistLayer := preload("res://menu/menu_mist.gd")   # v72：设置面板用（标签/按钮/纸张面板工厂）
 const CharArt := preload("res://shared/char_art.gd")   # v92：村里的同伴/看火人用 Q版立绘（原来画火柴人）
 const CharacterPanel := preload("res://menu/character_panel.gd")
 const WarehousePanel := preload("res://menu/warehouse_panel.gd")
@@ -244,6 +245,7 @@ var _reset_arm := 0          # 优化批㉒：重置键——第一次按记录�
 var _scroll = null
 var _village = null
 var _mount = null
+var _mist = null                # v232：画心雾气（随季换粒子）
 var _hud = null
 var _settings_ov = null       # v72：设置面板（音乐/音效音量 + 主界面曲目）
 var _char_panel = null
@@ -648,7 +650,10 @@ class TopVeil extends Node2D:
 		draw_string(font, Vector2(r2.position.x + 24.0, r2.end.y - 34.0), host._story_tip(), HORIZONTAL_ALIGNMENT_CENTER, r2.size.x - 48.0, 16, Color(ink.r, ink.g, ink.b, 0.55))
 
 func _ready() -> void:
+	# v221：全界面按钮统一点击音——新加的 Button 自动挂，不用每个面板各写一遍
+	get_tree().node_added.connect(_on_node_added)
 	Audio.play_bgm(Audio.menu_track())   # v72：主界面曲目由玩家在设置里选（默认"江南"）
+	_start_ambient.call_deferred()       # v230：等根节点/音频就绪后再起风
 	# v83：引子走完回村时，弹一次起名（隔一帧等界面铺好；已起过名就不会再弹）
 	call_deferred("_maybe_ask_name")
 	InkTouch.attach()            # v65：点击水墨扩散
@@ -745,6 +750,16 @@ func _ready() -> void:
 		add_child(_mount)
 	else:
 		add_child(_mount)
+	# v231：画心雾气/金尘——夹在画心（z -100）与装裱（z -40）之间，不吃鼠标
+	var mist_clip := Control.new()
+	mist_clip.position = Vector2(0.0, Conf.BAND_TOP)
+	mist_clip.size = Vector2(Conf.DW, Conf.BAND_H)
+	mist_clip.clip_contents = true
+	mist_clip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	mist_clip.z_index = -50
+	add_child(mist_clip)
+	_mist = MistLayer.new()
+	mist_clip.add_child(_mist)
 	_fx_root = Node2D.new()
 	add_child(_fx_root)
 	add_child(_hud)
@@ -1118,6 +1133,10 @@ func _season_now() -> int:
 
 func _init_season() -> void:
 	_season = _season_now()
+	if _mist != null:
+		_mist.set_season(_season)
+	# ⚠ 这里不要直接 _sync_ambient()：_init_season 在 _ready 里跑，root 还在建子节点，
+	#   add_child(环境音播放器) 会失败。交给 deferred 的 _start_ambient()。
 	var cf := ConfigFile.new()
 	var prev := -1
 	if cf.load(SEASON_CFG) == OK:
@@ -1140,7 +1159,18 @@ func _notification(what: int) -> void:
 		GameState.save_game()
 		print("[主界面] 险前落盘（通知码 ", what, "）")
 
+func _start_ambient() -> void:
+	_sync_ambient()
+
+# v234：夏雨用 rain，其余用 wind；换季时调用
+func _sync_ambient() -> void:
+	if _season == 1:
+		Audio.play_ambient("rain", -25.0)
+	else:
+		Audio.play_ambient("wind", -27.0)
+
 func _exit_tree() -> void:
+	Audio.stop_ambient()    # v230：离开主界面（进游历/战斗）就把风停掉
 	GameState.idle_sync()
 	GameState.save_game()   # 优化批㉒：退场落盘
 	print("[主界面] 离场落盘：村况=", GameState.village_stage, " 首趟=", GameState.first_journey_done)   # ㊿h：切场即存（主界面侧）
@@ -1361,7 +1391,6 @@ func _open_kushou_v2() -> void:
 func _open_settings() -> void:
 	if _settings_ov != null and is_instance_valid(_settings_ov):
 		return
-	Audio.ui_click()
 	var ov := Control.new()
 	ov.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	ov.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -1448,7 +1477,6 @@ func _exit_kushou() -> void:
 	_close_settings()
 	if _kushou_v2 != null and is_instance_valid(_kushou_v2):
 		_kushou_v2.close()
-	Audio.ui_click()
 	_show_toast("已退出困兽，回到主界面")
 
 func _close_settings() -> void:
@@ -2096,6 +2124,9 @@ func _unhandled_input(ev: InputEvent) -> void:
 		return
 	if ke.keycode == KEY_N:
 		_season = (_season + 1) % 4
+		if _mist != null:
+			_mist.set_season(_season)
+		_sync_ambient()
 		_season_lock = true
 		_show_toast("[测试] 季节预览「" + str(SEASON_CN[_season]) + "」——看卷面动静", 2.6)
 		print("[主界面][测试] 季节预览：", SEASON_CN[_season])
@@ -2185,6 +2216,9 @@ func _process(delta: float) -> void:
 			var s := _season_now()
 			if s != _season:
 				_season = s
+				if _mist != null:
+					_mist.set_season(_season)
+				_sync_ambient()
 				_show_toast("换季——" + str(SEASON_ARRIVE[_season]), 3.2)
 	if not _demo_done:
 		# v62（用户："同时画卷也可以缩一些"）：开场那次"画卷推过去"原来 1.2 秒等待 +
@@ -2241,6 +2275,7 @@ func _check_panel_anim() -> void:
 	var pn: Control = _top_panel()
 	if pn == null:
 		return
+	Audio.sfx("ui_open", -16.0, 1.0)
 	pn.pivot_offset = pn.size * 0.5
 	pn.scale = Vector2(0.96, 0.96)
 	pn.modulate.a = 0.0
@@ -2739,6 +2774,62 @@ func _build_once() -> void:
 	if _stage == 1:
 		await get_tree().create_timer(0.8).timeout   # v62
 		_show_toast("后山那头的路通了——去林子看看（往左看）")
+
+func _on_node_added(n: Node) -> void:
+	if n is Button:
+		var b := n as Button
+		var cb := _ui_click_sound.bind(b)
+		if not b.pressed.is_connected(cb):
+			b.pressed.connect(cb)
+		# v225：按压回弹——不是只有声音，按钮自己也按下去
+		var down_cb := _btn_press.bind(b)
+		var up_cb := _btn_release.bind(b)
+		if not b.button_down.is_connected(down_cb):
+			b.button_down.connect(down_cb)
+		if not b.button_up.is_connected(up_cb):
+			b.button_up.connect(up_cb)
+		b.visibility_changed.connect(func() -> void:
+			if not b.visible:
+				b.scale = Vector2.ONE)
+
+# v224：按钮音按语义分流——关/返回、买、翻页不再都是同一声"水滴"
+func _button_sfx(b: Button) -> String:
+	if b == null:
+		return ""
+	var s := b.text.replace(" ", "").replace("　", "")
+	if s == "":
+		return ""
+	if s == "‹" or s == "›":
+		return "paper"
+	if s == "×" or s.contains("关闭") or s.contains("返回") or s.contains("退出"):
+		return "ui_back"
+	if s.contains("购买") or s.contains("买") or s.contains("购入") or s.contains("兑换"):
+		return "coin"
+	return ""
+
+func _btn_press(b: Button) -> void:
+	if b == null or b.size.x > 620.0 or b.size.y > 1180.0:
+		return   # 满屏遮罩类按钮不缩
+	b.pivot_offset = b.size * 0.5
+	var tw := b.create_tween()
+	tw.tween_property(b, "scale", Vector2(0.95, 0.95), 0.06).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+
+func _btn_release(b: Button) -> void:
+	if b == null or b.size.x > 620.0 or b.size.y > 1180.0:
+		return
+	var tw := b.create_tween()
+	tw.tween_property(b, "scale", Vector2.ONE, 0.12).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+func _ui_click_sound(b: Button = null) -> void:
+	match _button_sfx(b):
+		"ui_back":
+			Audio.sfx("ui_back", -12.0, 0.98)
+		"coin":
+			Audio.sfx("coin", -12.0, randf_range(1.0, 1.06))
+		"paper":
+			Audio.sfx("paper", -19.0, randf_range(0.98, 1.05))
+		_:
+			Audio.ui_click()
 
 func _tag_fire(i: int) -> void:
 	Audio.ui_click()      # v98：底排页签原来一声都没有（用户："点击需要有一点反馈的音效"）

@@ -1760,7 +1760,7 @@ func close() -> void:
 	_close_strip_confirm()
 	_close_fate_pick()
 	_close_art_pick()
-	visible = false
+	UiKit.hide_panel(self)
 	closed.emit()
 
 func _gui_input(event: InputEvent) -> void:

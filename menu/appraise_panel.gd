@@ -22,6 +22,7 @@ extends Control
 # ============================================================
 
 const GameState := preload("res://shared/game_state.gd")
+const Audio := preload("res://shared/audio.gd")   # v223：动作音效
 const Appraise := preload("res://shared/data_appraise.gd")
 const Loot := preload("res://shared/data_loot.gd")
 const Ladder := preload("res://shared/data_ladder.gd")   # v58：掉落阶梯（列数规则与抽货共用一个口）
@@ -1135,6 +1136,7 @@ func _start_open_anim() -> void:
 	_flash.clear()
 	_flash_t = 0.0
 	_pop_busy = true
+	Audio.sfx("chest", -11.0, 0.92)   # v223：货仓撬开
 	_rev_ready = false
 	_rev_on = true
 	_rev_t = 0.0
@@ -1316,6 +1318,8 @@ func _rev_finish() -> void:
 	_rev_on = false
 	_rev_ready = true
 	_pop_busy = false
+	if not _rev_loot.is_empty():
+		Audio.sfx("coin", -12.0, 1.02)   # v223：货到手
 	for v in _chips_last:
 		var td: Dictionary = v
 		var chip: Panel = td.get("chip")
@@ -1534,7 +1538,7 @@ func close() -> void:
 	if not visible:
 		return
 	_close_hold()
-	visible = false
+	UiKit.hide_panel(self)
 	closed.emit()
 
 func _gui_input(event: InputEvent) -> void:

@@ -11,6 +11,7 @@ extends Control
 
 const GameState := preload("res://shared/game_state.gd")
 const DataPets := preload("res://shared/data_pets.gd")
+const UiKit := preload("res://shared/ui_kit.gd")   # v221：统一收起
 
 signal confirmed(stage_i: int)
 signal saved
@@ -401,7 +402,7 @@ func open_config() -> void:
 func close() -> void:
 	if not visible:
 		return
-	visible = false
+	UiKit.hide_panel(self)
 
 func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:

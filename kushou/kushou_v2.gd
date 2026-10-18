@@ -16,6 +16,7 @@ extends Control
 # ============================================================
 
 const UiKit := preload("res://shared/ui_kit.gd")
+const Ui := preload("res://menu/menu_theme.gd")   # v227：外壳也走墨金皮肤
 const Audio := preload("res://shared/audio.gd")   # v2h：战斗音效＋BGM
 const Battle := preload("res://kushou/kushou_battle.gd")   # v2j：真战斗引擎
 
@@ -876,7 +877,7 @@ func close() -> void:
 func _build() -> void:
 	var vp := get_viewport_rect().size
 	var bg := ColorRect.new()
-	bg.color = Color(0.12, 0.12, 0.14, 0.97)
+	bg.color = Color(0.055, 0.050, 0.046, 0.98) if Ui.SKIN == 1 else Color(0.12, 0.12, 0.14, 0.97)
 	bg.size = vp
 	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(bg)
@@ -903,7 +904,7 @@ func _build_hud() -> void:
 	var r1 := _panel(Rect2(8, 8, 704, 80), Color(0.18, 0.17, 0.19, 0.96), 12)
 	_wave_lb = _lbl(Vector2(24, 22), Vector2(190, 52), 28, PAPER)
 	_wave_lb.text = "波 12/30"
-	_boss_lb = _lbl(Vector2(226, 26), Vector2(300, 46), 22, GOLD)
+	_boss_lb = _lbl(Vector2(226, 26), Vector2(300, 46), 22, Ui.GOLD_HI if Ui.SKIN == 1 else GOLD)
 	_boss_lb.text = "一阶 boss 00:37"      # 开局静态文本；_process 里会按 分:秒 覆写
 	_mk_btn("设置", Vector2(560, 14), Vector2(140, 68), 24, false, _open_game_settings)
 
@@ -1006,9 +1007,12 @@ func _build_field() -> void:
 func _build_hero_bar() -> void:
 	_panel(Rect2(8, 888, 704, 72), Color(0.18, 0.17, 0.19, 0.96), 12)
 	_exp_lb = _lbl(Vector2(24, 902), Vector2(110, 44), 26, PAPER)
-	_exp_bar = _bar(Rect2(146, 908, 548, 32), Color(0.30, 0.42, 0.62))
+	_exp_bar = _bar(Rect2(146, 908, 548, 32), Ui.GOLD if Ui.SKIN == 1 else Color(0.30, 0.42, 0.62))
 
 	var hb := _panel(Rect2(8, 968, 704, 288), Color(0.18, 0.17, 0.19, 0.96), 12)
+	if Ui.SKIN == 1:
+		# v228：头像外面套一圈墨金框，不再是一颗孤零零的圆头
+		_panel(Rect2(20, 980, 184, 184), Color(0.10, 0.090, 0.075, 0.95), 4)
 	# 头像
 	var av := AvatarArt.new()
 	av.size = Vector2(176, 176)
@@ -7115,8 +7119,13 @@ func _panel(r: Rect2, col: Color, radius: int) -> Panel:
 	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = col
-	sb.set_corner_radius_all(radius)
-	sb.border_color = Color(1, 1, 1, 0.06)
+	if Ui.SKIN == 1:
+		# v227：墨底金线——近方角，跟主界面/百工坊一套
+		sb.set_corner_radius_all(4)
+		sb.border_color = Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.38)
+	else:
+		sb.set_corner_radius_all(radius)
+		sb.border_color = Color(1, 1, 1, 0.06)
 	sb.set_border_width_all(1)
 	p.add_theme_stylebox_override("panel", sb)
 	add_child(p)
@@ -7135,7 +7144,10 @@ func _lbl(pos: Vector2, sz: Vector2, fs: int, col: Color) -> Label:
 func _flat(c: Color) -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = c
-	sb.set_corner_radius_all(12)
+	sb.set_corner_radius_all(4 if Ui.SKIN == 1 else 12)
+	if Ui.SKIN == 1 and c.a > 0.2:
+		sb.border_color = Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.48)
+		sb.set_border_width_all(1)
 	return sb
 
 # v18z：弹窗页专用 —— _lbl() 是**自动挂到外壳根节点**的（HUD 用），
@@ -7157,12 +7169,13 @@ func _mk_btn(txt: String, pos: Vector2, sz: Vector2, fs: int, seal: bool, cb: Ca
 	b.size = sz
 	b.add_theme_font_size_override("font_size", fs)
 	b.focus_mode = Control.FOCUS_NONE
-	var c: Color = SEAL if seal else Color(0.26, 0.25, 0.28, 0.98)
+	var c: Color = SEAL if seal else (Color(0.075, 0.066, 0.060, 0.96) if Ui.SKIN == 1 else Color(0.26, 0.25, 0.28, 0.98))
 	b.add_theme_stylebox_override("normal", _flat(c))
 	b.add_theme_stylebox_override("hover", _flat(c.lightened(0.12)))
 	b.add_theme_stylebox_override("pressed", _flat(c.darkened(0.15)))
 	b.add_theme_stylebox_override("focus", _flat(Color(0, 0, 0, 0)))
-	b.add_theme_color_override("font_color", Color(0.97, 0.94, 0.88))
+	b.add_theme_color_override("font_color",
+		(Ui.GOLD_HI if not seal else Color(1.0, 0.95, 0.86)) if Ui.SKIN == 1 else Color(0.97, 0.94, 0.88))
 	b.pressed.connect(cb)
 	add_child(b)
 	return b
@@ -7175,17 +7188,24 @@ func _circle_btn(txt: String, pos: Vector2, cb: Callable) -> Button:
 	b.add_theme_font_size_override("font_size", 24)
 	b.focus_mode = Control.FOCUS_NONE
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.26, 0.25, 0.28, 0.98)
-	sb.set_corner_radius_all(52)
-	sb.border_color = Color(1, 1, 1, 0.10)
-	sb.set_border_width_all(1)
+	if Ui.SKIN == 1:
+		# v227：圆钮 → 墨金小牌（左缘四颗/右缘两颗终于不再是灰圆）
+		sb.bg_color = Color(0.075, 0.066, 0.060, 0.96)
+		sb.set_corner_radius_all(6)
+		sb.border_color = Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.46)
+		sb.set_border_width_all(1)
+	else:
+		sb.bg_color = Color(0.26, 0.25, 0.28, 0.98)
+		sb.set_corner_radius_all(52)
+		sb.border_color = Color(1, 1, 1, 0.10)
+		sb.set_border_width_all(1)
 	b.add_theme_stylebox_override("normal", sb)
 	var hb := sb.duplicate() as StyleBoxFlat
-	hb.bg_color = Color(0.34, 0.32, 0.36, 0.98)
+	hb.bg_color = Color(0.13, 0.11, 0.10, 0.98) if Ui.SKIN == 1 else Color(0.34, 0.32, 0.36, 0.98)
 	b.add_theme_stylebox_override("hover", hb)
 	b.add_theme_stylebox_override("pressed", hb)
 	b.add_theme_stylebox_override("focus", _flat(Color(0, 0, 0, 0)))
-	b.add_theme_color_override("font_color", Color(0.97, 0.94, 0.88))
+	b.add_theme_color_override("font_color", Ui.GOLD_HI if Ui.SKIN == 1 else Color(0.97, 0.94, 0.88))
 	b.pressed.connect(cb)
 	add_child(b)
 	return b
@@ -7213,6 +7233,14 @@ func _bar(r: Rect2, col: Color) -> ColorRect:
 	c.color = col
 	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(c)
+	if Ui.SKIN == 1:
+		# v228：条面上一道金高光，跟外壳的金线一套
+		var gl := ColorRect.new()
+		gl.position = r.position + Vector2(2.0, 2.0)
+		gl.size = Vector2(maxf(0.0, r.size.x - 4.0), 1.0)
+		gl.color = Color(Ui.GOLD_HI.r, Ui.GOLD_HI.g, Ui.GOLD_HI.b, 0.62)
+		gl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(gl)
 	c.set_meta("bg", bgp)
 	return c
 
@@ -8003,8 +8031,13 @@ func _open_popup(kind: String, large: bool) -> void:
 	p.mouse_filter = Control.MOUSE_FILTER_STOP
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(PAPER.r, PAPER.g, PAPER.b, 0.99)
-	sb.set_corner_radius_all(16)
-	sb.border_color = Color(SEAL.r, SEAL.g, SEAL.b, 0.55)
+	if Ui.SKIN == 1:
+		# v229：弹窗纸面与百工坊/品酒坊一致——近方角 + 金线
+		sb.set_corner_radius_all(4)
+		sb.border_color = Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.55)
+	else:
+		sb.set_corner_radius_all(16)
+		sb.border_color = Color(SEAL.r, SEAL.g, SEAL.b, 0.55)
 	sb.set_border_width_all(2)
 	p.add_theme_stylebox_override("panel", sb)
 	layer.add_child(p)
@@ -8014,6 +8047,13 @@ func _open_popup(kind: String, large: bool) -> void:
 	title.size = Vector2(400, 46)
 	title.add_theme_font_size_override("font_size", 30)
 	title.add_theme_color_override("font_color", INK)
+	if Ui.SKIN == 1:
+		title.add_theme_font_size_override("font_size", 34)
+		title.add_theme_color_override("font_outline_color", Ui.GOLD)
+		title.add_theme_constant_override("outline_size", 2)
+		var tbf := Ui.brush_font()
+		if tbf != null:
+			title.add_theme_font_override("font", tbf)
 	title.text = kind
 	p.add_child(title)
 	var xb := Button.new()
@@ -8022,10 +8062,10 @@ func _open_popup(kind: String, large: bool) -> void:
 	xb.size = Vector2(140, 64)
 	xb.add_theme_font_size_override("font_size", 24)
 	xb.focus_mode = Control.FOCUS_NONE
-	xb.add_theme_stylebox_override("normal", _flat(Color(0.26, 0.25, 0.28, 0.98)))
-	xb.add_theme_stylebox_override("hover", _flat(Color(0.34, 0.32, 0.36, 0.98)))
-	xb.add_theme_stylebox_override("pressed", _flat(Color(0.20, 0.19, 0.22, 0.98)))
-	xb.add_theme_color_override("font_color", Color(0.97, 0.94, 0.88))
+	xb.add_theme_stylebox_override("normal", _flat(Color(0.075, 0.066, 0.060, 0.96) if Ui.SKIN == 1 else Color(0.26, 0.25, 0.28, 0.98)))
+	xb.add_theme_stylebox_override("hover", _flat(Color(0.14, 0.12, 0.105, 0.98) if Ui.SKIN == 1 else Color(0.34, 0.32, 0.36, 0.98)))
+	xb.add_theme_stylebox_override("pressed", _flat(Color(0.05, 0.045, 0.040, 0.98) if Ui.SKIN == 1 else Color(0.20, 0.19, 0.22, 0.98)))
+	xb.add_theme_color_override("font_color", Ui.GOLD_HI if Ui.SKIN == 1 else Color(0.97, 0.94, 0.88))
 	xb.pressed.connect(_close_popup)
 	p.add_child(xb)
 
@@ -8038,7 +8078,13 @@ func _open_popup(kind: String, large: bool) -> void:
 		band.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		var bsb := StyleBoxFlat.new()
 		bsb.bg_color = Color(0.16, 0.15, 0.17, 0.96)
-		bsb.set_corner_radius_all(10)
+		if Ui.SKIN == 1:
+			bsb.bg_color = Color(0.075, 0.066, 0.060, 0.96)
+			bsb.set_corner_radius_all(4)
+			bsb.border_color = Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.35)
+			bsb.set_border_width_all(1)
+		else:
+			bsb.set_corner_radius_all(10)
 		band.add_theme_stylebox_override("panel", bsb)
 		p.add_child(band)
 		_band = Label.new()
@@ -8643,11 +8689,12 @@ func _pbtn(parent: Node, txt: String, pos: Vector2, sz: Vector2, fs: int, seal: 
 	b.size = sz
 	b.add_theme_font_size_override("font_size", fs)
 	b.focus_mode = Control.FOCUS_NONE
-	var c: Color = SEAL if seal else Color(0.26, 0.25, 0.28, 0.98)
+	var c: Color = SEAL if seal else (Color(0.075, 0.066, 0.060, 0.96) if Ui.SKIN == 1 else Color(0.26, 0.25, 0.28, 0.98))
 	b.add_theme_stylebox_override("normal", _flat(c))
 	b.add_theme_stylebox_override("hover", _flat(c.lightened(0.12)))
 	b.add_theme_stylebox_override("pressed", _flat(c.darkened(0.15)))
-	b.add_theme_color_override("font_color", Color(0.97, 0.94, 0.88))
+	b.add_theme_color_override("font_color",
+		(Ui.GOLD_HI if not seal else Color(1.0, 0.95, 0.86)) if Ui.SKIN == 1 else Color(0.97, 0.94, 0.88))
 	b.add_theme_stylebox_override("focus", _flat(Color(0, 0, 0, 0)))
 	b.pressed.connect(cb)
 	parent.add_child(b)

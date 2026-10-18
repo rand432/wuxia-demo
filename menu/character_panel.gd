@@ -1866,7 +1866,7 @@ func close() -> void:
 	_hide_growth()
 	if _pill_popup != null and _pill_popup.visible:
 		_pill_popup.close()
-	visible = false
+	UiKit.hide_panel(self)
 	closed.emit()
 
 func _on_tab(idx: int) -> void:
