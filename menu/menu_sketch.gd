@@ -2046,6 +2046,13 @@ func _unhandled_input(ev: InputEvent) -> void:
 		else:
 			_show_toast("[调参] 配置已写出——路径见控制台；改完重启游戏生效", 3.4)
 		return
+	if ke.keycode == KEY_F9:
+		# v139（测试）：**不碰存档**，直接重播引子——调剧情时用这个，不用清档。
+		#   游历场那边认 GameState.intro_force，只在"没有出征交接"的裸进时才生效。
+		GameState.intro_force = true
+		print("[主界面][测试] F9：强制重播引子（存档不动）")
+		_boot_journey()
+		return
 	if ke.keycode == KEY_J:
 		# ㉙：存档版本自检——模拟"盘上是新版档"，看会不会改名留档而不是静默丢。
 		# 用探针文件，不碰真档。结果看控制台 [自检] 那几行。

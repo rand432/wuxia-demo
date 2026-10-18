@@ -793,6 +793,9 @@ const SLOT_CN := {"weapon": "兵器", "armor": "护甲", "helm": "玉佩", "cloa
 
 static var village_stage := 0
 static var first_journey_done := false
+# v139（调试）：**强制重播引子**——只活在内存里，不写盘。
+#   存档里 first_journey_done 已经是 true 的档，想再测一遍引子就靠它（主界面 F9 开）。
+static var intro_force := false
 # v83（用户："引子结束后 给玩家一个弹出起名的窗口【不起名就默认叫少侠】"）：
 #   空串＝还没起过名（＝用默认「少侠」）。起了就落盘，全工程的显示都跟着变。
 static var player_name := ""

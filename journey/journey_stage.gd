@@ -291,7 +291,8 @@ func _ready() -> void:
 	# ㊿m：兜底——首趟已走通、又没有出征交接和续行档（＝直接运行了这个场景）：
 	# 不重演"十六岁"，退回主界面走正门（村里点［历练］出征）
 	GameState.load_game()
-	if GameState.first_journey_done:
+	# v139：F9 强制重播引子时，存档里的"首趟已走通"按下去
+	if GameState.first_journey_done and not GameState.intro_force:
 		print("[游历] 直跑且首趟已走通——不演引子，退回主界面（下次请从村里［历练］出征）")
 		var err_m := get_tree().change_scene_to_file(MENU_SCENE)
 		if err_m != OK:
