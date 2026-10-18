@@ -88,6 +88,7 @@ const WEIBA_X1 := 590.0
 const TITLE := "少年游"
 const FONT_PATH := "res://assets/fonts/lxgw_wenkai.ttf"
 const JOURNEY_SCENE := "res://journey_test.tscn"
+const EXPLORE_SCENE := "res://journey/explore/explore_map.tscn"
 
 # ---- 颜色 ----
 const INK := Color(0.16, 0.155, 0.18)

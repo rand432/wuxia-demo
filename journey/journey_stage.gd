@@ -50,6 +50,7 @@ const Cards := preload("res://shared/data_cards.gd")
 const JourneyData := preload("res://journey/data_journey.gd")
 const RunState := preload("res://shared/run_state.gd")
 const UiKit := preload("res://shared/ui_kit.gd")
+const Ui := preload("res://menu/menu_theme.gd")   # v242：游历纸面/标题走皮肤
 const CreationFlow := preload("res://journey/creation_flow.gd")
 # v138：引子第一节尸骨上那把锈剑（data_cards.sword_rusty 挂了 intro_only，任何掉落池都抽不到）
 const SWORD_SID := "sword_rusty"
@@ -1888,6 +1889,13 @@ func _open_start_kit() -> void:
 	var ph := 122.0 + chh + 18.0 + chh + 34.0
 	var panel := UiKit.make_paper_panel(veil, Rect2(58, POPUP_TOP, 604, ph))
 	var t1 := UiKit.make_label(panel, Vector2(0, 16), Vector2(604, 38), 28, UiKit.INK)
+	if Ui.SKIN == 1:
+		t1.add_theme_font_size_override("font_size", 34)
+		var tbf := Ui.brush_font()
+		if tbf != null:
+			t1.add_theme_font_override("font", tbf)
+		t1.add_theme_color_override("font_outline_color", Ui.GOLD)
+		t1.add_theme_constant_override("outline_size", 2)
 	UiKit.set_text(t1, "开局行装 · 五选一")
 	t1.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	# v104（用户："原来根据游历奖励也要划分四档"）：行装品阶跟**品级**走（凡/良/上/极）
@@ -1919,8 +1927,12 @@ func _kit_card(panel: Control, i: int, o: Dictionary, x: float, y: float, w: flo
 	card.mouse_filter = Control.MOUSE_FILTER_STOP
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(0.96, 0.93, 0.86, 1.0)
-	sb.set_corner_radius_all(8)
-	sb.border_color = Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.55)
+	if Ui.SKIN == 1:
+		sb.set_corner_radius_all(4)
+		sb.border_color = Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.48)
+	else:
+		sb.set_corner_radius_all(8)
+		sb.border_color = Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.55)
 	sb.set_border_width_all(2)
 	card.add_theme_stylebox_override("panel", sb)
 	card.gui_input.connect(_on_kit_row_input.bind(i))

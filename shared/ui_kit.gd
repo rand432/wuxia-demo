@@ -51,8 +51,13 @@ static func make_label(parent: Node, pos: Vector2, sz: Vector2, fs: int, col: Co
 static func paper_box(alpha := 0.95) -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(PAPER.r, PAPER.g, PAPER.b, alpha)
-	sb.set_corner_radius_all(12)
-	sb.border_color = Color(0.32, 0.27, 0.22, 0.55)
+	if Ui.SKIN == 1:
+		# v242：全工程 32 处纸面弹窗走同一套近方角 + 金线
+		sb.set_corner_radius_all(4)
+		sb.border_color = Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.55)
+	else:
+		sb.set_corner_radius_all(12)
+		sb.border_color = Color(0.32, 0.27, 0.22, 0.55)
 	sb.set_border_width_all(2)
 	return sb
 

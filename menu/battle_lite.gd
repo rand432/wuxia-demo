@@ -60,6 +60,7 @@ const Audio := preload("res://shared/audio.gd")
 const InkTouch := preload("res://shared/ink_touch.gd")
 const FadeIn := preload("res://shared/fade_in.gd")   # v68：进场淡入 + 震动
 const UiKit := preload("res://shared/ui_kit.gd")
+const Ui := preload("res://menu/menu_theme.gd")   # v238：战斗 HUD 也走墨金皮肤
 const SceneArt := preload("res://shared/scene_art.gd")   # v79：战斗背景（素材水墨图）
 const Tower := preload("res://shared/tower.gd")          # v93m：这一关给什么箱子（爆物按这个来）
 const Chase := preload("res://shared/data_chase.gd")      # v129：追剿（精英爬塔）——关卡/boss/特性
@@ -280,6 +281,7 @@ var _e_fill: Control
 var _e_bar_w := 420.0
 var _rows: Array = []
 var _result_lb: Label
+var _result_panel: Panel = null   # v239：墨金结算框
 var _auto_lb: Label
 var _act_btn: Button
 var _bg_btn: Button
@@ -966,6 +968,7 @@ func _build_ui() -> void:
 	_auto_btn.position = Vector2(px - 320.0, 10.0)
 	_auto_btn.size = Vector2(308, 50)
 	_auto_btn.pressed.connect(_on_auto_toggle)
+	_style_btn(_auto_btn, Color(0.21, 0.19, 0.20))   # 原来这颗没上样式，是默认灰钮
 	add_child(_auto_btn)
 
 	# v8：［敌情］——看首领招数（看着时不走回合）
@@ -1165,13 +1168,45 @@ func _build_ui() -> void:
 		add_child(chip)
 		_rows.append({"name": nm, "hp_txt": hpt, "hp_fill": fill, "rage_fill": rf, "st": stq, "chip": chip})
 
-	_log_lb = _label("", 14, Color(INK.r, INK.g, INK.b, 0.80))
+	if Ui.SKIN == 1:
+		# v238：战报垫一块墨底金线小条，别让字直接浮在画上
+		var lp := Panel.new()
+		lp.position = Vector2(12, py - 162.0)
+		lp.size = Vector2(px - 236.0, 112.0)
+		lp.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var lsb := StyleBoxFlat.new()
+		lsb.bg_color = Color(0.075, 0.066, 0.060, 0.74)
+		lsb.set_corner_radius_all(4)
+		lsb.border_color = Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.30)
+		lsb.set_border_width_all(1)
+		lp.add_theme_stylebox_override("panel", lsb)
+		add_child(lp)
+	_log_lb = _label("", 14, Color(0.93, 0.91, 0.85, 0.95) if Ui.SKIN == 1 else Color(INK.r, INK.g, INK.b, 0.80))
 	_log_lb.position = Vector2(20, py - 150.0)
 	_log_lb.size = Vector2(px - 240.0, 84)
 	_log_lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	add_child(_log_lb)
 
-	_result_lb = _label("", 64, SEAL)
+	if Ui.SKIN == 1:
+		_result_panel = Panel.new()
+		_result_panel.position = Vector2(px * 0.5 - 170.0, py * 0.38 - 26.0)
+		_result_panel.size = Vector2(340.0, 148.0)
+		_result_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var rps := StyleBoxFlat.new()
+		rps.bg_color = Color(0.075, 0.066, 0.060, 0.90)
+		rps.set_corner_radius_all(6)
+		rps.border_color = Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.55)
+		rps.set_border_width_all(2)
+		_result_panel.add_theme_stylebox_override("panel", rps)
+		_result_panel.visible = false
+		add_child(_result_panel)
+	_result_lb = _label("", 80 if Ui.SKIN == 1 else 64, SEAL)
+	if Ui.SKIN == 1:
+		var rbf := Ui.brush_font()
+		if rbf != null:
+			_result_lb.add_theme_font_override("font", rbf)
+		_result_lb.add_theme_color_override("font_outline_color", Ui.GOLD)
+		_result_lb.add_theme_constant_override("outline_size", 2)
 	_result_lb.position = Vector2(0, py * 0.38)
 	_result_lb.size = Vector2(px, 96)
 	_result_lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -1221,7 +1256,10 @@ func _label(text: String, font_size: int, col: Color) -> Label:
 func _flat(bg: Color) -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = bg
-	sb.set_corner_radius_all(8)
+	sb.set_corner_radius_all(4 if Ui.SKIN == 1 else 8)
+	if Ui.SKIN == 1 and bg.a > 0.2:
+		sb.border_color = Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.45)
+		sb.set_border_width_all(1)
 	return sb
 
 func _style_btn(btn: Button, base: Color) -> void:
@@ -1230,7 +1268,11 @@ func _style_btn(btn: Button, base: Color) -> void:
 	btn.add_theme_stylebox_override("pressed", _flat(Color(base.r * 0.75, base.g * 0.75, base.b * 0.75, 0.95)))
 	btn.add_theme_stylebox_override("disabled", _flat(Color(0.45, 0.43, 0.42, 0.35)))
 	btn.add_theme_stylebox_override("focus", _flat(Color(0, 0, 0, 0)))
-	btn.add_theme_color_override("font_color", Color(0.95, 0.92, 0.86))
+	if Ui.SKIN == 1:
+		# 绿钮（回村后台）保留米白字；其余墨钮用金字
+		btn.add_theme_color_override("font_color", Color(1.0, 0.95, 0.86) if base.g > base.r else Ui.GOLD_HI)
+	else:
+		btn.add_theme_color_override("font_color", Color(0.95, 0.92, 0.86))
 	btn.add_theme_color_override("font_disabled_color", Color(0.95, 0.92, 0.86, 0.45))
 
 # ---- 自动挑战 ----
@@ -4295,6 +4337,18 @@ func _push(lines: Array) -> void:
 	if _log_lb != null:
 		_log_lb.text = "\n".join(PackedStringArray(_log))
 
+func _show_result() -> void:
+	_result_lb.visible = true
+	if _result_panel != null:
+		_result_panel.visible = true
+		_result_panel.pivot_offset = _result_panel.size * 0.5
+		_result_panel.scale = Vector2(0.94, 0.94)
+		_result_panel.modulate.a = 0.0
+		var tw := _result_panel.create_tween()
+		tw.set_parallel(true)
+		tw.tween_property(_result_panel, "scale", Vector2.ONE, 0.20).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		tw.tween_property(_result_panel, "modulate:a", 1.0, 0.14)
+
 func _end(win: bool) -> void:
 	Audio.play_bgm("bgm_menu", 1.6)   # v65：打完回主界面 BGM
 	# v93i：**爆物还在演就别急着盖大字**——原来"胜"立刻出来，把爆物压得一点都看不见
@@ -4317,14 +4371,16 @@ func _end(win: bool) -> void:
 		_info_btn.visible = false
 	_close_info()
 	_result_lb.text = "胜" if win else "败"
-	_result_lb.add_theme_color_override("font_color", SEAL if win else Color(0.35, 0.33, 0.34, 0.90))
+	_result_lb.add_theme_color_override("font_color",
+		(Color(0.86, 0.18, 0.12) if win else Color(0.62, 0.60, 0.58)) if Ui.SKIN == 1
+		else (SEAL if win else Color(0.35, 0.33, 0.34, 0.90)))
 	var wait_ms := _burst_until - Time.get_ticks_msec()
 	if wait_ms > 120:
 		var btw := create_tween()
 		btw.tween_interval(float(wait_ms) / 1000.0)
-		btw.tween_callback(func(): _result_lb.visible = true)
+		btw.tween_callback(func(): _show_result())
 	else:
-		_result_lb.visible = true
+		_show_result()
 	if win:
 		_fx("hit", Vector2(_enemy_base_x(), _ground_y - 92.0), GOLD, 0.55, 64.0)
 		_shake(10.0)

@@ -45,6 +45,7 @@ extends Control
 const Cards := preload("res://shared/data_cards.gd")
 const RunState := preload("res://shared/run_state.gd")
 const UiKit := preload("res://shared/ui_kit.gd")
+const Ui := preload("res://menu/menu_theme.gd")   # v241：游历决斗 HUD 也走墨金
 const GameState := preload("res://shared/game_state.gd")
 const Affixes := preload("res://shared/data_affixes.gd")
 const St := preload("res://shared/data_status.gd")   # v52：负面状态（表＋API，与出村共用同一份）
@@ -667,11 +668,13 @@ func _build_bars() -> void:
 	UiKit.set_text(_txt_p, "")
 	_txt_p.visible = false
 	# v63j：敌方照爬塔——名字居中 + 420 宽大条 + 数值画在条里；多人段"全队：…"走条下居中
-	_txt_e = UiKit.make_label(_root, Vector2(130, 60), Vector2(420, 18), 13, Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.62))
+	_txt_e = UiKit.make_label(_root, Vector2(130, 60), Vector2(420, 18), 13,
+		Color(0.93, 0.90, 0.83, 0.85) if Ui.SKIN == 1 else Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.62))
 	_txt_e.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	UiKit.set_text(_txt_e, "")
 	_erow = {
-		"nm": UiKit.make_label(_root, Vector2(0, 0), Vector2(680, 34), 24, UiKit.INK),
+		"nm": UiKit.make_label(_root, Vector2(0, 0), Vector2(680, 34), 24,
+			Color(0.95, 0.92, 0.85) if Ui.SKIN == 1 else UiKit.INK),
 		"bar": _make_bar(Vector2(130, 40), Vector2(420, 16), Color(0.68, 0.28, 0.22)),
 		"hp": UiKit.make_label(_root, Vector2(130, 40), Vector2(420, 16), 12, Color(0.96, 0.94, 0.90)),
 	}
@@ -684,10 +687,12 @@ func _build_bars() -> void:
 	_mrows = []
 	for i in 3:
 		var ry := 112.0 + float(i) * 56.0
-		var nm := UiKit.make_label(_root, Vector2(0, ry), Vector2(150, 24), 16, Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.8))
+		var nm := UiKit.make_label(_root, Vector2(0, ry), Vector2(150, 24), 16,
+			Color(0.94, 0.91, 0.84, 0.95) if Ui.SKIN == 1 else Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.8))
 		var bar := _make_bar(Vector2(154, ry + 4.0), Vector2(200, 14), Color(0.34, 0.56, 0.34))
 		var rage := _make_bar(Vector2(154, ry + 23.0), Vector2(200, 5), Color(0.85, 0.72, 0.25))
-		var hp := UiKit.make_label(_root, Vector2(360, ry), Vector2(150, 24), 13, UiKit.INK)
+		var hp := UiKit.make_label(_root, Vector2(360, ry), Vector2(150, 24), 13,
+			Color(0.94, 0.91, 0.84, 0.95) if Ui.SKIN == 1 else UiKit.INK)
 		hp.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		_mrows.append({"nm": nm, "bar": bar, "rage": rage, "hp": hp})
 
@@ -709,7 +714,8 @@ func _build_bars() -> void:
 	_chip_e.max_n = 13
 	_root.add_child(_chip_e)
 
-	_art_line = UiKit.make_label(_root, Vector2(0, 310), Vector2(680, 28), 16, UiKit.SEAL)
+	_art_line = UiKit.make_label(_root, Vector2(0, 310), Vector2(680, 28), 16,
+		Color(0.94, 0.82, 0.46) if Ui.SKIN == 1 else UiKit.SEAL)
 	UiKit.set_text(_art_line, "")
 
 	# v63h（"战斗就爬塔那样"）：右上改两排大钮，照爬塔的位子与字号（17 号 / 50 高）：
@@ -717,8 +723,11 @@ func _build_bars() -> void:
 	#   x 从 288 铺到 708，舞台顶上的盘缠/节点标签（x≤438、y≤52）不被压到。
 	var vpw := size.x if size.x > 8.0 else get_viewport_rect().size.x
 	var dk := StyleBoxFlat.new()
-	dk.bg_color = Color(0.21, 0.19, 0.20, 0.92)
-	dk.set_corner_radius_all(8)
+	dk.bg_color = Color(0.075, 0.066, 0.060, 0.95) if Ui.SKIN == 1 else Color(0.21, 0.19, 0.20, 0.92)
+	dk.set_corner_radius_all(4 if Ui.SKIN == 1 else 8)
+	if Ui.SKIN == 1:
+		dk.border_color = Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.45)
+		dk.set_border_width_all(1)
 
 	_mode_btn = Button.new()
 	_mode_btn.focus_mode = Control.FOCUS_NONE
@@ -785,13 +794,18 @@ func _paint_mode_btn() -> void:
 	UiKit.set_btn_text(_mode_btn, ("出手：手动出牌（点我切）" if last_manual else "出手：自动（点我切）"))
 	var manual := last_manual
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.62, 0.20, 0.16, 0.95) if manual else Color(0.21, 0.19, 0.20, 0.92)
-	sb.set_corner_radius_all(8)
+	sb.bg_color = Color(0.62, 0.20, 0.16, 0.95) if manual else (Color(0.075, 0.066, 0.060, 0.95) if Ui.SKIN == 1 else Color(0.21, 0.19, 0.20, 0.92))
+	sb.set_corner_radius_all(4 if Ui.SKIN == 1 else 8)
+	if Ui.SKIN == 1:
+		sb.border_color = Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.50)
+		sb.set_border_width_all(1)
 	_mode_btn.add_theme_stylebox_override("normal", sb)
 	_mode_btn.add_theme_stylebox_override("hover", sb)
 	_mode_btn.add_theme_stylebox_override("pressed", sb)
 	_mode_btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
-	_mode_btn.add_theme_color_override("font_color", Color(1.0, 0.97, 0.88) if manual else Color(0.94, 0.91, 0.84))
+	_mode_btn.add_theme_color_override("font_color",
+		(Color(1.0, 0.95, 0.86) if manual else Ui.GOLD_HI) if Ui.SKIN == 1
+		else (Color(1.0, 0.97, 0.88) if manual else Color(0.94, 0.91, 0.84)))
 	_mode_btn.add_theme_font_size_override("font_size", 17)
 
 # ============================================================
@@ -811,13 +825,18 @@ func _paint_speed_btn() -> void:
 	var on := SPEED > 1.0
 	UiKit.set_btn_text(_speed_btn, ("快进 ×2（点我切）" if on else "快进 ×1（点我切）"))
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.24, 0.46, 0.30, 0.95) if on else Color(0.21, 0.19, 0.20, 0.92)
-	sb.set_corner_radius_all(8)
+	sb.bg_color = Color(0.24, 0.46, 0.30, 0.95) if on else (Color(0.075, 0.066, 0.060, 0.95) if Ui.SKIN == 1 else Color(0.21, 0.19, 0.20, 0.92))
+	sb.set_corner_radius_all(4 if Ui.SKIN == 1 else 8)
+	if Ui.SKIN == 1:
+		sb.border_color = Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.50)
+		sb.set_border_width_all(1)
 	_speed_btn.add_theme_stylebox_override("normal", sb)
 	_speed_btn.add_theme_stylebox_override("hover", sb)
 	_speed_btn.add_theme_stylebox_override("pressed", sb)
 	_speed_btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
-	_speed_btn.add_theme_color_override("font_color", Color(1.0, 0.97, 0.88) if on else Color(0.94, 0.91, 0.84))
+	_speed_btn.add_theme_color_override("font_color",
+		(Color(1.0, 0.95, 0.86) if on else Ui.GOLD_HI) if Ui.SKIN == 1
+		else (Color(1.0, 0.97, 0.88) if on else Color(0.94, 0.91, 0.84)))
 	_speed_btn.add_theme_font_size_override("font_size", 17)
 
 func _make_bar(pos: Vector2, sz: Vector2, col: Color) -> ProgressBar:

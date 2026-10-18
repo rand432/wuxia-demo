@@ -996,9 +996,12 @@ func _build_plaques() -> void:
 	_plaques.add_chip("advance", 0.403, 0.0383, "进阶", _open_advance, _advance_hint(), {"w": 80.0, "h": 34.0})
 	_plaques.add_chip("settings", 0.9264, 0.0375, "设置", _open_settings, "", {"w": 58.0, "h": 34.0})
 	# 挂机/建设：还是从横梁上吊下来（这两块是"画上的题字"，保留竖排毛笔）
-	_plaques.add_beam("beam", 128.0, 292.0, 148.0, [165.6, 241.2])   # 装饰件：没有命中盒，不挡拖卷
-	_plaques.add_hang("idle", 0.230, 0.0, "挂机", _on_idle_collect, "", "", {"hang_y": 148.0})
-	_plaques.add_hang("build", 0.335, 0.0, "建设", _build_once, "", "", {"hang_y": 148.0})
+	# v240（用户："挂机和建设上面的横栏 完全放在头像下面"）：
+	#   横梁从画面中央（128~292）搬到左上头像下面（14~204），两块木牌跟着下来；
+	#   画面中上留白，不再被梁和绳子切一道。
+	_plaques.add_beam("beam", 14.0, 204.0, 122.0, [52.0, 156.0])   # 装饰件：没有命中盒，不挡拖卷
+	_plaques.add_hang("idle", 0.083, 0.0, "挂机", _on_idle_collect, "", "", {"hang_y": 122.0})
+	_plaques.add_hang("build", 0.222, 0.0, "建设", _build_once, "", "", {"hang_y": 122.0})
 	# ===== v211 右侧功能栏：5 个**等宽格**（金刻线图标 + 大号毛笔字 + 小字名）=====
 	#   y 只是初始值；_refresh_plaques 末尾按"当前可见的格子"重排（隐藏一格，下面自动补位）。
 	_plaques.add_rail("shop", 0.905, 0.192, "栈", "商店", PlaqueLayer.RAIL_SHOP_TEX, _open_shop, "换材料")
@@ -1013,6 +1016,9 @@ func _build_plaques() -> void:
 	_plaques.add_arrow("out", 0.104, 0.575, "出村", _open_out, -1, V)
 	_plaques.add_hang("hill", 0.215, 0.695, "后山", _click_hill, "", "", {"page": "village", "white": true, "w": 76.0})
 	_plaques.add_hang("brook", 0.395, 0.645, "溪畔", _gather_wood, "", "", {"page": "village", "white": true, "w": 76.0})
+	# v237：一次性提示不再占右栏——直接放进画里，用掉就消失
+	_plaques.add_hang("cave_scene", 0.660, 0.560, "山洞", _click_cave, "", "", {"page": "village", "white": true, "w": 80.0})
+	_plaques.add_hang("treasure_map", 0.660, 0.660, "藏宝图", _click_treasure, "", "", {"page": "village", "white": true, "w": 96.0})
 	print("[主界面] 牌子层：", _plaques.items.size(), " 块（v211：顶栏 + 右栏 5 格 + 历练大碑）")
 
 func _player_tag() -> String:
@@ -1040,10 +1046,14 @@ func _refresh_plaques() -> void:
 	_plaques.set_vis("shop", rail_on)
 	_plaques.set_vis("kushou_test", rail_on)
 	_plaques.set_vis("stele", rail_on)
-	_plaques.set_vis("hill", rail_on and GameState.village_stage >= 1)
-	_plaques.set_vis("treasure", rail_on and GameState.map_found)
-	# v211：山洞过了也留在右栏（点一下只弹一句"洞里很凉"），右栏才凑得齐 5 格
-	_plaques.set_vis("cave", rail_on and GameState.b2_built)
+	# v237：后山把两只宠物都收完就没东西了——牌子直接消失，不再留个"白狐的老家"占位
+	var hill_done := GameState.pet_has("fox") and GameState.pet_has("qing_sun")
+	_plaques.set_vis("hill", rail_on and GameState.village_stage >= 1 and not hill_done)
+	# 右栏的 cave/treasure 退休：改由画里的 cave_scene/treasure_map 提示，用掉就消失
+	_plaques.set_vis("treasure", false)
+	_plaques.set_vis("cave", false)
+	_plaques.set_vis("treasure_map", rail_on and GameState.map_found and not GameState.b2_built)
+	_plaques.set_vis("cave_scene", rail_on and GameState.b2_built and not GameState.cave_opened)
 	_plaques.set_vis("craft", rail_on and GameState.cave_opened)
 	# v211：右栏按"当前可见的格子"重排（隐藏一格，下面的平滑往上顶）
 	_plaques.layout_rail(PlaqueLayer.RAIL_IDS, PlaqueLayer.RAIL_TOP, PlaqueLayer.RAIL_H, PlaqueLayer.RAIL_GAP)
@@ -1062,14 +1072,8 @@ func _refresh_plaques() -> void:
 		_plaques.set_sub("hill", "松梢落了只隼")
 	else:
 		_plaques.set_sub("hill", "白狐的老家")
-	if GameState.b2_built:
-		_plaques.set_sub("treasure", "图收在里头")
-	else:
-		_plaques.set_sub("treasure", "照图起一间\n木料 " + str(wood) + "/" + str(B2_COST))
-	if GameState.cave_opened:
-		_plaques.set_sub("cave", "洞里很凉")
-	else:
-		_plaques.set_sub("cave", "木料 " + str(wood) + "/" + str(CAVE_COST))
+	_plaques.set_sub("treasure_map", "照图起一间\n木料 " + str(wood) + "/" + str(B2_COST))
+	_plaques.set_sub("cave_scene", "扒开荒草\n木料 " + str(wood) + "/" + str(CAVE_COST))
 	var rooms: Array = ["品酒"]
 	if GameState.dange_built:
 		rooms.append("炼丹")
@@ -3032,11 +3036,11 @@ func _open_insight() -> void:
 	_insight_panel.open()
 
 func _on_deploy_started(party: Array, diff: int) -> void:
-	print("[主界面] 出征：", party, " · ", GameState.diff_name(diff), " → ", Conf.JOURNEY_SCENE)
-	var err := get_tree().change_scene_to_file(Conf.JOURNEY_SCENE)
+	print("[主界面] 出征：", party, " · ", GameState.diff_name(diff), " → ", Conf.EXPLORE_SCENE)
+	var err := get_tree().change_scene_to_file(Conf.EXPLORE_SCENE)
 	if err != OK:
-		print("[主界面] 打不开游历，错误码=", err, "；检查路径：", Conf.JOURNEY_SCENE)
-		_show_toast("进不去游历：路径＝" + Conf.JOURNEY_SCENE)
+		print("[主界面] 打不开游历，错误码=", err, "；检查路径：", Conf.EXPLORE_SCENE)
+		_show_toast("进不去游历：路径＝" + Conf.EXPLORE_SCENE)
 
 func _start_stage(i: int) -> void:
 	if i != GameState.stage_progress:

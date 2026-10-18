@@ -424,8 +424,12 @@ func push_move_to(to_p: Vector2, dur: float, trans: Tween.TransitionType = Tween
 	#   "Use stop() first."），紧跟其后的链式 .set_trans(...) 就当场炸，调用方函数中断 →
 	#   游历／决斗整个卡死。我写 Q版 时把**没修的那个写法**抄了过来，所以又犯一遍。
 	#   正确写法：先拿 PropertyTweener、判空；空就重开一条 tween 再来一次。
-	if _move_tw == null or not _move_tw.is_valid():
-		_move_tw = create_tween()
+	# 每次推位移都开一条新 tween；旧的一条先 kill。
+	# 之前“有就追加”的写法在连续两下 push 时会报
+	# "Can't append to a Tween that has started."（探针已复现）。
+	if _move_tw != null and _move_tw.is_valid():
+		_move_tw.kill()
+	_move_tw = create_tween()
 	var pt = _move_tw.tween_property(self, "position", to_p, maxf(dur, 0.01))
 	if pt == null:
 		_move_tw = create_tween()
