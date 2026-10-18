@@ -13,6 +13,15 @@ const dry = flag(a, 'dry');
 const stamp = new Date().toISOString().slice(0, 10);
 const backupDir = path.join(WS, 'assets', '_backup-' + stamp);
 
+/** 读 PNG 头拿尺寸（match 模式要按旧图尺寸来，免得把小图标撑大） */
+function pngSize(file) {
+  try {
+    const b = fs.readFileSync(file);
+    if (b.length < 24 || b[0] !== 0x89 || b[1] !== 0x50) return null;
+    return { w: b.readUInt32BE(16), h: b.readUInt32BE(20) };
+  } catch { return null; }
+}
+
 let done = 0;
 let failed = 0;
 for (const g of groups) {
@@ -22,7 +31,8 @@ for (const g of groups) {
   ensureDir(dstDir);
   let files = fs.readdirSync(srcDir).filter(f => /\.(jpg|jpeg|png)$/i.test(f) && !/_cut\.png$/i.test(f) && !f.startsWith('_'));
   if (g.only) files = files.filter(f => g.only.includes(path.parse(f).name));
-  say.step(g.dst + '  ' + files.length + ' 张  ' + (g.mode === 'height' ? g.height + 'px 高' : g.size + 'x' + g.size) + (dry ? '  [dry]' : ''));
+  const label = g.mode === 'height' ? g.height + 'px 高' : g.mode === 'match' ? '按旧图尺寸' : g.size + 'x' + g.size;
+  say.step(g.dst + '  ' + files.length + ' 张  ' + label + (dry ? '  [dry]' : ''));
   for (const f of files) {
     const base = path.parse(f).name;
     const src = path.join(srcDir, f);
@@ -35,7 +45,10 @@ for (const g of groups) {
       const outName = base + (g.suffix || '') + '.png';
       const outPath = path.join(dstDir, outName);
       const tmp = path.join(dstDir, '.tmp-' + outName);
-      const vf = g.mode === 'height'
+      const want = g.mode === 'match' && fs.existsSync(outPath) ? pngSize(outPath) : null;
+      const vf = want
+        ? 'scale=' + want.w + ':' + want.h + ':force_original_aspect_ratio=decrease,pad=' + want.w + ':' + want.h + ':(ow-iw)/2:(oh-ih)/2:color=0x00000000'
+        : g.mode === 'height'
         ? 'scale=-1:' + g.height + ':flags=lanczos'
         : 'scale=' + g.size + ':' + g.size + ':force_original_aspect_ratio=decrease,pad=' + g.size + ':' + g.size + ':(ow-iw)/2:(oh-ih)/2:color=0x00000000';
       execFileSync(FFMPEG, ['-y', '-loglevel', 'error', '-i', cut, '-vf', vf, '-pix_fmt', 'rgba', tmp], { stdio: 'pipe' });

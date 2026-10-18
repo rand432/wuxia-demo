@@ -1,0 +1,35 @@
+[
+  {
+    "src": ".ark-out/misc",
+    "dst": "assets/char",
+    "mode": "match",
+    "only": [
+      "chen_shi_full",
+      "chen_shi_q",
+      "chen_shi_face",
+      "player_face",
+      "qingluan_face"
+    ]
+  },
+  {
+    "src": ".ark-out/misc",
+    "dst": "assets/scenes",
+    "mode": "match",
+    "only": [
+      "chest_closed",
+      "chest_open"
+    ]
+  },
+  {
+    "src": ".ark-out/misc",
+    "dst": "assets/ui",
+    "mode": "match",
+    "only": [
+      "shop_stall",
+      "treasure_shelf",
+      "craft_bench",
+      "hill_rock",
+      "cave_mouth"
+    ]
+  }
+]

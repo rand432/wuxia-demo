@@ -1,0 +1,23 @@
+[
+  {
+    "src": ".ark-out/misc2",
+    "dst": "assets/char",
+    "mode": "match",
+    "only": [
+      "chen_shi_full",
+      "player_face"
+    ]
+  },
+  {
+    "src": ".ark-out/misc2",
+    "dst": "assets/ui",
+    "mode": "match",
+    "only": [
+      "shop_stall",
+      "treasure_shelf",
+      "craft_bench",
+      "hill_rock",
+      "cave_mouth"
+    ]
+  }
+]
