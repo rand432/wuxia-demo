@@ -369,6 +369,16 @@ const SETS := [
 
 const ELEM_CN := {"metal": "金", "wood": "木", "water": "水", "fire": "火", "earth": "土", "phys": "物理", "true": "真实"}
 
+# v242：锻造动态件（实例化装备）——不进 SETS，免得混进掉落池；
+#   只由 GameState.forge_cards 注册，存档载入时重建。
+static var FORGED_SETS := {}
+
+static func register_forged(id: String, set: Dictionary) -> void:
+	FORGED_SETS[id] = set
+
+static func clear_forged() -> void:
+	FORGED_SETS.clear()
+
 # ---- ㊿z4：被动功法 / 量身定做的辅助功法（带 "role" 的武学）----
 #   role：推荐给谁（空串＝通用）。**只是推荐，不拦着装**——照崩铁专武那把尺子
 #   （专武按命途限装、不锁人；这里"命途"那一层就是 weapon 的兵器类型）。
@@ -436,6 +446,8 @@ const STAT_CN := {"atk": "攻", "hp": "气血", "spd": "速度", "crit": "暴击
 const STAT_PCT := ["crit", "dmg", "crit_dmg"]
 
 static func by_id(id: String) -> Dictionary:
+	if FORGED_SETS.has(id):
+		return FORGED_SETS[id]
 	for s in SETS:
 		if str(s["id"]) == id:
 			return s

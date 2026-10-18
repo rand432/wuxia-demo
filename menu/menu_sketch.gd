@@ -70,6 +70,7 @@ const OutPanel := preload("res://menu/out_panel.gd")
 const ChestPanel := preload("res://menu/chest_panel.gd")   # v36：宝箱
 const AppraisePanel := preload("res://menu/appraise_panel.gd")   # v39：鉴宝行
 const CraftPanel := preload("res://menu/craft_panel.gd")   # v50：百工坊（品酒/炼丹/鉴宝 三合一的门厅）
+const ForgePanel := preload("res://menu/forge_panel.gd")   # v242：百工坊门厅第四间——铁砧
 const FormationPanel := preload("res://menu/formation_panel.gd")
 const WinePanel := preload("res://menu/wine_panel.gd")
 const AlchemyPanel := preload("res://menu/alchemy_panel.gd")
@@ -255,6 +256,7 @@ var _alchemy_panel = null
 var _star_panel = null   # v4.3：统一升星页（替掉旧的升星台）
 var _appraise_panel = null   # v39：鉴宝行
 var _craft_panel = null      # v50：百工坊（三个作坊的门厅）
+var _forge_panel = null      # v242：铁砧屏
 var _pet_panel = null
 var _shop_panel = null
 var _depart = null
@@ -841,6 +843,8 @@ func _ready() -> void:
 	add_child(_winery_panel)
 	_alchemy_panel = AlchemyPanel.new()
 	add_child(_alchemy_panel)
+	_forge_panel = ForgePanel.new()
+	add_child(_forge_panel)
 	_star_panel = StarPanel.new()
 	add_child(_star_panel)
 	_star_panel.closed.connect(_on_star_closed)
@@ -1716,6 +1720,9 @@ func _on_craft_room(room: String) -> void:
 				_show_toast("鉴宝行还没开张——过第 " + str(JIANBAO_STAGE) + " 关（打捞上来的货仓）")
 				return
 			_open_appraise()
+		"forge":
+			_clear_toast()
+			_forge_panel.open()
 
 func _click_winery() -> void:
 	_click_craft()
@@ -2219,7 +2226,7 @@ func _check_panel_anim() -> void:
 
 # 最上层的那个面板（后建的在上；作坊面板叠在百工坊门厅之上）
 func _top_panel() -> Control:
-	var arr: Array = [_insight_panel, _winery_panel, _alchemy_panel, _appraise_panel, _star_panel,
+	var arr: Array = [_insight_panel, _winery_panel, _alchemy_panel, _forge_panel, _appraise_panel, _star_panel,
 		_pet_panel, _shop_panel, _chest_panel, _craft_panel, _warehouse, _char_panel,
 		_out_panel, _formation, _depart]
 	for p in arr:
@@ -2339,9 +2346,10 @@ func _any_panel_open() -> bool:
 	var m: bool = _appraise_panel != null and _appraise_panel.visible
 	# v50：百工坊门厅也算"面板开着"
 	var n2: bool = _craft_panel != null and _craft_panel.visible
+	var p2: bool = _forge_panel != null and _forge_panel.visible
 	# v220：阅历线面板也补进来（原来漏了，开着时底下还能点）
 	var o2: bool = _insight_panel != null and _insight_panel.visible
-	return a or b or c or d or e or f or g or h or i or j or k or l or m or n2 or o2
+	return a or b or c or d or e or f or g or h or i or j or k or l or m or n2 or o2 or p2
 
 func _chen_visible() -> bool:
 	return GameState.disciple_joined and _story_page < 0 and not _any_panel_open()

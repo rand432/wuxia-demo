@@ -20,6 +20,7 @@ const UiKit := preload("res://shared/ui_kit.gd")
 const ItemArt := preload("res://shared/item_art.gd")   # v70：水墨道具图
 const SceneArt := preload("res://shared/scene_art.gd")   # v77：内景垫图
 const Ui := preload("res://menu/menu_theme.gd")          # v215：影之刃皮肤
+const ForgeData := preload("res://menu/data_forge.gd")     # v242：铁砧
 
 signal closed
 # 门厅自己不管那三个面板——由主界面把"开门"的动作接过去
@@ -32,10 +33,10 @@ const GOLD := Color(0.72, 0.52, 0.14)
 const GREEN := Color(0.28, 0.50, 0.30)
 
 const PANEL_W := 640.0
-const PANEL_H := 820.0
-const CARD_Y0 := 208.0
-const CARD_STEP := 172.0
-const CARD_H := 154.0
+const PANEL_H := 980.0
+const CARD_Y0 := 190.0
+const CARD_STEP := 158.0
+const CARD_H := 144.0
 
 var _panel: Panel
 var _cards: Array = []
@@ -103,7 +104,7 @@ func _build() -> void:
 			title.add_theme_font_override("font", bf)
 	_panel.add_child(title)
 
-	var sub := _label("一间屋子，三个作坊：酿酒、炼丹、鉴宝。", 14,
+	var sub := _label("一间屋子，四个作坊：酿酒、炼丹、鉴宝、锻造。", 14,
 		Color(Ui.TXT_DIM.r, Ui.TXT_DIM.g, Ui.TXT_DIM.b, 0.85) if Ui.SKIN == 1 else Color(INK.r, INK.g, INK.b, 0.62))
 	sub.position = Vector2(30, 72) if Ui.SKIN == 1 else Vector2(30, 62)
 	sub.size = Vector2(PANEL_W - 60.0, 22)
@@ -124,6 +125,7 @@ func _build() -> void:
 		{"id": "wine", "name": "品 酒 坊", "icon": "酒", "art": "it_jar"},
 		{"id": "alchemy", "name": "炼 丹 阁", "icon": "丹", "art": "it_herb"},
 		{"id": "jianbao", "name": "鉴 宝 行", "icon": "宝", "art": "it_token"},
+		{"id": "forge", "name": "铁 砧 台", "icon": "锻", "art": "it_ingot"},
 	]
 	_cards = []
 	for i in rooms.size():
@@ -260,6 +262,11 @@ func refresh() -> void:
 					line = "看仓 " + str(GameState.appraise_offers.size()) + " 只 · " + GameState.appraise_tool_line()
 				else:
 					line = "还没开张——过第 " + str(GameState.STORY_JIANBAO_STAGE) + " 关（打捞上来的货仓）"
+			"forge":
+				on = GameState.winery_built
+				var fit: Dictionary = GameState.forge_item
+				var fname := "空砧" if fit.is_empty() else ForgeData.item_name(fit)
+				line = fname + " · 锻造石 " + str(GameState.material_count("forge_stone"))
 		st.text = line
 		# 未开的作坊：牌子压暗（进不去）
 		if Ui.SKIN == 1:
@@ -292,6 +299,10 @@ func _on_card(ev: InputEvent, room: String) -> void:
 		"jianbao":
 			if not GameState.jianbao_ok():
 				_msg_lb.text = "鉴宝行还没开张——过第 " + str(GameState.STORY_JIANBAO_STAGE) + " 关（打捞上来的货仓）"
+				return
+		"forge":
+			if not GameState.winery_built:
+				_msg_lb.text = "铁砧台还没起——先把山洞那段过了"
 				return
 	_msg_lb.text = ""
 	room_pressed.emit(room)

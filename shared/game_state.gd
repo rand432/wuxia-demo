@@ -807,6 +807,11 @@ static var vault_items := {}
 # v242：锻造 V0.1——砧上那一把 ＋ 已收下的成品
 static var forge_item := {}
 static var forge_bag: Array = []
+# v242：锻造动态件（sid -> Cards 动态卡集）——存档载入时重建
+static var forge_cards := {}
+static var forge_seq := 0
+# v242：锻造图鉴（合中过的胚子 id）
+static var forge_compendium := {}
 static var materials := {}
 static var formation := ["player"]
 static var stage_progress := 0
@@ -3388,6 +3393,20 @@ static func vault_add_item(sid: String, n := 1) -> void:
 	if n > 0:
 		_elem_topup(sid)
 
+# ---- v242：锻造动态件 ----
+static func forge_next_sid() -> String:
+	forge_seq += 1
+	var sid := "forge_%04d" % forge_seq
+	while forge_cards.has(sid) or not Cards.by_id(sid).is_empty():
+		forge_seq += 1
+		sid = "forge_%04d" % forge_seq
+	return sid
+
+static func forge_add(sid: String, set: Dictionary) -> void:
+	forge_cards[sid] = set
+	Cards.register_forged(sid, set)
+	vault_add_item(sid, 1)
+
 static func vault_item_count(sid: String) -> int:
 	return int(vault_items.get(sid, 0))
 
@@ -5916,6 +5935,13 @@ static func load_game() -> void:
 	vault_items = _sd(vlt.get("items", {}), vault_items)
 	forge_item = _sd(vlt.get("forge_item", {}), forge_item)
 	forge_bag = _sa(vlt.get("forge_bag", []), forge_bag)
+	forge_cards = _sd(vlt.get("forge_cards", {}), {})
+	forge_seq = int(vlt.get("forge_seq", forge_seq))
+	forge_compendium = _sd(vlt.get("forge_compendium", {}), {})
+	Cards.clear_forged()
+	for fsid_v in forge_cards.keys():
+		var fsid := str(fsid_v)
+		Cards.register_forged(fsid, forge_cards[fsid])
 	materials = _sd(vlt.get("materials", {}), materials)
 	materials.erase("wood")   # v242：建设删了，木料一并下线（老档里剩下的不再显示）
 	fragments = _sd(vlt.get("fragments", {}), fragments)
@@ -5987,6 +6013,8 @@ static func save_game() -> void:
 	cf.set_value("world", "vault", {
 		"cards": vault_cards, "items": vault_items, "materials": materials,
 		"forge_item": forge_item, "forge_bag": forge_bag,
+		"forge_cards": forge_cards, "forge_seq": forge_seq,
+		"forge_compendium": forge_compendium,
 		"fragments": fragments, "pills": pills, "wines": wines,
 		"stars": item_stars, "alchemy": alchemy,   # alchemy 只为兼容老档（v41 起不写新内容）
 		# v58：五行元素（件名 → {元素:份数}）与"现在用哪一把"——**新增键，老档读进来是空的**
@@ -6108,6 +6136,10 @@ static func reset() -> void:
 	vault_items.clear()
 	forge_item.clear()
 	forge_bag.clear()
+	forge_cards.clear()
+	forge_seq = 0
+	forge_compendium.clear()
+	Cards.clear_forged()
 	materials.clear()
 	fragments.clear()
 	formation = ["player"]

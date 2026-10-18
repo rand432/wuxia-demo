@@ -27,7 +27,7 @@ const BLANKS := [
 	{"id": "zhujian", "name": "竹剑胚", "weapon": "竹剑", "kind": "sword",
 		"quality": 0, "cap": 2, "atk": 12, "dmg": 1, "open": 10,
 		"probs": [3, 35, 40, 17, 5], "trait": "便宜"},
-	{"id": "xuantie", "name": "玄铁刀胚", "weapon": "玄铁刀", "kind": "saber",
+	{"id": "xuantie", "name": "玄铁刀胚", "weapon": "玄铁刀", "kind": "dual",
 		"quality": 1, "cap": 3, "atk": 24, "dmg": 3, "open": 20,
 		"probs": [15, 30, 18, 22, 15], "trait": "赌"},
 	{"id": "shangpin", "name": "上品青锋", "weapon": "上品青锋剑", "kind": "sword",
@@ -80,6 +80,49 @@ static func item_stats(it: Dictionary) -> Dictionary:
 static func ascend_cost(q: int) -> Dictionary:
 	return {"silver": 20 + 20 * clampi(q, 0, 4), "jin": 1}
 
+static func card_set(it: Dictionary, sid: String) -> Dictionary:
+	var nm := item_name(it)
+	var st := item_stats(it)
+	return {
+		"id": sid, "name": nm, "item": nm,
+		"pool": "weapon", "quality": quality_name(int(it.get("quality", 0))),
+		"weapon": str(it.get("kind", "sword")),
+		"no_drop": true, "forge": true, "parts": [],
+		"item_stats": {"atk": int(st["atk"]), "dmg": int(st["dmg"])},
+		"desc": "锻造出品（" + trait_of(it) + "）",
+	}
+
 static func trait_of(it: Dictionary) -> String:
 	var b := blank(str(it.get("blank", "")))
 	return str(b.get("trait", ""))
+
+# ============================================================
+# 图鉴合（V0.1 一条）：石头试组合；合中才进图鉴，之后扣材料一键造胚。
+#   试错只亏石头，材料不动；正式造胚才吃材料。
+# ============================================================
+const TRIAL_STONES := 3
+const COMBOS := [
+	{"id": "qingfeng", "blank": "qingfeng", "name": "青锋剑胚",
+		"trial": ["bone", "rice"], "hint": "骨粉养锋，米浆淬火",
+		"cost": {"bone": 3, "rice": 2}},
+]
+
+static func combo(id: String) -> Dictionary:
+	for c in COMBOS:
+		if str((c as Dictionary)["id"]) == id:
+			return (c as Dictionary).duplicate(true)
+	return {}
+
+static func combo_by_trial(sel: Array) -> Dictionary:
+	var a: Array = []
+	for k in sel:
+		a.append(str(k))
+	a.sort()
+	for c in COMBOS:
+		var t: Array = []
+		for k in (c as Dictionary)["trial"]:
+			t.append(str(k))
+		t.sort()
+		if a == t:
+			return (c as Dictionary).duplicate(true)
+	return {}

@@ -113,6 +113,8 @@ var _foe: Node2D = null
 var _p_base := Vector2(210, 950)   # 当前聚焦那名我方的站位（由 _p_focus_on 换）
 var _e_base := Vector2(510, 950)
 var _skip_enemy := false
+# v242：探险战斗的敌人也用火柴人（主界面的塔/游历保持原样）
+var stick_foes := false
 # v139（用户："主角半血状态对战小兵且只能使用普攻卡"）：这一场**封哪几类牌**——
 #   节点上写 seal=["arts","ult"] 就只摊普攻。剧情用的闸，不走状态系统（那是给玩家看的 debuff）。
 var _seal: Array = []
@@ -1225,7 +1227,12 @@ func _build_foes(node: Dictionary, foe: Dictionary) -> void:
 func _make_foe_node(i: int) -> void:
 	var f: Dictionary = _foes[i]
 	# v65：按敌人名字取"Q版原型键"（有图就用 Q版，没图工厂自动退回火柴人）
-	var n := ActorFactory.make_enemy(ActorFactory.enemy_key(str(f.get("name", ""))))
+	# v242：探险战斗显式要求火柴人时，不再走 Q版工厂
+	var n: Node2D
+	if stick_foes:
+		n = StickFighter.new()
+	else:
+		n = ActorFactory.make_enemy(ActorFactory.enemy_key(str(f.get("name", ""))))
 	# v71c：染色只给火柴人用（那时候是没脸的线条人，靠颜色区分敌我）。
 	#   Q版 是画好的图，再乘一层色会发灰发白、跟主角不是一个画风——用户一眼就看出来了。
 	var wcol: Array = f.get("color", [0.5, 0.3, 0.28])
@@ -2313,6 +2320,7 @@ func run(state, player: Node2D, fx: Control, node: Dictionary, foe_first := fals
 	FadeIn.attach()   # v68：进场淡入
 
 	var foe: Dictionary = node.get("foe", {})
+	stick_foes = bool(node.get("stick_enemies", false))
 	_skip_enemy = false
 	_skip_next = false
 	# ㊿：沿用上次选的出手方式（本局记忆；默认自动＝老手感）。

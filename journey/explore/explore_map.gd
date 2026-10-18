@@ -615,6 +615,7 @@ func _try_battle(enemy: Node2D) -> void:
 		"name": str(enemy.get_meta("foe_name", "敌人")),
 		"foe": (enemy.get_meta("foe", {}) as Dictionary).duplicate(true),
 		"money": [12, 25],
+		"stick_enemies": true,   # v242：探险战斗的敌人也用火柴人
 	}
 	# 战斗里主角用火柴人（地图上仍用 Q 版立绘）：另起一个火柴人替身，
 	# 打完收掉，地图上的立绘原样还回来。
