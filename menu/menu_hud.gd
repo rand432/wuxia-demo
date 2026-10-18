@@ -19,6 +19,7 @@ var font: Font = null
 var host = null      # menu_sketch.gd 塞进来
 var _brush: Font = null
 var _tag_a: Array = []     # v200：每格的"按下量"（缓动，0~1）
+var _tag_act: Array = []   # v220：哪一格对应的面板开着（金线缓动，0~1）
 
 func _ready() -> void:
 	if Ui.SKIN == 1 and ResourceLoader.exists(Ui.FONT_BRUSH):
@@ -32,6 +33,8 @@ func _process(d: float) -> void:
 	var n: int = host._tag_rects.size()
 	while _tag_a.size() < n:
 		_tag_a.append(0.0)
+	while _tag_act.size() < n:
+		_tag_act.append(0.0)
 	var moved := false
 	for i in n:
 		var target := 1.0 if int(host._pressed_tag) == i else 0.0
@@ -39,6 +42,11 @@ func _process(d: float) -> void:
 		if absf(v - float(_tag_a[i])) > 0.002:
 			moved = true
 		_tag_a[i] = v
+		var ta := 1.0 if int(host._active_tag) == i else 0.0
+		var va := Ui.ease(float(_tag_act[i]), ta, 14.0, d)
+		if absf(va - float(_tag_act[i])) > 0.002:
+			moved = true
+		_tag_act[i] = va
 	if moved:
 		queue_redraw()
 
@@ -222,8 +230,16 @@ func _n_tag(rc: Rect2, txt: String, primary: bool, pressed: bool, idx: int) -> v
 		edge = Color(Ui.GOLD_HI.r, Ui.GOLD_HI.g, Ui.GOLD_HI.b, 0.82)
 	if a > 0.01:
 		fill = Ui.lerp_c(fill, Ui.INK3, a * 0.55)
+	var aa := 0.0
+	if idx >= 0 and idx < _tag_act.size():
+		aa = clampf(float(_tag_act[idx]), 0.0, 1.0)
 	Ui.panel(self, r, {"fill": fill, "edge": edge, "cut": 7.0, "bracket": false,
-		"glow": (1.0 if primary else 0.0) + a * 0.6, "ink_halo": false})
+		"glow": (1.0 if primary else 0.0) + a * 0.6 + aa * 0.55, "ink_halo": false})
+	if aa > 0.01:
+		# v220：开着的面板 → 该格顶沿一道金线（0.2s 缓入缓出，不是硬跳）
+		draw_line(Vector2(r.position.x + 12.0, r.position.y + 2.0),
+			Vector2(r.end.x - 12.0, r.position.y + 2.0),
+			Color(Ui.GOLD_HI.r, Ui.GOLD_HI.g, Ui.GOLD_HI.b, 0.95 * aa), 2.6, true)
 	if primary:
 		var ir := Rect2(r.position + Vector2(4.0, 4.0), r.size - Vector2(8.0, 8.0))
 		var ip := Ui.cut_poly(ir, 4.0)

@@ -3842,13 +3842,12 @@ func _card_face(p: Control, pos: Vector2, sz: Vector2, id: String) -> void:
 	band.add_theme_stylebox_override("panel", bsb)
 	box.add_child(band)
 	var bl := Label.new()
-	bl.position = Vector2(0, 0)
-	# v15k：⚠ 原来 size.x = sz.x − 6，而色带自身宽是 sz.x − 6 且起点在 x=3 ——
-	#   等于右缘多出 6px 被卡片裁掉（"力量祝福 2/3"最后一个字被切）。收窄 10。
+	# v216：色带字改**左对齐**——扇形手牌里只露出每张卡左侧一条，居中会把系列名切成碎片
+	bl.position = Vector2(8, 0)
 	bl.size = Vector2(sz.x - 16, 30)
 	bl.add_theme_font_size_override("font_size", 18)
 	bl.add_theme_color_override("font_color", Color(0.99, 0.97, 0.93))
-	bl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	bl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	bl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	# v15k（用户："比如 祝福卡 力量祝福"）：色带写**表里的完整系列名**（力量祝福 / 踏云步 …）。
 	#   ⚠ 别用 CARD_TIER_NAME —— 那是"卡名递进"（力量/力士/刑天），只有卡名而没有系列感。
@@ -8459,13 +8458,27 @@ func _fill_deck_slots(p: Control, y: float) -> float:
 			var off := float(i) - 4.5
 			var holder := Control.new()
 			var px := 320.0 + off * fan_step
-			var py := y + 300.0 + 18.0 * pow(absf(off) / 4.5, 2.0)
+			var py := y + 380.0 + 18.0 * pow(absf(off) / 4.5, 2.0)
 			holder.position = Vector2(px - 63.0, py - 268.0)
 			holder.size = Vector2(126.0, 268.0)
 			holder.pivot_offset = Vector2(63.0, 268.0)
 			holder.rotation = off * fan_span
 			p.add_child(holder)
 			_card_face(holder, Vector2.ZERO, Vector2(126, 268), str(_deck_cards[i]))
+			# 扇形会压住每张卡的中部——在露出来的左侧补一枚"卡名头两字"小签，
+			# 最后一张（整张露出）不补，免得与卡面本名重复
+			var card_id_now := str(_deck_cards[i])
+			if i < 9 and card_id_now != "":
+				# 只补**一个字**（卡名首字）——压在卡面"名字/图标"之间的空带里，
+				# 不盖色带、不盖本名，扇形里每一张都认得出
+				var tab := Label.new()
+				tab.text = card_name(card_id_now).substr(0, 1)
+				tab.position = Vector2(10, 92)
+				tab.size = Vector2(38, 34)
+				tab.add_theme_font_size_override("font_size", 26)
+				tab.add_theme_color_override("font_color", SEAL)
+				tab.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				holder.add_child(tab)
 			var hit := _pbtn(holder, "", Vector2.ZERO, Vector2(126, 260), 16, false, _card_detail.bind(i))
 			hit.add_theme_stylebox_override("normal", _flat(Color(1, 1, 1, 0.001)))
 			hit.add_theme_stylebox_override("hover", _flat(Color(1, 1, 1, 0.10)))
@@ -8476,15 +8489,15 @@ func _fill_deck_slots(p: Control, y: float) -> float:
 		for id_v in _bm_eaten:
 			names.append(card_name(str(id_v)))
 		var eat := Label.new()
-		eat.position = Vector2(24, y + (330.0 if _pending_card == "" else 566.0))
+		eat.position = Vector2(24, y + (430.0 if _pending_card == "" else 566.0))
 		eat.size = Vector2(608, 70)
 		eat.add_theme_font_size_override("font_size", 20)
 		eat.add_theme_color_override("font_color", SEAL)
 		eat.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		eat.text = "吞噬丹吞掉的 " + str(_bm_eaten.size()) + " 张（已腾出格子 · 效果与成套计数仍在）：" + "、".join(PackedStringArray(names))
 		p.add_child(eat)
-		return y + (410.0 if _pending_card == "" else 646.0)
-	return y + (400.0 if _pending_card == "" else 560.0)
+		return y + (510.0 if _pending_card == "" else 646.0)
+	return y + (500.0 if _pending_card == "" else 560.0)
 
 # 视图②：吞噬记录（每张卡吃了几张 → 现在几星 → 现在什么效果）
 func _fill_deck_ate(p: Control, y: float) -> float:

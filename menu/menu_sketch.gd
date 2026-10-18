@@ -206,6 +206,7 @@ var _dragging := false
 var _moved := 0.0
 var _mode := ""
 var _pressed_tag := -1
+var _active_tag := -1         # v220：当前开着的面板对应底排哪一格（金线提示）
 var _toast := ""
 var _toast_t := 0.0
 var _hint_a := 1.0
@@ -224,6 +225,7 @@ var _ink_clip = null          # v98：画心——村景页裁到装裱以内那
 var _desk_bg = null           # v98：桌面（画卷之外那一圈底色）
 var _video = null             # v99：动态画（VideoStreamPlayer；村景页现在放的是它）
 var _sc := 720.0              # v98：画卷偏移。0=村景页铺满 · 720=封面页铺满（向右拖＝展开到村景）
+var _sc_tween: Tween = null   # v220：松手后吸附到封面/村景，不再停在半路
 var _hint_used := false       # v98：玩家拖过一次就不再多嘴"按住画卷"
 var _set_btn = null           # v97：旧的右上角「设置」按钮（牌子层接管后收起来，代码留着）
 var _tag_notice := -1
@@ -279,8 +281,38 @@ class MoneyHud extends Node2D:
 	var yuanbao := 0
 	var _sb1: StyleBoxFlat = null
 	var _sb2: StyleBoxFlat = null
+	# v220：钱数滚动——目标变了先"数上去"，再停在目标值；同时金一下
+	var _disp_silver := 0.0
+	var _disp_yuanbao := 0.0
+	var _last_silver := -1
+	var _last_yuanbao := -1
+	var _bump_s := 0.0
+	var _bump_y := 0.0
+	var _seeded := false
 
-	func _process(_delta: float) -> void:
+	func _process(delta: float) -> void:
+		if not _seeded:
+			_disp_silver = float(silver)
+			_disp_yuanbao = float(yuanbao)
+			_last_silver = silver
+			_last_yuanbao = yuanbao
+			_seeded = true
+		if silver != _last_silver:
+			_last_silver = silver
+			_bump_s = 1.0
+		if yuanbao != _last_yuanbao:
+			_last_yuanbao = yuanbao
+			_bump_y = 1.0
+		var ns := Ui.ease(_disp_silver, float(silver), 9.0, delta)
+		if absf(ns - float(silver)) < 0.5:
+			ns = float(silver)
+		_disp_silver = ns
+		var ny := Ui.ease(_disp_yuanbao, float(yuanbao), 9.0, delta)
+		if absf(ny - float(yuanbao)) < 0.5:
+			ny = float(yuanbao)
+		_disp_yuanbao = ny
+		_bump_s = maxf(0.0, _bump_s - delta * 5.0)
+		_bump_y = maxf(0.0, _bump_y - delta * 5.0)
 		queue_redraw()
 
 	func _coin(c: Vector2) -> void:
@@ -307,7 +339,8 @@ class MoneyHud extends Node2D:
 		var r2 := Rect2(488.0, 30.0, 140.0, 38.0)
 		var o := {"fill": Color(0.094, 0.080, 0.070, 0.90),
 			"edge": Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.58),
-			"cut": 7.0, "bracket": false, "shadow": 0.45, "ink_halo": false}
+			"cut": 7.0, "bracket": false, "shadow": 0.45, "ink_halo": false,
+			"glow": maxf(_bump_s, _bump_y) * 0.55}
 		Ui.panel(self, r1, o)
 		Ui.panel(self, r2, o)
 		# 铜钱：金钱一枚，中间方孔
@@ -315,16 +348,16 @@ class MoneyHud extends Node2D:
 		draw_circle(c, 10.5, Color(0.86, 0.71, 0.38))
 		draw_arc(c, 10.5, 0.0, TAU, 24, Color(0.38, 0.29, 0.12, 0.85), 1.4, true)
 		draw_rect(Rect2(c + Vector2(-3.5, -3.5), Vector2(7.0, 7.0)), Color(0.38, 0.29, 0.12, 0.85), false, 1.4)
-		draw_string(font, Vector2(384.0, 57.0), str(silver), HORIZONTAL_ALIGNMENT_RIGHT, 82.0, 20.0,
-			Color(0.960, 0.925, 0.820, 0.96))
+		draw_string(font, Vector2(384.0, 57.0), str(int(round(_disp_silver))), HORIZONTAL_ALIGNMENT_RIGHT, 82.0, 20.0,
+			Color(0.960, 0.925, 0.820, 0.96).lerp(Ui.GOLD_HI, _bump_s * 0.85))
 		# 元宝
 		var g := Vector2(512.0, 49.0)
 		var pts := PackedVector2Array([g + Vector2(-9.0, 5.0), g + Vector2(-5.0, -1.0),
 			g + Vector2(5.0, -1.0), g + Vector2(9.0, 5.0)])
 		draw_colored_polygon(pts, Color(0.86, 0.71, 0.38))
 		draw_circle(g + Vector2(0.0, -3.0), 4.6, Color(0.90, 0.76, 0.42))
-		draw_string(font, Vector2(532.0, 57.0), str(yuanbao), HORIZONTAL_ALIGNMENT_RIGHT, 82.0, 20.0,
-			Color(0.960, 0.925, 0.820, 0.96))
+		draw_string(font, Vector2(532.0, 57.0), str(int(round(_disp_yuanbao))), HORIZONTAL_ALIGNMENT_RIGHT, 82.0, 20.0,
+			Color(0.960, 0.925, 0.820, 0.96).lerp(Ui.GOLD_HI, _bump_y * 0.85))
 
 	func _draw() -> void:
 		if font == null:
@@ -2178,6 +2211,22 @@ func _process(delta: float) -> void:
 			_refresh_plaques()
 	_apply_layer_transforms()
 	_check_panel_anim()
+	# v220：底排金线——哪个面板开着，哪一格亮
+	var tp := _top_panel()
+	var at := -1
+	if tp == _depart:
+		at = 0
+	elif tp == _char_panel:
+		at = 1
+	elif tp == _warehouse:
+		at = 2
+	elif tp == _pet_panel:
+		at = 3
+	elif tp == _chest_panel:
+		at = 4
+	elif tp == _insight_panel:
+		at = 5
+	_active_tag = at
 	queue_redraw()
 
 # v211（用户："需要动的也动起来"）：面板开场——scale 0.96→1 + alpha，0.18s TRANS_BACK。
@@ -2202,7 +2251,7 @@ func _check_panel_anim() -> void:
 
 # 最上层的那个面板（后建的在上；作坊面板叠在百工坊门厅之上）
 func _top_panel() -> Control:
-	var arr: Array = [_winery_panel, _alchemy_panel, _appraise_panel, _star_panel,
+	var arr: Array = [_insight_panel, _winery_panel, _alchemy_panel, _appraise_panel, _star_panel,
 		_pet_panel, _shop_panel, _chest_panel, _craft_panel, _warehouse, _char_panel,
 		_out_panel, _formation, _depart]
 	for p in arr:
@@ -2322,7 +2371,9 @@ func _any_panel_open() -> bool:
 	var m: bool = _appraise_panel != null and _appraise_panel.visible
 	# v50：百工坊门厅也算"面板开着"
 	var n2: bool = _craft_panel != null and _craft_panel.visible
-	return a or b or c or d or e or f or g or h or i or j or k or l or m or n2
+	# v220：阅历线面板也补进来（原来漏了，开着时底下还能点）
+	var o2: bool = _insight_panel != null and _insight_panel.visible
+	return a or b or c or d or e or f or g or h or i or j or k or l or m or n2 or o2
 
 func _chen_visible() -> bool:
 	return GameState.disciple_joined and _story_page < 0 and not _any_panel_open()
@@ -2583,6 +2634,8 @@ func _gui_input(ev: InputEvent) -> void:
 			if p.y > Conf.BAND_TOP - 60.0 and p.y < Conf.TAG_Y - 8.0:
 				_mode = "scroll"
 				_dragging = true
+				if _sc_tween != null and _sc_tween.is_valid():
+					_sc_tween.kill()
 				if INK_ONLY:
 					Audio.sfx("paper", -20.0, randf_range(0.96, 1.04))   # v98：展卷一声纸响（很轻）
 			else:
@@ -2602,6 +2655,8 @@ func _gui_input(ev: InputEvent) -> void:
 				_tap_at(p)
 			elif m == "tag" and tg >= 0 and _moved < 14.0 and (_tag_rects[tg] as Rect2).has_point(p):
 				_tag_fire(tg)
+			elif m == "scroll":
+				_snap_scroll()
 			accept_event()
 	elif ev is InputEventMouseMotion and _dragging:
 		var mm := ev as InputEventMouseMotion
@@ -2615,6 +2670,18 @@ func _gui_input(ev: InputEvent) -> void:
 		if _moved > 24.0:
 			_hint_a = maxf(0.0, _hint_a - 0.05)
 		accept_event()
+
+# v220：画卷松手吸附——过半就归到村景，没过半弹回封面；0.32s 缓出
+func _snap_scroll() -> void:
+	if not INK_ONLY:
+		return
+	if _sc <= 1.0 or _sc >= Conf.DW - 1.0:
+		return
+	if _sc_tween != null and _sc_tween.is_valid():
+		_sc_tween.kill()
+	var target: float = 0.0 if _sc < Conf.DW * 0.5 else Conf.DW
+	_sc_tween = create_tween()
+	_sc_tween.tween_property(self, "_sc", target, 0.32).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 
 func _tap_at(p: Vector2) -> void:
 	if PIN_CAM:

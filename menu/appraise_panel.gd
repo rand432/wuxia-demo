@@ -27,6 +27,7 @@ const Loot := preload("res://shared/data_loot.gd")
 const Ladder := preload("res://shared/data_ladder.gd")   # v58：掉落阶梯（列数规则与抽货共用一个口）
 const UiKit := preload("res://shared/ui_kit.gd")
 const SceneArt := preload("res://shared/scene_art.gd")   # v77：内景垫图
+const Ui := preload("res://menu/menu_theme.gd")          # v218：影之刃皮肤
 
 signal closed
 
@@ -262,41 +263,66 @@ func _build() -> void:
 	_panel.size = Vector2(PANEL_W, PANEL_H)
 	_panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	var psb := StyleBoxFlat.new()
-	psb.bg_color = Color(PAPER.r, PAPER.g, PAPER.b, 0.98)
-	psb.set_corner_radius_all(14)
-	psb.border_color = Color(0.32, 0.27, 0.22, 0.55)
-	psb.set_border_width_all(2)
+	if Ui.SKIN == 1:
+		psb.bg_color = Color(0.961, 0.941, 0.898, 0.985)
+		psb.set_corner_radius_all(4)
+		psb.border_color = Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.55)
+		psb.set_border_width_all(2)
+	else:
+		psb.bg_color = Color(PAPER.r, PAPER.g, PAPER.b, 0.98)
+		psb.set_corner_radius_all(14)
+		psb.border_color = Color(0.32, 0.27, 0.22, 0.55)
+		psb.set_border_width_all(2)
 	_panel.add_theme_stylebox_override("panel", psb)
 	add_child(_panel)
-	# v77：垫一张货仓内景（鉴宝行就在仓里翻货）
-	UiKit.add_room_bg(_panel, SceneArt.store_room(), 0.34)
+	if Ui.SKIN != 1:
+		# v77：垫一张货仓内景（鉴宝行就在仓里翻货）——v218：皮肤下收掉，净板
+		UiKit.add_room_bg(_panel, SceneArt.store_room(), 0.34)
+	else:
+		_panel.set_meta("skin_header", true)
+		var chrome := Control.new()
+		chrome.size = Vector2(PANEL_W, PANEL_H)
+		chrome.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		chrome.draw.connect(func() -> void: Ui.header(chrome, PANEL_W, 96.0))
+		_panel.add_child(chrome)
+		_panel.move_child(chrome, 0)
 
 	var title := _label("鉴 宝 行", 30, INK)
-	title.position = Vector2(28, 14)
-	title.size = Vector2(240, 44)
+	title.position = Vector2(28, 18)
+	title.size = Vector2(260, 46)
+	if Ui.SKIN == 1:
+		title.add_theme_font_size_override("font_size", 36)
+		title.add_theme_color_override("font_color", Ui.GOLD_HI)
+		var bf := Ui.brush_font()
+		if bf != null:
+			title.add_theme_font_override("font", bf)
 	_panel.add_child(title)
 
-	var sub := _label("船上捞上来的货仓，一仓一个价。看中了就点开——先用道具照一照，再决定买不买。", 13, Color(INK.r, INK.g, INK.b, 0.62))
-	sub.position = Vector2(30, 54)
+	var sub := _label("船上捞上来的货仓，一仓一个价。看中了就点开——先用道具照一照，再决定买不买。", 12,
+		Color(Ui.TXT_DIM.r, Ui.TXT_DIM.g, Ui.TXT_DIM.b, 0.88) if Ui.SKIN == 1 else Color(INK.r, INK.g, INK.b, 0.62))
+	sub.position = Vector2(30, 70) if Ui.SKIN == 1 else Vector2(30, 54)
 	sub.size = Vector2(PANEL_W - 60.0, 22)
 	_panel.add_child(sub)
 
-	_stat_lb = _label("", 13, Color(INK.r, INK.g, INK.b, 0.62))
-	_stat_lb.position = Vector2(30, 84)
-	_stat_lb.size = Vector2(PANEL_W - 60.0, 22)
+	# ⚠ 这行在 96 刊头**下面**的纸面上，皮肤下也得用深色（亮色在宣纸上会糊）
+	_stat_lb = _label("", 11 if Ui.SKIN == 1 else 13, Color(INK.r, INK.g, INK.b, 0.66))
+	_stat_lb.position = Vector2(30, 100) if Ui.SKIN == 1 else Vector2(30, 84)
+	_stat_lb.size = Vector2(PANEL_W - 60.0, 32)
+	_stat_lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_panel.add_child(_stat_lb)
 
-	var tip := _label("（店里只写名字与价钱——**几格**得自己量；道具在货栈「鉴宝」页买，每日限购）".replace("**", ""), 13,
-		Color(INK.r, INK.g, INK.b, 0.45))   # v61（手游）：12 → 13 号
-	tip.position = Vector2(30, 108)
+	var tip := _label("（店里只写名字与价钱——几格得自己量；道具在货栈「鉴宝」页买，每日限购）", 11 if Ui.SKIN == 1 else 13,
+		Color(INK.r, INK.g, INK.b, 0.48))
+	tip.position = Vector2(30, 140) if Ui.SKIN == 1 else Vector2(30, 108)
 	tip.size = Vector2(PANEL_W - 60.0, 24)
 	_panel.add_child(tip)
 
 	var sep := ColorRect.new()
 	sep.color = Color(INK.r, INK.g, INK.b, 0.22)
-	sep.position = Vector2(28, 140)
+	sep.position = Vector2(28, 168) if Ui.SKIN == 1 else Vector2(28, 140)
 	sep.size = Vector2(PANEL_W - 56.0, 2)
 	sep.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	sep.visible = Ui.SKIN != 1
 	_panel.add_child(sep)
 
 	# ── 三只货仓：一只一个横框（左头会动的货仓 ＋ 名字 ＋ 价钱）──
@@ -308,31 +334,44 @@ func _build() -> void:
 		row.size = Vector2(PANEL_W - 56.0, ROW_H)
 		row.mouse_filter = Control.MOUSE_FILTER_STOP
 		var rsb := StyleBoxFlat.new()
-		rsb.bg_color = Color(1, 1, 1, 0.40)
-		rsb.set_corner_radius_all(12)
-		rsb.border_color = Color(INK.r, INK.g, INK.b, 0.24)
-		rsb.set_border_width_all(1)
+		if Ui.SKIN == 1:
+			rsb.bg_color = Color(0.095, 0.082, 0.072, 0.96)
+			rsb.set_corner_radius_all(3)
+			rsb.border_color = Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.36)
+			rsb.set_border_width_all(1)
+		else:
+			rsb.bg_color = Color(1, 1, 1, 0.40)
+			rsb.set_corner_radius_all(12)
+			rsb.border_color = Color(INK.r, INK.g, INK.b, 0.24)
+			rsb.set_border_width_all(1)
 		row.add_theme_stylebox_override("panel", rsb)
 		_panel.add_child(row)
 		var art := HoldArt.new()
 		art.position = Vector2(14, 12)
 		art.size = Vector2(120, 136)
 		row.add_child(art)
-		var rn := _label("", 22, INK)
+		var rn := _label("", 22, Ui.GOLD_HI if Ui.SKIN == 1 else INK)
+		if Ui.SKIN == 1:
+			rn.add_theme_font_size_override("font_size", 24)
+			var rnbf := Ui.brush_font()
+			if rnbf != null:
+				rn.add_theme_font_override("font", rnbf)
 		rn.position = Vector2(150, 26)
 		rn.size = Vector2(300, 30)
 		row.add_child(rn)
-		var rd := _label("", 13, Color(INK.r, INK.g, INK.b, 0.55))   # v61（手游）：12 → 13 号
+		var rd := _label("", 13,
+			Color(Ui.TXT_DIM.r, Ui.TXT_DIM.g, Ui.TXT_DIM.b, 0.92) if Ui.SKIN == 1 else Color(INK.r, INK.g, INK.b, 0.55))
 		rd.position = Vector2(150, 62)
 		rd.size = Vector2(330, 40)
 		rd.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		row.add_child(rd)
-		var price := _label("", 22, SEAL)
+		var price := _label("", 22, Ui.GOLD_HI if Ui.SKIN == 1 else SEAL)
 		price.position = Vector2(PANEL_W - 56.0 - 210.0, 30)
 		price.size = Vector2(190, 30)
 		price.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		row.add_child(price)
-		var go := _label("点开看仓 ▸", 13, Color(INK.r, INK.g, INK.b, 0.45))
+		var go := _label("点开看仓 ▸", 13,
+			Color(Ui.GOLD_HI.r, Ui.GOLD_HI.g, Ui.GOLD_HI.b, 0.85) if Ui.SKIN == 1 else Color(INK.r, INK.g, INK.b, 0.45))
 		go.position = Vector2(PANEL_W - 56.0 - 210.0, 66)
 		go.size = Vector2(190, 20)
 		go.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -381,10 +420,15 @@ func refresh() -> void:
 		var price := 0 if free else Appraise.hold_price_now(hid)
 		(row["name"] as Label).text = Appraise.hold_name(hid) + ("　（打捞上来的那只）" if free else "")
 		# ⚠ 这里**不写格数**（用户定的）——只留一句味道话
-		(row["desc"] as Label).text = str(d.get("desc", ""))
+		# 数据里用 **粗体** 标重点——面板不渲染 Markdown，去掉星号再写
+		(row["desc"] as Label).text = str(d.get("desc", "")).replace("**", "")
 		var pl: Label = row["price"]
 		pl.text = "不收钱" if free else str(price) + " 两"
-		pl.add_theme_color_override("font_color", GREEN if (free or GameState.coin("silver") >= price) else SEAL)
+		if Ui.SKIN == 1:
+			pl.add_theme_color_override("font_color",
+				Color(0.55, 0.84, 0.52) if (free or GameState.coin("silver") >= price) else Color(0.92, 0.40, 0.30))
+		else:
+			pl.add_theme_color_override("font_color", GREEN if (free or GameState.coin("silver") >= price) else SEAL)
 		# 那只货仓的配色随档位，反光相位错开（三只不会同步闪）
 		var art = row["art"]
 		art.tier = clampi(Appraise.HOLDS.find(d), 0, 4)
@@ -442,6 +486,14 @@ func _open_hold(i: int) -> void:
 	psb.set_border_width_all(2)
 	_pop.add_theme_stylebox_override("panel", psb)
 	veil.add_child(_pop)
+	# v219：弹窗入场——0.18s scale 0.965→1 + alpha（与别处面板同一个手感）
+	_pop.pivot_offset = _pop.size * 0.5
+	_pop.scale = Vector2(0.965, 0.965)
+	_pop.modulate.a = 0.0
+	var ptw := _pop.create_tween()
+	ptw.set_parallel(true)
+	ptw.tween_property(_pop, "scale", Vector2.ONE, 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	ptw.tween_property(_pop, "modulate:a", 1.0, 0.14)
 
 	_pop_title = _label("", 26, INK)
 	_pop_title.position = Vector2(26, 16)
@@ -1230,7 +1282,9 @@ func _rev_step(d: float) -> void:
 		var pt := float(td.get("pop", 0.0))
 		var x := clampf((_rev_t - pt) / 0.18, 0.0, 1.0)
 		var s := 0.62 + 0.38 * (1.0 - pow(1.0 - x, 3.0))
+		s += sin(x * PI) * 0.055          # 一点点过冲，显形有"弹"感
 		chip.scale = Vector2(s, s)
+		chip.modulate.a = 0.20 + 0.80 * x
 	if _rev_t >= _rev_end:
 		_rev_finish()
 
@@ -1268,6 +1322,7 @@ func _rev_finish() -> void:
 		if chip != null and is_instance_valid(chip):
 			chip.visible = true
 			chip.scale = Vector2.ONE
+			chip.modulate.a = 1.0
 		var track: Panel = td.get("track")
 		if track != null and is_instance_valid(track):
 			track.visible = false
@@ -1284,6 +1339,7 @@ func _rev_skip() -> void:
 		if chip != null and is_instance_valid(chip):
 			chip.visible = true
 			chip.scale = Vector2.ONE
+			chip.modulate.a = 1.0
 		var fill: Panel = td.get("fill")
 		if fill != null and is_instance_valid(fill):
 			fill.size = Vector2(float(td.get("fill_w", 40.0)), 14.0)

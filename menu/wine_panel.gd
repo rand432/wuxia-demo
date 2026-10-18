@@ -17,6 +17,7 @@ extends Control
 
 const GameState := preload("res://shared/game_state.gd")
 const SceneArt := preload("res://shared/scene_art.gd")   # v90：酒坛换成素材里的真图
+const Ui := preload("res://menu/menu_theme.gd")          # v218：影之刃皮肤（与门厅/炼丹统一）
 
 const INK := Color(0.14, 0.13, 0.15)
 const PAPER := Color(0.905, 0.878, 0.795)
@@ -124,7 +125,10 @@ func _label(text: String, font_size: int, col: Color) -> Label:
 func _flat(bg: Color) -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = bg
-	sb.set_corner_radius_all(8)
+	sb.set_corner_radius_all(3 if Ui.SKIN == 1 else 8)
+	if Ui.SKIN == 1 and bg.a > 0.2:
+		sb.border_color = Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.42)
+		sb.set_border_width_all(1)
 	return sb
 
 func _style_dark(btn: Button) -> void:
@@ -133,7 +137,7 @@ func _style_dark(btn: Button) -> void:
 	btn.add_theme_stylebox_override("pressed", _flat(Color(0.13, 0.11, 0.12, 0.96)))
 	btn.add_theme_stylebox_override("disabled", _flat(Color(0.45, 0.43, 0.42, 0.40)))
 	btn.add_theme_stylebox_override("focus", _flat(Color(0, 0, 0, 0)))
-	btn.add_theme_color_override("font_color", Color(0.94, 0.91, 0.84))
+	btn.add_theme_color_override("font_color", Ui.GOLD_HI if Ui.SKIN == 1 else Color(0.94, 0.91, 0.84))
 	btn.add_theme_color_override("font_disabled_color", Color(0.25, 0.23, 0.22, 0.55))
 
 func _style_seal(btn: Button) -> void:
@@ -142,7 +146,7 @@ func _style_seal(btn: Button) -> void:
 	btn.add_theme_stylebox_override("pressed", _flat(Color(SEAL.r * 0.75, SEAL.g * 0.75, SEAL.b * 0.75, 0.95)))
 	btn.add_theme_stylebox_override("disabled", _flat(Color(0.45, 0.43, 0.42, 0.35)))
 	btn.add_theme_stylebox_override("focus", _flat(Color(0, 0, 0, 0)))
-	btn.add_theme_color_override("font_color", Color(0.96, 0.93, 0.87))
+	btn.add_theme_color_override("font_color", Color(1.0, 0.95, 0.86))
 	btn.add_theme_color_override("font_disabled_color", Color(0.25, 0.23, 0.22, 0.50))
 
 func _style_seat(b: Button) -> void:
@@ -180,10 +184,19 @@ func _build() -> void:
 
 	var title := _label("品酒坊", 30, INK)
 	title.position = Vector2(px + 28.0, py + 14.0)
-	title.size = Vector2(220, 44)
+	title.size = Vector2(240, 44)
+	if Ui.SKIN == 1:
+		# 纸面上的"金字"＝墨字描金边（亮金直接写宣纸上会糊）
+		title.add_theme_font_size_override("font_size", 34)
+		var bf := Ui.brush_font()
+		if bf != null:
+			title.add_theme_font_override("font", bf)
+		title.add_theme_color_override("font_color", INK)
+		title.add_theme_color_override("font_outline_color", Ui.GOLD)
+		title.add_theme_constant_override("outline_size", 2)
 	add_child(title)
 
-	_silver_lb = _label("", 16, SEAL)
+	_silver_lb = _label("", 16, SEAL if Ui.SKIN != 1 else Color(0.62, 0.44, 0.08))
 	_silver_lb.position = Vector2(px + PW - 232.0, py + 26.0)
 	_silver_lb.size = Vector2(204, 28)
 	_silver_lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -263,11 +276,12 @@ func _build() -> void:
 	close_btn.pressed.connect(close)
 	add_child(close_btn)
 
-	_msg_lb = _label(FOOT, 13, Color(INK.r, INK.g, INK.b, 0.55))   # v61（手游）：12 → 13 号
+	# v218：规矩那行原来是一整句、中文又没空格，Label 的最小宽度把右半截顶出面板。
+	#   直接在 "｜" 处显式断行（5 行，每行都短），比跟 Label 的最小尺寸较劲可靠。
+	_msg_lb = _label(FOOT.replace("｜", "\n"), 13, Color(INK.r, INK.g, INK.b, 0.55))
 	_msg_lb.position = Vector2(px + 28.0, py + 748.0)
 	_msg_lb.size = Vector2(PW - 56.0, 96.0)
 	_msg_lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_msg_lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	add_child(_msg_lb)
 
 # ---- 状态 ----
@@ -312,7 +326,7 @@ func _refresh_texts() -> void:
 		_next_btn.disabled = true
 		_brew_btn.text = "酿一坛（" + str(GameState.BREW_COST) + " 两）"
 		_brew_btn.disabled = GameState.wine_left_today() == 0
-		_msg_lb.text = _msg if _msg != "" else FOOT
+		_msg_lb.text = _msg if _msg != "" else FOOT.replace("｜", "\n")
 		return
 	_wi = clampi(_wi, 0, n - 1)
 	var w: Dictionary = GameState.wines[_wi]
@@ -341,7 +355,7 @@ func _refresh_texts() -> void:
 	_sell_btn.text = "卖掉这坛（" + str(GameState.wine_price(w)) + " 两）"
 	_brew_btn.text = "酿一坛（" + str(GameState.BREW_COST) + " 两）"
 	_brew_btn.disabled = GameState.wine_left_today() == 0
-	_msg_lb.text = _msg if _msg != "" else FOOT
+	_msg_lb.text = _msg if _msg != "" else FOOT.replace("｜", "\n")
 
 func _reset_note() -> void:
 	_anim_phase = 0
@@ -385,6 +399,13 @@ func _finish_pour() -> void:
 	_anim_seat = -1
 	print("[品酒坊] 斟给 #", _last_seat, "：", _last_say, " ", _last_stars, " 星")
 	_refresh_texts()
+	# v219：评语星星弹一下（从 1.35 回 1.0），不是"啪"地换一行字
+	if _last_stars > 0 and _last_seat >= 0 and _last_seat < _star_lbs.size():
+		var sl: Label = _star_lbs[_last_seat]
+		sl.pivot_offset = sl.size * 0.5
+		sl.scale = Vector2(1.35, 1.35)
+		var tw := sl.create_tween()
+		tw.tween_property(sl, "scale", Vector2.ONE, 0.36).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	queue_redraw()
 
 func _on_prev() -> void:
@@ -456,10 +477,19 @@ func _round_poly(r: Rect2, rad: float) -> PackedVector2Array:
 			pts.append(Vector2(ccx + cos(a) * rad, ccy + sin(a) * rad))
 	return pts
 
+func _ease_out3(x: float) -> float:
+	return 1.0 - pow(1.0 - clampf(x, 0.0, 1.0), 3.0)
+
 func _draw_guest(i: int) -> void:
 	var p := seat_of(i)
 	var rated := _stars_here(i) > 0
 	var bob := sin(_t * 1.7 + float(i) * 1.3) * 1.5
+	# v219：被斟的那位往前探一点；喝完之后轻轻一顶（比原来只有呼吸自然）
+	if _anim_phase == 1 and _anim_seat == i:
+		bob += sin(_anim_t * 9.0) * 1.2
+		p += (_tc - p).normalized() * 2.2
+	elif _anim_phase == 2 and _last_seat == i and _spark_t < 0.42:
+		bob -= sin(clampf(_spark_t / 0.42, 0.0, 1.0) * PI) * 4.0
 	var c: Color = GUEST_COL[i] if i < GUEST_COL.size() else Color(0.2, 0.2, 0.2, 0.9)
 	if rated:
 		c = Color(c.r, c.g, c.b, c.a * 0.55)
@@ -481,10 +511,17 @@ func _draw_cup(i: int) -> void:
 	if _stars_here(i) > 0:
 		fill = 1.0
 	elif _anim_phase == 1 and _anim_seat == i:
-		fill = clampf((_anim_t / POUR_DUR - 0.20) / 0.55, 0.0, 1.0)
+		# 倒酒进度 → 缓出，杯面涨得"先快后慢"，不是匀速线性
+		fill = _ease_out3((_anim_t / POUR_DUR - 0.18) / 0.58)
 	if fill > 0.01:
 		_draw_ell(cp, 7.6 * (0.5 + 0.5 * fill), 4.4 * (0.5 + 0.5 * fill), Color(WINE_C.r, WINE_C.g, WINE_C.b, 0.92))
 		_draw_ell(cp + Vector2(0.0, -1.0), 4.2 * fill + 1.4, 2.0 * fill + 0.8, Color(0.92, 0.72, 0.50, 0.55 * fill))
+		# v219：杯面涟漪——刚涨上来时一圈很淡的环，之后化开
+		if _anim_phase == 1 and _anim_seat == i and fill < 0.98:
+			var rip := 1.0 - fill
+			_ell_ring(cp + Vector2(0.0, -1.0), (7.0 + 9.0 * (1.0 - rip)) * (0.6 + 0.4 * fill),
+				(4.0 + 5.0 * (1.0 - rip)) * (0.6 + 0.4 * fill),
+				Color(0.92, 0.72, 0.50, 0.35 * rip), 1.2)
 
 # v90（用户："不要只换背景啊 里面的也要换"）：**酒坛换成真图**——
 #   原来是六边形+两个方块拼的酒坛（一眼程序画），现在用素材里的 pic_jiutan（带葫芦那只）。
@@ -516,20 +553,24 @@ func _draw_pour() -> void:
 	draw_line(gp + Vector2(0.0, -6.0), cup + (gp - cup).normalized() * 18.0, gc, 4.0, true)
 	var p := clampf(_anim_t / POUR_DUR, 0.0, 1.0)
 	var side := -1.0 if cup.x > _tc.x else 1.0
-	var pin := clampf(p / 0.22, 0.0, 1.0)
-	var pot := cup + Vector2(30.0 * side, -54.0)
-	var pxx := pot.x
-	var pyy := pot.y + (1.0 - pin) * 12.0
-	var pot_c := Color(0.34, 0.30, 0.28, 0.95 * pin)
-	_draw_ell(Vector2(pxx, pyy), 13.0, 10.0, pot_c)
-	draw_line(Vector2(pxx + 10.0 * -side, pyy - 2.0), Vector2(pxx + 22.0 * -side, pyy - 8.0), pot_c, 4.0)
-	draw_arc(Vector2(pxx + 12.0 * side, pyy + 2.0), 7.0, -0.8 * side, 2.2 * side, 10, pot_c, 2.4)
-	draw_rect(Rect2(pxx - 4.0, pyy - 13.0, 8.0, 4.0), Color(0.72, 0.66, 0.50, 0.9 * pin))
-	if p > 0.22 and p < 0.82:
-		var sa := 1.0
-		if p > 0.72:
-			sa = clampf((0.82 - p) / 0.10, 0.0, 1.0)
-		var from := Vector2(pxx + 22.0 * -side, pyy - 8.0)
+	# 酒壶：前 0.18 端进来（缓出），后 0.14 撤走——不是"啪"一下出现/消失
+	var pin := _ease_out3(p / 0.18)
+	var pout := clampf((p - 0.86) / 0.14, 0.0, 1.0)
+	var pa := clampf(pin, 0.0, 1.0) * (1.0 - pout)
+	var base := cup + Vector2(30.0 * side, -54.0)
+	var pot := base + Vector2(-16.0 * side * (1.0 - pin) + 12.0 * side * pout,
+		-10.0 * (1.0 - pin) + 8.0 * pout)
+	if pa > 0.01:
+		var pot_c := Color(0.34, 0.30, 0.28, 0.95 * pa)
+		_draw_ell(pot, 13.0, 10.0, pot_c)
+		draw_line(Vector2(pot.x + 10.0 * -side, pot.y - 2.0), Vector2(pot.x + 22.0 * -side, pot.y - 8.0), pot_c, 4.0)
+		draw_arc(Vector2(pot.x + 12.0 * side, pot.y + 2.0), 7.0, -0.8 * side, 2.2 * side, 10, pot_c, 2.4)
+		draw_rect(Rect2(pot.x - 4.0, pot.y - 13.0, 8.0, 4.0), Color(0.72, 0.66, 0.50, 0.9 * pa))
+	# 酒流：两端收细、渐显渐隐；再加一道高光与杯口溅点/涟漪
+	if p > 0.16 and p < 0.92:
+		var sp := clampf((p - 0.16) / 0.74, 0.0, 1.0)
+		var sa := clampf(sp * 7.0, 0.0, 1.0) * clampf((1.0 - sp) * 9.0, 0.0, 1.0)
+		var from := pot + Vector2(22.0 * -side, -8.0)
 		var to := cup + Vector2(0.0, -4.0)
 		var pts := PackedVector2Array()
 		for k in 10:
@@ -537,9 +578,19 @@ func _draw_pour() -> void:
 			var q := from.lerp(to, u)
 			q.y += sin(u * PI) * 7.0
 			pts.append(q)
-		draw_polyline(pts, Color(WINE_C.r, WINE_C.g, WINE_C.b, 0.85 * sa), 3.0)
-		_draw_ell(cup + Vector2(-5.0, -3.0), 2.0, 1.2, Color(WINE_C.r, WINE_C.g, WINE_C.b, 0.6 * sa))
-		_draw_ell(cup + Vector2(4.0, -5.0), 1.6, 1.0, Color(WINE_C.r, WINE_C.g, WINE_C.b, 0.5 * sa))
+		var wdt := 3.4 * (0.6 + 0.4 * sin(sp * PI))
+		draw_polyline(pts, Color(WINE_C.r, WINE_C.g, WINE_C.b, 0.88 * sa), wdt)
+		var hl := PackedVector2Array()
+		for qi in pts.size():
+			hl.append(pts[qi] + Vector2(0.9, -0.9))
+		draw_polyline(hl, Color(0.98, 0.84, 0.62, 0.45 * sa), 1.2)
+		var tt := fmod(_anim_t * 13.0, 1.0)
+		for k in 3:
+			var aa := fmod(tt + float(k) * 0.33, 1.0)
+			draw_circle(cup + Vector2(cos(aa * TAU) * (7.0 + aa * 9.0), -3.0 - sin(aa * PI) * 4.0),
+				1.4 * (1.0 - aa), Color(WINE_C.r, WINE_C.g, WINE_C.b, 0.55 * (1.0 - aa) * sa))
+		_ell_ring(cup + Vector2(0.0, -3.0), 9.0 + tt * 7.0, 4.6 + tt * 3.5,
+			Color(0.95, 0.78, 0.52, 0.30 * (1.0 - tt) * sa), 1.2)
 
 func _draw_sparkle() -> void:
 	if _anim_phase != 2 or _last_seat < 0 or _spark_t > 0.7:
@@ -555,14 +606,28 @@ func _draw_sparkle() -> void:
 
 func _draw() -> void:
 	draw_rect(Rect2(Vector2.ZERO, size), Color(0, 0, 0, 0.45))
-	draw_colored_polygon(_round_poly(_prect, 14.0), Color(PAPER.r, PAPER.g, PAPER.b, 0.985))
-	var bp := _round_poly(_prect, 14.0)
-	bp.append(bp[0])
-	draw_polyline(bp, Color(0.32, 0.27, 0.22, 0.55), 2.0)
-	var ir := Rect2(_prect.position + Vector2(9.0, 9.0), _prect.size - Vector2(18.0, 18.0))
-	var ip := _round_poly(ir, 10.0)
-	ip.append(ip[0])
-	draw_polyline(ip, Color(INK.r, INK.g, INK.b, 0.12), 1.4)
+	if Ui.SKIN == 1:
+		# v218：切角纸面 + 金框角标 + 左端朱砂起笔（跟弟子/仓库同一套板）
+		var pts := Ui.cut_poly(_prect, 12.0)
+		draw_colored_polygon(pts, Color(0.961, 0.941, 0.898, 0.985))
+		var q := PackedVector2Array(pts)
+		q.append(pts[0])
+		draw_polyline(q, Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.55), 2.0, true)
+		Ui.brackets(self, _prect, 12.0, Color(Ui.GOLD_HI.r, Ui.GOLD_HI.g, Ui.GOLD_HI.b, 0.72), 16.0, 2.0)
+		var ir := Rect2(_prect.position + Vector2(9.0, 9.0), _prect.size - Vector2(18.0, 18.0))
+		var ip := Ui.cut_poly(ir, 6.0)
+		ip.append(ip[0])
+		draw_polyline(ip, Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.18), 1.0, true)
+		draw_rect(Rect2(_prect.position.x + 18.0, _prect.position.y + 18.0, 4.0, 28.0), Ui.CINN)
+	else:
+		draw_colored_polygon(_round_poly(_prect, 14.0), Color(PAPER.r, PAPER.g, PAPER.b, 0.985))
+		var bp := _round_poly(_prect, 14.0)
+		bp.append(bp[0])
+		draw_polyline(bp, Color(0.32, 0.27, 0.22, 0.55), 2.0)
+		var ir := Rect2(_prect.position + Vector2(9.0, 9.0), _prect.size - Vector2(18.0, 18.0))
+		var ip := _round_poly(ir, 10.0)
+		ip.append(ip[0])
+		draw_polyline(ip, Color(INK.r, INK.g, INK.b, 0.12), 1.4)
 	# 地板
 	_draw_ell(_tc + Vector2(0.0, 112.0), 290.0, 52.0, Color(0.10, 0.09, 0.10, 0.05))
 	# 后排（0/1/4）：先人、后桌，桌子压住他们下半身

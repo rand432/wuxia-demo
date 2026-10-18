@@ -106,6 +106,19 @@ var _drawer_btn2: Button
 var _drawer_idx := -1
 var _drawer_tween: Tween = null
 
+# v217：长按 0.4s → 批量选择
+var _multi := false
+var _multi_sel := {}          # 页码 → true（列表一变就清）
+var _multi_bar: Panel = null
+var _multi_lb: Label = null
+var _multi_btn_synth: Button = null
+var _hold_k := -1
+var _hold_from := 0
+var _hold_x := 0.0
+var _hold_y := 0.0
+var _hold_moved := false
+var _long_fired := false
+
 func _ready() -> void:
 	size = get_viewport_rect().size
 	mouse_filter = Control.MOUSE_FILTER_STOP
@@ -377,6 +390,72 @@ func _build() -> void:
 	_style_dark_button(dx)
 	_drawer.add_child(dx)
 
+	# ---- v217：批量选择条（长按 0.4s 进）----
+	_multi_bar = Panel.new()
+	_multi_bar.position = Vector2(0, PANEL_H - 110.0)
+	_multi_bar.size = Vector2(PANEL_W, 110.0)
+	_multi_bar.mouse_filter = Control.MOUSE_FILTER_STOP
+	_multi_bar.visible = false
+	var mbs := StyleBoxFlat.new()
+	mbs.bg_color = Color(0.075, 0.066, 0.060, 0.985)
+	mbs.border_color = Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.62)
+	mbs.set_border_width_all(2)
+	mbs.set_corner_radius_all(4)
+	_multi_bar.add_theme_stylebox_override("panel", mbs)
+	_panel.add_child(_multi_bar)
+	_multi_lb = _label("批量选择 · 已选 0 件", 18,
+		Color(Ui.GOLD_HI.r, Ui.GOLD_HI.g, Ui.GOLD_HI.b, 0.96) if Ui.SKIN == 1 else INK)
+	_multi_lb.position = Vector2(24, 12)
+	_multi_lb.size = Vector2(330, 28)
+	_multi_bar.add_child(_multi_lb)
+	var m_all := Button.new()
+	m_all.text = "全选本页"
+	m_all.position = Vector2(24, 54)
+	m_all.size = Vector2(120, 42)
+	m_all.add_theme_font_size_override("font_size", 16)
+	m_all.focus_mode = Control.FOCUS_NONE
+	m_all.pressed.connect(_multi_all)
+	_style_dark_button(m_all)
+	_multi_bar.add_child(m_all)
+	var m_clr := Button.new()
+	m_clr.text = "清空"
+	m_clr.position = Vector2(154, 54)
+	m_clr.size = Vector2(86, 42)
+	m_clr.add_theme_font_size_override("font_size", 16)
+	m_clr.focus_mode = Control.FOCUS_NONE
+	m_clr.pressed.connect(_multi_clear)
+	_style_dark_button(m_clr)
+	_multi_bar.add_child(m_clr)
+	_multi_btn_synth = Button.new()
+	_multi_btn_synth.text = "合成所选"
+	_multi_btn_synth.position = Vector2(250, 54)
+	_multi_btn_synth.size = Vector2(190, 42)
+	_multi_btn_synth.add_theme_font_size_override("font_size", 17)
+	_multi_btn_synth.focus_mode = Control.FOCUS_NONE
+	_multi_btn_synth.pressed.connect(_multi_synth)
+	_multi_btn_synth.add_theme_stylebox_override("normal", _flat(Color(SEAL.r, SEAL.g, SEAL.b, 0.94)))
+	_multi_btn_synth.add_theme_stylebox_override("hover", _flat(Color(SEAL.r, SEAL.g, SEAL.b, 0.80)))
+	_multi_btn_synth.add_theme_stylebox_override("pressed", _flat(Color(SEAL.r * 0.75, SEAL.g * 0.75, SEAL.b * 0.75, 0.96)))
+	_multi_btn_synth.add_theme_stylebox_override("disabled", _flat(Color(0.35, 0.32, 0.30, 0.5)))
+	_multi_btn_synth.add_theme_color_override("font_color", Color(1.0, 0.95, 0.86))
+	_multi_btn_synth.add_theme_color_override("font_disabled_color", Color(0.8, 0.76, 0.68, 0.5))
+	_multi_bar.add_child(_multi_btn_synth)
+	var m_quit := Button.new()
+	m_quit.text = "退出"
+	m_quit.position = Vector2(450, 54)
+	m_quit.size = Vector2(86, 42)
+	m_quit.add_theme_font_size_override("font_size", 16)
+	m_quit.focus_mode = Control.FOCUS_NONE
+	m_quit.pressed.connect(func() -> void: _exit_multi(false))
+	_style_dark_button(m_quit)
+	_multi_bar.add_child(m_quit)
+	var m_tip := _label("长按卡片 = 批量选择 · 动作只支持残卡合成", 11,
+		Color(Ui.TXT_DIM.r, Ui.TXT_DIM.g, Ui.TXT_DIM.b, 0.8))
+	m_tip.position = Vector2(360, 16)
+	m_tip.size = Vector2(256, 22)
+	m_tip.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_multi_bar.add_child(m_tip)
+
 func _label(text: String, font_size: int, col: Color) -> Label:
 	var lb := Label.new()
 	lb.text = text
@@ -403,6 +482,7 @@ func _ensure_cells(n: int) -> void:
 		#   现在走 tap_in_scroll：PASS（拖动继续传给滚动区）+ 只有"位移 ≤14 像素且 ≤0.7 秒"
 		#   才算点中物品。手滑一下只滚列表，不会误开详情。
 		UiKit.tap_in_scroll(cell, _click_cell.bind(k))
+		cell.gui_input.connect(_hold_input.bind(cell, k))
 		_grid.add_child(cell)
 		# v93o（用户："仓库怎么还是字啊"）：格子里**加一张图标**——
 		#   图在上、名在中、类型与数量在底下一行；取不到图就只留字，不会开天窗。
@@ -440,7 +520,20 @@ func _ensure_cells(n: int) -> void:
 		bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		bar.visible = false
 		cell.add_child(bar)
-		_cells.append({"panel": cell, "name": nm, "part": pt, "count": ct, "icon": ic, "bar": bar})
+		# v217：批量选择的选中框（金边，盖在色条上）
+		var sel := Panel.new()
+		sel.position = Vector2.ZERO
+		sel.size = Vector2(CELL, CELL)
+		sel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var ssb := StyleBoxFlat.new()
+		ssb.bg_color = Color(0, 0, 0, 0)
+		ssb.border_color = Color(Ui.GOLD_HI.r, Ui.GOLD_HI.g, Ui.GOLD_HI.b, 0.98) if Ui.SKIN == 1 else Color(SEAL.r, SEAL.g, SEAL.b, 0.90)
+		ssb.set_border_width_all(3)
+		ssb.set_corner_radius_all(3)
+		sel.add_theme_stylebox_override("panel", ssb)
+		sel.visible = false
+		cell.add_child(sel)
+		_cells.append({"panel": cell, "name": nm, "part": pt, "count": ct, "icon": ic, "bar": bar, "sel": sel})
 
 func _flat(bg: Color) -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()
@@ -704,6 +797,9 @@ func refresh() -> void:
 	# v214：列表一变（换页/整理/开礼包），抽屉先收——不然抽屉里那一件可能已经不在列表里了
 	if _drawer != null and _drawer.visible:
 		_close_drawer(true)
+	# v217：批量选择也一起收（页码变了，旧下标没意义）
+	if _multi:
+		_exit_multi(false)
 	var picking := _pick_cat != ""
 	if picking:
 		_title_lb.text = "仓库 · 选一件" + str(GEAR_CN.get(_pick_cat, _pick_cat))
@@ -844,8 +940,142 @@ func _on_gift_open() -> void:
 # v61b：原来的 `_on_cell_gui`（按**下**就触发）已撤——格子改走 UiKit.tap_in_scroll，
 #   逻辑只留"真的点中了"之后的这一段（见 _ensure_cells 里的注释）。
 
+# ============================================================
+# v217：长按 0.4s → 批量选择（当前只给残卡做"批量合成"）
+# ============================================================
+func _process(_delta: float) -> void:
+	if not visible:
+		return
+	if _hold_k >= 0 and not _long_fired and not _hold_moved and Time.get_ticks_msec() - _hold_from >= 400:
+		var k := _hold_k
+		_hold_k = -1
+		_long_fired = true
+		_enter_multi(k)
+
+func _hold_input(ev: InputEvent, _cell: Control, k: int) -> void:
+	if ev is InputEventMouseButton:
+		var mb := ev as InputEventMouseButton
+		if mb.button_index != MOUSE_BUTTON_LEFT:
+			return
+		if mb.pressed:
+			_hold_k = k
+			_hold_from = Time.get_ticks_msec()
+			_hold_x = mb.position.x
+			_hold_y = mb.position.y
+			_hold_moved = false
+			_long_fired = false
+		elif _hold_k == k:
+			_hold_k = -1
+	elif ev is InputEventMouseMotion:
+		var mm := ev as InputEventMouseMotion
+		if _hold_k == k and mm.button_mask != 0 and Vector2(mm.position.x - _hold_x, mm.position.y - _hold_y).length() > 14.0:
+			_hold_moved = true
+	elif ev is InputEventScreenTouch:
+		var t := ev as InputEventScreenTouch
+		if t.pressed:
+			_hold_k = k
+			_hold_from = Time.get_ticks_msec()
+			_hold_x = t.position.x
+			_hold_y = t.position.y
+			_hold_moved = false
+			_long_fired = false
+		elif _hold_k == k:
+			_hold_k = -1
+	elif ev is InputEventScreenDrag:
+		var sd := ev as InputEventScreenDrag
+		if _hold_k == k and Vector2(sd.position.x - _hold_x, sd.position.y - _hold_y).length() > 14.0:
+			_hold_moved = true
+
+func _enter_multi(k: int) -> void:
+	if k < 0 or k >= _stacks_now.size():
+		return
+	if not _multi:
+		_multi = true
+		_multi_sel.clear()
+		_close_drawer(true)
+		_multi_bar.visible = true
+		_multi_bar.move_to_front()
+	_toggle_sel(k)
+
+func _toggle_sel(k: int) -> void:
+	if k < 0 or k >= _cells.size() or k >= _stacks_now.size():
+		return
+	if _multi_sel.has(k):
+		_multi_sel.erase(k)
+	else:
+		_multi_sel[k] = true
+	var sel: Panel = _cells[k]["sel"]
+	sel.visible = _multi_sel.has(k)
+	_update_multi_bar()
+
+func _update_multi_bar() -> void:
+	if _multi_bar == null:
+		return
+	var n := _multi_sel.size()
+	_multi_lb.text = "批量选择 · 已选 " + str(n) + " 件"
+	var synth := 0
+	for k_v in _multi_sel.keys():
+		var k := int(k_v)
+		if k < _stacks_now.size():
+			var st: Dictionary = _stacks_now[k]
+			if str(st.get("kind", "")) == "card" and GameState.can_synthesize(str(st.get("sid", ""))):
+				synth += 1
+	_multi_btn_synth.disabled = synth <= 0
+	_multi_btn_synth.text = "合成所选" + (("（" + str(synth) + "）") if synth > 0 else "")
+
+func _multi_all() -> void:
+	_multi_sel.clear()
+	for k in _stacks_now.size():
+		if k < _cells.size():
+			_multi_sel[k] = true
+			(_cells[k]["sel"] as Panel).visible = true
+	_update_multi_bar()
+
+func _multi_clear() -> void:
+	_multi_sel.clear()
+	for cd in _cells:
+		(cd["sel"] as Panel).visible = false
+	_update_multi_bar()
+
+func _multi_synth() -> void:
+	var sids: Array = []
+	for k_v in _multi_sel.keys():
+		var k := int(k_v)
+		if k >= _stacks_now.size():
+			continue
+		var st: Dictionary = _stacks_now[k]
+		var sid := str(st.get("sid", ""))
+		if str(st.get("kind", "")) == "card" and GameState.can_synthesize(sid) and not sids.has(sid):
+			sids.append(sid)
+	var done := 0
+	var msgs: Array = []
+	for sid_v in sids:
+		var r: Dictionary = GameState.synthesize(str(sid_v))
+		if bool(r.get("ok", false)):
+			done += 1
+			msgs.append(str(r.get("msg", "")))
+	_msg_lb.text = "批量合成：合了 " + str(done) + " 件" + ("（" + "；".join(PackedStringArray(msgs)) + "）" if done > 0 else "——选中的残卡还没凑齐")
+	_exit_multi(true)
+
+func _exit_multi(do_refresh: bool) -> void:
+	_multi = false
+	_multi_sel.clear()
+	if _multi_bar != null:
+		_multi_bar.visible = false
+	for cd in _cells:
+		(cd["sel"] as Panel).visible = false
+	if do_refresh:
+		refresh()
+
 # v214：点格子 = 开底部抽屉（真正的动作在抽屉那两颗钮里）
+# v217：批量选择模式下 = 勾选/取消
 func _click_cell(k: int) -> void:
+	if _long_fired:
+		_long_fired = false
+		return
+	if _multi:
+		_toggle_sel(k)
+		return
 	_open_drawer(k)
 
 
@@ -1290,6 +1520,7 @@ func close() -> void:
 	visible = false
 	_pick_cat = ""
 	_close_drawer(true)
+	_exit_multi(false)
 	# v63（用户："不管穿戴装备还是武学，总会弹上一个穿戴物品的描述"）：
 	#   病根：装配窗（_eq_veil）是面板的**子节点**——关面板只是"隐藏"，弹窗跟着藏起来；
 	#   下次开面板（比如弟子页点武学格 → 选一件）它**一起显形** ✗ 于是永远弹旧兵器的信息 ✗。

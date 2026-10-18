@@ -53,45 +53,88 @@ const FR_VIEW_H := 420.0
 signal closed
 
 class FurnaceScene extends Node2D:
+	# v219：炉台重画——墨底金框 + 丹炉/多层火苗/火星/烟；起炉与丹成各有一圈光
+	const Ui := preload("res://menu/menu_theme.gd")
 	var t := 0.0
 	var state := 0          # 0 闲 / 1 炼制中 / 2 丹成
 	var has_tender := false
+	var last_state := 0
+	var burst := 9.0
 
 	func _process(delta: float) -> void:
 		t += delta
+		if state != last_state:
+			last_state = state
+			burst = 0.0
+		burst += delta
 		queue_redraw()
 
+	func _flame(c: Vector2, w: float, h: float, col: Color) -> void:
+		draw_colored_polygon(PackedVector2Array([
+			c + Vector2(-w, 0.0), c + Vector2(-w * 0.55, -h * 0.45),
+			c + Vector2(0.0, -h), c + Vector2(w * 0.55, -h * 0.45),
+			c + Vector2(w, 0.0)]), col)
+
 	func _draw() -> void:
-		draw_rect(Rect2(0, 0, 584, 92), Color(0.93, 0.90, 0.83, 0.85))
-		draw_colored_polygon(PackedVector2Array([Vector2(-10, 92), Vector2(120, 40), Vector2(300, 92)]), Color(0.16, 0.14, 0.13, 0.35))
-		draw_colored_polygon(PackedVector2Array([Vector2(260, 92), Vector2(420, 28), Vector2(596, 92)]), Color(0.13, 0.11, 0.11, 0.45))
-		draw_line(Vector2(0, 92), Vector2(584, 92), Color(0.30, 0.24, 0.18, 0.55), 2.0)
-		var cx := 292.0
+		Ui.panel(self, Rect2(0.0, 0.0, 360.0, 140.0), {"fill": Color(0.075, 0.066, 0.060, 0.96),
+			"edge": Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.55), "cut": 10.0,
+			"bracket": true, "shadow": 0.6, "ink_halo": false})
+		# 远山 / 地面
+		draw_colored_polygon(PackedVector2Array([Vector2(-10, 132), Vector2(80, 66), Vector2(178, 132)]), Color(0.16, 0.14, 0.13, 0.55))
+		draw_colored_polygon(PackedVector2Array([Vector2(182, 132), Vector2(272, 50), Vector2(370, 132)]), Color(0.13, 0.11, 0.11, 0.65))
+		draw_line(Vector2(16, 132), Vector2(344, 132), Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.28), 1.2, true)
+		var cx := 180.0
+		var inten := 0.55 + 0.45 * float(state)
+		# 看火人
 		if has_tender:
-			var px := cx - 86.0
+			var px := cx - 88.0
 			var fw := sin(t * (5.0 if state == 1 else 3.0)) * 3.0
 			var body := Color(0.20, 0.19, 0.23, 0.90)
-			draw_circle(Vector2(px, 62.0), 8.0, Color(0.93, 0.89, 0.82, 0.95))
-			draw_line(Vector2(px, 70.0), Vector2(px, 82.0), body, 4.0)
-			draw_line(Vector2(px, 82.0), Vector2(px - 5.0, 90.0), body, 3.0)
-			draw_line(Vector2(px, 82.0), Vector2(px + 5.0, 90.0), body, 3.0)
-			draw_line(Vector2(px + 6.0, 74.0), Vector2(px + 15.0, 68.0 + fw), Color(0.44, 0.32, 0.20, 0.85), 2.0)
-		draw_rect(Rect2(cx - 44, 44, 88, 42), Color(0.30, 0.27, 0.25, 0.98))
-		draw_colored_polygon(PackedVector2Array([Vector2(cx - 52, 46), Vector2(cx - 30, 26), Vector2(cx + 30, 26), Vector2(cx + 52, 46)]), Color(0.36, 0.32, 0.29, 0.98))
-		draw_line(Vector2(cx - 14, 44), Vector2(cx - 14, 26), Color(0.22, 0.19, 0.17, 0.9), 2.0)
-		draw_line(Vector2(cx + 14, 44), Vector2(cx + 14, 26), Color(0.22, 0.19, 0.17, 0.9), 2.0)
+			draw_circle(Vector2(px, 78.0), 8.0, Color(0.93, 0.89, 0.82, 0.95))
+			draw_line(Vector2(px, 86.0), Vector2(px, 116.0), body, 5.0)
+			draw_line(Vector2(px, 116.0), Vector2(px - 6.0, 130.0), body, 4.0)
+			draw_line(Vector2(px, 116.0), Vector2(px + 6.0, 130.0), body, 4.0)
+			draw_line(Vector2(px + 7.0, 96.0), Vector2(px + 18.0, 86.0 + fw), Color(0.44, 0.32, 0.20, 0.85), 2.4)
+		# 丹炉（三足 + 炉身 + 炉口）
+		draw_line(Vector2(cx - 36, 112), Vector2(cx - 44, 134), Color(0.16, 0.14, 0.13, 0.95), 4.0)
+		draw_line(Vector2(cx + 36, 112), Vector2(cx + 44, 134), Color(0.16, 0.14, 0.13, 0.95), 4.0)
+		draw_line(Vector2(cx, 114), Vector2(cx, 136), Color(0.16, 0.14, 0.13, 0.95), 4.0)
+		draw_circle(Vector2(cx, 96.0), 40.0, Color(0.20, 0.18, 0.19, 1.0))
+		draw_circle(Vector2(cx, 89.0), 32.0, Color(0.28, 0.25, 0.25, 1.0))
+		draw_arc(Vector2(cx, 70.0), 36.0, 0.0, TAU, 28, Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.46), 2.4, true)
+		# 火：三层火苗 + 底光
 		var g := 0.5 + 0.5 * sin(t * (3.0 + 1.5 * float(state)))
-		var fire_r := 10.0 + 2.0 * float(state)
-		draw_circle(Vector2(cx, 66), fire_r + 3.0 * g, Color(0.90, 0.55, 0.20, 0.25 + 0.10 * float(state) + 0.30 * g))
-		draw_circle(Vector2(cx, 66), 5.0 + 1.5 * float(state) + 2.0 * g, Color(0.98, 0.82, 0.42, 0.45 + 0.08 * float(state) + 0.35 * g))
-		if state == 2:
-			draw_arc(Vector2(cx, 58.0), 21.0 + 3.0 * g, 0.0, TAU, 22, Color(0.95, 0.78, 0.30, 0.35 + 0.25 * g), 2.0)
-		var smoke_spd := 0.35 + 0.25 * float(state)
+		draw_circle(Vector2(cx, 128.0), 44.0 + 8.0 * inten, Color(0.90, 0.50, 0.18, 0.10 + 0.10 * g))
+		for k in 3:
+			var fh := (30.0 + 16.0 * float(k)) * inten * (0.82 + 0.18 * sin(t * 7.0 + float(k) * 1.7))
+			var fw := 18.0 - 4.0 * float(k)
+			_flame(Vector2(cx + sin(t * 5.0 + float(k)) * 3.0, 128.0), fw, fh,
+				Color(0.96 - 0.06 * float(k), 0.58 + 0.10 * float(k), 0.20 + 0.10 * float(k), 0.55 - 0.10 * float(k)))
+		draw_circle(Vector2(cx, 128.0), 7.0 + 3.5 * g, Color(1.0, 0.86, 0.48, 0.55 + 0.35 * g))
+		# 火星（炼制中更多）
+		var n_emb := 6 + state * 4
+		for i in n_emb:
+			var ph := fmod(t * (0.35 + 0.18 * float(state)) + float(i) * 0.13, 1.0)
+			var ex := cx + sin(ph * 6.0 + float(i) * 1.7) * (12.0 + ph * 30.0)
+			var ey := 124.0 - ph * (56.0 + 30.0 * float(state))
+			draw_circle(Vector2(ex, ey), 2.0 * (1.0 - ph) + 0.5, Color(1.0, 0.72, 0.30, 0.80 * (1.0 - ph)))
+		# 烟
 		for i in 3:
-			var ph := fmod(t * smoke_spd + float(i) * 0.33, 1.0)
-			draw_circle(Vector2(cx - 6.0 + sin(ph * 6.0 + float(i)) * 12.0, 30.0 - ph * 34.0), 5.0 * (1.0 - ph) + 2.0, Color(0.60, 0.58, 0.55, 0.35 * (1.0 - ph)))
-		draw_rect(Rect2(cx - 62, 84, 124, 6), Color(0.24, 0.20, 0.17, 0.9))
-
+			var ph2 := fmod(t * (0.30 + 0.18 * float(state)) + float(i) * 0.33, 1.0)
+			draw_circle(Vector2(cx - 5.0 + sin(ph2 * 6.0 + float(i)) * 16.0, 64.0 - ph2 * 50.0),
+				6.5 * (1.0 - ph2) + 2.6, Color(0.62, 0.60, 0.56, 0.26 * (1.0 - ph2)))
+		# 丹成：丹丸从炉口升起 + 金环
+		if state == 2:
+			var lift := 18.0 + 6.0 * sin(t * 2.2)
+			draw_circle(Vector2(cx, 44.0 - lift), 44.0 + 9.0 * g, Color(0.98, 0.78, 0.32, 0.10 + 0.10 * g))
+			draw_circle(Vector2(cx, 44.0 - lift), 9.0, Color(0.94, 0.72, 0.30, 0.95))
+			draw_circle(Vector2(cx - 2.6, 41.0 - lift), 3.0, Color(1.0, 0.94, 0.72, 0.9))
+			draw_arc(Vector2(cx, 44.0 - lift), 19.0 + 4.0 * g, 0.0, TAU, 26, Color(1.0, 0.84, 0.40, 0.45 + 0.25 * g), 2.0, true)
+		# 起炉/丹成的一圈光
+		if burst < 0.65:
+			var u := burst / 0.65
+			var col := Color(1.0, 0.80, 0.40, (1.0 - u) * 0.65)
+			draw_arc(Vector2(cx, 120.0), 24.0 + 72.0 * u, 0.0, TAU, 32, col, 2.4 * (1.0 - u) + 0.8, true)
 var _panel: Panel
 var _scene: FurnaceScene
 var _mat_lb: Label
@@ -129,7 +172,8 @@ func _process(delta: float) -> void:
 	if not visible:
 		return
 	_tick += delta
-	if _tick >= 0.5:
+	# v219：炉位进度条原来 0.5 秒跳一次（肉眼一格一格蹦）——改 0.1 秒重画，条子顺滑
+	if _tick >= 0.10:
 		_tick = 0.0
 		refresh()
 
@@ -253,13 +297,13 @@ func _build() -> void:
 
 	# 炉火小景（三态 + 看火人）
 	_scene = FurnaceScene.new()
-	_scene.position = Vector2(32, 560)
-	_scene.scale = Vector2(0.9, 0.9)
+	_scene.position = Vector2(140, 538)
+	_scene.scale = Vector2(1.0, 1.0)
 	_panel.add_child(_scene)
 
 	# ---- 看火：派谁去看炉子（必须下战） ----
 	_tend_lb = _label("看火：", 18, Color(INK.r, INK.g, INK.b, 0.62))
-	_tend_lb.position = Vector2(32, 666)
+	_tend_lb.position = Vector2(32, 694)
 	_tend_lb.size = Vector2(66, 36)
 	_panel.add_child(_tend_lb)
 	_tend_btns = []
@@ -273,7 +317,7 @@ func _build() -> void:
 		var it: Dictionary = tend_list[k]
 		var tb := Button.new()
 		tb.text = str(it["name"])
-		tb.position = Vector2(104.0 + float(k) * 128.0, 658)
+		tb.position = Vector2(104.0 + float(k) * 128.0, 686)
 		tb.size = Vector2(120, 58)
 		tb.add_theme_font_size_override("font_size", 18)
 		tb.focus_mode = Control.FOCUS_NONE
@@ -281,26 +325,26 @@ func _build() -> void:
 		_panel.add_child(tb)
 		_tend_btns.append({"id": str(it["id"]), "btn": tb})
 	_tend_hint = _label("看火要下战（先出阵容；在阵里点了会被拦）。效率：陈石 ×0.7 · 青鸾 ×0.8 · 少侠 ×0.85 · 没人 ×1.0；每收一炉，看火的人 +20 经验/颗。", 13, Color(INK.r, INK.g, INK.b, 0.55))
-	_tend_hint.position = Vector2(32, 728)
+	_tend_hint.position = Vector2(32, 756)
 	_tend_hint.size = Vector2(PANEL_W - 64.0, 36)
 	_tend_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_panel.add_child(_tend_hint)
 
 	_note_lb = _label("服用：「弟子」面板选中人 → 点右下「服药」格。每人每境限量：属性丹 3 颗——每突破一重（境界 +1，25 级）扩容。", 13, Color(INK.r, INK.g, INK.b, 0.62))
-	_note_lb.position = Vector2(32, 772)
+	_note_lb.position = Vector2(32, 800)
 	_note_lb.size = Vector2(PANEL_W - 64.0, 40)
 	_note_lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_panel.add_child(_note_lb)
 
 	_msg_lb = _label("", 14, Color(SEAL.r, SEAL.g, SEAL.b, 0.92))
-	_msg_lb.position = Vector2(32, 820)
+	_msg_lb.position = Vector2(32, 848)
 	_msg_lb.size = Vector2(PANEL_W - 64.0, 44)
 	_msg_lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_panel.add_child(_msg_lb)
 
 	var close_btn := Button.new()
 	close_btn.text = "关闭"
-	close_btn.position = Vector2(368, 892)
+	close_btn.position = Vector2(368, 920)
 	close_btn.size = Vector2(240, 64)
 	close_btn.add_theme_font_size_override("font_size", 24)
 	close_btn.focus_mode = Control.FOCUS_NONE
@@ -335,6 +379,14 @@ func _open_dlg(rid := "") -> void:
 	box.mouse_filter = Control.MOUSE_FILTER_STOP
 	box.add_theme_stylebox_override("panel", _soft_sb())
 	veil.add_child(box)
+	# v219：丹方弹窗入场——0.18s scale 0.965→1 + alpha
+	box.pivot_offset = box.size * 0.5
+	box.scale = Vector2(0.965, 0.965)
+	box.modulate.a = 0.0
+	var btw := box.create_tween()
+	btw.set_parallel(true)
+	btw.tween_property(box, "scale", Vector2.ONE, 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	btw.tween_property(box, "modulate:a", 1.0, 0.14)
 
 	var t1 := _label("炼制丹药", 28, INK)
 	t1.position = Vector2(0, 14)
