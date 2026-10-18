@@ -50,6 +50,8 @@ func _draw() -> void:
 		return
 	_draw_hint()
 	_draw_toast()
+	if Ui.SKIN == 1:
+		_n_barband()
 	_draw_tags()
 	# v97：这行是开发用的读数（村况/卷轴位置）。镜头钉死之后"卷 2280/2280"没意义了，
 	#   而且它正好压在底排按钮下沿上——新模式下不再画（老模式照旧）。
@@ -231,17 +233,32 @@ func _n_tag(rc: Rect2, txt: String, primary: bool, pressed: bool, idx: int) -> v
 	if primary:
 		ic = Ui.GOLD_HI
 	var cx := r.position.x + r.size.x * 0.5
-	draw_set_transform(Vector2(cx, r.position.y + 25.0), 0.0, Vector2.ONE)
-	_draw_tag_icon(idx, Vector2.ZERO, 11.0, ic)
+	# v211：底栏 100 高，图标 11 → 14（约 28px 的观感）
+	draw_set_transform(Vector2(cx, r.position.y + 36.0), 0.0, Vector2.ONE)
+	_draw_tag_icon(idx, Vector2.ZERO, 14.0, ic)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	var f: Font = _brush if _brush != null else font
-	var fs := 21 if primary else 19
-	if txt.length() > 3:
-		fs = 16
+	var fs := 22 if primary else 20
+	if txt.length() == 4:
+		fs = 18
+	elif txt.length() > 4:
+		fs = 15
 	var col := Ui.GOLD_HI if primary else Color(0.945, 0.925, 0.870, 0.95)
-	var ty := r.position.y + r.size.y - 12.0
+	var ty := r.position.y + r.size.y - 14.0
 	# 小字不用毛笔字：Ma Shan Zheng 笔画细，19px 加描边会被暗边吃掉，反而糊
 	draw_string(font, Vector2(r.position.x, ty), txt, HORIZONTAL_ALIGNMENT_CENTER, r.size.x, fs, col)
+
+# v211：底栏贯通墨带（0~720 一条），六格压在上面像一条功能带
+func _n_barband() -> void:
+	var y := Conf.TAG_Y - 7.0
+	draw_rect(Rect2(0.0, y, Conf.DW, Conf.DH - y), Color(0.030, 0.027, 0.025, 0.95))
+	draw_rect(Rect2(0.0, y, Conf.DW, 2.0), Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.88))
+	draw_line(Vector2(0.0, y + 5.0), Vector2(Conf.DW, y + 5.0),
+		Color(Ui.GOLD_DK.r, Ui.GOLD_DK.g, Ui.GOLD_DK.b, 0.45), 1.0)
+	draw_line(Vector2(6.0, y + 2.0), Vector2(6.0, Conf.DH - 4.0),
+		Color(Ui.CINN.r, Ui.CINN.g, Ui.CINN.b, 0.70), 2.0, true)
+	draw_line(Vector2(Conf.DW - 6.0, y + 2.0), Vector2(Conf.DW - 6.0, Conf.DH - 4.0),
+		Color(Ui.CINN.r, Ui.CINN.g, Ui.CINN.b, 0.70), 2.0, true)
 
 # 浮条（提示）：墨底 + 金边
 func _n_toast(txt: String, a: float) -> void:

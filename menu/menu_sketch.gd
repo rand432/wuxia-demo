@@ -301,27 +301,28 @@ class MoneyHud extends Node2D:
 
 	# v200：影之刃式资源条——墨底金线，钱眼/元宝都用金
 	func _n_draw() -> void:
-		var r1 := Rect2(334.0, 6.0, 132.0, 34.0)
-		var r2 := Rect2(474.0, 6.0, 128.0, 34.0)
+		# v211：银两/元宝压进顶栏墨带（右段 340~628），不再浮在画面里
+		var r1 := Rect2(340.0, 30.0, 140.0, 38.0)
+		var r2 := Rect2(488.0, 30.0, 140.0, 38.0)
 		var o := {"fill": Color(0.094, 0.080, 0.070, 0.90),
 			"edge": Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.58),
 			"cut": 7.0, "bracket": false, "shadow": 0.45, "ink_halo": false}
 		Ui.panel(self, r1, o)
 		Ui.panel(self, r2, o)
 		# 铜钱：金钱一枚，中间方孔
-		var c := Vector2(357.0, 23.0)
-		draw_circle(c, 10.0, Color(0.86, 0.71, 0.38))
-		draw_arc(c, 10.0, 0.0, TAU, 24, Color(0.38, 0.29, 0.12, 0.85), 1.4, true)
+		var c := Vector2(364.0, 49.0)
+		draw_circle(c, 10.5, Color(0.86, 0.71, 0.38))
+		draw_arc(c, 10.5, 0.0, TAU, 24, Color(0.38, 0.29, 0.12, 0.85), 1.4, true)
 		draw_rect(Rect2(c + Vector2(-3.5, -3.5), Vector2(7.0, 7.0)), Color(0.38, 0.29, 0.12, 0.85), false, 1.4)
-		draw_string(font, Vector2(376.0, 30.0), str(silver), HORIZONTAL_ALIGNMENT_LEFT, 86.0, 18.0,
+		draw_string(font, Vector2(384.0, 57.0), str(silver), HORIZONTAL_ALIGNMENT_LEFT, 90.0, 20.0,
 			Color(0.960, 0.925, 0.820, 0.96))
 		# 元宝
-		var g := Vector2(497.0, 23.0)
+		var g := Vector2(512.0, 49.0)
 		var pts := PackedVector2Array([g + Vector2(-9.0, 5.0), g + Vector2(-5.0, -1.0),
 			g + Vector2(5.0, -1.0), g + Vector2(9.0, 5.0)])
 		draw_colored_polygon(pts, Color(0.86, 0.71, 0.38))
 		draw_circle(g + Vector2(0.0, -3.0), 4.6, Color(0.90, 0.76, 0.42))
-		draw_string(font, Vector2(514.0, 30.0), str(yuanbao), HORIZONTAL_ALIGNMENT_LEFT, 80.0, 18.0,
+		draw_string(font, Vector2(532.0, 57.0), str(yuanbao), HORIZONTAL_ALIGNMENT_LEFT, 88.0, 20.0,
 			Color(0.960, 0.925, 0.820, 0.96))
 
 	func _draw() -> void:
@@ -938,47 +939,31 @@ func _build_plaques() -> void:
 	_plaques.font = _font
 	add_child(_plaques)
 	var pn := _player_tag()
-	# ===== 常驻 UI（不随画卷滑走）=====
-	_plaques.add_disc("avatar", 0.090, 0.060, "", _open_char_panel)
-	# v98（用户："头像和名字靠近一点"）：名号从 0.345 挪到 0.268，紧挨头像
-	# v121（用户："具体境界在主界面角色头像名字那里显示"）：名号下面那行＝**进阶境界**
-	_plaques.add_txt("name", 0.268, 0.062, pn, _open_char_panel, GameState.advance_name())
-	# v122（用户："主界面头像名字旁边加这个按钮"）：名号右边一颗**进阶**白纸牌（点开进阶页）
-	_plaques.add_slip("advance", 0.470, 0.062, "进阶", _open_advance, _advance_hint())
-	# v98（用户："底下那一条横线我的本意是横线就是挂着下面两个挂机和建筑的"）：
-	#   名号底下那条线现在是一根**横梁**，挂机/建设就从梁上吊下来（两块牌顶齐平）。
-	# v123：横梁往下让 36 像素——名号底下现在是**称号牌**（32 高），原来梁心 112 会压在牌上。
+	# ===== v211 顶栏（0~96 一条贯通墨带）=====
+	#   头像 64 · 名号（左对齐 + 下面一块境界牌）· 进阶小牌 · 银两/元宝（MoneyHud）· 设置小牌
+	_plaques.add_disc("avatar", 0.086, 0.0375, "", _open_char_panel, "", {"w": 64.0})
+	_plaques.add_txt("name", 0.239, 0.0383, pn, _open_char_panel, GameState.advance_name(), {"w": 140.0, "h": 76.0})
+	_plaques.add_chip("advance", 0.403, 0.0383, "进阶", _open_advance, _advance_hint(), {"w": 80.0, "h": 34.0})
+	_plaques.add_chip("settings", 0.9264, 0.0375, "设置", _open_settings, "", {"w": 58.0, "h": 34.0})
+	# 挂机/建设：还是从横梁上吊下来（这两块是"画上的题字"，保留竖排毛笔）
 	_plaques.add_beam("beam", 128.0, 292.0, 148.0, [165.6, 241.2])   # 装饰件：没有命中盒，不挡拖卷
 	_plaques.add_hang("idle", 0.230, 0.0, "挂机", _on_idle_collect, "", "", {"hang_y": 148.0})
 	_plaques.add_hang("build", 0.335, 0.0, "建设", _build_once, "", "", {"hang_y": 148.0})
-	_plaques.add_ribbon("settings", 0.933, 0.040, "设置", _open_settings)
-	# v16z（用户："主界面加一个困兽【测试】按钮"）：原来挂在右上、跟［设置］同一排。
-	# v17e（用户："困兽测试按钮放在主界面商店下方"）：已**挪到商店正下方**（见下面 add_hang）。
-	# v98（用户："商店固定"）：一直挂在那儿——不随风摆，也不再随剧情忽隐忽现
-	# v115：徽标换成铺子——铺子比六边形宽（104 vs 78），中心从 0.950 挪到 0.905 才不被屏幕切掉
-	_plaques.add_shop("shop", 0.905, 0.232, "商店", _open_shop)
-	# v17e（用户："困兽测试按钮放在主界面商店下方"）：
-	#   商店在 (0.905, 0.232)，铺子徽标约 104 高 —— 这颗挂在它正下方 0.385 处，
-	#   同一个 x（0.905）对齐成一列。主页面常驻（不带村景的 V，跟商店一样）。
-	_plaques.add_hang("kushou_test", 0.905, 0.385, "困兽测试", _open_stage_pick, "点开选难度", "", {})
-	# ===== 村景页（跟着画卷左右滑）=====
-	# v98（用户："其他竖牌功能牌就白色就好了"）：这一组全是**白纸牌**
+	# ===== v211 右侧功能栏：5 个**等宽格**（金刻线图标 + 大号毛笔字 + 小字名）=====
+	#   y 只是初始值；_refresh_plaques 末尾按"当前可见的格子"重排（隐藏一格，下面自动补位）。
+	_plaques.add_rail("shop", 0.905, 0.192, "栈", "商店", PlaqueLayer.RAIL_SHOP_TEX, _open_shop, "换材料")
+	_plaques.add_rail("kushou_test", 0.905, 0.342, "兽", "困兽", PlaqueLayer.RAIL_BEAST_TEX, _open_stage_pick, "点开选难度")
+	_plaques.add_rail("cave", 0.905, 0.492, "洞", "山洞", PlaqueLayer.RAIL_CAVE_TEX, _click_cave)
+	_plaques.add_rail("treasure", 0.905, 0.642, "宝", "藏宝阁", PlaqueLayer.RAIL_TREASURE_TEX, _click_treasure)
+	_plaques.add_rail("craft", 0.905, 0.792, "坊", "百工坊", PlaqueLayer.RAIL_CRAFT_TEX, _click_craft)
+	# ===== v211 中央朱砂「历练」大碑（主操作压在拇指区，接原来那个 _open_out）=====
+	_plaques.add_stele("stele", 0.5, 0.828, "历练", _open_out, "开始游历", {"w": 452.0, "h": 138.0})
+	# ===== 画上的地点牌（跟着画卷左右滑）=====
 	var V := {"page": "village", "white": true}
-	# v98（用户："出村改为向左的箭头"）
-	_plaques.add_arrow("out", 0.104, 0.595, "出村", _open_out, -1, V)   # v102：白箭头变长，中心右移一点，别顶出左边缘
-	_plaques.add_hang("cave", 0.915, 0.565, "山洞", _click_cave, "", "", V)
-	_plaques.add_hang("hill", 0.355, 0.705, "后山", _click_hill, "", "", V)
-	_plaques.add_hang("brook", 0.600, 0.775, "溪畔", _gather_wood, "", "", V)   # 桥右侧的水边（桥左那块地是画里四个小人的站位，别压住他们）
-	# v98（用户："藏宝阁往右边挪一点"）：0.700 → 0.760
-	# v127（用户："后山藏宝阁百工坊都不用加图素材了"）：换回木牌（素材文件留在 assets/ui 里备用）
-	_plaques.add_hang("treasure", 0.760, 0.700, "藏宝阁", _click_treasure, "", "", V)
-	_plaques.add_hang("craft", 0.895, 0.820, "百工坊", _click_craft, "", "", V)
-	# v17b（用户："行囊上方不是有个少侠按钮吗 小船旁…点击后 名号少侠 头像点开角色面板"）：
-	#   ⚠ 这块牌已按用户要求**去掉** —— 它只弹一句"名号「少侠」——头像：点开角色面板"，
-	#     而左上角那颗头像本来就能开角色面板，功能重复。（_show_player_tag 留着不删，
-	#     以后想挂到别处还能用。）
-	# _plaques.add_slip("pid", 0.545, 0.842, pn, _show_player_tag, "", V)
-	print("[主界面] 牌子层：", _plaques.items.size(), " 块（用户标注 11 处 + 溪畔/藏宝阁两处原有功能）")
+	_plaques.add_arrow("out", 0.104, 0.575, "出村", _open_out, -1, V)
+	_plaques.add_hang("hill", 0.215, 0.695, "后山", _click_hill, "", "", {"page": "village", "white": true, "w": 76.0})
+	_plaques.add_hang("brook", 0.395, 0.645, "溪畔", _gather_wood, "", "", {"page": "village", "white": true, "w": 76.0})
+	print("[主界面] 牌子层：", _plaques.items.size(), " 块（v211：顶栏 + 右栏 5 格 + 历练大碑）")
 
 func _player_tag() -> String:
 	var n := str(GameState.player_name)
@@ -1003,10 +988,13 @@ func _refresh_plaques() -> void:
 	# v200：封面页只留头像/名号/进阶/挂机/建设；商店与困兽没收起来会压住书名
 	_plaques.set_vis("shop", not _cover_mode)
 	_plaques.set_vis("kushou_test", not _cover_mode)
+	_plaques.set_vis("stele", not _cover_mode)
 	_plaques.set_vis("hill", GameState.village_stage >= 1)
 	_plaques.set_vis("treasure", GameState.map_found)
 	_plaques.set_vis("cave", GameState.b2_built and not GameState.cave_opened)
 	_plaques.set_vis("craft", GameState.cave_opened)
+	# v211：右栏按"当前可见的格子"重排（隐藏一格，下面的平滑往上顶）
+	_plaques.layout_rail(PlaqueLayer.RAIL_IDS, PlaqueLayer.RAIL_TOP, PlaqueLayer.RAIL_H, PlaqueLayer.RAIL_GAP)
 	# v98：商店**固定**（用户点名）——不再按剧情显隐，也不随风摆
 	var wood := GameState.material_count("wood")
 	if _stage >= Build.STAGE_MAX:
@@ -1033,8 +1021,10 @@ func _refresh_plaques() -> void:
 	if GameState.jianbao_ok():
 		rooms.append("鉴宝")
 	_plaques.set_sub("craft", "点我进屋\n" + "/".join(PackedStringArray(rooms)))
-	_plaques.set_sub("shop", "换材料")   # ⚠ 六边形徽标靠右沿（x 0.95），副标题太长会被屏幕切掉
+	_plaques.set_sub("shop", "换材料")
 	_plaques.set_sub("out", "历练去")
+	# v211：中央大碑副题（主操作永远告诉玩家下一步）
+	_plaques.set_sub("stele", "开始游历 · 已历 " + str(GameState.stage_progress) + " 关")
 	# ⚠ 「挂机」那一块的副标题（攒了多久/收不收）由 _refresh_idle_btn 每 0.5 秒喂，
 	#   这里**不要**碰它——每帧清一次的话，那行字根本显示不出来。
 
@@ -1118,15 +1108,13 @@ func _exit_tree() -> void:
 # v4.2：5 格 → 6 格（新增「宝箱」）。宽度得跟着收：720 - 2×10 边距 = 700，
 #   主键 146 + 5×96 + 5×11 缝 = 681，居中后左右各留 ~19。
 func _layout_tags() -> void:
-	var mk := 146.0
-	var ow := 96.0
-	var gap := 11.0
+	# v211：6 格**等宽**（底栏抬到 100 高）——主格不再独大，整排像一条真正的功能带
+	var gap := 8.0
 	var n := Conf.TAGN.size()
-	var total := mk + ow * float(n - 1) + gap * float(n - 1)
-	var x := (Conf.DW - total) * 0.5
+	var w := (Conf.DW - 24.0 - gap * float(n - 1)) / float(n)
+	var x := 12.0
 	var rects: Array = []
 	for i in n:
-		var w := mk if i == 0 else ow
 		rects.append(Rect2(x, Conf.TAG_Y, w, Conf.TAG_H))
 		x += w + gap
 	_tag_rects = rects
@@ -2218,10 +2206,14 @@ func _skin_pass() -> void:
 			if sb is StyleBoxFlat:
 				var s := sb as StyleBoxFlat
 				if s.corner_radius_top_left >= 10 and s.bg_color.v > 0.72 and s.bg_color.a > 0.8:
+					# v208（用户："怎么感觉和原版差不多"）：问题不在细节，在**大色块**——
+					#   1px 金线在 450 宽的截图上只有 0.6 像素，压根看不见。
+					#   所以把整块面板翻成玄墨底 + 3px 金框，再把这板上的深色字提成纸白。
 					s.set_corner_radius_all(4)
 					s.border_color = Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.55)
 					s.set_border_width_all(2)
 					n_panel += 1
+
 			# v207：给"有标题的面板"自动补一条刊头（已经手工做过的跳过：
 			#   判据＝标题字已经是亮金，或面板上已挂 skin_header 标记）
 			if pn.size.x >= 380.0 and not pn.has_meta("skin_header"):
@@ -2253,11 +2245,7 @@ func _skin_pass() -> void:
 					tlb.add_theme_color_override("font_color", Ui.GOLD_HI)
 					n_heads += 1
 					# 刊头带里的其它深色字（副标题/银两那些）一起提亮，免得墨底墨字看不见
-					for c2 in pn.get_children():
-						if c2 is Label:
-							var l3 := c2 as Label
-							if l3 != tlb and l3.position.y < 96.0 and l3.get_theme_color("font_color").v < 0.62:
-								l3.add_theme_color_override("font_color", Color(0.80, 0.76, 0.68, 0.92))
+
 	print("[主界面] 换皮扫描：", n_panel, " 块面板 / ", n_label, " 个标题 / ", n_heads, " 条刊头")
 
 func _zoom() -> float:

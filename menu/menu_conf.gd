@@ -28,8 +28,8 @@ const START_STAGE := 0
 # v4.2：底排 5 格 → **6 格**，新增第 5 格「宝箱」（宝箱专页，见 chest_panel.gd）。
 #   注意下标的坑：第 4 格（下标 3）画的是「宠物」，`TAGN[3]` 那串"设置"只是占位
 #   （设置以后并进「石桌」）。加/删底排格子时，`menu_sketch._tag_fire()` 的 case 要一起改。
-const TAG_BM := 26.0
-const TAG_H := 86.0
+const TAG_BM := 16.0
+const TAG_H := 100.0
 const TAG_Y := DH - TAG_BM - TAG_H
 const HINT_Y := TAG_Y - 20.0
 const TOAST_Y := TAG_Y - 66.0
