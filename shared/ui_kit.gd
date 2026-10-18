@@ -7,6 +7,7 @@ extends RefCounted
 # ============================================================
 
 const Audio := preload("res://shared/audio.gd")   # v65：点击音（全game 按钮都出自 make_button，一处挂全）
+const Ui := preload("res://menu/menu_theme.gd")   # v200：影之刃皮肤（SKIN=0 自动回旧样式）
 
 const INK := Color(0.14, 0.13, 0.15)
 const PAPER := Color(0.93, 0.90, 0.83)
@@ -58,7 +59,13 @@ static func paper_box(alpha := 0.95) -> StyleBoxFlat:
 static func ink_box(bg: Color) -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = bg
-	sb.set_corner_radius_all(6)
+	if Ui.SKIN == 1:
+		# v200：影之刃式按钮——近方角 + 一道鎏金细边
+		sb.set_corner_radius_all(2)
+		sb.border_color = Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.42)
+		sb.set_border_width_all(1)
+	else:
+		sb.set_corner_radius_all(6)
 	sb.content_margin_left = 10.0
 	sb.content_margin_right = 10.0
 	sb.content_margin_top = 4.0
@@ -66,6 +73,17 @@ static func ink_box(bg: Color) -> StyleBoxFlat:
 	return sb
 
 static func style_button(btn: Button) -> void:
+	if Ui.SKIN == 1:
+		btn.add_theme_stylebox_override("normal", ink_box(Color(0.094, 0.080, 0.070, 0.94)))
+		btn.add_theme_stylebox_override("hover", ink_box(Color(0.165, 0.133, 0.110, 0.96)))
+		btn.add_theme_stylebox_override("pressed", ink_box(Color(0.055, 0.046, 0.042, 0.98)))
+		btn.add_theme_stylebox_override("disabled", ink_box(Color(0.16, 0.15, 0.14, 0.42)))
+		btn.add_theme_color_override("font_color", Color(0.941, 0.914, 0.839))
+		btn.add_theme_color_override("font_disabled_color", Color(0.94, 0.91, 0.84, 0.30))
+		var f0 := font()
+		if f0 != null:
+			btn.add_theme_font_override("font", f0)
+		return
 	btn.add_theme_stylebox_override("normal", ink_box(Color(0.21, 0.19, 0.20, 0.96)))
 	btn.add_theme_stylebox_override("hover", ink_box(Color(0.31, 0.27, 0.27, 0.96)))
 	btn.add_theme_stylebox_override("pressed", ink_box(Color(0.13, 0.11, 0.12, 0.96)))

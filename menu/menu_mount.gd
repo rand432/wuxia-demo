@@ -11,16 +11,22 @@ extends Node2D
 
 const Conf := preload("res://menu/menu_conf.gd")
 const Draw := preload("res://menu/menu_draw.gd")
+const Ui := preload("res://menu/menu_theme.gd")   # v200：影之刃皮肤
 
 var t := 0.0
 var cam := 0.0
 var font: Font = null
+var _brush: Font = null
 var show_weiba := false        # 左端题跋（"结束语"＋封面绢面）：想要回来改 true
 var show_left_mount := false   # 左端装裱件（隔水绢块＋两条竖框线＋左木轴）：它们正压在后山图上，默认全不画
 
 func _ready() -> void:
 	if font == null:
 		font = ThemeDB.fallback_font
+	if Ui.SKIN == 1 and ResourceLoader.exists(Ui.FONT_BRUSH):
+		var r: Resource = load(Ui.FONT_BRUSH)
+		if r is Font:
+			_brush = r as Font
 
 # v98：两页画卷的总长只有 1440（封面页 + 村景页），不是老的 3000 长卷——
 #   所以卷口大小改由外面喂 roll_ratio（0=村景页铺满 · 1=封面页铺满）。不喂就照老规矩看 cam。
@@ -67,6 +73,24 @@ func _yinshou() -> void:
 	var cx := Conf.YINSHOU_CX
 	var n := Conf.TITLE.length()
 	var y0 := 479.0 - float(n - 1) * 56.0
+	if Ui.SKIN == 1:
+		# v200：金漆书名 + 内框 + 四角标（影之刃的"引首"做法）
+		var fr := Rect2(Conf.YINSHOU_X0 + 12.0, Conf.CONTENT_TOP + 26.0,
+			Conf.YINSHOU_X1 - Conf.YINSHOU_X0 - 24.0, Conf.CONTENT_BOT - Conf.CONTENT_TOP - 52.0)
+		Ui.panel(self, fr, {"fill": Color(0.0, 0.0, 0.0, 0.0), "edge": Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.42),
+			"cut": 8.0, "bracket": true, "shadow": 0.0, "ink_halo": false, "no_hi": true})
+		var f: Font = _brush if _brush != null else font
+		# ⚠ 纸面上不能用亮金（#F0D68A 压在 #EDE7D8 上几乎看不见）——
+		#   改成**墨字描金边**：金在外圈提气，墨在内里压住，远看就是"金字招牌"。
+		for i in n:
+			var tp := Vector2(cx - 56.0, y0 + float(i) * 112.0 + 34.0)
+			var ch := Conf.TITLE.substr(i, 1)
+			draw_string_outline(f, tp, ch, HORIZONTAL_ALIGNMENT_CENTER, 112.0, 84, 6, Color(0.80, 0.63, 0.26, 0.90))
+			draw_string(f, tp, ch, HORIZONTAL_ALIGNMENT_CENTER, 112.0, 84, Color(0.098, 0.082, 0.078, 0.97))
+		_seal(Vector2(cx, y0 + float(n) * 112.0 + 54.0), 58.0, "无名")
+		draw_string(font, Vector2(cx - 110.0, 898.0), "一 卷 山 水", HORIZONTAL_ALIGNMENT_CENTER, 220.0, 20,
+			Color(0.62, 0.48, 0.18, 0.80))
+		return
 	for i in n:
 		draw_string(font, Vector2(cx - 56.0, y0 + float(i) * 112.0 + 32.0), Conf.TITLE.substr(i, 1), HORIZONTAL_ALIGNMENT_CENTER, 112.0, 76, Conf.INK)
 	_seal(Vector2(cx, y0 + float(n) * 112.0 + 49.0), 56.0, "无名")
@@ -87,6 +111,14 @@ func _weiba() -> void:
 	draw_rect(Rect2(weiba_x, Conf.CONTENT_TOP, weiba_w, Conf.CONTENT_BOT - Conf.CONTENT_TOP), Conf.WEI_C)
 	draw_line(Vector2(weiba_x, Conf.CONTENT_TOP), Vector2(weiba_x, Conf.CONTENT_BOT), Color(0.25, 0.18, 0.12, 0.25), 1.5)
 	draw_line(Vector2(weiba_x + weiba_w, Conf.CONTENT_TOP), Vector2(weiba_x + weiba_w, Conf.CONTENT_BOT), Color(0.25, 0.18, 0.12, 0.25), 1.5)
+	if Ui.SKIN == 1:
+		# v200：题记加一道内框 + 四角标（纸面留白，只收边，不压暗）
+		var fr := Rect2(weiba_x + 16.0, Conf.CONTENT_TOP + 24.0, weiba_w - 32.0, Conf.CONTENT_BOT - Conf.CONTENT_TOP - 48.0)
+		Ui.panel(self, fr, {"fill": Color(0.0, 0.0, 0.0, 0.0), "edge": Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.34),
+			"cut": 8.0, "bracket": true, "shadow": 0.0, "ink_halo": false, "no_hi": true})
+		# 下半留白补两片淡远山：只加层次，不抢题记
+		_ink_ridge(weiba_x + 28.0, Conf.CONTENT_BOT - 118.0, weiba_w - 56.0, 0.10, 1.0)
+		_ink_ridge(weiba_x + 28.0, Conf.CONTENT_BOT - 60.0, weiba_w - 56.0, 0.07, 2.3)
 	var dn := Conf.DISCIPLE_NAME
 	var cols: Array = [
 		["此卷记一少年", 418.0, 29.0],
@@ -102,7 +134,10 @@ func _weiba() -> void:
 		_vtext(str(c[0]), weiba_x + weiba_w - 46.0 - float(i) * step, float(c[1]), float(c[2]))
 	_seal(Vector2(weiba_x + weiba_w - 46.0, 806.0), 42.0, "记")
 	_seal(Vector2(weiba_x + 46.0, 806.0), 46.0, "无名")
-	draw_string(font, Vector2(weiba_x, 869.0), "—— 未完 · 待续 ——", HORIZONTAL_ALIGNMENT_CENTER, weiba_w, 21, Color(Conf.INK.r, Conf.INK.g, Conf.INK.b, 0.40))
+	var foot_c := Color(Conf.INK.r, Conf.INK.g, Conf.INK.b, 0.40)
+	if Ui.SKIN == 1:
+		foot_c = Color(0.60, 0.46, 0.17, 0.72)
+	draw_string(font, Vector2(weiba_x, 869.0), "—— 未完 · 待续 ——", HORIZONTAL_ALIGNMENT_CENTER, weiba_w, 21, foot_c)
 
 func _gap_rect(x0: float, x1: float) -> void:
 	if not Draw.vis(cam, x0, x1):
@@ -111,12 +146,30 @@ func _gap_rect(x0: float, x1: float) -> void:
 	draw_line(Vector2(x0, Conf.CONTENT_TOP), Vector2(x0, Conf.CONTENT_BOT), Color(0.25, 0.18, 0.12, 0.25), 1.5)
 	draw_line(Vector2(x1, Conf.CONTENT_TOP), Vector2(x1, Conf.CONTENT_BOT), Color(0.25, 0.18, 0.12, 0.25), 1.5)
 
+# 淡墨远山（封面页下半的留白）：一道起伏的墨坡，alpha 很低，只当水印
+func _ink_ridge(x0: float, y0: float, w: float, a: float, ph: float) -> void:
+	var n := 11
+	var pts := PackedVector2Array([Vector2(x0, y0 + 60.0)])
+	for i in n:
+		var tx := x0 + w * float(i) / float(n - 1)
+		var hh := 22.0 + 26.0 * sin(float(i) * 1.15 + ph) + 12.0 * sin(float(i) * 2.7 + ph * 1.9)
+		pts.append(Vector2(tx, y0 - hh))
+	pts.append(Vector2(x0 + w, y0 + 60.0))
+	draw_colored_polygon(pts, Color(0.16, 0.15, 0.17, a))
+
 func _vtext(s: String, x: float, y0: float, fs: float) -> void:
 	for i in s.length():
 		draw_string(font, Vector2(x - 30.0, y0 + float(i) * (fs + 7.0)), s.substr(i, 1), HORIZONTAL_ALIGNMENT_CENTER, 60.0, int(fs), Color(Conf.INK.r, Conf.INK.g, Conf.INK.b, 0.68))
 
 func _seal(c: Vector2, sz: float, s: String) -> void:
-	draw_colored_polygon(Draw.round_poly(Rect2(c.x - sz * 0.5, c.y - sz * 0.5, sz, sz), 4.0), Color(Conf.SEAL_C.r, Conf.SEAL_C.g, Conf.SEAL_C.b, 0.84))
+	var col := Color(Conf.SEAL_C.r, Conf.SEAL_C.g, Conf.SEAL_C.b, 0.84)
+	if Ui.SKIN == 1:
+		col = Color(0.706, 0.157, 0.118, 0.94)
+	draw_colored_polygon(Draw.round_poly(Rect2(c.x - sz * 0.5, c.y - sz * 0.5, sz, sz), 4.0), col)
+	if Ui.SKIN == 1:
+		var rp := Draw.round_poly(Rect2(c.x - sz * 0.5 + 3.0, c.y - sz * 0.5 + 3.0, sz - 6.0, sz - 6.0), 3.0)
+		rp.append(rp[0])
+		draw_polyline(rp, Color(Ui.GOLD_HI.r, Ui.GOLD_HI.g, Ui.GOLD_HI.b, 0.42), 1.0, true)
 	var fs := int(sz * 0.42)
 	var n := s.length()
 	for i in n:

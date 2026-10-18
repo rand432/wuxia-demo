@@ -26,6 +26,7 @@ const Elem := preload("res://shared/data_elem.gd")   # v58：五行真源（键�
 const Bonds := preload("res://shared/data_bonds.gd")   # ㊽：上阵羁绊（纯数据）
 const PillPopup := preload("res://menu/pill_popup.gd")
 const Voice := preload("res://shared/voice.gd")
+const Ui := preload("res://menu/menu_theme.gd")   # v201：影之刃皮肤
 const DataIcons := preload("res://shared/data_icons.gd")   # v93l：武学/命数图标（素材图集切出来的）   # v93：开面板/换页签念一句（用户："语音包点击没听到"）
 
 const PANEL_W := 640.0
@@ -221,12 +222,38 @@ func _build() -> void:
 	_panel.size = Vector2(PANEL_W, PANEL_H)
 	_panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	var psb := StyleBoxFlat.new()
-	psb.bg_color = Color(PAPER.r, PAPER.g, PAPER.b, 0.98)
-	psb.set_corner_radius_all(14)
-	psb.border_color = Color(0.32, 0.27, 0.22, 0.55)
-	psb.set_border_width_all(2)
+	if Ui.SKIN == 1:
+		# v201：近方角纸面 + 一道金线（影之刃的板是硬的，不是圆卡片）
+		psb.bg_color = Color(0.961, 0.941, 0.898, 0.985)
+		psb.set_corner_radius_all(4)
+		psb.border_color = Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.55)
+		psb.set_border_width_all(2)
+	else:
+		psb.bg_color = Color(PAPER.r, PAPER.g, PAPER.b, 0.98)
+		psb.set_corner_radius_all(14)
+		psb.border_color = Color(0.32, 0.27, 0.22, 0.55)
+		psb.set_border_width_all(2)
 	_panel.add_theme_stylebox_override("panel", psb)
 	add_child(_panel)
+	if Ui.SKIN == 1:
+		# 刊头：单独一层画在面板最底下（draw 信号避免再开一个内嵌类）
+		var chrome := Control.new()
+		chrome.size = Vector2(PANEL_W, PANEL_H)
+		chrome.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		chrome.draw.connect(func() -> void:
+			Ui.header(chrome, PANEL_W, 78.0)
+			# 分区卡片（位置按 _build 里各 _head() 的 y 推出来的：242/414/522/776/988）
+			# 坐标按 _build 里的真实 y 推的：属性行 282~404 / 攻击属性 438~514 /
+			# 装备格 560~764 / 武学格 800~976。天赋那块自带面板，不再套卡。
+			for r in [
+				Rect2(24.0, 276.0, PANEL_W - 48.0, 132.0),   # 属性
+				Rect2(24.0, 434.0, PANEL_W - 48.0, 88.0),    # 攻击属性
+				Rect2(24.0, 556.0, PANEL_W - 48.0, 214.0),   # 装备
+				Rect2(24.0, 796.0, PANEL_W - 48.0, 186.0),   # 武学
+			]:
+				Ui.card(chrome, r))
+		_panel.add_child(chrome)
+		_panel.move_child(chrome, 0)
 
 	# v61（用户："弟子界面的按钮是不是太拥挤了 是不是重新分布一下"）：
 	#   顶上这一行原来是 标题(28..178) ＋［上阵］(178..336) ＋ 三个页签(324..628)——
@@ -236,6 +263,14 @@ func _build() -> void:
 	var title := _label("弟子", 28, INK)
 	title.position = Vector2(28, 20)
 	title.size = Vector2(90, 44)
+	if Ui.SKIN == 1:
+		# 刊头是墨底：标题改毛笔金字
+		title.add_theme_color_override("font_color", Ui.GOLD_HI)
+		title.add_theme_font_size_override("font_size", 34)
+		if ResourceLoader.exists(Ui.FONT_BRUSH):
+			var bf: Resource = load(Ui.FONT_BRUSH)
+			if bf is Font:
+				title.add_theme_font_override("font", bf)
 	_panel.add_child(title)
 
 	_deploy_btn = Button.new()
@@ -271,6 +306,7 @@ func _build() -> void:
 	sep.position = Vector2(28, 74)
 	sep.size = Vector2(PANEL_W - 56.0, 2)
 	sep.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	sep.visible = Ui.SKIN != 1     # v201：刊头自带金线，这条收掉
 	_panel.add_child(sep)
 
 	# v93（用户："角色面板你没有看我上次的草图"）：**左上角一个圆形头像**——
@@ -824,6 +860,22 @@ func _style_deploy(on: bool) -> void:
 	_deploy_btn.add_theme_color_override("font_color", Color(0.94, 0.91, 0.84))
 
 func _style_tab(btn: Button, selected: bool) -> void:
+	if Ui.SKIN == 1:
+		# v201：刊头是墨底——选中的页签用朱砂，未选中用浅墨，才分得开
+		if selected:
+			btn.add_theme_stylebox_override("normal", _flat(Color(Ui.CINN.r, Ui.CINN.g, Ui.CINN.b, 0.95)))
+			btn.add_theme_stylebox_override("hover", _flat(Color(Ui.CINN_HI.r, Ui.CINN_HI.g, Ui.CINN_HI.b, 0.95)))
+			btn.add_theme_stylebox_override("pressed", _flat(Color(Ui.CINN.r * 0.75, Ui.CINN.g * 0.75, Ui.CINN.b * 0.75, 0.95)))
+			btn.add_theme_color_override("font_color", Color(1.0, 0.945, 0.83))
+			btn.add_theme_color_override("font_hover_color", Color(1.0, 0.945, 0.83))
+		else:
+			btn.add_theme_stylebox_override("normal", _flat(Color(0.165, 0.145, 0.130, 0.95)))
+			btn.add_theme_stylebox_override("hover", _flat(Color(0.245, 0.215, 0.190, 0.95)))
+			btn.add_theme_stylebox_override("pressed", _flat(Color(0.120, 0.105, 0.095, 0.95)))
+			btn.add_theme_color_override("font_color", Color(Ui.TXT.r, Ui.TXT.g, Ui.TXT.b, 0.86))
+			btn.add_theme_color_override("font_hover_color", Ui.GOLD_HI)
+		btn.add_theme_stylebox_override("focus", _flat(Color(0, 0, 0, 0)))
+		return
 	if selected:
 		btn.add_theme_stylebox_override("normal", _flat(Color(INK.r, INK.g, INK.b, 0.92)))
 		btn.add_theme_stylebox_override("hover", _flat(Color(INK.r, INK.g, INK.b, 0.85)))

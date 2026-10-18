@@ -27,6 +27,7 @@ const Conf := preload("res://menu/menu_conf.gd")
 const Draw := preload("res://menu/menu_draw.gd")
 const CharArt := preload("res://shared/char_art.gd")
 const Audio := preload("res://shared/audio.gd")   # v98：点击反馈音（用户点名要）
+const Ui := preload("res://menu/menu_theme.gd")     # v200：影之刃·玄墨鎏金皮肤（原名 Skin 撞了引擎内置类）
 
 const DW := 720.0
 const DH := 1280.0
@@ -48,14 +49,50 @@ var items: Array = []      # {id,kind,cx,cy,w,h,text,fn,sub,act,vis,warm,gold,st
 var slide := 0.0           # 画卷偏移：page="village" 的牌子跟着村景页一起滑
 var _hover := -1
 var _down := -1
+var _ripples: Array = []       # v200：点击涟漪 {p: Vector2, t: float}
+var _brush: Font = null        # v200：毛笔字（Ma Shan Zheng）
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE     # 空白处放行给主界面
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	if Ui.SKIN == 1 and ResourceLoader.exists(Ui.FONT_BRUSH):
+		var r: Resource = load(Ui.FONT_BRUSH)
+		if r is Font:
+			_brush = r as Font
 
 func _process(d: float) -> void:
 	t += d
+	if Ui.SKIN == 1:
+		_tick_anim(d)
 	queue_redraw()
+
+# v200（用户："主要要丝滑"）：所有悬停/按下都走缓动，不再瞬间跳变。
+#   · hv：指数趋近（跟手、帧率无关）
+#   · dn：阻尼弹簧（松手有回弹，不是硬切）
+func _tick_anim(d: float) -> void:
+	for i in items.size():
+		var it: Dictionary = items[i]
+		var hv := Ui.ease(float(it.get("hv", 0.0)), 1.0 if _hover == i else 0.0, 13.0, d)
+		it["hv"] = hv
+		var sp: Array = Ui.spring([float(it.get("dn", 0.0)), float(it.get("dvy", 0.0))],
+			1.0 if _down == i else 0.0, 420.0, 27.0, d)
+		it["dn"] = sp[0]
+		it["dvy"] = sp[1]
+	# 涟漪：0.55 秒走完
+	var keep: Array = []
+	for rp in _ripples:
+		rp["t"] = float(rp["t"]) + d
+		if float(rp["t"]) < 0.55:
+			keep.append(rp)
+	_ripples = keep
+
+# 点击涟漪（金环由内向外扩）
+func _burst(pos: Vector2) -> void:
+	if Ui.SKIN != 1:
+		return
+	_ripples.append({"p": pos, "t": 0.0})
+	if _ripples.size() > 6:
+		_ripples.pop_front()
 
 # ---------------- 建牌子 ----------------
 # 锚点＝**牌面中心**的占屏比例（跟用户标注表的框心对齐）
@@ -148,6 +185,9 @@ func _on_hit(ev: InputEvent, idx: int) -> void:
 	if mb.pressed:
 		_down = idx
 		_click_sfx(idx)
+		var it: Dictionary = items[idx]
+		var ss := slide if str(it["page"]) == "village" else 0.0
+		_burst(Vector2(float(it["cx"]) - ss, float(it["cy"])))
 		queue_redraw()
 	else:
 		var was := _down
@@ -260,23 +300,49 @@ func _draw() -> void:
 		var s := slide if str(it["page"]) == "village" else 0.0
 		if s > DW + 120.0 or s < -(DW + 120.0):
 			continue                        # 整页滑出屏幕了，省点力气
-		match str(it["kind"]):
-			"beam":
-				_draw_beam(it)
-			"hang":
-				_draw_hang(it, s)
-			"shop", "icon":
-				_draw_icon(it, s)
-			"ribbon":
-				_draw_ribbon(it, s)
-			"slip":
-				_draw_slip(it, s)
-			"disc":
-				_draw_disc(it, s)
-			"txt":
-				_draw_txt(it, s)
-			"arrow":
-				_draw_arrow(it, s)
+		if Ui.SKIN == 1:
+			match str(it["kind"]):
+				"beam":
+					_n_beam(it)
+				"hang":
+					_n_hang(it, s)
+				"shop", "icon":
+					_n_icon(it, s)
+				"ribbon":
+					_n_ribbon(it, s)
+				"slip":
+					_n_slip(it, s)
+				"disc":
+					_n_disc(it, s)
+				"txt":
+					_n_txt(it, s)
+				"arrow":
+					_n_arrow(it, s)
+		else:
+			match str(it["kind"]):
+				"beam":
+					_draw_beam(it)
+				"hang":
+					_draw_hang(it, s)
+				"shop", "icon":
+					_draw_icon(it, s)
+				"ribbon":
+					_draw_ribbon(it, s)
+				"slip":
+					_draw_slip(it, s)
+				"disc":
+					_draw_disc(it, s)
+				"txt":
+					_draw_txt(it, s)
+				"arrow":
+					_draw_arrow(it, s)
+	# v200：涟漪画在最上层
+	for rp in _ripples:
+		var k := clampf(float(rp["t"]) / 0.55, 0.0, 1.0)
+		var rad := 10.0 + 64.0 * (1.0 - pow(1.0 - k, 2.2))
+		var a := (1.0 - k) * (1.0 - k)
+		draw_arc(rp["p"], rad, 0.0, TAU, 44,
+			Color(Ui.GOLD_HI.r, Ui.GOLD_HI.g, Ui.GOLD_HI.b, a * 0.55), 1.4 + 2.0 * a, true)
 
 func _wood(it: Dictionary) -> Color:
 	var c: Color = WOOD0.lerp(WOOD1, clampf(float(it["warm"]), 0.0, 1.0))
@@ -609,3 +675,223 @@ func _draw_arrow(it: Dictionary, s: float) -> void:
 		var sx := minf(neck, tail)
 		var sw := absf(tail - neck)
 		draw_string(font, Vector2(sx, cy + 9.0), txt, HORIZONTAL_ALIGNMENT_CENTER, sw, 22, Color(INK.r, INK.g, INK.b, 0.92))
+
+# ============================================================
+# v200 · 影之刃皮肤（玄墨鎏金）
+#   一张板＝切角 + 金线 + 四角 L 标；字＝毛笔金；强调只剩朱砂。
+#   所有 _n_* 都读 it["hv"] / it["dn"]（缓动值，见 _tick_anim）。
+# ============================================================
+
+func _n_font() -> Font:
+	return _brush if _brush != null else font
+
+# 板面：底 → 悬停提亮 → 按下加深
+func _n_fill(it: Dictionary) -> Color:
+	var hv := clampf(float(it.get("hv", 0.0)), 0.0, 1.0)
+	var dn := clampf(float(it.get("dn", 0.0)), 0.0, 1.0)
+	var c := Ui.lerp_c(Ui.INK0, Ui.INK2, hv * 0.85)
+	return Ui.lerp_c(c, Ui.INK3, dn * 0.7)
+
+func _n_edge(it: Dictionary) -> Color:
+	var hv := clampf(float(it.get("hv", 0.0)), 0.0, 1.0)
+	var dn := clampf(float(it.get("dn", 0.0)), 0.0, 1.0)
+	var c := Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.50 + 0.34 * hv)
+	return Ui.lerp_c(c, Color(Ui.CINN_HI.r, Ui.CINN_HI.g, Ui.CINN_HI.b, 0.95), dn * 0.75)
+
+# 横梁：一根铁梁，上下各一线金，钉子改成金菱
+func _n_beam(it: Dictionary) -> void:
+	var x0 := float(it["x0"])
+	var x1 := float(it["x1"])
+	var y := float(it["cy"])
+	var w := x1 - x0
+	draw_rect(Rect2(x0, y, w, 7.0), Color(0.055, 0.050, 0.065, 0.62))
+	draw_line(Vector2(x0, y), Vector2(x1, y), Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.72), 1.4, true)
+	draw_line(Vector2(x0, y + 7.0), Vector2(x1, y + 7.0), Color(Ui.GOLD_DK.r, Ui.GOLD_DK.g, Ui.GOLD_DK.b, 0.62), 1.0, true)
+	for nx in (it["nails"] as Array):
+		Ui.diamond(self, Vector2(float(nx), y + 3.0), 3.4, Ui.GOLD_HI, 1.2)
+
+# 悬挂牌：吊绳 + 墨牌 + 竖排毛笔金
+func _n_hang(it: Dictionary, s: float) -> void:
+	var hv := clampf(float(it.get("hv", 0.0)), 0.0, 1.0)
+	var dn := clampf(float(it.get("dn", 0.0)), -0.4, 1.6)
+	var w := float(it["w"])
+	var h := float(it["h"])
+	var cx := float(it["cx"]) - s
+	var cy := float(it["cy"]) - 1.8 * hv + 2.4 * dn
+	var x := cx - w * 0.5
+	var y := cy - h * 0.5
+	var peg := Vector2(cx, y - ROPE)
+	var rope_c := Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.40 + 0.30 * hv)
+	draw_line(peg, Vector2(x + w * 0.30, y + 9.0), rope_c, 1.2, true)
+	draw_line(peg, Vector2(x + w * 0.70, y + 9.0), rope_c, 1.2, true)
+	Ui.diamond(self, peg, 3.4, Ui.GOLD_HI, 1.2)
+	Ui.panel(self, Rect2(x, y, w, h), {"fill": _n_fill(it), "edge": _n_edge(it), "glow": hv, "cut": 8.0})
+	draw_line(Vector2(x + 10.0, y + 15.0), Vector2(x + w - 10.0, y + 15.0),
+		Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.20 + 0.12 * hv), 1.0, true)
+	var f := _n_font()
+	var fs := 22
+	var txt := str(it["text"])
+	var ty := y + 20.0 + float(fs)
+	for i in txt.length():
+		Ui.gold_text(self, f, Vector2(x, ty), txt.substr(i, 1), fs, HORIZONTAL_ALIGNMENT_CENTER, w, Ui.GOLD_HI, 2)
+		ty += float(fs) + 3.0
+	# 底部：动作字压在最下（朱砂），副题往上一行行排——v200 修掉原来 act/sub 叠字
+	var act := str(it["act"])
+	var sub := str(it["sub"])
+	var lines: PackedStringArray = sub.split("\n") if sub != "" else PackedStringArray()
+	var base_y := y + h - 14.0
+	if act != "":
+		Ui.gold_text(self, f, Vector2(x, base_y), act, 15, HORIZONTAL_ALIGNMENT_CENTER, w, Ui.CINN_HI, 2)
+		base_y -= 20.0
+	for i in lines.size():
+		var sy2 := base_y - float(lines.size() - 1 - i) * 15.0
+		draw_string(font, Vector2(x, sy2), str(lines[i]), HORIZONTAL_ALIGNMENT_CENTER, w, 12,
+			Color(Ui.TXT_DIM.r, Ui.TXT_DIM.g, Ui.TXT_DIM.b, 0.92))
+
+# 窄签（进阶）
+func _n_slip(it: Dictionary, s: float) -> void:
+	var w := float(it["w"])
+	var h := float(it["h"])
+	var cx := float(it["cx"]) - s
+	var cy := float(it["cy"])
+	var r := Rect2(cx - w * 0.5, cy - h * 0.5, w, h)
+	Ui.panel(self, r, {"fill": _n_fill(it), "edge": _n_edge(it),
+		"glow": clampf(float(it.get("hv", 0.0)), 0.0, 1.0), "cut": 6.0})
+	var f := _n_font()
+	var txt := str(it["text"])
+	var fs := 19
+	var ty := r.position.y + 15.0 + float(fs)
+	for i in txt.length():
+		Ui.gold_text(self, f, Vector2(r.position.x, ty), txt.substr(i, 1), fs, HORIZONTAL_ALIGNMENT_CENTER, w, Ui.GOLD_HI, 2)
+		ty += float(fs) + 8.0
+
+# 右上角斜挂小牌（设置）
+func _n_ribbon(it: Dictionary, s: float) -> void:
+	var cx := float(it["cx"]) - s
+	var cy := float(it["cy"])
+	var w := float(it["w"])
+	var h := float(it["h"])
+	var hv := clampf(float(it.get("hv", 0.0)), 0.0, 1.0)
+	var rc := Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.38)
+	draw_line(Vector2(cx + 16.0, cy - h * 0.5 - 20.0), Vector2(cx - w * 0.26, cy - h * 0.5 + 4.0), rc, 1.0, true)
+	draw_line(Vector2(cx + 16.0, cy - h * 0.5 - 20.0), Vector2(cx + w * 0.26, cy - h * 0.5 + 4.0), rc, 1.0, true)
+	draw_set_transform(Vector2(cx, cy), -0.30, Vector2.ONE)
+	var r := Rect2(-w * 0.5, -h * 0.5, w, h)
+	Ui.panel(self, r, {"fill": _n_fill(it), "edge": _n_edge(it), "glow": hv, "cut": 6.0, "bracket": false})
+	Ui.gold_text(self, _n_font(), Vector2(r.position.x, r.position.y + h * 0.5 + 6.0), str(it["text"]), 17,
+		HORIZONTAL_ALIGNMENT_CENTER, w, Ui.GOLD_HI, 2)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+# 圆形头像：墨底 + 双金环 + 四枚刻点
+func _n_disc(it: Dictionary, s: float) -> void:
+	var cx := float(it["cx"]) - s
+	var cy := float(it["cy"])
+	var r := float(it["w"]) * 0.5
+	var hv := clampf(float(it.get("hv", 0.0)), 0.0, 1.0)
+	draw_circle(Vector2(cx + 1.5, cy + 3.5), r, Color(0.02, 0.02, 0.03, 0.45))
+	draw_circle(Vector2(cx, cy), r, Ui.INK0)
+	var tex: Texture2D = CharArt.q_head("player")
+	if tex != null:
+		var tw := tex.get_width()
+		var th := tex.get_height()
+		var k: float = (r * 1.62) / maxf(1.0, float(maxi(tw, th)))
+		var dw := float(tw) * k
+		var dh := float(th) * k
+		draw_texture_rect(tex, Rect2(cx - dw * 0.5, cy - dh * 0.5 + r * 0.08, dw, dh), false)
+	else:
+		Ui.gold_text(self, _n_font(), Vector2(cx - r, cy + 11.0), "侠", 32,
+			HORIZONTAL_ALIGNMENT_CENTER, r * 2.0, Ui.GOLD_HI, 3)
+	Ui.ring(self, Vector2(cx, cy), r, Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.60 + 0.32 * hv), 2.0)
+	Ui.ring(self, Vector2(cx, cy), r - 5.0, Color(Ui.GOLD_HI.r, Ui.GOLD_HI.g, Ui.GOLD_HI.b, 0.16 + 0.38 * hv), 1.0)
+	for i in 4:
+		var a := -PI * 0.5 + float(i) * PI * 0.5
+		Ui.diamond(self, Vector2(cx + cos(a) * r, cy + sin(a) * r), 3.2, Ui.GOLD_HI, 1.0)
+
+# 图标牌（商店）：墨卡 + 浅绢画心（把素材白底吃成留白）+ 金字
+func _n_icon(it: Dictionary, s: float) -> void:
+	var cx := float(it["cx"]) - s
+	var cy := float(it["cy"])
+	var W := 112.0
+	var H := 132.0
+	var hv := clampf(float(it.get("hv", 0.0)), 0.0, 1.0)
+	var dn := clampf(float(it.get("dn", 0.0)), -0.4, 1.6)
+	var y0 := cy - H * 0.5 + 2.2 * dn - 1.6 * hv
+	var card := Rect2(cx - W * 0.5, y0, W, H)
+	Ui.panel(self, card, {"fill": _n_fill(it), "edge": _n_edge(it), "glow": hv, "cut": 9.0})
+	var inner := Rect2(card.position.x + 9.0, card.position.y + 9.0, W - 18.0, H - 46.0)
+	draw_colored_polygon(Ui.cut_poly(inner, 4.0), Color(0.925, 0.906, 0.855, 0.94))
+	var tex: Texture2D = SHOP_TEX
+	if it.get("tex", null) != null:
+		tex = it["tex"]
+	if tex != null:
+		var th := inner.size.y - 6.0
+		var tw := th * float(tex.get_width()) / maxf(1.0, float(tex.get_height()))
+		if tw > inner.size.x - 6.0:
+			tw = inner.size.x - 6.0
+			th = tw * float(tex.get_height()) / maxf(1.0, float(tex.get_width()))
+		draw_texture_rect(tex, Rect2(inner.get_center().x - tw * 0.5, inner.get_center().y - th * 0.5, tw, th), false)
+	var sub := str(it["sub"])
+	var lines: Array = []
+	if sub != "":
+		for ln in sub.split("\n"):
+			lines.append(str(ln))
+	Ui.gold_text(self, _n_font(), Vector2(card.position.x, card.position.y + H - 30.0), str(it["text"]), 20,
+		HORIZONTAL_ALIGNMENT_CENTER, W, Ui.GOLD_HI, 2)
+	var li := 0
+	for ln in lines:
+		draw_string(font, Vector2(card.position.x, card.position.y + H - 12.0 + float(li) * 13.0), str(ln),
+			HORIZONTAL_ALIGNMENT_CENTER, W, 11, Color(Ui.TXT_DIM.r, Ui.TXT_DIM.g, Ui.TXT_DIM.b, 0.92))
+		li += 1
+
+# 名号（头像右）+ 境界牌
+func _n_txt(it: Dictionary, s: float) -> void:
+	var cx := float(it["cx"]) - s
+	var cy := float(it["cy"])
+	var w := float(it["w"])
+	var hv := clampf(float(it.get("hv", 0.0)), 0.0, 1.0)
+	var f := _n_font()
+	var txt := str(it["text"])
+	Ui.gold_text(self, f, Vector2(cx - w * 0.5, cy + 13.0), txt, 34, HORIZONTAL_ALIGNMENT_CENTER, w, Ui.GOLD_HI, 3)
+	if hv > 0.01:
+		Ui.gold_text(self, f, Vector2(cx - w * 0.5, cy + 13.0), txt, 34, HORIZONTAL_ALIGNMENT_CENTER, w,
+			Color(1.0, 0.95, 0.74, hv * 0.45), 0)
+	var sub := str(it["sub"])
+	if sub != "":
+		var tw := maxf(112.0, float(sub.length()) * 21.0 + 40.0)
+		var th := 32.0
+		var r := Rect2(cx - tw * 0.5, cy + 22.0, tw, th)
+		Ui.panel(self, r, {"fill": Color(0.098, 0.090, 0.112, 0.94),
+			"edge": Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.82), "cut": 7.0, "bracket": false, "shadow": 0.6})
+		Ui.gold_text(self, f, Vector2(r.position.x, r.position.y + th * 0.5 + 9.0), sub, 19,
+			HORIZONTAL_ALIGNMENT_CENTER, tw, Ui.GOLD_HI, 2)
+
+# 出村箭头：墨底金边 + 金字
+func _n_arrow(it: Dictionary, s: float) -> void:
+	var cx := float(it["cx"]) - s
+	var cy := float(it["cy"])
+	var d := float(it["dir"])
+	var L := 122.0
+	var HH := 31.0
+	var SH := 16.0
+	var HEAD := 48.0
+	var tip := cx + d * L * 0.5
+	var tail := cx - d * L * 0.5
+	var neck := tip - d * HEAD
+	var pts := PackedVector2Array([
+		Vector2(tip, cy), Vector2(neck, cy - HH), Vector2(neck, cy - SH),
+		Vector2(tail, cy - SH), Vector2(tail, cy + SH), Vector2(neck, cy + SH),
+		Vector2(neck, cy + HH)])
+	var sh := PackedVector2Array()
+	for p in pts:
+		sh.append(p + Vector2(2.0, 4.0))
+	draw_colored_polygon(sh, Color(0.02, 0.02, 0.03, 0.35))
+	draw_colored_polygon(pts, _n_fill(it))
+	var outline := PackedVector2Array(pts)
+	outline.append(pts[0])
+	draw_polyline(outline, _n_edge(it), 1.8, true)
+	var txt := str(it["text"])
+	if txt != "":
+		var sx := minf(neck, tail)
+		var sw := absf(tail - neck)
+		Ui.gold_text(self, _n_font(), Vector2(sx, cy + 9.0), txt, 21, HORIZONTAL_ALIGNMENT_CENTER, sw, Ui.GOLD_HI, 2)
+

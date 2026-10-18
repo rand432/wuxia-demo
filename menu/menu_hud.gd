@@ -12,10 +12,35 @@ const Conf := preload("res://menu/menu_conf.gd")
 const Draw := preload("res://menu/menu_draw.gd")
 const Build := preload("res://menu/data_build.gd")
 const GameState := preload("res://shared/game_state.gd")
+const Ui := preload("res://menu/menu_theme.gd")   # v200：影之刃皮肤
 
 var t := 0.0
 var font: Font = null
 var host = null      # menu_sketch.gd 塞进来
+var _brush: Font = null
+var _tag_a: Array = []     # v200：每格的"按下量"（缓动，0~1）
+
+func _ready() -> void:
+	if Ui.SKIN == 1 and ResourceLoader.exists(Ui.FONT_BRUSH):
+		var r: Resource = load(Ui.FONT_BRUSH)
+		if r is Font:
+			_brush = r as Font
+
+func _process(d: float) -> void:
+	if Ui.SKIN != 1 or host == null:
+		return
+	var n: int = host._tag_rects.size()
+	while _tag_a.size() < n:
+		_tag_a.append(0.0)
+	var moved := false
+	for i in n:
+		var target := 1.0 if int(host._pressed_tag) == i else 0.0
+		var v := Ui.ease(float(_tag_a[i]), target, 20.0, d)
+		if absf(v - float(_tag_a[i])) > 0.002:
+			moved = true
+		_tag_a[i] = v
+	if moved:
+		queue_redraw()
 
 func _draw() -> void:
 	if host == null or font == null:
@@ -60,6 +85,9 @@ func _draw_toast() -> void:
 		return
 	var txt := str(host._toast)
 	var a := clampf(host._toast_t / 0.5, 0.0, 1.0)
+	if Ui.SKIN == 1:
+		_n_toast(txt, a)
+		return
 	var fs := 24
 	var per := 26
 	var lines: Array = []
@@ -139,6 +167,9 @@ func _draw_chest_badge(rc: Rect2) -> void:
 #     → 顶上一个小墨字图标（剑/人/囊/爪/箱/册） → 底下一行字。
 #   ⚠ 命中区（_tag_rects）**一个像素都没动**，只是画法变了，按钮行为不受影响。
 func _draw_tag(rc: Rect2, txt: String, primary: bool, pressed: bool, idx: int = -1) -> void:
+	if Ui.SKIN == 1:
+		_n_tag(rc, txt, primary, pressed, idx)
+		return
 	var off := 3.0 if pressed else 0.0
 	var r := Rect2(rc.position + Vector2(0, off), rc.size)
 	var base: Color = Conf.CHIP_P if primary else Conf.CHIP_C
@@ -172,6 +203,73 @@ func _draw_tag(rc: Rect2, txt: String, primary: bool, pressed: bool, idx: int = 
 	if txt.length() > 3:
 		fs = 17     # 宠物·幼狐 这类五六字
 	draw_string(font, Vector2(r.position.x, r.position.y + r.size.y - 11.0), txt, HORIZONTAL_ALIGNMENT_CENTER, r.size.x, fs, Color(Conf.INK.r, Conf.INK.g, Conf.INK.b, 0.86))
+
+# ============================================================
+# v200 · 影之刃底排：墨牌 + 金线，主格（开始历练）用朱砂
+#   按下量走 _tag_a 缓动（见 _process），不是硬跳。
+# ============================================================
+func _n_tag(rc: Rect2, txt: String, primary: bool, pressed: bool, idx: int) -> void:
+	var a := 0.0
+	if idx >= 0 and idx < _tag_a.size():
+		a = clampf(float(_tag_a[idx]), 0.0, 1.0)
+	var r := Rect2(rc.position + Vector2(0.0, 2.4 * a), rc.size)
+	var fill := Ui.INK1
+	var edge := Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.44)
+	if primary:
+		fill = Color(0.300, 0.093, 0.068, 0.95)
+		edge = Color(Ui.GOLD_HI.r, Ui.GOLD_HI.g, Ui.GOLD_HI.b, 0.78)
+	if a > 0.01:
+		fill = Ui.lerp_c(fill, Ui.INK3, a * 0.55)
+	Ui.panel(self, r, {"fill": fill, "edge": edge, "cut": 7.0, "bracket": false,
+		"glow": (1.0 if primary else 0.0) + a * 0.6, "ink_halo": false})
+	if primary:
+		var ir := Rect2(r.position + Vector2(4.0, 4.0), r.size - Vector2(8.0, 8.0))
+		var ip := Ui.cut_poly(ir, 4.0)
+		ip.append(ip[0])
+		draw_polyline(ip, Color(Ui.GOLD_HI.r, Ui.GOLD_HI.g, Ui.GOLD_HI.b, 0.26), 1.0, true)
+	var ic := Color(Ui.TXT.r, Ui.TXT.g, Ui.TXT.b, 0.86)
+	if primary:
+		ic = Ui.GOLD_HI
+	var cx := r.position.x + r.size.x * 0.5
+	draw_set_transform(Vector2(cx, r.position.y + 25.0), 0.0, Vector2.ONE)
+	_draw_tag_icon(idx, Vector2.ZERO, 11.0, ic)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	var f: Font = _brush if _brush != null else font
+	var fs := 21 if primary else 19
+	if txt.length() > 3:
+		fs = 16
+	var col := Ui.GOLD_HI if primary else Color(0.945, 0.925, 0.870, 0.95)
+	var ty := r.position.y + r.size.y - 12.0
+	# 小字不用毛笔字：Ma Shan Zheng 笔画细，19px 加描边会被暗边吃掉，反而糊
+	draw_string(font, Vector2(r.position.x, ty), txt, HORIZONTAL_ALIGNMENT_CENTER, r.size.x, fs, col)
+
+# 浮条（提示）：墨底 + 金边
+func _n_toast(txt: String, a: float) -> void:
+	var fs := 24
+	var per := 26
+	var lines: Array = []
+	var i := 0
+	while i < txt.length() and lines.size() < 4:
+		lines.append(txt.substr(i, per))
+		i += per
+	var lh := 36.0
+	var h := 30.0 + lh * float(lines.size())
+	var maxw := 0.0
+	for ln in lines:
+		maxw = maxf(maxw, float(str(ln).length()) * float(fs) * 1.04)
+	var w := minf(maxw + 72.0, Conf.DW - 36.0)
+	var x := (Conf.DW - w) * 0.5
+	var ty := (Conf.DH - h) * 0.5
+	var r := Rect2(x, ty, w, h)
+	var fa := clampf(a, 0.0, 1.0)
+	Ui.panel(self, r, {"fill": Color(0.094, 0.078, 0.068, 0.96 * fa),
+		"edge": Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.85 * fa), "cut": 10.0,
+		"glow": 0.6, "shadow": fa})
+	var yy := ty + 34.0
+	for ln in lines:
+		draw_string(font, Vector2(r.position.x, yy), str(ln), HORIZONTAL_ALIGNMENT_CENTER, w, fs,
+			Color(Ui.TXT.r, Ui.TXT.g, Ui.TXT.b, 0.92 * fa))
+		yy += lh
 
 # 六个格子的图标：全部用最少的线条画，走"墨"的味道（不引美术资源，随时能改）
 func _draw_tag_icon(i: int, c: Vector2, s: float, col: Color) -> void:

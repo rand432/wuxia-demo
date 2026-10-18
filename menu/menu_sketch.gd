@@ -60,6 +60,7 @@ const VIDEO_SCENE := "res://assets/video/village_loop.ogv"
 const PIN_CAM := true
 const MountLayer := preload("res://menu/menu_mount.gd")
 const HudLayer := preload("res://menu/menu_hud.gd")
+const Ui := preload("res://menu/menu_theme.gd")   # v200：影之刃皮肤
 const UiKit := preload("res://shared/ui_kit.gd")   # v72：设置面板用（标签/按钮/纸张面板工厂）
 const CharArt := preload("res://shared/char_art.gd")   # v92：村里的同伴/看火人用 Q版立绘（原来画火柴人）
 const CharacterPanel := preload("res://menu/character_panel.gd")
@@ -211,6 +212,7 @@ var _hint_a := 1.0
 var _demo_done := false
 var _demo_clock := 0.0
 var _tag_rects: Array = []
+var _cover_mode := true        # v200：当前停在封面页（收起商店/困兽，给书名让位）
 var _panel_open := false
 var _actors = null            # v93g：人物层（村景之上、UI 之下，等比缩放）
 var _ink = null               # v96：水墨村景层（最底，读 village_layout.json）
@@ -296,8 +298,36 @@ class MoneyHud extends Node2D:
 		draw_circle(c + Vector2(0, -4), 6.5, gd, false, 1.5)
 		draw_polyline(PackedVector2Array([pts[0], pts[1], pts[2], pts[3], pts[0]]), gd, 1.5)
 
+	# v200：影之刃式资源条——墨底金线，钱眼/元宝都用金
+	func _n_draw() -> void:
+		var r1 := Rect2(334.0, 6.0, 132.0, 34.0)
+		var r2 := Rect2(474.0, 6.0, 128.0, 34.0)
+		var o := {"fill": Color(0.094, 0.080, 0.070, 0.90),
+			"edge": Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.58),
+			"cut": 7.0, "bracket": false, "shadow": 0.45, "ink_halo": false}
+		Ui.panel(self, r1, o)
+		Ui.panel(self, r2, o)
+		# 铜钱：金钱一枚，中间方孔
+		var c := Vector2(357.0, 23.0)
+		draw_circle(c, 10.0, Color(0.86, 0.71, 0.38))
+		draw_arc(c, 10.0, 0.0, TAU, 24, Color(0.38, 0.29, 0.12, 0.85), 1.4, true)
+		draw_rect(Rect2(c + Vector2(-3.5, -3.5), Vector2(7.0, 7.0)), Color(0.38, 0.29, 0.12, 0.85), false, 1.4)
+		draw_string(font, Vector2(376.0, 30.0), str(silver), HORIZONTAL_ALIGNMENT_LEFT, 86.0, 18.0,
+			Color(0.960, 0.925, 0.820, 0.96))
+		# 元宝
+		var g := Vector2(497.0, 23.0)
+		var pts := PackedVector2Array([g + Vector2(-9.0, 5.0), g + Vector2(-5.0, -1.0),
+			g + Vector2(5.0, -1.0), g + Vector2(9.0, 5.0)])
+		draw_colored_polygon(pts, Color(0.86, 0.71, 0.38))
+		draw_circle(g + Vector2(0.0, -3.0), 4.6, Color(0.90, 0.76, 0.42))
+		draw_string(font, Vector2(514.0, 30.0), str(yuanbao), HORIZONTAL_ALIGNMENT_LEFT, 80.0, 18.0,
+			Color(0.960, 0.925, 0.820, 0.96))
+
 	func _draw() -> void:
 		if font == null:
+			return
+		if Ui.SKIN == 1:
+			_n_draw()
 			return
 		if _sb1 == null:
 			_sb1 = StyleBoxFlat.new()
@@ -969,6 +999,9 @@ func _refresh_plaques() -> void:
 	_plaques.visible = (_story_page < 0) and not _any_panel_open()
 	if not _plaques.visible:
 		return
+	# v200：封面页只留头像/名号/进阶/挂机/建设；商店与困兽没收起来会压住书名
+	_plaques.set_vis("shop", not _cover_mode)
+	_plaques.set_vis("kushou_test", not _cover_mode)
 	_plaques.set_vis("hill", GameState.village_stage >= 1)
 	_plaques.set_vis("treasure", GameState.map_found)
 	_plaques.set_vis("cave", GameState.b2_built and not GameState.cave_opened)
@@ -2137,6 +2170,11 @@ func _process(delta: float) -> void:
 			_cam = Conf.OPEN_CAM - 60.0 * sin(PI * p)
 			if INK_ONLY:
 				_sc = Conf.DW - 60.0 * sin(PI * p)   # 开屏"展一下卷"，再停在封面页
+	if INK_ONLY:
+		var on_cover := _sc > Conf.DW * 0.45
+		if on_cover != _cover_mode:
+			_cover_mode = on_cover
+			_refresh_plaques()
 	_apply_layer_transforms()
 	queue_redraw()
 
