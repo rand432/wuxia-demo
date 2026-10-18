@@ -35,6 +35,8 @@ const SEAL := Color(0.68, 0.15, 0.12)
 const _GOLD := Color(0.72, 0.52, 0.14)   # 金色材料那一行的颜色
 
 const PANEL_W := 640.0
+# v215：丹方弹窗右侧的"产出"图（v212 画的丹丸图标）
+const PILL_TEX := preload("res://assets/ui/shop_pill.png")
 # v8（用户："炼丹房的按钮和横栏框也可以再大一点"）：面板从 730 长到 **1000**
 #   ——屏是 720×1280，730 只占了中间一块，白空着；长高之后每一段都能放大一圈：
 #   ［炼制丹药］160×48 → **208×60**、炉位那一行 84 → **104**（按钮 120×40 → **140×56**、
@@ -113,6 +115,7 @@ var _dlg_chips: Array = []       # 丹方小键
 var _dlg_cnt_lb: Label
 var _dlg_in: LineEdit
 var _dlg_prev: Label
+var _dlg_out_lb: Label
 var _dlg_ok: Button
 
 func _ready() -> void:
@@ -315,11 +318,9 @@ func _open_dlg(rid := "") -> void:
 	var avail := _craftable()
 	_dlg_pick = rid if avail.has(rid) else ("" if avail.is_empty() else str(avail[0]))
 
-	# 先算要几行丹方，才能定弹窗多高（v8：每行 62 高；一门都没有就留一块提示）
-	var rows_n := int(ceil(float(avail.size()) / 2.0))
-	var chips_h := 62.0 * float(rows_n) if rows_n > 0 else 104.0
-	var pw := 660.0
-	var ph := clampf(340.0 + chips_h, 440.0, 660.0)
+	# v215：**左配方 / 右产出 / 底部一键**（百工坊三页共用骨架的第一页）
+	var pw := 680.0
+	var ph := 660.0
 
 	var veil := ColorRect.new()
 	veil.color = Color(0, 0, 0, 0.45)
@@ -335,59 +336,104 @@ func _open_dlg(rid := "") -> void:
 	box.add_theme_stylebox_override("panel", _soft_sb())
 	veil.add_child(box)
 
-	var t1 := _label("炼制丹药", 30, INK)
+	var t1 := _label("炼制丹药", 28, INK)
 	t1.position = Vector2(0, 14)
 	t1.size = Vector2(pw, 38)
 	t1.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(t1)
-	var t2 := _label("① 选丹药　② 选颗数　③ 开始炼丹（看火的人在上面那排选）", 15, Color(INK.r, INK.g, INK.b, 0.60))
-	t2.position = Vector2(0, 52)
-	t2.size = Vector2(pw, 26)
+	var t2 := _label("左选丹方 · 右看材料与炉时 · 底部一键开炉", 14, Color(INK.r, INK.g, INK.b, 0.60))
+	t2.position = Vector2(0, 50)
+	t2.size = Vector2(pw, 24)
 	t2.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(t2)
 
-	# ① 丹方小键（两列；带存量）——v7：只摆"有料能炼"的
+	# ---- 左：丹方列表（可滑） ----
+	var lh := _label("丹方", 15, Color(INK.r, INK.g, INK.b, 0.55))
+	lh.position = Vector2(24, 84)
+	lh.size = Vector2(120, 22)
+	box.add_child(lh)
+	var sc := ScrollContainer.new()
+	UiKit.drag_scroll(sc)
+	sc.position = Vector2(24, 108)
+	sc.size = Vector2(304, 392)
+	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	sc.get_v_scroll_bar().visible = false
+	sc.get_h_scroll_bar().visible = false
+	box.add_child(sc)
+	var vb := VBoxContainer.new()
+	vb.custom_minimum_size = Vector2(304, 0)
+	vb.add_theme_constant_override("separation", 8)
+	sc.add_child(vb)
 	_dlg_chips = []
-	var y0 := 88.0
 	if avail.is_empty():
-		var none_lb := _label("现在没有能炼的丹——药材不够。\n去仓库数数：紫芝 / 雪参 / 朱果 / 兽骨碎 / 灵米 / 木料（金髓只有宝箱与搜刮里出）", 17, Color(INK.r, INK.g, INK.b, 0.72))
-		none_lb.position = Vector2(24, y0 + 6)
-		none_lb.size = Vector2(pw - 48.0, 92)
+		var none_lb := _label("现在没有能炼的丹——药材不够。\n去仓库数数：紫芝 / 雪参 / 朱果 / 兽骨碎 / 灵米 / 木料（金髓只有宝箱与搜刮里出）", 14, Color(INK.r, INK.g, INK.b, 0.72))
+		none_lb.custom_minimum_size = Vector2(284, 110)
 		none_lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		box.add_child(none_lb)
+		vb.add_child(none_lb)
 	else:
 		for k in avail.size():
 			var rid_k := str(avail[k])
-			var r2: Dictionary = GameState.recipe_of(rid_k)
-			var col := k % 2
-			var rowi := k / 2
 			var cb := Button.new()
+			cb.custom_minimum_size = Vector2(304, 52)
+			cb.add_theme_font_size_override("font_size", 17)
 			cb.focus_mode = Control.FOCUS_NONE
-			cb.position = Vector2(24.0 + float(col) * 312.0, y0 + float(rowi) * 62.0)
-			cb.size = Vector2(300, 56)
-			cb.add_theme_font_size_override("font_size", 18)
 			cb.pressed.connect(_on_dlg_pick.bind(rid_k))
-			box.add_child(cb)
+			vb.add_child(cb)
 			_dlg_chips.append({"id": rid_k, "btn": cb})
-	var y_cnt := y0 + chips_h + 8.0
 
-	# ② 颗数：−／直接输入／＋ ＋ 快选
-	_dlg_cnt_lb = _label("颗数", 18, Color(INK.r, INK.g, INK.b, 0.72))
-	_dlg_cnt_lb.position = Vector2(24, y_cnt + 8)
-	_dlg_cnt_lb.size = Vector2(60, 34)
+	# ---- 右：产出 / 材料 / 炉时 ----
+	var rh := _label("产出与材料", 15, Color(INK.r, INK.g, INK.b, 0.55))
+	rh.position = Vector2(344, 84)
+	rh.size = Vector2(312, 22)
+	box.add_child(rh)
+	# 右：产出图标 + 数量
+	var out_slot := Panel.new()
+	out_slot.position = Vector2(344, 108)
+	out_slot.size = Vector2(92, 92)
+	out_slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	out_slot.add_theme_stylebox_override("panel", _soft_sb())
+	box.add_child(out_slot)
+	var out_tr := TextureRect.new()
+	# ⚠ 先 expand/stretch 再给 texture/size——反过来贴图的最小尺寸会把 size 顶回 128
+	out_tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	out_tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	out_tr.texture = PILL_TEX
+	out_tr.position = Vector2(8, 8)
+	out_tr.size = Vector2(76, 76)
+	out_tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	out_slot.add_child(out_tr)
+	_dlg_out_lb = _label("—", 20, INK)
+	_dlg_out_lb.position = Vector2(448, 118)
+	_dlg_out_lb.size = Vector2(208, 30)
+	box.add_child(_dlg_out_lb)
+	var out_sub := _label("产出", 13, Color(INK.r, INK.g, INK.b, 0.55))
+	out_sub.position = Vector2(448, 150)
+	out_sub.size = Vector2(208, 20)
+	box.add_child(out_sub)
+	_dlg_prev = _label("", 14, Color(INK.r, INK.g, INK.b, 0.82))
+	_dlg_prev.position = Vector2(344, 214)
+	_dlg_prev.size = Vector2(312, 282)
+	_dlg_prev.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(_dlg_prev)
+
+	# ---- 底部：颗数（− / 输入 / ＋ / ×1 ×3 ×5 / 满） ----
+	var y_cnt := 516.0
+	_dlg_cnt_lb = _label("颗数", 17, Color(INK.r, INK.g, INK.b, 0.72))
+	_dlg_cnt_lb.position = Vector2(24, y_cnt + 9)
+	_dlg_cnt_lb.size = Vector2(56, 30)
 	box.add_child(_dlg_cnt_lb)
 	var minus := Button.new()
 	minus.text = "−"
 	minus.focus_mode = Control.FOCUS_NONE
-	minus.position = Vector2(92, y_cnt)
-	minus.size = Vector2(56, 46)
+	minus.position = Vector2(84, y_cnt)
+	minus.size = Vector2(52, 46)
 	minus.add_theme_font_size_override("font_size", 24)
 	minus.pressed.connect(_on_dlg_count.bind(-1))
 	_style_dark(minus)
 	box.add_child(minus)
 	_dlg_in = LineEdit.new()
-	_dlg_in.position = Vector2(154, y_cnt)
-	_dlg_in.size = Vector2(84, 46)
+	_dlg_in.position = Vector2(142, y_cnt)
+	_dlg_in.size = Vector2(64, 46)
 	_dlg_in.alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_dlg_in.max_length = 2
 	_dlg_in.virtual_keyboard_enabled = true
@@ -397,8 +443,8 @@ func _open_dlg(rid := "") -> void:
 	var plus := Button.new()
 	plus.text = "＋"
 	plus.focus_mode = Control.FOCUS_NONE
-	plus.position = Vector2(244, y_cnt)
-	plus.size = Vector2(56, 46)
+	plus.position = Vector2(212, y_cnt)
+	plus.size = Vector2(52, 46)
 	plus.add_theme_font_size_override("font_size", 24)
 	plus.pressed.connect(_on_dlg_count.bind(1))
 	_style_dark(plus)
@@ -408,8 +454,8 @@ func _open_dlg(rid := "") -> void:
 		var qb := Button.new()
 		qb.text = "×" + str(quick[q])
 		qb.focus_mode = Control.FOCUS_NONE
-		qb.position = Vector2(316.0 + float(q) * 74.0, y_cnt)
-		qb.size = Vector2(68, 46)
+		qb.position = Vector2(284.0 + float(q) * 66.0, y_cnt)
+		qb.size = Vector2(60, 46)
 		qb.add_theme_font_size_override("font_size", 17)
 		qb.pressed.connect(_on_dlg_set.bind(int(quick[q])))
 		_style_dark(qb)
@@ -417,24 +463,19 @@ func _open_dlg(rid := "") -> void:
 	var maxb := Button.new()
 	maxb.text = "满"
 	maxb.focus_mode = Control.FOCUS_NONE
-	maxb.position = Vector2(316.0 + 3.0 * 74.0, y_cnt)
-	maxb.size = Vector2(68, 46)
+	maxb.position = Vector2(284.0 + 3.0 * 66.0, y_cnt)
+	maxb.size = Vector2(60, 46)
 	maxb.add_theme_font_size_override("font_size", 17)
 	maxb.pressed.connect(_on_dlg_set.bind(GameState.ALCHEMY_BATCH_MAX))
 	_style_dark(maxb)
 	box.add_child(maxb)
 
-	# ③ 预览 + 开始
-	_dlg_prev = _label("", 15, Color(INK.r, INK.g, INK.b, 0.78))
-	_dlg_prev.position = Vector2(24, y_cnt + 58.0)
-	_dlg_prev.size = Vector2(pw - 48.0, 84)
-	_dlg_prev.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	box.add_child(_dlg_prev)
+	# ---- 底部一键 ----
 	_dlg_ok = Button.new()
 	_dlg_ok.text = "开始炼丹"
 	_dlg_ok.focus_mode = Control.FOCUS_NONE
-	_dlg_ok.position = Vector2(36, ph - 76.0)
-	_dlg_ok.size = Vector2(280, 60)
+	_dlg_ok.position = Vector2(24, ph - 76.0)
+	_dlg_ok.size = Vector2(300, 56)
 	_dlg_ok.add_theme_font_size_override("font_size", 22)
 	_dlg_ok.pressed.connect(_on_dlg_go)
 	_style_seal(_dlg_ok)
@@ -442,8 +483,8 @@ func _open_dlg(rid := "") -> void:
 	var cancel := Button.new()
 	cancel.text = "取消"
 	cancel.focus_mode = Control.FOCUS_NONE
-	cancel.position = Vector2(pw - 316.0, ph - 76.0)
-	cancel.size = Vector2(280, 60)
+	cancel.position = Vector2(356, ph - 76.0)
+	cancel.size = Vector2(300, 56)
 	cancel.add_theme_font_size_override("font_size", 22)
 	cancel.pressed.connect(_close_dlg)
 	_style_dark(cancel)
@@ -451,6 +492,8 @@ func _open_dlg(rid := "") -> void:
 
 	_dlg_in.text = str(_dlg_count())
 	_refresh_dlg()
+
+
 
 func _can_pay(rid: String, count: int) -> bool:
 	var r: Dictionary = GameState.recipe_of(rid)
@@ -499,6 +542,8 @@ func _refresh_dlg() -> void:
 	_dlg_cnt_lb.text = "颗数"
 	var rid2 := _dlg_pick
 	if rid2 == "" or GameState.recipe_of(rid2).is_empty():
+		if _dlg_out_lb != null:
+			_dlg_out_lb.text = "—"
 		_dlg_prev.text = ("一门都炼不了——先把药材凑够（紫芝 / 雪参 / 朱果 / 兽骨碎 / 灵米 / 木料，洗灵丹还要金髓）"
 			if _dlg_chips.is_empty() else "先选一门丹药")
 		_dlg_ok.disabled = true
@@ -510,10 +555,11 @@ func _refresh_dlg() -> void:
 	var mins := GameState.batch_minutes(rid2, n, _tender)
 	var slot := _slot if not GameState.furnace_is_busy(_slot) else GameState.furnace_free()
 	var where := "第 " + str(slot + 1) + " 号炉" if slot >= 0 else "**炉位占满**（先收一炉，或开个新炉位）"
-	_dlg_prev.text = ("选的是「" + str(r2.get("name", rid2)) + "」×" + str(n)
-		+ "　·　材料：" + GameState.cost_text(need2) + "（现有：" + GameState.cost_text(_mine(need2)) + "）"
+	if _dlg_out_lb != null:
+		_dlg_out_lb.text = str(r2.get("name", rid2)) + "　×" + str(n)
+	_dlg_prev.text = ("材料：" + GameState.cost_text(need2) + "（现有：" + GameState.cost_text(_mine(need2)) + "）"
 		+ "\n炉时约 " + str(snappedf(mins, 0.1)) + " 分（" + ("没人看火 ×1.0" if _tender == "" else GameState.tend_name(_tender) + "看火 ×" + str(snappedf(GameState.tend_mul(_tender), 0.05))) + "）"
-		+ "　·　下到 " + where)
+		+ "\n下到 " + where)
 	var can := _can_pay(rid2, n) and slot >= 0
 	_dlg_ok.disabled = not can
 

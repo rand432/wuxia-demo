@@ -19,6 +19,7 @@ const GameState := preload("res://shared/game_state.gd")
 const UiKit := preload("res://shared/ui_kit.gd")
 const ItemArt := preload("res://shared/item_art.gd")   # v70：水墨道具图
 const SceneArt := preload("res://shared/scene_art.gd")   # v77：内景垫图
+const Ui := preload("res://menu/menu_theme.gd")          # v215：影之刃皮肤
 
 signal closed
 # 门厅自己不管那三个面板——由主界面把"开门"的动作接过去
@@ -67,22 +68,44 @@ func _build() -> void:
 	_panel.size = Vector2(PANEL_W, PANEL_H)
 	_panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	var psb := StyleBoxFlat.new()
-	psb.bg_color = Color(PAPER.r, PAPER.g, PAPER.b, 0.98)
-	psb.set_corner_radius_all(14)
-	psb.border_color = Color(0.32, 0.27, 0.22, 0.55)
-	psb.set_border_width_all(2)
+	if Ui.SKIN == 1:
+		psb.bg_color = Color(0.961, 0.941, 0.898, 0.985)
+		psb.set_corner_radius_all(4)
+		psb.border_color = Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.55)
+		psb.set_border_width_all(2)
+	else:
+		psb.bg_color = Color(PAPER.r, PAPER.g, PAPER.b, 0.98)
+		psb.set_corner_radius_all(14)
+		psb.border_color = Color(0.32, 0.27, 0.22, 0.55)
+		psb.set_border_width_all(2)
 	_panel.add_theme_stylebox_override("panel", psb)
 	add_child(_panel)
-	# v77：门厅也垫一张内景（酒肆那间），进门就有"屋子"的感觉
-	UiKit.add_room_bg(_panel, SceneArt.inn(), 0.30)
+	# v77：门厅也垫一张内景（酒肆那间）——v215：皮肤下不要内景（跟净板打架）
+	if Ui.SKIN != 1:
+		UiKit.add_room_bg(_panel, SceneArt.inn(), 0.30)
+	else:
+		_panel.set_meta("skin_header", true)
+		var chrome := Control.new()
+		chrome.size = Vector2(PANEL_W, PANEL_H)
+		chrome.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		chrome.draw.connect(func() -> void: Ui.header(chrome, PANEL_W, 96.0))
+		_panel.add_child(chrome)
+		_panel.move_child(chrome, 0)
 
 	var title := _label("百 工 坊", 32, INK)
-	title.position = Vector2(28, 16)
+	title.position = Vector2(28, 18)
 	title.size = Vector2(300, 46)
+	if Ui.SKIN == 1:
+		title.add_theme_color_override("font_color", Ui.GOLD_HI)
+		title.add_theme_font_size_override("font_size", 36)
+		var bf := Ui.brush_font()
+		if bf != null:
+			title.add_theme_font_override("font", bf)
 	_panel.add_child(title)
 
-	var sub := _label("一间屋子，三个作坊：酿酒、炼丹、鉴宝。", 14, Color(INK.r, INK.g, INK.b, 0.62))
-	sub.position = Vector2(30, 62)
+	var sub := _label("一间屋子，三个作坊：酿酒、炼丹、鉴宝。", 14,
+		Color(Ui.TXT_DIM.r, Ui.TXT_DIM.g, Ui.TXT_DIM.b, 0.85) if Ui.SKIN == 1 else Color(INK.r, INK.g, INK.b, 0.62))
+	sub.position = Vector2(30, 72) if Ui.SKIN == 1 else Vector2(30, 62)
 	sub.size = Vector2(PANEL_W - 60.0, 22)
 	_panel.add_child(sub)
 
@@ -91,6 +114,7 @@ func _build() -> void:
 	sep.position = Vector2(28, 100)
 	sep.size = Vector2(PANEL_W - 56.0, 2)
 	sep.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	sep.visible = Ui.SKIN != 1
 	_panel.add_child(sep)
 
 	# ── 三块作坊牌子（点哪块进哪间）──
@@ -110,11 +134,18 @@ func _build() -> void:
 		card.size = Vector2(PANEL_W - 56.0, CARD_H)
 		card.mouse_filter = Control.MOUSE_FILTER_STOP
 		var csb := StyleBoxFlat.new()
-		csb.bg_color = Color(1, 1, 1, 0.42)
-		csb.set_corner_radius_all(12)
-		csb.border_color = Color(INK.r, INK.g, INK.b, 0.24)
-		csb.set_border_width_all(1)
+		if Ui.SKIN == 1:
+			csb.bg_color = Color(0.095, 0.082, 0.072, 0.96)
+			csb.set_corner_radius_all(3)
+			csb.border_color = Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.40)
+			csb.set_border_width_all(1)
+		else:
+			csb.bg_color = Color(1, 1, 1, 0.42)
+			csb.set_corner_radius_all(12)
+			csb.border_color = Color(INK.r, INK.g, INK.b, 0.24)
+			csb.set_border_width_all(1)
 		card.add_theme_stylebox_override("panel", csb)
+		card.set_meta("skin_header", true)   # v215：别让 _skin_pass 往卡片里再补一条自动刊头
 		_panel.add_child(card)
 		# 左边一个"字牌"（酒 / 丹 / 宝）——没有贴图，用一颗圆牌写字
 		var chip := Label.new()
@@ -124,14 +155,21 @@ func _build() -> void:
 		chip.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		chip.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		chip.add_theme_font_size_override("font_size", 40)
-		chip.add_theme_color_override("font_color", Color(0.35, 0.30, 0.26, 0.30))   # 字退成浅底纹，图才是主角
+		chip.add_theme_color_override("font_color",
+			Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.22) if Ui.SKIN == 1 else Color(0.35, 0.30, 0.26, 0.30))
 		chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		var chsb := StyleBoxFlat.new()
 		# v70：底衬改**纸色**——水墨图是深墨画的，压在原来的深褐圆牌上根本看不清（第一版就是）
-		chsb.bg_color = Color(0.925, 0.898, 0.822, 0.96)
-		chsb.set_corner_radius_all(44)
-		chsb.border_color = Color(GOLD.r, GOLD.g, GOLD.b, 0.65)
-		chsb.set_border_width_all(2)
+		if Ui.SKIN == 1:
+			chsb.bg_color = Color(0.030, 0.026, 0.022, 0.95)
+			chsb.set_corner_radius_all(8)
+			chsb.border_color = Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.45)
+			chsb.set_border_width_all(1)
+		else:
+			chsb.bg_color = Color(0.925, 0.898, 0.822, 0.96)
+			chsb.set_corner_radius_all(44)
+			chsb.border_color = Color(GOLD.r, GOLD.g, GOLD.b, 0.65)
+			chsb.set_border_width_all(2)
 		chip.add_theme_stylebox_override("normal", chsb)
 		card.add_child(chip)
 		# 压一张水墨道具图上去（找不到图就只留字牌，不会空一块）
@@ -145,16 +183,23 @@ func _build() -> void:
 			ctr.size = Vector2(72, 80)
 			ctr.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			card.add_child(ctr)
-		var nm := _label(str(r["name"]), 24, INK)
-		nm.position = Vector2(122, 24)
-		nm.size = Vector2(280, 32)
+		var nm := _label(str(r["name"]), 24, Ui.GOLD_HI if Ui.SKIN == 1 else INK)
+		nm.position = Vector2(122, 20)
+		nm.size = Vector2(300, 36)
+		if Ui.SKIN == 1:
+			nm.add_theme_font_size_override("font_size", 26)
+			var nbf := Ui.brush_font()
+			if nbf != null:
+				nm.add_theme_font_override("font", nbf)
 		card.add_child(nm)
-		var st := _label("", 13, Color(INK.r, INK.g, INK.b, 0.62))
+		var st := _label("", 13,
+			Color(Ui.TXT_DIM.r, Ui.TXT_DIM.g, Ui.TXT_DIM.b, 0.92) if Ui.SKIN == 1 else Color(INK.r, INK.g, INK.b, 0.62))
 		st.position = Vector2(122, 62)
 		st.size = Vector2(PANEL_W - 56.0 - 260.0, 44)
 		st.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		card.add_child(st)
-		var go := _label("进 ▸", 16, Color(INK.r, INK.g, INK.b, 0.40))
+		var go := _label("进 ▸", 16,
+			Color(Ui.GOLD_HI.r, Ui.GOLD_HI.g, Ui.GOLD_HI.b, 0.9) if Ui.SKIN == 1 else Color(INK.r, INK.g, INK.b, 0.40))
 		go.position = Vector2(PANEL_W - 56.0 - 66.0, 104)
 		go.size = Vector2(56, 24)
 		go.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -217,8 +262,14 @@ func refresh() -> void:
 					line = "还没开张——过第 " + str(GameState.STORY_JIANBAO_STAGE) + " 关（打捞上来的货仓）"
 		st.text = line
 		# 未开的作坊：牌子压暗（进不去）
-		chip.add_theme_color_override("font_color", Color(0.97, 0.94, 0.88) if on else Color(0.72, 0.70, 0.68))
-		(e["name"] as Label).add_theme_color_override("font_color", INK if on else Color(INK.r, INK.g, INK.b, 0.45))
+		if Ui.SKIN == 1:
+			chip.add_theme_color_override("font_color",
+				Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.30) if on else Color(0.44, 0.40, 0.34, 0.20))
+			(e["name"] as Label).add_theme_color_override("font_color",
+				Ui.GOLD_HI if on else Color(0.60, 0.55, 0.46, 0.80))
+		else:
+			chip.add_theme_color_override("font_color", Color(0.97, 0.94, 0.88) if on else Color(0.72, 0.70, 0.68))
+			(e["name"] as Label).add_theme_color_override("font_color", INK if on else Color(INK.r, INK.g, INK.b, 0.45))
 
 func _on_card(ev: InputEvent, room: String) -> void:
 	if not (ev is InputEventMouseButton):

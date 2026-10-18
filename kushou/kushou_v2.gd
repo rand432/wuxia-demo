@@ -8435,44 +8435,56 @@ func _fill_deck_slots(p: Control, y: float) -> float:
 		pend.text = "手上： " + card_name(_pending_card) + "　→ 点下面任意一张的［换］把它顶掉（原卡回池）"
 		p.add_child(pend)
 		_pbtn(p, "放弃这张", Vector2(590, y - 4.0), Vector2(96, 36), 18, false, _drop_pending)
-	for i in 10:
-		var col := i % 5
-		var row := i / 5
-		var cx := 24.0 + float(col) * 134.0
-		var cy := y + float(row) * 280.0
-		_card_face(p, Vector2(cx, cy), Vector2(126, 268), str(_deck_cards[i]))
-		# v8c：整格可点 → 看详情
-		var hit := _pbtn(p, "", Vector2(cx, cy), Vector2(126, 218 if _pending_card != "" else 260), 16, false, _card_detail.bind(i))
-		hit.add_theme_stylebox_override("normal", _flat(Color(1, 1, 1, 0.001)))
-		hit.add_theme_stylebox_override("hover", _flat(Color(1, 1, 1, 0.10)))
-		hit.add_theme_stylebox_override("pressed", _flat(Color(1, 1, 1, 0.18)))
-		if _pending_card != "" and str(_deck_cards[i]) != "":
-			# 按钮占卡片自己让出来的那一条（宽 126−8，高 38，离底 6）
-			_pbtn(p, "换这张", Vector2(cx + 4.0, cy + 224.0), Vector2(118, 38), 20, true, _swap_in.bind(i))
+		# 换卡模式还是"格":需要看到每张卡的［换这张］，扇形会互相压住
+		for i in 10:
+			var col := i % 5
+			var row := i / 5
+			var cx := 24.0 + float(col) * 134.0
+			var cy := y + float(row) * 280.0
+			_card_face(p, Vector2(cx, cy), Vector2(126, 268), str(_deck_cards[i]))
+			var hit := _pbtn(p, "", Vector2(cx, cy), Vector2(126, 218), 16, false, _card_detail.bind(i))
+			hit.add_theme_stylebox_override("normal", _flat(Color(1, 1, 1, 0.001)))
+			hit.add_theme_stylebox_override("hover", _flat(Color(1, 1, 1, 0.10)))
+			hit.add_theme_stylebox_override("pressed", _flat(Color(1, 1, 1, 0.18)))
+			if str(_deck_cards[i]) != "":
+				_pbtn(p, "换这张", Vector2(cx + 4.0, cy + 224.0), Vector2(118, 38), 20, true, _swap_in.bind(i))
+	else:
+		# v216：**手牌区扇形展开**——十张卡沿一道浅弧排开（底心为轴，±0.13 弧度），
+		#   像手里捏着一把牌；每张露出的左上一条仍可点开详情。
+		#   ⚠ 卡面是普通 Control（不是 Button），所以用 holder 包一层再转；命中钮放进 holder，
+		#   跟着一起转，点哪儿算哪儿。
+		var fan_step := 52.0
+		var fan_span := 0.052
+		for i in 10:
+			var off := float(i) - 4.5
+			var holder := Control.new()
+			var px := 320.0 + off * fan_step
+			var py := y + 300.0 + 18.0 * pow(absf(off) / 4.5, 2.0)
+			holder.position = Vector2(px - 63.0, py - 268.0)
+			holder.size = Vector2(126.0, 268.0)
+			holder.pivot_offset = Vector2(63.0, 268.0)
+			holder.rotation = off * fan_span
+			p.add_child(holder)
+			_card_face(holder, Vector2.ZERO, Vector2(126, 268), str(_deck_cards[i]))
+			var hit := _pbtn(holder, "", Vector2.ZERO, Vector2(126, 260), 16, false, _card_detail.bind(i))
+			hit.add_theme_stylebox_override("normal", _flat(Color(1, 1, 1, 0.001)))
+			hit.add_theme_stylebox_override("hover", _flat(Color(1, 1, 1, 0.10)))
+			hit.add_theme_stylebox_override("pressed", _flat(Color(1, 1, 1, 0.18)))
 	# v13a：被吞噬丹吞掉的卡（已腾出格子 · 效果与成套计数都还在）
 	if not _bm_eaten.is_empty():
 		var names: Array = []
 		for id_v in _bm_eaten:
 			names.append(card_name(str(id_v)))
 		var eat := Label.new()
-		eat.position = Vector2(24, y + 566.0)
+		eat.position = Vector2(24, y + (330.0 if _pending_card == "" else 566.0))
 		eat.size = Vector2(608, 70)
 		eat.add_theme_font_size_override("font_size", 20)
 		eat.add_theme_color_override("font_color", SEAL)
 		eat.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		eat.text = "吞噬丹吞掉的 " + str(_bm_eaten.size()) + " 张（已腾出格子 · 效果与成套计数仍在）：" + "、".join(PackedStringArray(names))
 		p.add_child(eat)
-		return y + 646.0
-	return y + 560.0
-	var tip := Label.new()
-	tip.position = Vector2(28, y + 248.0)
-	tip.size = Vector2(640, 44)
-	tip.add_theme_font_size_override("font_size", 20)
-	tip.add_theme_color_override("font_color", DIM)
-	tip.text = "同名卡自动吞噬升星（2/3/5/5）；凑齐一套 → 给组合效果并把这几张**腾出占位**（效果转常驻，卡永久出池）。换掉的卡会回池。".replace("**腾出占位**", "腾出占位")
-	tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	p.add_child(tip)
-	return y + 300.0
+		return y + (410.0 if _pending_card == "" else 646.0)
+	return y + (400.0 if _pending_card == "" else 560.0)
 
 # 视图②：吞噬记录（每张卡吃了几张 → 现在几星 → 现在什么效果）
 func _fill_deck_ate(p: Control, y: float) -> float:

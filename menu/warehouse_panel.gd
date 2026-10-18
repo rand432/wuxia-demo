@@ -40,7 +40,7 @@ const PANEL_H := 760.0   # v40：底部腾出 62 给「新手关卡礼包」那�
 #   残卡/成品一多就往下滑，不用再挤成一团。格内那三行字也按新格子重排：
 #   类别 11 号、名字**可换行**（丹药名"突破丹（凡品）"这种 7 个字在 88 宽里本来是要溢出的）。
 const COLS := 5
-const CELL := 106.0
+const CELL := 112.0
 const GAP := 8.0
 const GRID_VIEW_H := 350.0     # 滚动窗口高度（够放三行多一点，一眼看得出能滑）
 const GRID_W := CELL * float(COLS) + GAP * float(COLS - 1)
@@ -94,6 +94,17 @@ var _gift_box: Panel
 var _gift_name: Label
 var _gift_sub: Label
 var _gift_btn: Button
+
+# v214：底部详情抽屉（点格子滑出；不再一上来就弹窗）
+var _drawer: Control = null
+var _drawer_icon: TextureRect
+var _drawer_name: Label
+var _drawer_kind_lb: Label
+var _drawer_desc: Label
+var _drawer_btn1: Button
+var _drawer_btn2: Button
+var _drawer_idx := -1
+var _drawer_tween: Tween = null
 
 func _ready() -> void:
 	size = get_viewport_rect().size
@@ -213,8 +224,8 @@ func _build() -> void:
 	#   所以不再写死"几行几列"；刷新时按件数补格子、并把内容高度调到刚好。
 	_scroll = ScrollContainer.new()
 	UiKit.drag_scroll(_scroll)
-	_scroll.position = Vector2(28, 162)
-	_scroll.size = Vector2(PANEL_W - 56.0, GRID_VIEW_H)
+	_scroll.position = Vector2(24, 162)
+	_scroll.size = Vector2(PANEL_W - 48.0, GRID_VIEW_H)
 	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	# v15x（用户："所有滑动不要滑动进度条 用指尖滑动那种就可以了"）：
 	#   强制藏掉滚动条（Godot 默认主题在内容超出时会冒出来）——拖拽滚动不受影响。
@@ -280,10 +291,7 @@ func _build() -> void:
 	_msg_lb.size = Vector2(560, 24)
 	_panel.add_child(_msg_lb)
 
-	var hint := _label("还没接存档：关掉游戏会清零", 13, Color(INK.r, INK.g, INK.b, 0.45))   # v61（手游）：12 → 13 号
-	hint.position = Vector2(28, 656)
-	hint.size = Vector2(380, 22)
-	_panel.add_child(hint)
+	# v214：旧页脚那句「还没接存档：关掉游戏会清零」是早期遗留的错话（现在每 20 秒都落盘），撤掉。
 
 	var close_btn := Button.new()
 	close_btn.text = "关闭"
@@ -294,6 +302,80 @@ func _build() -> void:
 	close_btn.pressed.connect(close)
 	_style_dark_button(close_btn)
 	_panel.add_child(close_btn)
+
+	# ============================================================
+	# v214：**底部详情抽屉**（设计规范第 4 节）——点格子从下滑出 320 高，
+	#   左 96 图标 / 右 名称+品阶+描述 / 底部两颗按钮；不再"点一下弹一个窗"。
+	# ============================================================
+	_drawer = Control.new()
+	_drawer.position = Vector2(0.0, PANEL_H)
+	_drawer.size = Vector2(PANEL_W, 320.0)
+	_drawer.mouse_filter = Control.MOUSE_FILTER_STOP
+	_drawer.visible = false
+	_panel.add_child(_drawer)
+	var dbg := Control.new()
+	dbg.size = _drawer.size
+	dbg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	dbg.draw.connect(_draw_drawer_bg.bind(dbg))
+	_drawer.add_child(dbg)
+
+	_drawer_icon = TextureRect.new()
+	_drawer_icon.position = Vector2(38, 38)
+	_drawer_icon.size = Vector2(76, 76)
+	_drawer_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_drawer_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_drawer_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_drawer.add_child(_drawer_icon)
+
+	_drawer_name = _label("", 24, Ui.GOLD_HI if Ui.SKIN == 1 else INK)
+	_drawer_name.position = Vector2(144, 20)
+	_drawer_name.size = Vector2(410, 34)
+	_drawer.add_child(_drawer_name)
+
+	_drawer_kind_lb = _label("", 13,
+		Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.85) if Ui.SKIN == 1 else Color(INK.r, INK.g, INK.b, 0.60))
+	_drawer_kind_lb.position = Vector2(144, 54)
+	_drawer_kind_lb.size = Vector2(410, 20)
+	_drawer.add_child(_drawer_kind_lb)
+
+	_drawer_desc = _label("", 15,
+		Color(0.90, 0.86, 0.78, 0.96) if Ui.SKIN == 1 else Color(INK.r, INK.g, INK.b, 0.85))
+	_drawer_desc.position = Vector2(144, 80)
+	_drawer_desc.size = Vector2(440, 106)
+	_drawer_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_drawer.add_child(_drawer_desc)
+
+	_drawer_btn1 = Button.new()
+	_drawer_btn1.position = Vector2(144, 246)
+	_drawer_btn1.size = Vector2(210, 54)
+	_drawer_btn1.add_theme_font_size_override("font_size", 19)
+	_drawer_btn1.focus_mode = Control.FOCUS_NONE
+	_drawer_btn1.pressed.connect(_drawer_go)
+	_drawer_btn1.add_theme_stylebox_override("normal", _flat(Color(SEAL.r, SEAL.g, SEAL.b, 0.94)))
+	_drawer_btn1.add_theme_stylebox_override("hover", _flat(Color(SEAL.r, SEAL.g, SEAL.b, 0.80)))
+	_drawer_btn1.add_theme_stylebox_override("pressed", _flat(Color(SEAL.r * 0.75, SEAL.g * 0.75, SEAL.b * 0.75, 0.96)))
+	_drawer_btn1.add_theme_color_override("font_color", Color(1.0, 0.95, 0.86))
+	_drawer.add_child(_drawer_btn1)
+
+	_drawer_btn2 = Button.new()
+	_drawer_btn2.position = Vector2(370, 246)
+	_drawer_btn2.size = Vector2(202, 54)
+	_drawer_btn2.add_theme_font_size_override("font_size", 19)
+	_drawer_btn2.focus_mode = Control.FOCUS_NONE
+	_drawer_btn2.pressed.connect(_drawer_detail)
+	_style_dark_button(_drawer_btn2)
+	UiKit.font_states(_drawer_btn2, Color(0.94, 0.91, 0.84))
+	_drawer.add_child(_drawer_btn2)
+
+	var dx := Button.new()
+	dx.text = "×"
+	dx.position = Vector2(566, 12)
+	dx.size = Vector2(46, 46)
+	dx.add_theme_font_size_override("font_size", 24)
+	dx.focus_mode = Control.FOCUS_NONE
+	dx.pressed.connect(_close_drawer)
+	_style_dark_button(dx)
+	_drawer.add_child(dx)
 
 func _label(text: String, font_size: int, col: Color) -> Label:
 	var lb := Label.new()
@@ -331,13 +413,13 @@ func _ensure_cells(n: int) -> void:
 		ic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		cell.add_child(ic)
-		var nm := _label("", 11, Color(INK.r, INK.g, INK.b, 0.55))
+		var nm := _label("", 11, Color(Ui.TXT_DIM.r, Ui.TXT_DIM.g, Ui.TXT_DIM.b, 0.90) if Ui.SKIN == 1 else Color(INK.r, INK.g, INK.b, 0.55))
 		nm.position = Vector2(3, CELL - 22.0)
 		nm.size = Vector2(CELL * 0.6, 16)
 		nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 		cell.add_child(nm)
 		# v60：名字这行**可换行**（丹药名"突破丹（凡品）"7 个字，88 宽的老格子是要溢出的）
-		var pt := _label("", 16, INK)
+		var pt := _label("", 16, Ui.TXT if Ui.SKIN == 1 else INK)
 		pt.position = Vector2(4, 58)
 		pt.size = Vector2(CELL - 8.0, CELL - 80.0)
 		pt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -346,12 +428,19 @@ func _ensure_cells(n: int) -> void:
 		pt.max_lines_visible = 2
 		pt.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 		cell.add_child(pt)
-		var ct := _label("", 12, Color(SEAL.r, SEAL.g, SEAL.b, 0.90))
+		var ct := _label("", 12, Ui.GOLD_HI if Ui.SKIN == 1 else Color(SEAL.r, SEAL.g, SEAL.b, 0.90))
 		ct.position = Vector2(3, CELL - 22.0)
 		ct.size = Vector2(CELL - 6.0, 18)
 		ct.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		cell.add_child(ct)
-		_cells.append({"panel": cell, "name": nm, "part": pt, "count": ct, "icon": ic})
+		# v214：底边 3px 品级色条（凡灰/良绿/上蓝/极紫/绝金）
+		var bar := ColorRect.new()
+		bar.position = Vector2(2.0, CELL - 4.0)
+		bar.size = Vector2(CELL - 4.0, 3.0)
+		bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		bar.visible = false
+		cell.add_child(bar)
+		_cells.append({"panel": cell, "name": nm, "part": pt, "count": ct, "icon": ic, "bar": bar})
 
 func _flat(bg: Color) -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()
@@ -391,14 +480,25 @@ func _style_tab(btn: Button, selected: bool) -> void:
 #   不然玩家得自己数六个格子里哪几个是同一套的哪几页。
 func _cell_box(kind: String, ready := false, q_col = null) -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()
-	sb.set_corner_radius_all(3 if Ui.SKIN == 1 else 8)
+	# v214：皮肤下改成"墨底金线 + 底边品级色条"（色条是格子里另画的一条 ColorRect）
+	if Ui.SKIN == 1:
+		sb.set_corner_radius_all(3)
+		sb.set_border_width_all(1)
+		if kind == "":
+			sb.bg_color = Color(0.886, 0.859, 0.784, 0.30)
+			sb.border_color = Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.16)
+			return sb
+		sb.bg_color = Color(0.095, 0.082, 0.072, 0.96)
+		sb.border_color = Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.34)
+		if ready:
+			sb.border_color = Color(Ui.GOLD_HI.r, Ui.GOLD_HI.g, Ui.GOLD_HI.b, 0.95)
+			sb.set_border_width_all(2)
+		return sb
+	sb.set_corner_radius_all(8)
 	sb.set_border_width_all(1)
 	if kind == "":
 		sb.bg_color = Color(1, 1, 1, 0.16)
 		sb.border_color = Color(INK.r, INK.g, INK.b, 0.14)
-		if Ui.SKIN == 1:
-			sb.bg_color = Color(0.886, 0.859, 0.784, 0.55)
-			sb.border_color = Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.28)
 		return sb
 	sb.bg_color = Color(0.96, 0.93, 0.86, 1.0)
 	if ready:
@@ -406,11 +506,9 @@ func _cell_box(kind: String, ready := false, q_col = null) -> StyleBoxFlat:
 		sb.border_color = Color(0.78, 0.60, 0.16, 1.0)
 		sb.set_border_width_all(3)
 	elif q_col != null:
-		# v93p（用户："同时加颜色品质"）：**边框按品级上色**——凡白/良绿/上紫/极金/绝红
 		var q: Color = q_col
 		sb.border_color = Color(q.r, q.g, q.b, 0.95)
 		sb.set_border_width_all(3)
-		# 再垫一层极淡的同色底，格子里一眼能分出高低
 		sb.bg_color = Color(0.96, 0.93, 0.86, 1.0).lerp(Color(q.r, q.g, q.b, 1.0), 0.10)
 	elif kind == "item" or kind == "pill":
 		sb.border_color = Color(0.72, 0.58, 0.25, 0.70)
@@ -603,6 +701,9 @@ func _cat_total(tab_id: String) -> int:
 func refresh() -> void:
 	if _panel == null:
 		return
+	# v214：列表一变（换页/整理/开礼包），抽屉先收——不然抽屉里那一件可能已经不在列表里了
+	if _drawer != null and _drawer.visible:
+		_close_drawer(true)
 	var picking := _pick_cat != ""
 	if picking:
 		_title_lb.text = "仓库 · 选一件" + str(GEAR_CN.get(_pick_cat, _pick_cat))
@@ -663,10 +764,11 @@ func refresh() -> void:
 				can = GameState.can_synthesize(str(st.get("sid", "")))
 			if can:
 				ct.text = "×" + str(n) + " ✓可合成"
-				ct.add_theme_color_override("font_color", Color(0.62, 0.44, 0.08, 1.0))
+				ct.add_theme_color_override("font_color", Ui.GOLD_HI if Ui.SKIN == 1 else Color(0.62, 0.44, 0.08, 1.0))
 			else:
 				ct.text = "×" + str(n)
-				ct.add_theme_color_override("font_color", Color(SEAL.r, SEAL.g, SEAL.b, 0.90))
+				ct.add_theme_color_override("font_color",
+					Color(0.96, 0.92, 0.84, 0.92) if Ui.SKIN == 1 else Color(SEAL.r, SEAL.g, SEAL.b, 0.90))
 			ct.visible = (n > 1) or can
 			# v93o：这一件的图标（材料按材料键、丹药用丹盒、装备按 pool 挑图）
 			var kd := str(st.get("kind", ""))
@@ -684,6 +786,13 @@ func refresh() -> void:
 			if kd == "item" or kd == "card" or kd == "pill":
 				qc = ItemIcons.quality_col_of(sid2)
 			cell.add_theme_stylebox_override("panel", _cell_box(str(st["kind"]), can, qc))
+			# v214：底边品级色条
+			var bar: ColorRect = cd["bar"]
+			if qc != null:
+				bar.color = Color(qc.r, qc.g, qc.b, 0.95)
+				bar.visible = true
+			else:
+				bar.visible = false
 		else:
 			nm.text = ""
 			pt.text = ""
@@ -691,6 +800,8 @@ func refresh() -> void:
 			ct.visible = false
 			ic2.texture = null
 			cell.add_theme_stylebox_override("panel", _cell_box(""))
+			var bar0: ColorRect = cd["bar"]
+			bar0.visible = false
 	var empty := stacks.is_empty()
 	if picking and empty:
 		_empty1.text = "没有可用的成品"
@@ -733,40 +844,11 @@ func _on_gift_open() -> void:
 # v61b：原来的 `_on_cell_gui`（按**下**就触发）已撤——格子改走 UiKit.tap_in_scroll，
 #   逻辑只留"真的点中了"之后的这一段（见 _ensure_cells 里的注释）。
 
+# v214：点格子 = 开底部抽屉（真正的动作在抽屉那两颗钮里）
 func _click_cell(k: int) -> void:
-	if k < 0 or k >= _stacks_now.size():
-		return
-	var st: Dictionary = _stacks_now[k]
-	if _pick_cat != "":
-		picked.emit(str(st.get("sid", "")))
-		close()
-		return
-	if str(st["kind"]) == "pill":
-		var r2: Dictionary = GameState.recipe_of(str(st.get("sid", "")))
-		var cnt := str(st["count"])
-		var pstat := str(r2.get("stat", ""))
-		if pstat == "pet":
-						_msg_lb.text = "「" + str(st["title"]) + "」×" + cnt + "：宠物粮——去「宠物」面板喂它（升阶用）"
-		elif pstat == "pet_apt":
-						_msg_lb.text = "「" + str(st["title"]) + "」×" + cnt + "：宠物资质丹——去「宠物」面板［服洗灵丹］（资质 +2，每阶限 1 颗）"
-		else:
-			_msg_lb.text = "「" + str(st["title"]) + "」×" + cnt + "：" + str(r2.get("desc", "")) + "——去「弟子」面板，选中人点右下［服药］格吃"
-		return
-	if str(st["kind"]) == "mat":
-		# v60：材料点一下给句"这料干什么用的"——去处从丹方表反查（见 _mat_use）
-		_msg_lb.text = "「" + str(st["title"]) + "」×" + str(st["count"]) + "：" + _mat_use(str(st.get("sid", "")))
-		return
-	if str(st["kind"]) == "item":
-		# v58（用户："装备在仓库也可以装备吧 点击装备跳转到弟子页面就好了"）：
-		#   原来这里只写一句"去弟子面板点装备格"——等于没有动作。现在点一下开一页**装配窗**：
-		#   写清这件是什么、加什么、现在谁拿着，底下［装备（去弟子页）］一键跳过去装上。
-		_open_equip_win(str(st.get("sid", "")))
-	else:
-		# ㊿：残页/残卡——点开就是**合成页**（以前这里只写"合成台随后接"，等于没有）
-		_ask_synth(str(st.get("sid", "")))
+	_open_drawer(k)
 
-# v60：这一味料"用在哪儿"——从丹方表（DAN_RECIPES 的 cost）反查，
-#   丹方一改这里自动跟；木料另加一句"起屋/起炉"（那两笔账在菜单侧，不在丹方里）。
+
 func _mat_use(k: String) -> String:
 	var uses: Array = []
 	for r_v in GameState.DAN_RECIPES:
@@ -779,6 +861,166 @@ func _mat_use(k: String) -> String:
 	if uses.is_empty():
 		return "眼下还没有配方吃它——先攒着"
 	return "用在：" + "、".join(PackedStringArray(uses))
+
+# ============================================================
+# v214：底部详情抽屉
+# ============================================================
+func _draw_drawer_bg(c: Control) -> void:
+	Ui.panel(c, Rect2(0.0, 0.0, c.size.x, c.size.y), {
+		"fill": Color(0.075, 0.066, 0.060, 0.985),
+		"edge": Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.62),
+		"cut": 10.0, "bracket": true, "shadow": 1.0, "ink_halo": false})
+	c.draw_line(Vector2(14.0, 3.0), Vector2(c.size.x - 14.0, 3.0),
+		Color(Ui.GOLD_HI.r, Ui.GOLD_HI.g, Ui.GOLD_HI.b, 0.55), 2.0, true)
+	var slot := Rect2(28.0, 26.0, 96.0, 96.0)
+	var sp := Ui.cut_poly(slot, 8.0)
+	c.draw_colored_polygon(sp, Color(0.030, 0.026, 0.022, 0.95))
+	var q := PackedVector2Array(sp)
+	q.append(sp[0])
+	c.draw_polyline(q, Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.45), 1.4, true)
+	c.draw_line(Vector2(28.0, 196.0), Vector2(c.size.x - 28.0, 196.0),
+		Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.18), 1.0, true)
+
+# 点格子 → 填内容 + 从下滑出（0.18s，TRANS_BACK）
+func _open_drawer(k: int) -> void:
+	if k < 0 or k >= _stacks_now.size():
+		return
+	_drawer_idx = k
+	var st: Dictionary = _stacks_now[k]
+	var kd := str(st.get("kind", ""))
+	var sid := str(st.get("sid", ""))
+	var count := int(st.get("count", 1))
+	var title := str(st.get("title", st.get("set_name", "")))
+	if kd == "mat":
+		_drawer_icon.texture = ItemIcons.for_mat(sid)
+	elif kd == "pill":
+		_drawer_icon.texture = ItemIcons.for_pill()
+	elif kd == "item" or kd == "card":
+		_drawer_icon.texture = ItemIcons.for_pool(str(st.get("pool", "")), str(st.get("weapon", "")), sid)
+	else:
+		_drawer_icon.texture = ItemIcons.fallback()
+	var kind_txt := ""
+	var desc := ""
+	var primary := "知道了"
+	var secondary := "关　闭"
+	var show2 := false
+	if _pick_cat != "":
+		kind_txt = str(GEAR_CN.get(_pick_cat, "")) + " · 选一件装上"
+		desc = "点［取用］把这一件装到刚选的格子上；换下来的那件会放回仓库。"
+		primary = "取　用"
+	elif kd == "item":
+		var pool := str(st.get("pool", ""))
+		kind_txt = GameState.grade_of(sid) + " · " + str(GEAR_CN.get(pool, "成品")) + " · 现有 ×" + str(count)
+		var lines: Array = []
+		lines.append("加成：" + Cards.bonus_text(GameState.starred_stats(sid)) + GameState.star_marks(sid))
+		if pool == "arts":
+			var cl := Cards.cat_line(sid)
+			if cl != "":
+				lines.append(cl)
+		lines.append("现在：" + _holders_text(sid, pool) + " 拿着")
+		desc = "\n".join(PackedStringArray(lines))
+		primary = "装　备"
+		secondary = "看详情"
+		show2 = true
+	elif kd == "card":
+		kind_txt = "残卡 · 现有 ×" + str(count)
+		if GameState.can_synthesize(sid):
+			desc = "这一套已经凑齐——点［合　成］直接合。"
+		else:
+			desc = "集齐这一套的残页可合成。点［合　成］看还差哪几张。"
+		primary = "合　成"
+		secondary = "关　闭"
+		show2 = true
+	elif kd == "pill":
+		var r2: Dictionary = GameState.recipe_of(sid)
+		kind_txt = "丹药 · 存 " + str(count) + " 颗"
+		desc = str(r2.get("desc", "")) + "\n去「弟子」面板点右下［服药］吃；宠物粮去「宠物」面板喂。"
+	elif kd == "mat":
+		kind_txt = "材料 · 现有 ×" + str(count)
+		desc = _mat_use(sid)
+	_drawer_name.text = title
+	_drawer_kind_lb.text = kind_txt
+	_drawer_desc.text = desc
+	_drawer_btn1.text = primary
+	_drawer_btn2.text = secondary
+	_drawer_btn2.visible = show2
+	if _drawer.visible:
+		return
+	_drawer.visible = true
+	_drawer.position.y = PANEL_H
+	if _drawer_tween != null and _drawer_tween.is_valid():
+		_drawer_tween.kill()
+	_drawer_tween = create_tween()
+	_drawer_tween.tween_property(_drawer, "position:y", PANEL_H - 320.0, 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+func _close_drawer(instant := false) -> void:
+	if _drawer == null or not _drawer.visible:
+		return
+	_drawer_idx = -1
+	if _drawer_tween != null and _drawer_tween.is_valid():
+		_drawer_tween.kill()
+	if instant:
+		_drawer.visible = false
+		_drawer.position.y = PANEL_H
+		return
+	_drawer_tween = create_tween()
+	_drawer_tween.tween_property(_drawer, "position:y", PANEL_H, 0.16).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	_drawer_tween.tween_callback(func() -> void: _drawer.visible = false)
+
+func _drawer_go() -> void:
+	if _drawer_idx < 0 or _drawer_idx >= _stacks_now.size():
+		_close_drawer()
+		return
+	var st: Dictionary = _stacks_now[_drawer_idx]
+	var kd := str(st.get("kind", ""))
+	var sid := str(st.get("sid", ""))
+	if _pick_cat != "":
+		picked.emit(sid)
+		close()
+		return
+	match kd:
+		"item":
+			_equip_go(sid)
+		"card":
+			_ask_synth(sid)
+		_:
+			_close_drawer()
+
+func _drawer_detail() -> void:
+	if _drawer_idx < 0 or _drawer_idx >= _stacks_now.size():
+		_close_drawer()
+		return
+	var st: Dictionary = _stacks_now[_drawer_idx]
+	var kd := str(st.get("kind", ""))
+	var sid := str(st.get("sid", ""))
+	match kd:
+		"item":
+			_open_equip_win(sid)
+		"card":
+			_ask_synth(sid)
+		_:
+			_close_drawer()
+
+func _holders_text(sid: String, pool: String) -> String:
+	var holders: Array = []
+	for rid_v in GameState.disciple_ids():
+		var rid := str(rid_v)
+		var d: Dictionary = GameState.role_data(rid)
+		var nm := str(d.get("name", rid))
+		if pool == "arts":
+			if (d.get("skills", []) as Array).has(sid):
+				holders.append(nm)
+		elif str(d.get("weapon", "")) == sid:
+			holders.append(nm)
+		else:
+			var gr: Dictionary = d.get("gear", {})
+			for sl in gr.keys():
+				if str(gr[sl]) == sid:
+					holders.append(nm)
+					break
+	if holders.is_empty():
+		return "没人"
+	return "、".join(PackedStringArray(holders))
 
 # ============================================================
 # v58：仓库里的**装配窗**（用户："装备在仓库也可以装备吧 点击装备跳转到弟子页面就好了"）
@@ -1047,6 +1289,7 @@ func close() -> void:
 		return
 	visible = false
 	_pick_cat = ""
+	_close_drawer(true)
 	# v63（用户："不管穿戴装备还是武学，总会弹上一个穿戴物品的描述"）：
 	#   病根：装配窗（_eq_veil）是面板的**子节点**——关面板只是"隐藏"，弹窗跟着藏起来；
 	#   下次开面板（比如弟子页点武学格 → 选一件）它**一起显形** ✗ 于是永远弹旧兵器的信息 ✗。
