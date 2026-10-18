@@ -218,8 +218,8 @@ func _n_tag(rc: Rect2, txt: String, primary: bool, pressed: bool, idx: int) -> v
 	var fill := Ui.INK1
 	var edge := Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.44)
 	if primary:
-		fill = Color(0.300, 0.093, 0.068, 0.95)
-		edge = Color(Ui.GOLD_HI.r, Ui.GOLD_HI.g, Ui.GOLD_HI.b, 0.78)
+		fill = Color(0.440, 0.120, 0.090, 0.96)
+		edge = Color(Ui.GOLD_HI.r, Ui.GOLD_HI.g, Ui.GOLD_HI.b, 0.82)
 	if a > 0.01:
 		fill = Ui.lerp_c(fill, Ui.INK3, a * 0.55)
 	Ui.panel(self, r, {"fill": fill, "edge": edge, "cut": 7.0, "bracket": false,

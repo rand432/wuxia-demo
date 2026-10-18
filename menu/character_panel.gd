@@ -133,8 +133,11 @@ var _panel: Panel
 var _deploy_btn: Button
 var _tabs: Array = []
 var _name_lb: Label
-var _avatar: TextureRect          # v93：圆形头像（照用户草图）
+var _avatar: TextureRect          # v93：圆形头像（v212 起隐藏，立绘卡接替）
 var _avatar_rid := ""
+var _portrait: TextureRect        # v212：立绘卡里的胸像（抠白底版）
+var _portrait_rid := ""
+var _brief_lb: Label              # v212：立绘右侧的一行速览（等级/气血/攻击）
 var _star_btn: Button
 var _break_btn: Button            # v36：［突破］（境界：每 25 级一道关，吃一颗突破丹）
 var _sub_lb: Label
@@ -246,10 +249,10 @@ func _build() -> void:
 			# 坐标按 _build 里的真实 y 推的：属性行 282~404 / 攻击属性 438~514 /
 			# 装备格 560~764 / 武学格 800~976。天赋那块自带面板，不再套卡。
 			for r in [
-				Rect2(24.0, 276.0, PANEL_W - 48.0, 132.0),   # 属性
-				Rect2(24.0, 434.0, PANEL_W - 48.0, 88.0),    # 攻击属性
-				Rect2(24.0, 556.0, PANEL_W - 48.0, 214.0),   # 装备
-				Rect2(24.0, 796.0, PANEL_W - 48.0, 186.0),   # 武学
+				Rect2(24.0, 350.0, PANEL_W - 48.0, 168.0),   # 属性
+				Rect2(24.0, 518.0, PANEL_W - 48.0, 30.0),    # 攻击属性（v212：压成一行）
+				Rect2(24.0, 548.0, PANEL_W - 48.0, 258.0),   # 装备
+				Rect2(24.0, 806.0, PANEL_W - 48.0, 214.0),   # 武学
 			]:
 				Ui.card(chrome, r))
 		_panel.add_child(chrome)
@@ -335,14 +338,46 @@ void fragment(){
 	av_mat.shader = av_sh
 	_avatar.material = av_mat
 	_panel.add_child(_avatar)
+	_avatar.visible = false     # v212：圆头像让位给左边的立绘卡（缺图时 _refresh 会再放出来）
 
-	_name_lb = _label("", 32, INK)
-	_name_lb.position = Vector2(132, 82)
-	_name_lb.size = Vector2(320, 38)
+	# v212：**立绘卡 154×196**——用户设计图里最大的一块，先做到"一眼看见人"
+	var pcard := Panel.new()
+	pcard.position = Vector2(24, 86)
+	pcard.size = Vector2(154, 196)
+	pcard.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var pc_sb := StyleBoxFlat.new()
+	if Ui.SKIN == 1:
+		pc_sb.bg_color = Color(0.925, 0.906, 0.855, 0.96)
+		pc_sb.set_corner_radius_all(3)
+		pc_sb.border_color = Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.55)
+		pc_sb.set_border_width_all(2)
+	else:
+		pc_sb.bg_color = Color(0.955, 0.937, 0.886, 0.98)
+		pc_sb.set_corner_radius_all(10)
+		pc_sb.border_color = Color(0.32, 0.27, 0.22, 0.55)
+		pc_sb.set_border_width_all(2)
+	pcard.add_theme_stylebox_override("panel", pc_sb)
+	_panel.add_child(pcard)
+	_portrait = TextureRect.new()
+	_portrait.position = Vector2(5, 5)
+	_portrait.size = Vector2(144, 186)
+	_portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	pcard.add_child(_portrait)
+
+	_name_lb = _label("", 34, INK)
+	_name_lb.position = Vector2(192, 88)
+	_name_lb.size = Vector2(300, 44)
+	if Ui.SKIN == 1:
+		_name_lb.add_theme_color_override("font_color", Color(0.16, 0.13, 0.10))
+		var nf := Ui.brush_font()
+		if nf != null:
+			_name_lb.add_theme_font_override("font", nf)
 	_panel.add_child(_name_lb)
-	_sub_lb = _label("", 15, Color(INK.r, INK.g, INK.b, 0.60))
-	_sub_lb.position = Vector2(132, 130)
-	_sub_lb.size = Vector2(360, 22)
+	_sub_lb = _label("", 14, Color(INK.r, INK.g, INK.b, 0.60))
+	_sub_lb.position = Vector2(192, 136)
+	_sub_lb.size = Vector2(330, 20)
 	_sub_lb.mouse_filter = Control.MOUSE_FILTER_STOP
 	_sub_lb.gui_input.connect(_press_gui.bind(_sub_lb, "profile", -1))
 	_panel.add_child(_sub_lb)
@@ -353,11 +388,11 @@ void fragment(){
 	#   副标题里不再重复写根骨——一处显示，点它就有账。
 	_gengu_chip = Label.new()
 	_gengu_chip.text = "根骨 0 ▾"
-	_gengu_chip.position = Vector2(456, 84)
-	_gengu_chip.size = Vector2(156, 36)
+	_gengu_chip.position = Vector2(192, 160)
+	_gengu_chip.size = Vector2(120, 30)
 	_gengu_chip.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_gengu_chip.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_gengu_chip.add_theme_font_size_override("font_size", 16)
+	_gengu_chip.add_theme_font_size_override("font_size", 14)
 	_gengu_chip.mouse_filter = Control.MOUSE_FILTER_STOP
 	_gengu_chip.gui_input.connect(_chip_gui)
 	_panel.add_child(_gengu_chip)
@@ -366,11 +401,11 @@ void fragment(){
 	#   （境界＝突破次数，0~39；每重 25 级的上限）。评价挪到说明浮框里当附注。
 	_eval_chip = Label.new()
 	_eval_chip.text = "境界 0"
-	_eval_chip.position = Vector2(500, 122)
-	_eval_chip.size = Vector2(112, 28)
+	_eval_chip.position = Vector2(322, 160)
+	_eval_chip.size = Vector2(224, 30)
 	_eval_chip.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_eval_chip.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_eval_chip.add_theme_font_size_override("font_size", 15)
+	_eval_chip.add_theme_font_size_override("font_size", 13)
 	_eval_chip.mouse_filter = Control.MOUSE_FILTER_STOP
 	_eval_chip.gui_input.connect(_press_gui.bind(_eval_chip, "profile", -1))
 	_panel.add_child(_eval_chip)
@@ -381,28 +416,37 @@ void fragment(){
 	#   （用户："升级的按钮也大一点 太小了"）。现在升级 200×50、连升 180×50、
 	#   突破 188×50，20 号字，三颗之间各隔 8。
 	_exp_bg = ColorRect.new()
-	_exp_bg.position = Vector2(28, 156)
-	_exp_bg.size = Vector2(584, 24)   # v62x（用户："经验条的字小了"）：20 → 24，好装更大的字
+	_exp_bg.position = Vector2(192, 198)
+	_exp_bg.size = Vector2(420, 22)   # v62x（用户："经验条的字小了"）：20 → 24，好装更大的字
 	_exp_bg.color = Color(0.10, 0.09, 0.10, 0.18)
 	_exp_bg.mouse_filter = Control.MOUSE_FILTER_STOP
 	_exp_bg.gui_input.connect(_press_gui.bind(_exp_bg, "exp", -1))
 	_panel.add_child(_exp_bg)
 	_exp_fill = ColorRect.new()
-	_exp_fill.position = Vector2(28, 156)
-	_exp_fill.size = Vector2(0, 24)
+	_exp_fill.position = Vector2(192, 198)
+	_exp_fill.size = Vector2(0, 22)
 	_exp_fill.color = Color(0.34, 0.52, 0.62)
 	_exp_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_panel.add_child(_exp_fill)
-	_exp_lb = _label("", 16, Color(0.96, 0.94, 0.90))   # v62x：13 → 16（字太小 ✗）
-	_exp_lb.position = Vector2(28, 156)
-	_exp_lb.size = Vector2(584, 24)
+	_exp_lb = _label("", 14, Color(0.96, 0.94, 0.90))   # v212：420 宽 → 14 号，文字走紧凑写法
+	_exp_lb.position = Vector2(192, 198)
+	_exp_lb.size = Vector2(420, 22)
 	_exp_lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_exp_lb.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	# 条子满了是亮金、空着是暗灰——字加一圈深描边，两头都读得清
+	_exp_lb.add_theme_color_override("font_outline_color", Color(0.10, 0.09, 0.10, 0.85))
+	_exp_lb.add_theme_constant_override("outline_size", 3)
 	_panel.add_child(_exp_lb)
+
+	# v212：立绘右侧速览——等级 / 气血 / 攻击（设计图里那一行小字）
+	_brief_lb = _label("", 13, Color(INK.r, INK.g, INK.b, 0.62))
+	_brief_lb.position = Vector2(192, 226)
+	_brief_lb.size = Vector2(420, 20)
+	_panel.add_child(_brief_lb)
 
 	_up1_btn = Button.new()
 	_up1_btn.text = "升级"
-	_up1_btn.position = Vector2(28, 184)
+	_up1_btn.position = Vector2(28, 294)
 	_up1_btn.size = Vector2(200, 50)
 	_up1_btn.add_theme_font_size_override("font_size", 20)
 	_up1_btn.focus_mode = Control.FOCUS_NONE
@@ -411,7 +455,7 @@ void fragment(){
 	_panel.add_child(_up1_btn)
 	_up_all_btn = Button.new()
 	_up_all_btn.text = "连升"
-	_up_all_btn.position = Vector2(236, 184)
+	_up_all_btn.position = Vector2(236, 294)
 	_up_all_btn.size = Vector2(180, 50)
 	_up_all_btn.add_theme_font_size_override("font_size", 20)
 	_up_all_btn.focus_mode = Control.FOCUS_NONE
@@ -423,7 +467,7 @@ void fragment(){
 	# v36：［突破］——等级练到境界上限就按它（吃一颗突破丹）。
 	_break_btn = Button.new()
 	_break_btn.text = "突破"
-	_break_btn.position = Vector2(424, 184)
+	_break_btn.position = Vector2(424, 294)
 	_break_btn.size = Vector2(188, 50)
 	_break_btn.add_theme_font_size_override("font_size", 20)
 	_break_btn.focus_mode = Control.FOCUS_NONE
@@ -432,7 +476,7 @@ void fragment(){
 	_panel.add_child(_break_btn)
 
 	# ---- 属性（合计值） ----
-	_panel.add_child(_head("属性（基础 ＋ 额外）", Vector2(28, 242)))
+	_panel.add_child(_head("属性（基础 ＋ 额外）", Vector2(28, 360)))
 	# v60（用户："弟子属性栏那一块，元素加伤和抗性重叠了……可以做个额外按钮详细属性"）：
 	#   正面这一块**只摆最开始那 8 条**（2 列 × 4 行，正好一格不叠一格）；
 	#   v58 新加的五行那一组（物理/五行增伤 ＋ 五行抗性，共 11 条）塞不进这块地方，
@@ -443,8 +487,8 @@ void fragment(){
 	var sdb := Button.new()
 	sdb.text = "详细属性 ▸"
 	# v61（手游）：36 → 44 高、上沿提到 236（下面 282 起是属性行）
-	sdb.position = Vector2(424, 236)
-	sdb.size = Vector2(188, 44)
+	sdb.position = Vector2(424, 354)
+	sdb.size = Vector2(188, 42)
 	sdb.add_theme_font_size_override("font_size", 17)
 	sdb.focus_mode = Control.FOCUS_NONE
 	sdb.pressed.connect(_on_stat_detail)
@@ -457,41 +501,43 @@ void fragment(){
 		var col := 0 if i < 4 else 1
 		var r := i % 4
 		var x := 28.0 + float(col) * 308.0
-		var y := 282.0 + float(r) * 32.0
+		var y := 396.0 + float(r) * 30.0
 		var lb := _label(str(row.get("label", "")), 15, Color(INK.r, INK.g, INK.b, 0.55))
 		lb.position = Vector2(x, y)
 		lb.size = Vector2(96, 26)
 		_panel.add_child(lb)
 		# ㊺：数值格收窄到只放总数，右边空出来给"拆账"小字
 		#   （攻击那一行会写成 基础10＋兵器4；其它行留空）
-		var vl := _label("—", 19, INK)
-		vl.position = Vector2(x + 104.0, y - 2.0)
-		vl.size = Vector2(58, 30)
+		var vl := _label("—", 21, INK)
+		# v212：数值**右对齐到同一条竖线**（列内 172 处的右沿）——这是"看着舒服"的核心
+		vl.position = Vector2(x + 96.0, y - 3.0)
+		vl.size = Vector2(76, 32)
+		vl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		vl.mouse_filter = Control.MOUSE_FILTER_STOP
 		vl.gui_input.connect(_press_gui.bind(vl, "stat", i))
 		_panel.add_child(vl)
 		_stat_val_lbs.append(vl)
 		var sl := _label("", 12, Color(SEAL.r, SEAL.g, SEAL.b, 0.85))
-		sl.position = Vector2(x + 164.0, y + 7.0)
-		# 130 宽：第二列用满也不会顶到 PANEL_W(640) 的边（336+164+130=630）
-		sl.size = Vector2(130, 20)
+		sl.position = Vector2(x + 176.0, y + 7.0)
+		# 118 宽：第二列用满也不会顶到 PANEL_W(640) 的边（336+176+118=630）
+		sl.size = Vector2(118, 20)
 		sl.clip_text = true
 		_panel.add_child(sl)
 		_stat_sub_lbs.append(sl)
 
 	# ---- 攻击属性：只显示当前（v11） ----
-	_elem_head = _head("攻击属性", Vector2(28, 414))
+	_elem_head = _head("攻击属性", Vector2(28, 516))
 	_elem_head.mouse_filter = Control.MOUSE_FILTER_STOP
 	_elem_head.gui_input.connect(_press_gui.bind(_elem_head, "elem", -1))
 	_panel.add_child(_elem_head)
 
 	_elem_big = Label.new()
 	_elem_big.text = "—"
-	_elem_big.position = Vector2(28, 438)
-	_elem_big.size = Vector2(150, 46)
+	_elem_big.position = Vector2(118, 512)
+	_elem_big.size = Vector2(88, 34)
 	_elem_big.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_elem_big.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_elem_big.add_theme_font_size_override("font_size", 22)
+	_elem_big.add_theme_font_size_override("font_size", 18)
 	_elem_big.mouse_filter = Control.MOUSE_FILTER_STOP
 	_elem_big.gui_input.connect(_press_gui.bind(_elem_big, "elem", -1))
 	_panel.add_child(_elem_big)
@@ -500,19 +546,20 @@ void fragment(){
 	_elem_note.position = Vector2(190, 440)
 	_elem_note.size = Vector2(438, 42)
 	_elem_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_elem_note.visible = false      # v212：长说明折进详细属性页，正面只留一行
 	_panel.add_child(_elem_note)
 
 	# ---- ㊽：上阵羁绊（一行摘要；点开看明细）----
-	_bond_lb = _label("羁绊：—", 14, GOLD)
-	_bond_lb.position = Vector2(28, 490)
-	_bond_lb.size = Vector2(600, 24)
+	_bond_lb = _label("羁绊：—", 13, GOLD)
+	_bond_lb.position = Vector2(224, 520)
+	_bond_lb.size = Vector2(388, 22)
 	_bond_lb.clip_text = true
 	_bond_lb.mouse_filter = Control.MOUSE_FILTER_STOP
 	_bond_lb.gui_input.connect(_press_gui.bind(_bond_lb, "bond", -1))
 	_panel.add_child(_bond_lb)
 
 	# ---- 装备（四格全通）+ 升星 ----
-	_panel.add_child(_head("装备", Vector2(28, 522)))
+	_panel.add_child(_head("装备", Vector2(28, 556)))
 
 	# v4.3（用户："弟子界面加一个升星按钮，展开的页面可以看到差多少碎片、和升星什么效果，
 	#   功法和武学也要加"）：原来这儿是两颗按钮（［角色星 0/6］开一个小弹窗 ＋［升星台］
@@ -521,8 +568,8 @@ void fragment(){
 	#   碎片的"还差几片"、功法的"差几本"都在那一页的行上和明细里。
 	_star_btn = Button.new()
 	# v61（手游）：34 → 44 高、字 16 → 18（并把上沿提到 512，别压到 560 起的装备格）
-	_star_btn.position = Vector2(146, 512)
-	_star_btn.size = Vector2(466, 44)
+	_star_btn.position = Vector2(146, 550)
+	_star_btn.size = Vector2(466, 40)
 	_star_btn.add_theme_font_size_override("font_size", 18)
 	_star_btn.focus_mode = Control.FOCUS_NONE
 	_star_btn.pressed.connect(_on_forge)
@@ -541,22 +588,22 @@ void fragment(){
 		#   而"青锋剑★★（火）"这类要 170~180 宽 → 自动换行折成两行，
 		#   但那个 Label 只有 **26 高（一行）**，第二行被切掉——看着就是"字超出框"。
 		#   现在格高 84 → **100**、文字框 26 → **56（两行）**，两行都看得见。
-		var cell := _make_cell(str(SLOTS[k]["label"]), Vector2(28.0 + float(col2) * 292.0, 560.0 + float(row2) * 104.0), Vector2(284, 100), true, str(SLOTS[k]["label"]).substr(0, 1))
+		var cell := _make_cell(str(SLOTS[k]["label"]), Vector2(28.0 + float(col2) * 292.0, 596.0 + float(row2) * 104.0), Vector2(284, 100), true, str(SLOTS[k]["label"]).substr(0, 1))
 		_panel.add_child(cell)
 		_equip_cells.append(cell)
 		_equip_vals.append(cell.get_meta("value_label"))
 		_wire_cell(cell, slot, k)
 		var ub := _make_unequip_btn(cell, Vector2(176, 44))
 		if Ui.SKIN == 1:
-			ub.position = Vector2(198, 62)     # 右下角，给左边的图标和件名让出整行
-			ub.size = Vector2(74, 30)
-			ub.add_theme_font_size_override("font_size", 14)
+			ub.position = Vector2(198, 68)     # 更靠右下：第一行件名不再被它压住
+			ub.size = Vector2(74, 28)
+			ub.add_theme_font_size_override("font_size", 13)
 		ub.pressed.connect(_on_slot_unequip.bind(slot))
 		_equip_un_btns.append(ub)
 
 	# ---- 武学（3 可装 + 大招；被动在天赋框） ----
 	# v61：整段下移 32（装备格加高让位）——776 起
-	_panel.add_child(_head("武学", Vector2(28, 776)))
+	_panel.add_child(_head("武学", Vector2(28, 814)))
 	_art_cells = []
 	_skill_vals = []
 	_art_tag_lbs = []
@@ -569,7 +616,7 @@ void fragment(){
 		if k == 3:
 			head_txt = "大招（怒气）"
 			kind = "ult"
-		var cell2 := _make_cell(head_txt, Vector2(28.0 + float(col3) * 292.0, 800.0 + float(row3) * 90.0), Vector2(284, 86), true)
+		var cell2 := _make_cell(head_txt, Vector2(28.0 + float(col3) * 292.0, 840.0 + float(row3) * 90.0), Vector2(284, 86), true)
 		_panel.add_child(cell2)
 		_art_cells.append(cell2)
 		_skill_vals.append(cell2.get_meta("value_label"))
@@ -619,14 +666,14 @@ void fragment(){
 	#   ⚠ 滚动区是 STOP（要吃拖动）；所以"长按看说明"挪到**标题**上（点"天赋"两个字）。
 	# v61：整段下移 32（装备格加高让位）；框本身收 32（222 → 190）把空间还回去——
 	#   天赋区本来就是滚动列表，少 32 只少半行，比"装备名被切掉"划算。
-	var th := _head("天赋", Vector2(28, 988))
+	var th := _head("天赋", Vector2(28, 1020))
 	# ㊿：滚动区吃掉拖动（要能滑），所以"长按看说明"改绑在**标题**上
 	th.mouse_filter = Control.MOUSE_FILTER_STOP
 	th.gui_input.connect(_press_gui.bind(th, "talents", -1))
 	_panel.add_child(th)
 	var bar := Panel.new()
-	bar.position = Vector2(28, 1010)
-	bar.size = Vector2(340.0, 190.0)
+	bar.position = Vector2(28, 1044)
+	bar.size = Vector2(340.0, 170.0)
 	bar.mouse_filter = Control.MOUSE_FILTER_STOP
 	bar.add_theme_stylebox_override("panel", _soft_sb())
 	bar.gui_input.connect(_press_gui.bind(bar, "talents", -1))
@@ -634,7 +681,7 @@ void fragment(){
 	var tscroll = ScrollContainer.new()
 	UiKit.drag_scroll(tscroll)
 	tscroll.position = Vector2(16, 12)
-	tscroll.size = Vector2(308.0, 132.0)
+	tscroll.size = Vector2(308.0, 112.0)
 	tscroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	# v15x（用户："所有滑动不要滑动进度条 用指尖滑动那种就可以了"）：
 	#   强制藏掉滚动条（Godot 默认主题在内容超出时会冒出来）——拖拽滚动不受影响。
@@ -647,7 +694,7 @@ void fragment(){
 	tscroll.add_child(_talent_box)
 	# v14：被动撤格——搬进天赋框，朱红高亮
 	_passive_lb = _label("", 14, SEAL)
-	_passive_lb.position = Vector2(16, 148)
+	_passive_lb.position = Vector2(16, 128)
 	_passive_lb.size = Vector2(308.0, 34.0)
 	_passive_lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_passive_lb.clip_text = true
@@ -659,15 +706,15 @@ void fragment(){
 	#   现在挪进服药弹窗里那两个新选项：【当前服用状态查明】/【当前丹药查明】。
 	#   空出来的地方留给［服药］按钮本身（52 → 64 高，字 18 → 20）。
 	var phead := _label("服药 · 包裹", 20, Color(INK.r, INK.g, INK.b, 0.70))
-	phead.position = Vector2(384, 988)
+	phead.position = Vector2(384, 1020)
 	phead.size = Vector2(228, 28)
 	phead.mouse_filter = Control.MOUSE_FILTER_STOP
 	phead.gui_input.connect(_press_gui.bind(phead, "pills", -1))
 	_panel.add_child(phead)
 	_pill_btn = Button.new()
 	_pill_btn.text = "服药"
-	_pill_btn.position = Vector2(384, 1016)
-	_pill_btn.size = Vector2(228, 64)
+	_pill_btn.position = Vector2(384, 1052)
+	_pill_btn.size = Vector2(228, 60)
 	_pill_btn.add_theme_font_size_override("font_size", 20)
 	_pill_btn.focus_mode = Control.FOCUS_NONE
 	_pill_btn.pressed.connect(_on_pill_open)
@@ -684,8 +731,8 @@ void fragment(){
 	#   ⚠ 这个 Label 保留着——它是"银两不够 / 这格装不了"那些**瞬时提示**的落脚点
 	#   （_set_msg 会写它），只是默认不再摆 DEFAULT_HINT 那串常驻文字。
 	_hint_lb = _label("", 13, Color(INK.r, INK.g, INK.b, 0.55))
-	_hint_lb.position = Vector2(28, 1206)
-	_hint_lb.size = Vector2(584, 36)
+	_hint_lb.position = Vector2(28, 1218)
+	_hint_lb.size = Vector2(584, 30)
 	_hint_lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_panel.add_child(_hint_lb)
 
@@ -693,8 +740,8 @@ void fragment(){
 	#   原来是跟提示行并排，两颗都在底下挤。
 	var close_btn := Button.new()
 	close_btn.text = "关闭"
-	close_btn.position = Vector2(384, 1128)
-	close_btn.size = Vector2(228, 56)
+	close_btn.position = Vector2(384, 1120)
+	close_btn.size = Vector2(228, 50)
 	close_btn.add_theme_font_size_override("font_size", 20)
 	close_btn.focus_mode = Control.FOCUS_NONE
 	close_btn.pressed.connect(close)
@@ -861,7 +908,9 @@ func _make_cell(head_text: String, pos: Vector2, sz: Vector2, reserve_right: boo
 	if reserve_right:
 		# v61：高度按格子给（原来的 26 只够一行，长件名折行就被切）
 		if tx > 16.0:
-			val.size = Vector2(sz.x - tx - 18.0, 26.0)      # 图标格：一行放下件名，不折行
+			# v212：图标格给两行高度（长件名如「生锈的铁剑（物理）」不再被切）
+			val.size = Vector2(sz.x - tx - 18.0, 48.0)
+			val.add_theme_font_size_override("font_size", 21)
 		else:
 			val.size = Vector2(sz.x - 130.0, maxf(26.0, sz.y - 44.0))
 		val.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -1100,6 +1149,17 @@ func _refresh() -> void:
 		if atex == null:
 			atex = CharArt.q(rid)
 		_avatar.texture = atex
+	# v212：立绘卡——优先抠白底的胸像；没有就退回圆头像
+	if _portrait != null and (_portrait_rid != rid or _portrait.texture == null):
+		_portrait_rid = rid
+		var ftex := CharArt.face(rid)
+		if ftex != null:
+			_portrait.texture = ftex
+			_portrait.visible = true
+			_avatar.visible = false
+		else:
+			_portrait.visible = false
+			_avatar.visible = true
 	var cap := GameState.level_cap(rid)      # v36：上限随境界走（25×(境界+1)）
 	var realm := GameState.role_realm(rid)
 	_sub_lb.text = (str(role.get("sub", "")) + "　·　" + str(lv) + "/" + str(cap) + " 级")
@@ -1131,12 +1191,12 @@ func _refresh() -> void:
 			_break_btn.disabled = true
 	if lv >= cap:
 		if GameState.need_break(rid):
-			_exp_lb.text = "已到境界上限（" + str(cap) + "）——先突破　｜ 经验池 " + str(GameState.exp_pool)
-			_exp_fill.size = Vector2(584, 20)
+			_exp_lb.text = "已到上限 " + str(cap) + " · 先突破 · 池 " + str(GameState.exp_pool)
+			_exp_fill.size = Vector2(420, 18)
 			_exp_fill.color = SEAL
 		else:
-			_exp_lb.text = "已满级（" + str(GameState.LEVEL_MAX) + "）　｜ 经验池 " + str(GameState.exp_pool)
-			_exp_fill.size = Vector2(584, 20)
+			_exp_lb.text = "已满级 · 池 " + str(GameState.exp_pool)
+			_exp_fill.size = Vector2(420, 18)
 			_exp_fill.color = GOLD
 	else:
 		var need := GameState.exp_need(lv)
@@ -1146,11 +1206,11 @@ func _refresh() -> void:
 		# v62m（用户："等级突破 也需要消耗银两"）：**升级还要银两**——
 		#   单价随等级走，所以这一行把它写出来；银两不够时直接说清（不然"点了没反应"）。
 		var sp_lv := GameState.level_silver_cost(lv)
-		var sp_txt := "　银两 " + str(sp_lv) + "/级"
+		var sp_txt := " · 银 " + str(sp_lv) + "/级"
 		if avail > 0 and GameState.coin("silver") < sp_lv:
-			sp_txt += "（不够，现有 " + str(GameState.coin("silver")) + "）"
-		_exp_lb.text = "可用经验 " + str(usable) + " / " + str(need) + ("　可升级！" if avail > 0 else "") + "　｜ 池 " + str(GameState.exp_pool) + sp_txt
-		_exp_fill.size = Vector2(584.0 * clampf(float(usable) / float(maxi(1, need)), 0.0, 1.0), 20)
+			sp_txt = " · 银不足(" + str(sp_lv) + ")"
+		_exp_lb.text = "经验 " + str(usable) + "/" + str(need) + (" · 可升!" if avail > 0 else "") + " · 池 " + str(GameState.exp_pool) + sp_txt
+		_exp_fill.size = Vector2(420.0 * clampf(float(usable) / float(maxi(1, need)), 0.0, 1.0), 18)
 		_exp_fill.color = GOLD if avail > 0 else Color(0.34, 0.52, 0.62)
 	_up1_btn.disabled = avail < 1
 	_up1_btn.text = "升级 ↑" if avail > 0 else "升级"
@@ -1161,6 +1221,9 @@ func _refresh() -> void:
 	_style_deploy(on)
 	_refresh_star_btn(rid)   # ㊿y：角色星按钮（显示 n/6）
 	var eff: Dictionary = GameState.panel_stats(rid)   # v48：＝squad_stats ＋ 战斗那份 tfx（天赋/星/专武）
+	# v212：立绘右侧速览（等级 / 气血 / 攻击 / 防御）
+	if _brief_lb != null:
+		_brief_lb.text = "Lv." + str(lv) + "　气血 " + str(int(eff.get("hp", 0))) + "　攻击 " + str(int(eff.get("atk", 0))) + "　防御 " + str(int(eff.get("def", 0)))
 	# ㊺：攻击力 = 基础攻击 + 额外攻击（额外＝兵器＋装备＋武学＋㊽羁绊）。
 	#   总数走 panel_stats（＝出村战斗那份口径），拆账走 atk_parts()。
 	#   ⚠ 攻击这一行**不折 dmg%**：伤害加成是单独一行，战斗里才乘上去——

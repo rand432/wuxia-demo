@@ -215,6 +215,7 @@ var _tag_rects: Array = []
 var _cover_mode := true        # v200：当前停在封面页（收起商店/困兽，给书名让位）
 var _skinned := false          # v206：全局换皮扫描是否已跑过
 var _panel_open := false
+var _last_panel_open := false   # v211：面板开合沿（用来放 0.18s 的 scale/alpha 入场）
 var _actors = null            # v93g：人物层（村景之上、UI 之下，等比缩放）
 var _ink = null               # v96：水墨村景层（最底，读 village_layout.json）
 var _plaques = null           # v97：牌子层（竖排木牌/六边形徽标/头像；位置＝占屏比例）
@@ -314,7 +315,7 @@ class MoneyHud extends Node2D:
 		draw_circle(c, 10.5, Color(0.86, 0.71, 0.38))
 		draw_arc(c, 10.5, 0.0, TAU, 24, Color(0.38, 0.29, 0.12, 0.85), 1.4, true)
 		draw_rect(Rect2(c + Vector2(-3.5, -3.5), Vector2(7.0, 7.0)), Color(0.38, 0.29, 0.12, 0.85), false, 1.4)
-		draw_string(font, Vector2(384.0, 57.0), str(silver), HORIZONTAL_ALIGNMENT_LEFT, 90.0, 20.0,
+		draw_string(font, Vector2(384.0, 57.0), str(silver), HORIZONTAL_ALIGNMENT_RIGHT, 82.0, 20.0,
 			Color(0.960, 0.925, 0.820, 0.96))
 		# 元宝
 		var g := Vector2(512.0, 49.0)
@@ -322,7 +323,7 @@ class MoneyHud extends Node2D:
 			g + Vector2(5.0, -1.0), g + Vector2(9.0, 5.0)])
 		draw_colored_polygon(pts, Color(0.86, 0.71, 0.38))
 		draw_circle(g + Vector2(0.0, -3.0), 4.6, Color(0.90, 0.76, 0.42))
-		draw_string(font, Vector2(532.0, 57.0), str(yuanbao), HORIZONTAL_ALIGNMENT_LEFT, 88.0, 20.0,
+		draw_string(font, Vector2(532.0, 57.0), str(yuanbao), HORIZONTAL_ALIGNMENT_RIGHT, 82.0, 20.0,
 			Color(0.960, 0.925, 0.820, 0.96))
 
 	func _draw() -> void:
@@ -726,11 +727,6 @@ func _ready() -> void:
 	_marks_root = Control.new()
 	_marks_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_marks_root)
-	_money_hud = MoneyHud.new()
-	_money_hud.font = _font
-	_money_hud.silver = GameState.coin("silver")
-	_money_hud.yuanbao = GameState.coin("yuanbao")
-	add_child(_money_hud)
 	# v92 修（用户："设置在打开角色界面还在"）：**「设置」按钮挪到面板之前建**。
 	#   以前它建在 32 个面板**后面**（下面那行 v72 的老注释），Control 是后加的盖在上面，
 	#   于是开任何面板时它都浮在面板与遮罩之上（截图：弟子面板右上角那个"设置"）。
@@ -743,6 +739,12 @@ func _ready() -> void:
 	# v97：牌子层（用户标注的 11 处锚点）。建在**面板之前**——一开面板就被盖住，
 	#   跟旧的记号牌/挂机牌一个待遇（v92 那条"设置浮在角色界面上"的教训）。
 	_build_plaques()
+	# v211：银两/元宝建在**牌子层之后**——顶栏墨带在牌子层里画，先建就被压暗了（这次踩过）
+	_money_hud = MoneyHud.new()
+	_money_hud.font = _font
+	_money_hud.silver = GameState.coin("silver")
+	_money_hud.yuanbao = GameState.coin("yuanbao")
+	add_child(_money_hud)
 	if INK_ONLY:
 		# 旧的挂机牌与「设置」按钮由牌子层接管（**只隐藏，不删**：改回 false 原样回来）
 		_idle_btn.visible = false
@@ -985,14 +987,16 @@ func _refresh_plaques() -> void:
 	_plaques.visible = (_story_page < 0) and not _any_panel_open()
 	if not _plaques.visible:
 		return
-	# v200：封面页只留头像/名号/进阶/挂机/建设；商店与困兽没收起来会压住书名
-	_plaques.set_vis("shop", not _cover_mode)
-	_plaques.set_vis("kushou_test", not _cover_mode)
-	_plaques.set_vis("stele", not _cover_mode)
-	_plaques.set_vis("hill", GameState.village_stage >= 1)
-	_plaques.set_vis("treasure", GameState.map_found)
-	_plaques.set_vis("cave", GameState.b2_built and not GameState.cave_opened)
-	_plaques.set_vis("craft", GameState.cave_opened)
+	# v200/v211：封面页只留顶栏（头像/名号/进阶/银两）与挂机/建设；右栏与大碑全部收起
+	var rail_on := not _cover_mode
+	_plaques.set_vis("shop", rail_on)
+	_plaques.set_vis("kushou_test", rail_on)
+	_plaques.set_vis("stele", rail_on)
+	_plaques.set_vis("hill", rail_on and GameState.village_stage >= 1)
+	_plaques.set_vis("treasure", rail_on and GameState.map_found)
+	# v211：山洞过了也留在右栏（点一下只弹一句"洞里很凉"），右栏才凑得齐 5 格
+	_plaques.set_vis("cave", rail_on and GameState.b2_built)
+	_plaques.set_vis("craft", rail_on and GameState.cave_opened)
 	# v211：右栏按"当前可见的格子"重排（隐藏一格，下面的平滑往上顶）
 	_plaques.layout_rail(PlaqueLayer.RAIL_IDS, PlaqueLayer.RAIL_TOP, PlaqueLayer.RAIL_H, PlaqueLayer.RAIL_GAP)
 	# v98：商店**固定**（用户点名）——不再按剧情显隐，也不随风摆
@@ -1014,7 +1018,10 @@ func _refresh_plaques() -> void:
 		_plaques.set_sub("treasure", "图收在里头")
 	else:
 		_plaques.set_sub("treasure", "照图起一间\n木料 " + str(wood) + "/" + str(B2_COST))
-	_plaques.set_sub("cave", "木料 " + str(wood) + "/" + str(CAVE_COST))
+	if GameState.cave_opened:
+		_plaques.set_sub("cave", "洞里很凉")
+	else:
+		_plaques.set_sub("cave", "木料 " + str(wood) + "/" + str(CAVE_COST))
 	var rooms: Array = ["品酒"]
 	if GameState.dange_built:
 		rooms.append("炼丹")
@@ -2121,6 +2128,8 @@ func _process(delta: float) -> void:
 	if _money_hud != null:
 		_money_hud.silver = GameState.coin("silver")
 		_money_hud.yuanbao = GameState.coin("yuanbao")
+		# v211：顶栏墨带随牌子层一起收（面板/剧情），钱条别单独挂在半空
+		_money_hud.visible = _story_page < 0 and not _any_panel_open()
 	_money_clock += delta
 	if _money_clock >= 0.5:
 		_money_clock = 0.0
@@ -2168,7 +2177,39 @@ func _process(delta: float) -> void:
 			_cover_mode = on_cover
 			_refresh_plaques()
 	_apply_layer_transforms()
+	_check_panel_anim()
 	queue_redraw()
+
+# v211（用户："需要动的也动起来"）：面板开场——scale 0.96→1 + alpha，0.18s TRANS_BACK。
+#   放在这里做"全局一份"，各个面板的 open() 不用各写一遍。
+func _check_panel_anim() -> void:
+	var now := _any_panel_open()
+	if now == _last_panel_open:
+		return
+	_last_panel_open = now
+	if not now:
+		return
+	var pn: Control = _top_panel()
+	if pn == null:
+		return
+	pn.pivot_offset = pn.size * 0.5
+	pn.scale = Vector2(0.96, 0.96)
+	pn.modulate.a = 0.0
+	var tw := pn.create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(pn, "scale", Vector2.ONE, 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(pn, "modulate:a", 1.0, 0.15)
+
+# 最上层的那个面板（后建的在上；作坊面板叠在百工坊门厅之上）
+func _top_panel() -> Control:
+	var arr: Array = [_winery_panel, _alchemy_panel, _appraise_panel, _star_panel,
+		_pet_panel, _shop_panel, _chest_panel, _craft_panel, _warehouse, _char_panel,
+		_out_panel, _formation, _depart]
+	for p in arr:
+		var c: Control = p as Control
+		if c != null and is_instance_valid(c) and c.visible:
+			return c
+	return null
 
 # ============================================================
 # v206 · 全局换皮扫描：把各面板自己造的"纸面大板"统一改成

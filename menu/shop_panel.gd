@@ -16,6 +16,7 @@ extends Control
 
 const GameState := preload("res://shared/game_state.gd")
 const UiKit := preload("res://shared/ui_kit.gd")   # v61：tap_in_scroll（滚动区里可滑可点）
+const Ui := preload("res://menu/menu_theme.gd")     # v212：影之刃皮肤（墨底金线）
 
 signal closed
 
@@ -23,19 +24,37 @@ const INK := Color(0.14, 0.13, 0.15)
 const PAPER := Color(0.905, 0.878, 0.795)
 const SEAL := Color(0.68, 0.15, 0.12)
 
+# v212：货行 → **卡片流**（2 列）。面板加高到 900，一屏能看 6 张大卡。
 const PANEL_W := 640.0
-const PANEL_H := 720.0
-const LIST_W := 584.0
-const LIST_H := 458.0
-const ROW_H := 96.0
-const INNER_W := 562.0     # 行内可用宽（右边留出滚动条的余地）
+const PANEL_H := 820.0
+const LIST_W := 564.0
+const LIST_H := 530.0
+const CARD_W := 276.0
+const CARD_H := 180.0
+const CARD_GAP := 12.0
+const ROW_H := 180.0       # 兼容旧名（有些地方按行高算消息位置）
+const INNER_W := 564.0
+
+# ---- 卡片图标（素材已有的直接 preload；丹药是 v212 生成的 shop_pill.png）----
+const ICON_MAP := {
+	"bone": preload("res://assets/items/mat_bone.png"),
+	"rice": preload("res://assets/items/mat_rice.png"),
+	"jin": preload("res://assets/items/mat_jin.png"),
+	"weapon_card": preload("res://assets/items/it_sword.png"),
+	"art_card": preload("res://assets/items/it_book.png"),
+	"gear_card": preload("res://assets/items/it_armor.png"),
+	"blood_gold": preload("res://assets/items/it_jar.png"),
+	"tupo_fan": preload("res://assets/ui/shop_pill.png"),
+	"tupo_liang": preload("res://assets/ui/shop_pill.png"),
+}
+const ICON_TOOL := preload("res://assets/items/it_token.png")
 
 var _panel: Panel
 var _silver_lb: Label
 var _tab_btns: Array = []
 var _tab := 0
 var _scroll: ScrollContainer
-var _list: VBoxContainer
+var _list: GridContainer
 var _msg_lb: Label
 var _result_veil: Control = null
 var _day_key := ""        # v39：上次画的时候是哪一天（按凌晨 4:00 换日）
@@ -78,34 +97,61 @@ func _build() -> void:
 	_panel.size = Vector2(PANEL_W, PANEL_H)
 	_panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	var psb := StyleBoxFlat.new()
-	psb.bg_color = Color(PAPER.r, PAPER.g, PAPER.b, 0.98)
-	psb.set_corner_radius_all(14)
-	psb.border_color = Color(0.32, 0.27, 0.22, 0.55)
-	psb.set_border_width_all(2)
+	if Ui.SKIN == 1:
+		psb.bg_color = Color(0.961, 0.941, 0.898, 0.985)
+		psb.set_corner_radius_all(4)
+		psb.border_color = Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.55)
+		psb.set_border_width_all(2)
+	else:
+		psb.bg_color = Color(PAPER.r, PAPER.g, PAPER.b, 0.98)
+		psb.set_corner_radius_all(14)
+		psb.border_color = Color(0.32, 0.27, 0.22, 0.55)
+		psb.set_border_width_all(2)
 	_panel.add_theme_stylebox_override("panel", psb)
 	add_child(_panel)
 
+	# v212：自己画刊头（96 高）；打标避免 _skin_pass 再补一条 78 的
+	if Ui.SKIN == 1:
+		_panel.set_meta("skin_header", true)
+		var chrome := Control.new()
+		chrome.size = Vector2(PANEL_W, PANEL_H)
+		chrome.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		chrome.draw.connect(func() -> void: Ui.header(chrome, PANEL_W, 96.0))
+		_panel.add_child(chrome)
+		_panel.move_child(chrome, 0)
+
 	var title := _label("货　栈", 30, INK)
-	title.position = Vector2(28, 18)
-	title.size = Vector2(220, 44)
+	title.position = Vector2(28, 20)
+	title.size = Vector2(240, 46)
+	if Ui.SKIN == 1:
+		title.add_theme_color_override("font_color", Ui.GOLD_HI)
+		title.add_theme_font_size_override("font_size", 36)
+		var bf := Ui.brush_font()
+		if bf != null:
+			title.add_theme_font_override("font", bf)
 	_panel.add_child(title)
 
-	var sub := _label("银两换材料与残卡——残卡与血脉囊按真实日期限购", 13, Color(INK.r, INK.g, INK.b, 0.55))
-	sub.position = Vector2(30, 60)
-	sub.size = Vector2(430, 22)
+	var sub := _label("银两换材料与残卡——残卡与血脉囊按真实日期限购", 13,
+		Color(Ui.TXT_DIM.r, Ui.TXT_DIM.g, Ui.TXT_DIM.b, 0.85) if Ui.SKIN == 1 else Color(INK.r, INK.g, INK.b, 0.55))
+	sub.position = Vector2(30, 72)
+	sub.size = Vector2(430, 20)
 	_panel.add_child(sub)
 
-	_silver_lb = _label("身上银两 0", 15, Color(SEAL.r, SEAL.g, SEAL.b, 0.92))
-	_silver_lb.position = Vector2(PANEL_W - 268.0, 28)
-	_silver_lb.size = Vector2(240, 24)
+	_silver_lb = _label("身上银两 0", 15,
+		Color(Ui.GOLD_HI.r, Ui.GOLD_HI.g, Ui.GOLD_HI.b, 0.95) if Ui.SKIN == 1 else Color(SEAL.r, SEAL.g, SEAL.b, 0.92))
+	_silver_lb.position = Vector2(PANEL_W - 268.0, 32)
+	_silver_lb.size = Vector2(240, 26)
 	_silver_lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	if Ui.SKIN == 1:
+		_silver_lb.add_theme_font_size_override("font_size", 17)
 	_panel.add_child(_silver_lb)
 
 	var sep := ColorRect.new()
 	sep.color = Color(INK.r, INK.g, INK.b, 0.22)
-	sep.position = Vector2(28, 92)
+	sep.position = Vector2(28, 96)
 	sep.size = Vector2(PANEL_W - 56.0, 2)
 	sep.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	sep.visible = Ui.SKIN != 1
 	_panel.add_child(sep)
 
 	# ---- 分类页签（跟仓库一个路数） ----
@@ -130,7 +176,7 @@ func _build() -> void:
 	# ---- 货行列表（滚动；行是叠着排的，不会再撞） ----
 	_scroll = ScrollContainer.new()
 	UiKit.drag_scroll(_scroll)
-	_scroll.position = Vector2(28, 166)
+	_scroll.position = Vector2(38, 166)
 	_scroll.size = Vector2(LIST_W, LIST_H)
 	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	# v15x（用户："所有滑动不要滑动进度条 用指尖滑动那种就可以了"）：
@@ -138,24 +184,27 @@ func _build() -> void:
 	_scroll.get_v_scroll_bar().visible = false
 	_scroll.get_h_scroll_bar().visible = false
 	_panel.add_child(_scroll)
-	_list = VBoxContainer.new()
+	_list = GridContainer.new()
+	_list.columns = 2
 	_list.custom_minimum_size = Vector2(INNER_W, 0)
-	_list.add_theme_constant_override("separation", 8)
+	_list.add_theme_constant_override("h_separation", int(CARD_GAP))
+	_list.add_theme_constant_override("v_separation", int(CARD_GAP))
 	_scroll.add_child(_list)
 
 	_msg_lb = _label("", 13, Color(SEAL.r, SEAL.g, SEAL.b, 0.92))
-	_msg_lb.position = Vector2(28, 628)
-	_msg_lb.size = Vector2(584, 24)
+	_msg_lb.position = Vector2(38, 706)
+	_msg_lb.size = Vector2(564, 24)
 	_panel.add_child(_msg_lb)
 
-	var hint := _label("限购按真实日期，跨天自动重来", 13, Color(INK.r, INK.g, INK.b, 0.45))   # v61（手游）：12 → 13 号
-	hint.position = Vector2(28, 662)
+	var hint := _label("限购按真实日期，跨天自动重来", 13,
+		Color(Ui.TXT_DIM.r, Ui.TXT_DIM.g, Ui.TXT_DIM.b, 0.7) if Ui.SKIN == 1 else Color(INK.r, INK.g, INK.b, 0.45))
+	hint.position = Vector2(38, 754)
 	hint.size = Vector2(360, 22)
 	_panel.add_child(hint)
 
 	var close_btn := Button.new()
 	close_btn.text = "关闭"
-	close_btn.position = Vector2(PANEL_W - 228.0, 656)
+	close_btn.position = Vector2(PANEL_W - 228.0, 748)
 	close_btn.size = Vector2(200, 52)
 	close_btn.add_theme_font_size_override("font_size", 22)
 	close_btn.focus_mode = Control.FOCUS_NONE
@@ -178,6 +227,22 @@ func _flat(bg: Color) -> StyleBoxFlat:
 	return sb
 
 func _style_dark(btn: Button) -> void:
+	if Ui.SKIN == 1:
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.11, 0.095, 0.085, 0.96)
+		sb.set_corner_radius_all(3)
+		sb.border_color = Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.45)
+		sb.set_border_width_all(1)
+		btn.add_theme_stylebox_override("normal", sb)
+		var hv := sb.duplicate() as StyleBoxFlat
+		hv.bg_color = Color(0.17, 0.15, 0.13, 0.98)
+		btn.add_theme_stylebox_override("hover", hv)
+		var pr := sb.duplicate() as StyleBoxFlat
+		pr.bg_color = Color(0.07, 0.06, 0.055, 0.98)
+		btn.add_theme_stylebox_override("pressed", pr)
+		btn.add_theme_stylebox_override("focus", _flat(Color(0, 0, 0, 0)))
+		btn.add_theme_color_override("font_color", Ui.GOLD_HI)
+		return
 	btn.add_theme_stylebox_override("normal", _flat(Color(0.21, 0.19, 0.20, 0.96)))
 	btn.add_theme_stylebox_override("hover", _flat(Color(0.31, 0.27, 0.27, 0.96)))
 	btn.add_theme_stylebox_override("pressed", _flat(Color(0.13, 0.11, 0.12, 0.96)))
@@ -185,6 +250,24 @@ func _style_dark(btn: Button) -> void:
 	btn.add_theme_color_override("font_color", Color(0.94, 0.91, 0.84))
 
 func _style_seal(btn: Button) -> void:
+	if Ui.SKIN == 1:
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(Ui.CINN.r, Ui.CINN.g, Ui.CINN.b, 0.94)
+		sb.set_corner_radius_all(3)
+		sb.border_color = Color(Ui.GOLD_HI.r, Ui.GOLD_HI.g, Ui.GOLD_HI.b, 0.55)
+		sb.set_border_width_all(1)
+		btn.add_theme_stylebox_override("normal", sb)
+		var hv := sb.duplicate() as StyleBoxFlat
+		hv.bg_color = Color(Ui.CINN_HI.r, Ui.CINN_HI.g, Ui.CINN_HI.b, 0.96)
+		btn.add_theme_stylebox_override("hover", hv)
+		var pr := sb.duplicate() as StyleBoxFlat
+		pr.bg_color = Color(Ui.CINN.r * 0.75, Ui.CINN.g * 0.75, Ui.CINN.b * 0.75, 0.96)
+		btn.add_theme_stylebox_override("pressed", pr)
+		btn.add_theme_stylebox_override("disabled", _flat(Color(0.26, 0.24, 0.22, 0.55)))
+		btn.add_theme_stylebox_override("focus", _flat(Color(0, 0, 0, 0)))
+		btn.add_theme_color_override("font_color", Color(1.0, 0.95, 0.86))
+		btn.add_theme_color_override("font_disabled_color", Color(0.85, 0.82, 0.76, 0.45))
+		return
 	btn.add_theme_stylebox_override("normal", _flat(Color(SEAL.r, SEAL.g, SEAL.b, 0.92)))
 	btn.add_theme_stylebox_override("hover", _flat(Color(SEAL.r, SEAL.g, SEAL.b, 0.80)))
 	btn.add_theme_stylebox_override("pressed", _flat(Color(SEAL.r * 0.75, SEAL.g * 0.75, SEAL.b * 0.75, 0.95)))
@@ -194,6 +277,29 @@ func _style_seal(btn: Button) -> void:
 	btn.add_theme_color_override("font_disabled_color", Color(0.96, 0.93, 0.87, 0.45))
 
 func _style_tab(btn: Button, selected: bool) -> void:
+	if Ui.SKIN == 1:
+		# v212：页签＝一排小墨牌；选中转朱砂 + 金边
+		var sb := StyleBoxFlat.new()
+		sb.set_corner_radius_all(3)
+		sb.set_border_width_all(1)
+		if selected:
+			sb.bg_color = Color(0.44, 0.12, 0.09, 0.96)
+			sb.border_color = Color(Ui.GOLD_HI.r, Ui.GOLD_HI.g, Ui.GOLD_HI.b, 0.85)
+		else:
+			sb.bg_color = Color(0.105, 0.090, 0.080, 0.94)
+			sb.border_color = Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.30)
+		btn.add_theme_stylebox_override("normal", sb)
+		var hv := sb.duplicate() as StyleBoxFlat
+		hv.bg_color = sb.bg_color.lightened(0.08)
+		hv.border_color = Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.62)
+		btn.add_theme_stylebox_override("hover", hv)
+		var pr := sb.duplicate() as StyleBoxFlat
+		pr.bg_color = sb.bg_color.darkened(0.16)
+		btn.add_theme_stylebox_override("pressed", pr)
+		btn.add_theme_color_override("font_color", Ui.GOLD_HI if selected else Color(0.86, 0.82, 0.74, 0.92))
+		btn.add_theme_color_override("font_hover_color", Ui.GOLD_HI)
+		btn.add_theme_stylebox_override("focus", _flat(Color(0, 0, 0, 0)))
+		return
 	if selected:
 		btn.add_theme_stylebox_override("normal", _flat(Color(INK.r, INK.g, INK.b, 0.90)))
 		btn.add_theme_stylebox_override("hover", _flat(Color(INK.r, INK.g, INK.b, 0.84)))
@@ -230,102 +336,143 @@ func _rebuild() -> void:
 		_list.add_child(lb)
 		return
 	for it in items:
-		_add_row(it)
+		_add_card(it)
 
-func _add_row(it: Dictionary) -> void:
+func _add_card(it: Dictionary) -> void:
 	var key := str(it["key"])
-	var kd := str(it.get("kind", "mat"))       # mat（不限购）/ card（残卡）/ blood（血脉囊）
+	var kd := str(it.get("kind", "mat"))
 	var is_card := kd == "card"
-	var row := Panel.new()
-	row.custom_minimum_size = Vector2(0, ROW_H)
-	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(1, 1, 1, 0.42)
-	sb.set_corner_radius_all(8)
-	sb.border_color = Color(INK.r, INK.g, INK.b, 0.20)
-	sb.set_border_width_all(1)
-	row.add_theme_stylebox_override("panel", sb)
-	_list.add_child(row)
-
-	var nm := _label(str(it.get("name", key)), 18, INK)
-	nm.position = Vector2(14, 8)
-	nm.size = Vector2(INNER_W - 280.0, 26)
-	row.add_child(nm)
-
-	var desc := _label(str(it.get("desc", "")), 13, Color(INK.r, INK.g, INK.b, 0.55))   # v61（手游）：12 → 13 号
-	desc.position = Vector2(14, 34)
-	desc.size = Vector2(INNER_W - 280.0, 22)
-	row.add_child(desc)
-
-	# v3（#11）：残卡行第三行改成"随机"明示——买下前谁都预览不了
-	# v4：这一行按**三种货**分开写——以前只判 is_card，于是「金纹血脉囊」既走了
-	#   "现有 0"（它不是材料，material_count 查不到）又漏了限购文案。
-	var have := ""
-	var have_col := Color(INK.r, INK.g, INK.b, 0.50)
-	if is_card:
-		have = "【随机】开出的是现役池里随机一件（残件部位也随机）——买下即知"
-		have_col = Color(SEAL.r, SEAL.g, SEAL.b, 0.78)
-	elif kd == "blood":
-		# v63（用户："这里显示有点问题"）：原来这句写死"开出金色血脉" ✗ 与卡面概率（紫九成）打架 ✗，
-		#   而且太长顶进右边按钮。改成：纯度和用途 + 买下即知（概率已在卡面第一行）。
-		have = "纯度 30~100 随机 · 宠物融合用——买下即知"
-		have_col = Color(SEAL.r, SEAL.g, SEAL.b, 0.78)
-	elif kd == "pill":
-		# v36：突破丹——显示包裹里已有几颗（它是丹药，不是材料）
-		have = "包裹 " + str(GameState.pill_count(str(it.get("pid", key)))) + " 颗 · 角色面板点［突破］用"
-		have_col = Color(SEAL.r, SEAL.g, SEAL.b, 0.70)
-	elif kd == "tool":
-		# v39：鉴宝行的侦查道具——显示背包里已有几个（在鉴宝行那一页用）
-		have = "现有 " + str(GameState.appraise_tool_count(str(it.get("tid", "")))) + " 个 · 鉴宝行里用来照货仓"
-		have_col = Color(SEAL.r, SEAL.g, SEAL.b, 0.70)
-	else:
-		have = "现有 " + str(GameState.material_count(key))
-	var have_lb := _label(have, 13, have_col)   # v61（手游）：12 → 13 号
-	have_lb.position = Vector2(14, 58)
-	have_lb.size = Vector2(INNER_W - 280.0, 20)
-	row.add_child(have_lb)
-
 	var price_val: int = int(it["price"]) if not is_card else int(GameState.shop_card_price(key))
-	var price := _label("银两 " + str(price_val), 16, Color(SEAL.r, SEAL.g, SEAL.b, 0.92))
-	price.position = Vector2(INNER_W - 250.0, 10)
-	price.size = Vector2(130, 24)
-	price.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	row.add_child(price)
-
-	# ---- 限购（v4：**一个口径**——都看 GameState.shop_left，-1 ＝ 不限购）----
-	#   病根：以前这里写的是 `if is_card:`，而血脉囊的 kind 是 "blood"——
-	#   于是它那一行永远显示"不限购"、［购买］钮也不灰，买过一次再点才回一句
-	#   "今日已经卖完了"。限购得按**账本**说（shop_left 认 card 与 blood 两种），
-	#   面板不再自己判品类。
 	var left := GameState.shop_left(key)
 	var lim := int(it.get("limit", 0))
+	var sold := left == 0
+	var card := Control.new()
+	card.custom_minimum_size = Vector2(CARD_W, CARD_H)
+	card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_list.add_child(card)
+	card.draw.connect(_draw_card.bind(card, sold))
+
+	var tex := _icon_for(it)
+	if tex != null:
+		var tr := TextureRect.new()
+		# ⚠ 顺序有讲究：先设 expand/stretch，再设 size——反过来会被贴图的最小尺寸顶回 128
+		tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		tr.texture = tex
+		tr.position = Vector2(18, 18)
+		tr.size = Vector2(48, 48)
+		tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		card.add_child(tr)
+
+	var gold_hi := Color(Ui.GOLD_HI.r, Ui.GOLD_HI.g, Ui.GOLD_HI.b, 0.96) if Ui.SKIN == 1 else INK
+	var dim := Color(Ui.TXT_DIM.r, Ui.TXT_DIM.g, Ui.TXT_DIM.b, 0.90) if Ui.SKIN == 1 else Color(INK.r, INK.g, INK.b, 0.55)
+	var nm := _label(str(it.get("name", key)), 18, gold_hi)
+	nm.position = Vector2(80, 10)
+	nm.size = Vector2(182, 26)
+	nm.clip_text = true
+	card.add_child(nm)
+
+	# 种类 + 现有数量合成一行（卡片只有 180 高，别再单开一行"现有 N"）
+	var chip_txt := _kind_cn(it)
+	if is_card:
+		chip_txt += " · 补最缺"
+	elif kd == "blood":
+		chip_txt += " · 紫 90%"
+	elif kd == "pill":
+		chip_txt += " · 包裹 " + str(GameState.pill_count(str(it.get("pid", key)))) + " 颗"
+	elif kd == "tool":
+		chip_txt += " · 现有 " + str(GameState.appraise_tool_count(str(it.get("tid", "")))) + " 个"
+	else:
+		chip_txt += " · 现有 " + str(GameState.material_count(key))
+	var chip := _label(chip_txt, 11,
+		Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.90) if Ui.SKIN == 1 else Color(SEAL.r, SEAL.g, SEAL.b, 0.80))
+	chip.position = Vector2(80, 36)
+	chip.size = Vector2(182, 18)
+	card.add_child(chip)
+
+	# ⚠ 先设自动换行，再设 size——否则 Label 的最小宽度会按"整行不换行"算，撑到 224
+	var desc := _label(str(it.get("desc", "")), 12, dim)
+	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	desc.position = Vector2(80, 62)
+	desc.size = Vector2(182, 54)
+	card.add_child(desc)
+
+	var price_col := Color(Ui.GOLD_HI.r, Ui.GOLD_HI.g, Ui.GOLD_HI.b, 0.95) if Ui.SKIN == 1 else Color(SEAL.r, SEAL.g, SEAL.b, 0.92)
+	var price := _label("银两 " + str(price_val), 16, price_col)
+	price.position = Vector2(14, 128)
+	price.size = Vector2(160, 22)
+	card.add_child(price)
+
+	# 底行左二：限购（-1 不限购）
 	var lim_txt := "不限购"
-	var lim_col := Color(INK.r, INK.g, INK.b, 0.45)
-	var sold := false
+	var lim_col := dim
 	if left == 0:
 		lim_txt = "今日售罄"
-		lim_col = Color(SEAL.r, SEAL.g, SEAL.b, 0.92)
-		sold = true
+		lim_col = Color(SEAL.r, SEAL.g, SEAL.b, 0.95)
 	elif left > 0:
 		lim_txt = "今日剩 " + str(left) + "/" + str(lim)
-	var lim_lb := _label(lim_txt, 13, lim_col)   # v61（手游）：12 → 13 号
-	lim_lb.position = Vector2(INNER_W - 250.0, 36)
-	lim_lb.size = Vector2(140, 20)
-	lim_lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	row.add_child(lim_lb)
+	var lim_lb := _label(lim_txt, 11, lim_col)
+	lim_lb.position = Vector2(14, 152)
+	lim_lb.size = Vector2(160, 18)
+	card.add_child(lim_lb)
 
+	# 购买钮：右下角
 	var buy := Button.new()
 	buy.text = "售罄" if sold else "购买"
-	buy.position = Vector2(INNER_W - 108.0, 26)
-	buy.size = Vector2(94, 44)
-	buy.add_theme_font_size_override("font_size", 16)
+	buy.position = Vector2(180, 124)
+	buy.size = Vector2(82, 40)
+	buy.add_theme_font_size_override("font_size", 15)
 	buy.focus_mode = Control.FOCUS_NONE
 	buy.disabled = sold
 	# v61（手游）：购买钮在滚动区里——拖得动、点得准（原来一滑就误买）
 	UiKit.tap_in_scroll(buy, _on_buy.bind(key))
 	_style_seal(buy)
-	row.add_child(buy)
+	card.add_child(buy)
+
+# v212：卡片底（墨底 + 金角标 + 图标槽 + 底金线）；售罄盖一层暗
+func _draw_card(c: Control, sold: bool) -> void:
+	var r := Rect2(Vector2.ZERO, c.size)
+	if Ui.SKIN == 1:
+		Ui.panel(c, r, {"fill": Color(0.095, 0.082, 0.072, 0.97),
+			"edge": Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.52 if not sold else 0.26),
+			"cut": 9.0, "bracket": true, "shadow": 0.9 if not sold else 0.35, "ink_halo": false})
+		var slot := Rect2(14.0, 14.0, 56.0, 56.0)
+		var sp := Ui.cut_poly(slot, 6.0)
+		c.draw_colored_polygon(sp, Color(0.025, 0.022, 0.020, 0.92))
+		var sq := PackedVector2Array(sp)
+		sq.append(sp[0])
+		c.draw_polyline(sq, Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.30), 1.0, true)
+		c.draw_line(Vector2(14.0, 124.0), Vector2(c.size.x - 14.0, 124.0),
+			Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.16), 1.0, true)
+		if sold:
+			var ov := Ui.cut_poly(Rect2(Vector2(2.0, 2.0), c.size - Vector2(4.0, 4.0)), 9.0)
+			c.draw_colored_polygon(ov, Color(0.02, 0.02, 0.02, 0.42))
+	else:
+		Ui.card(c, r, 8.0)
+		c.draw_line(Vector2(14.0, 124.0), Vector2(c.size.x - 14.0, 124.0),
+			Color(0.30, 0.25, 0.20, 0.18), 1.0, true)
+
+func _kind_cn(it: Dictionary) -> String:
+	match str(it.get("kind", "mat")):
+		"card":
+			return "残卡"
+		"blood":
+			return "血脉"
+		"pill":
+			return "突破丹"
+		"tool":
+			return "鉴宝道具"
+		_:
+			return "材料"
+
+func _icon_for(it: Dictionary) -> Texture2D:
+	var key := str(it.get("key", ""))
+	if ICON_MAP.has(key):
+		var t: Texture2D = ICON_MAP[key]
+		return t
+	if str(it.get("kind", "")) == "tool":
+		return ICON_TOOL
+	return null
 
 # ---- 点击 ----
 

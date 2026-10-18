@@ -1097,7 +1097,7 @@ func _n_rail(it: Dictionary, s: float) -> void:
 	if el >= 0.0:
 		var delay := float(it.get("seq", 0)) * 0.075
 		k = _back(clampf((el - 0.10 - delay) / 0.42, 0.0, 1.0))
-	var cy := float(it["cy"]) - (1.0 - k) * 76.0 - 1.8 * hv + 2.4 * dn
+	var cy := float(it["cy"]) - (1.0 - k) * 56.0 - 1.8 * hv + 2.4 * dn
 	var r := Rect2(cx - w * 0.5, cy - h * 0.5, w, h)
 	# 悬停：板外一圈暖光
 	if hv > 0.02:
@@ -1113,12 +1113,18 @@ func _n_rail(it: Dictionary, s: float) -> void:
 	draw_polyline(ip, Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.18 + 0.30 * hv), 1.0, true)
 	Ui.diamond(self, Vector2(cx, r.position.y + 2.0), 4.0,
 		Color(Ui.GOLD_HI.r, Ui.GOLD_HI.g, Ui.GOLD_HI.b, 0.75 + 0.25 * hv), 1.2)
-	# 图标水印（金色刻线）
+	# 图标槽：一个更暗的小方槽 + 金线，让"金刻线图标"读得出是刻上去的
+	var slot := Rect2(cx - 25.0, r.position.y + 8.0, 50.0, 50.0)
+	var sp := Ui.cut_poly(slot, 7.0)
+	draw_colored_polygon(sp, Color(0.020, 0.017, 0.015, 0.42))
+	var sq := PackedVector2Array(sp)
+	sq.append(sp[0])
+	draw_polyline(sq, Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.16 + 0.16 * hv), 1.0, true)
 	var tex: Texture2D = it.get("tex", null)
 	if tex != null:
-		var sz := 44.0
-		draw_texture_rect(tex, Rect2(cx - sz * 0.5, r.position.y + 10.0, sz, sz), false,
-			Color(1.0, 1.0, 1.0, 0.34 + 0.22 * hv))
+		var sz := 40.0
+		draw_texture_rect(tex, Rect2(cx - sz * 0.5, r.position.y + 13.0, sz, sz), false,
+			Color(1.0, 1.0, 1.0, 0.52 + 0.22 * hv))
 	var f := _n_font()
 	var big := str(it["big"])
 	if big == "":
@@ -1165,21 +1171,26 @@ func _n_stele(it: Dictionary, s: float) -> void:
 			Color(0.78, 0.14, 0.09, (0.085 - 0.022 * float(g)) * (0.55 + 0.45 * breath)))
 	var shp := Ui.cut_poly(Rect2(r.position + Vector2(0.0, 6.0), r.size), 12.0)
 	draw_colored_polygon(shp, Color(0.02, 0.01, 0.01, 0.42))
-	# 板面三明治：底朱 → 上半提亮 → 下半压暗（切角都保住）
-	draw_colored_polygon(Ui.cut_poly(r, 12.0), Color(0.58, 0.115, 0.088, 0.985))
+	# 板面：竖向渐变（上亮下暗）——一行行 1px 线画，切角处按斜边收，没有横向接缝
 	var c := 12.0
 	var x0 := r.position.x
 	var x1 := r.end.x
 	var y0 := r.position.y
 	var y1 := r.end.y
-	var top_pts := PackedVector2Array([
-		Vector2(x0 + c, y0), Vector2(x1 - c, y0), Vector2(x1, y0 + c),
-		Vector2(x1, y0 + h * 0.46), Vector2(x0, y0 + h * 0.46), Vector2(x0, y0 + c)])
-	draw_colored_polygon(top_pts, Color(0.80, 0.22, 0.15, 0.55))
-	var bot_pts := PackedVector2Array([
-		Vector2(x0, y0 + h * 0.52), Vector2(x1, y0 + h * 0.52),
-		Vector2(x1, y1 - c), Vector2(x1 - c, y1), Vector2(x0 + c, y1), Vector2(x0, y1 - c)])
-	draw_colored_polygon(bot_pts, Color(0.26, 0.035, 0.028, 0.55))
+	draw_colored_polygon(Ui.cut_poly(r, c), Color(0.72, 0.17, 0.125, 0.99))
+	var steps := 46
+	var step_h := h / float(steps)
+	for si in steps:
+		var ty := y0 + float(si) * step_h
+		var u := float(si) / float(steps - 1)
+		var col := Color(0.76, 0.19, 0.14, 1.0).lerp(Color(0.36, 0.055, 0.045, 1.0), u)
+		var inset := 0.0
+		if ty - y0 < c:
+			inset = c - (ty - y0)
+		if y1 - ty < c:
+			inset = maxf(inset, c - (y1 - ty))
+		draw_line(Vector2(x0 + 1.0 + inset, ty + 0.5), Vector2(x1 - 1.0 - inset, ty + 0.5),
+			col, step_h + 0.7, true)
 	draw_line(Vector2(x0 + c + 6.0, y0 + 3.0), Vector2(x1 - c - 6.0, y0 + 3.0),
 		Color(1.0, 0.84, 0.52, 0.20 + 0.12 * breath), 1.4, true)
 	var op := Ui.cut_poly(r, c)
@@ -1192,7 +1203,7 @@ func _n_stele(it: Dictionary, s: float) -> void:
 	draw_polyline(ip, Color(Ui.GOLD_HI.r, Ui.GOLD_HI.g, Ui.GOLD_HI.b, 0.30 + 0.18 * breath), 1.0, true)
 	Ui.brackets(self, r, c, Color(Ui.GOLD_HI.r, Ui.GOLD_HI.g, Ui.GOLD_HI.b, 0.92), 20.0, 2.0)
 	if JIAN_TEX != null:
-		draw_texture_rect(JIAN_TEX, Rect2(x1 - 150.0, y0 + 4.0, 132.0, 132.0), false,
+		draw_texture_rect(JIAN_TEX, Rect2(x1 - 142.0, y0 + 11.0, 112.0, 112.0), false,
 			Color(1.0, 1.0, 1.0, 0.14 + 0.05 * breath + 0.10 * hv))
 	# 斜扫光：像金字上过一道光
 	var sx := fposmod(t * 90.0, w + 260.0) - 130.0 + x0
@@ -1207,7 +1218,7 @@ func _n_stele(it: Dictionary, s: float) -> void:
 		Color(Ui.GOLD_HI.r, Ui.GOLD_HI.g, Ui.GOLD_HI.b, 0.30 + 0.15 * breath), 1.2, true)
 	var sub := str(it["sub"])
 	if sub != "":
-		draw_string(font, Vector2(x0 + 40.0, 60.0), sub, HORIZONTAL_ALIGNMENT_LEFT, w - 150.0, 14,
-			Color(0.99, 0.90, 0.72, 0.88))
+		draw_string(font, Vector2(x0 + 40.0, 60.0), sub, HORIZONTAL_ALIGNMENT_LEFT, w - 150.0, 15,
+			Color(1.0, 0.94, 0.80, 0.94))
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 

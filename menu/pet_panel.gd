@@ -25,7 +25,7 @@ const GREEN := Color(0.30, 0.52, 0.32)
 const GOLD := Color(0.72, 0.58, 0.22)
 
 const PANEL_W := 640.0
-const PANEL_H := 1070.0   # v61：940 → 1070（护主效果给两行大字、四颗钮改成 2×2 大钮）
+const PANEL_H := 1150.0   # v213：+80 给「立绘 + 三圆环」的灵宠台
 
 signal closed
 
@@ -48,9 +48,17 @@ class PetArt extends Control:
 	var _last_pet := 0        # 上次摸头的时间戳（去抖用）
 	var say_t := 0.0
 	const SLEEP_AFTER := 24.0
+	const Ui := preload("res://menu/menu_theme.gd")   # v213：墨底金框 + 金环
+
+	# v213：三圆环要喂的字（品质/阶/状态）由 refresh() 填，PetArt 只管画
+	var star := 0
+	var follow_on := false
+	var quality_txt := ""
+	var stage_txt := ""
+	var status_txt := ""
 
 	func _ready() -> void:
-		size = Vector2(584.0, 170.0)
+		size = Vector2(584.0, 250.0)
 		mouse_filter = Control.MOUSE_FILTER_STOP
 		mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 		gui_input.connect(_on_gui)
@@ -93,10 +101,14 @@ class PetArt extends Control:
 		queue_redraw()
 
 	func _draw() -> void:
-		draw_rect(Rect2(0, 0, 584, 170), Color(0.93, 0.90, 0.83, 0.85))
-		draw_colored_polygon(PackedVector2Array([Vector2(-10, 150), Vector2(140, 62), Vector2(330, 150)]), Color(0.16, 0.14, 0.13, 0.30))
-		draw_colored_polygon(PackedVector2Array([Vector2(280, 150), Vector2(450, 46), Vector2(596, 150)]), Color(0.13, 0.11, 0.11, 0.40))
-		draw_line(Vector2(0, 150), Vector2(584, 150), Color(0.30, 0.24, 0.18, 0.50), 2.0)
+		# v213：墨底金框的「灵宠台」——三环画在宠物后面，宠物坐在环心
+		Ui.panel(self, Rect2(0.0, 0.0, 584.0, 250.0), {"fill": Color(0.075, 0.066, 0.060, 0.96),
+			"edge": Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.62), "cut": 12.0,
+			"bracket": true, "shadow": 1.0, "ink_halo": false})
+		draw_colored_polygon(PackedVector2Array([Vector2(-10, 236), Vector2(140, 112), Vector2(330, 236)]), Color(0.16, 0.14, 0.13, 0.55))
+		draw_colored_polygon(PackedVector2Array([Vector2(280, 236), Vector2(450, 84), Vector2(596, 236)]), Color(0.13, 0.11, 0.11, 0.65))
+		draw_line(Vector2(0, 236), Vector2(584, 236), Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.45), 2.0)
+		_draw_rings()
 		if not has_pet:
 			return
 		# v92（用户："宠物面板也没有变化"）：**面板里的狐/隼也换成 Q版图**——
@@ -123,9 +135,9 @@ class PetArt extends Control:
 			elif act == "cute":
 				spd = 12.0
 			var fi := int(floor(t * spd)) % nfr
-			var dh := 138.0 * (1.0 + 0.06 * float(stage))
+			var dh := 158.0 * (1.0 + 0.06 * float(stage))
 			var dw := dh * aw
-			draw_texture_rect_region(sheet, Rect2(292.0 - dw * 0.5, 150.0 - dh, dw, dh),
+			draw_texture_rect_region(sheet, Rect2(292.0 - dw * 0.5, 232.0 - dh, dw, dh),
 				Rect2(float(fi) * fw, 0.0, fw, fh), Color(1, 1, 1, 1))
 			if act == "sleep":
 				var zz := 0.8 + 0.2 * sin(t * 1.6)
@@ -140,16 +152,64 @@ class PetArt extends Control:
 			return
 		var qtex := PArt.pet(kind)
 		if qtex != null:
-			var qh := 138.0 * (1.0 + 0.06 * float(stage))
+			var qh := 158.0 * (1.0 + 0.06 * float(stage))
 			var qw := qh * float(qtex.get_width()) / maxf(float(qtex.get_height()), 1.0)
 			var qbob := sin(t * 2.6) * 2.5
 			var qlift := 26.0 if kind == "hawk" else 0.0
-			draw_texture_rect(qtex, Rect2(292.0 - qw * 0.5, 150.0 - qh - qlift - qbob, qw, qh), false)
+			draw_texture_rect(qtex, Rect2(292.0 - qw * 0.5, 232.0 - qh - qlift - qbob, qw, qh), false)
 			return
 		if kind == "hawk":
 			_draw_hawk()
 		else:
 			_draw_fox()
+
+	# v213：三圆环——品质（6 个星位）/ 阶（5 段）/ 状态（随行=绿金实环，留守=灰虚线）
+	func _draw_rings() -> void:
+		var c := Vector2(292.0, 130.0)
+		var breath := 0.5 + 0.5 * sin(t * 2.0)
+		var f := ThemeDB.fallback_font
+		# 还没遇见宠物：三环收成暗线，环心写"未得"——别留三个空标签
+		if not has_pet:
+			for rad in [78.0, 96.0, 114.0]:
+				draw_arc(c, rad, 0.0, TAU, 64, Color(0.45, 0.40, 0.32, 0.20), 1.2, true)
+			draw_string(f, Vector2(192.0, 138.0), "未　得", HORIZONTAL_ALIGNMENT_CENTER, 200.0, 22,
+				Color(0.66, 0.61, 0.52, 0.55))
+			return
+		# 状态环（最外 114）
+		var st_col := Color(0.62, 0.80, 0.55, 0.50 + 0.22 * breath) if follow_on else Color(0.60, 0.58, 0.54, 0.26)
+		for k in 36:
+			if follow_on or k % 2 == 0:
+				var a0 := TAU * float(k) / 36.0
+				draw_arc(c, 114.0, a0, a0 + TAU / 36.0 * (0.62 if follow_on else 0.82), 4,
+					st_col, 2.0, true)
+		# 阶环（96）：5 段，填到 stage+1
+		for k in 5:
+			var a0 := -PI * 0.5 + TAU * float(k) / 5.0 + 0.09
+			var a1 := -PI * 0.5 + TAU * float(k + 1) / 5.0 - 0.09
+			var full := k <= stage
+			var col := Color(Ui.GOLD_HI.r, Ui.GOLD_HI.g, Ui.GOLD_HI.b, 0.90 - 0.04 * float(k)) if full else Color(0.34, 0.29, 0.22, 0.55)
+			draw_arc(c, 96.0, a0, a1, 22, col, 4.0 if full else 2.0, true)
+		# 品质环（78）：5 个星位（实心=已有星；PET_STAR_MAX = 5）
+		draw_arc(c, 78.0, 0.0, TAU, 48, Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.16), 1.2, true)
+		for k in 5:
+			var a := -PI * 0.5 + TAU * float(k) / 5.0
+			var p := c + Vector2(cos(a), sin(a)) * 78.0
+			var on := k < star
+			Ui.diamond(self, p, 5.0,
+				Color(Ui.GOLD_HI.r, Ui.GOLD_HI.g, Ui.GOLD_HI.b, 0.95 if on else 0.22), 1.6 if on else 1.0)
+		# 左上：品质 + 阶；右上：状态
+		draw_string(f, Vector2(20.0, 28.0), "品质", HORIZONTAL_ALIGNMENT_LEFT, 120.0, 12,
+			Color(Ui.TXT_DIM.r, Ui.TXT_DIM.g, Ui.TXT_DIM.b, 0.75))
+		draw_string(f, Vector2(20.0, 46.0), quality_txt, HORIZONTAL_ALIGNMENT_LEFT, 140.0, 14,
+			Color(Ui.GOLD_HI.r, Ui.GOLD_HI.g, Ui.GOLD_HI.b, 0.95))
+		draw_string(f, Vector2(20.0, 72.0), "阶", HORIZONTAL_ALIGNMENT_LEFT, 120.0, 12,
+			Color(Ui.TXT_DIM.r, Ui.TXT_DIM.g, Ui.TXT_DIM.b, 0.75))
+		draw_string(f, Vector2(20.0, 90.0), stage_txt, HORIZONTAL_ALIGNMENT_LEFT, 140.0, 14,
+			Color(Ui.CINN_HI.r, Ui.CINN_HI.g, Ui.CINN_HI.b, 0.95))
+		draw_string(f, Vector2(424.0, 28.0), "状态", HORIZONTAL_ALIGNMENT_RIGHT, 140.0, 12,
+			Color(Ui.TXT_DIM.r, Ui.TXT_DIM.g, Ui.TXT_DIM.b, 0.75))
+		draw_string(f, Vector2(424.0, 48.0), status_txt, HORIZONTAL_ALIGNMENT_RIGHT, 140.0, 14,
+			Color(0.62, 0.82, 0.56, 0.95) if follow_on else Color(0.70, 0.66, 0.60, 0.85))
 
 	func _draw_fox() -> void:
 		var cx := 292.0
@@ -325,7 +385,7 @@ func _build() -> void:
 	_panel.add_child(_art)
 
 	_name_lb = _label("", 26, INK)
-	_name_lb.position = Vector2(28, 296)
+	_name_lb.position = Vector2(28, 376)
 	_name_lb.size = Vector2(400, 34)
 	_panel.add_child(_name_lb)
 
@@ -339,37 +399,37 @@ func _build() -> void:
 	#   面板跟着长高（PANEL_H 940 → 1070），下面血脉区整体下移，
 	#   ［关闭］也往下让（984 起，仍旧贴底）。
 	_apt_lb = _label("", 17, Color(INK.r, INK.g, INK.b, 0.72))
-	_apt_lb.position = Vector2(28, 332)
+	_apt_lb.position = Vector2(28, 412)
 	_apt_lb.size = Vector2(584, 26)
 	_apt_lb.clip_text = true          # 保险：真长出框也只裁字，不顶到隔壁
 	_panel.add_child(_apt_lb)
 
 	_pass_lb = _label("", 16, Color(INK.r, INK.g, INK.b, 0.72))
-	_pass_lb.position = Vector2(28, 360)
+	_pass_lb.position = Vector2(28, 440)
 	_pass_lb.size = Vector2(584, 44)
 	_pass_lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_panel.add_child(_pass_lb)
 
 	_fx_lb = _label("", 17, GOLD)
-	_fx_lb.position = Vector2(28, 408)
+	_fx_lb.position = Vector2(28, 488)
 	_fx_lb.size = Vector2(584, 54)
 	_fx_lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_panel.add_child(_fx_lb)
 
 	_xp_bg = ColorRect.new()
-	_xp_bg.position = Vector2(28, 468)
+	_xp_bg.position = Vector2(28, 548)
 	_xp_bg.size = Vector2(584, 20)
 	_xp_bg.color = Color(0.10, 0.09, 0.10, 0.18)
 	_xp_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_panel.add_child(_xp_bg)
 	_xp_fill = ColorRect.new()
-	_xp_fill.position = Vector2(28, 468)
+	_xp_fill.position = Vector2(28, 548)
 	_xp_fill.size = Vector2(0, 20)
 	_xp_fill.color = GOLD
 	_xp_fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_panel.add_child(_xp_fill)
 	_xp_lb = _label("", 13, Color(0.96, 0.94, 0.90))
-	_xp_lb.position = Vector2(28, 468)
+	_xp_lb.position = Vector2(28, 548)
 	_xp_lb.size = Vector2(584, 20)
 	_xp_lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_xp_lb.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -378,7 +438,7 @@ func _build() -> void:
 	# ㊿z9：右列四颗按钮 → v61：改成经验条下面的 **2×2 大钮**
 	_star_btn = Button.new()
 	_star_btn.text = "升星"
-	_star_btn.position = Vector2(28, 496)
+	_star_btn.position = Vector2(28, 576)
 	_star_btn.size = Vector2(284, 52)
 	_star_btn.add_theme_font_size_override("font_size", 18)
 	_star_btn.focus_mode = Control.FOCUS_NONE
@@ -388,7 +448,7 @@ func _build() -> void:
 
 	_apt_btn = Button.new()
 	_apt_btn.text = "服洗灵丹"
-	_apt_btn.position = Vector2(320, 496)
+	_apt_btn.position = Vector2(320, 576)
 	_apt_btn.size = Vector2(284, 52)
 	_apt_btn.add_theme_font_size_override("font_size", 18)
 	_apt_btn.focus_mode = Control.FOCUS_NONE
@@ -398,7 +458,7 @@ func _build() -> void:
 
 	_feed_btn = Button.new()
 	_feed_btn.text = "喂养灵丹"
-	_feed_btn.position = Vector2(28, 556)
+	_feed_btn.position = Vector2(28, 636)
 	_feed_btn.size = Vector2(284, 52)
 	_feed_btn.add_theme_font_size_override("font_size", 18)
 	_feed_btn.focus_mode = Control.FOCUS_NONE
@@ -408,7 +468,7 @@ func _build() -> void:
 
 	_toggle_btn = Button.new()
 	_toggle_btn.text = "让它随行"
-	_toggle_btn.position = Vector2(320, 556)
+	_toggle_btn.position = Vector2(320, 636)
 	_toggle_btn.size = Vector2(284, 52)
 	_toggle_btn.add_theme_font_size_override("font_size", 18)
 	_toggle_btn.focus_mode = Control.FOCUS_NONE
@@ -418,12 +478,12 @@ func _build() -> void:
 
 	# ---- 血脉区（v3）· v61：整段下移（中段变高：护主两行 + 2×2 大钮） ----
 	_bl_head = _label("", 17, SEAL)
-	_bl_head.position = Vector2(28, 626)
+	_bl_head.position = Vector2(28, 706)
 	_bl_head.size = Vector2(584, 26)
 	_panel.add_child(_bl_head)
 
 	_bl_slots = _label("", 14, Color(INK.r, INK.g, INK.b, 0.85))
-	_bl_slots.position = Vector2(28, 654)
+	_bl_slots.position = Vector2(28, 734)
 	_bl_slots.size = Vector2(584, 58)
 	_bl_slots.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_panel.add_child(_bl_slots)
@@ -431,7 +491,7 @@ func _build() -> void:
 	_bl_prev = Button.new()
 	_bl_prev.text = "◀"
 	# v61（手游）：44×40 → 52×44（翻页钮也要抓得住）
-	_bl_prev.position = Vector2(28, 724)
+	_bl_prev.position = Vector2(28, 804)
 	_bl_prev.size = Vector2(52, 44)
 	_bl_prev.focus_mode = Control.FOCUS_NONE
 	_bl_prev.pressed.connect(_on_bl_prev)
@@ -439,7 +499,7 @@ func _build() -> void:
 	_panel.add_child(_bl_prev)
 
 	_bl_pick = _label("", 16, INK)
-	_bl_pick.position = Vector2(88, 726)
+	_bl_pick.position = Vector2(88, 806)
 	_bl_pick.size = Vector2(288, 40)
 	_bl_pick.max_lines_visible = 1
 	_bl_pick.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
@@ -447,7 +507,7 @@ func _build() -> void:
 
 	_bl_next = Button.new()
 	_bl_next.text = "▶"
-	_bl_next.position = Vector2(384, 724)
+	_bl_next.position = Vector2(384, 804)
 	_bl_next.size = Vector2(52, 44)
 	_bl_next.focus_mode = Control.FOCUS_NONE
 	_bl_next.pressed.connect(_on_bl_next)
@@ -456,7 +516,7 @@ func _build() -> void:
 
 	_bl_fuse = Button.new()
 	_bl_fuse.text = "融　合"
-	_bl_fuse.position = Vector2(444, 724)
+	_bl_fuse.position = Vector2(444, 804)
 	_bl_fuse.size = Vector2(168, 44)
 	_bl_fuse.add_theme_font_size_override("font_size", 17)
 	_bl_fuse.focus_mode = Control.FOCUS_NONE
@@ -465,14 +525,14 @@ func _build() -> void:
 	_panel.add_child(_bl_fuse)
 
 	_bl_pre = _label("", 15, GOLD)
-	_bl_pre.position = Vector2(28, 782)
+	_bl_pre.position = Vector2(28, 862)
 	_bl_pre.size = Vector2(584, 30)
 	_bl_pre.max_lines_visible = 1
 	_bl_pre.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	_panel.add_child(_bl_pre)
 
 	_msg_lb = _label("", 15, Color(SEAL.r, SEAL.g, SEAL.b, 0.92))
-	_msg_lb.position = Vector2(28, 818)
+	_msg_lb.position = Vector2(28, 898)
 	_msg_lb.size = Vector2(584, 52)
 	_msg_lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_panel.add_child(_msg_lb)
@@ -480,14 +540,14 @@ func _build() -> void:
 	# v63（用户："宠物界面也是一塌糊涂 你看着优化"）：说明**精简成两句半、字号 13→15**——
 	#   原来那段 190 字的长文在 13 号字下又密又糊 ✗；配方/细节以后长按问号再看（预留）。
 	_hint_lb = _label("血脉：密柜红件偶尔翻出（凡/紫/金/绝四档，越稀越好）。\n养灵丹升阶（开血脉格）、洗灵丹提资质（+2）、升星吃同名 1/2/4/8/16。\n可养多只——只有随行那只的护主与加成生效。", 15, Color(INK.r, INK.g, INK.b, 0.72))
-	_hint_lb.position = Vector2(28, 872)
+	_hint_lb.position = Vector2(28, 952)
 	_hint_lb.size = Vector2(584, 88)
 	_hint_lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_panel.add_child(_hint_lb)
 
 	var close_btn := Button.new()
 	close_btn.text = "关闭"
-	close_btn.position = Vector2(412, 976)
+	close_btn.position = Vector2(412, 1056)
 	close_btn.size = Vector2(200, 52)
 	close_btn.add_theme_font_size_override("font_size", 22)
 	close_btn.focus_mode = Control.FOCUS_NONE
@@ -566,6 +626,11 @@ func refresh() -> void:
 			_style_tab(btn, pid == sel)
 	if owned.is_empty():
 		_art.has_pet = false
+		_art.star = 0
+		_art.follow_on = false
+		_art.quality_txt = ""
+		_art.stage_txt = ""
+		_art.status_txt = "未得"
 		_stage_lb.text = "未得"
 		_name_lb.text = "（还没遇见它）"
 		_apt_lb.text = ""
@@ -593,6 +658,12 @@ func refresh() -> void:
 	_art.has_pet = true
 	_art.kind = "hawk" if sel == "qing_sun" else "fox"
 	_art.stage = st
+	# v213：三圆环的数据
+	_art.star = GameState.pet_star_of(sel)
+	_art.follow_on = (follow == sel)
+	_art.quality_txt = "★ " + str(_art.star) + " / " + str(GameState.PET_STAR_MAX)
+	_art.stage_txt = GameState.pet_stage_name_of(sel) + " · " + str(st + 1) + "/" + str(GameState.PET_STAGE_MAX + 1)
+	_art.status_txt = "随行中" if follow == sel else "留守"
 	_stage_lb.text = GameState.pet_stage_name_of(sel) + " · 第 " + str(st + 1) + "/" + str(GameState.PET_STAGE_MAX + 1) + " 段"
 	# ㊿z9：名字后面挂星级（5 格，实心＝已有星）——一眼看出这只养到哪了
 	_name_lb.text = GameState.pet_name_of(sel) + "　" + _star_text(GameState.pet_star_of(sel))

@@ -27,10 +27,17 @@ static func has(role_id: String, slot: String) -> bool:
 		return false
 	return ResourceLoader.exists(DIR + role_id + "_" + slot + ".png")
 
+# v212：优先用抠过白底的版本（tools/cut_white_bg.py 生成），面板里能直接坐在纸面上
 static func face(role_id: String) -> Texture2D:
+	var t := _tex(role_id + "_face_cut")
+	if t != null:
+		return t
 	return _tex(role_id + "_face")
 
 static func full(role_id: String) -> Texture2D:
+	var t := _tex(role_id + "_full_cut")
+	if t != null:
+		return t
 	return _tex(role_id + "_full")
 
 static func q(role_id: String) -> Texture2D:
