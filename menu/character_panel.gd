@@ -541,12 +541,16 @@ void fragment(){
 		#   而"青锋剑★★（火）"这类要 170~180 宽 → 自动换行折成两行，
 		#   但那个 Label 只有 **26 高（一行）**，第二行被切掉——看着就是"字超出框"。
 		#   现在格高 84 → **100**、文字框 26 → **56（两行）**，两行都看得见。
-		var cell := _make_cell(str(SLOTS[k]["label"]), Vector2(28.0 + float(col2) * 292.0, 560.0 + float(row2) * 104.0), Vector2(284, 100), true)
+		var cell := _make_cell(str(SLOTS[k]["label"]), Vector2(28.0 + float(col2) * 292.0, 560.0 + float(row2) * 104.0), Vector2(284, 100), true, str(SLOTS[k]["label"]).substr(0, 1))
 		_panel.add_child(cell)
 		_equip_cells.append(cell)
 		_equip_vals.append(cell.get_meta("value_label"))
 		_wire_cell(cell, slot, k)
 		var ub := _make_unequip_btn(cell, Vector2(176, 44))
+		if Ui.SKIN == 1:
+			ub.position = Vector2(198, 62)     # 右下角，给左边的图标和件名让出整行
+			ub.size = Vector2(74, 30)
+			ub.add_theme_font_size_override("font_size", 14)
 		ub.pressed.connect(_on_slot_unequip.bind(slot))
 		_equip_un_btns.append(ub)
 
@@ -588,6 +592,22 @@ void fragment(){
 			var ub2 := _make_unequip_btn(cell2, Vector2(176, 38))
 			ub2.pressed.connect(_on_art_unequip.bind(k))
 			_art_un_btns.append(ub2)
+
+	# v202：大招格单独染色——深朱红底 + 金边，字改亮（暗底必须换字色）
+	if Ui.SKIN == 1 and _art_cells.size() > 3:
+		var ultsb := StyleBoxFlat.new()
+		ultsb.bg_color = Color(0.286, 0.098, 0.086, 0.96)
+		ultsb.set_corner_radius_all(3)
+		ultsb.border_color = Color(Ui.CINN_HI.r, Ui.CINN_HI.g, Ui.CINN_HI.b, 0.92)
+		ultsb.set_border_width_all(2)
+		_art_cells[3].add_theme_stylebox_override("panel", ultsb)
+		var uhd: Node = _art_cells[3].get_child(0)
+		if uhd is Label:
+			(uhd as Label).add_theme_color_override("font_color", Color(0.96, 0.76, 0.62, 0.92))
+		if _skill_vals.size() > 3:
+			_skill_vals[3].add_theme_color_override("font_color", Ui.GOLD_HI)
+		if _art_tag_lbs.size() > 3:
+			_art_tag_lbs[3].add_theme_color_override("font_color", Color(0.90, 0.66, 0.54, 0.85))
 
 	# ---- 天赋（左） ----
 	# ㊹ 修"天赋框字体重合"：框加高到 182、天赋区 12~146、被动 148，两个 Label 开 clip_text。
@@ -775,6 +795,13 @@ func _head(text: String, pos: Vector2) -> Label:
 
 func _soft_sb(opaque := false) -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()
+	if Ui.SKIN == 1:
+		# v202：格子＝纸面小牌 + 金线，圆角收平（面板/卡片/格子 三层明暗交替）
+		sb.bg_color = Color(0.961, 0.941, 0.898, 0.92) if opaque else Color(0.961, 0.941, 0.898, 0.55)
+		sb.set_corner_radius_all(3)
+		sb.border_color = Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.45)
+		sb.set_border_width_all(1)
+		return sb
 	if opaque:
 		sb.bg_color = Color(0.955, 0.937, 0.886, 0.99)
 	else:
@@ -799,21 +826,44 @@ func _eval_sb(tier: String) -> StyleBoxFlat:
 	sb.set_border_width_all(1)
 	return sb
 
-func _make_cell(head_text: String, pos: Vector2, sz: Vector2, reserve_right: bool) -> Panel:
+func _make_cell(head_text: String, pos: Vector2, sz: Vector2, reserve_right: bool, glyph := "") -> Panel:
 	var cell := Panel.new()
 	cell.position = pos
 	cell.size = sz
 	cell.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	cell.add_theme_stylebox_override("panel", _soft_sb())
+	var tx := 16.0
+	if Ui.SKIN == 1 and glyph != "":
+		# v204：装备格左侧让出 64×64 的图标框（影之刃/物华弥新都是"图标+文字"的格子）
+		var ico := Control.new()
+		ico.position = Vector2(10.0, 22.0)
+		ico.size = Vector2(56.0, 56.0)
+		ico.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		ico.draw.connect(func() -> void:
+			var r := Rect2(Vector2.ZERO, ico.size)
+			var q := Ui.cut_poly(r, 6.0)
+			ico.draw_colored_polygon(q, Color(0.886, 0.859, 0.784, 0.96))
+			var qc := PackedVector2Array(q)
+			qc.append(q[0])
+			ico.draw_polyline(qc, Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.58), 1.2, true)
+			var bf := Ui.brush_font()
+			if bf != null:
+				ico.draw_string(bf, Vector2(0.0, 41.0), glyph, HORIZONTAL_ALIGNMENT_CENTER, 56.0, 30,
+					Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.78)))
+		cell.add_child(ico)
+		tx = 76.0
 	var head := _label(head_text, 16, Color(INK.r, INK.g, INK.b, 0.55))
-	head.position = Vector2(16, 8)
-	head.size = Vector2(sz.x - 32.0, 24)
+	head.position = Vector2(tx, 8)
+	head.size = Vector2(sz.x - tx - 120.0, 24)
 	cell.add_child(head)
 	var val := _label("—", 22, INK)
-	val.position = Vector2(16, 34)
+	val.position = Vector2(tx, 34)
 	if reserve_right:
 		# v61：高度按格子给（原来的 26 只够一行，长件名折行就被切）
-		val.size = Vector2(sz.x - 130.0, maxf(26.0, sz.y - 44.0))
+		if tx > 16.0:
+			val.size = Vector2(sz.x - tx - 18.0, 26.0)      # 图标格：一行放下件名，不折行
+		else:
+			val.size = Vector2(sz.x - 130.0, maxf(26.0, sz.y - 44.0))
 		val.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	else:
 		val.size = Vector2(sz.x - 32.0, 34)

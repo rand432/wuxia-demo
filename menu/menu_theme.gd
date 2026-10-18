@@ -38,6 +38,16 @@ const TXT_DARK := Color(0.035, 0.030, 0.040, 0.85)
 
 const FONT_BRUSH := "res://fonts/ink.ttf"
 
+static var _brush_cache: Font = null
+
+# 毛笔字体（缓存一次；不要在 _draw 里反复 load）
+static func brush_font() -> Font:
+	if _brush_cache == null and ResourceLoader.exists(FONT_BRUSH):
+		var r: Resource = load(FONT_BRUSH)
+		if r is Font:
+			_brush_cache = r as Font
+	return _brush_cache
+
 # ---- 几何 ----
 const CUT := 9.0          # 45° 切角
 const ARM := 14.0         # 角标臂长
@@ -185,7 +195,8 @@ static func glow(c: Color, amount: float) -> Color:
 static func header(h: CanvasItem, w: float, hgt: float = 78.0) -> void:
 	h.draw_rect(Rect2(0.0, 0.0, w, hgt), INK0)
 	h.draw_rect(Rect2(0.0, hgt - 4.0, w, 4.0), Color(GOLD.r, GOLD.g, GOLD.b, 0.95))
-	h.draw_rect(Rect2(26.0, 22.0, 6.0, 36.0), CINN)
+	var bh := minf(36.0, hgt - 14.0)
+	h.draw_rect(Rect2(26.0, (hgt - bh) * 0.5 + 1.0, 6.0, bh), CINN)
 
 # 分区标题：朱砂竖条 + 一条金线拉到右边
 static func sect(h: CanvasItem, x0: float, y: float, w: float, name: String, font: Font, fs: int = 22) -> void:

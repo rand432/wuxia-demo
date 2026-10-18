@@ -213,6 +213,7 @@ var _demo_done := false
 var _demo_clock := 0.0
 var _tag_rects: Array = []
 var _cover_mode := true        # v200：当前停在封面页（收起商店/困兽，给书名让位）
+var _skinned := false          # v206：全局换皮扫描是否已跑过
 var _panel_open := false
 var _actors = null            # v93g：人物层（村景之上、UI 之下，等比缩放）
 var _ink = null               # v96：水墨村景层（最底，读 village_layout.json）
@@ -2170,6 +2171,9 @@ func _process(delta: float) -> void:
 			_cam = Conf.OPEN_CAM - 60.0 * sin(PI * p)
 			if INK_ONLY:
 				_sc = Conf.DW - 60.0 * sin(PI * p)   # 开屏"展一下卷"，再停在封面页
+	if Ui.SKIN == 1 and not _skinned and _t > 0.4:
+		_skinned = true
+		_skin_pass()
 	if INK_ONLY:
 		var on_cover := _sc > Conf.DW * 0.45
 		if on_cover != _cover_mode:
@@ -2177,6 +2181,84 @@ func _process(delta: float) -> void:
 			_refresh_plaques()
 	_apply_layer_transforms()
 	queue_redraw()
+
+# ============================================================
+# v206 · 全局换皮扫描：把各面板自己造的"纸面大板"统一改成
+#   近方角 + 金线（影之刃的板是硬的，不是圆卡片）。
+#   只动**浅色 + 大圆角**的 StyleBoxFlat —— 格子(半径 8)、印章、彩色条不碰。
+#   注：直接改 StyleBoxFlat 实例（节点上挂的就是它，改一次全局生效）。
+# ============================================================
+func _skin_pass() -> void:
+	var stack: Array = [self]
+	var n_panel := 0
+	var n_label := 0
+	var n_heads := 0
+	while stack.size() > 0:
+		var n: Node = stack.pop_back()
+		for c in n.get_children():
+			stack.append(c)
+		if n is Label:
+			# 面板大标题统一毛笔字（纯汉字、无数字的短标题才算）
+			var lb := n as Label
+			var fs2: int = lb.get_theme_font_size("font_size")
+			var t2 := lb.text.strip_edges()
+			var pure_cjk := t2.length() > 0 and t2.length() <= 8
+			for ch in t2:
+				if ch.is_valid_int() or ch == "." or ch == "%" or ch == "/" or ch == ":":
+					pure_cjk = false
+					break
+			if fs2 >= 26 and pure_cjk and lb.get_theme_color("font_color").v < 0.45:
+				var bf2 := Ui.brush_font()
+				if bf2 != null:
+					lb.add_theme_font_override("font", bf2)
+					n_label += 1
+		if n is Panel:
+			var pn := n as Panel
+			var sb: StyleBox = pn.get_theme_stylebox("panel")
+			if sb is StyleBoxFlat:
+				var s := sb as StyleBoxFlat
+				if s.corner_radius_top_left >= 10 and s.bg_color.v > 0.72 and s.bg_color.a > 0.8:
+					s.set_corner_radius_all(4)
+					s.border_color = Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.55)
+					s.set_border_width_all(2)
+					n_panel += 1
+			# v207：给"有标题的面板"自动补一条刊头（已经手工做过的跳过：
+			#   判据＝标题字已经是亮金，或面板上已挂 skin_header 标记）
+			if pn.size.x >= 380.0 and not pn.has_meta("skin_header"):
+				var tlb: Label = null
+				for c in pn.get_children():
+					if c is Label:
+						var l2 := c as Label
+						if l2.position.y < 45.0 and l2.get_theme_font_size("font_size") >= 26:
+							tlb = l2
+							break
+				if tlb != null and tlb.get_theme_color("font_color").v < 0.6:
+					# 标题底下若还有一行小字（副题/说明），刊头就收矮，别把人家的字盖掉
+					var hh := 78.0
+					for c3 in pn.get_children():
+						if c3 is Label:
+							var l4 := c3 as Label
+							if l4 != tlb and l4.position.y > 46.0 and l4.position.y < 108.0 									and l4.get_theme_font_size("font_size") < 24:
+								hh = 52.0
+								break
+					var ch2 := Control.new()
+					ch2.size = pn.size
+					ch2.mouse_filter = Control.MOUSE_FILTER_IGNORE
+					var pw: float = pn.size.x
+					var ph: float = 78.0     # 固定 78：标题(34号，y18起)正好装下
+					ch2.draw.connect(func() -> void: Ui.header(ch2, pw, ph))
+					pn.add_child(ch2)
+					pn.move_child(ch2, 0)
+					pn.set_meta("skin_header", true)
+					tlb.add_theme_color_override("font_color", Ui.GOLD_HI)
+					n_heads += 1
+					# 刊头带里的其它深色字（副标题/银两那些）一起提亮，免得墨底墨字看不见
+					for c2 in pn.get_children():
+						if c2 is Label:
+							var l3 := c2 as Label
+							if l3 != tlb and l3.position.y < 96.0 and l3.get_theme_color("font_color").v < 0.62:
+								l3.add_theme_color_override("font_color", Color(0.80, 0.76, 0.68, 0.92))
+	print("[主界面] 换皮扫描：", n_panel, " 块面板 / ", n_label, " 个标题 / ", n_heads, " 条刊头")
 
 func _zoom() -> float:
 	return maxf(minf(size.x / Conf.DW, size.y / Conf.DH), 0.01)

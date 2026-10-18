@@ -15,6 +15,7 @@ const GameState := preload("res://shared/game_state.gd")
 const ItemIcons := preload("res://shared/item_icons.gd")   # v93o：一件东西 → 一张图
 const Cards := preload("res://shared/data_cards.gd")
 const UiKit := preload("res://shared/ui_kit.gd")   # v61b：tap_in_scroll（格子可滑可点）
+const Ui := preload("res://menu/menu_theme.gd")    # v205：影之刃皮肤
 const SceneArt := preload("res://shared/scene_art.gd")   # v77：内景垫图
 const GameData := preload("res://shared/game_data.gd")   # v142：招式说明走 move_desc（负面/控制那行）
 
@@ -114,16 +115,35 @@ func _build() -> void:
 	_panel.size = Vector2(PANEL_W, PANEL_H)
 	_panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	var psb := StyleBoxFlat.new()
-	psb.bg_color = Color(PAPER.r, PAPER.g, PAPER.b, 0.98)
-	psb.set_corner_radius_all(14)
-	psb.border_color = Color(0.32, 0.27, 0.22, 0.55)
-	psb.set_border_width_all(2)
+	if Ui.SKIN == 1:
+		psb.bg_color = Color(0.961, 0.941, 0.898, 0.985)
+		psb.set_corner_radius_all(4)
+		psb.border_color = Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.55)
+		psb.set_border_width_all(2)
+	else:
+		psb.bg_color = Color(PAPER.r, PAPER.g, PAPER.b, 0.98)
+		psb.set_corner_radius_all(14)
+		psb.border_color = Color(0.32, 0.27, 0.22, 0.55)
+		psb.set_border_width_all(2)
 	_panel.add_theme_stylebox_override("panel", psb)
 	add_child(_panel)
 	# v77：垫一张货仓内景（用户：「是不是也要换图了」）——34% 透明度，纸底还透、字照样清楚
-	UiKit.add_room_bg(_panel, SceneArt.store_room(), 0.34)
+	if Ui.SKIN != 1:
+		UiKit.add_room_bg(_panel, SceneArt.store_room(), 0.34)   # v205：新皮肤不要内景底图（跟影之刃的净板打架）
+	else:
+		var chrome := Control.new()
+		chrome.size = Vector2(PANEL_W, PANEL_H)
+		chrome.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		chrome.draw.connect(func() -> void: Ui.header(chrome, PANEL_W, 78.0))
+		_panel.add_child(chrome)
 
 	_title_lb = _label("仓　库", 30, INK)
+	if Ui.SKIN == 1:
+		_title_lb.add_theme_font_size_override("font_size", 34)
+		_title_lb.add_theme_color_override("font_color", Ui.GOLD_HI)
+		var bf := Ui.brush_font()
+		if bf != null:
+			_title_lb.add_theme_font_override("font", bf)
 	_title_lb.position = Vector2(28, 18)
 	_title_lb.size = Vector2(206, 36)
 	_panel.add_child(_title_lb)
@@ -131,7 +151,8 @@ func _build() -> void:
 	# v132：副标题缩到标题底下那一小条（12 号、两行以内）——右边两颗钮（归类/整理）
 	#   原来那颗长副标题（390 宽）尾巴会被钮压住，改成短句 + 自动换行，谁也不压谁。
 	_sub_lb = _label("分类收在这儿 · 残卡凑齐可合成", 12, Color(INK.r, INK.g, INK.b, 0.55))
-	_sub_lb.position = Vector2(30, 52)
+	_sub_lb.position = Vector2(30, 84) if Ui.SKIN == 1 else Vector2(30, 52)   # v205：刊头高 78，副标题得让开
+	_sub_lb.visible = Ui.SKIN != 1      # 刊头抢地方，这行小字直接收掉
 	_sub_lb.size = Vector2(206, 34)
 	_sub_lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_panel.add_child(_sub_lb)
@@ -335,7 +356,13 @@ func _ensure_cells(n: int) -> void:
 func _flat(bg: Color) -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = bg
-	sb.set_corner_radius_all(8)
+	if Ui.SKIN == 1:
+		sb.set_corner_radius_all(2)
+		if bg.a > 0.10:      # focus 那种全透明框别加边，否则按钮外面多一个金框
+			sb.border_color = Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.40)
+			sb.set_border_width_all(1)
+	else:
+		sb.set_corner_radius_all(8)
 	return sb
 
 func _style_dark_button(btn: Button) -> void:
@@ -364,11 +391,14 @@ func _style_tab(btn: Button, selected: bool) -> void:
 #   不然玩家得自己数六个格子里哪几个是同一套的哪几页。
 func _cell_box(kind: String, ready := false, q_col = null) -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()
-	sb.set_corner_radius_all(8)
+	sb.set_corner_radius_all(3 if Ui.SKIN == 1 else 8)
 	sb.set_border_width_all(1)
 	if kind == "":
 		sb.bg_color = Color(1, 1, 1, 0.16)
 		sb.border_color = Color(INK.r, INK.g, INK.b, 0.14)
+		if Ui.SKIN == 1:
+			sb.bg_color = Color(0.886, 0.859, 0.784, 0.55)
+			sb.border_color = Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.28)
 		return sb
 	sb.bg_color = Color(0.96, 0.93, 0.86, 1.0)
 	if ready:
