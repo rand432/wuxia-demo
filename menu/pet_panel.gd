@@ -635,7 +635,7 @@ func refresh() -> void:
 		_stage_lb.text = "未得"
 		_name_lb.text = "（还没遇见它）"
 		_apt_lb.text = ""
-		_pass_lb.text = "修出村况 1 段后，去后山看看——林子里有动静。"
+		_pass_lb.text = "去后山看看——林子里有动静。"
 		_fx_lb.text = ""
 		_xp_lb.text = ""
 		_xp_fill.size = Vector2(0, 20)   # v61：经验条 18 → 20 高

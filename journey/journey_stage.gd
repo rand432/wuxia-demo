@@ -2773,7 +2773,7 @@ func _on_return_village() -> void:
 			GameState.finish_journey()
 		# v40：走 note_push（不再直接赋值）——引子那趟 finish_journey 里"礼包到手"那句
 		#   就是被这一行吃掉过，现在两句会串在一起播。
-		GameState.note_push("回到村子——又修好一段（" + str(GameState.village_stage) + "/" + str(GameState.VILLAGE_MAX) + "）")
+		GameState.note_push("回到村子——首趟走通了")
 		print("[游历] 回村：村况=", GameState.village_stage, " 首趟=", GameState.first_journey_done)
 	# ㊿v：走通/殒命两条路都要把出征时卸下的随身之物穿回去（殒命那条上面已单独过一遍）
 	GameState.pending_note = _restore_strip(GameState.pending_note)

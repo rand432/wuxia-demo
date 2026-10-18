@@ -14,6 +14,7 @@ const RunState := preload("res://shared/run_state.gd")
 const GameState := preload("res://shared/game_state.gd")
 const FxLayer := preload("res://journey/fx_layer.gd")
 const ActorFactory := preload("res://journey/actor_factory.gd")
+const StickFighter := preload("res://journey/stick_fighter.gd")
 
 const MAP_W := 24
 const MAP_H := 30
@@ -63,6 +64,12 @@ var _msg := ""
 var _msg_t := 0.0
 var _toast_layer: CanvasLayer
 var _toast: Label
+var _back_btn: Button
+var _action_lb: Label
+var _action_empty := false
+var _exit_timer := 0.0
+var _loot_silver := 0
+var _loot_stones := 0
 
 func _ready() -> void:
 	var dep: Dictionary = GameState.deploy_take()
@@ -76,6 +83,9 @@ func _ready() -> void:
 		party = (dep.get("party", []) as Array).duplicate()
 		fates = (dep.get("fates", []) as Array).duplicate()
 	setup(role_id, diff, party, fates)
+	if GameState.action <= 0:
+		_set_msg("行动资源耗尽了——回村", 9.9)
+		call_deferred("_return_village")
 
 func setup(role_id := "player", diff := 1, party: Array = [], fates: Array = []) -> void:
 	_role_id = role_id
@@ -131,6 +141,32 @@ func _spawn_toast() -> void:
 	_toast.add_theme_color_override("font_color", Color("#f0d68a"))
 	_toast.visible = false
 	_toast_layer.add_child(_toast)
+	_action_lb = Label.new()
+	_action_lb.position = Vector2(24, 56)
+	_action_lb.add_theme_font_size_override("font_size", 16)
+	_toast_layer.add_child(_action_lb)
+	_update_action_label()
+	var back := Button.new()
+	back.text = "回 村"
+	back.position = Vector2(584, 1172)
+	back.size = Vector2(112, 44)
+	back.focus_mode = Control.FOCUS_NONE
+	back.add_theme_font_size_override("font_size", 20)
+	back.add_theme_color_override("font_color", Color("#f0d68a"))
+	var normal := StyleBoxFlat.new()
+	normal.bg_color = Color(0.06, 0.05, 0.04, 0.84)
+	normal.border_color = Color(0.72, 0.58, 0.22, 0.82)
+	normal.set_border_width_all(1)
+	normal.set_corner_radius_all(8)
+	back.add_theme_stylebox_override("normal", normal)
+	var hover := normal.duplicate() as StyleBoxFlat
+	hover.bg_color = Color(0.14, 0.11, 0.08, 0.92)
+	back.add_theme_stylebox_override("hover", hover)
+	back.add_theme_stylebox_override("pressed", hover)
+	back.tooltip_text = "回村（战利品已入账）"
+	back.pressed.connect(_return_village)
+	_toast_layer.add_child(back)
+	_back_btn = back
 
 func _spawn_enemies() -> void:
 	var spots := [Vector2i(16, 16), Vector2i(7, 9), Vector2i(19, 5)]
@@ -208,6 +244,8 @@ func _draw() -> void:
 	if _in_house:
 		_draw_interior()
 		return
+	# 地图外的底色：不然走到地图边缘，镜头会把工程的浅灰底露出来
+	draw_rect(Rect2(Vector2(-TILE * 8.0, -TILE * 8.0), Vector2(MAP_W * TILE + TILE * 16.0, MAP_H * TILE + TILE * 16.0)), Color("#0b100c"))
 	var full := Rect2(Vector2.ZERO, Vector2(MAP_W, MAP_H) * TILE)
 	draw_rect(full, Color("#1b2a1c"))
 	for gx in range(0, MAP_W, 2):
@@ -308,12 +346,42 @@ func _open_chest(cell: Vector2i) -> void:
 	if bool(_chest_open.get(cell, false)):
 		return
 	_chest_open[cell] = true
-	_msg = "拾得：锻造石 ×3 · 旧铁 ×1"
-	_msg_t = 2.6
+	GameState.add_material("forge_stone", 3)
+	GameState.add_coin("silver", 20)
+	_loot_stones += 3
+	_loot_silver += 20
+	GameState.save_game()
+	_set_msg("拾得：锻造石 ×3 · 银两 +20")
+
+func _set_msg(text: String, sec := 2.6) -> void:
+	_msg = text
+	_msg_t = sec
 	if _toast != null:
-		_toast.text = _msg
+		_toast.text = text
 		_toast.visible = true
 	queue_redraw()
+
+func _update_action_label() -> void:
+	if _action_lb == null:
+		return
+	_action_lb.text = "行动 " + str(GameState.action) + " / " + str(GameState.ACTION_MAX)
+	_action_lb.add_theme_color_override("font_color", Color("#e06a5a") if GameState.action <= 5 else Color("#d8cba0"))
+
+func _return_village() -> void:
+	if _battle_active:
+		return
+	var parts: Array = []
+	if _loot_silver > 0:
+		parts.append("银两 +" + str(_loot_silver))
+	if _loot_stones > 0:
+		parts.append("锻造石 +" + str(_loot_stones))
+	if not parts.is_empty():
+		GameState.note_push("游历归来：" + " · ".join(PackedStringArray(parts)))
+	elif _action_empty:
+		GameState.note_push("行动资源耗尽——安全回村，战利品已入账")
+	GameState.save_game()
+	print("[游历] 回村：锻造石=", GameState.material_count("forge_stone"), " 银两=", GameState.coin("silver"), " 行动=", GameState.action)
+	get_tree().change_scene_to_file("res://menu/menu_sketch.tscn")
 
 func _draw_interior() -> void:
 	var w := ROOM_W * TILE
@@ -382,7 +450,7 @@ func _reveal_at(pos: Vector2) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
-		get_tree().change_scene_to_file("res://menu/menu_sketch.tscn")
+		_return_village()
 		return
 	if event.is_action_pressed("ui_accept"):
 		if _in_house:
@@ -458,6 +526,14 @@ func _on_click(pos: Vector2) -> void:
 	var path: Array = _astar.get_id_path(_player_cell(), cell)
 	if path.is_empty():
 		return
+	if not GameState.action_spend(1):
+		_set_msg("行动资源耗尽——这一趟该回去了")
+		_action_empty = true
+		return
+	_update_action_label()
+	if GameState.action <= 0:
+		_action_empty = true
+		_set_msg("行动资源耗尽——这一趟该回去了")
 	_path = path
 	_path_i = 1
 	_moving = true
@@ -473,6 +549,11 @@ func _process(delta: float) -> void:
 			if _toast != null:
 				_toast.visible = false
 			queue_redraw()
+	if _action_empty and not _moving and not _busy and not _battle_active and not _in_house:
+		_exit_timer += delta
+		if _exit_timer > 1.4:
+			_return_village()
+			return
 	if _busy or _battle_active or _player == null:
 		return
 	if _in_house:
@@ -520,6 +601,8 @@ func _try_battle(enemy: Node2D) -> void:
 	_moving = false
 	_battle_active = true
 	_has_click = false
+	if _back_btn != null:
+		_back_btn.visible = false
 	_map_pos_before_battle = _player.position
 	_camera.enabled = false
 	for e_v in _enemies:
@@ -533,20 +616,44 @@ func _try_battle(enemy: Node2D) -> void:
 		"foe": (enemy.get_meta("foe", {}) as Dictionary).duplicate(true),
 		"money": [12, 25],
 	}
+	# 战斗里主角用火柴人（地图上仍用 Q 版立绘）：另起一个火柴人替身，
+	# 打完收掉，地图上的立绘原样还回来。
+	var battle_player := StickFighter.new()
+	battle_player.position = Vector2(210.0, 950.0)
+	add_child(battle_player)
+	_player.visible = false
 	var battle := DuelBattle.new()
 	add_child(battle)
-	var res: Dictionary = await battle.run(_state, _player, _fx, node, false, [])
+	var res: Dictionary = await battle.run(_state, battle_player, _fx, node, false, [])
 	if is_instance_valid(battle):
 		battle.queue_free()
+	if is_instance_valid(battle_player):
+		battle_player.queue_free()
+	_player.visible = true
 	_player.position = _map_pos_before_battle
 	_camera.enabled = true
-	if bool(res.get("win", false)):
+	var won := bool(res.get("win", false))
+	if won:
 		enemy.set_meta("beaten", true)
 	_battle_active = false
+	if _back_btn != null:
+		_back_btn.visible = true
 	for e_v in _enemies:
 		var e: Node2D = e_v
 		if is_instance_valid(e):
 			e.visible = not bool(e.get_meta("beaten", false))
 	_busy = false
+	if won:
+		_grant_battle_loot(enemy)
 	queue_redraw()
+
+func _grant_battle_loot(enemy: Node2D) -> void:
+	var silver := randi_range(12, 25)
+	var stones := randi_range(1, 3)
+	GameState.add_coin("silver", silver)
+	GameState.add_material("forge_stone", stones)
+	_loot_silver += silver
+	_loot_stones += stones
+	GameState.save_game()
+	_set_msg("击败「" + str(enemy.get_meta("foe_name", "敌人")) + "」：银两 +" + str(silver) + " · 锻造石 +" + str(stones), 3.0)
 

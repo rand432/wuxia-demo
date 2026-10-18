@@ -188,7 +188,7 @@ const LOOT := preload("res://shared/data_loot.gd")
 #   兑换的东西直接落到主游戏（江湖游历）的仓库 / 酒窖 / 材料 / 碎片里 —— 那边就是真多了一件。
 #   ⚠ 这是**可重复兑换**的，不再是一次性永久加成。
 const FAME_EXCHANGE := [
-	{"id": "x_mat", "n": "一包炼丹材料", "price": 25, "d": "随机两种材料各 2 份（木料/朱果/紫芝/雪参/兽骨碎/灵米/金髓）"},
+	{"id": "x_mat", "n": "一包炼丹材料", "price": 25, "d": "随机两种材料各 2 份（朱果/紫芝/雪参/兽骨碎/灵米/金髓）"},
 	{"id": "x_jiu", "n": "一坛好酒", "price": 30, "d": "随机一坛【上品~极品】酒，直接进主游戏的酒窖"},
 	{"id": "x_frag", "n": "一叠角色碎片", "price": 40, "d": "随机一位角色 3~6 片碎片（升星用）"},
 	{"id": "x_card", "n": "一页功法残页", "price": 55, "d": "随机一门武学/功法的残页 1 页（凑齐可合成）"},
@@ -259,8 +259,8 @@ func _fame_exchange(id: String) -> void:
 	var msg := ""
 	match id:
 		"x_mat":
-			var keys := ["wood", "guo", "zhi", "shen", "bone", "rice", "jin"]
-			var mat_cn := {"wood": "木料", "guo": "朱果", "zhi": "紫芝", "shen": "雪参", "bone": "兽骨碎", "rice": "灵米", "jin": "金髓"}
+			var keys := ["guo", "zhi", "shen", "bone", "rice", "jin"]
+			var mat_cn := {"guo": "朱果", "zhi": "紫芝", "shen": "雪参", "bone": "兽骨碎", "rice": "灵米", "jin": "金髓"}
 			var a := str(keys[randi() % keys.size()])
 			var b := a
 			for _try in 8:

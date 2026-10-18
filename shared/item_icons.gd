@@ -80,18 +80,16 @@ static func quality_col_of(sid: String) -> Color:
 		return QUALITY_COL[0]
 	return quality_col(Cards.q_idx(sid))
 
-# 材料：**七味各有各的图**（原来除了木料/金髓，其余全挤在药草那一张上）
+# 材料：**各有各的图**（原来除了金髓，其余全挤在药草那一张上）
 static func for_mat(k: String) -> Texture2D:
 	match k:
-		"wood":
-			return _t("it_wood")
 		"zhi":
 			return _t("mat_zhi")
 		"shen":
 			return _t("mat_shen")
 		"guo":
 			return _t("mat_guo")
-		"bone":
+		"bone", "forge_stone":
 			return _t("mat_bone")
 		"rice":
 			return _t("mat_rice")

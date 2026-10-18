@@ -79,9 +79,8 @@ const Appraise := preload("res://shared/data_appraise.gd")   # v39：鉴宝行�
 const Tuning := preload("res://shared/tuning.gd")   # ㉘：可调参数读取口
 
 const VILLAGE_MAX := 4
-const STAGE_WOOD := 3          # ㊿n：过关不再发木料；此值只当"折经验"的份数（3 份 × 10 点 = +30）
 const BOSS_SILVER := 20        # 首领赏原值；实发走 boss_silver_gain() 按系数减
-const STAGE_EXP_BONUS := 9     # v62m：12 → 9（跟着经验收益再砍 25%）    # ㊿n：木料折算——每人每关 +N 经验（v62：18 → 12，跟着"经验再砍一批"）
+const STAGE_EXP_BONUS := 9     # v62m：12 → 9（跟着经验收益再砍 25%）    # 每人每关固定 +N 经验
 const STAGE_SILVER_MUL := 0.5  # ㊿n：过关银两系数（砍半；改回 1.0 = 恢复原样）
 const DEPLOY_MAX := 3
 const FREE_SKILL_SLOTS := 3
@@ -90,8 +89,9 @@ const FREE_SKILL_SLOTS := 3
 const IDLE_CFG := "user://idle.cfg"
 const IDLE_CAP_SEC := 28800
 const IDLE_SILVER_PER_MIN := 1
-const IDLE_WOOD_PER_10MIN := 1
 const IDLE_EXP_PER_MIN := 2
+const ACTION_START := 24      # v242：行动资源（游历门票）——起始、上限
+const ACTION_MAX := 60
 # ㉞：每清几关挂机收益涨一档。
 #   原来是 5——那时塔只有 50 关，顶天 10 档（+10 银两/分）还算克制。
 #   塔扩到 500 关后，5 会变成 100 档（+100 银两/分），直接把过关赏（每关十几两）
@@ -804,6 +804,9 @@ static var qingluan_joined := false
 static var pending_note := ""
 static var vault_cards := {}
 static var vault_items := {}
+# v242：锻造 V0.1——砧上那一把 ＋ 已收下的成品
+static var forge_item := {}
+static var forge_bag: Array = []
 static var materials := {}
 static var formation := ["player"]
 static var stage_progress := 0
@@ -844,6 +847,20 @@ static var coins := {"wen": 0, "silver": 0, "yuanbao": 0}
 #   · insight＝现有阅历值；insight_lv＝{支线 → 已升到第几段}
 static var insight := 0
 static var insight_lv := {}
+
+# ---- v242：**行动资源**（游历门票）----
+#   塔挂机产；进图按“一次移动”烧 1 点；站着不动不扣；空了自动安全回村。
+static var action := ACTION_START
+
+static func action_add(n: int) -> int:
+	action = clampi(action + n, 0, ACTION_MAX)
+	return action
+
+static func action_spend(n := 1) -> bool:
+	if action < n:
+		return false
+	action -= n
+	return true
 
 # ---- 货栈（银两换材料 / 残卡；残卡每日限购，按真实日期重置） ----
 const SHOP_CFG := "user://shop.cfg"
@@ -2198,7 +2215,7 @@ static func pet_fx() -> Dictionary:
 static func pet_toggle() -> String:
 	var pid := pet_cur()
 	if pid == "":
-		return "还没有宠物——修出村况 1 段后去后山看看"
+		return "还没有宠物——去后山看看"
 	var nm := DataPets.name_of(pid)
 	if pet_follow == pid:
 		pet_follow = ""
@@ -2223,12 +2240,12 @@ static func pet_follow_toggle(pid: String) -> String:
 static func pet_feed() -> Dictionary:
 	var pid := pet_cur()
 	if pid == "":
-		return {"ok": false, "msg": "还没有宠物——修出村况 1 段后去后山看看"}
+		return {"ok": false, "msg": "还没有宠物——去后山看看"}
 	var nm := DataPets.name_of(pid)
 	if pet_stage_of(pid) >= PET_STAGE_MAX:
 		return {"ok": false, "msg": nm + "已至" + pet_stage_name_of(pid, pet_stage_of(pid)) + "——到顶了，丹药先留着"}
 	if pill_count("yangling") <= 0:
-		return {"ok": false, "msg": "包裹里没有「养灵丹」——炼丹阁能炼（兽骨碎×2·灵米×1·木料×1）"}
+		return {"ok": false, "msg": "包裹里没有「养灵丹」——炼丹阁能炼（兽骨碎×2·灵米×1）"}
 	pills["yangling"] = pill_count("yangling") - 1
 	var before := pet_stage_of(pid)
 	pet_roster[pid] = pet_xp_of(pid) + PET_PILL_XP
@@ -3489,7 +3506,7 @@ static func stage_exp(i: int) -> int:
 	return Tower.stage_exp(i)
 
 static func stage_exp_gain(i: int) -> int:
-	# ㊿n：过关实发经验＝本关经验＋木料折的经验——每人一份 × 上阵人数
+	# ㊿n：过关实发经验＝本关经验＋固定加成——每人一份 × 上阵人数
 	# ㊴：接上「悟性过人／懒散」的 exp_pct（这条天赋一直没被消费过，是死的）
 	var v := (Tower.stage_exp(i) + STAGE_EXP_BONUS) * formation.size()
 	return maxi(1, int(round(float(v) * player_talent_exp_mul())))
@@ -3747,8 +3764,8 @@ static func stage_clear(i: int) -> bool:
 # ---- 材料（含灵草 / 宠物料） ----
 
 # v121（用户："增加新材料"）：境界石 / 道心砂——进阶专用（别的路不掉、也不花）
-const MAT_CN := {"wood": "木料", "zhi": "紫芝", "shen": "雪参", "guo": "朱果", "bone": "兽骨碎", "rice": "灵米", "jin": "金髓",
-	"jingshi": "境界石（金）", "daoxin": "道心砂（红）"}
+const MAT_CN := {"zhi": "紫芝", "shen": "雪参", "guo": "朱果", "bone": "兽骨碎", "rice": "灵米", "jin": "金髓",
+	"forge_stone": "锻造石", "jingshi": "境界石（金）", "daoxin": "道心砂（红）"}
 
 # v41（用户："增加金色材料，同时让洗灵丹也能炼，也是稀有的金色材料才能炼制"）：
 #   **金髓** ＝ 稀有的**金色材料**——洗髓丹与宠物资质丹（洗灵丹）都要它才能开炉。
@@ -3779,15 +3796,15 @@ static func grant_herbs() -> void:
 # ---- 炼丹 ----
 
 const DAN_RECIPES := [
-	{"id": "qiangshen", "name": "强身丹", "desc": "气血 +10", "stat": "hp", "add": 10, "cost": {"guo": 1, "wood": 2}, "min": 3},
-	{"id": "cuiti", "name": "淬体丹", "desc": "攻击 +2", "stat": "atk", "add": 2, "cost": {"zhi": 1, "wood": 2}, "min": 5},
+	{"id": "qiangshen", "name": "强身丹", "desc": "气血 +10", "stat": "hp", "add": 10, "cost": {"guo": 1}, "min": 3},
+	{"id": "cuiti", "name": "淬体丹", "desc": "攻击 +2", "stat": "atk", "add": 2, "cost": {"zhi": 1}, "min": 5},
 	# v61（用户："移除洗髓丹"）：原来这里有一条
 	#   {"id": "xisui", ... "stat": "gengu", "add": 1, cost 含 jin ...}（根骨 +1）
 	#   —— 整条**删掉**：丹方、掉落（data_loot.pill_by_id）、搜刮阶梯（data_ladder）都下线了。
 	#   ⚠ 后果：**根骨再没有成长途径**，只由人物模板定（少侠 62 / 陈石 35 / 苏青鸾 48）；
 	#     「服药」弹窗、弟子面板、炼丹阁里那些"洗髓 x/y"的文案也一并去掉了。
 	#   想恢复：把这一条加回来，再把 data_loot / data_ladder 那两处一起加回来。
-	{"id": "yangling", "name": "养灵丹", "desc": "宠物灵息 +30", "stat": "pet", "add": 30, "cost": {"bone": 2, "rice": 1, "wood": 1}, "min": 2},
+	{"id": "yangling", "name": "养灵丹", "desc": "宠物灵息 +30", "stat": "pet", "add": 30, "cost": {"bone": 2, "rice": 1}, "min": 2},
 	# ㊿z9：洗灵丹——宠物资质丹。**炼不出来**（loot_only）：只从搜刮红件里偶尔翻到，
 	#   稀有、限量，每阶最多吃 1 颗。
 	# v41：洗灵丹（宠物资质丹）**改成能炼了**——但只有金髓能开炉（以前是 loot_only，只能搜刮）
@@ -3801,11 +3818,11 @@ const DAN_RECIPES := [
 	#   stat 写成 "break"：它**不是吃的丹**——不涨属性，也不进［服药］列表，
 	#   只在角色面板点［突破］用（见 break_do）。炼丹炼得出；货栈每日限购也有卖。
 	#   成本与炉时随品级抬（min＝炉时分钟）：凡品最便宜，绝品要一堆好料 + 20 分钟。
-	{"id": "tupo_fan", "name": "突破丹（凡品）", "desc": "境界 1~8 重用的突破丹（每 25 级一重）", "stat": "break", "add": 0, "cost": {"guo": 2, "wood": 3}, "min": 4},
-	{"id": "tupo_liang", "name": "突破丹（良品）", "desc": "境界 9~16 重用的突破丹", "stat": "break", "add": 0, "cost": {"zhi": 2, "shen": 1, "wood": 4}, "min": 8},
-	{"id": "tupo_shang", "name": "突破丹（上品）", "desc": "境界 17~24 重用的突破丹", "stat": "break", "add": 0, "cost": {"shen": 2, "guo": 2, "bone": 2, "wood": 5}, "min": 12},
-	{"id": "tupo_ji", "name": "突破丹（极品）", "desc": "境界 25~32 重用的突破丹", "stat": "break", "add": 0, "cost": {"zhi": 3, "shen": 3, "rice": 2, "wood": 6}, "min": 16},
-	{"id": "tupo_jue", "name": "突破丹（绝品）", "desc": "境界 33~39 重用的突破丹", "stat": "break", "add": 0, "cost": {"zhi": 4, "shen": 4, "guo": 4, "rice": 3, "wood": 8}, "min": 20},
+	{"id": "tupo_fan", "name": "突破丹（凡品）", "desc": "境界 1~8 重用的突破丹（每 25 级一重）", "stat": "break", "add": 0, "cost": {"guo": 2}, "min": 4},
+	{"id": "tupo_liang", "name": "突破丹（良品）", "desc": "境界 9~16 重用的突破丹", "stat": "break", "add": 0, "cost": {"zhi": 2, "shen": 1}, "min": 8},
+	{"id": "tupo_shang", "name": "突破丹（上品）", "desc": "境界 17~24 重用的突破丹", "stat": "break", "add": 0, "cost": {"shen": 2, "guo": 2, "bone": 2}, "min": 12},
+	{"id": "tupo_ji", "name": "突破丹（极品）", "desc": "境界 25~32 重用的突破丹", "stat": "break", "add": 0, "cost": {"zhi": 3, "shen": 3, "rice": 2}, "min": 16},
+	{"id": "tupo_jue", "name": "突破丹（绝品）", "desc": "境界 33~39 重用的突破丹", "stat": "break", "add": 0, "cost": {"zhi": 4, "shen": 4, "guo": 4, "rice": 3}, "min": 20},
 ]
 const PILLS_PER_REALM := 3
 const GENGU_PER_REALM := 1
@@ -4480,8 +4497,8 @@ static func idle_silver_rate() -> float:
 	# v62n：再挂上 IDLE_RATE_MUL（0.7）——"挂机倍率降低 30%"
 	return float(IDLE_SILVER_PER_MIN + idle_tier()) * 0.225 * IDLE_RATE_MUL
 
-static func idle_wood_per_10min() -> int:
-	return IDLE_WOOD_PER_10MIN + idle_tier() / 2
+static func idle_action_per_10min() -> int:
+	return 1 + idle_tier() / 2
 
 static func idle_exp_per_min() -> int:
 	# 显示用；真实速率见 idle_exp_rate()
@@ -4500,19 +4517,16 @@ static func idle_rate_text() -> String:
 		tier_note = "每清 " + str(IDLE_STEP) + " 关涨一档"
 	else:
 		tier_note = str(IDLE_TIER_SWITCH) + " 关后每 " + str(IDLE_STEP_LATE) + " 关涨一档（不封顶）"
-	return "银两 " + str(idle_silver_per_min()) + "/分 · 木料 " + str(idle_wood_per_10min()) + "/10分 · 经验 " + str(idle_exp_per_min()) + "/分 · 阅历 " + str(snappedf(insight_rate(), 0.1)) + "/分（第 " + str(idle_tier() + 1) + " 档；" + tier_note + "）"
+	return "银两 " + str(idle_silver_per_min()) + "/分 · 行动 " + str(idle_action_per_10min()) + "/10分 · 经验 " + str(idle_exp_per_min()) + "/分 · 阅历 " + str(snappedf(insight_rate(), 0.1)) + "/分（第 " + str(idle_tier() + 1) + " 档；" + tier_note + "）"
 
 static func idle_collect() -> Dictionary:
 	idle_sync()
 	var mins := idle_pool_sec / 60
 	# v61：两条速率都走浮点（见 idle_silver_rate / idle_exp_rate），保证正好 −70% / −40%
 	var silver := int(round(float(mins) * idle_silver_rate()))
-	var wood := (mins / 10) * idle_wood_per_10min()
 	var exp_each := int(round(float(mins) * idle_exp_rate()))
 	if silver > 0:
 		add_coin("silver", silver)
-	if wood > 0:
-		add_material("wood", wood)
 	# ㊾：经验进池——总量照原口径（每人一份 × 上阵人数）；给谁由你在弟子面板分配
 	var exp_total := exp_each * formation.size()
 	if exp_total > 0:
@@ -4520,9 +4534,13 @@ static func idle_collect() -> Dictionary:
 	# v64b：阅历——与银两/经验同一个池、同一口收取（用户："挂机给阅历值 · 吃挂机档位"）
 	var ins := int(round(float(mins) * insight_rate()))
 	insight_add(ins)
+	# v242：行动资源也进挂机池（10 分钟 1 点起，吃塔档位；上限 ACTION_MAX）
+	var act := mini(ACTION_MAX - action, (mins / 10) * idle_action_per_10min())
+	if act > 0:
+		action += act
 	idle_pool_sec = 0
 	_idle_save()
-	return {"minutes": mins, "silver": silver, "wood": wood, "exp": exp_total, "exp_pool": exp_pool, "insight": ins}
+	return {"minutes": mins, "silver": silver, "action": act, "exp": exp_total, "exp_pool": exp_pool, "insight": ins}
 
 # ============================================================
 # v64b：**阅历线**的账（唯一真源＝shared/data_insight.gd；这里只管"攒/花/并进属性"）
@@ -4637,7 +4655,6 @@ static func idle_claim() -> Dictionary:
 
 static func finish_journey() -> void:
 	first_journey_done = true
-	village_stage = mini(village_stage + 1, VILLAGE_MAX)
 	# v40：**引子下山通关那一下**，仓库里塞一只「新手关卡礼包」（测试版的专武来路）
 	note_push(grant_stage_gift())
 
@@ -5863,6 +5880,7 @@ static func load_game() -> void:
 	stage_gift_opened = clampi(int(vd.get("stage_gift_opened", stage_gift_opened)), 0, stage_gift_total())
 	coins = _sd(cf.get_value("world", "coins", coins), coins)
 	insight = maxi(0, int(cf.get_value("world", "insight", 0)))            # v64b：阅历值
+	action = clampi(int(cf.get_value("world", "action", ACTION_START)), 0, ACTION_MAX)   # v242：行动资源
 	advance_lv = clampi(int(cf.get_value("world", "advance_lv", 0)), 0, Realm.MAX_LV)   # v121：进阶境界
 	insight_lv = _sd(cf.get_value("world", "insight_lv", {}), insight_lv)  # v64b：四支等级
 	exp_pool = maxi(0, int(cf.get_value("world", "exp_pool", 0)))   # ㊾：经验池
@@ -5896,7 +5914,10 @@ static func load_game() -> void:
 	var vlt := _sd(cf.get_value("world", "vault", {}), {})
 	vault_cards = _sd(vlt.get("cards", {}), vault_cards)
 	vault_items = _sd(vlt.get("items", {}), vault_items)
+	forge_item = _sd(vlt.get("forge_item", {}), forge_item)
+	forge_bag = _sa(vlt.get("forge_bag", []), forge_bag)
 	materials = _sd(vlt.get("materials", {}), materials)
+	materials.erase("wood")   # v242：建设删了，木料一并下线（老档里剩下的不再显示）
 	fragments = _sd(vlt.get("fragments", {}), fragments)
 	pills = _sd(vlt.get("pills", {}), pills)
 	wines = _sa(vlt.get("wines", []), wines)
@@ -5953,6 +5974,7 @@ static func save_game() -> void:
 	cf.set_value("world", "coins", coins)
 	# v64b：阅历线（阅历值 ＋ 四支各自升到第几段）
 	cf.set_value("world", "insight", insight)
+	cf.set_value("world", "action", action)
 	cf.set_value("world", "advance_lv", advance_lv)          # v121：进阶境界
 	cf.set_value("world", "insight_lv", insight_lv)
 	cf.set_value("world", "exp_pool", exp_pool)   # ㊾：经验池
@@ -5964,6 +5986,7 @@ static func save_game() -> void:
 	cf.set_value("world", "strip_saved", strip_saved)
 	cf.set_value("world", "vault", {
 		"cards": vault_cards, "items": vault_items, "materials": materials,
+		"forge_item": forge_item, "forge_bag": forge_bag,
 		"fragments": fragments, "pills": pills, "wines": wines,
 		"stars": item_stars, "alchemy": alchemy,   # alchemy 只为兼容老档（v41 起不写新内容）
 		# v58：五行元素（件名 → {元素:份数}）与"现在用哪一把"——**新增键，老档读进来是空的**
@@ -6037,7 +6060,6 @@ static func debug_unlock_chain() -> void:
 	herbs_granted = true
 	dange_built = true
 	add_coin("silver", 100)
-	add_material("wood", 10)
 	add_material("zhi", 2)
 	add_material("shen", 2)
 	add_material("guo", 2)
@@ -6055,7 +6077,6 @@ static func debug_alchemy_fill() -> void:
 	add_material("zhi", 2)
 	add_material("shen", 2)
 	add_material("guo", 2)
-	add_material("wood", 20)
 
 # 【测试用·上线前删】P 键：宠物测试包（v20：两只都发；丹加量——升阶验 fx 用）
 static func debug_pet_fill() -> void:
@@ -6085,6 +6106,8 @@ static func reset() -> void:
 	pending_note = ""
 	vault_cards.clear()
 	vault_items.clear()
+	forge_item.clear()
+	forge_bag.clear()
 	materials.clear()
 	fragments.clear()
 	formation = ["player"]
@@ -6104,6 +6127,7 @@ static func reset() -> void:
 	player_role = {}
 	qingluan = {}
 	idle_pool_sec = 0
+	action = ACTION_START
 	_idle_last_ts = _idle_now()
 	_idle_save()
 	level_notes.clear()

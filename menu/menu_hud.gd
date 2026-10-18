@@ -10,7 +10,6 @@ extends Node2D
 
 const Conf := preload("res://menu/menu_conf.gd")
 const Draw := preload("res://menu/menu_draw.gd")
-const Build := preload("res://menu/data_build.gd")
 const GameState := preload("res://shared/game_state.gd")
 const Ui := preload("res://menu/menu_theme.gd")   # v200：影之刃皮肤
 
@@ -65,8 +64,6 @@ func _draw() -> void:
 	#   而且它正好压在底排按钮下沿上——新模式下不再画（老模式照旧）。
 	if host.PIN_CAM:
 		return
-	var st: Dictionary = Build.STAGES[int(host._stage)]
-	draw_string(font, Vector2(0.0, 1260.0), "主界面 v7 · 村况 " + str(int(host._stage)) + "/" + str(Build.STAGE_MAX) + "·" + str(st["name"]) + " · 卷 " + str(int(host._cam)) + "/" + str(int(Conf.CAM_MAX)), HORIZONTAL_ALIGNMENT_RIGHT, Conf.DW - 18.0, 15, Color(Conf.INK.r, Conf.INK.g, Conf.INK.b, 0.32))
 
 func _draw_hint() -> void:
 	if host.PIN_CAM:
@@ -351,11 +348,9 @@ func _draw_panel() -> void:
 	var lx := r.position.x + 56.0
 	var lw := r.size.x - 112.0
 	var c1 := Color(Conf.INK.r, Conf.INK.g, Conf.INK.b, 0.80)
-	var sg: Dictionary = Build.STAGES[int(host._stage)]
 	draw_string(font, Vector2(lx, 622.0), "来　历：" + Conf.DISCIPLE_ORIGIN, HORIZONTAL_ALIGNMENT_LEFT, lw, 17, c1)
-	draw_string(font, Vector2(lx, 654.0), "起　因：你应下了重修村子的事", HORIZONTAL_ALIGNMENT_LEFT, lw, 17, c1)
+	draw_string(font, Vector2(lx, 654.0), "起　因：你收拾行囊，他跟着", HORIZONTAL_ALIGNMENT_LEFT, lw, 17, c1)
 	draw_string(font, Vector2(lx, 686.0), "状　态：随行中（第一个弟子）", HORIZONTAL_ALIGNMENT_LEFT, lw, 17, c1)
-	draw_string(font, Vector2(lx, 718.0), "村　况：第 " + str(int(host._stage)) + " 段 · " + str(sg["name"]) + "——" + str(sg["note"]), HORIZONTAL_ALIGNMENT_LEFT, lw, 15, Color(Conf.INK.r, Conf.INK.g, Conf.INK.b, 0.66))
 	draw_string(font, Vector2(lx, 756.0), Conf.DISCIPLE_NOTE, HORIZONTAL_ALIGNMENT_LEFT, lw, 15, Color(Conf.INK.r, Conf.INK.g, Conf.INK.b, 0.58))
 	draw_string(font, Vector2(r.position.x, 820.0), "点任意处关闭", HORIZONTAL_ALIGNMENT_CENTER, r.size.x, 15, Color(Conf.INK.r, Conf.INK.g, Conf.INK.b, 0.45))
 	draw_colored_polygon(Draw.round_poly(Rect2(r.end.x - 74.0, r.position.y + 26.0, 34.0, 34.0), 4.0), Color(Conf.SEAL_C.r, Conf.SEAL_C.g, Conf.SEAL_C.b, 0.84))

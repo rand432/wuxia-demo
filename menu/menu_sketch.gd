@@ -20,7 +20,7 @@ extends Control
 # v25 已有：底排「宠物」＝HUD 直画；四季轮换；吊绳挂机木牌；左端装裱拔除
 # 测试键（字母）：F 出战配置 · I 入门 · K 后山·重播宠链 · M 仓库货 · T 挂机+1时 ·
 #   Y 挂机灌满 · G 建筑链+炼丹 · H 酒 · C 炼丹料 · V 炉火快进 · X 推到30关 ·
-#   L 村况 · W 窗口 · P 宠物 · Q 女侠 · N 下一季（预览）
+#   W 窗口 · P 宠物 · Q 女侠 · N 下一季（预览）
 # v63 后新增（同样重开游戏才生效）：
 #   B 抽搐取证（任何界面）· U 跳引子直达主界面 · S 苏青鸾入队 · E 困兽试玩
 # ============================================================
@@ -31,7 +31,6 @@ const InkTouch := preload("res://shared/ink_touch.gd")   # v65：点击水墨扩
 const FadeIn := preload("res://shared/fade_in.gd")      # v68：进场淡入 + 震动
 const SceneArt := preload("res://shared/scene_art.gd")   # v67：场景/建筑图
 const Draw := preload("res://menu/menu_draw.gd")
-const Build := preload("res://menu/data_build.gd")
 const ScrollLayer := preload("res://menu/menu_scroll.gd")
 const VillageLayer := preload("res://menu/menu_village.gd")
 const InkScene := preload("res://menu/menu_ink_scene.gd")   # v96：水墨村景层（摆景器那套）
@@ -84,11 +83,6 @@ const BattleLite := preload("res://menu/battle_lite.gd")
 const GameState := preload("res://shared/game_state.gd")
 const Tuning := preload("res://shared/tuning.gd")   # ㉘：调参配置状态查询
 
-const BUILD_COST := 5
-const B2_COST := 8
-const CAVE_COST := 6
-const WINERY_COST := 8
-const DANGE_COST := 10
 
 # ============================================================
 # ㉟ 剧情节点在塔上的位置
@@ -132,13 +126,13 @@ const C_INK := Color(0.14, 0.13, 0.15)
 
 const INTRO_PAGES := [
 	["山门外，多了一个人。", "他背着一杆断枪，从早上站到日落。"],
-	["「听说您要重修村子。」", "「我留下——赶也不走。」"],
+	["「听说您要走远路。」", "「我留下——赶也不走。」"],
 	["他单膝跪下，把名字放在你脚边：", "「陈石。」"],
 ]
 const INTRO_AFTER := "陈石——从今往后，在你门下。"
 
 const BACKHILL_PAGES := [
-	["村子修出第一段的那天，你往后山走了一趟。", "林子比记忆里深——风一过，树影里像藏着什么。"],
+	["临行前，你往后山走了一趟。", "林子比记忆里深——风一过，树影里像藏着什么。"],
 	["草窝里蜷着一团白。", "是只小狐，后腿带着伤，眼睛却亮得很。"],
 	["它没躲。你把它抱回村里上了药。", "第二天清早，它已经蹲在门槛上了。"],
 ]
@@ -160,14 +154,14 @@ const CAVE_PAGES := [
 	["洞底石案上蹲着一坛酒，泥封完好。", "封口压着块木牌：「此酒待客，勿饮独酌。」"],
 	["你把坛子抱回村里。", "坛子一开，满村都是香气。"],
 ]
-const CAVE_AFTER := "得「陈酿」一坛——去把「品酒坊」起起来。"
+const CAVE_AFTER := "得「陈酿」一坛——去「百工坊」看看。"
 
 const HERB_PAGES := [
 	["{N} 关清完，收兵回村。", "白狐头一回走得比人快——径直往后山去。"],
 	["它叼着一株草回来：叶是紫的，根是白的，果是红的。", "「一株？」陈石凑近看了看：「师父，是三种。」"],
 	["紫芝安神，雪参固本，朱果养气。", "灵草在案上摊开——该有座炼丹的炉子了。"],
 ]
-const HERB_AFTER := "得灵草三种（紫芝·雪参·朱果 各 2）——「炼丹阁」能炼灵草丹了（还没起炉就去村里起一间）。"
+const HERB_AFTER := "得灵草三种（紫芝·雪参·朱果 各 2）——「炼丹阁」能炼灵草丹了（去「百工坊」开炉）。"
 
 const QINGLUAN_PAGES := [
 	["第 {N} 关，寨墙塌了半面。", "你收刀的时候，墙头上有人拍了两下手。"],
@@ -191,7 +185,7 @@ const JIANBAO_AFTER := "「鉴宝行」在村里开张了——那只打捞上�
 const HERO_LINES := [
 	"这位少年——往后的路，他替你走",
 	"他蹲在溪边，把柴刀磨了又磨。",
-	"「先把村子修好。路，在村子外面。」",
+	"「路，在村子外面。」",
 ]
 const CHEN_LINES := [
 	"「师父。」他抱拳行礼。",
@@ -202,7 +196,6 @@ const CHEN_LINES := [
 var _font: Font
 var _t := 0.0
 var _cam := Conf.OPEN_CAM
-var _stage := clampi(GameState.village_stage, 0, Build.STAGE_MAX)
 var _dragging := false
 var _moved := 0.0
 var _mode := ""
@@ -449,12 +442,12 @@ class IdlePlaque extends Button:
 		draw_line(Vector2(44.0, 210.0 + dy), Vector2(44.0, 219.0 + dy), Color(0.68, 0.15, 0.12, 0.72), 1.4, true)
 		draw_circle(Vector2(44.0, 220.0 + dy), 1.8, Color(0.68, 0.15, 0.12, 0.62))
 
-# ---- 建设动画 ----
+# ---- 落成动画 ----
 class BuildFx extends Node2D:
 	# v62（用户："感觉目前的建筑动画 可以缩减一些 太多无用的了"）：
 	#   原来 1.5 秒、10 粒尘土 + 3 层尘环 + 一道金弧，起一间屋子要看足一秒半。
 	#   现在 **0.7 秒、4 粒、1 层尘环**，金弧留着（那一下"落成"的准头还得有）。
-	#   顺带把"起屋之后等 1.6 秒再报下一条"也压到 0.8（见 _build_once / 村况 / 剧情那三处 await）。
+	#   顺带把"落成之后等 1.6 秒再报下一条"也压到 0.8（见剧情那几处 await）。
 	var life := 0.0
 	var dur := 0.7
 	var rng := RandomNumberGenerator.new()
@@ -661,7 +654,6 @@ func _ready() -> void:
 	GameState.load_game()   # 优化批㉒：先进游戏先读全局档（只读一次）
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_stage = clampi(GameState.village_stage, 0, Build.STAGE_MAX)
 	_font = Draw.pick_font(get_theme_default_font())
 	_layout_tags()
 	_scroll = ScrollLayer.new()
@@ -801,8 +793,6 @@ func _ready() -> void:
 	_add_mark("zhu", 1215.0, 726.0, "竹屋", "行囊 · 仓库")
 	_add_mark("stone", 1393.0, 778.0, "石桌", "")
 	_add_mark("gate", 1560.0, 586.0, "山门", "")
-	_add_mark("site", 2490.0, 786.0, "工地", "")
-	_add_mark("brook", 1112.0, 660.0, "溪畔", "")
 	_add_mark("hill", 660.0, 700.0, "后山", "")
 	_add_mark("treasure", 2140.0, 792.0, "藏宝阁", "")
 	_add_mark("cave", 470.0, 712.0, "山洞", "")
@@ -917,7 +907,7 @@ func _ready() -> void:
 			_show_toast(onote, 4.0)
 	# ㊿f：进主界面就落一次盘——不等 20 秒兜底、不赌退场那一笔（每进一次都算）
 	GameState.save_game()
-	print("[主界面] 进村即落盘：村况=", GameState.village_stage, " 首趟=", GameState.first_journey_done, " 弟子=", GameState.disciple_joined)
+	print("[主界面] 进村即落盘：首趟=", GameState.first_journey_done, " 弟子=", GameState.disciple_joined)
 	Tuning.describe()   # ㉘：报一下这次是拿哪份调参配置在跑
 	# v56：删掉三个没人用的局部变量（编辑器里那三条 UNUSED_VARIABLE 告警：`o` / `zsx` / `sg`）——
 	#   都是早期版本留下的残料（`zsx` 算的是"隐身记号"的屏幕 x，后来那条路改了，就没人读了）。
@@ -926,8 +916,8 @@ func _ready() -> void:
 	print("[主界面] v27 窗口=", size, " 缩放=", z, " 卷长=", int(Conf.STRIP_W), " 纵向拉伸=", Draw.sy())
 	print("[主界面] v27：历练先过出征屏（首趟仍走引子）· 后山二遭可收青隼（先狐后隼）· K 键重播整条宠链")
 	print("[主界面] 挂机档位：第 ", GameState.idle_tier() + 1, " 档 · ", GameState.idle_rate_text())
-	print("[主界面] 账本：村况=", GameState.village_stage, " 木料=", GameState.material_count("wood"), " 灵草=", GameState.material_count("zhi"), "/", GameState.material_count("shen"), "/", GameState.material_count("guo"), " 宠料=", GameState.material_count("bone"), "/", GameState.material_count("rice"), " 弟子=", GameState.disciple_joined, " 青鸾=", GameState.qingluan_joined, " 宠物=", GameState.pet_id, " 阶=", GameState.pet_stage(), " 关卡=", GameState.stage_progress, "/", GameState.STAGE_MAX, " 自动=", GameState.auto_climb, " 阵容=", GameState.formation, " 货币=", GameState.coin_line())
-	print("[主界面] 测试键：F 出战配置 · I 入门 · K 后山 · M 仓库货 · T 挂机+1时 · Y 挂机灌满 · G 建筑链+炼丹 · H 酒 · C 炼丹料 · V 炉火快进 · X 推到满关 · L 村况 · W 窗口 · P 宠物 · Q 女侠 · N 下一季 · O 导出调参配置 · J 存档版本自检")
+	print("[主界面] 账本：灵草=", GameState.material_count("zhi"), "/", GameState.material_count("shen"), "/", GameState.material_count("guo"), " 宠料=", GameState.material_count("bone"), "/", GameState.material_count("rice"), " 弟子=", GameState.disciple_joined, " 青鸾=", GameState.qingluan_joined, " 宠物=", GameState.pet_id, " 阶=", GameState.pet_stage(), " 关卡=", GameState.stage_progress, "/", GameState.STAGE_MAX, " 自动=", GameState.auto_climb, " 阵容=", GameState.formation, " 货币=", GameState.coin_line())
+	print("[主界面] 测试键：F 出战配置 · I 入门 · K 后山 · M 仓库货 · T 挂机+1时 · Y 挂机灌满 · G 建筑链+炼丹 · H 酒 · C 炼丹料 · V 炉火快进 · X 推到满关 · W 窗口 · P 宠物 · Q 女侠 · N 下一季 · O 导出调参配置 · J 存档版本自检")
 	print("[主界面] 测试键（数字，v42）：0 进度归零 · 1→49关 · 2→149关 · 3→299关 · 4→399关(鉴宝行) · 5→499关 · 6 进度+25 · 7 进度-25 · 8 发新手礼包 · 9 直接开鉴宝行")
 	# ㊿p（B 案）：新档开机——不进村，直接进引子（十六岁·五问；走到结算回村为止）
 	#   只认"首趟未走通"；首趟走过一次后这条路自动关闭（first_journey_done=true）。
@@ -980,8 +970,8 @@ func _build_idle_plaque() -> void:
 #
 #   位置全部写成**占屏比例**（0~1），跟 docs/主界面布局_用户标注.md 那张表一行对一行。
 #   每个牌子都接到**原来那个函数**上——牌子只是换了样子与位置，功能一个不丢：
-#     头像/名号 → 角色面板 · 挂机 → 收菜 · 建设 → 修村 · 设置 → 设置面板 · 商店 → 货栈
-#     山洞 → 山洞 · 后山 → 后山 · 出村 → 出村面板 · 百工坊 → 门厅 · 溪畔 → 拾柴 · 藏宝阁 → 藏宝阁
+#     头像/名号 → 角色面板 · 挂机 → 收菜 · 设置 → 设置面板 · 商店 → 货栈
+#     山洞 → 山洞 · 后山 → 后山 · 出村 → 出村面板 · 百工坊 → 门厅 · 藏宝阁 → 藏宝阁
 #   「江湖」那块用户已明确：**只显示玩家 ID**，不要题头（见标注文档"已定"一节）。
 # ============================================================
 func _build_plaques() -> void:
@@ -995,13 +985,12 @@ func _build_plaques() -> void:
 	_plaques.add_txt("name", 0.239, 0.0383, pn, _open_char_panel, GameState.advance_name(), {"w": 140.0, "h": 76.0})
 	_plaques.add_chip("advance", 0.403, 0.0383, "进阶", _open_advance, _advance_hint(), {"w": 80.0, "h": 34.0})
 	_plaques.add_chip("settings", 0.9264, 0.0375, "设置", _open_settings, "", {"w": 58.0, "h": 34.0})
-	# 挂机/建设：还是从横梁上吊下来（这两块是"画上的题字"，保留竖排毛笔）
+	# 挂机：还是从横梁上吊下来（这块是"画上的题字"，保留竖排毛笔）
 	# v240（用户："挂机和建设上面的横栏 完全放在头像下面"）：
-	#   横梁从画面中央（128~292）搬到左上头像下面（14~204），两块木牌跟着下来；
+	#   横梁从画面中央（128~292）搬到左上头像下面（14~204），木牌跟着下来；
 	#   画面中上留白，不再被梁和绳子切一道。
-	_plaques.add_beam("beam", 14.0, 204.0, 122.0, [52.0, 156.0])   # 装饰件：没有命中盒，不挡拖卷
+	_plaques.add_beam("beam", 14.0, 120.0, 122.0, [60.0])   # 装饰件：没有命中盒，不挡拖卷（v242：只剩挂机一块）
 	_plaques.add_hang("idle", 0.083, 0.0, "挂机", _on_idle_collect, "", "", {"hang_y": 122.0})
-	_plaques.add_hang("build", 0.222, 0.0, "建设", _build_once, "", "", {"hang_y": 122.0})
 	# ===== v211 右侧功能栏：5 个**等宽格**（金刻线图标 + 大号毛笔字 + 小字名）=====
 	#   y 只是初始值；_refresh_plaques 末尾按"当前可见的格子"重排（隐藏一格，下面自动补位）。
 	_plaques.add_rail("shop", 0.905, 0.192, "栈", "商店", PlaqueLayer.RAIL_SHOP_TEX, _open_shop, "换材料")
@@ -1015,7 +1004,6 @@ func _build_plaques() -> void:
 	var V := {"page": "village", "white": true}
 	_plaques.add_arrow("out", 0.104, 0.575, "出村", _open_out, -1, V)
 	_plaques.add_hang("hill", 0.215, 0.695, "后山", _click_hill, "", "", {"page": "village", "white": true, "w": 76.0})
-	_plaques.add_hang("brook", 0.395, 0.645, "溪畔", _gather_wood, "", "", {"page": "village", "white": true, "w": 76.0})
 	# v237：一次性提示不再占右栏——直接放进画里，用掉就消失
 	_plaques.add_hang("cave_scene", 0.660, 0.560, "山洞", _click_cave, "", "", {"page": "village", "white": true, "w": 80.0})
 	_plaques.add_hang("treasure_map", 0.660, 0.660, "藏宝图", _click_treasure, "", "", {"page": "village", "white": true, "w": 96.0})
@@ -1041,14 +1029,14 @@ func _refresh_plaques() -> void:
 	_plaques.visible = (_story_page < 0) and not _any_panel_open()
 	if not _plaques.visible:
 		return
-	# v200/v211：封面页只留顶栏（头像/名号/进阶/银两）与挂机/建设；右栏与大碑全部收起
+	# v200/v211：封面页只留顶栏（头像/名号/进阶/银两）与挂机；右栏与大碑全部收起
 	var rail_on := not _cover_mode
 	_plaques.set_vis("shop", rail_on)
 	_plaques.set_vis("kushou_test", rail_on)
 	_plaques.set_vis("stele", rail_on)
 	# v237：后山把两只宠物都收完就没东西了——牌子直接消失，不再留个"白狐的老家"占位
 	var hill_done := GameState.pet_has("fox") and GameState.pet_has("qing_sun")
-	_plaques.set_vis("hill", rail_on and GameState.village_stage >= 1 and not hill_done)
+	_plaques.set_vis("hill", rail_on and not hill_done)
 	# 右栏的 cave/treasure 退休：改由画里的 cave_scene/treasure_map 提示，用掉就消失
 	_plaques.set_vis("treasure", false)
 	_plaques.set_vis("cave", false)
@@ -1058,22 +1046,14 @@ func _refresh_plaques() -> void:
 	# v211：右栏按"当前可见的格子"重排（隐藏一格，下面的平滑往上顶）
 	_plaques.layout_rail(PlaqueLayer.RAIL_IDS, PlaqueLayer.RAIL_TOP, PlaqueLayer.RAIL_H, PlaqueLayer.RAIL_GAP)
 	# v98：商店**固定**（用户点名）——不再按剧情显隐，也不随风摆
-	var wood := GameState.material_count("wood")
-	if _stage >= Build.STAGE_MAX:
-		_plaques.set_sub("build", "修满了")
-	elif BUILD_COST > 0:
-		_plaques.set_sub("build", "村况 " + str(_stage) + "/" + str(Build.STAGE_MAX) + "\n木料 " + str(wood))
-	else:
-		_plaques.set_sub("build", "村况 " + str(_stage) + "/" + str(Build.STAGE_MAX) + "\n免费重修")
-	_plaques.set_sub("brook", "点我拾柴\n木料 " + str(wood))
 	if not GameState.pet_has("fox"):
 		_plaques.set_sub("hill", "山里有动静")
 	elif not GameState.pet_has("qing_sun"):
 		_plaques.set_sub("hill", "松梢落了只隼")
 	else:
 		_plaques.set_sub("hill", "白狐的老家")
-	_plaques.set_sub("treasure_map", "照图起一间\n木料 " + str(wood) + "/" + str(B2_COST))
-	_plaques.set_sub("cave_scene", "扒开荒草\n木料 " + str(wood) + "/" + str(CAVE_COST))
+	_plaques.set_sub("treasure_map", "照图起一间")
+	_plaques.set_sub("cave_scene", "扒开荒草")
 	var rooms: Array = ["品酒"]
 	if GameState.dange_built:
 		rooms.append("炼丹")
@@ -1177,7 +1157,7 @@ func _exit_tree() -> void:
 	Audio.stop_ambient()    # v230：离开主界面（进游历/战斗）就把风停掉
 	GameState.idle_sync()
 	GameState.save_game()   # 优化批㉒：退场落盘
-	print("[主界面] 离场落盘：村况=", GameState.village_stage, " 首趟=", GameState.first_journey_done)   # ㊿h：切场即存（主界面侧）
+	print("[主界面] 离场落盘：首趟=", GameState.first_journey_done)   # ㊿h：切场即存（主界面侧）
 
 # v4.2：5 格 → 6 格（新增「宝箱」）。宽度得跟着收：720 - 2×10 边距 = 700，
 #   主键 146 + 5×96 + 5×11 缝 = 681，居中后左右各留 ~19。
@@ -1550,20 +1530,7 @@ func _update_marks() -> void:
 		var sl: Label = e["sl"]
 		var sub := str(e["sub"])
 		match kind:
-			"site":
-				var wood := GameState.material_count("wood")
-				if _stage >= Build.STAGE_MAX:
-					sub = "修满了（L 重看）"
-				elif BUILD_COST > 0:
-					sub = "村况 " + str(_stage) + "/" + str(Build.STAGE_MAX) + " · 木料 " + str(wood) + " · 每段耗 " + str(BUILD_COST)
-				else:
-					sub = "村况 " + str(_stage) + "/" + str(Build.STAGE_MAX) + " · 免费重修（测试）"
-			"brook":
-				sub = "点我拾柴 · 木料 " + str(GameState.material_count("wood"))
 			"hill":
-				if GameState.village_stage < 1:
-					btn.visible = false
-					continue
 				if not GameState.pet_has("fox"):
 					sub = "新解锁：山林里有动静"
 				elif not GameState.pet_has("qing_sun"):
@@ -1577,13 +1544,13 @@ func _update_marks() -> void:
 				if GameState.b2_built:
 					sub = "图收在里头（用处以后再定）"
 				else:
-					sub = "照图起一间 · 木料 " + str(GameState.material_count("wood")) + "/" + str(B2_COST)
+					sub = "照图起一间"
 			"cave":
 				# v26：做完任务山洞就没了——记号也不再冒出来
 				if not GameState.b2_built or GameState.cave_opened:
 					btn.visible = false
 					continue
-				sub = "荒草盖着个洞 · 木料 " + str(GameState.material_count("wood")) + "/" + str(CAVE_COST)
+				sub = "荒草盖着个洞"
 			"craft":
 				# v50：「百工坊」＝品酒坊 ＋ 炼丹阁 ＋ 鉴宝行 的门厅（用户："统一集中到一个建筑物"）
 				#   出现时机＝原来品酒坊那一条（过山洞剧情）；里面三间各有各的开法。
@@ -1591,7 +1558,7 @@ func _update_marks() -> void:
 					btn.visible = false
 					continue
 				if not GameState.winery_built:
-					sub = "陈酿有地方去了 · 木料 " + str(GameState.material_count("wood")) + "/" + str(WINERY_COST)
+					sub = "陈酿有地方去了"
 				else:
 					var rooms: Array = ["品酒"]
 					if GameState.dange_built:
@@ -1662,10 +1629,6 @@ func _on_mark(kind: String) -> void:
 			_show_toast("「石桌」——以后是：设置")
 		"gate":
 			_show_toast("「山门」——以后是：回山门 · 关于")
-		"site":
-			_build_once()
-		"brook":
-			_gather_wood()
 		"hill":
 			_click_hill()
 		"treasure":
@@ -1684,9 +1647,6 @@ func _on_mark(kind: String) -> void:
 			_open_shop()
 
 func _click_hill() -> void:
-	if GameState.village_stage < 1:
-		_show_toast("后山的林子还没路——先把村子修出一段")
-		return
 	if not GameState.pet_has("fox"):
 		_story_start("backhill")
 		return
@@ -1703,11 +1663,6 @@ func _click_treasure() -> void:
 	if GameState.b2_built:
 		_show_toast("「藏宝阁」——图上画的那块地方，如今是间空屋。用处以后再定。")
 		return
-	var wood := GameState.material_count("wood")
-	if wood < B2_COST:
-		_show_toast("木料不够：起这间要 " + str(B2_COST) + "（现有 " + str(wood) + "）——去溪畔拾柴，或挂机收木料")
-		return
-	GameState.add_material("wood", -B2_COST)
 	GameState.b2_built = true
 	_spawn_build_fx(Vector2(2140.0, 812.0))
 	_show_toast("「藏宝阁」起好了——图收在里头。乱草堆后面，像还压着别的记号……", 2.6)
@@ -1718,11 +1673,6 @@ func _click_cave() -> void:
 	if GameState.cave_opened:
 		_show_toast("洞里很凉——石案上只剩个湿印子。")
 		return
-	var wood := GameState.material_count("wood")
-	if wood < CAVE_COST:
-		_show_toast("扒开荒草要搭架子：木料 " + str(CAVE_COST) + "（现有 " + str(wood) + "）——去溪畔拾柴")
-		return
-	GameState.add_material("wood", -CAVE_COST)
 	_spawn_build_fx(Vector2(470.0, 730.0))
 	_story_start("cave")
 
@@ -1738,12 +1688,6 @@ func _click_craft() -> void:
 		_show_toast("这屋子还没影——先把山洞那段过了")
 		return
 	if not GameState.winery_built:
-		# 起屋＝原来品酒坊那一步（同一笔账、同一个价）
-		var wood := GameState.material_count("wood")
-		if wood < WINERY_COST:
-			_show_toast("木料不够：起「百工坊」要 " + str(WINERY_COST) + "（现有 " + str(wood) + "）——去溪畔拾柴，或挂机收木料")
-			return
-		GameState.add_material("wood", -WINERY_COST)
 		GameState.winery_built = true
 		_spawn_build_fx(Vector2(1040.0, 852.0))
 		_show_toast("「百工坊」起好了——里头先开了品酒坊；炼丹阁要过 " + str(HERB_STAGE) + " 关、鉴宝行要过 " + str(JIANBAO_STAGE) + " 关", 3.2)
@@ -1763,11 +1707,6 @@ func _on_craft_room(room: String) -> void:
 			if not _dange_ready():
 				_show_toast("炼丹阁要过第 " + str(HERB_STAGE) + " 关（灵草剧情）才起得了炉")
 				return
-			var wood2 := GameState.material_count("wood")
-			if wood2 < DANGE_COST:
-				_show_toast("木料不够：起炼丹阁要 " + str(DANGE_COST) + "（现有 " + str(wood2) + "）——去溪畔拾柴，或挂机收木料")
-				return
-			GameState.add_material("wood", -DANGE_COST)
 			GameState.dange_built = true
 			_spawn_build_fx(Vector2(1872.0, 815.0))
 			_show_toast("「炼丹阁」起好了——开炉前可以先派个没出战的人看火", 2.8)
@@ -1816,7 +1755,7 @@ func _apply_layer_transforms() -> void:
 	_village.scale = _scroll.scale
 	_village.cam = _cam
 	_village.t = _t
-	_village.stage = _stage
+	_village.stage = GameState.VILLAGE_MAX
 	_village.show_cave = GameState.b2_built
 	_village.cave_opened = GameState.cave_opened
 	_village.show_winery = GameState.winery_built
@@ -1826,7 +1765,7 @@ func _apply_layer_transforms() -> void:
 	_village.show_treasure = GameState.b2_built
 	_village.disciple_joined = GameState.disciple_joined
 	_village.qingluan_joined = GameState.qingluan_joined   # v93：她也要在村里活动
-	_village.backhill_open = GameState.village_stage >= 1
+	_village.backhill_open = true
 	_village.pet_joined = GameState.pet_id != ""
 	_village.sun_joined = GameState.pet_has("qing_sun")
 	_village.season = _season
@@ -1906,7 +1845,7 @@ func _spawn_build_fx(pos: Vector2) -> void:
 		return
 	var fx := BuildFx.new()
 	fx.position = pos
-	fx.setup(randi() % 1000, _stage)
+	fx.setup(randi() % 1000, 0)
 	_fx_root.add_child(fx)
 
 # v63j（用户："b 和 u 依旧没啥反应"）：B/U 挪进 **_input**——它在 GUI/焦点之前就到，
@@ -1963,10 +1902,7 @@ func _unhandled_input(ev: InputEvent) -> void:
 		print("[主界面][测试] 重播弟子入门剧情（出战引导也重置）")
 		return
 	if ke.keycode == KEY_K:
-		if GameState.village_stage < 1:
-			GameState.village_stage = 1
-			_stage = 1
-				# 重播整条宠链：狐、隼都从名册摘掉（灵息归零）——狐剧情重开，通关后狐入册，再点后山收隼
+		# 重播整条宠链：狐、隼都从名册摘掉（灵息归零）——狐剧情重开，通关后狐入册，再点后山收隼
 		GameState.pet_roster.erase("fox")
 		GameState.pet_roster.erase("qing_sun")
 		GameState.pet_sel = ""
@@ -2001,7 +1937,7 @@ func _unhandled_input(ev: InputEvent) -> void:
 			_winery_panel.refresh()
 		if _alchemy_panel != null:
 			_alchemy_panel.refresh()
-		_show_toast("[测试] 建筑链 + 炼丹链全解锁：灵草各+2 · 木料+10 · 银两+100 · 送一坛「陈酿」", 3.0)
+		_show_toast("[测试] 建筑链 + 炼丹链全解锁：灵草各+2 · 银两+100 · 送一坛「陈酿」", 3.0)
 		print("[主界面][测试] G：建筑链+炼丹链全解锁（灵草/丹阁/材料）")
 		return
 	if ke.keycode == KEY_H:
@@ -2014,7 +1950,7 @@ func _unhandled_input(ev: InputEvent) -> void:
 		GameState.debug_alchemy_fill()
 		if _alchemy_panel != null:
 			_alchemy_panel.refresh()
-		_show_toast("[测试] 灵草各 +2 · 木料 +20 · 炼丹阁解锁 · 收下陈石", 2.8)
+		_show_toast("[测试] 灵草各 +2 · 炼丹阁解锁 · 收下陈石", 2.8)
 		return
 	if ke.keycode == KEY_V:
 		if GameState.alchemy_rush():
@@ -2103,12 +2039,6 @@ func _unhandled_input(ev: InputEvent) -> void:
 		if _alchemy_panel != null:
 			_alchemy_panel.refresh()
 		return
-	if ke.keycode == KEY_L:
-		_stage = (_stage + 1) % (Build.STAGE_MAX + 1)
-		GameState.village_stage = _stage
-		var sg: Dictionary = Build.STAGES[_stage]
-		print("[主界面] 村况切到 ", _stage, " · ", sg["name"])
-		return
 	if ke.keycode == KEY_P:
 		GameState.debug_pet_fill()
 		if _pet_panel != null:
@@ -2167,7 +2097,6 @@ func _unhandled_input(ev: InputEvent) -> void:
 		if _reset_arm > 0 and now_ms - _reset_arm <= 3000:
 			_reset_arm = 0
 			GameState.reset_full()
-			_stage = clampi(GameState.village_stage, 0, Build.STAGE_MAX)
 			_tag_notice = -1
 			_show_toast("[测试] 已重置全部存档——一切从头开始（再按 R 还能清一次）", 3.2)
 			print("[主界面][测试] reset_full：全档已清")
@@ -2487,8 +2416,8 @@ func _on_idle_collect() -> void:
 		return
 	Audio.sfx("coin", -7.0, randf_range(1.0, 1.08))   # v98：收着钱了给一声
 	var parts: Array = ["银两 +" + str(int(r["silver"]))]
-	if int(r["wood"]) > 0:
-		parts.append("木料 +" + str(int(r["wood"])))
+	if int(r.get("action", 0)) > 0:
+		parts.append("行动 +" + str(int(r["action"])) + "（现 " + str(GameState.action) + "/" + str(GameState.ACTION_MAX) + "）")
 	var ex := int(r.get("exp", 0))
 	if ex > 0:
 		parts.append("经验 +" + str(ex) + " 入经验池（现 " + str(GameState.exp_pool) + "，弟子面板［分配］）")
@@ -2497,7 +2426,7 @@ func _on_idle_collect() -> void:
 	if ins > 0:
 		parts.append("阅历 +" + str(ins) + "（现 " + str(GameState.insight) + "，底排［阅历］点线）")
 	_show_toast("挂机（第 " + str(GameState.idle_tier() + 1) + " 档）收取：" + _fmt_min(mins) + " → " + " · ".join(PackedStringArray(parts)), 3.4)
-	print("[主界面] 挂机收取：", mins, " 分（第 ", GameState.idle_tier() + 1, " 档）→ 银两 +", int(r["silver"]), " · 木料 +", int(r["wood"]), " · 经验 +", ex, " 入池（现 ", GameState.exp_pool, "）· 阅历 +", ins, "（现 ", GameState.insight, "）")
+	print("[主界面] 挂机收取：", mins, " 分（第 ", GameState.idle_tier() + 1, " 档）→ 银两 +", int(r["silver"]), " · 经验 +", ex, " 入池（现 ", GameState.exp_pool, "）· 阅历 +", ins, "（现 ", GameState.insight, "）")
 	_refresh_idle_btn()
 	if _char_panel != null and _char_panel.visible:
 		_char_panel.refresh()
@@ -2738,7 +2667,7 @@ func _tap_at(p: Vector2) -> void:
 	elif c >= 1636.0 and c <= 1700.0 and p.y > Draw.sy_at(738.0) and p.y < Draw.sy_at(786.0):
 		_chen_talk()
 	elif c >= 1490.0 and c <= 1560.0 and p.y > Draw.sy_at(740.0) and p.y < Draw.sy_at(790.0) and GameState.qingluan_joined:
-		_show_toast("「先修村，我再看出手。」她把剑往臂上一横。")
+		_show_toast("「先出村，我再看出手。」她把剑往臂上一横。")
 	elif c >= 1050.0 and c <= 1175.0 and p.y > Draw.sy_at(660.0) and p.y < Draw.sy_at(750.0):
 		_show_toast("一叶扁舟——溪上的人，只是路过")
 	elif c >= Conf.YINSHOU_X0 and c <= Conf.YINSHOU_X1:
@@ -2754,30 +2683,6 @@ func _chen_talk() -> void:
 		return
 	_show_toast(str(CHEN_LINES[_chen_i % CHEN_LINES.size()]))
 	_chen_i += 1
-
-func _gather_wood() -> void:
-	var n := GameState.add_material("wood", 1)
-	_show_toast("溪畔拾柴 · 木料 +1（现有 " + str(n) + "）")
-	print("[主界面] 采集：木料=", n)
-
-func _build_once() -> void:
-	if _stage >= Build.STAGE_MAX:
-		_show_toast("村子已经修完了（村况 " + str(Build.STAGE_MAX) + "/" + str(Build.STAGE_MAX) + "）——想重看改建按 L")
-		return
-	if BUILD_COST > 0:
-		var wood := GameState.material_count("wood")
-		if wood < BUILD_COST:
-			_show_toast("木料不够：修一段要 " + str(BUILD_COST) + "（现有 " + str(wood) + "）——去溪畔拾柴")
-			return
-		GameState.add_material("wood", -BUILD_COST)
-	_stage += 1
-	GameState.village_stage = _stage
-	_spawn_build_fx(Vector2(2490.0, 806.0))
-	var sg: Dictionary = Build.STAGES[_stage]
-	_show_toast("村况 " + str(_stage) + "/" + str(Build.STAGE_MAX) + " · " + str(sg["name"]) + "：" + str(sg["note"]))
-	if _stage == 1:
-		await get_tree().create_timer(0.8).timeout   # v62
-		_show_toast("后山那头的路通了——去林子看看（往左看）")
 
 func _on_node_added(n: Node) -> void:
 	if n is Button:
@@ -3036,6 +2941,9 @@ func _open_insight() -> void:
 	_insight_panel.open()
 
 func _on_deploy_started(party: Array, diff: int) -> void:
+	if GameState.action <= 0:
+		_show_toast("行动资源空了——先去「挂机」收一次，或爬塔攒一点", 3.2)
+		return
 	print("[主界面] 出征：", party, " · ", GameState.diff_name(diff), " → ", Conf.EXPLORE_SCENE)
 	var err := get_tree().change_scene_to_file(Conf.EXPLORE_SCENE)
 	if err != OK:
@@ -3074,7 +2982,7 @@ func _on_battle_done(win: bool, i: int) -> void:
 	if win:
 		GameState.stage_clear(i)
 		var e: Dictionary = GameState.enemy_at(i)
-		# ㊿n：木料收益取消（折进经验）——播报改：银两（已减）· 经验入池 · 逢五关卡的大奖
+		# ㊿n：过关收益只发银两与经验——播报：银两（已减）· 经验入池 · 逢五关卡的大奖
 		var msg := "清缴：" + str(e["name"]) + " · 银两 +" + str(GameState.stage_silver(i)) + " · 经验 +" + str(GameState.stage_exp_gain(i)) + " 入经验池（现 " + str(GameState.exp_pool) + "）"
 		if GameState.is_boss(i):
 			msg += " · 首领赏 +" + str(GameState.boss_silver_gain(i))

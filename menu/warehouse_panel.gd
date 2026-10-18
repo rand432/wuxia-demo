@@ -53,9 +53,9 @@ const TABS := [
 	{"id": "equip", "name": "装备", "e1": "这一层还是空的", "e2": "历练带回的兵刃残卡与装备成品，会收在这儿（残卡凑齐可合成）"},
 	{"id": "arts", "name": "武学", "e1": "这一层还是空的", "e2": "事件里拿到的武学残页，会收在这儿（凑齐可合成）"},
 	{"id": "pill", "name": "丹药", "e1": "还没有丹药", "e2": "去「炼丹阁」炼一炉——丹成点［收丹］，自动收进这一格"},
-	# v60（用户："宝箱开的材料在仓库不显示"）：新增**材料**一页——木料/灵草/兽骨碎/灵米/金髓
-	#   以前一个都不显示（村账里明明有数），炼丹、起屋、升星要料时只能干瞪眼。
-	{"id": "mat", "name": "材料", "e1": "还没有材料", "e2": "溪畔拾柴、爬塔宝箱、游历搜刮都会出材料——起屋 · 炼丹 · 升星都要它"},
+	# v60（用户："宝箱开的材料在仓库不显示"）：新增**材料**一页——灵草/兽骨碎/灵米/金髓
+	#   以前一个都不显示（村账里明明有数），炼丹、升星要料时只能干瞪眼。
+	{"id": "mat", "name": "材料", "e1": "还没有材料", "e2": "爬塔宝箱、游历搜刮都会出材料——炼丹 · 升星都要它"},
 	{"id": "use", "name": "消耗品", "e1": "还没有消耗品", "e2": "以后有消耗品了，就往这格放"},
 	{"id": "misc", "name": "其他", "e1": "杂项都堆这儿", "e2": "眼下是空的"},
 ]
@@ -749,8 +749,8 @@ func _pill_stacks() -> Array:
 	return out
 
 # v60（用户："宝箱开的材料在仓库不显示"）：材料页——把村账里现有的材料逐种列出来。
-#   名单以 GameState.MAT_CN 为准（木料/紫芝/雪参/朱果/兽骨碎/灵米/金髓），
-#   数量取 material_count ✓（宝箱、溪畔拾柴、搜刮、货栈买的全进这一个账）。
+#   名单以 GameState.MAT_CN 为准（紫芝/雪参/朱果/兽骨碎/灵米/金髓），
+#   数量取 material_count ✓（宝箱、搜刮、货栈买的全进这一个账）。
 func _mat_stacks() -> Array:
 	var out: Array = []
 	for k_v in GameState.MAT_CN.keys():
@@ -1086,8 +1086,8 @@ func _mat_use(k: String) -> String:
 		var cost: Dictionary = r.get("cost", {})
 		if cost.has(k):
 			uses.append("「" + str(r.get("name", r.get("id", ""))) + "」×" + str(int(cost[k])))
-	if k == "wood":
-		uses.append("起屋/起炉（百工坊、炼丹阁都吃木料）")
+	if k == "forge_stone":
+		uses.append("锻造（铁砧）")
 	if uses.is_empty():
 		return "眼下还没有配方吃它——先攒着"
 	return "用在：" + "、".join(PackedStringArray(uses))

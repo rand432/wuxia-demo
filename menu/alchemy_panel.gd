@@ -420,7 +420,7 @@ func _open_dlg(rid := "") -> void:
 	sc.add_child(vb)
 	_dlg_chips = []
 	if avail.is_empty():
-		var none_lb := _label("现在没有能炼的丹——药材不够。\n去仓库数数：紫芝 / 雪参 / 朱果 / 兽骨碎 / 灵米 / 木料（金髓只有宝箱与搜刮里出）", 14, Color(INK.r, INK.g, INK.b, 0.72))
+		var none_lb := _label("现在没有能炼的丹——药材不够。\n去仓库数数：紫芝 / 雪参 / 朱果 / 兽骨碎 / 灵米（金髓只有宝箱与搜刮里出）", 14, Color(INK.r, INK.g, INK.b, 0.72))
 		none_lb.custom_minimum_size = Vector2(284, 110)
 		none_lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		vb.add_child(none_lb)
@@ -598,7 +598,7 @@ func _refresh_dlg() -> void:
 	if rid2 == "" or GameState.recipe_of(rid2).is_empty():
 		if _dlg_out_lb != null:
 			_dlg_out_lb.text = "—"
-		_dlg_prev.text = ("一门都炼不了——先把药材凑够（紫芝 / 雪参 / 朱果 / 兽骨碎 / 灵米 / 木料，洗灵丹还要金髓）"
+		_dlg_prev.text = ("一门都炼不了——先把药材凑够（紫芝 / 雪参 / 朱果 / 兽骨碎 / 灵米，洗灵丹还要金髓）"
 			if _dlg_chips.is_empty() else "先选一门丹药")
 		_dlg_ok.disabled = true
 		return
@@ -741,7 +741,7 @@ func refresh() -> void:
 		_tender = ""
 	if _tender == "qingluan" and not GameState.qingluan_joined:
 		_tender = ""
-	_mat_lb.text = "药材：紫芝 " + str(GameState.material_count("zhi")) + " · 雪参 " + str(GameState.material_count("shen")) + " · 朱果 " + str(GameState.material_count("guo")) + " ｜ 兽骨碎 " + str(GameState.material_count("bone")) + " · 灵米 " + str(GameState.material_count("rice")) + " ｜ 木料 " + str(GameState.material_count("wood"))
+	_mat_lb.text = "药材：紫芝 " + str(GameState.material_count("zhi")) + " · 雪参 " + str(GameState.material_count("shen")) + " · 朱果 " + str(GameState.material_count("guo")) + " ｜ 兽骨碎 " + str(GameState.material_count("bone")) + " · 灵米 " + str(GameState.material_count("rice"))
 	# v62b（用户："洗灵丹丹方 材料全部去掉"）：洗灵丹不再吃料，所以这句不再写"洗灵丹要它"——
 	#   金髓眼下没有丹方在用（材料/宝箱权重/货栈那件都留着），如实标注即可。
 	_gold_lb.text = "◆金髓 " + str(GameState.material_count("jin")) + "（稀有料·暂无丹方要用）"

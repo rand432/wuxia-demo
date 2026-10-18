@@ -123,6 +123,7 @@ var _pet_lb: Label
 var _foot_lb: Label
 var _msg_lb: Label
 var _pool_lb: Label
+var _sub_lb: Label
 var _carry_lb: Label
 var _bond_lb: Label = null        # ㊿：选谁上阵那行——v62c 起只报**阵型**（前/中/后）
 var _diff_lb: Label = null        # v62c：当前游历难度那一行（原来是一排十格）
@@ -187,10 +188,10 @@ func _build() -> void:
 	title.size = Vector2(300, 42)
 	_panel.add_child(title)
 
-	var sub := _label("点头像选人 · 挑一档路——路上轻重，全看这趟", 16, Color(INK.r, INK.g, INK.b, 0.55))
-	sub.position = Vector2(30, 60)
-	sub.size = Vector2(420, 22)
-	_panel.add_child(sub)
+	_sub_lb = _label("点头像选人 · 挑一档路", 16, Color(INK.r, INK.g, INK.b, 0.55))
+	_sub_lb.position = Vector2(30, 60)
+	_sub_lb.size = Vector2(420, 22)
+	_panel.add_child(_sub_lb)
 
 	_pool_lb = _label("", 15, Color(INK.r, INK.g, INK.b, 0.60))
 	_pool_lb.position = Vector2(300, 30)
@@ -979,6 +980,8 @@ func _paint() -> void:
 			_sel_lb.text += "　·　" + str(_pick_roles.size()) + " 人同行"
 	else:
 		_sel_lb.text = "没有可走的路——能走的档都走通了（新路在后面的版本里）"
+	if _sub_lb != null:
+		_sub_lb.text = "点头像选人 · 挑一档路 · 行动 " + str(GameState.action) + "/" + str(GameState.ACTION_MAX)
 	var sw: int = GameState.ladder_swaps("weapon")
 	var sa: int = GameState.ladder_swaps("arts")
 	_pool_lb.text = "货源：" + _pool_stage_cn() + "段 · 兵器已换 " + str(sw) + " 手／武学已换 " + str(sa) + " 手"

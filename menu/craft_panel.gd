@@ -241,7 +241,7 @@ func refresh() -> void:
 				if on:
 					line = "请人品酒 · 卖酒（现有 " + str(GameState.wines.size()) + " 坛）"
 				else:
-					line = "还没起这间——先过山洞那段（" + str(GameState.material_count("wood")) + "/8 木料）"
+					line = "还没起这间——先过山洞那段"
 			"alchemy":
 				on = GameState.dange_built
 				if on:
@@ -253,7 +253,7 @@ func refresh() -> void:
 					else:
 						line = "炉子空着——开炉炼丹（可派弟子看火）"
 				else:
-					line = "灵草剧情还没到（第 " + str(GameState.STORY_HERB_STAGE) + " 关）" if not GameState.dange_unlocked() else "有灵草了——起炉要 " + str(GameState.material_count("wood")) + "/10 木料"
+					line = "灵草剧情还没到（第 " + str(GameState.STORY_HERB_STAGE) + " 关）" if not GameState.dange_unlocked() else "有灵草了——点一下起炉"
 			"jianbao":
 				on = GameState.jianbao_ok()
 				if on:
@@ -281,12 +281,11 @@ func _on_card(ev: InputEvent, room: String) -> void:
 	match room:
 		"wine":
 			if not GameState.winery_built:
-				_msg_lb.text = "品酒坊还没起——先把山洞那段过了（山洞就在村里，起屋要 8 木料）"
+				_msg_lb.text = "品酒坊还没起——先把山洞那段过了（山洞就在村里）"
 				return
 		"alchemy":
-			# ⚠ 这里以前是 `if not dange_built:` → 两种情况都 return，**解锁了也进不去**，
-			#   于是"过了 300 关、木料也够了"却永远起不了炉（用户报的那条）。
-			#   现在只有"还没解锁"才拦；解锁了就把这一下交给主界面去起炉（那里才有木料账）。
+			# ⚠ 这里以前是 `if not dange_built:` → 两种情况都 return，**解锁了也进不去**。
+			#   现在只有"还没解锁"才拦；解锁了就把这一下交给主界面去起炉。
 			if not GameState.dange_built and not GameState.dange_unlocked():
 				_msg_lb.text = "炼丹阁要到第 " + str(GameState.STORY_HERB_STAGE) + " 关（灵草剧情）才起得了炉"
 				return

@@ -43,7 +43,7 @@ const VILLAGE_NAME := "青山村"
 const DISCIPLE_NAME := "阿石"
 const DISCIPLE_ORIGIN := "青山村口的小伙"
 const DISCIPLE_QUOTE := "「我跟你走。」"
-const DISCIPLE_NOTE := "见你应下了重修村子的事，他就站在门外等着。"
+const DISCIPLE_NOTE := "见你收拾行囊，他就站在门外等着。"
 
 # ---- 全卷动效总闸与节奏（数字越小越慢越静；TIME_SCALE=0 = 全静止） ----
 const TIME_SCALE := 1.0
