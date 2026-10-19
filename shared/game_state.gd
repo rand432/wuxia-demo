@@ -915,6 +915,13 @@ static var merchant_stock_slot := ""
 static var merchant_stock: Dictionary = {}
 static var npc_stock: Dictionary = {}
 static var region_landmarks: Dictionary = {}
+static var npc_budget := -1
+static var sect_prosperity_rank := 0
+static var forge_names: Array = []
+static var ng_event_seen := false
+static var ng_event_choice := -1
+static var ng_echo_seen := false
+static var story_title_prosperity := false
 static var north_garrison := false
 static var broker_weapon := false
 # v260：听雨楼密信剧情（0=未触发 / 1=交青岚 / 2=卖赤水 / 3=烧掉）
@@ -945,6 +952,20 @@ static func action_spend(n := 1) -> bool:
 			time_slot = 0
 			time_day += 1
 	return true
+
+static func check_sect_rank() -> void:
+	var r := 0
+	if sect_contrib >= 250:
+		r = 2
+	elif sect_contrib >= 100:
+		r = 1
+	if r > sect_prosperity_rank:
+		var gain := 5 if r == 1 else 15
+		if sect_prosperity_rank >= 1:
+			gain = 10
+		add_prosperity(gain, "宗门晋升")
+		sect_prosperity_rank = r
+		save_game()
 
 static func mark_landmark(id: String) -> void:
 	var rk := str(current_region)
@@ -3507,10 +3528,23 @@ static func forge_next_sid() -> String:
 		sid = "forge_%04d" % forge_seq
 	return sid
 
+static func note_forge(nm: String) -> void:
+	if nm == "" or forge_names.has(nm):
+		return
+	forge_names.append(nm)
+	add_prosperity(2, "新成品")
+
+static func note_story_title(title: String) -> void:
+	if title == "" or story_title_prosperity:
+		return
+	story_title_prosperity = true
+	add_prosperity(5, "称号")
+
 static func forge_add(sid: String, set: Dictionary) -> void:
 	forge_cards[sid] = set
 	Cards.register_forged(sid, set)
 	vault_add_item(sid, 1)
+	note_forge(str(set.get("name", "")))
 
 static func grant_boss_weapon(boss_name: String) -> Dictionary:
 	# v250：Boss 首杀专属兵器——直接进锻造库 / 仓库，可装备。
@@ -3523,6 +3557,7 @@ static func grant_boss_weapon(boss_name: String) -> Dictionary:
 	}
 	var d: Dictionary = data.get(boss_name, {"name": "凶骨刃", "kind": "sword", "atk": 40, "dmg": 5, "affix": "pojun"})
 	var nm := str(d["name"])
+	note_forge(nm)
 	var kind := str(d["kind"])
 	var atk := int(d["atk"])
 	var dmg := int(d["dmg"])
@@ -3555,6 +3590,7 @@ static func grant_boss_weapon(boss_name: String) -> Dictionary:
 static func grant_broker_weapon() -> Dictionary:
 	# v259：听雨楼楼主藏货——一次性专属成品。
 	var nm := "听雨刃"
+	note_forge(nm)
 	var kind := "sword"
 	var atk := 62
 	var dmg := 8
@@ -3582,6 +3618,7 @@ static func grant_broker_weapon() -> Dictionary:
 static func grant_north_weapon() -> Dictionary:
 	# v264：北境平定专属——黑风刀。
 	var nm := "黑风刀"
+	note_forge(nm)
 	var kind := "dual"
 	var atk := 52
 	var dmg := 7
@@ -4983,6 +5020,13 @@ static func begin_new_cycle() -> void:
 	merchant_stock.clear()
 	npc_stock.clear()
 	region_landmarks.clear()
+	npc_budget = -1
+	sect_prosperity_rank = 0
+	forge_names.clear()
+	story_title_prosperity = false
+	ng_event_seen = false
+	ng_event_choice = -1
+	ng_echo_seen = false
 	current_region = 0
 	region_unlocked = [true, true, true, false, false]
 	world_seed += 1
@@ -6292,6 +6336,13 @@ static func load_game() -> void:
 	merchant_stock = _sd(cf.get_value("world", "merchant_stock", {}), merchant_stock)
 	npc_stock = _sd(cf.get_value("world", "npc_stock", {}), npc_stock)
 	region_landmarks = _sd(cf.get_value("world", "region_landmarks", {}), region_landmarks)
+	npc_budget = int(cf.get_value("world", "npc_budget", -1))
+	sect_prosperity_rank = clampi(int(cf.get_value("world", "sect_prosperity_rank", 0)), 0, 2)
+	forge_names = _sa(cf.get_value("world", "forge_names", []), forge_names)
+	ng_event_seen = bool(cf.get_value("world", "ng_event_seen", false))
+	ng_event_choice = clampi(int(cf.get_value("world", "ng_event_choice", -1)), -1, 1)
+	ng_echo_seen = bool(cf.get_value("world", "ng_echo_seen", false))
+	story_title_prosperity = bool(cf.get_value("world", "story_title_prosperity", false))
 	while region_unlocked.size() < 5:
 		region_unlocked.append(false)
 	north_garrison = bool(cf.get_value("world", "north_garrison", false))
@@ -6467,6 +6518,13 @@ static func save_game() -> void:
 	cf.set_value("world", "merchant_stock", merchant_stock)
 	cf.set_value("world", "npc_stock", npc_stock)
 	cf.set_value("world", "region_landmarks", region_landmarks)
+	cf.set_value("world", "npc_budget", npc_budget)
+	cf.set_value("world", "sect_prosperity_rank", sect_prosperity_rank)
+	cf.set_value("world", "forge_names", forge_names)
+	cf.set_value("world", "ng_event_seen", ng_event_seen)
+	cf.set_value("world", "ng_event_choice", ng_event_choice)
+	cf.set_value("world", "ng_echo_seen", ng_echo_seen)
+	cf.set_value("world", "story_title_prosperity", story_title_prosperity)
 	cf.set_value("world", "north_garrison", north_garrison)
 	cf.set_value("world", "broker_weapon", broker_weapon)
 	cf.set_value("world", "story_letter", story_letter)
@@ -6656,6 +6714,13 @@ static func reset() -> void:
 	merchant_stock.clear()
 	npc_stock.clear()
 	region_landmarks.clear()
+	npc_budget = -1
+	sect_prosperity_rank = 0
+	forge_names.clear()
+	story_title_prosperity = false
+	ng_event_seen = false
+	ng_event_choice = -1
+	ng_echo_seen = false
 	merchant_favor = 0
 	wanted = 0
 	boss_kills.clear()

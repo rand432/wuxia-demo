@@ -79,6 +79,8 @@ var _food_meter: Control
 var _time_lb: Label
 var _region_lb: Label
 var _side_panel: Control
+var _ng_panel: Control
+var _ng_echo_mode := false
 var _wanted_lb: Label
 var _action_empty := false
 var _exit_timer := 0.0
@@ -186,6 +188,7 @@ func setup(role_id := "player", diff := 1, party: Array = [], fates: Array = [])
 	_spawn_toast()
 	_reveal_at(_player.position)
 	queue_redraw()
+	call_deferred("_maybe_ng_event")
 
 func _gen_world() -> void:
 	_land_id = clampi(GameState.current_region, 0, 4)
@@ -230,7 +233,10 @@ func _gen_world() -> void:
 		4: node_pool = ["snowherb", "bone"]
 	var poi_order := ["temple", "well", "tea", "merchant"]
 	var poi_n := 4
-	if _land_id == 4:
+	if _land_id == 0:
+		poi_order.append("herb_garden")
+		poi_n = 5
+	elif _land_id == 4:
 		poi_order.append("snow_cave")
 		poi_n = 5
 	elif _land_id == 3:
@@ -350,7 +356,12 @@ func _gen_world() -> void:
 		var qr := rng.randf()
 		_chest_quality[cc] = 2 if qr < 0.05 else (1 if qr < 0.30 else 0)
 	# 随机 NPC：每世界 0~3 个；长线对按密信走向强制成对
-	var npc_n := rng.randi_range(0, 3)
+	if GameState.npc_budget < 0:
+		GameState.npc_budget = rng.randi_range(0, 3)
+	var npc_n := 0
+	if GameState.npc_budget > 0:
+		npc_n = rng.randi_range(0, mini(2, GameState.npc_budget))
+		GameState.npc_budget -= npc_n
 	var npc_pool := ["merchant", "doctor", "storyteller", "swordsman", "thief"]
 	for i in npc_n:
 		var ct := str(npc_pool[rng.randi_range(0, npc_pool.size() - 1)])
@@ -368,6 +379,7 @@ func _gen_world() -> void:
 			var pc2 := _npc_free_cell(rng)
 			if pc2.x >= 0:
 				_npcs.append(_make_npc(pc2, "story", str(nm)))
+	GameState.save_game()
 	_apply_story_followup()
 
 func _apply_story_followup() -> void:
@@ -587,6 +599,84 @@ func _spawn_toast() -> void:
 		else:
 			b.pressed.connect(_quit_to_menu)
 		bar.add_child(b)
+
+func _maybe_ng_event() -> void:
+	if GameState.ng_plus <= 0 or _busy:
+		return
+	if not GameState.ng_event_seen:
+		GameState.ng_event_seen = true
+		GameState.save_game()
+		_ng_echo_mode = false
+		_show_ng_panel({
+			"title": "轮 回 旧 梦",
+			"sub": "第 " + str(GameState.ng_plus + 1) + " 周 · 旧世界的残响",
+			"body": "你在路上看见一个熟悉的背影。\n他回过头，像是上一世的你。",
+			"choices": [{"id": "take", "label": "拾 起 旧 梦"}, {"id": "cut", "label": "斩 断 旧 梦"}],
+		})
+	elif not GameState.ng_echo_seen:
+		GameState.ng_echo_seen = true
+		GameState.save_game()
+		_ng_echo_mode = true
+		_show_ng_panel({
+			"title": "旧 梦 余 响",
+			"sub": "第 " + str(GameState.ng_plus + 1) + " 周 · 第二次回望",
+			"body": "旧影没有散尽。它站在路边，等你再给一个答案。",
+			"choices": [{"id": "take", "label": "受 它 一 礼"}, {"id": "cut", "label": "就 此 别 过"}],
+		})
+
+func _show_ng_panel(data: Dictionary) -> void:
+	if _ng_panel == null:
+		var np = POIPanel.new()
+		np.connect("picked", _on_ng_pick)
+		np.connect("closed", _on_ng_closed)
+		_toast_layer.add_child(np)
+		_ng_panel = np
+	_ng_panel.call("open", data)
+	_busy = true
+	_moving = false
+	_has_click = false
+	if _action_lb != null:
+		_action_lb.visible = false
+	if _back_btn != null:
+		_back_btn.visible = false
+
+func _on_ng_pick(id: String) -> void:
+	var msg := "你站了一会儿，旧影散了。"
+	if _ng_echo_mode:
+		if id == "take":
+			GameState.add_material("atlas", 1)
+			GameState.add_region_rep(GameState.current_region, 5)
+			GameState.add_prosperity(5, "旧梦余响")
+			msg = "旧影行了一礼：舆图 +1 · 声望 +5 · 繁荣 +5。"
+		else:
+			GameState.add_material("jin", 2)
+			GameState.action_add(10)
+			GameState.add_prosperity(5, "旧梦余响")
+			msg = "你与旧影别过：金髓 +2 · 食物 +10 · 繁荣 +5。"
+	else:
+		if id == "take":
+			GameState.ng_event_choice = 0
+			GameState.add_material("atlas", 1)
+			GameState.action_add(20)
+			GameState.add_prosperity(5, "轮回旧梦")
+			msg = "你收下了旧梦：舆图 +1 · 食物 +20 · 繁荣 +5。"
+		elif id == "cut":
+			GameState.ng_event_choice = 1
+			GameState.add_material("jin", 2)
+			GameState.action_add(20)
+			GameState.add_prosperity(5, "斩断旧梦")
+			msg = "你斩断旧影：金髓 +2 · 食物 +20 · 繁荣 +5。"
+	GameState.save_game()
+	_update_action_label()
+	_ng_panel.call("set_result", msg)
+
+func _on_ng_closed() -> void:
+	_busy = false
+	_ng_echo_mode = false
+	if _action_lb != null:
+		_action_lb.visible = true
+	if _back_btn != null:
+		_back_btn.visible = true
 
 func _open_character_panel() -> void:
 	if _busy:
@@ -905,7 +995,25 @@ func _on_npc_pick(id: String) -> void:
 		"talk":
 			n["done"] = true
 			GameState.add_region_rep(GameState.current_region, 5)
+			GameState.world_mark("pair", str(n["name"]))
 			msg = "你们交换了几句旧事。"
+			var pair_id := ""
+			var pair_a := ""
+			var pair_b := ""
+			if str(n["name"]).contains("青岚执事") or str(n["name"]).contains("听雨楼线人"):
+				pair_id = "qinglan"
+				pair_a = "青岚执事·沈砚"
+				pair_b = "听雨楼线人·阿罗"
+			elif str(n["name"]) == "阿石" or str(n["name"]) == "货郎老赵":
+				pair_id = "ashi"
+				pair_a = "阿石"
+				pair_b = "货郎老赵"
+			if pair_id != "" and GameState.world_has("pair", pair_a) and GameState.world_has("pair", pair_b) and not GameState.world_has("pair_done", pair_id):
+				GameState.world_mark("pair_done", pair_id)
+				GameState.add_prosperity(10, "长线旧识")
+				GameState.add_region_rep(GameState.current_region, 10)
+				GameState.add_material("atlas", 1)
+				msg += " 两条线对上了：舆图 +1 · 声望 +10。"
 	if bool(n.get("done", false)):
 		GameState.world_mark("npc", _flag_key(n["cell"]))
 	GameState.save_game()
@@ -1485,6 +1593,12 @@ func _draw_pois() -> void:
 				draw_line(p + Vector2(-24, -2), p + Vector2(-24, 16), Color("#3a2a1c"), 3.0)
 				draw_line(p + Vector2(24, -2), p + Vector2(24, 16), Color("#3a2a1c"), 3.0)
 				draw_line(p + Vector2(0, 8), p + Vector2(0, -6), Color(0.9, 0.85, 0.72, 0.45), 2.0)
+			"herb_garden":
+				draw_rect(Rect2(p + Vector2(-30, 2), Vector2(60, 20)), Color("#4a3524"))
+				for k in 4:
+					draw_line(p + Vector2(-24 + k * 16, 14), p + Vector2(-24 + k * 16, -14), Color("#5a8a4a"), 3.0)
+					draw_circle(p + Vector2(-24 + k * 16, -16), 5.0, Color("#8ab46a"))
+				draw_line(p + Vector2(-34, 22), p + Vector2(34, 22), Color("#6b4a2a"), 3.0)
 			"ferry":
 				draw_line(p + Vector2(-30, 4), p + Vector2(30, 4), Color("#5a4630"), 5.0)
 				draw_colored_polygon(PackedVector2Array([p + Vector2(-26, 4), p + Vector2(-12, 20), p + Vector2(20, 20), p + Vector2(30, 4)]), Color("#6b4a2a"))
@@ -1505,7 +1619,7 @@ func _draw_pois() -> void:
 				draw_circle(p + Vector2(0, 2), 24.0, Color("#c9d3d6"))
 				draw_circle(p + Vector2(0, 4), 17.0, Color("#14181b"))
 				draw_arc(p + Vector2(0, 2), 22.0, PI, TAU, 14, Color("#8fa0a6"), 3.0)
-		var nm: String = str({"temple": "破庙", "well": "古井", "tea": "茶棚", "merchant": "货郎", "snow_cave": "雪洞", "mine": "矿洞", "ferry": "渡口", "hunter": "猎户"}.get(typ, "旧迹"))
+		var nm: String = str({"temple": "破庙", "well": "古井", "tea": "茶棚", "merchant": "货郎", "snow_cave": "雪洞", "mine": "矿洞", "ferry": "渡口", "hunter": "猎户", "herb_garden": "药圃"}.get(typ, "旧迹"))
 		draw_string(ThemeDB.fallback_font, p + Vector2(-22, -50), nm, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("#b9a878") if used else Color("#f0d68a"))
 		if used:
 			draw_string(ThemeDB.fallback_font, p + Vector2(-18, -34), "已探", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.72, 0.66, 0.54, 0.8))
@@ -1804,6 +1918,10 @@ func _poi_data(typ: String) -> Dictionary:
 			return {"title": "破　庙", "sub": "半塌的山神庙，泥像没了头。",
 				"body": "供桌积着灰，香炉冷透。梁上似乎还藏着东西。\n\n（只能探一次）",
 				"choices": [{"id": "loot", "label": "搜供桌"}, {"id": "incense", "label": "上一炷香"}]}
+		"herb_garden":
+			return {"title": "药　圃", "sub": "山坳里一圈矮篱，药苗长得正好。",
+				"body": "一个老樵夫蹲在圃边理药。\n\n（只能探一次）",
+				"choices": [{"id": "pick", "label": "采 药（1食物）"}, {"id": "help", "label": "帮他劈柴（2食物）"}]}
 		"ferry":
 			return {"title": "渡　口", "sub": "水边一条旧渡船，绳子系在木桩上。",
 				"body": "船底积着水，对岸雾蒙蒙的。\n\n（只能探一次）",
@@ -1892,6 +2010,31 @@ func _on_poi_pick(id: String) -> void:
 					GameState.add_material("forge_stone", 3)
 					used = true
 					msg = "井底只摸到三块沉石，倒是能当锻造石用。"
+		"herb_garden":
+			if id == "pick":
+				if GameState.action_spend(1):
+					if randf() < 0.5:
+						GameState.add_material("zhi", 2)
+						msg = "采到紫芝 ×2。"
+					else:
+						GameState.add_material("shen", 1)
+						msg = "采到雪参 ×1。"
+					used = true
+				else:
+					msg = "食物不够，蹲不下去。"
+			elif id == "help":
+				if GameState.action_spend(2):
+					if randf() < 0.4:
+						GameState.add_material("jin", 1)
+						GameState.add_material("bone", 2)
+						msg = "老樵夫塞给你一块金髓：金髓 +1 · 兽骨碎 +2。"
+					else:
+						GameState.action_add(10)
+						GameState.add_material("bone", 2)
+						msg = "劈完柴，老樵夫留你吃了顿饭：食物 +10 · 兽骨碎 +2。"
+					used = true
+				else:
+					msg = "食物不够，抡不动斧。"
 		"ferry":
 			if id == "fish":
 				if GameState.action_spend(1):
@@ -2357,6 +2500,7 @@ func _on_rival_pick(id: String) -> void:
 			return
 		GameState.add_coin("silver", -200)
 		GameState.red_water_wall = true
+		GameState.add_prosperity(5, "寨墙")
 		GameState.war_score = mini(100, GameState.war_score + 5)
 		GameState.note_war("赤水寨修了寨墙")
 		GameState.save_game()
@@ -2370,6 +2514,7 @@ func _on_rival_pick(id: String) -> void:
 			return
 		GameState.add_coin("silver", -150)
 		GameState.red_water_market = true
+		GameState.add_prosperity(5, "货栈")
 		GameState.war_score = mini(100, GameState.war_score + 5)
 		GameState.note_war("赤水寨开了货栈")
 		GameState.save_game()
@@ -2383,6 +2528,7 @@ func _on_rival_pick(id: String) -> void:
 			return
 		GameState.add_coin("silver", -250)
 		GameState.red_water_taxpost = true
+		GameState.add_prosperity(5, "税所")
 		GameState.war_score = mini(100, GameState.war_score + 5)
 		GameState.note_war("赤水寨设了税所")
 		GameState.save_game()
@@ -2396,6 +2542,7 @@ func _on_rival_pick(id: String) -> void:
 			return
 		GameState.add_coin("silver", -300)
 		GameState.red_water_garrison = true
+		GameState.add_prosperity(5, "驻军")
 		GameState.war_score = mini(100, GameState.war_score + 5)
 		GameState.note_war("赤水寨驻了军")
 		GameState.save_game()
@@ -2718,14 +2865,17 @@ func _on_broker_pick(id: String) -> void:
 	if id.begins_with("epi_"):
 		if id == "epi_qinglan":
 			GameState.story_title = "青岚客卿"
+			GameState.note_story_title("青岚客卿")
 			GameState.sect_favor = mini(100, GameState.sect_favor + 10)
 			GameState.note_war("挂了青岚客卿的名")
 		elif id == "epi_tingyu":
 			GameState.story_title = "听雨客"
+			GameState.note_story_title("听雨客")
 			GameState.broker_rep = mini(100, GameState.broker_rep + 5)
 			GameState.note_war("成了听雨楼的客人")
 		else:
 			GameState.story_title = "江湖散人"
+			GameState.note_story_title("江湖散人")
 			GameState.add_coin("silver", 100)
 			GameState.note_war("不挂任何一家的名，继续走江湖")
 		GameState.save_game()

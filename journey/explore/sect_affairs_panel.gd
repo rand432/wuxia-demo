@@ -93,6 +93,7 @@ func _refresh() -> void:
 	_task_btns[0].text = "交兽骨碎 ×3 · 贡献 +" + str(20 + bonus)
 	_task_btns[1].text = "交锻造石 ×2 · 贡献 +" + str(25 + bonus)
 	_task_btns[2].text = "跑腿 3 食物 · 贡献 +" + str(15 + bonus)
+	GS.check_sect_rank()
 	_top_lb.text = "青岚山门 · " + _rank_name() + " · 贡献 " + str(GS.sect_contrib)
 	_task_btns[0].disabled = GS.material_count("bone") < 3
 	_task_btns[1].disabled = GS.material_count("forge_stone") < 2
