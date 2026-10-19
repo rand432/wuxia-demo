@@ -110,6 +110,8 @@ var _broker_cell := Vector2i(-1, -1)
 var _broker_panel: Control
 var _broker_pending := false
 var _broker_done := false
+var _story_pending := false
+var _story_panel: Control
 var _chest_cells: Array = []
 var _obstacles: Array = []
 var _enemy_cells: Array = []
@@ -152,8 +154,8 @@ func setup(role_id := "player", diff := 1, party: Array = [], fates: Array = [])
 	queue_redraw()
 
 func _gen_world() -> void:
-	_land_id = GameState.world_seed % 4
-	_reveal_r = 2 if (_land_id == 1 or _land_id == 2) else 3
+	_land_id = GameState.world_seed % 5
+	_reveal_r = 2 if (_land_id == 1 or _land_id == 2 or _land_id == 4) else 3
 	_obstacles.clear()
 	_chest_cells.clear()
 	_enemy_cells.clear()
@@ -162,7 +164,7 @@ func _gen_world() -> void:
 	_poi_used.clear()
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 9001 + GameState.world_seed * 7919
-	var obs_n: int = [14, 9, 11, 12][_land_id]
+	var obs_n: int = [14, 9, 11, 12, 13][_land_id]
 	var guard := 0
 	while _obstacles.size() < obs_n and guard < 500:
 		guard += 1
@@ -170,7 +172,7 @@ func _gen_world() -> void:
 		if _reserved(c, 2) or _obstacles.has(c):
 			continue
 		_obstacles.append(c)
-	var chest_n: int = [4, 5, 5, 7][_land_id]
+	var chest_n: int = [4, 5, 5, 7, 5][_land_id]
 	guard = 0
 	while _chest_cells.size() < chest_n and guard < 500:
 		guard += 1
@@ -179,9 +181,13 @@ func _gen_world() -> void:
 			continue
 		_chest_cells.append(c2)
 	var poi_order := ["temple", "well", "tea", "merchant"]
+	var poi_n := 4
+	if _land_id == 4:
+		poi_order.append("snow_cave")
+		poi_n = 5
 	var poff := GameState.world_seed % poi_order.size()
 	guard = 0
-	while _poi_cells.size() < 4 and guard < 500:
+	while _poi_cells.size() < poi_n and guard < 500:
 		guard += 1
 		var cp := Vector2i(rng.randi_range(1, MAP_W - 2), rng.randi_range(1, MAP_H - 2))
 		if _reserved(cp, 1) or _obstacles.has(cp) or _chest_cells.has(cp) or _poi_cells.has(cp):
@@ -191,7 +197,7 @@ func _gen_world() -> void:
 	var hunter_n := mini(2, GameState.wanted)
 	var guard_n := 1 if GameState.wanted > 0 else 0
 	var elite_n := 1 if GameState.world_tier >= 2 else 0
-	var enemy_n := mini(9, 3 + int(GameState.world_tier / 3) + (1 if _land_id == 2 else 0) + hunter_n + guard_n + elite_n)
+	var enemy_n := mini(9, 3 + int(GameState.world_tier / 3) + (1 if (_land_id == 2 or _land_id == 4) else 0) + hunter_n + guard_n + elite_n)
 	guard = 0
 	while _enemy_cells.size() < enemy_n and guard < 500:
 		guard += 1
@@ -229,7 +235,7 @@ func _gen_world() -> void:
 			break
 	# Boss 落在离起点远、避开所有已占格的位置；找不到就退到 (3,3)
 	var bnames := ["山君", "夜叉", "老妖"]
-	_boss_name = str(bnames[GameState.world_seed % bnames.size()])
+	_boss_name = "雪魈" if _land_id == 4 else str(bnames[GameState.world_seed % bnames.size()])
 	_boss_cell = Vector2i(3, 3)
 	guard = 0
 	while guard < 500:
@@ -241,6 +247,106 @@ func _gen_world() -> void:
 			continue
 		_boss_cell = cb
 		break
+	_apply_story_followup()
+
+func _apply_story_followup() -> void:
+	if GameState.story_letter <= 0 or GameState.story_follow > 0:
+		return
+	_story_pending = true
+	call_deferred("_open_story_followup")
+
+func _open_story_followup() -> void:
+	if not _story_pending or GameState.story_follow > 0:
+		return
+	if _story_panel == null:
+		var sp = POIPanel.new()
+		sp.connect("picked", _on_story_pick)
+		sp.connect("closed", _on_story_closed)
+		_toast_layer.add_child(sp)
+		_story_panel = sp
+	var data := {}
+	match GameState.story_letter:
+		1:
+			data = {
+				"title": "山 门 来 人",
+				"sub": "青岚弟子在路口等你。",
+				"body": "「长老说，信里的暗道图有用——山门昨夜拔了赤水一处暗哨。\n这点东西，是山门记你的。」",
+				"choices": [{"id": "ok", "label": "收 下"}],
+			}
+		2:
+			data = {
+				"title": "赤 水 回 礼",
+				"sub": "一个戴斗笠的人拦在路口。",
+				"body": "「信有用。赤水伏了青岚一队人。\n寨主让我给你带句话——下次还有这种货，直接送来。」",
+				"choices": [{"id": "ok", "label": "收 下"}],
+			}
+		_:
+			data = {
+				"title": "听 雨 楼 的 茶",
+				"sub": "楼里的灯暗了一盏。",
+				"body": "「楼主知道那封信被你烧了。\n茶凉了。名声，也凉一点。」",
+				"choices": [{"id": "ok", "label": "知 道 了"}],
+			}
+	_story_panel.call("open", data)
+	_busy = true
+	_moving = false
+	_has_click = false
+	for e_v in _enemies:
+		var e: Node2D = e_v
+		if is_instance_valid(e):
+			e.visible = false
+	if _action_lb != null:
+		_action_lb.visible = false
+	if _back_btn != null:
+		_back_btn.visible = false
+	if _codex_btn != null:
+		_codex_btn.visible = false
+	if _rel_btn != null:
+		_rel_btn.visible = false
+
+func _on_story_pick(id: String) -> void:
+	if id != "ok":
+		_story_panel.call("close")
+		return
+	match GameState.story_letter:
+		1:
+			GameState.sect_favor = mini(100, GameState.sect_favor + 5)
+			if GameState.sect_joined:
+				GameState.sect_contrib += 30
+			GameState.note_war("青岚按密信拔了赤水一处暗哨")
+			GameState.note_push("青岚按密信拔了赤水一处暗哨：好感 +5" + (" · 贡献 +30" if GameState.sect_joined else ""))
+		2:
+			GameState.wanted = mini(5, GameState.wanted + 1)
+			if not GameState.red_water_peace:
+				GameState.war_score = maxi(0, GameState.war_score - 10)
+			GameState.note_war("赤水按密信伏了青岚一队人")
+			GameState.note_push("赤水按密信伏了青岚一队人：通缉 +1 · 战线 -10")
+		_:
+			GameState.broker_rep = maxi(0, GameState.broker_rep - 5)
+			GameState.note_war("听雨楼查到你烧了信")
+			GameState.note_push("听雨楼查到你烧了信：名声 -5")
+	GameState.story_follow = 1
+	GameState.save_game()
+	_story_pending = false
+	_story_panel.call("close")
+	_set_msg("这件事有了回音。")
+	queue_redraw()
+
+func _on_story_closed() -> void:
+	_story_pending = false
+	_busy = false
+	for e_v in _enemies:
+		var e: Node2D = e_v
+		if is_instance_valid(e):
+			e.visible = not bool(e.get_meta("beaten", false))
+	if _action_lb != null:
+		_action_lb.visible = true
+	if _back_btn != null:
+		_back_btn.visible = true
+	if _codex_btn != null:
+		_codex_btn.visible = true
+	if _rel_btn != null:
+		_rel_btn.visible = true
 
 func _reserved(c: Vector2i, r: int) -> bool:
 	for p_v in [START_CELL, HOUSE_CELL, SECT_CELL]:
@@ -360,7 +466,11 @@ func _spawn_boss() -> void:
 	_boss_node.set_meta("boss", true)
 	_boss_node.set_meta("foe_name", _boss_name)
 	_boss_node.set_meta("beaten", false)
-	_boss_node.set_meta("foe", {"hp": hp, "atk": 14 + tier * 2, "scale": 1.3})
+	var foe := {"hp": hp, "atk": 14 + tier * 2, "scale": 1.3}
+	if _boss_name == "雪魈":
+		foe["def"] = 8
+		foe["spd"] = 105
+	_boss_node.set_meta("foe", foe)
 	add_child(_boss_node)
 
 func _spawn_enemies() -> void:
@@ -412,6 +522,8 @@ func _make_enemy(cell: Vector2i, i: int, hunter := false, guard := false, elite 
 		kinds.append("剑客")
 	if tier0 >= 5:
 		kinds.append("雾鬼")
+	if _land_id == 4 and not kinds.has("雪狼"):
+		kinds.append("雪狼")
 	var base_kind: String = kinds[(i + GameState.world_seed + GameState.world_tier) % kinds.size()]
 	var kind: String = base_kind
 	if guard:
@@ -452,6 +564,11 @@ func _make_enemy(cell: Vector2i, i: int, hunter := false, guard := false, elite 
 			hp -= 15
 			atk += 2
 			spd = 112
+		"雪狼":
+			hp += 10
+			atk += 1
+			spd = 110
+			sc = 1.05
 	if hunter:
 		hp += 30
 		atk += 3
@@ -487,6 +604,8 @@ func _make_enemy(cell: Vector2i, i: int, hunter := false, guard := false, elite 
 				_draw_swordsman(e)
 			"雾鬼":
 				_draw_wraith(e)
+			"雪狼":
+				_draw_snowwolf(e)
 			_:
 				_draw_bandit(e)
 		if elite:
@@ -518,6 +637,18 @@ func _draw_wolf(e: Node2D) -> void:
 	e.draw_line(Vector2(-2, 5), Vector2(-2, 18), Color("#4d4d47"), 4.0)
 	e.draw_line(Vector2(8, 5), Vector2(10, 20), Color("#4d4d47"), 4.0)
 	e.draw_line(Vector2(-18, -8), Vector2(-30, -16), Color("#4d4d47"), 4.0)
+
+func _draw_snowwolf(e: Node2D) -> void:
+	e.draw_circle(Vector2(0, -8), 18.0, Color("#c9d3d6"))
+	e.draw_circle(Vector2(0, -8), 12.0, Color("#e2eaec"))
+	e.draw_circle(Vector2(16, -22), 9.0, Color("#c9d3d6"))
+	e.draw_colored_polygon(PackedVector2Array([Vector2(11, -27), Vector2(14, -36), Vector2(18, -30)]), Color("#aebcc1"))
+	e.draw_colored_polygon(PackedVector2Array([Vector2(19, -27), Vector2(23, -36), Vector2(25, -28)]), Color("#aebcc1"))
+	e.draw_circle(Vector2(19, -24), 1.8, Color("#7cc8d8"))
+	e.draw_line(Vector2(-12, 4), Vector2(-14, 20), Color("#aebcc1"), 4.0)
+	e.draw_line(Vector2(-2, 5), Vector2(-2, 18), Color("#aebcc1"), 4.0)
+	e.draw_line(Vector2(8, 5), Vector2(10, 20), Color("#aebcc1"), 4.0)
+	e.draw_line(Vector2(-18, -8), Vector2(-30, -16), Color("#aebcc1"), 4.0)
 
 func _draw_bandit(e: Node2D) -> void:
 	e.draw_circle(Vector2(0, -8), 15.0, Color("#7a5a3a"))
@@ -585,12 +716,17 @@ func _draw() -> void:
 	# 地图外的底色：不然走到地图边缘，镜头会把工程的浅灰底露出来
 	draw_rect(Rect2(Vector2(-TILE * 8.0, -TILE * 8.0), Vector2(MAP_W * TILE + TILE * 16.0, MAP_H * TILE + TILE * 16.0)), Color("#0b100c"))
 	var full := Rect2(Vector2.ZERO, Vector2(MAP_W, MAP_H) * TILE)
-	var grounds := ["#1b2a1c", "#1b2630", "#162a1c", "#2a2117"]
+	var grounds := ["#1b2a1c", "#1b2630", "#162a1c", "#2a2117", "#20262b"]
 	draw_rect(full, Color(grounds[clampi(_land_id, 0, grounds.size() - 1)]))
 	for gx in range(0, MAP_W, 2):
 		for gy in range(0, MAP_H, 2):
 			if _hash(gx, gy, 3) > 0.55:
 				draw_rect(Rect2(Vector2(gx, gy) * TILE, Vector2(2, 2) * TILE), Color(0.11, 0.17, 0.12, 0.35))
+	if _land_id == 4:
+		for sx in range(MAP_W):
+			for sy in range(MAP_H):
+				if _hash(sx, sy, 9) > 0.9:
+					draw_circle(Vector2(sx, sy) * TILE + Vector2(TILE * 0.5, TILE * 0.5), 2.0, Color(0.85, 0.9, 0.92, 0.5))
 	var path := PackedVector2Array([
 		Vector2(2.2, 28.0) * TILE, Vector2(4.2, 24.2) * TILE,
 		Vector2(7.2, 20.6) * TILE, Vector2(10.2, 18.2) * TILE,
@@ -735,7 +871,8 @@ func _draw_boss() -> void:
 	var calm := _boss_node != null and bool(_boss_node.get_meta("appeased", false))
 	draw_circle(p + Vector2(0, 22), 38.0, Color(0.03, 0.04, 0.03, 0.45))
 	draw_rect(Rect2(p + Vector2(-30, 4), Vector2(60, 18)), Color("#3a3128"))
-	draw_circle(p + Vector2(0, -8), 20.0, Color("#d8d0bc") if not dead else Color("#6b655c"))
+	var body_col := Color("#e6eef0") if _boss_name == "雪魈" else Color("#d8d0bc")
+	draw_circle(p + Vector2(0, -8), 20.0, body_col if not dead else Color("#6b655c"))
 	draw_circle(p + Vector2(-7, -10), 4.0, Color("#1b1a18"))
 	draw_circle(p + Vector2(7, -10), 4.0, Color("#1b1a18"))
 	draw_line(p + Vector2(-6, 2), p + Vector2(6, 2), Color("#1b1a18"), 2.0)
@@ -777,7 +914,11 @@ func _draw_pois() -> void:
 				draw_line(p + Vector2(-24, -2), p + Vector2(-24, 16), Color("#3a2a1c"), 3.0)
 				draw_line(p + Vector2(24, -2), p + Vector2(24, 16), Color("#3a2a1c"), 3.0)
 				draw_line(p + Vector2(0, 8), p + Vector2(0, -6), Color(0.9, 0.85, 0.72, 0.45), 2.0)
-		var nm: String = str({"temple": "破庙", "well": "古井", "tea": "茶棚", "merchant": "货郎"}.get(typ, "旧迹"))
+			"snow_cave":
+				draw_circle(p + Vector2(0, 2), 24.0, Color("#c9d3d6"))
+				draw_circle(p + Vector2(0, 4), 17.0, Color("#14181b"))
+				draw_arc(p + Vector2(0, 2), 22.0, PI, TAU, 14, Color("#8fa0a6"), 3.0)
+		var nm: String = str({"temple": "破庙", "well": "古井", "tea": "茶棚", "merchant": "货郎", "snow_cave": "雪洞"}.get(typ, "旧迹"))
 		draw_string(ThemeDB.fallback_font, p + Vector2(-22, -50), nm, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("#b9a878") if used else Color("#f0d68a"))
 		if used:
 			draw_string(ThemeDB.fallback_font, p + Vector2(-18, -34), "已探", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.72, 0.66, 0.54, 0.8))
@@ -1003,6 +1144,10 @@ func _poi_data(typ: String) -> Dictionary:
 			return {"title": "破　庙", "sub": "半塌的山神庙，泥像没了头。",
 				"body": "供桌积着灰，香炉冷透。梁上似乎还藏着东西。\n\n（只能探一次）",
 				"choices": [{"id": "loot", "label": "搜供桌"}, {"id": "incense", "label": "上一炷香"}]}
+		"snow_cave":
+			return {"title": "雪　洞", "sub": "雪坡上裂开一口黑黢黢的洞。",
+				"body": "洞里没有风，反倒有些暖。\n\n（只能探一次）",
+				"choices": [{"id": "warm", "label": "避 风（行动+3）"}, {"id": "probe", "label": "探 洞"}]}
 		"well":
 			return {"title": "古　井", "sub": "井沿磨得发亮，井水黑得看不见底。",
 				"body": "水桶还在，绳子没烂。\n\n（只能探一次）",
@@ -1071,6 +1216,21 @@ func _on_poi_pick(id: String) -> void:
 					GameState.add_material("forge_stone", 3)
 					used = true
 					msg = "井底只摸到三块沉石，倒是能当锻造石用。"
+		"snow_cave":
+			if id == "warm":
+				GameState.action_add(3)
+				used = true
+				msg = "洞里暖得出奇。行动 +3。"
+			elif id == "probe":
+				if randf() < 0.4:
+					GameState.add_material("atlas", 1)
+					used = true
+					msg = "洞底压着半只旧箱，里面有一张舆图。"
+				else:
+					GameState.add_material("forge_stone", 3)
+					GameState.add_coin("silver", 15)
+					used = true
+					msg = "洞里只有几块冻石和 15 两碎银。"
 		"tea":
 			if id == "drink":
 				if GameState.coin("silver") < 10:
@@ -1641,10 +1801,16 @@ func _broker_near() -> bool:
 	return _player.position.distance_to(_cell_pos(_broker_cell.x, _broker_cell.y)) < 106.0
 
 func _broker_buy_price() -> int:
-	return maxi(40, 80 - GameState.broker_rep / 4)
+	var p := maxi(40, 80 - GameState.broker_rep / 4)
+	if GameState.story_title == "听雨客":
+		p = maxi(30, p - 10)
+	return p
 
 func _broker_sell_price() -> int:
-	return 60 + GameState.broker_rep / 5
+	var p := 60 + GameState.broker_rep / 5
+	if GameState.story_title == "听雨客":
+		p += 10
+	return p
 
 func _open_broker() -> void:
 	if _broker_done:
@@ -1656,11 +1822,82 @@ func _open_broker() -> void:
 		bp.connect("closed", _on_broker_closed)
 		_toast_layer.add_child(bp)
 		_broker_panel = bp
+	if GameState.broker_rep >= 60 and GameState.story_letter == 0:
+		var letter := {
+			"title": "一封没署名的信",
+			"sub": "听雨楼把它压在茶盏底下。",
+			"body": "信里是青岚后山的一条暗道图，落款被烧掉了。\n交给青岚，还是卖给赤水？",
+			"choices": [{"id": "letter_qinglan", "label": "交给青岚"}, {"id": "letter_chi", "label": "卖给赤水（+150两）"}, {"id": "letter_burn", "label": "烧掉"}],
+		}
+		_broker_panel.call("open", letter)
+		_busy = true
+		_moving = false
+		_has_click = false
+		for e_v in _enemies:
+			var e: Node2D = e_v
+			if is_instance_valid(e):
+				e.visible = false
+		if _action_lb != null:
+			_action_lb.visible = false
+		if _back_btn != null:
+			_back_btn.visible = false
+		if _codex_btn != null:
+			_codex_btn.visible = false
+		if _rel_btn != null:
+			_rel_btn.visible = false
+		return
+	if GameState.broker_rep >= 90 and GameState.story_letter > 0 and GameState.story_title == "":
+		var epi_choices: Array = []
+		if GameState.sect_joined:
+			epi_choices.append({"id": "epi_qinglan", "label": "留在青岚"})
+		epi_choices.append({"id": "epi_tingyu", "label": "做听雨楼的客人"})
+		epi_choices.append({"id": "epi_wander", "label": "继续走江湖"})
+		var epi := {
+			"title": "楼 主 的 茶",
+			"sub": "听雨楼最高一层，只有一盏灯。",
+			"body": "「你替青岚、替赤水、替听雨都跑过腿。\n往后的路，想挂哪一家的名？」",
+			"choices": epi_choices,
+		}
+		_broker_panel.call("open", epi)
+		_busy = true
+		_moving = false
+		_has_click = false
+		for e_v in _enemies:
+			var e: Node2D = e_v
+			if is_instance_valid(e):
+				e.visible = false
+		if _action_lb != null:
+			_action_lb.visible = false
+		if _back_btn != null:
+			_back_btn.visible = false
+		if _codex_btn != null:
+			_codex_btn.visible = false
+		if _rel_btn != null:
+			_rel_btn.visible = false
+		return
+	var choices: Array = []
+	if GameState.broker_rep >= 100 and GameState.broker_quest >= 3 and not GameState.broker_weapon:
+		choices.append({"id": "weapon", "label": "听雨刃（300两）"})
+	if GameState.broker_rep >= 90 and GameState.wanted > 0 and not GameState.broker_pardon:
+		choices.append({"id": "pardon", "label": "听雨令·抹案"})
+	choices.append({"id": "buy", "label": "买消息（" + str(_broker_buy_price()) + "两）"})
+	choices.append({"id": "sell", "label": "卖消息（+" + str(_broker_sell_price()) + "两）"})
+	var qlabel := ""
+	if GameState.broker_quest == 0 and GameState.broker_rep >= 30:
+		qlabel = "接委托（2行动）"
+	elif GameState.broker_quest == 1 and GameState.broker_rep >= 60:
+		qlabel = "查布防（2行动）"
+	elif GameState.broker_quest == 2 and GameState.broker_rep >= 90:
+		qlabel = "楼主托付（3行动）"
+	if qlabel != "":
+		choices.append({"id": "quest", "label": qlabel})
+	if choices.size() > 3:
+		choices = choices.slice(0, 3)
 	var data := {
 		"title": "听 雨 楼",
 		"sub": "檐下两盏雨灯，不问来路。名声 " + str(GameState.broker_rep) + "/100 · " + GameState.broker_rank_name() + "。",
 		"body": "楼里卖两样东西：别人的布防，和你的行踪。\n买消息 " + str(_broker_buy_price()) + " 两；卖消息 +" + str(_broker_sell_price()) + " 两。",
-		"choices": [{"id": "buy", "label": "买消息（" + str(_broker_buy_price()) + "两）"}, {"id": "sell", "label": "卖消息（+" + str(_broker_sell_price()) + "两）"}],
+		"choices": choices,
 	}
 	_broker_panel.call("open", data)
 	_busy = true
@@ -1680,6 +1917,49 @@ func _open_broker() -> void:
 		_rel_btn.visible = false
 
 func _on_broker_pick(id: String) -> void:
+	if id.begins_with("letter_"):
+		if id == "letter_qinglan":
+			GameState.sect_favor = mini(100, GameState.sect_favor + 10)
+			GameState.broker_rep = mini(100, GameState.broker_rep + 5)
+			GameState.story_letter = 1
+			GameState.note_war("把听雨楼的密信交给了青岚")
+			GameState.save_game()
+			_broker_panel.call("close")
+			_set_msg("信送进了青岚山门。山门好感 +10，听雨楼名声 +5。")
+		elif id == "letter_chi":
+			GameState.add_coin("silver", 150)
+			GameState.wanted = mini(5, GameState.wanted + 1)
+			GameState.story_letter = 2
+			GameState.note_war("把青岚的密信卖给了赤水寨")
+			GameState.save_game()
+			_broker_panel.call("close")
+			_set_msg("赤水寨收了信，给你 150 两。通缉 +1。")
+		else:
+			GameState.story_letter = 3
+			GameState.note_war("烧了听雨楼的密信")
+			GameState.save_game()
+			_broker_panel.call("close")
+			_set_msg("信在灯火上卷成灰。没人知道里面写了什么。")
+		queue_redraw()
+		return
+	if id.begins_with("epi_"):
+		if id == "epi_qinglan":
+			GameState.story_title = "青岚客卿"
+			GameState.sect_favor = mini(100, GameState.sect_favor + 10)
+			GameState.note_war("挂了青岚客卿的名")
+		elif id == "epi_tingyu":
+			GameState.story_title = "听雨客"
+			GameState.broker_rep = mini(100, GameState.broker_rep + 5)
+			GameState.note_war("成了听雨楼的客人")
+		else:
+			GameState.story_title = "江湖散人"
+			GameState.add_coin("silver", 100)
+			GameState.note_war("不挂任何一家的名，继续走江湖")
+		GameState.save_game()
+		_broker_panel.call("close")
+		_set_msg("从此江湖上多了一个「" + GameState.story_title + "」。")
+		queue_redraw()
+		return
 	if id == "buy":
 		var cost := _broker_buy_price()
 		if GameState.coin("silver") < cost:
@@ -1698,6 +1978,61 @@ func _on_broker_pick(id: String) -> void:
 		_broker_done = true
 		_broker_panel.call("close")
 		_set_msg("布防图到手，地图亮了一角。" + (" 战线 +" + str(score_gain) + "。" if got_score else ""))
+		queue_redraw()
+		return
+	if id == "weapon":
+		if GameState.coin("silver") < 300:
+			_broker_panel.call("set_result", "听雨刃要 300 两——不够。")
+			return
+		GameState.add_coin("silver", -300)
+		var got: Dictionary = GameState.grant_broker_weapon()
+		GameState.broker_weapon = true
+		GameState.note_war("从听雨楼取了听雨刃")
+		GameState.save_game()
+		_broker_panel.call("close")
+		_set_msg("楼主把「" + str(got.get("name", "听雨刃")) + "」推了过来。已入锻造库。")
+		queue_redraw()
+		return
+	if id == "pardon":
+		GameState.wanted = 0
+		GameState.broker_pardon = true
+		GameState.note_war("听雨楼抹了你的案子")
+		GameState.save_game()
+		_broker_panel.call("close")
+		_set_msg("听雨令动了。通缉清零，只此一次。")
+		queue_redraw()
+		return
+	if id == "quest":
+		var stage := GameState.broker_quest
+		var cost := 3 if stage == 2 else 2
+		if stage > 2:
+			_broker_panel.call("set_result", "听雨楼的委托已经跑完了。")
+			return
+		if not GameState.action_spend(cost):
+			_broker_panel.call("set_result", "行动不够——这单要 " + str(cost) + " 点。")
+			return
+		GameState.broker_quest = stage + 1
+		if stage == 0:
+			GameState.broker_rep = mini(100, GameState.broker_rep + 10)
+			GameState.add_coin("silver", 120)
+			GameState.note_war("替听雨楼跑了一趟委托")
+			_set_msg("信送到了。听雨楼给 120 两，名声 +10。")
+		elif stage == 1:
+			GameState.broker_rep = mini(100, GameState.broker_rep + 15)
+			GameState.add_coin("silver", 120)
+			if GameState.red_water == 2 and not GameState.red_water_peace:
+				GameState.war_score = mini(100, GameState.war_score + 20)
+			GameState.note_war("替听雨楼查了赤水布防")
+			_set_msg("布防查清了。听雨楼给 120 两，名声 +15。")
+		else:
+			GameState.broker_rep = mini(100, GameState.broker_rep + 20)
+			GameState.add_coin("silver", 200)
+			GameState.add_material("atlas", 1)
+			GameState.add_material("jin", 2)
+			GameState.note_war("办完了听雨楼楼主的托付")
+			_set_msg("楼主托付办完。银两 +200 · 舆图 +1 · 金髓 +2，名声 +20。")
+		GameState.save_game()
+		_broker_panel.call("close")
 		queue_redraw()
 		return
 	if id == "sell":
@@ -2055,6 +2390,7 @@ func _try_battle(enemy: Node2D) -> void:
 	queue_redraw()
 	var is_guard := bool(enemy.get_meta("guard", false))
 	var is_boss := bool(enemy.get_meta("boss", false))
+	var is_snow_boss := is_boss and str(enemy.get_meta("foe_name", "")) == "雪魈"
 	var node := {
 		"t": "battle",
 		"name": str(enemy.get_meta("foe_name", "敌人")),
@@ -2063,6 +2399,7 @@ func _try_battle(enemy: Node2D) -> void:
 		"stick_enemies": true,   # v242：探险战斗的敌人也用火柴人
 		"guard": is_guard,
 		"boss": is_boss,
+		"chill": is_snow_boss,
 	}
 	# 战斗里主角用火柴人（地图上仍用 Q 版立绘）：另起一个火柴人替身，
 	# 打完收掉，地图上的立绘原样还回来。
@@ -2159,6 +2496,8 @@ func _grant_battle_loot(enemy: Node2D) -> void:
 			_loot_atlas += 1
 			var drop := GameState.grant_boss_weapon(bname)
 			boss_drop = str(drop.get("name", ""))
+	if GameState.story_title == "江湖散人":
+		silver = int(round(float(silver) * 1.1))
 	GameState.add_coin("silver", silver)
 	GameState.add_material("forge_stone", stones)
 	_loot_silver += silver

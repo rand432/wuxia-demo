@@ -885,6 +885,13 @@ static var red_water_taxpost := false
 static var red_water_peace := false
 static var war_score := 0
 static var broker_rep := 0
+static var broker_quest := 0
+static var broker_pardon := false
+static var broker_weapon := false
+# v260：听雨楼密信剧情（0=未触发 / 1=交青岚 / 2=卖赤水 / 3=烧掉）
+static var story_letter := 0
+static var story_follow := 0
+static var story_title := ""
 static var turf_tax_day := ""
 static var war_notes: Array = []
 
@@ -3444,6 +3451,7 @@ static func grant_boss_weapon(boss_name: String) -> Dictionary:
 		"山君": {"name": "山君骨刃", "kind": "sword", "atk": 46, "dmg": 5, "affix": "pojun"},
 		"夜叉": {"name": "夜叉鬼爪", "kind": "dual", "atk": 42, "dmg": 6, "affix": "yinrui"},
 		"老妖": {"name": "老妖杖", "kind": "staff", "atk": 40, "dmg": 6, "affix": "buzhe"},
+		"雪魈": {"name": "雪魈獠牙", "kind": "dual", "atk": 44, "dmg": 6, "affix": "qingshen"},
 	}
 	var d: Dictionary = data.get(boss_name, {"name": "凶骨刃", "kind": "sword", "atk": 40, "dmg": 5, "affix": "pojun"})
 	var nm := str(d["name"])
@@ -3471,6 +3479,33 @@ static func grant_boss_weapon(boss_name: String) -> Dictionary:
 		"base_atk": float(atk), "base_dmg": float(dmg),
 		"inspired_left": 0, "round_inspired": false, "awaiting": false,
 		"affixes": [affix], "rule": "no_break", "source": "boss",
+	})
+	if forge_bag.size() > 40:
+		forge_bag.pop_front()
+	return {"sid": sid, "name": nm}
+
+static func grant_broker_weapon() -> Dictionary:
+	# v259：听雨楼楼主藏货——一次性专属成品。
+	var nm := "听雨刃"
+	var kind := "sword"
+	var atk := 62
+	var dmg := 8
+	var st := {"atk": atk, "dmg": dmg, "crit": 5, "spd": 3}
+	var sid := forge_next_sid()
+	var set := {
+		"id": sid, "name": nm, "item": nm, "pool": "weapon",
+		"quality": "绝品", "weapon": kind, "no_drop": true, "forge": true,
+		"parts": [], "item_stats": st, "desc": "听雨楼楼主藏货",
+	}
+	forge_cards[sid] = set
+	Cards.register_forged(sid, set)
+	vault_add_item(sid, 1)
+	forge_bag.append({
+		"sid": sid, "blank": "broker", "weapon": nm, "kind": kind,
+		"quality": 4, "cap": 4, "enhance": 10, "cracks": 0,
+		"base_atk": float(atk), "base_dmg": float(dmg),
+		"inspired_left": 0, "round_inspired": false, "awaiting": false,
+		"affixes": ["fengrui", "qingshen"], "rule": "no_break", "source": "broker",
 	})
 	if forge_bag.size() > 40:
 		forge_bag.pop_front()
@@ -6021,6 +6056,12 @@ static func load_game() -> void:
 	red_water_peace = bool(cf.get_value("world", "red_water_peace", false))
 	war_score = clampi(int(cf.get_value("world", "war_score", 0)), 0, 100)
 	broker_rep = clampi(int(cf.get_value("world", "broker_rep", 0)), 0, 100)
+	broker_quest = clampi(int(cf.get_value("world", "broker_quest", 0)), 0, 3)
+	broker_pardon = bool(cf.get_value("world", "broker_pardon", false))
+	broker_weapon = bool(cf.get_value("world", "broker_weapon", false))
+	story_letter = clampi(int(cf.get_value("world", "story_letter", 0)), 0, 3)
+	story_follow = clampi(int(cf.get_value("world", "story_follow", 0)), 0, 1)
+	story_title = str(cf.get_value("world", "story_title", ""))
 	turf_tax_day = str(cf.get_value("world", "turf_tax_day", ""))
 	war_notes = _sa(cf.get_value("world", "war_notes", []), war_notes)
 	advance_lv = clampi(int(cf.get_value("world", "advance_lv", 0)), 0, Realm.MAX_LV)   # v121：进阶境界
@@ -6153,6 +6194,12 @@ static func save_game() -> void:
 	cf.set_value("world", "red_water_peace", red_water_peace)
 	cf.set_value("world", "war_score", war_score)
 	cf.set_value("world", "broker_rep", broker_rep)
+	cf.set_value("world", "broker_quest", broker_quest)
+	cf.set_value("world", "broker_pardon", broker_pardon)
+	cf.set_value("world", "broker_weapon", broker_weapon)
+	cf.set_value("world", "story_letter", story_letter)
+	cf.set_value("world", "story_follow", story_follow)
+	cf.set_value("world", "story_title", story_title)
 	cf.set_value("world", "turf_tax_day", turf_tax_day)
 	cf.set_value("world", "war_notes", war_notes)
 	cf.set_value("world", "advance_lv", advance_lv)          # v121：进阶境界
@@ -6336,6 +6383,12 @@ static func reset() -> void:
 	red_water_peace = false
 	war_score = 0
 	broker_rep = 0
+	broker_quest = 0
+	broker_pardon = false
+	broker_weapon = false
+	story_letter = 0
+	story_follow = 0
+	story_title = ""
 	turf_tax_day = ""
 	war_notes.clear()
 	_idle_last_ts = _idle_now()

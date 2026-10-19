@@ -1,5 +1,5 @@
 extends Control
-# v251：凶物图鉴——三只区域 Boss 的首杀 / 专属记录。
+# v262：凶物图鉴——四只区域 Boss（含雪原雪魈）的首杀 / 专属记录。
 signal closed
 
 const UiKit := preload("res://shared/ui_kit.gd")
@@ -9,6 +9,7 @@ const BOSSES := [
 	{"name": "山君", "weapon": "山君骨刃", "weak": "左肋旧伤——再战气血 -10%", "lore": "盘踞山坳的虎形凶物，喜食过路商队。"},
 	{"name": "夜叉", "weapon": "夜叉鬼爪", "weak": "怕火——再战气血 -10%", "lore": "古战场残念所化，夜行如风。"},
 	{"name": "老妖", "weapon": "老妖杖", "weak": "根须怕断——再战气血 -10%", "lore": "老树成精，根须缠住整条山道。"},
+	{"name": "雪魈", "weapon": "雪魈獠牙", "weak": "畏热——再战气血 -10%", "lore": "雪原深处的高大人形凶物，毛色与雪同白。"},
 ]
 
 var _sub_lb: Label
@@ -18,7 +19,7 @@ func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	var veil := UiKit.make_veil(self, Vector2(720, 1280), 0.62)
-	var panel := UiKit.make_paper_panel(veil, Rect2(50, 260, 620, 760))
+	var panel := UiKit.make_paper_panel(veil, Rect2(50, 240, 620, 800))
 	panel.add_theme_stylebox_override("panel", UiKit.paper_box(1.0))
 	var title := UiKit.make_label(panel, Vector2(0, 20), Vector2(620, 46), 34, UiKit.INK)
 	UiKit.set_text(title, "凶 物 图 鉴")
@@ -27,18 +28,18 @@ func _ready() -> void:
 	_sub_lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	for i in BOSSES.size():
 		var b: Dictionary = BOSSES[i]
-		var y := 120.0 + float(i) * 190.0
+		var y := 105.0 + float(i) * 150.0
 		var nm := UiKit.make_label(panel, Vector2(40, y), Vector2(540, 34), 24, UiKit.SEAL)
 		UiKit.set_text(nm, str(b["name"]))
 		var st := UiKit.make_label(panel, Vector2(40, y + 36), Vector2(540, 24), 15, UiKit.INK)
-		var wp := UiKit.make_label(panel, Vector2(40, y + 64), Vector2(540, 24), 14, UiKit.DIM)
+		var wp := UiKit.make_label(panel, Vector2(40, y + 62), Vector2(540, 24), 14, UiKit.DIM)
 		UiKit.set_text(wp, "专属：" + str(b["weapon"]))
-		var wk := UiKit.make_label(panel, Vector2(40, y + 88), Vector2(540, 22), 14, Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.52))
-		var lo := UiKit.make_label(panel, Vector2(40, y + 114), Vector2(540, 46), 14, Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.68))
+		var wk := UiKit.make_label(panel, Vector2(40, y + 86), Vector2(540, 22), 14, Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.52))
+		var lo := UiKit.make_label(panel, Vector2(40, y + 110), Vector2(540, 32), 14, Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.68))
 		UiKit.set_text(lo, str(b["lore"]))
 		lo.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		_rows.append({"name": str(b["name"]), "status": st, "weak": wk, "weak_txt": str(b["weak"])})
-	var back := UiKit.make_button(panel, Vector2(210, 670), Vector2(200, 46), "关 闭", 18)
+	var back := UiKit.make_button(panel, Vector2(210, 720), Vector2(200, 46), "关 闭", 18)
 	back.pressed.connect(close)
 	visible = false
 
@@ -55,7 +56,7 @@ func open() -> void:
 		var wk: Label = r["weak"]
 		wk.text = "弱点：" + str(r["weak_txt"]) if killed else "弱点：未识破（首杀后记下）"
 		wk.add_theme_color_override("font_color", UiKit.SEAL if killed else Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.42))
-	_sub_lb.text = "已首杀 " + str(got) + " / 3 · 已识破 " + str(got) + " 处弱点"
+	_sub_lb.text = "已首杀 " + str(got) + " / " + str(BOSSES.size()) + " · 已识破 " + str(got) + " 处弱点"
 	visible = true
 
 func close() -> void:

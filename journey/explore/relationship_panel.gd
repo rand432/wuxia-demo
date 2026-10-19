@@ -5,9 +5,11 @@ signal closed
 const UiKit := preload("res://shared/ui_kit.gd")
 const GS := preload("res://shared/game_state.gd")
 const WarReportPanel := preload("res://journey/explore/war_report_panel.gd")
+const EpiloguePanel := preload("res://journey/explore/epilogue_panel.gd")
 
-const LAND_NAMES := ["山多·路窄", "水多·雾重", "林密·怪多", "石多·宝多"]
+const LAND_NAMES := ["山多·路窄", "水多·雾重", "林密·怪多", "石多·宝多", "雪原·苦寒"]
 
+var _sub_lb: Label
 var _dealer_lb: Label
 var _sect_lb: Label
 var _boss_lb: Label
@@ -18,6 +20,8 @@ var _appease_btn: Button
 var _msg_lb: Label
 var _war_btn: Button
 var _war_panel: Control
+var _epi_btn: Button
+var _epi_panel: Control
 var _close_btn: Button
 var _last_info := {}
 
@@ -30,9 +34,9 @@ func _ready() -> void:
 	var title := UiKit.make_label(panel, Vector2(0, 20), Vector2(640, 46), 34, UiKit.INK)
 	UiKit.set_text(title, "江 湖 关 系")
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	var sub := UiKit.make_label(panel, Vector2(0, 70), Vector2(640, 24), 15, UiKit.DIM)
-	UiKit.set_text(sub, "货郎 · 山门 · 凶物 · 此方世界")
-	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_sub_lb = UiKit.make_label(panel, Vector2(0, 70), Vector2(640, 24), 15, UiKit.DIM)
+	UiKit.set_text(_sub_lb, "货郎 · 山门 · 凶物 · 此方世界")
+	_sub_lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
 	_dealer_lb = _section("货 郎 老 赵", 110)
 	_sect_lb = _section("青 岚 山 门", 250)
@@ -48,6 +52,8 @@ func _ready() -> void:
 	_msg_lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_war_btn = UiKit.make_button(panel, Vector2(500, 20), Vector2(110, 34), "战 报", 14)
 	_war_btn.pressed.connect(_open_war)
+	_epi_btn = UiKit.make_button(panel, Vector2(380, 20), Vector2(110, 34), "后 记", 14)
+	_epi_btn.pressed.connect(_open_epi)
 	_close_btn = UiKit.make_button(panel, Vector2(220, 880), Vector2(200, 46), "关 闭", 18)
 	_close_btn.pressed.connect(close)
 	visible = false
@@ -70,6 +76,10 @@ func _panel_parent() -> Node:
 
 func open(info: Dictionary) -> void:
 	_last_info = info
+	var subtxt := "货郎 · 山门 · 凶物 · 此方世界"
+	if GS.story_title != "":
+		subtxt += " · " + GS.story_title
+	_sub_lb.text = subtxt
 	var d := int(round(minf(0.2, float(GS.merchant_favor) * 0.002) * 100.0))
 	_dealer_lb.text = "人情 " + str(GS.merchant_favor) + "/100 · 价 -" + str(d) + "%\n通缉 " + str(GS.wanted) + "/5 · " + ("暂不做你生意" if GS.wanted > 0 else "照常做生意")
 	var sect := ""
@@ -129,6 +139,20 @@ func _on_war_closed() -> void:
 	if _close_btn != null:
 		_close_btn.visible = true
 
+func _open_epi() -> void:
+	if _epi_panel == null:
+		var ep = EpiloguePanel.new()
+		ep.connect("closed", _on_epi_closed)
+		add_child(ep)
+		_epi_panel = ep
+	_epi_panel.call("open")
+	if _close_btn != null:
+		_close_btn.visible = false
+
+func _on_epi_closed() -> void:
+	if _close_btn != null:
+		_close_btn.visible = true
+
 func _gift() -> void:
 	if GS.merchant_favor >= 100 or GS.coin("silver") < 50:
 		_msg_lb.text = "礼送不出去。"
@@ -172,6 +196,8 @@ func close() -> void:
 
 func _input(event: InputEvent) -> void:
 	if _war_panel != null and _war_panel.visible:
+		return
+	if _epi_panel != null and _epi_panel.visible:
 		return
 	if event.is_action_pressed("ui_cancel"):
 		get_viewport().set_input_as_handled()

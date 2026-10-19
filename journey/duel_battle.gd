@@ -2412,6 +2412,12 @@ func run(state, player: Node2D, fx: Control, node: Dictionary, foe_first := fals
 	if foe_first:
 		_blog("来敌先手！", "hit")
 		_banner("来敌先手！", UiKit.SEAL)
+	if bool(node.get("chill", false)):
+		var chill_msg: String = St.apply(_a(), "slow", 3, 2)
+		_blog("雪魈的寒霜压住身法：" + chill_msg, "guard")
+		_banner("寒 霜", Color(0.55, 0.75, 0.85))
+		_update_bars()
+		await _wait(0.8)
 
 	var p_first: bool = (not foe_first) and _player_spd() >= _foe_spd()
 	var guard := 0

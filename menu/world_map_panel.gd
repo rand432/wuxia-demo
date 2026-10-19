@@ -7,8 +7,8 @@ const UiKit := preload("res://shared/ui_kit.gd")
 const GS := preload("res://shared/game_state.gd")
 
 const WORLD_NAMES := ["青岚界", "赤水界", "玄霜界", "黄泉界", "无相界"]
-const LAND_NAMES := ["山多·路窄", "水多·雾重", "林密·怪多", "石多·宝多"]
-const LAND_DESC := ["宝箱少 · 石多", "视野短 · 雾重", "怪多一只 · 草木密", "宝箱多 · 石多"]
+const LAND_NAMES := ["山多·路窄", "水多·雾重", "林密·怪多", "石多·宝多", "雪原·苦寒"]
+const LAND_DESC := ["宝箱少 · 石多", "视野短 · 雾重", "怪多一只 · 草木密", "宝箱多 · 石多", "怪快 · 视野短 · 雪狼"]
 
 var _cur_lb: Label
 var _next_lb: Label

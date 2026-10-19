@@ -89,6 +89,10 @@ func _input(event: InputEvent) -> void:
 		close()
 
 func _refresh() -> void:
+	var bonus := 5 if GS.story_title == "青岚客卿" else 0
+	_task_btns[0].text = "交兽骨碎 ×3 · 贡献 +" + str(20 + bonus)
+	_task_btns[1].text = "交锻造石 ×2 · 贡献 +" + str(25 + bonus)
+	_task_btns[2].text = "跑腿 3 行动 · 贡献 +" + str(15 + bonus)
 	_top_lb.text = "青岚山门 · " + _rank_name() + " · 贡献 " + str(GS.sect_contrib)
 	_task_btns[0].disabled = GS.material_count("bone") < 3
 	_task_btns[1].disabled = GS.material_count("forge_stone") < 2
@@ -114,24 +118,25 @@ func _arena() -> void:
 	arena_requested.emit()
 
 func _do_task(i: int) -> void:
+	var bonus := 5 if GS.story_title == "青岚客卿" else 0
 	match i:
 		0:
 			if GS.material_count("bone") < 3:
 				return
 			GS.add_material("bone", -3)
-			GS.sect_contrib += 20
-			_msg_lb.text = "交了兽骨碎。贡献 +20。"
+			GS.sect_contrib += 20 + bonus
+			_msg_lb.text = "交了兽骨碎。贡献 +" + str(20 + bonus) + "。"
 		1:
 			if GS.material_count("forge_stone") < 2:
 				return
 			GS.add_material("forge_stone", -2)
-			GS.sect_contrib += 25
-			_msg_lb.text = "交了锻造石。贡献 +25。"
+			GS.sect_contrib += 25 + bonus
+			_msg_lb.text = "交了锻造石。贡献 +" + str(25 + bonus) + "。"
 		2:
 			if not GS.action_spend(3):
 				return
-			GS.sect_contrib += 15
-			_msg_lb.text = "跑完一趟腿。贡献 +15。"
+			GS.sect_contrib += 15 + bonus
+			_msg_lb.text = "跑完一趟腿。贡献 +" + str(15 + bonus) + "。"
 	GS.save_game()
 	_refresh()
 
