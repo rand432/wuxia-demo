@@ -9,6 +9,7 @@ const BOSSES := [
 	{"name": "山君", "weapon": "山君骨刃", "weak": "左肋旧伤——再战气血 -10%", "lore": "盘踞山坳的虎形凶物，喜食过路商队。"},
 	{"name": "夜叉", "weapon": "夜叉鬼爪", "weak": "怕火——再战气血 -10%", "lore": "古战场残念所化，夜行如风。"},
 	{"name": "老妖", "weapon": "老妖杖", "weak": "根须怕断——再战气血 -10%", "lore": "老树成精，根须缠住整条山道。"},
+	{"name": "石傀", "weapon": "石傀重锤", "weak": "核心外露——再战气血 -10%", "lore": "石谷深处的守矿巨像，醒来只为碾碎入侵者。"},
 	{"name": "雪魈", "weapon": "雪魈獠牙", "weak": "畏热——再战气血 -10%", "lore": "雪原深处的高大人形凶物，毛色与雪同白。"},
 ]
 
@@ -19,7 +20,7 @@ func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	var veil := UiKit.make_veil(self, Vector2(720, 1280), 0.62)
-	var panel := UiKit.make_paper_panel(veil, Rect2(50, 240, 620, 800))
+	var panel := UiKit.make_paper_panel(veil, Rect2(50, 200, 620, 840))
 	panel.add_theme_stylebox_override("panel", UiKit.paper_box(1.0))
 	var title := UiKit.make_label(panel, Vector2(0, 20), Vector2(620, 46), 34, UiKit.INK)
 	UiKit.set_text(title, "凶 物 图 鉴")
@@ -28,18 +29,18 @@ func _ready() -> void:
 	_sub_lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	for i in BOSSES.size():
 		var b: Dictionary = BOSSES[i]
-		var y := 105.0 + float(i) * 150.0
+		var y := 100.0 + float(i) * 128.0
 		var nm := UiKit.make_label(panel, Vector2(40, y), Vector2(540, 34), 24, UiKit.SEAL)
 		UiKit.set_text(nm, str(b["name"]))
-		var st := UiKit.make_label(panel, Vector2(40, y + 36), Vector2(540, 24), 15, UiKit.INK)
-		var wp := UiKit.make_label(panel, Vector2(40, y + 62), Vector2(540, 24), 14, UiKit.DIM)
+		var st := UiKit.make_label(panel, Vector2(40, y + 32), Vector2(540, 22), 15, UiKit.INK)
+		var wp := UiKit.make_label(panel, Vector2(40, y + 55), Vector2(540, 20), 14, UiKit.DIM)
 		UiKit.set_text(wp, "专属：" + str(b["weapon"]))
-		var wk := UiKit.make_label(panel, Vector2(40, y + 86), Vector2(540, 22), 14, Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.52))
-		var lo := UiKit.make_label(panel, Vector2(40, y + 110), Vector2(540, 32), 14, Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.68))
+		var wk := UiKit.make_label(panel, Vector2(40, y + 77), Vector2(540, 20), 14, Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.52))
+		var lo := UiKit.make_label(panel, Vector2(40, y + 99), Vector2(540, 26), 14, Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.68))
 		UiKit.set_text(lo, str(b["lore"]))
 		lo.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		_rows.append({"name": str(b["name"]), "status": st, "weak": wk, "weak_txt": str(b["weak"])})
-	var back := UiKit.make_button(panel, Vector2(210, 720), Vector2(200, 46), "关 闭", 18)
+	var back := UiKit.make_button(panel, Vector2(210, 760), Vector2(200, 46), "关 闭", 18)
 	back.pressed.connect(close)
 	visible = false
 

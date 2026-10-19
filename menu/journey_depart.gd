@@ -996,7 +996,10 @@ func _paint() -> void:
 	else:
 		_sel_lb.text = "没有可走的路——能走的档都走通了（新路在后面的版本里）"
 	if _sub_lb != null:
-		_sub_lb.text = "点头像选人 · 挑一档路 · 行动 " + str(GameState.action) + "/" + str(GameState.ACTION_MAX)
+		var ft := "食物 " + str(mini(GameState.action, 100)) + " / 100"
+		if GameState.action > 100:
+			ft += " · 存粮 +" + str(GameState.action - 100)
+		_sub_lb.text = "点头像选人 · 挑一档路 · " + ft
 	var sw: int = GameState.ladder_swaps("weapon")
 	var sa: int = GameState.ladder_swaps("arts")
 	_pool_lb.text = "货源：" + _pool_stage_cn() + "段 · 兵器已换 " + str(sw) + " 手／武学已换 " + str(sa) + " 手"

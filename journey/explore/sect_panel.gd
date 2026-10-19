@@ -61,7 +61,7 @@ func _ready() -> void:
 	UiKit.set_text(align, "中立 · 不挑出身")
 
 	_test_lb = _row("考 验", 346)
-	_test_btn = UiKit.make_button(_panel, Vector2(400, 334), Vector2(200, 46), "跑腿 3行动·30两", 15)
+	_test_btn = UiKit.make_button(_panel, Vector2(400, 334), Vector2(200, 46), "跑腿 3食物·30两", 15)
 	_test_btn.pressed.connect(_test)
 
 	_gate_lb = UiKit.make_label(_panel, Vector2(40, 416), Vector2(560, 60), 15, Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.72))
@@ -189,7 +189,7 @@ func _test() -> void:
 		_say("跑腿要 " + str(TEST_SILVER) + " 两。")
 		return
 	if GS.action < TEST_ACTION:
-		_say("行动不够——跑这趟要 " + str(TEST_ACTION) + " 点行动。")
+		_say("食物不够——跑这趟要 " + str(TEST_ACTION) + " 点食物。")
 		return
 	GS.add_coin("silver", -TEST_SILVER)
 	GS.action_spend(TEST_ACTION)

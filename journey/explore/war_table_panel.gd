@@ -27,9 +27,9 @@ func _ready() -> void:
 	_red_lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_north_lb = UiKit.make_label(panel, Vector2(40, 224), Vector2(540, 90), 15, Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.78))
 	_north_lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_dispatch_btn = UiKit.make_button(panel, Vector2(130, 340), Vector2(360, 46), "北境出兵（2行动+50两）", 15)
+	_dispatch_btn = UiKit.make_button(panel, Vector2(130, 340), Vector2(360, 46), "北境出兵（2食物+50两）", 15)
 	_dispatch_btn.pressed.connect(_dispatch)
-	_final_btn = UiKit.make_button(panel, Vector2(130, 400), Vector2(360, 46), "北境决战（5行动+200两）", 15)
+	_final_btn = UiKit.make_button(panel, Vector2(130, 400), Vector2(360, 46), "北境决战（5食物+200两）", 15)
 	_final_btn.pressed.connect(_final)
 	_msg_lb = UiKit.make_label(panel, Vector2(40, 468), Vector2(540, 80), 14, Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.75))
 	_msg_lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -60,7 +60,7 @@ func _dispatch() -> void:
 	if GS.north_peace:
 		return
 	if not GS.action_spend(2) or GS.coin("silver") < 50:
-		_msg_lb.text = "行动或银两不够。"
+		_msg_lb.text = "食物或银两不够。"
 		return
 	GS.add_coin("silver", -50)
 	if randf() < 0.6:
@@ -80,7 +80,7 @@ func _final() -> void:
 	if GS.north_peace or GS.north_score < 100:
 		return
 	if not GS.action_spend(5) or GS.coin("silver") < 200:
-		_msg_lb.text = "决战要 5 行动 + 200 两。"
+		_msg_lb.text = "决战要 5 食物 + 200 两。"
 		return
 	GS.add_coin("silver", -200)
 	if randf() < 0.55:

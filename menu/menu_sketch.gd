@@ -78,6 +78,7 @@ const StarPanel := preload("res://menu/star_panel.gd")   # v4.3：统一升星�
 const PetPanel := preload("res://menu/pet_panel.gd")
 const ShopPanel := preload("res://menu/shop_panel.gd")
 const JourneyDepart := preload("res://menu/journey_depart.gd")
+const RegionSelectPanel := preload("res://menu/region_select.gd")
 const InsightPanel := preload("res://menu/insight_panel.gd")   # v64b：阅历线（底排第 6 格）
 const JourneySave := preload("res://journey/journey_save.gd")
 const BattleLite := preload("res://menu/battle_lite.gd")
@@ -260,6 +261,7 @@ var _forge_panel = null      # v242：铁砧屏
 var _pet_panel = null
 var _shop_panel = null
 var _depart = null
+var _region_panel = null
 var _battle = null
 var _veil = null
 var _marks_root: Control
@@ -2425,7 +2427,10 @@ func _on_idle_collect() -> void:
 	Audio.sfx("coin", -7.0, randf_range(1.0, 1.08))   # v98：收着钱了给一声
 	var parts: Array = ["银两 +" + str(int(r["silver"]))]
 	if int(r.get("action", 0)) > 0:
-		parts.append("行动 +" + str(int(r["action"])) + "（现 " + str(GameState.action) + "/" + str(GameState.ACTION_MAX) + "）")
+		var ft := "食物 +" + str(int(r["action"])) + "（现 " + str(mini(GameState.action, 100)) + "/100"
+		if GameState.action > 100:
+			ft += " · 存粮 +" + str(GameState.action - 100)
+		parts.append(ft + "）")
 	var ex := int(r.get("exp", 0))
 	if ex > 0:
 		parts.append("经验 +" + str(ex) + " 入经验池（现 " + str(GameState.exp_pool) + "，弟子面板［分配］）")
@@ -2950,13 +2955,28 @@ func _open_insight() -> void:
 
 func _on_deploy_started(party: Array, diff: int) -> void:
 	if GameState.action <= 0:
-		_show_toast("行动资源空了——先去「挂机」收一次，或爬塔攒一点", 3.2)
+		_show_toast("食物空了——先去「挂机」收一次，或爬塔攒一点", 3.2)
 		return
-	print("[主界面] 出征：", party, " · ", GameState.diff_name(diff), " → ", Conf.EXPLORE_SCENE)
+	if _region_panel == null:
+		_region_panel = RegionSelectPanel.new()
+		_region_panel.entered.connect(_on_region_entered)
+		_region_panel.closed.connect(_on_region_closed)
+		add_child(_region_panel)
+	_region_panel.open()
+
+func _on_region_entered(region: int) -> void:
+	GameState.current_region = clampi(region, 0, 4)
+	GameState.save_game()
+	if _region_panel != null:
+		_region_panel.close()
+	print("[主界面] 入图：", GameState.REGION_NAMES[GameState.current_region], " · 世界档 ", GameState.world_tier)
 	var err := get_tree().change_scene_to_file(Conf.EXPLORE_SCENE)
 	if err != OK:
 		print("[主界面] 打不开游历，错误码=", err, "；检查路径：", Conf.EXPLORE_SCENE)
 		_show_toast("进不去游历：路径＝" + Conf.EXPLORE_SCENE)
+
+func _on_region_closed() -> void:
+	pass
 
 func _start_stage(i: int) -> void:
 	if i != GameState.stage_progress:

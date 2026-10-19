@@ -90,8 +90,8 @@ const IDLE_CFG := "user://idle.cfg"
 const IDLE_CAP_SEC := 28800
 const IDLE_SILVER_PER_MIN := 1
 const IDLE_EXP_PER_MIN := 2
-const ACTION_START := 24      # v242：行动资源（游历门票）——起始、上限
-const ACTION_MAX := 60
+const ACTION_START := 60      # 食物（原行动值）：开局 60，主条满值 100，库存上限 999
+const ACTION_MAX := 999
 # ㉞：每清几关挂机收益涨一档。
 #   原来是 5——那时塔只有 50 关，顶天 10 档（+10 银两/分）还算克制。
 #   塔扩到 500 关后，5 会变成 100 档（+100 银两/分），直接把过关赏（每关十几两）
@@ -895,6 +895,20 @@ static var north_weapon := false
 static var north_tax_day := ""
 static var ng_plus := 0
 static var map_owners: Dictionary = {}
+static var world_flags: Dictionary = {}
+const PROSPERITY_STEPS := [0, 30, 70, 120, 180]
+static var world_prosperity := 0
+const REGION_NAMES := ["山", "水", "林", "石", "雪"]
+const REGION_BOSSES := ["山君", "夜叉", "老妖", "石傀", "雪魈"]
+const REGION_DIFFS := [1, 2, 3, 4, 5]
+const REGION_COSTS := [0, 0, 0, 2, 3]
+static var current_region := 0
+static var region_unlocked: Array = [true, true, true, false, false]
+const TIME_NAMES := ["晨", "昼", "夜"]
+static var time_slot := 0
+static var time_day := 1
+static var slot_progress := 0
+static var region_rep: Array = [0, 0, 0, 0, 0]
 static var north_garrison := false
 static var broker_weapon := false
 # v260：听雨楼密信剧情（0=未触发 / 1=交青岚 / 2=卖赤水 / 3=烧掉）
@@ -910,11 +924,30 @@ static func action_add(n: int) -> int:
 	action = clampi(action + n, 0, ACTION_MAX)
 	return action
 
+static func food_cap() -> int:
+	return ACTION_MAX
+
 static func action_spend(n := 1) -> bool:
 	if action < n:
 		return false
 	action -= n
+	slot_progress += n
+	while slot_progress >= 20:
+		slot_progress -= 20
+		time_slot += 1
+		if time_slot >= 3:
+			time_slot = 0
+			time_day += 1
 	return true
+
+static func time_text() -> String:
+	return str(TIME_NAMES[clampi(time_slot, 0, 2)]) + " · 第 " + str(time_day) + " 天"
+
+static func add_region_rep(region: int, n: int) -> void:
+	var i := clampi(region, 0, 4)
+	while region_rep.size() < 5:
+		region_rep.append(0)
+	region_rep[i] = clampi(int(region_rep[i]) + n, 0, 100)
 
 # ---- 货栈（银两换材料 / 残卡；残卡每日限购，按真实日期重置） ----
 const SHOP_CFG := "user://shop.cfg"
@@ -3462,6 +3495,7 @@ static func grant_boss_weapon(boss_name: String) -> Dictionary:
 		"山君": {"name": "山君骨刃", "kind": "sword", "atk": 46, "dmg": 5, "affix": "pojun"},
 		"夜叉": {"name": "夜叉鬼爪", "kind": "dual", "atk": 42, "dmg": 6, "affix": "yinrui"},
 		"老妖": {"name": "老妖杖", "kind": "staff", "atk": 40, "dmg": 6, "affix": "buzhe"},
+		"石傀": {"name": "石傀重锤", "kind": "staff", "atk": 48, "dmg": 7, "affix": "buzhe"},
 		"雪魈": {"name": "雪魈獠牙", "kind": "dual", "atk": 44, "dmg": 6, "affix": "qingshen"},
 	}
 	var d: Dictionary = data.get(boss_name, {"name": "凶骨刃", "kind": "sword", "atk": 40, "dmg": 5, "affix": "pojun"})
@@ -4689,7 +4723,7 @@ static func idle_rate_text() -> String:
 		tier_note = "每清 " + str(IDLE_STEP) + " 关涨一档"
 	else:
 		tier_note = str(IDLE_TIER_SWITCH) + " 关后每 " + str(IDLE_STEP_LATE) + " 关涨一档（不封顶）"
-	return "银两 " + str(idle_silver_per_min()) + "/分 · 行动 " + str(idle_action_per_10min()) + "/10分 · 经验 " + str(idle_exp_per_min()) + "/分 · 阅历 " + str(snappedf(insight_rate(), 0.1)) + "/分（第 " + str(idle_tier() + 1) + " 档；" + tier_note + "）"
+	return "银两 " + str(idle_silver_per_min()) + "/分 · 食物 " + str(idle_action_per_10min()) + "/10分 · 经验 " + str(idle_exp_per_min()) + "/分 · 阅历 " + str(snappedf(insight_rate(), 0.1)) + "/分（第 " + str(idle_tier() + 1) + " 档；" + tier_note + "）"
 
 static func idle_collect() -> Dictionary:
 	idle_sync()
@@ -4849,6 +4883,50 @@ static func broker_rank_name() -> String:
 static func ng_mul() -> float:
 	return 1.0 + 0.15 * float(ng_plus)
 
+static func tier_for_prosperity(points: int) -> int:
+	var t := 1
+	for i in PROSPERITY_STEPS.size():
+		if points >= int(PROSPERITY_STEPS[i]):
+			t = i + 1
+	return t
+
+static func prosperity_need(tier: int) -> int:
+	return int(PROSPERITY_STEPS[clampi(tier - 1, 0, 4)])
+
+static func add_prosperity(n: int, reason := "") -> void:
+	var old := world_tier
+	world_prosperity = maxi(0, world_prosperity + n)
+	world_tier = tier_for_prosperity(world_prosperity)
+	if world_tier > old:
+		note_push("世界繁荣：第 " + str(world_tier) + " 档" + ("（" + reason + "）" if reason != "" else ""))
+
+static func region_cost(i: int) -> int:
+	return int(REGION_COSTS[clampi(i, 0, 4)])
+
+static func region_unlocked_at(i: int) -> bool:
+	var idx := clampi(i, 0, 4)
+	if idx >= region_unlocked.size():
+		return false
+	return bool(region_unlocked[idx])
+
+static func world_has(kind: String, key: String) -> bool:
+	var w: Dictionary = world_flags.get(str(world_seed), {})
+	var arr: Array = w.get(kind, [])
+	return arr.has(str(current_region) + "|" + key)
+
+static func world_mark(kind: String, key: String) -> void:
+	var sk := str(world_seed)
+	var w: Dictionary = world_flags.get(sk, {})
+	var arr: Array = w.get(kind, [])
+	var kk := str(current_region) + "|" + key
+	if not arr.has(kk):
+		arr.append(kk)
+	w[kind] = arr
+	world_flags[sk] = w
+
+static func world_clear() -> void:
+	world_flags.clear()
+
 static func map_owner_of(seed: int) -> int:
 	return clampi(int(map_owners.get(str(seed), 0)), 0, 3)
 
@@ -4869,8 +4947,16 @@ static func cycle_title() -> String:
 static func begin_new_cycle() -> void:
 	ng_plus = mini(99, ng_plus + 1)
 	map_owners.clear()
+	world_flags.clear()
+	world_prosperity = 0
+	world_tier = 1
+	time_slot = 0
+	time_day = 1
+	slot_progress = 0
+	region_rep = [0, 0, 0, 0, 0]
+	current_region = 0
+	region_unlocked = [true, true, true, false, false]
 	world_seed += 1
-	world_tier = mini(5, 1 + ng_plus)
 	red_water = 0
 	red_water_wall = false
 	red_water_market = false
@@ -6153,6 +6239,22 @@ static func load_game() -> void:
 	north_tax_day = str(cf.get_value("world", "north_tax_day", ""))
 	ng_plus = clampi(int(cf.get_value("world", "ng_plus", 0)), 0, 99)
 	map_owners = _sd(cf.get_value("world", "map_owners", {}), map_owners)
+	world_flags = _sd(cf.get_value("world", "world_flags", {}), world_flags)
+	var old_tier := world_tier
+	world_prosperity = int(cf.get_value("world", "world_prosperity", -1))
+	if world_prosperity < 0:
+		world_prosperity = int(PROSPERITY_STEPS[clampi(old_tier - 1, 0, 4)])
+	world_tier = tier_for_prosperity(world_prosperity)
+	current_region = clampi(int(cf.get_value("world", "current_region", 0)), 0, 4)
+	region_unlocked = _sa(cf.get_value("world", "region_unlocked", [true, true, true, false, false]), [true, true, true, false, false]).duplicate()
+	time_slot = clampi(int(cf.get_value("world", "time_slot", 0)), 0, 2)
+	time_day = maxi(1, int(cf.get_value("world", "time_day", 1)))
+	slot_progress = maxi(0, int(cf.get_value("world", "slot_progress", 0)))
+	region_rep = _sa(cf.get_value("world", "region_rep", [0, 0, 0, 0, 0]), [0, 0, 0, 0, 0]).duplicate()
+	while region_rep.size() < 5:
+		region_rep.append(0)
+	while region_unlocked.size() < 5:
+		region_unlocked.append(false)
 	north_garrison = bool(cf.get_value("world", "north_garrison", false))
 	broker_weapon = bool(cf.get_value("world", "broker_weapon", false))
 	story_letter = clampi(int(cf.get_value("world", "story_letter", 0)), 0, 3)
@@ -6312,6 +6414,14 @@ static func save_game() -> void:
 	cf.set_value("world", "north_tax_day", north_tax_day)
 	cf.set_value("world", "ng_plus", ng_plus)
 	cf.set_value("world", "map_owners", map_owners)
+	cf.set_value("world", "world_flags", world_flags)
+	cf.set_value("world", "world_prosperity", world_prosperity)
+	cf.set_value("world", "current_region", current_region)
+	cf.set_value("world", "region_unlocked", region_unlocked)
+	cf.set_value("world", "time_slot", time_slot)
+	cf.set_value("world", "time_day", time_day)
+	cf.set_value("world", "slot_progress", slot_progress)
+	cf.set_value("world", "region_rep", region_rep)
 	cf.set_value("world", "north_garrison", north_garrison)
 	cf.set_value("world", "broker_weapon", broker_weapon)
 	cf.set_value("world", "story_letter", story_letter)
@@ -6490,6 +6600,11 @@ static func reset() -> void:
 	sect_betrayed = false
 	world_seed = 0
 	world_tier = 1
+	world_prosperity = 0
+	time_slot = 0
+	time_day = 1
+	slot_progress = 0
+	region_rep = [0, 0, 0, 0, 0]
 	merchant_favor = 0
 	wanted = 0
 	boss_kills.clear()
@@ -6518,6 +6633,9 @@ static func reset() -> void:
 	north_garrison = false
 	ng_plus = 0
 	map_owners.clear()
+	world_flags.clear()
+	current_region = 0
+	region_unlocked = [true, true, true, false, false]
 	turf_tax_day = ""
 	war_notes.clear()
 	_idle_last_ts = _idle_now()

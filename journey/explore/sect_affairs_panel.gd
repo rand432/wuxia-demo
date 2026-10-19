@@ -39,7 +39,7 @@ func _ready() -> void:
 
 	var task_title := UiKit.make_label(panel, Vector2(40, 112), Vector2(540, 26), 17, UiKit.SEAL)
 	UiKit.set_text(task_title, "杂 役")
-	var tasks := ["交兽骨碎 ×3 · 贡献 +20", "交锻造石 ×2 · 贡献 +25", "跑腿 3 行动 · 贡献 +15"]
+	var tasks := ["交兽骨碎 ×3 · 贡献 +20", "交锻造石 ×2 · 贡献 +25", "跑腿 3 食物 · 贡献 +15"]
 	for i in tasks.size():
 		var b := UiKit.make_button(panel, Vector2(170, 150 + i * 54), Vector2(280, 44), tasks[i], 16)
 		b.pressed.connect(_do_task.bind(i))
@@ -56,7 +56,7 @@ func _ready() -> void:
 		b.pressed.connect(_learn.bind(i))
 		_art_btns.append(b)
 
-	_arena_btn = UiKit.make_button(panel, Vector2(170, 486), Vector2(280, 44), "演武场 · 挑战师兄（2行动）", 15)
+	_arena_btn = UiKit.make_button(panel, Vector2(170, 486), Vector2(280, 44), "演武场 · 挑战师兄（2食物）", 15)
 	_arena_btn.pressed.connect(_arena)
 	_msg_lb = UiKit.make_label(panel, Vector2(40, 552), Vector2(540, 54), 14, Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.75))
 	_msg_lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -92,7 +92,7 @@ func _refresh() -> void:
 	var bonus := 5 if GS.story_title == "青岚客卿" else 0
 	_task_btns[0].text = "交兽骨碎 ×3 · 贡献 +" + str(20 + bonus)
 	_task_btns[1].text = "交锻造石 ×2 · 贡献 +" + str(25 + bonus)
-	_task_btns[2].text = "跑腿 3 行动 · 贡献 +" + str(15 + bonus)
+	_task_btns[2].text = "跑腿 3 食物 · 贡献 +" + str(15 + bonus)
 	_top_lb.text = "青岚山门 · " + _rank_name() + " · 贡献 " + str(GS.sect_contrib)
 	_task_btns[0].disabled = GS.material_count("bone") < 3
 	_task_btns[1].disabled = GS.material_count("forge_stone") < 2
@@ -113,7 +113,7 @@ func _refresh() -> void:
 
 func _arena() -> void:
 	if GS.action < 2:
-		_msg_lb.text = "行动不够——挑战师兄要 2 点行动。"
+		_msg_lb.text = "食物不够——挑战师兄要 2 点食物。"
 		return
 	arena_requested.emit()
 

@@ -15,6 +15,7 @@ const GameState := preload("res://shared/game_state.gd")
 const FxLayer := preload("res://journey/fx_layer.gd")
 const ActorFactory := preload("res://journey/actor_factory.gd")
 const StickFighter := preload("res://journey/stick_fighter.gd")
+const FoodMeter := preload("res://journey/explore/food_meter.gd")
 
 const MAP_W := 24
 const MAP_H := 30
@@ -71,6 +72,8 @@ var _toast_layer: CanvasLayer
 var _toast: Label
 var _back_btn: Button
 var _action_lb: Label
+var _food_meter: Control
+var _time_lb: Label
 var _wanted_lb: Label
 var _action_empty := false
 var _exit_timer := 0.0
@@ -87,6 +90,15 @@ var _codex_btn: Button
 var _rel_panel: Control
 var _rel_btn: Button
 var _poi_pending := -1
+var _node_cells: Array = []
+var _node_types: Array = []
+var _node_used: Dictionary = {}
+var _node_pending := -1
+var _npcs: Array = []
+var _npc_pending := -1
+var _npc_active := -1
+var _npc_panel: Control
+var _chest_quality: Dictionary = {}
 var _poi_active := -1
 var _poi_cells: Array = []
 var _poi_types: Array = []
@@ -143,7 +155,7 @@ func _ready() -> void:
 		fates = (dep.get("fates", []) as Array).duplicate()
 	setup(role_id, diff, party, fates)
 	if GameState.action <= 0:
-		_set_msg("行动资源耗尽了——回村", 9.9)
+		_set_msg("食物资源耗尽了——回村", 9.9)
 		call_deferred("_return_village")
 
 func setup(role_id := "player", diff := 1, party: Array = [], fates: Array = []) -> void:
@@ -161,12 +173,13 @@ func setup(role_id := "player", diff := 1, party: Array = [], fates: Array = [])
 	_spawn_fx()
 	_spawn_enemies()
 	_spawn_boss()
+	_apply_world_flags()
 	_spawn_toast()
 	_reveal_at(_player.position)
 	queue_redraw()
 
 func _gen_world() -> void:
-	_land_id = GameState.world_seed % 5
+	_land_id = clampi(GameState.current_region, 0, 4)
 	_map_owner = GameState.map_owner_of(GameState.world_seed)
 	_reveal_r = 2 if (_land_id == 1 or _land_id == 2 or _land_id == 4) else 3
 	_obstacles.clear()
@@ -175,8 +188,13 @@ func _gen_world() -> void:
 	_poi_cells.clear()
 	_poi_types.clear()
 	_poi_used.clear()
+	_node_cells.clear()
+	_node_types.clear()
+	_node_used.clear()
+	_npcs.clear()
+	_chest_quality.clear()
 	var rng := RandomNumberGenerator.new()
-	rng.seed = 9001 + GameState.world_seed * 7919
+	rng.seed = 9001 + GameState.world_seed * 7919 + _land_id * 104729
 	var obs_n: int = [14, 9, 11, 12, 13][_land_id]
 	var guard := 0
 	while _obstacles.size() < obs_n and guard < 500:
@@ -193,12 +211,20 @@ func _gen_world() -> void:
 		if _reserved(c2, 2) or _obstacles.has(c2) or _chest_cells.has(c2):
 			continue
 		_chest_cells.append(c2)
+	var node_n: int = [3, 4, 4, 5, 3][_land_id]
+	var node_pool: Array = []
+	match _land_id:
+		0: node_pool = ["ore", "bone"]
+		1: node_pool = ["herb", "rice"]
+		2: node_pool = ["herb", "rice"]
+		3: node_pool = ["ore", "bone"]
+		4: node_pool = ["snowherb", "bone"]
 	var poi_order := ["temple", "well", "tea", "merchant"]
 	var poi_n := 4
 	if _land_id == 4:
 		poi_order.append("snow_cave")
 		poi_n = 5
-	var poff := GameState.world_seed % poi_order.size()
+	var poff := (GameState.world_seed + _land_id * 7) % poi_order.size()
 	guard = 0
 	while _poi_cells.size() < poi_n and guard < 500:
 		guard += 1
@@ -275,8 +301,8 @@ func _gen_world() -> void:
 			_brawl_cell = cw
 			break
 	# Boss 落在离起点远、避开所有已占格的位置；找不到就退到 (3,3)
-	var bnames := ["山君", "夜叉", "老妖"]
-	_boss_name = "雪魈" if _land_id == 4 else str(bnames[GameState.world_seed % bnames.size()])
+	var bnames := ["山君", "夜叉", "老妖", "石傀", "雪魈"]
+	_boss_name = str(bnames[_land_id])
 	_boss_display = _boss_name + ("·轮回" if GameState.ng_plus > 0 else "")
 	_boss_cell = Vector2i(3, 3)
 	guard = 0
@@ -289,6 +315,41 @@ func _gen_world() -> void:
 			continue
 		_boss_cell = cb
 		break
+	# 材料点：避开所有已占格，一图 3~5 处
+	guard = 0
+	while _node_cells.size() < node_n and guard < 500:
+		guard += 1
+		var cg := Vector2i(rng.randi_range(1, MAP_W - 2), rng.randi_range(1, MAP_H - 2))
+		if _reserved(cg, 2) or _obstacles.has(cg) or _chest_cells.has(cg) or _poi_cells.has(cg) or _enemy_cells.has(cg) or _node_cells.has(cg):
+			continue
+		if cg == _boss_cell or cg == _rival_cell or cg == _broker_cell or cg == _north_cell or cg == _brawl_cell:
+			continue
+		_node_cells.append(cg)
+		_node_types.append(str(node_pool[rng.randi_range(0, node_pool.size() - 1)]))
+	# 宝箱品质：普通 70 / 精制 25 / 秘藏 5
+	for cc_v in _chest_cells:
+		var cc: Vector2i = cc_v
+		var qr := rng.randf()
+		_chest_quality[cc] = 2 if qr < 0.05 else (1 if qr < 0.30 else 0)
+	# 随机 NPC：每世界 0~3 个；长线对按密信走向强制成对
+	var npc_n := rng.randi_range(0, 3)
+	var npc_pool := ["merchant", "doctor", "storyteller", "swordsman", "thief"]
+	for i in npc_n:
+		var ct := str(npc_pool[rng.randi_range(0, npc_pool.size() - 1)])
+		var cn := _npc_free_cell(rng)
+		if cn.x >= 0:
+			_npcs.append(_make_npc(cn, ct, _npc_default_name(ct)))
+	var pair := _story_pair_kind()
+	if pair == "qinglan":
+		for nm in ["青岚执事·沈砚", "听雨楼线人·阿罗"]:
+			var pc := _npc_free_cell(rng)
+			if pc.x >= 0:
+				_npcs.append(_make_npc(pc, "story", str(nm)))
+	elif pair == "ashi":
+		for nm in ["阿石", "货郎老赵"]:
+			var pc2 := _npc_free_cell(rng)
+			if pc2.x >= 0:
+				_npcs.append(_make_npc(pc2, "story", str(nm)))
 	_apply_story_followup()
 
 func _apply_story_followup() -> void:
@@ -436,9 +497,18 @@ func _spawn_toast() -> void:
 	_toast.visible = false
 	_toast_layer.add_child(_toast)
 	_action_lb = Label.new()
-	_action_lb.position = Vector2(24, 56)
+	_action_lb.position = Vector2(76, 60)
 	_action_lb.add_theme_font_size_override("font_size", 16)
 	_toast_layer.add_child(_action_lb)
+	_food_meter = FoodMeter.new()
+	_food_meter.position = Vector2(-58, -8)
+	_food_meter.size = Vector2(44, 44)
+	_action_lb.add_child(_food_meter)
+	_time_lb = Label.new()
+	_time_lb.position = Vector2(270, -2)
+	_time_lb.add_theme_font_size_override("font_size", 15)
+	_time_lb.add_theme_color_override("font_color", Color("#b9a878"))
+	_action_lb.add_child(_time_lb)
 	_update_action_label()
 	_wanted_lb = Label.new()
 	_wanted_lb.position = Vector2(24, 86)
@@ -497,6 +567,268 @@ func _spawn_toast() -> void:
 	codex.pressed.connect(_open_codex)
 	_toast_layer.add_child(codex)
 	_codex_btn = codex
+
+func _node_idx_at(cell: Vector2i) -> int:
+	return _node_cells.find(cell)
+
+func _node_near(i: int) -> bool:
+	if i < 0 or i >= _node_cells.size():
+		return false
+	return _player.position.distance_to(_cell_pos(_node_cells[i].x, _node_cells[i].y)) < 84.0
+
+func _gather_node(i: int) -> void:
+	if i < 0 or i >= _node_cells.size():
+		return
+	var cell: Vector2i = _node_cells[i]
+	if bool(_node_used.get(cell, false)):
+		return
+	if not GameState.action_spend(1):
+		_set_msg("食物不够——采不动了")
+		return
+	_node_used[cell] = true
+	GameState.world_mark("node", _flag_key(cell))
+	var typ := str(_node_types[i])
+	var msg := ""
+	match typ:
+		"herb":
+			if randf() < 0.5:
+				GameState.add_material("zhi", 2)
+				msg = "采到紫芝 ×2"
+			else:
+				GameState.add_material("shen", 1)
+				msg = "采到雪参 ×1"
+		"snowherb":
+			GameState.add_material("shen", 2)
+			msg = "采到雪参 ×2"
+		"ore":
+			var os := randi_range(2, 4)
+			GameState.add_material("forge_stone", os)
+			msg = "挖到锻造石 ×" + str(os)
+		"bone":
+			var bs := randi_range(2, 4)
+			GameState.add_material("bone", bs)
+			msg = "捡到兽骨碎 ×" + str(bs)
+		"rice":
+			var rs := randi_range(1, 3)
+			GameState.add_material("rice", rs)
+			msg = "采到灵米 ×" + str(rs)
+	GameState.save_game()
+	_update_action_label()
+	queue_redraw()
+	_set_msg(msg + "（食物 -1）")
+
+func _npc_free_cell(rng: RandomNumberGenerator) -> Vector2i:
+	for i in 220:
+		var c := Vector2i(rng.randi_range(1, MAP_W - 2), rng.randi_range(1, MAP_H - 2))
+		if _reserved(c, 2) or _obstacles.has(c) or _chest_cells.has(c) or _poi_cells.has(c) or _node_cells.has(c) or _enemy_cells.has(c) or c == _boss_cell or c == _rival_cell or c == _broker_cell or c == _north_cell or c == _brawl_cell:
+			continue
+		var taken := false
+		for n_v in _npcs:
+			if Vector2i(n_v["cell"]) == c:
+				taken = true
+				break
+		if not taken:
+			return c
+	return Vector2i(-1, -1)
+
+func _make_npc(cell: Vector2i, typ: String, nm: String) -> Dictionary:
+	return {"cell": cell, "type": typ, "name": nm, "done": false}
+
+func _npc_default_name(typ: String) -> String:
+	return str({"merchant": "行商·赵四", "doctor": "游医·白芷", "storyteller": "说书人·柳先生", "swordsman": "落魄剑客·秦三", "thief": "偷儿·小六"}.get(typ, "江湖客"))
+
+func _story_pair_kind() -> String:
+	if GameState.story_letter == 1:
+		return "qinglan"
+	if GameState.story_letter >= 2:
+		return "ashi"
+	return ""
+
+func _npc_idx_at(cell: Vector2i) -> int:
+	for i in _npcs.size():
+		if Vector2i(_npcs[i]["cell"]) == cell:
+			return i
+	return -1
+
+func _npc_near(i: int) -> bool:
+	if i < 0 or i >= _npcs.size():
+		return false
+	var c: Vector2i = _npcs[i]["cell"]
+	return _player.position.distance_to(_cell_pos(c.x, c.y)) < 90.0
+
+func _npc_type_name(typ: String) -> String:
+	return str({"merchant": "行商", "doctor": "游医", "storyteller": "说书人", "swordsman": "落魄剑客", "thief": "偷儿", "story": "旧识"}.get(typ, "江湖客"))
+
+func _draw_npcs() -> void:
+	for i in _npcs.size():
+		var n: Dictionary = _npcs[i]
+		var c: Vector2i = n["cell"]
+		var p := _cell_pos(c.x, c.y)
+		var typ := str(n["type"])
+		var col := Color("#c9a64a") if typ == "merchant" else (Color("#8ab46a") if typ == "doctor" else (Color("#b9a878") if typ == "storyteller" else (Color("#8fa0b0") if typ == "swordsman" else (Color("#9a6a8a") if typ == "thief" else Color("#e0c070")))))
+		if bool(n.get("done", false)):
+			col = Color("#6b655c")
+		draw_circle(p + Vector2(0, 18), 16.0, Color(0.04, 0.05, 0.04, 0.32))
+		draw_circle(p + Vector2(0, -18), 9.0, Color("#d8c8a8"))
+		draw_rect(Rect2(p + Vector2(-8, -10), Vector2(16, 26)), col)
+		draw_line(p + Vector2(-8, 4), p + Vector2(-16, 12), Color("#d8c8a8"), 3.0)
+		draw_line(p + Vector2(8, 4), p + Vector2(16, 12), Color("#d8c8a8"), 3.0)
+		draw_string(ThemeDB.fallback_font, p + Vector2(-28, -40), str(n["name"]), HORIZONTAL_ALIGNMENT_LEFT, -1, 12, col)
+		if bool(n.get("done", false)):
+			draw_string(ThemeDB.fallback_font, p + Vector2(-10, 34), "已了", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(0.55, 0.5, 0.4, 0.8))
+
+func _open_npc(i: int) -> void:
+	if i < 0 or i >= _npcs.size():
+		return
+	var n: Dictionary = _npcs[i]
+	if bool(n.get("done", false)):
+		_set_msg(str(n["name"]) + "：话已经说完了。")
+		return
+	var typ := str(n["type"])
+	var choices: Array = []
+	match typ:
+		"merchant":
+			choices = [{"id": "food", "label": "买干粮（10两 · 食物+10）"}, {"id": "herb", "label": "买药包（25两 · 雪参×1）"}]
+		"doctor":
+			choices = [{"id": "heal", "label": "讨碗药汤（15两 · 食物+15）"}]
+		"storyteller":
+			choices = [{"id": "listen", "label": "听一段旧事（15两 · 开视野）"}]
+		"swordsman":
+			choices = [{"id": "tip", "label": "请他指点（50两 · 金髓×1）"}]
+		"thief":
+			choices = [{"id": "atlas", "label": "买一张舆图（120两）"}]
+		_:
+			choices = [{"id": "talk", "label": "说 几 句"}]
+	if _npc_panel == null:
+		var np = POIPanel.new()
+		np.connect("picked", _on_npc_pick)
+		np.connect("closed", _on_npc_closed)
+		_toast_layer.add_child(np)
+		_npc_panel = np
+	_npc_active = i
+	var body := "一个" + _npc_type_name(typ) + "在路边歇脚。"
+	if typ == "story":
+		body = "旧识在此，似乎有话要说。"
+	_npc_panel.call("open", {"title": str(n["name"]), "sub": _npc_type_name(typ), "body": body, "choices": choices})
+	_busy = true
+	_moving = false
+	_has_click = false
+	for e_v in _enemies:
+		var e: Node2D = e_v
+		if is_instance_valid(e):
+			e.visible = false
+	if _action_lb != null:
+		_action_lb.visible = false
+	if _back_btn != null:
+		_back_btn.visible = false
+	if _codex_btn != null:
+		_codex_btn.visible = false
+	if _rel_btn != null:
+		_rel_btn.visible = false
+
+func _on_npc_pick(id: String) -> void:
+	if _npc_active < 0 or _npc_active >= _npcs.size():
+		return
+	var n: Dictionary = _npcs[_npc_active]
+	var msg := "你退开了。"
+	match id:
+		"food":
+			if GameState.coin("silver") < 10:
+				msg = "银两不够。"
+			else:
+				GameState.add_coin("silver", -10)
+				GameState.action_add(10)
+				msg = "干粮下肚。食物 +10。"
+		"herb":
+			if GameState.coin("silver") < 25:
+				msg = "银两不够。"
+			else:
+				GameState.add_coin("silver", -25)
+				GameState.add_material("shen", 1)
+				msg = "药包入手：雪参 ×1。"
+		"heal":
+			if GameState.coin("silver") < 15:
+				msg = "银两不够。"
+			else:
+				GameState.add_coin("silver", -15)
+				GameState.action_add(15)
+				msg = "药汤暖胃。食物 +15。"
+		"listen":
+			if GameState.coin("silver") < 15:
+				msg = "银两不够。"
+			else:
+				GameState.add_coin("silver", -15)
+				for k in 5:
+					_reveal_at(_cell_pos(randi_range(1, MAP_W - 2), randi_range(1, MAP_H - 2)))
+				n["done"] = true
+				msg = "说书人讲了五处旧事。"
+		"tip":
+			if GameState.coin("silver") < 50:
+				msg = "银两不够。"
+			else:
+				GameState.add_coin("silver", -50)
+				GameState.add_material("jin", 1)
+				n["done"] = true
+				msg = "他指了指你的腕子。金髓 +1。"
+		"atlas":
+			if GameState.coin("silver") < 120:
+				msg = "银两不够。"
+			else:
+				GameState.add_coin("silver", -120)
+				GameState.add_material("atlas", 1)
+				n["done"] = true
+				msg = "偷儿塞给你一张舆图。"
+		"talk":
+			n["done"] = true
+			GameState.add_region_rep(GameState.current_region, 5)
+			msg = "你们交换了几句旧事。"
+	if bool(n.get("done", false)):
+		GameState.world_mark("npc", _flag_key(n["cell"]))
+	GameState.save_game()
+	_update_action_label()
+	queue_redraw()
+	_npc_panel.call("set_result", msg)
+
+func _on_npc_closed() -> void:
+	_busy = false
+	_npc_pending = -1
+	_npc_active = -1
+	for e_v in _enemies:
+		var e: Node2D = e_v
+		if is_instance_valid(e):
+			e.visible = not bool(e.get_meta("beaten", false))
+	if _action_lb != null:
+		_action_lb.visible = true
+	if _back_btn != null:
+		_back_btn.visible = true
+	if _codex_btn != null:
+		_codex_btn.visible = true
+	if _rel_btn != null:
+		_rel_btn.visible = true
+
+func _flag_key(cell: Vector2i) -> String:
+	return str(cell.x) + "," + str(cell.y)
+
+func _apply_world_flags() -> void:
+	for c_v in _chest_cells:
+		var c: Vector2i = c_v
+		if GameState.world_has("chest", _flag_key(c)):
+			_chest_open[c] = true
+	for p_v in _poi_cells:
+		var p: Vector2i = p_v
+		if GameState.world_has("poi", _flag_key(p)):
+			_poi_used[p] = true
+	for n_v in _node_cells:
+		var n: Vector2i = n_v
+		if GameState.world_has("node", _flag_key(n)):
+			_node_used[n] = true
+	for npc_v in _npcs:
+		var npc: Dictionary = npc_v
+		var nc: Vector2i = npc["cell"]
+		if GameState.world_has("npc", _flag_key(nc)):
+			npc["done"] = true
+	if _boss_node != null and GameState.world_has("boss", _boss_name):
+		_boss_node.set_meta("beaten", true)
 
 func _spawn_boss() -> void:
 	_boss_node = Node2D.new()
@@ -807,6 +1139,8 @@ func _draw() -> void:
 	_draw_boss()
 	_draw_pois()
 	_draw_chests()
+	_draw_nodes()
+	_draw_npcs()
 	# 迷雾：没走过的格子压暗
 	for gx in MAP_W:
 		for gy in MAP_H:
@@ -1017,33 +1351,84 @@ func _draw_chests() -> void:
 		var cell: Vector2i = cell_v
 		var p := _cell_pos(cell.x, cell.y)
 		var opened := bool(_chest_open.get(cell, false))
+		var q := int(_chest_quality.get(cell, 0))
+		var body := Color("#6b4a2a") if q == 0 else (Color("#7a5a2a") if q == 1 else Color("#3a2a3a"))
+		var band := Color("#8a6a3a") if q == 0 else (Color("#c9a64a") if q == 1 else Color("#e06a5a"))
 		draw_circle(p + Vector2(0, 16), 16.0, Color(0.04, 0.05, 0.04, 0.35))
-		draw_rect(Rect2(p + Vector2(-16, -10), Vector2(32, 22)), Color("#6b4a2a"))
-		draw_rect(Rect2(p + Vector2(-13, -7), Vector2(26, 16)), Color("#8a6a3a"))
+		draw_rect(Rect2(p + Vector2(-16, -10), Vector2(32, 22)), body)
+		draw_rect(Rect2(p + Vector2(-13, -7), Vector2(26, 16)), band)
 		if opened:
 			draw_rect(Rect2(p + Vector2(-16, -20), Vector2(32, 10)), Color("#4a3a2a"))
 		else:
 			draw_rect(Rect2(p + Vector2(-16, -14), Vector2(32, 7)), Color("#5a3a20"))
-			draw_rect(Rect2(p + Vector2(-4, -18), Vector2(8, 6)), Color("#c9a64a"))
+			draw_rect(Rect2(p + Vector2(-4, -18), Vector2(8, 6)), Color("#f0d68a"))
+		if q > 0 and not opened:
+			draw_string(ThemeDB.fallback_font, p + Vector2(-18, -28), "精制" if q == 1 else "秘藏", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color("#e8c46a") if q == 1 else Color("#e06a5a"))
+
+func _draw_nodes() -> void:
+	for i in _node_cells.size():
+		var cell: Vector2i = _node_cells[i]
+		var p := _cell_pos(cell.x, cell.y)
+		var typ := str(_node_types[i])
+		var used := bool(_node_used.get(cell, false))
+		draw_circle(p + Vector2(0, 16), 18.0, Color(0.04, 0.05, 0.04, 0.32))
+		match typ:
+			"herb", "snowherb":
+				draw_line(p + Vector2(0, 14), p + Vector2(0, -6), Color("#4a6a3a"), 3.0)
+				draw_circle(p + Vector2(-8, -6), 7.0, Color("#5a8a4a"))
+				draw_circle(p + Vector2(8, -3), 6.0, Color("#6a9a5a"))
+				draw_circle(p + Vector2(0, -13), 5.0, Color("#c9d9a0") if typ == "snowherb" else Color("#8ab46a"))
+			"ore":
+				draw_colored_polygon(PackedVector2Array([p + Vector2(-14, 12), p + Vector2(-8, -10), p + Vector2(6, -14), p + Vector2(16, 4), p + Vector2(8, 14)]), Color("#6b6252"))
+				draw_line(p + Vector2(-4, 0), p + Vector2(4, -8), Color("#c9a64a"), 2.0)
+			"bone":
+				draw_line(p + Vector2(-12, 10), p + Vector2(12, -8), Color("#d8d0bc"), 4.0)
+				draw_circle(p + Vector2(-12, 10), 4.0, Color("#d8d0bc"))
+				draw_circle(p + Vector2(12, -8), 4.0, Color("#d8d0bc"))
+			"rice":
+				draw_line(p + Vector2(0, 14), p + Vector2(0, -4), Color("#8a7a3a"), 2.0)
+				for k in 5:
+					draw_circle(p + Vector2(-8 + k * 4, -6 - (k % 2) * 5), 3.0, Color("#d9b56a"))
+		var nm := "草药" if typ == "herb" else ("雪参" if typ == "snowherb" else ("矿脉" if typ == "ore" else ("兽骨" if typ == "bone" else "灵米")))
+		draw_string(ThemeDB.fallback_font, p + Vector2(-20, -30), nm, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.55, 0.5, 0.4, 0.9) if used else Color("#b9d68a"))
+		if used:
+			draw_string(ThemeDB.fallback_font, p + Vector2(-14, 4), "采", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.55, 0.5, 0.4, 0.75))
 
 func _open_chest(cell: Vector2i) -> void:
 	if bool(_chest_open.get(cell, false)):
 		return
 	_chest_open[cell] = true
+	GameState.world_mark("chest", _flag_key(cell))
 	var tier := clampi(GameState.world_tier, 1, 5)
+	var q := int(_chest_quality.get(cell, 0))
 	var stones := 3 + tier
 	var silver := 20 + tier * 6
+	if q == 1:
+		stones *= 2
+		silver = int(round(float(silver) * 1.5))
+	elif q == 2:
+		stones *= 3
+		silver *= 2
 	GameState.add_material("forge_stone", stones)
 	GameState.add_coin("silver", silver)
 	_loot_stones += stones
 	_loot_silver += silver
 	var extra := ""
-	if randf() < 0.22:
+	if q == 1:
+		GameState.add_material("rice", 3)
+		extra = " · 灵米 ×3"
+	elif q == 2:
+		GameState.add_material("atlas", 1)
+		GameState.add_material("jin", 1)
+		_loot_atlas += 1
+		extra = " · 舆图 ×1 · 金髓 ×1"
+	elif randf() < 0.22:
 		GameState.add_material("atlas", 1)
 		_loot_atlas += 1
 		extra = " · 舆图 ×1"
 	GameState.save_game()
-	_set_msg("拾得：锻造石 ×" + str(stones) + " · 银两 +" + str(silver) + extra)
+	var qn := "" if q == 0 else ("〔精制〕" if q == 1 else "〔秘藏〕")
+	_set_msg(qn + "拾得：锻造石 ×" + str(stones) + " · 银两 +" + str(silver) + extra)
 
 func _set_msg(text: String, sec := 2.6) -> void:
 	_msg = text
@@ -1056,8 +1441,20 @@ func _set_msg(text: String, sec := 2.6) -> void:
 func _update_action_label() -> void:
 	if _action_lb == null:
 		return
-	_action_lb.text = "行动 " + str(GameState.action) + " / " + str(GameState.ACTION_MAX)
-	_action_lb.add_theme_color_override("font_color", Color("#e06a5a") if GameState.action <= 5 else Color("#d8cba0"))
+	if _food_meter != null:
+		_food_meter.call("set_value", GameState.action)
+	if _time_lb != null:
+		_time_lb.text = GameState.time_text()
+	if GameState.action > 100:
+		_action_lb.text = "食物 " + str(GameState.action) + " / 100 · 存粮 +" + str(GameState.action - 100)
+	else:
+		_action_lb.text = "食物 " + str(GameState.action) + " / 100"
+	if GameState.action > 100:
+		_action_lb.add_theme_color_override("font_color", Color("#e8c46a"))
+	elif GameState.action <= 10:
+		_action_lb.add_theme_color_override("font_color", Color("#e06a5a"))
+	else:
+		_action_lb.add_theme_color_override("font_color", Color("#d8cba0"))
 
 func _update_wanted_label() -> void:
 	if _wanted_lb == null:
@@ -1078,9 +1475,9 @@ func _return_village() -> void:
 	if not parts.is_empty():
 		GameState.note_push("游历归来：" + " · ".join(PackedStringArray(parts)))
 	elif _action_empty:
-		GameState.note_push("行动资源耗尽——安全回村，战利品已入账")
+		GameState.note_push("食物资源耗尽——安全回村，战利品已入账")
 	GameState.save_game()
-	print("[游历] 回村：锻造石=", GameState.material_count("forge_stone"), " 银两=", GameState.coin("silver"), " 行动=", GameState.action)
+	print("[游历] 回村：锻造石=", GameState.material_count("forge_stone"), " 银两=", GameState.coin("silver"), " 食物=", GameState.action)
 	get_tree().change_scene_to_file("res://menu/menu_sketch.tscn")
 
 func _draw_interior() -> void:
@@ -1238,7 +1635,7 @@ func _poi_data(typ: String) -> Dictionary:
 				"body": "供桌积着灰，香炉冷透。梁上似乎还藏着东西。\n\n（只能探一次）",
 				"choices": [{"id": "loot", "label": "搜供桌"}, {"id": "incense", "label": "上一炷香"}]}
 		"snow_cave":
-			var cc: Array = [{"id": "warm", "label": "避 风（行动+3）"}, {"id": "probe", "label": "探 洞"}]
+			var cc: Array = [{"id": "warm", "label": "避 风（食物+10）"}, {"id": "probe", "label": "探 洞"}]
 			if not GameState.snow_charm:
 				cc.append({"id": "charm", "label": "买护符（80两）"})
 			elif not GameState.snow_charm2:
@@ -1296,15 +1693,14 @@ func _on_poi_pick(id: String) -> void:
 				used = true
 				msg = "供桌下摸出 25 两碎银，又捡了两块锻造石。"
 			elif id == "incense":
-				GameState.action_add(2)
 				_reveal_at(_cell_pos(cell.x, cell.y))
 				used = true
-				msg = "你上了一炷香，心里静了静。行动 +2，附近亮了一角。"
+				msg = "你上了一炷香，心里静了静。附近亮了一角。"
 		"well":
 			if id == "water":
-				GameState.action_add(2)
+				GameState.action_add(6)
 				used = true
-				msg = "井水冰凉，喝下去精神一振。行动 +2。"
+				msg = "井水冰凉，喝下去精神一振。食物 +6。"
 			elif id == "probe":
 				if randf() < 0.4:
 					GameState.add_material("atlas", 1)
@@ -1316,9 +1712,9 @@ func _on_poi_pick(id: String) -> void:
 					msg = "井底只摸到三块沉石，倒是能当锻造石用。"
 		"snow_cave":
 			if id == "warm":
-				GameState.action_add(3)
+				GameState.action_add(10)
 				used = true
-				msg = "洞里暖得出奇。行动 +3。"
+				msg = "洞里暖得出奇，你歇了一会儿。食物 +10。"
 			elif id == "probe":
 				if randf() < 0.4:
 					GameState.add_material("atlas", 1)
@@ -1354,16 +1750,21 @@ func _on_poi_pick(id: String) -> void:
 					msg = "茶钱不够——老板没收你的铜板，也没给你茶。"
 				else:
 					GameState.add_coin("silver", -10)
-					GameState.action_add(3)
+					GameState.action_add(10)
 					used = true
-					msg = "一碗热茶下肚。行动 +3，银两 -10。"
+					msg = "一碗热茶下肚。食物 +10，银两 -10。"
 			elif id == "listen":
 				for k in 4:
 					_reveal_at(_cell_pos(randi_range(1, MAP_W - 2), randi_range(1, MAP_H - 2)))
 				used = true
 				msg = "说书人讲了几处旧事，地图亮了一角。"
 	if used:
+		var first_poi := not GameState.world_has("poi", _flag_key(cell))
 		_poi_used[cell] = true
+		GameState.world_mark("poi", _flag_key(cell))
+		if first_poi:
+			GameState.add_prosperity(2, "探旧迹")
+			GameState.add_region_rep(GameState.current_region, 3)
 		GameState.save_game()
 	_update_action_label()
 	queue_redraw()
@@ -1621,8 +2022,8 @@ func _open_rival() -> void:
 		data = {
 			"title": "赤水寨·反扑",
 			"sub": "青岚控制的地盘，赤水残部摸了回来。",
-			"body": "寨门外火把乱晃。\n迎战要 3 行动；让出则地盘归赤水。",
-			"choices": [{"id": "defend", "label": "迎 战（3行动）"}, {"id": "cede", "label": "让 出"}],
+			"body": "寨门外火把乱晃。\n迎战要 3 食物；让出则地盘归赤水。",
+			"choices": [{"id": "defend", "label": "迎 战（3食物）"}, {"id": "cede", "label": "让 出"}],
 		}
 	elif GameState.red_water == 2 and GameState.war_score >= 100:
 		_rival_broker_help = GameState.broker_rep >= 60
@@ -1630,8 +2031,8 @@ func _open_rival() -> void:
 		data = {
 			"title": "赤水寨·决战",
 			"sub": "青岚与赤水的账，今天一次算清。",
-			"body": "寨主披甲站在门外，背后是全部残部。\n决战要 5 行动。胜了，赤水寨永平。" + help_txt,
-			"choices": [{"id": "final", "label": "决 战（5行动）"}],
+			"body": "寨主披甲站在门外，背后是全部残部。\n决战要 5 食物。胜了，赤水寨永平。" + help_txt,
+			"choices": [{"id": "final", "label": "决 战（5食物）"}],
 		}
 	elif GameState.red_water == 2:
 		var opts: Array = []
@@ -1656,8 +2057,8 @@ func _open_rival() -> void:
 		data = {
 			"title": "赤 水 寨",
 			"sub": "山道上的敌对寨子，红幡压着路口。",
-			"body": "寨门半开，里面有人磨刀。\n拔寨要 3 行动；买路要 50 两。\n（失败不会被抓，只退回来）",
-			"choices": [{"id": "fight", "label": "拔 寨（3行动）"}, {"id": "pay", "label": "买 路（50两）"}],
+			"body": "寨门半开，里面有人磨刀。\n拔寨要 3 食物；买路要 50 两。\n（失败不会被抓，只退回来）",
+			"choices": [{"id": "fight", "label": "拔 寨（3食物）"}, {"id": "pay", "label": "买 路（50两）"}],
 		}
 	_rival_panel.call("open", data)
 	_busy = true
@@ -1794,7 +2195,7 @@ func _rival_battle() -> void:
 		return
 	var cost := 5 if _rival_final else 3
 	if not GameState.action_spend(cost):
-		_set_msg("行动不够——要 " + str(cost) + " 点行动")
+		_set_msg("食物不够——要 " + str(cost) + " 点食物")
 		return
 	_busy = true
 	_battle_active = true
@@ -1867,6 +2268,7 @@ func _rival_battle() -> void:
 		if _rival_final:
 			GameState.red_water = 2
 			GameState.red_water_peace = true
+			GameState.add_prosperity(20, "赤水平定")
 			GameState.war_score = 100
 			GameState.add_coin("silver", 300)
 			GameState.add_material("atlas", 2)
@@ -1889,6 +2291,7 @@ func _rival_battle() -> void:
 				GameState.sect_contrib += 80
 				GameState.red_water = 2
 				GameState.set_map_owner(GameState.world_seed, 1)
+				GameState.add_prosperity(3, "拿下赤水")
 				GameState.war_score = mini(100, GameState.war_score + 25)
 				GameState.note_war("青岚拿下赤水寨")
 			else:
@@ -2003,11 +2406,11 @@ func _open_broker() -> void:
 	choices.append({"id": "sell", "label": "卖消息（+" + str(_broker_sell_price()) + "两）"})
 	var qlabel := ""
 	if GameState.broker_quest == 0 and GameState.broker_rep >= 30:
-		qlabel = "接委托（2行动）"
+		qlabel = "接委托（2食物）"
 	elif GameState.broker_quest == 1 and GameState.broker_rep >= 60:
-		qlabel = "查布防（2行动）"
+		qlabel = "查布防（2食物）"
 	elif GameState.broker_quest == 2 and GameState.broker_rep >= 90:
-		qlabel = "楼主托付（3行动）"
+		qlabel = "楼主托付（3食物）"
 	if qlabel != "":
 		choices.append({"id": "quest", "label": qlabel})
 	if choices.size() > 3:
@@ -2128,7 +2531,7 @@ func _on_broker_pick(id: String) -> void:
 			_broker_panel.call("set_result", "听雨楼的委托已经跑完了。")
 			return
 		if not GameState.action_spend(cost):
-			_broker_panel.call("set_result", "行动不够——这单要 " + str(cost) + " 点。")
+			_broker_panel.call("set_result", "食物不够——这单要 " + str(cost) + " 点。")
 			return
 		GameState.broker_quest = stage + 1
 		if stage == 0:
@@ -2191,7 +2594,7 @@ func _north_battle() -> void:
 		return
 	var cost := 5 if _north_final else 2
 	if not GameState.action_spend(cost):
-		_set_msg("行动不够——要 " + str(cost) + " 点。")
+		_set_msg("食物不够——要 " + str(cost) + " 点。")
 		return
 	_busy = true
 	_battle_active = true
@@ -2267,6 +2670,7 @@ func _north_battle() -> void:
 		if _north_final:
 			GameState.north_peace = true
 			GameState.set_map_owner(GameState.world_seed, 1)
+			GameState.add_prosperity(20, "北境平定")
 			GameState.add_coin("silver", 300)
 			GameState.add_material("atlas", 2)
 			if not GameState.north_weapon:
@@ -2324,14 +2728,14 @@ func _open_north() -> void:
 	else:
 		var choices: Array = []
 		if GameState.north_score >= 100:
-			choices.append({"id": "final", "label": "决 战（5行动）"})
+			choices.append({"id": "final", "label": "决 战（5食物）"})
 		else:
-			choices.append({"id": "raid", "label": "攻 寨（2行动）"})
+			choices.append({"id": "raid", "label": "攻 寨（2食物）"})
 			choices.append({"id": "pay", "label": "买 路（60两）"})
 		data = {
 			"title": "黑 风 寨",
 			"sub": "北境马贼的寨子，黑幡压着风口。",
-			"body": "寨墙上有人张弓。\n" + ("战线已满，可决战。" if GameState.north_score >= 100 else "攻寨 2 行动；买路 60 两。"),
+			"body": "寨墙上有人张弓。\n" + ("战线已满，可决战。" if GameState.north_score >= 100 else "攻寨 2 食物；买路 60 两。"),
 			"choices": choices,
 		}
 	_north_panel.call("open", data)
@@ -2467,6 +2871,8 @@ func _on_brawl_pick(id: String) -> void:
 		GameState.north_score = maxi(0, GameState.north_score - 10)
 		GameState.add_coin("silver", 80)
 		GameState.set_map_owner(GameState.world_seed, 2)
+		GameState.add_prosperity(3, "赤水得图")
+		GameState.add_region_rep(GameState.current_region, 10)
 		GameState.note_war("两寨火并，你帮了赤水")
 		_set_msg("赤水的人赢了这一阵。战线 +10 · 北境 -10 · 银两 +80。")
 	elif id == "black":
@@ -2474,6 +2880,8 @@ func _on_brawl_pick(id: String) -> void:
 		GameState.war_score = maxi(0, GameState.war_score - 10)
 		GameState.add_coin("silver", 80)
 		GameState.set_map_owner(GameState.world_seed, 3)
+		GameState.add_prosperity(3, "黑风得图")
+		GameState.add_region_rep(GameState.current_region, 10)
 		GameState.note_war("两寨火并，你帮了黑风")
 		_set_msg("黑风的人赢了这一阵。北境 +10 · 赤水 -10 · 银两 +80。")
 	else:
@@ -2530,7 +2938,7 @@ func _arena_battle() -> void:
 	if _busy or _battle_active:
 		return
 	if not GameState.action_spend(2):
-		_set_msg("行动不够——挑战师兄要 2 点行动")
+		_set_msg("食物不够——挑战师兄要 2 点食物")
 		return
 	_arena_done = true
 	_busy = true
@@ -2639,6 +3047,21 @@ func _on_click(pos: Vector2) -> void:
 			_open_poi(pi)
 			return
 		_poi_pending = pi
+	var npc_i := _npc_idx_at(cell)
+	if npc_i >= 0:
+		if _npc_near(npc_i):
+			_open_npc(npc_i)
+			return
+		_npc_pending = npc_i
+	var node_i := _node_idx_at(cell)
+	if node_i >= 0:
+		if bool(_node_used.get(cell, false)):
+			_set_msg("这里已经采过了")
+			return
+		if _node_near(node_i):
+			_gather_node(node_i)
+			return
+		_node_pending = node_i
 	if cell == _boss_cell:
 		if _boss_node != null and (bool(_boss_node.get_meta("beaten", false)) or bool(_boss_node.get_meta("appeased", false))):
 			_set_msg("这里已经了结了")
@@ -2700,14 +3123,16 @@ func _on_click(pos: Vector2) -> void:
 	var path: Array = _astar.get_id_path(_player_cell(), cell)
 	if path.is_empty():
 		return
-	if not GameState.action_spend(1):
-		_set_msg("行动资源耗尽——这一趟该回去了")
-		_action_empty = true
+	var steps := path.size() - 1
+	var food_cost := 0
+	if steps > 0:
+		food_cost = maxi(1, int(ceil(float(steps) / 5.0)))
+	if food_cost > 0 and not GameState.action_spend(food_cost):
+		_set_msg("食物不够走这一程——先回村吃点东西")
 		return
 	_update_action_label()
-	if GameState.action <= 0:
-		_action_empty = true
-		_set_msg("行动资源耗尽——这一趟该回去了")
+	if food_cost > 0:
+		_set_msg("走了 " + str(steps) + " 格，食物 -" + str(food_cost), 1.2)
 	_path = path
 	_path_i = 1
 	_moving = true
@@ -2761,6 +3186,22 @@ func _process(delta: float) -> void:
 		_path.clear()
 		_has_click = false
 		_open_poi(pi2)
+		return
+	if _node_pending >= 0 and not _in_house and _node_near(_node_pending):
+		var ni2 := _node_pending
+		_node_pending = -1
+		_moving = false
+		_path.clear()
+		_has_click = false
+		_gather_node(ni2)
+		return
+	if _npc_pending >= 0 and not _in_house and _npc_near(_npc_pending):
+		var ni3 := _npc_pending
+		_npc_pending = -1
+		_moving = false
+		_path.clear()
+		_has_click = false
+		_open_npc(ni3)
 		return
 	if _boss_pending and not _in_house and _boss_near():
 		_boss_pending = false
@@ -2955,8 +3396,11 @@ func _grant_battle_loot(enemy: Node2D) -> void:
 		GameState.add_material("jin", 1)
 		_loot_atlas += 1
 		var bname := str(enemy.get_meta("foe_name", "凶物"))
+		GameState.world_mark("boss", bname)
 		if not GameState.boss_kills.has(bname):
 			GameState.boss_kills.append(bname)
+			GameState.add_prosperity(10, "Boss首杀")
+			GameState.add_region_rep(GameState.current_region, 15)
 			first_boss = true
 			stones += 10
 			GameState.add_material("jin", 2)

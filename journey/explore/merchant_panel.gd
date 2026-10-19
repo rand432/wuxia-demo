@@ -87,6 +87,8 @@ func _discount() -> float:
 		turf += 0.02
 	elif owner == 2:
 		turf += 0.03
+	var rep := int(GS.region_rep[clampi(GS.current_region, 0, 4)]) if GS.region_rep.size() >= 5 else 0
+	turf += float(rep) * 0.002
 	return minf(0.25, float(GS.merchant_favor) * 0.002 + turf)
 
 func _price(base: int) -> int:
