@@ -89,6 +89,12 @@ func _confirm() -> void:
 	GS.time_day = 1
 	GS.slot_progress = 0
 	GS.region_rep = [0, 0, 0, 0, 0]
+	GS.region_seen = [false, false, false, false, false]
+	GS.region_walk = [0, 0, 0, 0, 0]
+	GS.merchant_stock_slot = ""
+	GS.merchant_stock.clear()
+	GS.npc_stock.clear()
+	GS.region_landmarks.clear()
 	GS.save_game()
 	_msg_lb.text = "新世界展开：" + _world_name(GS.world_tier) + " · 第 " + str(GS.world_tier) + " 档。下一趟进图生效。"
 	changed.emit()

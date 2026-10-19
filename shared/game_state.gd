@@ -909,6 +909,12 @@ static var time_slot := 0
 static var time_day := 1
 static var slot_progress := 0
 static var region_rep: Array = [0, 0, 0, 0, 0]
+static var region_seen: Array = [false, false, false, false, false]
+static var region_walk: Array = [0, 0, 0, 0, 0]
+static var merchant_stock_slot := ""
+static var merchant_stock: Dictionary = {}
+static var npc_stock: Dictionary = {}
+static var region_landmarks: Dictionary = {}
 static var north_garrison := false
 static var broker_weapon := false
 # v260：听雨楼密信剧情（0=未触发 / 1=交青岚 / 2=卖赤水 / 3=烧掉）
@@ -939,6 +945,23 @@ static func action_spend(n := 1) -> bool:
 			time_slot = 0
 			time_day += 1
 	return true
+
+static func mark_landmark(id: String) -> void:
+	var rk := str(current_region)
+	var arr: Array = region_landmarks.get(rk, [])
+	if not arr.has(id):
+		arr.append(id)
+	region_landmarks[rk] = arr
+
+static func landmarks(region: int) -> Array:
+	return (region_landmarks.get(str(clampi(region, 0, 4)), []) as Array).duplicate()
+
+static func ensure_merchant_stock() -> void:
+	var key := str(time_day) + ":" + str(time_slot)
+	if merchant_stock_slot == key and not merchant_stock.is_empty():
+		return
+	merchant_stock_slot = key
+	merchant_stock = {"forge_stone": 1, "atlas": 1, "rice": 2, "bone": 2}
 
 static func time_text() -> String:
 	return str(TIME_NAMES[clampi(time_slot, 0, 2)]) + " · 第 " + str(time_day) + " 天"
@@ -4954,6 +4977,12 @@ static func begin_new_cycle() -> void:
 	time_day = 1
 	slot_progress = 0
 	region_rep = [0, 0, 0, 0, 0]
+	region_seen = [false, false, false, false, false]
+	region_walk = [0, 0, 0, 0, 0]
+	merchant_stock_slot = ""
+	merchant_stock.clear()
+	npc_stock.clear()
+	region_landmarks.clear()
 	current_region = 0
 	region_unlocked = [true, true, true, false, false]
 	world_seed += 1
@@ -6253,6 +6282,16 @@ static func load_game() -> void:
 	region_rep = _sa(cf.get_value("world", "region_rep", [0, 0, 0, 0, 0]), [0, 0, 0, 0, 0]).duplicate()
 	while region_rep.size() < 5:
 		region_rep.append(0)
+	region_seen = _sa(cf.get_value("world", "region_seen", [false, false, false, false, false]), [false, false, false, false, false]).duplicate()
+	while region_seen.size() < 5:
+		region_seen.append(false)
+	region_walk = _sa(cf.get_value("world", "region_walk", [0, 0, 0, 0, 0]), [0, 0, 0, 0, 0]).duplicate()
+	while region_walk.size() < 5:
+		region_walk.append(0)
+	merchant_stock_slot = str(cf.get_value("world", "merchant_stock_slot", ""))
+	merchant_stock = _sd(cf.get_value("world", "merchant_stock", {}), merchant_stock)
+	npc_stock = _sd(cf.get_value("world", "npc_stock", {}), npc_stock)
+	region_landmarks = _sd(cf.get_value("world", "region_landmarks", {}), region_landmarks)
 	while region_unlocked.size() < 5:
 		region_unlocked.append(false)
 	north_garrison = bool(cf.get_value("world", "north_garrison", false))
@@ -6422,6 +6461,12 @@ static func save_game() -> void:
 	cf.set_value("world", "time_day", time_day)
 	cf.set_value("world", "slot_progress", slot_progress)
 	cf.set_value("world", "region_rep", region_rep)
+	cf.set_value("world", "region_seen", region_seen)
+	cf.set_value("world", "region_walk", region_walk)
+	cf.set_value("world", "merchant_stock_slot", merchant_stock_slot)
+	cf.set_value("world", "merchant_stock", merchant_stock)
+	cf.set_value("world", "npc_stock", npc_stock)
+	cf.set_value("world", "region_landmarks", region_landmarks)
 	cf.set_value("world", "north_garrison", north_garrison)
 	cf.set_value("world", "broker_weapon", broker_weapon)
 	cf.set_value("world", "story_letter", story_letter)
@@ -6605,6 +6650,12 @@ static func reset() -> void:
 	time_day = 1
 	slot_progress = 0
 	region_rep = [0, 0, 0, 0, 0]
+	region_seen = [false, false, false, false, false]
+	region_walk = [0, 0, 0, 0, 0]
+	merchant_stock_slot = ""
+	merchant_stock.clear()
+	npc_stock.clear()
+	region_landmarks.clear()
 	merchant_favor = 0
 	wanted = 0
 	boss_kills.clear()

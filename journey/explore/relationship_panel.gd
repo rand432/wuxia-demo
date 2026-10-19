@@ -120,7 +120,7 @@ func open(info: Dictionary) -> void:
 	_war_btn.visible = not GS.war_notes.is_empty()
 	_war_btn.text = "战报 " + str(GS.war_notes.size())
 	var next_p := GS.prosperity_need(mini(5, GS.world_tier + 1)) if GS.world_tier < 5 else GS.world_prosperity
-	_world_lb.text = "世界档 " + str(GS.world_tier) + " · 繁荣 " + str(GS.world_prosperity) + "/" + str(next_p) + " · 区块 " + str(GS.REGION_NAMES[GS.current_region]) + "\n赤水寨：" + str(rw) + "\n听雨楼：名声 " + str(GS.broker_rep) + "/100 · " + GS.broker_rank_name() + "\n本图 Boss：" + str(info.get("boss", "凶物")) + "（" + str(info.get("boss_state", "未动")) + "）" + last_war
+	_world_lb.text = "世界档 " + str(GS.world_tier) + " · 繁荣 " + str(GS.world_prosperity) + "/" + str(next_p) + " · 区块 " + str(GS.REGION_NAMES[GS.current_region]) + " · 声望 " + str(GS.region_rep[clampi(GS.current_region, 0, 4)]) + "\n赤水寨：" + str(rw) + "\n听雨楼：名声 " + str(GS.broker_rep) + "/100 · " + GS.broker_rank_name() + "\n本图 Boss：" + str(info.get("boss", "凶物")) + "（" + str(info.get("boss_state", "未动")) + "）" + last_war
 	_gift_btn.disabled = GS.merchant_favor >= 100 or GS.coin("silver") < 50
 	var wash_cost := 80 * GS.wanted
 	_wash_btn.visible = GS.wanted > 0

@@ -97,6 +97,7 @@ func _price(base: int) -> int:
 	return maxi(1, int(round(float(base) * (1.0 - _discount()))))
 
 func _refresh() -> void:
+	GS.ensure_merchant_stock()
 	var d := int(round(_discount() * 100.0))
 	var w := GS.wanted
 	var turf_txt := " · 青岚地盘" if GS.red_water == 2 else ""
@@ -107,8 +108,10 @@ func _refresh() -> void:
 	for i in GOODS.size():
 		var g: Dictionary = GOODS[i]
 		var p := _price(int(g["base"]))
+		var left := int(GS.merchant_stock.get(str(g["id"]), 0))
+		_goods_lbs[i].text = GS.mat_name(str(g["id"])) + " ×" + str(g["n"]) + " · 余" + str(left)
 		_price_lbs[i].text = str(p) + " 两"
-		_buy_btns[i].disabled = GS.coin("silver") < p
+		_buy_btns[i].disabled = GS.coin("silver") < p or left <= 0
 	_sell_btn.disabled = GS.material_count("forge_stone") < 5
 	_sell_btn.text = "销赃（5锻造石 +20两）" if w > 0 else "卖锻造石 ×5（+15两）"
 	_rob_btn.visible = w <= 0
@@ -123,10 +126,16 @@ func _buy(i: int) -> void:
 		return
 	var g: Dictionary = GOODS[i]
 	var p := _price(int(g["base"]))
+	GS.ensure_merchant_stock()
+	var left := int(GS.merchant_stock.get(str(g["id"]), 0))
+	if left <= 0:
+		_msg_lb.text = "这种货这个时段卖完了。"
+		return
 	if GS.coin("silver") < p:
 		_msg_lb.text = "银两不够——这价已经压到底了。"
 		return
 	GS.add_coin("silver", -p)
+	GS.merchant_stock[str(g["id"])] = left - 1
 	GS.add_material(str(g["id"]), int(g["n"]))
 	if GS.wanted <= 0:
 		GS.merchant_favor = mini(100, GS.merchant_favor + 2)

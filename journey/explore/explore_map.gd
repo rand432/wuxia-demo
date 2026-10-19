@@ -16,6 +16,9 @@ const FxLayer := preload("res://journey/fx_layer.gd")
 const ActorFactory := preload("res://journey/actor_factory.gd")
 const StickFighter := preload("res://journey/stick_fighter.gd")
 const FoodMeter := preload("res://journey/explore/food_meter.gd")
+const CharacterPanel := preload("res://menu/character_panel.gd")
+const WarehousePanel := preload("res://menu/warehouse_panel.gd")
+const RegionSelectPanel := preload("res://menu/region_select.gd")
 
 const MAP_W := 24
 const MAP_H := 30
@@ -74,6 +77,8 @@ var _back_btn: Button
 var _action_lb: Label
 var _food_meter: Control
 var _time_lb: Label
+var _region_lb: Label
+var _side_panel: Control
 var _wanted_lb: Label
 var _action_empty := false
 var _exit_timer := 0.0
@@ -141,6 +146,8 @@ var _enemy_cells: Array = []
 var _reveal_r := 3
 var _land_id := 0
 var _map_owner := 0
+var _party_ids: Array = []
+var _fates_keep: Array = []
 
 func _ready() -> void:
 	var dep: Dictionary = GameState.deploy_take()
@@ -166,6 +173,8 @@ func setup(role_id := "player", diff := 1, party: Array = [], fates: Array = [])
 	var use_party: Array = party.duplicate()
 	if use_party.is_empty():
 		use_party = [role_id]
+	_party_ids = use_party.duplicate()
+	_fates_keep = fates.duplicate()
 	_state.begin_formal(use_party, _diff, fates)
 	_gen_world()
 	_build_astar()
@@ -223,6 +232,15 @@ func _gen_world() -> void:
 	var poi_n := 4
 	if _land_id == 4:
 		poi_order.append("snow_cave")
+		poi_n = 5
+	elif _land_id == 3:
+		poi_order.append("mine")
+		poi_n = 5
+	elif _land_id == 1:
+		poi_order.append("ferry")
+		poi_n = 5
+	elif _land_id == 2:
+		poi_order.append("hunter")
 		poi_n = 5
 	var poff := (GameState.world_seed + _land_id * 7) % poi_order.size()
 	guard = 0
@@ -509,64 +527,135 @@ func _spawn_toast() -> void:
 	_time_lb.add_theme_font_size_override("font_size", 15)
 	_time_lb.add_theme_color_override("font_color", Color("#b9a878"))
 	_action_lb.add_child(_time_lb)
+	_region_lb = Label.new()
+	_region_lb.position = Vector2(500, -12)
+	_region_lb.size = Vector2(120, 20)
+	_region_lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_region_lb.add_theme_font_size_override("font_size", 12)
+	_region_lb.add_theme_color_override("font_color", Color(0.62, 0.55, 0.4, 0.85))
+	_action_lb.add_child(_region_lb)
 	_update_action_label()
 	_wanted_lb = Label.new()
-	_wanted_lb.position = Vector2(24, 86)
+	_wanted_lb.position = Vector2(584, 26)
+	_wanted_lb.size = Vector2(112, 22)
+	_wanted_lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_wanted_lb.add_theme_font_size_override("font_size", 14)
 	_wanted_lb.add_theme_color_override("font_color", Color("#e06a5a"))
 	_toast_layer.add_child(_wanted_lb)
 	_update_wanted_label()
-	var back := Button.new()
-	back.text = "回 村"
-	back.position = Vector2(584, 1172)
-	back.size = Vector2(112, 44)
-	back.focus_mode = Control.FOCUS_NONE
-	back.add_theme_font_size_override("font_size", 20)
-	back.add_theme_color_override("font_color", Color("#f0d68a"))
 	var normal := StyleBoxFlat.new()
 	normal.bg_color = Color(0.06, 0.05, 0.04, 0.84)
 	normal.border_color = Color(0.72, 0.58, 0.22, 0.82)
 	normal.set_border_width_all(1)
 	normal.set_corner_radius_all(8)
-	back.add_theme_stylebox_override("normal", normal)
 	var hover := normal.duplicate() as StyleBoxFlat
 	hover.bg_color = Color(0.14, 0.11, 0.08, 0.92)
-	back.add_theme_stylebox_override("hover", hover)
-	back.add_theme_stylebox_override("pressed", hover)
-	back.tooltip_text = "回村（战利品已入账）"
-	back.pressed.connect(_return_village)
-	_toast_layer.add_child(back)
-	_back_btn = back
-	var rel := Button.new()
-	rel.text = "关 系"
-	rel.position = Vector2(24, 1172)
-	rel.size = Vector2(112, 44)
-	rel.focus_mode = Control.FOCUS_NONE
-	rel.add_theme_font_size_override("font_size", 20)
-	rel.add_theme_color_override("font_color", Color("#f0d68a"))
-	var rn := normal.duplicate() as StyleBoxFlat
-	var rh := hover.duplicate() as StyleBoxFlat
-	rel.add_theme_stylebox_override("normal", rn)
-	rel.add_theme_stylebox_override("hover", rh)
-	rel.add_theme_stylebox_override("pressed", rh)
-	rel.pressed.connect(_open_relations)
-	_toast_layer.add_child(rel)
-	_rel_btn = rel
-	var codex := Button.new()
-	codex.text = "图 鉴"
-	codex.position = Vector2(144, 1172)
-	codex.size = Vector2(112, 44)
-	codex.focus_mode = Control.FOCUS_NONE
-	codex.add_theme_font_size_override("font_size", 20)
-	codex.add_theme_color_override("font_color", Color("#f0d68a"))
-	var cn := normal.duplicate() as StyleBoxFlat
-	var ch := hover.duplicate() as StyleBoxFlat
-	codex.add_theme_stylebox_override("normal", cn)
-	codex.add_theme_stylebox_override("hover", ch)
-	codex.add_theme_stylebox_override("pressed", ch)
-	codex.pressed.connect(_open_codex)
-	_toast_layer.add_child(codex)
-	_codex_btn = codex
+	var bar := Button.new()
+	bar.text = ""
+	bar.position = Vector2(0, 1160)
+	bar.size = Vector2(720, 62)
+	bar.focus_mode = Control.FOCUS_NONE
+	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	bar.flat = true
+	bar.add_theme_stylebox_override("normal", StyleBoxEmpty.new())
+	bar.add_theme_stylebox_override("hover", StyleBoxEmpty.new())
+	bar.add_theme_stylebox_override("pressed", StyleBoxEmpty.new())
+	_toast_layer.add_child(bar)
+	_back_btn = bar
+	var labels := ["角色", "背包", "地图", "记录", "退出"]
+	for i in labels.size():
+		var b := Button.new()
+		b.text = str(labels[i])
+		b.position = Vector2(8 + i * 144, 10)
+		b.size = Vector2(128, 44)
+		b.focus_mode = Control.FOCUS_NONE
+		b.add_theme_font_size_override("font_size", 18)
+		b.add_theme_color_override("font_color", Color("#f0d68a"))
+		b.add_theme_stylebox_override("normal", normal.duplicate() as StyleBoxFlat)
+		b.add_theme_stylebox_override("hover", hover.duplicate() as StyleBoxFlat)
+		b.add_theme_stylebox_override("pressed", hover.duplicate() as StyleBoxFlat)
+		if i == 0:
+			b.pressed.connect(_open_character_panel)
+			_codex_btn = b
+		elif i == 1:
+			b.pressed.connect(_open_inventory_panel)
+		elif i == 2:
+			b.pressed.connect(_open_map_panel)
+		elif i == 3:
+			b.pressed.connect(_open_relations)
+			_rel_btn = b
+		else:
+			b.pressed.connect(_quit_to_menu)
+		bar.add_child(b)
+
+func _open_character_panel() -> void:
+	if _busy:
+		return
+	var cp = CharacterPanel.new()
+	cp.connect("closed", _on_side_closed)
+	_toast_layer.add_child(cp)
+	_side_panel = cp
+	_hide_for_side()
+	cp.call("open")
+
+func _open_inventory_panel() -> void:
+	if _busy:
+		return
+	var wp = WarehousePanel.new()
+	wp.connect("closed", _on_side_closed)
+	_toast_layer.add_child(wp)
+	_side_panel = wp
+	_hide_for_side()
+	wp.call("open")
+
+func _open_map_panel() -> void:
+	if _busy:
+		return
+	var rp = RegionSelectPanel.new()
+	rp.connect("entered", _on_map_region_entered)
+	rp.connect("closed", _on_map_closed)
+	_toast_layer.add_child(rp)
+	_side_panel = rp
+	_hide_for_side()
+	rp.call("open")
+
+func _on_map_region_entered(region: int) -> void:
+	GameState.current_region = clampi(region, 0, 4)
+	GameState.deploy_set(_party_ids, _diff, _fates_keep)
+	GameState.save_game()
+	get_tree().reload_current_scene()
+
+func _on_map_closed() -> void:
+	_return_village()
+
+func _quit_to_menu() -> void:
+	GameState.save_game()
+	get_tree().change_scene_to_file("res://menu_sketch.tscn")
+
+func _hide_for_side() -> void:
+	_busy = true
+	_moving = false
+	_has_click = false
+	if _action_lb != null:
+		_action_lb.visible = false
+	if _back_btn != null:
+		_back_btn.visible = false
+	if _rel_btn != null:
+		_rel_btn.visible = false
+	if _codex_btn != null:
+		_codex_btn.visible = false
+
+func _on_side_closed() -> void:
+	_busy = false
+	_side_panel = null
+	if _action_lb != null:
+		_action_lb.visible = true
+	if _back_btn != null:
+		_back_btn.visible = true
+	if _rel_btn != null:
+		_rel_btn.visible = true
+	if _codex_btn != null:
+		_codex_btn.visible = true
 
 func _node_idx_at(cell: Vector2i) -> int:
 	return _node_cells.find(cell)
@@ -632,7 +721,14 @@ func _npc_free_cell(rng: RandomNumberGenerator) -> Vector2i:
 	return Vector2i(-1, -1)
 
 func _make_npc(cell: Vector2i, typ: String, nm: String) -> Dictionary:
-	return {"cell": cell, "type": typ, "name": nm, "done": false}
+	return {"cell": cell, "type": typ, "name": nm, "done": false, "stock_slot": -1, "stock": {}}
+
+func _npc_key(cell: Vector2i) -> String:
+	return str(GameState.world_seed) + ":" + str(GameState.current_region) + ":" + _flag_key(cell)
+
+func _npc_price(base: int) -> int:
+	var rep := int(GameState.region_rep[clampi(GameState.current_region, 0, 4)]) if GameState.region_rep.size() >= 5 else 0
+	return maxi(1, int(round(float(base) * (1.0 - float(rep) * 0.002))))
 
 func _npc_default_name(typ: String) -> String:
 	return str({"merchant": "行商·赵四", "doctor": "游医·白芷", "storyteller": "说书人·柳先生", "swordsman": "落魄剑客·秦三", "thief": "偷儿·小六"}.get(typ, "江湖客"))
@@ -663,6 +759,8 @@ func _draw_npcs() -> void:
 	for i in _npcs.size():
 		var n: Dictionary = _npcs[i]
 		var c: Vector2i = n["cell"]
+		if not _detail_visible(c):
+			continue
 		var p := _cell_pos(c.x, c.y)
 		var typ := str(n["type"])
 		var col := Color("#c9a64a") if typ == "merchant" else (Color("#8ab46a") if typ == "doctor" else (Color("#b9a878") if typ == "storyteller" else (Color("#8fa0b0") if typ == "swordsman" else (Color("#9a6a8a") if typ == "thief" else Color("#e0c070")))))
@@ -688,15 +786,23 @@ func _open_npc(i: int) -> void:
 	var choices: Array = []
 	match typ:
 		"merchant":
-			choices = [{"id": "food", "label": "买干粮（10两 · 食物+10）"}, {"id": "herb", "label": "买药包（25两 · 雪参×1）"}]
+			var sk := _npc_key(n["cell"])
+			var slot_key := str(GameState.time_day) + ":" + str(GameState.time_slot)
+			var rec: Dictionary = GameState.npc_stock.get(sk, {})
+			if str(rec.get("slot", "")) != slot_key:
+				rec = {"slot": slot_key, "stock": {"food": 3, "herb": 2}}
+				GameState.npc_stock[sk] = rec
+			n["stock"] = rec.get("stock", {"food": 3, "herb": 2})
+			var st: Dictionary = n["stock"]
+			choices = [{"id": "food", "label": "买干粮（" + str(_npc_price(10)) + "两 · 食物+10 · 余" + str(st.get("food", 0)) + "）"}, {"id": "herb", "label": "买药包（" + str(_npc_price(25)) + "两 · 雪参×1 · 余" + str(st.get("herb", 0)) + "）"}]
 		"doctor":
-			choices = [{"id": "heal", "label": "讨碗药汤（15两 · 食物+15）"}]
+			choices = [{"id": "heal", "label": "讨碗药汤（" + str(_npc_price(15)) + "两 · 食物+15）"}]
 		"storyteller":
-			choices = [{"id": "listen", "label": "听一段旧事（15两 · 开视野）"}]
+			choices = [{"id": "listen", "label": "听一段旧事（" + str(_npc_price(15)) + "两 · 开视野）"}]
 		"swordsman":
-			choices = [{"id": "tip", "label": "请他指点（50两 · 金髓×1）"}]
+			choices = [{"id": "tip", "label": "请他指点（" + str(_npc_price(50)) + "两 · 金髓×1）"}]
 		"thief":
-			choices = [{"id": "atlas", "label": "买一张舆图（120两）"}]
+			choices = [{"id": "atlas", "label": "买一张舆图（" + str(_npc_price(120)) + "两）"}]
 		_:
 			choices = [{"id": "talk", "label": "说 几 句"}]
 	if _npc_panel == null:
@@ -733,48 +839,66 @@ func _on_npc_pick(id: String) -> void:
 	var msg := "你退开了。"
 	match id:
 		"food":
-			if GameState.coin("silver") < 10:
+			var st: Dictionary = n.get("stock", {})
+			var price := _npc_price(10)
+			if int(st.get("food", 0)) <= 0:
+				msg = "干粮卖完了，等下一个时段。"
+			elif GameState.coin("silver") < price:
 				msg = "银两不够。"
 			else:
-				GameState.add_coin("silver", -10)
+				GameState.add_coin("silver", -price)
+				st["food"] = int(st.get("food", 0)) - 1
+				n["stock"] = st
+				GameState.npc_stock[_npc_key(n["cell"])] = {"slot": str(GameState.time_day) + ":" + str(GameState.time_slot), "stock": st}
 				GameState.action_add(10)
 				msg = "干粮下肚。食物 +10。"
 		"herb":
-			if GameState.coin("silver") < 25:
+			var st2: Dictionary = n.get("stock", {})
+			var price2 := _npc_price(25)
+			if int(st2.get("herb", 0)) <= 0:
+				msg = "药包卖完了，等下一个时段。"
+			elif GameState.coin("silver") < price2:
 				msg = "银两不够。"
 			else:
-				GameState.add_coin("silver", -25)
+				GameState.add_coin("silver", -price2)
+				st2["herb"] = int(st2.get("herb", 0)) - 1
+				n["stock"] = st2
+				GameState.npc_stock[_npc_key(n["cell"])] = {"slot": str(GameState.time_day) + ":" + str(GameState.time_slot), "stock": st2}
 				GameState.add_material("shen", 1)
 				msg = "药包入手：雪参 ×1。"
 		"heal":
-			if GameState.coin("silver") < 15:
+			var price3 := _npc_price(15)
+			if GameState.coin("silver") < price3:
 				msg = "银两不够。"
 			else:
-				GameState.add_coin("silver", -15)
+				GameState.add_coin("silver", -price3)
 				GameState.action_add(15)
 				msg = "药汤暖胃。食物 +15。"
 		"listen":
-			if GameState.coin("silver") < 15:
+			var price4 := _npc_price(15)
+			if GameState.coin("silver") < price4:
 				msg = "银两不够。"
 			else:
-				GameState.add_coin("silver", -15)
+				GameState.add_coin("silver", -price4)
 				for k in 5:
 					_reveal_at(_cell_pos(randi_range(1, MAP_W - 2), randi_range(1, MAP_H - 2)))
 				n["done"] = true
 				msg = "说书人讲了五处旧事。"
 		"tip":
-			if GameState.coin("silver") < 50:
+			var price5 := _npc_price(50)
+			if GameState.coin("silver") < price5:
 				msg = "银两不够。"
 			else:
-				GameState.add_coin("silver", -50)
+				GameState.add_coin("silver", -price5)
 				GameState.add_material("jin", 1)
 				n["done"] = true
 				msg = "他指了指你的腕子。金髓 +1。"
 		"atlas":
-			if GameState.coin("silver") < 120:
+			var price6 := _npc_price(120)
+			if GameState.coin("silver") < price6:
 				msg = "银两不够。"
 			else:
-				GameState.add_coin("silver", -120)
+				GameState.add_coin("silver", -price6)
 				GameState.add_material("atlas", 1)
 				n["done"] = true
 				msg = "偷儿塞给你一张舆图。"
@@ -805,6 +929,24 @@ func _on_npc_closed() -> void:
 		_codex_btn.visible = true
 	if _rel_btn != null:
 		_rel_btn.visible = true
+
+func _mark_landmark(id: String) -> void:
+	var arr: Array = GameState.landmarks(GameState.current_region)
+	if not arr.has(id):
+		GameState.mark_landmark(id)
+		GameState.save_game()
+
+func _detail_visible(cell: Vector2i) -> bool:
+	if _player == null:
+		return false
+	var near := _player.position.distance_to(_cell_pos(cell.x, cell.y)) <= TILE * 4.0
+	var key := _flag_key(cell)
+	if near:
+		if not GameState.world_has("seen", key):
+			GameState.world_mark("seen", key)
+			GameState.save_game()
+		return true
+	return GameState.world_has("seen", key)
 
 func _flag_key(cell: Vector2i) -> String:
 	return str(cell.x) + "," + str(cell.y)
@@ -1141,12 +1283,6 @@ func _draw() -> void:
 	_draw_chests()
 	_draw_nodes()
 	_draw_npcs()
-	# 迷雾：没走过的格子压暗
-	for gx in MAP_W:
-		for gy in MAP_H:
-			var c := Vector2i(gx, gy)
-			if not _explored.has(c):
-				draw_rect(Rect2(Vector2(gx, gy) * TILE, Vector2(TILE, TILE)), Color(0.02, 0.03, 0.02, 0.78))
 	# 路径提示
 	if _moving and _path.size() > 1:
 		var pts := PackedVector2Array()
@@ -1183,6 +1319,9 @@ func _draw_bamboo(pos: Vector2) -> void:
 		draw_line(pos + Vector2(dx + 2.0, -24), pos + Vector2(dx - 10.0, -32.0), Color("#4f6a3d"), 2.0)
 
 func _draw_house() -> void:
+	if not _detail_visible(HOUSE_CELL):
+		return
+	_mark_landmark("house")
 	var p := _cell_pos(HOUSE_CELL.x, HOUSE_CELL.y)
 	draw_circle(p + Vector2(0, 20), 34.0, Color(0.04, 0.06, 0.04, 0.4))
 	draw_rect(Rect2(p + Vector2(-34, -26), Vector2(68, 46)), Color("#4a3a2a"))
@@ -1192,6 +1331,9 @@ func _draw_house() -> void:
 	draw_string(ThemeDB.fallback_font, p + Vector2(-18, -70), "竹屋", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("#f0d68a"))
 
 func _draw_sect_gate() -> void:
+	if not _detail_visible(SECT_CELL):
+		return
+	_mark_landmark("sect")
 	var p := _cell_pos(SECT_CELL.x, SECT_CELL.y)
 	draw_circle(p + Vector2(0, 24), 46.0, Color(0.04, 0.05, 0.04, 0.38))
 	draw_rect(Rect2(p + Vector2(-46, 8), Vector2(92, 10)), Color("#3f3a30"))
@@ -1205,8 +1347,9 @@ func _draw_sect_gate() -> void:
 	draw_string(ThemeDB.fallback_font, p + Vector2(-32, -132), "青岚山门", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("#f0d68a"))
 
 func _draw_rival() -> void:
-	if _rival_cell.x < 0:
+	if _rival_cell.x < 0 or not _detail_visible(_rival_cell):
 		return
+	_mark_landmark("redwater")
 	var p := _cell_pos(_rival_cell.x, _rival_cell.y)
 	var st := GameState.red_water
 	var contest := _rival_contest and not _rival_done
@@ -1232,8 +1375,9 @@ func _draw_rival() -> void:
 	draw_string(ThemeDB.fallback_font, p + Vector2(-34, -126), label, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("#9a927f") if done else Color("#e06a5a"))
 
 func _draw_broker() -> void:
-	if _broker_cell.x < 0:
+	if _broker_cell.x < 0 or not _detail_visible(_broker_cell):
 		return
+	_mark_landmark("broker")
 	var p := _cell_pos(_broker_cell.x, _broker_cell.y)
 	var col := Color("#6b655c") if _broker_done else Color("#3a4a5a")
 	draw_circle(p + Vector2(0, 22), 32.0, Color(0.03, 0.03, 0.03, 0.38))
@@ -1247,8 +1391,9 @@ func _draw_broker() -> void:
 	draw_string(ThemeDB.fallback_font, p + Vector2(-26, -96), "听雨楼", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("#9ab0c0") if not _broker_done else Color("#9a927f"))
 
 func _draw_north() -> void:
-	if _north_cell.x < 0:
+	if _north_cell.x < 0 or not _detail_visible(_north_cell):
 		return
+	_mark_landmark("outpost" if GameState.north_peace else "north")
 	var p := _cell_pos(_north_cell.x, _north_cell.y)
 	var peace := GameState.north_peace
 	var col := Color("#6b655c") if _north_done else (Color("#2a4a4a") if peace else Color("#262a2e"))
@@ -1263,7 +1408,7 @@ func _draw_north() -> void:
 	draw_string(ThemeDB.fallback_font, p + Vector2(-30, -132), ("青岚·北境哨" if not _north_done else "北境哨·已取") if peace else ("黑风寨·已平" if _north_done else "黑风寨"), HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("#9a927f") if _north_done else Color("#c9a64a"))
 
 func _draw_brawl() -> void:
-	if _brawl_cell.x < 0:
+	if _brawl_cell.x < 0 or not _detail_visible(_brawl_cell):
 		return
 	var p := _cell_pos(_brawl_cell.x, _brawl_cell.y)
 	var done := _brawl_done
@@ -1287,7 +1432,7 @@ func _draw_faction_flag() -> void:
 	draw_string(ThemeDB.fallback_font, p + Vector2(-18, -38), "本图：" + nm, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, col)
 
 func _draw_boss() -> void:
-	if _boss_cell.x < 0:
+	if _boss_cell.x < 0 or not _detail_visible(_boss_cell):
 		return
 	var p := _cell_pos(_boss_cell.x, _boss_cell.y)
 	var dead := _boss_node != null and bool(_boss_node.get_meta("beaten", false))
@@ -1307,8 +1452,11 @@ func _draw_boss() -> void:
 func _draw_pois() -> void:
 	for i in _poi_cells.size():
 		var cell: Vector2i = _poi_cells[i]
+		if not _detail_visible(cell):
+			continue
 		var p := _cell_pos(cell.x, cell.y)
 		var typ := str(_poi_types[i])
+		_mark_landmark(typ)
 		var used := bool(_poi_used.get(cell, false))
 		draw_circle(p + Vector2(0, 18), 26.0, Color(0.04, 0.05, 0.04, 0.36))
 		match typ:
@@ -1337,11 +1485,27 @@ func _draw_pois() -> void:
 				draw_line(p + Vector2(-24, -2), p + Vector2(-24, 16), Color("#3a2a1c"), 3.0)
 				draw_line(p + Vector2(24, -2), p + Vector2(24, 16), Color("#3a2a1c"), 3.0)
 				draw_line(p + Vector2(0, 8), p + Vector2(0, -6), Color(0.9, 0.85, 0.72, 0.45), 2.0)
+			"ferry":
+				draw_line(p + Vector2(-30, 4), p + Vector2(30, 4), Color("#5a4630"), 5.0)
+				draw_colored_polygon(PackedVector2Array([p + Vector2(-26, 4), p + Vector2(-12, 20), p + Vector2(20, 20), p + Vector2(30, 4)]), Color("#6b4a2a"))
+				draw_line(p + Vector2(0, 4), p + Vector2(0, -28), Color("#3a2a1c"), 3.0)
+				draw_colored_polygon(PackedVector2Array([p + Vector2(0, -28), p + Vector2(20, -22), p + Vector2(0, -12)]), Color("#c9a64a"))
+			"hunter":
+				draw_rect(Rect2(p + Vector2(-24, -6), Vector2(48, 30)), Color("#4a3524"))
+				draw_colored_polygon(PackedVector2Array([p + Vector2(-30, -6), p + Vector2(30, -6), p + Vector2(18, -26), p + Vector2(-18, -26)]), Color("#6b4a2a"))
+				draw_line(p + Vector2(-20, 22), p + Vector2(-28, 30), Color("#3a2a1c"), 3.0)
+				draw_line(p + Vector2(20, 22), p + Vector2(28, 30), Color("#3a2a1c"), 3.0)
+			"mine":
+				draw_circle(p + Vector2(0, 6), 28.0, Color("#2a241c"))
+				draw_circle(p + Vector2(0, 10), 19.0, Color("#0e0d0a"))
+				draw_line(p + Vector2(-24, -18), p + Vector2(-8, 2), Color("#6b4a2a"), 5.0)
+				draw_line(p + Vector2(24, -18), p + Vector2(8, 2), Color("#6b4a2a"), 5.0)
+				draw_line(p + Vector2(-18, -22), p + Vector2(18, -22), Color("#3a2a1c"), 4.0)
 			"snow_cave":
 				draw_circle(p + Vector2(0, 2), 24.0, Color("#c9d3d6"))
 				draw_circle(p + Vector2(0, 4), 17.0, Color("#14181b"))
 				draw_arc(p + Vector2(0, 2), 22.0, PI, TAU, 14, Color("#8fa0a6"), 3.0)
-		var nm: String = str({"temple": "破庙", "well": "古井", "tea": "茶棚", "merchant": "货郎", "snow_cave": "雪洞"}.get(typ, "旧迹"))
+		var nm: String = str({"temple": "破庙", "well": "古井", "tea": "茶棚", "merchant": "货郎", "snow_cave": "雪洞", "mine": "矿洞", "ferry": "渡口", "hunter": "猎户"}.get(typ, "旧迹"))
 		draw_string(ThemeDB.fallback_font, p + Vector2(-22, -50), nm, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("#b9a878") if used else Color("#f0d68a"))
 		if used:
 			draw_string(ThemeDB.fallback_font, p + Vector2(-18, -34), "已探", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.72, 0.66, 0.54, 0.8))
@@ -1349,6 +1513,8 @@ func _draw_pois() -> void:
 func _draw_chests() -> void:
 	for cell_v in _chest_cells:
 		var cell: Vector2i = cell_v
+		if not _detail_visible(cell):
+			continue
 		var p := _cell_pos(cell.x, cell.y)
 		var opened := bool(_chest_open.get(cell, false))
 		var q := int(_chest_quality.get(cell, 0))
@@ -1368,6 +1534,8 @@ func _draw_chests() -> void:
 func _draw_nodes() -> void:
 	for i in _node_cells.size():
 		var cell: Vector2i = _node_cells[i]
+		if not _detail_visible(cell):
+			continue
 		var p := _cell_pos(cell.x, cell.y)
 		var typ := str(_node_types[i])
 		var used := bool(_node_used.get(cell, false))
@@ -1445,8 +1613,10 @@ func _update_action_label() -> void:
 		_food_meter.call("set_value", GameState.action)
 	if _time_lb != null:
 		_time_lb.text = GameState.time_text()
+	if _region_lb != null:
+		_region_lb.text = str(GameState.REGION_NAMES[GameState.current_region]) + " D" + str(GameState.REGION_DIFFS[GameState.current_region]) + " · 档 " + str(GameState.world_tier)
 	if GameState.action > 100:
-		_action_lb.text = "食物 " + str(GameState.action) + " / 100 · 存粮 +" + str(GameState.action - 100)
+		_action_lb.text = "食物 " + str(GameState.action) + " · 存粮 +" + str(GameState.action - 100)
 	else:
 		_action_lb.text = "食物 " + str(GameState.action) + " / 100"
 	if GameState.action > 100:
@@ -1478,7 +1648,7 @@ func _return_village() -> void:
 		GameState.note_push("食物资源耗尽——安全回村，战利品已入账")
 	GameState.save_game()
 	print("[游历] 回村：锻造石=", GameState.material_count("forge_stone"), " 银两=", GameState.coin("silver"), " 食物=", GameState.action)
-	get_tree().change_scene_to_file("res://menu/menu_sketch.tscn")
+	get_tree().change_scene_to_file("res://menu_sketch.tscn")
 
 func _draw_interior() -> void:
 	var w := ROOM_W * TILE
@@ -1634,6 +1804,18 @@ func _poi_data(typ: String) -> Dictionary:
 			return {"title": "破　庙", "sub": "半塌的山神庙，泥像没了头。",
 				"body": "供桌积着灰，香炉冷透。梁上似乎还藏着东西。\n\n（只能探一次）",
 				"choices": [{"id": "loot", "label": "搜供桌"}, {"id": "incense", "label": "上一炷香"}]}
+		"ferry":
+			return {"title": "渡　口", "sub": "水边一条旧渡船，绳子系在木桩上。",
+				"body": "船底积着水，对岸雾蒙蒙的。\n\n（只能探一次）",
+				"choices": [{"id": "fish", "label": "钓 鱼（1食物）"}, {"id": "cross", "label": "渡 河（1食物）"}]}
+		"hunter":
+			return {"title": "猎　户", "sub": "林中一间树屋，檐下挂着兽皮。",
+				"body": "猎户正在磨刀，灶上炖着肉。\n\n（只能探一次）",
+				"choices": [{"id": "meat", "label": "买肉（15两 · 食物+15）"}, {"id": "hunt", "label": "跟他进山（2食物）"}]}
+		"mine":
+			return {"title": "矿　洞", "sub": "石壁上全是旧镐痕，深处有风。",
+				"body": "洞口堆着碎矿，里面黑得看不见底。\n\n（只能探一次）",
+				"choices": [{"id": "dig", "label": "采 矿（1食物）"}, {"id": "deep", "label": "深 挖（3食物）"}]}
 		"snow_cave":
 			var cc: Array = [{"id": "warm", "label": "避 风（食物+10）"}, {"id": "probe", "label": "探 洞"}]
 			if not GameState.snow_charm:
@@ -1710,6 +1892,75 @@ func _on_poi_pick(id: String) -> void:
 					GameState.add_material("forge_stone", 3)
 					used = true
 					msg = "井底只摸到三块沉石，倒是能当锻造石用。"
+		"ferry":
+			if id == "fish":
+				if GameState.action_spend(1):
+					if randf() < 0.5:
+						GameState.add_material("rice", 2)
+						msg = "钓上两尾银鳞。灵米 +2。"
+					else:
+						GameState.add_material("rice", 1)
+						GameState.add_coin("silver", 12)
+						msg = "鱼没钓着，倒摸到 12 两旧钱。灵米 +1。"
+					used = true
+				else:
+					msg = "食物不够，提不动竿。"
+			elif id == "cross":
+				if GameState.action_spend(1):
+					if randf() < 0.35:
+						GameState.add_material("atlas", 1)
+						msg = "船到河心，艄公递来一张旧舆图。"
+					else:
+						GameState.add_coin("silver", 25)
+						msg = "对岸有个小集市，你换了 25 两。"
+					used = true
+				else:
+					msg = "食物不够，划不动船。"
+		"hunter":
+			if id == "meat":
+				if GameState.coin("silver") < 15:
+					msg = "银两不够。"
+				else:
+					GameState.add_coin("silver", -15)
+					GameState.action_add(15)
+					used = true
+					msg = "一碗炖肉下肚。食物 +15。"
+			elif id == "hunt":
+				if GameState.action_spend(2):
+					if randf() < 0.35:
+						GameState.add_material("jin", 1)
+						GameState.add_material("bone", 2)
+						msg = "猎户一箭放倒头鹿：金髓 +1 · 兽骨碎 +2。"
+					else:
+						var bs := randi_range(3, 5)
+						GameState.add_material("bone", bs)
+						msg = "只套着两只兔子：兽骨碎 +" + str(bs) + "。"
+					used = true
+				else:
+					msg = "食物不够，走不动山路。"
+		"mine":
+			if id == "dig":
+				if GameState.action_spend(1):
+					var ms := randi_range(5, 8)
+					GameState.add_material("forge_stone", ms)
+					used = true
+					msg = "凿下几块好矿：锻造石 +" + str(ms) + "。"
+				else:
+					msg = "食物不够，抡不动镐。"
+			elif id == "deep":
+				if GameState.action_spend(3):
+					if randf() < 0.5:
+						GameState.add_material("atlas", 1)
+						GameState.add_material("jin", 1)
+						used = true
+						msg = "深洞里摸到一只铁匣：舆图 ×1 · 金髓 ×1。"
+					else:
+						var ms2 := randi_range(4, 7)
+						GameState.add_material("forge_stone", ms2)
+						used = true
+						msg = "洞底塌了一角，只扒出锻造石 +" + str(ms2) + "。"
+				else:
+					msg = "食物不够，深挖要 3 食物。"
 		"snow_cave":
 			if id == "warm":
 				GameState.action_add(10)
@@ -3131,6 +3382,13 @@ func _on_click(pos: Vector2) -> void:
 		_set_msg("食物不够走这一程——先回村吃点东西")
 		return
 	_update_action_label()
+	var ri := clampi(GameState.current_region, 0, 4)
+	while GameState.region_walk.size() < 5:
+		GameState.region_walk.append(0)
+	GameState.region_walk[ri] = int(GameState.region_walk[ri]) + steps
+	if not GameState.region_seen[ri] and int(GameState.region_walk[ri]) >= 8:
+		GameState.region_seen[ri] = true
+		GameState.save_game()
 	if food_cost > 0:
 		_set_msg("走了 " + str(steps) + " 格，食物 -" + str(food_cost), 1.2)
 	_path = path
@@ -3155,6 +3413,12 @@ func _process(delta: float) -> void:
 			return
 	if _busy or _battle_active or _player == null:
 		return
+	for ev in _enemies:
+		var en: Node2D = ev
+		if not is_instance_valid(en):
+			continue
+		var ec := Vector2i(int(en.position.x / TILE), int(en.position.y / TILE))
+		en.visible = (not _in_house) and (not bool(en.get_meta("beaten", false))) and _detail_visible(ec)
 	if not _in_house:
 		for e_v in _enemies:
 			var eg: Node2D = e_v
