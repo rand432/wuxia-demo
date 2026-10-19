@@ -379,6 +379,9 @@ static func register_forged(id: String, set: Dictionary) -> void:
 static func clear_forged() -> void:
 	FORGED_SETS.clear()
 
+static func unregister_forged(id: String) -> void:
+	FORGED_SETS.erase(id)
+
 # ---- ㊿z4：被动功法 / 量身定做的辅助功法（带 "role" 的武学）----
 #   role：推荐给谁（空串＝通用）。**只是推荐，不拦着装**——照崩铁专武那把尺子
 #   （专武按命途限装、不锁人；这里"命途"那一层就是 weapon 的兵器类型）。

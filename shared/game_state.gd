@@ -856,6 +856,18 @@ static var insight_lv := {}
 # ---- v242：**行动资源**（游历门票）----
 #   塔挂机产；进图按“一次移动”烧 1 点；站着不动不扣；空了自动安全回村。
 static var action := ACTION_START
+# v243：山门占位（四道门）
+static var sect_favor := 0
+static var sect_rep := 0
+static var sect_test := false
+static var sect_art := false
+# v244：世界档 / 舆图（换新世界用）
+static var world_seed := 0
+static var world_tier := 1
+# v246：货郎人情（世界内关系网的第一根线）
+static var merchant_favor := 0
+# v247：通缉（0~5）——打劫货郎涨，洗白清零
+static var wanted := 0
 
 static func action_add(n: int) -> int:
 	action = clampi(action + n, 0, ACTION_MAX)
@@ -3407,6 +3419,17 @@ static func forge_add(sid: String, set: Dictionary) -> void:
 	Cards.register_forged(sid, set)
 	vault_add_item(sid, 1)
 
+static func forge_remove(sid: String) -> void:
+	forge_cards.erase(sid)
+	Cards.unregister_forged(sid)
+
+static func forge_wearer(sid: String) -> String:
+	for rid in ["player", "chen_shi", "qingluan"]:
+		var d: Dictionary = role_data(str(rid))
+		if str(d.get("weapon", "")) == sid:
+			return str(d.get("name", rid))
+	return ""
+
 static func vault_item_count(sid: String) -> int:
 	return int(vault_items.get(sid, 0))
 
@@ -3784,7 +3807,7 @@ static func stage_clear(i: int) -> bool:
 
 # v121（用户："增加新材料"）：境界石 / 道心砂——进阶专用（别的路不掉、也不花）
 const MAT_CN := {"zhi": "紫芝", "shen": "雪参", "guo": "朱果", "bone": "兽骨碎", "rice": "灵米", "jin": "金髓",
-	"forge_stone": "锻造石", "jingshi": "境界石（金）", "daoxin": "道心砂（红）"}
+	"forge_stone": "锻造石", "jingshi": "境界石（金）", "daoxin": "道心砂（红）", "atlas": "舆图"}
 
 # v41（用户："增加金色材料，同时让洗灵丹也能炼，也是稀有的金色材料才能炼制"）：
 #   **金髓** ＝ 稀有的**金色材料**——洗髓丹与宠物资质丹（洗灵丹）都要它才能开炉。
@@ -5900,6 +5923,15 @@ static func load_game() -> void:
 	coins = _sd(cf.get_value("world", "coins", coins), coins)
 	insight = maxi(0, int(cf.get_value("world", "insight", 0)))            # v64b：阅历值
 	action = clampi(int(cf.get_value("world", "action", ACTION_START)), 0, ACTION_MAX)   # v242：行动资源
+	var sd := _sd(cf.get_value("world", "sect", {}), {})
+	sect_favor = clampi(int(sd.get("favor", 0)), 0, 100)
+	sect_rep = clampi(int(sd.get("rep", 0)), 0, 100)
+	sect_test = bool(sd.get("test", false))
+	sect_art = bool(sd.get("art", false))
+	world_seed = maxi(0, int(cf.get_value("world", "world_seed", 0)))
+	world_tier = clampi(int(cf.get_value("world", "world_tier", 1 + int(world_seed / 2))), 1, 5)
+	merchant_favor = clampi(int(cf.get_value("world", "merchant_favor", 0)), 0, 100)
+	wanted = clampi(int(cf.get_value("world", "wanted", 0)), 0, 5)
 	advance_lv = clampi(int(cf.get_value("world", "advance_lv", 0)), 0, Realm.MAX_LV)   # v121：进阶境界
 	insight_lv = _sd(cf.get_value("world", "insight_lv", {}), insight_lv)  # v64b：四支等级
 	exp_pool = maxi(0, int(cf.get_value("world", "exp_pool", 0)))   # ㊾：经验池
@@ -5943,6 +5975,9 @@ static func load_game() -> void:
 		var fsid := str(fsid_v)
 		Cards.register_forged(fsid, forge_cards[fsid])
 	materials = _sd(vlt.get("materials", {}), materials)
+	# v244：老档 / 新档给一张舆图；用掉后 world_seed > 0，不再补发
+	if int(materials.get("atlas", 0)) <= 0 and world_seed == 0:
+		materials["atlas"] = 1
 	materials.erase("wood")   # v242：建设删了，木料一并下线（老档里剩下的不再显示）
 	fragments = _sd(vlt.get("fragments", {}), fragments)
 	pills = _sd(vlt.get("pills", {}), pills)
@@ -6001,6 +6036,11 @@ static func save_game() -> void:
 	# v64b：阅历线（阅历值 ＋ 四支各自升到第几段）
 	cf.set_value("world", "insight", insight)
 	cf.set_value("world", "action", action)
+	cf.set_value("world", "sect", {"favor": sect_favor, "rep": sect_rep, "test": sect_test, "art": sect_art})
+	cf.set_value("world", "world_seed", world_seed)
+	cf.set_value("world", "world_tier", world_tier)
+	cf.set_value("world", "merchant_favor", merchant_favor)
+	cf.set_value("world", "wanted", wanted)
 	cf.set_value("world", "advance_lv", advance_lv)          # v121：进阶境界
 	cf.set_value("world", "insight_lv", insight_lv)
 	cf.set_value("world", "exp_pool", exp_pool)   # ㊾：经验池
@@ -6141,6 +6181,7 @@ static func reset() -> void:
 	forge_compendium.clear()
 	Cards.clear_forged()
 	materials.clear()
+	materials["atlas"] = 1
 	fragments.clear()
 	formation = ["player"]
 	stage_progress = 0
@@ -6160,6 +6201,14 @@ static func reset() -> void:
 	qingluan = {}
 	idle_pool_sec = 0
 	action = ACTION_START
+	sect_favor = 0
+	sect_rep = 0
+	sect_test = false
+	sect_art = false
+	world_seed = 0
+	world_tier = 1
+	merchant_favor = 0
+	wanted = 0
 	_idle_last_ts = _idle_now()
 	_idle_save()
 	level_notes.clear()

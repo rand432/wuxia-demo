@@ -95,6 +95,8 @@ static func for_mat(k: String) -> Texture2D:
 			return _t("mat_rice")
 		"jin":
 			return _t("mat_jin")
+		"atlas":
+			return _t("it_scroll")
 	return _t("it_herb")
 
 # 丹药 / 消耗

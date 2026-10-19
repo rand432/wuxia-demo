@@ -42,8 +42,19 @@ var _comp_hint_lb: Label
 var _comp_recipe_lb: Label
 var _comp_try_btn: Button
 var _comp_make_btn: Button
+var _comp_page_btn: Button
 var _comp_mat_btns := {}
 var _comp_sel: Array = []
+var _comp_idx := 0
+var _bag_panel: Panel
+var _bag_name_lb: Label
+var _bag_stat_lb: Label
+var _bag_price_lb: Label
+var _bag_page_btn: Button
+var _bag_sell_btn: Button
+var _bag_scrap_btn: Button
+var _bag_gift_btn: Button
+var _bag_idx := 0
 var _t := 0.0
 
 func _ready() -> void:
@@ -144,21 +155,24 @@ func _build() -> void:
 		btn.pressed.connect(_open_blank.bind(str(b["id"])))
 		_blank_btns.append({"id": str(b["id"]), "btn": btn})
 
-	_take_btn = UiKit.make_button(_panel, Vector2(30, 760), Vector2(180, 48), "收 下", 18)
+	_take_btn = UiKit.make_button(_panel, Vector2(30, 800), Vector2(180, 48), "收 下", 18)
 	_take_btn.pressed.connect(_take)
-	_ascend_btn = UiKit.make_button(_panel, Vector2(230, 760), Vector2(180, 48), "升 阶", 18)
+	_ascend_btn = UiKit.make_button(_panel, Vector2(230, 800), Vector2(180, 48), "升 阶", 18)
 	_ascend_btn.pressed.connect(_ascend)
-	var close_btn := UiKit.make_button(_panel, Vector2(430, 760), Vector2(180, 48), "关 闭", 18)
+	var close_btn := UiKit.make_button(_panel, Vector2(430, 800), Vector2(180, 48), "关 闭", 18)
 	close_btn.pressed.connect(close)
 
 	_bag_lb = _label("", 13, Color(INK.r, INK.g, INK.b, 0.58))
-	_bag_lb.position = Vector2(30, 826)
+	_bag_lb.position = Vector2(30, 858)
 	_bag_lb.size = Vector2(580, 22)
 	_panel.add_child(_bag_lb)
 
+	var bag_btn := UiKit.make_button(_panel, Vector2(404, 12), Vector2(104, 36), "成品库", 15)
+	bag_btn.pressed.connect(_bag_open)
 	var comp_btn := UiKit.make_button(_panel, Vector2(516, 12), Vector2(94, 36), "图 鉴", 16)
 	comp_btn.pressed.connect(_comp_open)
 	_build_compendium()
+	_build_bag()
 
 func _build_compendium() -> void:
 	_comp_dim = ColorRect.new()
@@ -192,6 +206,9 @@ func _build_compendium() -> void:
 	_comp_hint_lb.size = Vector2(536, 24)
 	_comp_panel.add_child(_comp_hint_lb)
 
+	_comp_page_btn = UiKit.make_button(_comp_panel, Vector2(404, 14), Vector2(154, 34), "下一条", 14)
+	_comp_page_btn.pressed.connect(_comp_next)
+
 	var pick := _label("放两味料试试（试错只亏石头，材料不动）", 13, Color(INK.r, INK.g, INK.b, 0.54))
 	pick.position = Vector2(22, 84)
 	pick.size = Vector2(536, 20)
@@ -222,6 +239,59 @@ func _build_compendium() -> void:
 
 	var back := UiKit.make_button(_comp_panel, Vector2(300, 370), Vector2(258, 48), "返 回", 18)
 	back.pressed.connect(_comp_close)
+
+func _build_bag() -> void:
+	_bag_panel = Panel.new()
+	_bag_panel.position = Vector2(60, 150)
+	_bag_panel.size = Vector2(520, 380)
+	_bag_panel.z_index = 20
+	_bag_panel.visible = false
+	var bsb := StyleBoxFlat.new()
+	bsb.bg_color = Color(0.958, 0.938, 0.892, 1.0)
+	bsb.set_corner_radius_all(6)
+	bsb.border_color = Color(0.42, 0.33, 0.20, 0.60)
+	bsb.set_border_width_all(2)
+	_bag_panel.add_theme_stylebox_override("panel", bsb)
+	_panel.add_child(_bag_panel)
+
+	var t := _label("锻 造 库", 24, INK)
+	t.position = Vector2(20, 12)
+	t.size = Vector2(240, 32)
+	_bag_panel.add_child(t)
+
+	_bag_page_btn = UiKit.make_button(_bag_panel, Vector2(320, 12), Vector2(180, 34), "下一条", 14)
+	_bag_page_btn.pressed.connect(_bag_next)
+
+	_bag_name_lb = _label("", 22, SEAL)
+	_bag_name_lb.position = Vector2(20, 56)
+	_bag_name_lb.size = Vector2(480, 30)
+	_bag_panel.add_child(_bag_name_lb)
+
+	_bag_stat_lb = _label("", 14, Color(INK.r, INK.g, INK.b, 0.70))
+	_bag_stat_lb.position = Vector2(20, 92)
+	_bag_stat_lb.size = Vector2(480, 22)
+	_bag_panel.add_child(_bag_stat_lb)
+
+	_bag_price_lb = _label("", 13, Color(INK.r, INK.g, INK.b, 0.56))
+	_bag_price_lb.position = Vector2(20, 124)
+	_bag_price_lb.size = Vector2(480, 22)
+	_bag_panel.add_child(_bag_price_lb)
+
+	_bag_sell_btn = UiKit.make_button(_bag_panel, Vector2(20, 170), Vector2(150, 46), "卖 掉", 17)
+	_bag_sell_btn.pressed.connect(_bag_sell)
+	_bag_scrap_btn = UiKit.make_button(_bag_panel, Vector2(185, 170), Vector2(150, 46), "拆 掉", 17)
+	_bag_scrap_btn.pressed.connect(_bag_scrap)
+	_bag_gift_btn = UiKit.make_button(_bag_panel, Vector2(350, 170), Vector2(150, 46), "送 同 伴", 16)
+	_bag_gift_btn.pressed.connect(_bag_gift)
+
+	var back := UiKit.make_button(_bag_panel, Vector2(185, 240), Vector2(150, 42), "返 回", 17)
+	back.pressed.connect(_bag_close)
+
+	var note := _label("卖掉得银两；拆掉得锻造石与材料；送同伴会直接装到陈石/苏青鸾身上。", 12, Color(INK.r, INK.g, INK.b, 0.54))
+	note.position = Vector2(20, 300)
+	note.size = Vector2(480, 50)
+	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_bag_panel.add_child(note)
 
 func _label(text: String, fs: int, col: Color) -> Label:
 	var lb := Label.new()
@@ -348,6 +418,15 @@ func _hammer() -> void:
 			text = "损伤——强化 -1，裂纹 +1"
 		_:
 			text = "破坏——剑碎了"
+	# 大成功有机会出词缀（每条刀剑最多 2 条）
+	if outcome == 0:
+		var affs: Array = it.get("affixes", [])
+		if affs.size() < 2 and randf() < 0.30:
+			var af: Dictionary = ForgeData.random_affix(it)
+			if not af.is_empty():
+				affs.append(str(af["id"]))
+				it["affixes"] = affs
+				text += "｜出词缀：「" + str(af["name"]) + "」"
 	if outcome != 4:
 		if int(it.get("inspired_left", 0)) > 0:
 			it["inspired_left"] = int(it.get("inspired_left", 0)) - 1
@@ -370,6 +449,8 @@ func _roll(it: Dictionary) -> int:
 	var b: Dictionary = ForgeData.blank(str(it.get("blank", "")))
 	if b.is_empty():
 		return 1
+	if str(it.get("rule", "")) == "always_success":
+		return 0 if randf() < 0.3 else 1
 	var p: Array = []
 	for v in (b.get("probs", [8, 45, 25, 17, 5]) as Array):
 		p.append(float(v))
@@ -380,6 +461,9 @@ func _roll(it: Dictionary) -> int:
 	p[4] += extra_break
 	p[3] += extra_dmg
 	p[1] = maxf(0.0, float(p[1]) - extra_break - extra_dmg)
+	# 特殊胚「天生不折」：破坏率永远 0
+	if str(it.get("rule", "")) == "no_break":
+		p[4] = 0.0
 	if int(it.get("inspired_left", 0)) > 0:
 		p[4] = 0.0
 		p[0] += 8.0
@@ -438,7 +522,164 @@ func _ascend() -> void:
 	GameState.save_game()
 	refresh()
 
+func _comp_next() -> void:
+	if ForgeData.COMBOS.is_empty():
+		return
+	_comp_idx = (_comp_idx + 1) % ForgeData.COMBOS.size()
+	_comp_refresh()
+
+func _bag_list() -> Array:
+	var out: Array = []
+	for rec_v in GameState.forge_bag:
+		var rec: Dictionary = rec_v
+		if str(rec.get("sid", "")) != "":
+			out.append(rec)
+	return out
+
+func _bag_current() -> Dictionary:
+	var list := _bag_list()
+	if list.is_empty():
+		return {}
+	_bag_idx = clampi(_bag_idx, 0, list.size() - 1)
+	return list[_bag_idx]
+
+func _bag_open() -> void:
+	if _comp_panel != null:
+		_comp_panel.visible = false
+	var list := _bag_list()
+	_bag_idx = maxi(0, list.size() - 1)
+	_comp_dim.visible = true
+	_bag_panel.visible = true
+	_bag_refresh()
+
+func _bag_close() -> void:
+	if _bag_panel != null:
+		_bag_panel.visible = false
+	if _comp_panel == null or not _comp_panel.visible:
+		_comp_dim.visible = false
+
+func _bag_next() -> void:
+	var list := _bag_list()
+	if list.is_empty():
+		return
+	_bag_idx = (_bag_idx + 1) % list.size()
+	_bag_refresh()
+
+func _bag_refresh() -> void:
+	if _bag_panel == null or not _bag_panel.visible:
+		return
+	var list := _bag_list()
+	_bag_page_btn.text = "0/0" if list.is_empty() else ("下一条 " + str(_bag_idx + 1) + "/" + str(list.size()))
+	if list.is_empty():
+		_bag_name_lb.text = "库房空着——先锻一把出来"
+		_bag_stat_lb.text = ""
+		_bag_price_lb.text = ""
+		_bag_sell_btn.visible = false
+		_bag_scrap_btn.visible = false
+		_bag_gift_btn.visible = false
+		return
+	_bag_idx = clampi(_bag_idx, 0, list.size() - 1)
+	var rec: Dictionary = list[_bag_idx]
+	var sid := str(rec.get("sid", ""))
+	var st: Dictionary = ForgeData.item_stats(rec)
+	_bag_name_lb.text = ForgeData.item_name(rec)
+	var extra := ""
+	var affs: Array = rec.get("affixes", [])
+	if not affs.is_empty():
+		var names: Array = []
+		for aid in affs:
+			names.append(str(ForgeData.affix(str(aid)).get("name", aid)))
+		extra = " · 词缀 " + "、".join(PackedStringArray(names))
+	if str(rec.get("rule", "")) == "no_break":
+		extra += " · 天生不折"
+	_bag_stat_lb.text = "攻 " + str(int(st["atk"])) + " · 伤 " + str(int(st["dmg"])) + " · 强化 +" + str(int(rec.get("enhance", 0))) + extra
+	var ret: Dictionary = ForgeData.scrap_return(rec)
+	var mats_txt := ""
+	for k_v in (ret.get("mats", {}) as Dictionary).keys():
+		var k := str(k_v)
+		mats_txt += GameState.mat_name(k) + " " + str(int(ret["mats"][k])) + " "
+	_bag_price_lb.text = "卖价 " + str(ForgeData.sell_price(rec)) + " 两 · 拆得 锻造石 " + str(int(ret["stones"])) + " · " + mats_txt.strip_edges()
+	var wearer := GameState.forge_wearer(sid)
+	if wearer != "":
+		_bag_stat_lb.text += " · 已装备在" + wearer
+	var has := GameState.vault_item_count(sid) > 0
+	_bag_sell_btn.visible = true
+	_bag_scrap_btn.visible = true
+	_bag_gift_btn.visible = true
+	_bag_sell_btn.disabled = not has
+	_bag_scrap_btn.disabled = not has
+	_bag_gift_btn.disabled = not has
+
+func _bag_drop_record(sid: String) -> void:
+	for i in range(GameState.forge_bag.size() - 1, -1, -1):
+		var rec: Dictionary = GameState.forge_bag[i]
+		if str(rec.get("sid", "")) == sid:
+			GameState.forge_bag.remove_at(i)
+
+func _bag_sell() -> void:
+	var rec := _bag_current()
+	if rec.is_empty():
+		return
+	var sid := str(rec.get("sid", ""))
+	if GameState.vault_item_count(sid) <= 0:
+		_push_log("这件已经装在人身上——先卸下再卖。")
+		return
+	var price := ForgeData.sell_price(rec)
+	GameState.vault_items[sid] = GameState.vault_item_count(sid) - 1
+	GameState.add_coin("silver", price)
+	GameState.forge_remove(sid)
+	_bag_drop_record(sid)
+	_push_log("卖掉：" + ForgeData.item_name(rec) + "（+" + str(price) + " 两）")
+	GameState.save_game()
+	_bag_refresh()
+	refresh()
+
+func _bag_scrap() -> void:
+	var rec := _bag_current()
+	if rec.is_empty():
+		return
+	var sid := str(rec.get("sid", ""))
+	if GameState.vault_item_count(sid) <= 0:
+		_push_log("这件已经装在人身上——先卸下再拆。")
+		return
+	var ret := ForgeData.scrap_return(rec)
+	GameState.vault_items[sid] = GameState.vault_item_count(sid) - 1
+	GameState.add_material("forge_stone", int(ret["stones"]))
+	for k_v in (ret.get("mats", {}) as Dictionary).keys():
+		var k := str(k_v)
+		GameState.add_material(k, int(ret["mats"][k]))
+	GameState.forge_remove(sid)
+	_bag_drop_record(sid)
+	_push_log("拆掉：" + ForgeData.item_name(rec) + "（锻造石 +" + str(int(ret["stones"])) + "）")
+	GameState.save_game()
+	_bag_refresh()
+	refresh()
+
+func _bag_gift() -> void:
+	var rec := _bag_current()
+	if rec.is_empty():
+		return
+	var sid := str(rec.get("sid", ""))
+	if GameState.vault_item_count(sid) <= 0:
+		_push_log("这件已经装在人身上了。")
+		return
+	var target := "player"
+	var tname := "自己"
+	if GameState.disciple_joined:
+		target = "chen_shi"
+		tname = "陈石"
+	elif GameState.qingluan_joined:
+		target = "qingluan"
+		tname = "苏青鸾"
+	var msg := GameState.equip_weapon(target, sid)
+	_push_log("送" + tname + "：" + msg)
+	GameState.save_game()
+	_bag_refresh()
+	refresh()
+
 func _comp_open() -> void:
+	if _bag_panel != null:
+		_bag_panel.visible = false
 	_comp_dim.visible = true
 	_comp_panel.visible = true
 	_comp_refresh()
@@ -475,13 +716,14 @@ func _comp_try() -> void:
 		_push_log("没合中——只亏 " + str(ForgeData.TRIAL_STONES) + " 锻造石，材料没动。")
 	else:
 		GameState.forge_compendium[str(c["id"])] = true
+		_comp_idx = ForgeData.combo_index(str(c["id"]))
 		_push_log("合中！图鉴 +1：「" + str(c["name"]) + "」")
 	GameState.save_game()
 	refresh()
 
 func _comp_make() -> void:
-	var c: Dictionary = ForgeData.combo("qingfeng")
-	if not GameState.forge_compendium.has("qingfeng"):
+	var c: Dictionary = ForgeData.COMBOS[_comp_idx]
+	if not GameState.forge_compendium.has(str(c.get("id", ""))):
 		_push_log("还没合中——图鉴上是空的。")
 		return
 	if not (GameState.forge_item as Dictionary).is_empty():
@@ -505,16 +747,21 @@ func _comp_make() -> void:
 func _comp_refresh() -> void:
 	if _comp_panel == null or not _comp_panel.visible:
 		return
-	var unlocked := GameState.forge_compendium.has("qingfeng")
+	if ForgeData.COMBOS.is_empty():
+		return
+	_comp_idx = clampi(_comp_idx, 0, ForgeData.COMBOS.size() - 1)
+	var c: Dictionary = ForgeData.COMBOS[_comp_idx]
+	var cid := str(c.get("id", ""))
+	var unlocked := GameState.forge_compendium.has(cid)
 	var stones := GameState.material_count("forge_stone")
 	for k_v in _comp_mat_btns.keys():
 		var k := str(k_v)
 		var b: Button = _comp_mat_btns[k]
 		b.text = GameState.mat_name(k) + " " + str(GameState.material_count(k))
-	_comp_hint_lb.text = "已入图鉴：「青锋剑胚」" if unlocked else "老铁匠说：骨粉养锋，米浆淬火"
+	_comp_page_btn.text = "下一条 " + str(_comp_idx + 1) + "/" + str(ForgeData.COMBOS.size())
+	_comp_hint_lb.text = "已入图鉴：「" + str(c["name"]) + "」" if unlocked else "老铁匠说：" + str(c["hint"])
 	_comp_try_btn.disabled = unlocked or stones < ForgeData.TRIAL_STONES
 	_comp_try_btn.text = "试 合（锻造石 " + str(ForgeData.TRIAL_STONES) + "）"
-	var c: Dictionary = ForgeData.combo("qingfeng")
 	var cost: Dictionary = c.get("cost", {})
 	var cost_txt := ""
 	for k_v in cost.keys():
@@ -522,9 +769,9 @@ func _comp_refresh() -> void:
 		cost_txt += GameState.mat_name(k) + " " + str(int(cost[k])) + " · "
 	cost_txt = cost_txt.trim_suffix(" · ")
 	if unlocked:
-		_comp_recipe_lb.text = "图鉴：「青锋剑胚」\n造胚耗：" + cost_txt + "\n造出来直接上砧，不再收开炉银两。"
+		_comp_recipe_lb.text = "图鉴：「" + str(c["name"]) + "」\n造胚耗：" + cost_txt + "\n造出来直接上砧，不再收开炉银两。"
 	else:
-		_comp_recipe_lb.text = "图鉴：未合中\n提示：骨粉养锋，米浆淬火。\n（放进炉子试；合不中只亏石头，材料原样退回）"
+		_comp_recipe_lb.text = "图鉴：未合中\n试合：选两味料 + " + str(ForgeData.TRIAL_STONES) + " 锻造石\n（合不中只亏石头，材料原样退回）"
 	_comp_make_btn.visible = unlocked
 	var can_make := true
 	for k_v in cost.keys():
@@ -573,6 +820,8 @@ func refresh() -> void:
 		btn.disabled = not it.is_empty()
 	if _comp_panel != null:
 		_comp_refresh()
+	if _bag_panel != null:
+		_bag_refresh()
 	if it.is_empty():
 		_item_lb.text = "砧上无物——挑一口胚子开炉"
 		_stat_lb.text = "开炉后每锤耗 1 锻造石；+10 入神，+20 自动升阶"
@@ -586,7 +835,24 @@ func refresh() -> void:
 		var insp := ""
 		if int(it.get("inspired_left", 0)) > 0:
 			insp = " · 入神 " + str(int(it.get("inspired_left", 0))) + "/7"
-		_stat_lb.text = "攻 " + str(int(st["atk"])) + " · 伤 " + str(int(st["dmg"])) + " · 强化 +" + str(int(it.get("enhance", 0))) + "/20 · 裂纹 " + str(int(it.get("cracks", 0))) + insp
+		var extra_txt := ""
+		var affs: Array = it.get("affixes", [])
+		if not affs.is_empty():
+			var aff_names: Array = []
+			for aid in affs:
+				aff_names.append(str(ForgeData.affix(str(aid)).get("name", aid)))
+			extra_txt += " · 词缀 " + "、".join(PackedStringArray(aff_names))
+		if st.has("crit"):
+			extra_txt += " · 暴 " + str(int(st["crit"]))
+		if st.has("def"):
+			extra_txt += " · 防 " + str(int(st["def"]))
+		if st.has("spd"):
+			extra_txt += " · 速 " + str(int(st["spd"]))
+		if st.has("hp"):
+			extra_txt += " · 血 " + str(int(st["hp"]))
+		if str(it.get("rule", "")) == "no_break":
+			extra_txt += " · 天生不折"
+		_stat_lb.text = "攻 " + str(int(st["atk"])) + " · 伤 " + str(int(st["dmg"])) + " · 强化 +" + str(int(it.get("enhance", 0))) + "/20 · 裂纹 " + str(int(it.get("cracks", 0))) + insp + extra_txt
 		var waiting := bool(it.get("awaiting", false))
 		_hammer_btn.disabled = waiting or int(it.get("enhance", 0)) >= 20 or GameState.material_count("forge_stone") < 1
 		_hammer_btn.text = "先 升 阶" if waiting or int(it.get("enhance", 0)) >= 20 else "锤 一 下（锻造石 1）"
@@ -609,6 +875,8 @@ func refresh() -> void:
 func open() -> void:
 	if _comp_panel != null:
 		_comp_panel.visible = false
+	if _bag_panel != null:
+		_bag_panel.visible = false
 	if _comp_dim != null:
 		_comp_dim.visible = false
 	refresh()
@@ -624,6 +892,9 @@ func close() -> void:
 func _gui_input(event: InputEvent) -> void:
 	if _comp_panel != null and _comp_panel.visible:
 		_comp_close()
+		return
+	if _bag_panel != null and _bag_panel.visible:
+		_bag_close()
 		return
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
@@ -643,5 +914,7 @@ func _input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 			if _comp_panel != null and _comp_panel.visible:
 				_comp_close()
+			elif _bag_panel != null and _bag_panel.visible:
+				_bag_close()
 			else:
 				close()

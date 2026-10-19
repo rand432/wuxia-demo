@@ -32,7 +32,10 @@ const BLANKS := [
 		"probs": [15, 30, 18, 22, 15], "trait": "赌"},
 	{"id": "shangpin", "name": "上品青锋", "weapon": "上品青锋剑", "kind": "sword",
 		"quality": 2, "cap": 4, "atk": 34, "dmg": 4, "open": 30,
-		"probs": [10, 42, 24, 18, 6], "trait": "上品"},
+		"probs": [10, 42, 24, 18, 6], "trait": "上品", "rule": "no_break"},
+	{"id": "bicheng", "name": "天生·必成", "weapon": "必成剑", "kind": "sword",
+		"quality": 0, "cap": 2, "atk": 16, "dmg": 2, "open": 20,
+		"probs": [30, 70, 0, 0, 0], "trait": "必成", "rule": "always_success"},
 ]
 
 static func blank(id: String) -> Dictionary:
@@ -61,6 +64,8 @@ static func make_item(blank_id: String) -> Dictionary:
 		"inspired_left": 0,
 		"round_inspired": false,
 		"awaiting": false,
+		"affixes": [],
+		"rule": str(b.get("rule", "")),
 	}
 
 static func item_name(it: Dictionary) -> String:
@@ -72,10 +77,16 @@ static func item_stats(it: Dictionary) -> Dictionary:
 	if it.is_empty():
 		return {"atk": 0, "dmg": 0}
 	var mul := 1.0 + float(it.get("enhance", 0)) * 0.02
-	return {
+	var out := {
 		"atk": int(round(float(it.get("base_atk", 0.0)) * mul)),
 		"dmg": int(round(float(it.get("base_dmg", 0.0)) * mul)),
 	}
+	for aid in (it.get("affixes", []) as Array):
+		var af := affix(str(aid))
+		var st: Dictionary = af.get("stats", {})
+		for k in st.keys():
+			out[str(k)] = int(out.get(str(k), 0)) + int(st[k])
+	return out
 
 static func ascend_cost(q: int) -> Dictionary:
 	return {"silver": 20 + 20 * clampi(q, 0, 4), "jin": 1}
@@ -92,6 +103,31 @@ static func card_set(it: Dictionary, sid: String) -> Dictionary:
 		"desc": "锻造出品（" + trait_of(it) + "）",
 	}
 
+const AFFIXES := [
+	{"id": "fengrui", "name": "锋锐", "stats": {"crit": 5}, "desc": "暴击 +5"},
+	{"id": "buzhe", "name": "不折", "stats": {"def": 3}, "desc": "防御 +3"},
+	{"id": "yinrui", "name": "饮血", "stats": {"atk": 4}, "desc": "攻 +4"},
+	{"id": "pojun", "name": "破军", "stats": {"dmg": 4}, "desc": "伤害 +4%"},
+	{"id": "qingshen", "name": "轻身", "stats": {"spd": 3}, "desc": "速度 +3"},
+	{"id": "tiegu", "name": "铁骨", "stats": {"hp": 80}, "desc": "气血 +80"},
+]
+
+static func affix(id: String) -> Dictionary:
+	for a in AFFIXES:
+		if str((a as Dictionary)["id"]) == id:
+			return (a as Dictionary).duplicate(true)
+	return {}
+
+static func random_affix(it: Dictionary) -> Dictionary:
+	var have: Array = it.get("affixes", [])
+	var pool: Array = []
+	for a in AFFIXES:
+		if not have.has(str((a as Dictionary)["id"])):
+			pool.append(a)
+	if pool.is_empty():
+		return {}
+	return (pool[randi() % pool.size()] as Dictionary).duplicate(true)
+
 static func trait_of(it: Dictionary) -> String:
 	var b := blank(str(it.get("blank", "")))
 	return str(b.get("trait", ""))
@@ -105,13 +141,44 @@ const COMBOS := [
 	{"id": "qingfeng", "blank": "qingfeng", "name": "青锋剑胚",
 		"trial": ["bone", "rice"], "hint": "骨粉养锋，米浆淬火",
 		"cost": {"bone": 3, "rice": 2}},
+	{"id": "zhujian", "blank": "zhujian", "name": "竹剑胚",
+		"trial": ["zhi", "rice"], "hint": "紫芝养竹，米浆润节",
+		"cost": {"zhi": 2, "rice": 1}},
+	{"id": "xuantie", "blank": "xuantie", "name": "玄铁刀胚",
+		"trial": ["bone", "jin"], "hint": "骨炭沉锋，金髓定钢",
+		"cost": {"bone": 4, "jin": 1}},
+	{"id": "shangpin", "blank": "shangpin", "name": "上品青锋",
+		"trial": ["zhi", "jin"], "hint": "紫芝养魂，金髓定锋（天生不折）",
+		"cost": {"zhi": 3, "jin": 2}},
+	{"id": "bicheng", "blank": "bicheng", "name": "天生·必成",
+		"trial": ["rice", "jin"], "hint": "米浆定火，金髓锁锋（强化必成）",
+		"cost": {"rice": 3, "jin": 1}},
 ]
+
+const SELL_BASE := [8, 25, 75, 220, 600]
+
+static func sell_price(it: Dictionary) -> int:
+	var q := clampi(int(it.get("quality", 0)), 0, SELL_BASE.size() - 1)
+	var mul := 1.0 + float(it.get("enhance", 0)) * 0.02
+	return maxi(1, int(round(float(SELL_BASE[q]) * mul)))
+
+static func scrap_return(it: Dictionary) -> Dictionary:
+	var q := clampi(int(it.get("quality", 0)), 0, 4)
+	var stones := 2 + q * 2 + int(it.get("enhance", 0)) / 5
+	var mats := {"bone": 1} if q <= 1 else {"jin": 1}
+	return {"stones": stones, "mats": mats}
 
 static func combo(id: String) -> Dictionary:
 	for c in COMBOS:
 		if str((c as Dictionary)["id"]) == id:
 			return (c as Dictionary).duplicate(true)
 	return {}
+
+static func combo_index(id: String) -> int:
+	for i in COMBOS.size():
+		if str((COMBOS[i] as Dictionary)["id"]) == id:
+			return i
+	return 0
 
 static func combo_by_trial(sel: Array) -> Dictionary:
 	var a: Array = []

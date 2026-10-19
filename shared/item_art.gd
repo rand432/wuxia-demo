@@ -94,6 +94,8 @@ static func mat_icon(mat: String) -> Texture2D:
 			return icon("it_herb")
 		"jin":
 			return icon("it_ingot")
+		"atlas":
+			return icon("it_scroll")
 		"wine":
 			return icon("it_jar")
 		_:

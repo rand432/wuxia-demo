@@ -1088,6 +1088,8 @@ func _mat_use(k: String) -> String:
 			uses.append("「" + str(r.get("name", r.get("id", ""))) + "」×" + str(int(cost[k])))
 	if k == "forge_stone":
 		uses.append("锻造（铁砧）")
+	if k == "atlas":
+		uses.append("展开舆图（出征屏）")
 	if uses.is_empty():
 		return "眼下还没有配方吃它——先攒着"
 	return "用在：" + "、".join(PackedStringArray(uses))

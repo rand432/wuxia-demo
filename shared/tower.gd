@@ -475,7 +475,7 @@ static func chest_card_pool(kind: String, grad: int) -> Array:
 # 材料权重（开箱那几掷在这个池子里挑；键＝game_state.MAT_CN 的键）
 # v121（用户："突破境界需要很多材料【增加新材料】"）：境界石 / 道心砂 从宝箱出（进阶专用）
 const CHEST_MATS := {"zhi": 20, "guo": 20, "shen": 15, "bone": 10, "rice": 5, "jin": 3,
-	"forge_stone": 24, "jingshi": 9, "daoxin": 3}
+	"forge_stone": 24, "jingshi": 9, "daoxin": 3, "atlas": 2}
 #   ⚠ v41：`jin`（金髓）是**稀有金色材料**——洗髓丹/洗灵丹的硬门槛，所以权重压到 3（约 3%）。
 #     想让它更好出就抬这个数；它同时也是货栈每日限购那件（900 两、日限 1）。
 

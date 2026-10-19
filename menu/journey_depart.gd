@@ -39,6 +39,7 @@ const Cards := preload("res://shared/data_cards.gd")
 const Buffs := preload("res://shared/data_buffs.gd")
 const Bonds := preload("res://shared/data_bonds.gd")   # ㊿：出征屏要显示羁绊
 const UiKit := preload("res://shared/ui_kit.gd")      # v61：字色六态那一口（font_states）
+const WorldMapPanel := preload("res://menu/world_map_panel.gd")   # v244：舆图 / 世界档
 
 signal closed
 signal deploy_started(party: Array, diff: int)   # ㊿：整车名单（1~3 人）
@@ -148,6 +149,8 @@ var _art_ack := false
 var _art_veil: Control = null
 var _confirm_veil: Control = null
 var _fate_veil: Control = null    # ㉛：挑卡页
+var _world_btn: Button = null
+var _world_panel: Control = null
 
 func _ready() -> void:
 	size = get_viewport_rect().size
@@ -198,6 +201,16 @@ func _build() -> void:
 	_pool_lb.size = Vector2(312, 22)
 	_pool_lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_panel.add_child(_pool_lb)
+
+	_world_btn = Button.new()
+	_world_btn.text = "舆图 · " + str(GameState.world_tier)
+	_world_btn.position = Vector2(496, 56)
+	_world_btn.size = Vector2(116, 28)
+	_world_btn.add_theme_font_size_override("font_size", 14)
+	_world_btn.focus_mode = Control.FOCUS_NONE
+	_world_btn.pressed.connect(_open_world)
+	_style_light_button(_world_btn)
+	_panel.add_child(_world_btn)
 
 	var sep := ColorRect.new()
 	sep.color = Color(INK.r, INK.g, INK.b, 0.22)
@@ -1735,8 +1748,25 @@ func _strip_snapshot(rids: Array) -> Dictionary:
 		}
 	return out
 
+func _refresh_world_btn() -> void:
+	if _world_btn != null:
+		_world_btn.text = "舆图 · " + str(GameState.world_tier)
+
+func _open_world() -> void:
+	if _world_panel == null:
+		var wp = WorldMapPanel.new()
+		wp.connect("closed", _on_world_closed)
+		wp.connect("changed", _refresh_world_btn)
+		add_child(wp)
+		_world_panel = wp
+	_world_panel.open()
+
+func _on_world_closed() -> void:
+	_refresh_world_btn()
+
 func open() -> void:
 	_msg_lb.text = ""
+	_refresh_world_btn()
 	# v10（用户："游历的出战设置保存没有用"）：开屏**先照账上那份阵型**落选人。
 	#   病根：这里原来是无条件 _pick_roles.clear()，于是"出战配置▸（整备·阵容）"里
 	#   排好的前/中/后，**每关一次屏再开就没了**（_refresh 见空又补名册第一个）——
