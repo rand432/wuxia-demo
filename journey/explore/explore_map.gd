@@ -77,6 +77,12 @@ var _poi_active := -1
 var _poi_cells: Array = []
 var _poi_types: Array = []
 var _poi_used := {}
+var _boss_cell := Vector2i(-1, -1)
+var _boss_name := "山君"
+var _boss_node: Node2D
+var _boss_panel: Control
+var _boss_pending := false
+var _boss_fight_pending := false
 var _chest_cells: Array = []
 var _obstacles: Array = []
 var _enemy_cells: Array = []
@@ -113,6 +119,7 @@ func setup(role_id := "player", diff := 1, party: Array = [], fates: Array = [])
 	_spawn_player()
 	_spawn_fx()
 	_spawn_enemies()
+	_spawn_boss()
 	_spawn_toast()
 	_reveal_at(_player.position)
 	queue_redraw()
@@ -164,6 +171,20 @@ func _gen_world() -> void:
 		if _reserved(c3, 1) or _obstacles.has(c3) or _chest_cells.has(c3) or _poi_cells.has(c3) or _enemy_cells.has(c3):
 			continue
 		_enemy_cells.append(c3)
+	# Boss 落在离起点远、避开所有已占格的位置；找不到就退到 (3,3)
+	var bnames := ["山君", "夜叉", "老妖"]
+	_boss_name = str(bnames[GameState.world_seed % bnames.size()])
+	_boss_cell = Vector2i(3, 3)
+	guard = 0
+	while guard < 500:
+		guard += 1
+		var cb := Vector2i(rng.randi_range(1, MAP_W - 2), rng.randi_range(1, MAP_H - 2))
+		if _reserved(cb, 2) or _obstacles.has(cb) or _chest_cells.has(cb) or _poi_cells.has(cb) or _enemy_cells.has(cb):
+			continue
+		if Vector2(cb).distance_to(Vector2(START_CELL)) < 9.0:
+			continue
+		_boss_cell = cb
+		break
 
 func _reserved(c: Vector2i, r: int) -> bool:
 	for p_v in [START_CELL, HOUSE_CELL, SECT_CELL]:
@@ -242,6 +263,16 @@ func _spawn_toast() -> void:
 	back.pressed.connect(_return_village)
 	_toast_layer.add_child(back)
 	_back_btn = back
+
+func _spawn_boss() -> void:
+	_boss_node = Node2D.new()
+	_boss_node.position = _cell_pos(_boss_cell.x, _boss_cell.y)
+	var tier := clampi(GameState.world_tier, 1, 5)
+	_boss_node.set_meta("boss", true)
+	_boss_node.set_meta("foe_name", _boss_name)
+	_boss_node.set_meta("beaten", false)
+	_boss_node.set_meta("foe", {"hp": 280 + tier * 70, "atk": 14 + tier * 2, "scale": 1.3})
+	add_child(_boss_node)
 
 func _spawn_enemies() -> void:
 	var spots: Array = _enemy_cells
@@ -374,6 +405,7 @@ func _draw() -> void:
 			_draw_rock(_cell_pos(cell.x, cell.y))
 	_draw_house()
 	_draw_sect_gate()
+	_draw_boss()
 	_draw_pois()
 	_draw_chests()
 	# 迷雾：没走过的格子压暗
@@ -437,6 +469,21 @@ func _draw_sect_gate() -> void:
 	draw_rect(Rect2(p + Vector2(-26, -118), Vector2(52, 22)), Color("#e6d7b4"))
 	draw_string(ThemeDB.fallback_font, p + Vector2(-22, -102), "山门", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("#6b2f22"))
 	draw_string(ThemeDB.fallback_font, p + Vector2(-32, -132), "青岚山门", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("#f0d68a"))
+
+func _draw_boss() -> void:
+	if _boss_cell.x < 0:
+		return
+	var p := _cell_pos(_boss_cell.x, _boss_cell.y)
+	var dead := _boss_node != null and bool(_boss_node.get_meta("beaten", false))
+	draw_circle(p + Vector2(0, 22), 38.0, Color(0.03, 0.04, 0.03, 0.45))
+	draw_rect(Rect2(p + Vector2(-30, 4), Vector2(60, 18)), Color("#3a3128"))
+	draw_circle(p + Vector2(0, -8), 20.0, Color("#d8d0bc") if not dead else Color("#6b655c"))
+	draw_circle(p + Vector2(-7, -10), 4.0, Color("#1b1a18"))
+	draw_circle(p + Vector2(7, -10), 4.0, Color("#1b1a18"))
+	draw_line(p + Vector2(-6, 2), p + Vector2(6, 2), Color("#1b1a18"), 2.0)
+	draw_colored_polygon(PackedVector2Array([p + Vector2(-22, -20), p + Vector2(-34, -44), p + Vector2(-12, -30)]), Color("#5a3f2a"))
+	draw_colored_polygon(PackedVector2Array([p + Vector2(22, -20), p + Vector2(34, -44), p + Vector2(12, -30)]), Color("#5a3f2a"))
+	draw_string(ThemeDB.fallback_font, p + Vector2(-30, -56), _boss_name + ("·已伏" if dead else ""), HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color("#9a927f") if dead else Color("#e06a5a"))
 
 func _draw_pois() -> void:
 	for i in _poi_cells.size():
@@ -846,6 +893,59 @@ func _open_jail() -> void:
 func _on_jail_finished() -> void:
 	GameState.save_game()
 	_return_village()
+
+func _boss_near() -> bool:
+	if _boss_cell.x < 0:
+		return false
+	return _player.position.distance_to(_cell_pos(_boss_cell.x, _boss_cell.y)) < 118.0
+
+func _open_boss() -> void:
+	if _boss_node == null or bool(_boss_node.get_meta("beaten", false)):
+		return
+	if _boss_panel == null:
+		var bp = POIPanel.new()
+		bp.connect("picked", _on_boss_pick)
+		bp.connect("closed", _on_boss_closed)
+		_toast_layer.add_child(bp)
+		_boss_panel = bp
+	var data := {
+		"title": _boss_name,
+		"sub": "盘踞在此的一方凶物。",
+		"body": "山风忽然停了。\n\n（失败会被抬回村，战利品全留）",
+		"choices": [{"id": "fight", "label": "拔 剑"}, {"id": "leave", "label": "绕 开"}],
+	}
+	_boss_panel.call("open", data)
+	_busy = true
+	_moving = false
+	_has_click = false
+	for e_v in _enemies:
+		var e: Node2D = e_v
+		if is_instance_valid(e):
+			e.visible = false
+	if _action_lb != null:
+		_action_lb.visible = false
+	if _back_btn != null:
+		_back_btn.visible = false
+
+func _on_boss_pick(id: String) -> void:
+	if id == "fight":
+		_boss_fight_pending = true
+	_boss_panel.call("close")
+
+func _on_boss_closed() -> void:
+	_busy = false
+	_boss_pending = false
+	for e_v in _enemies:
+		var e: Node2D = e_v
+		if is_instance_valid(e):
+			e.visible = not bool(e.get_meta("beaten", false))
+	if _action_lb != null:
+		_action_lb.visible = true
+	if _back_btn != null:
+		_back_btn.visible = true
+	if _boss_fight_pending:
+		_boss_fight_pending = false
+		call_deferred("_try_battle", _boss_node)
 
 func _open_sect() -> void:
 	if _sect_panel == null:
