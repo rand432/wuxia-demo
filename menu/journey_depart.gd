@@ -40,6 +40,7 @@ const Buffs := preload("res://shared/data_buffs.gd")
 const Bonds := preload("res://shared/data_bonds.gd")   # ㊿：出征屏要显示羁绊
 const UiKit := preload("res://shared/ui_kit.gd")      # v61：字色六态那一口（font_states）
 const WorldMapPanel := preload("res://menu/world_map_panel.gd")   # v244：舆图 / 世界档
+const JailPanel := preload("res://journey/explore/jail_panel.gd")   # v252：常驻牢房
 
 signal closed
 signal deploy_started(party: Array, diff: int)   # ㊿：整车名单（1~3 人）
@@ -151,6 +152,7 @@ var _confirm_veil: Control = null
 var _fate_veil: Control = null    # ㉛：挑卡页
 var _world_btn: Button = null
 var _world_panel: Control = null
+var _jail_gate: Control = null
 
 func _ready() -> void:
 	size = get_viewport_rect().size
@@ -1786,6 +1788,23 @@ func open() -> void:
 	_close_art_pick()
 	_refresh()
 	visible = true
+	if GameState.jailed_days > 0:
+		_maybe_open_jail()
+
+func _maybe_open_jail() -> void:
+	if GameState.jailed_days <= 0:
+		return
+	if _jail_gate == null:
+		var jp = JailPanel.new()
+		jp.connect("finished", _on_jail_finished)
+		add_child(jp)
+		_jail_gate = jp
+	_jail_gate.call("open")
+	_go_btn.disabled = true
+
+func _on_jail_finished() -> void:
+	_msg_lb.text = "案子了了，可以重新准备出征。"
+	_refresh()
 
 func close() -> void:
 	if not visible:
@@ -1808,6 +1827,8 @@ func _gui_input(event: InputEvent) -> void:
 
 func _input(event: InputEvent) -> void:
 	if not visible:
+		return
+	if _jail_gate != null and _jail_gate.visible:
 		return
 	if event is InputEventKey:
 		var ke := event as InputEventKey

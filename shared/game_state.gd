@@ -861,6 +861,10 @@ static var sect_favor := 0
 static var sect_rep := 0
 static var sect_test := false
 static var sect_art := false
+# v253：入门前后的宗门线
+static var sect_joined := false
+static var sect_contrib := 0
+static var sect_betrayed := false
 # v244：世界档 / 舆图（换新世界用）
 static var world_seed := 0
 static var world_tier := 1
@@ -868,6 +872,10 @@ static var world_tier := 1
 static var merchant_favor := 0
 # v247：通缉（0~5）——打劫货郎涨，洗白清零
 static var wanted := 0
+# v249：Boss 首杀记录（山君/夜叉/老妖）
+static var boss_kills: Array = []
+# v252：常驻牢房（0=自由，3=关押中）
+static var jailed_days := 0
 
 static func action_add(n: int) -> int:
 	action = clampi(action + n, 0, ACTION_MAX)
@@ -3419,6 +3427,44 @@ static func forge_add(sid: String, set: Dictionary) -> void:
 	Cards.register_forged(sid, set)
 	vault_add_item(sid, 1)
 
+static func grant_boss_weapon(boss_name: String) -> Dictionary:
+	# v250：Boss 首杀专属兵器——直接进锻造库 / 仓库，可装备。
+	var data := {
+		"山君": {"name": "山君骨刃", "kind": "sword", "atk": 46, "dmg": 5, "affix": "pojun"},
+		"夜叉": {"name": "夜叉鬼爪", "kind": "dual", "atk": 42, "dmg": 6, "affix": "yinrui"},
+		"老妖": {"name": "老妖杖", "kind": "staff", "atk": 40, "dmg": 6, "affix": "buzhe"},
+	}
+	var d: Dictionary = data.get(boss_name, {"name": "凶骨刃", "kind": "sword", "atk": 40, "dmg": 5, "affix": "pojun"})
+	var nm := str(d["name"])
+	var kind := str(d["kind"])
+	var atk := int(d["atk"])
+	var dmg := int(d["dmg"])
+	var affix := str(d["affix"])
+	var mul := 1.2
+	var st := {"atk": int(round(atk * mul)), "dmg": int(round(dmg * mul))}
+	var af := {"fengrui": {"crit": 5}, "buzhe": {"def": 3}, "yinrui": {"atk": 4}, "pojun": {"dmg": 4}, "qingshen": {"spd": 3}, "tiegu": {"hp": 80}}
+	for k_v in (af.get(affix, {}) as Dictionary).keys():
+		st[str(k_v)] = int(st.get(str(k_v), 0)) + int(af[affix][k_v])
+	var sid := forge_next_sid()
+	var set := {
+		"id": sid, "name": nm, "item": nm, "pool": "weapon",
+		"quality": "上品", "weapon": kind, "no_drop": true, "forge": true,
+		"parts": [], "item_stats": st, "desc": "Boss 首杀专属（" + boss_name + "）",
+	}
+	forge_cards[sid] = set
+	Cards.register_forged(sid, set)
+	vault_add_item(sid, 1)
+	forge_bag.append({
+		"sid": sid, "blank": "boss", "weapon": nm, "kind": kind,
+		"quality": 2, "cap": 4, "enhance": 10, "cracks": 0,
+		"base_atk": float(atk), "base_dmg": float(dmg),
+		"inspired_left": 0, "round_inspired": false, "awaiting": false,
+		"affixes": [affix], "rule": "no_break", "source": "boss",
+	})
+	if forge_bag.size() > 40:
+		forge_bag.pop_front()
+	return {"sid": sid, "name": nm}
+
 static func forge_remove(sid: String) -> void:
 	forge_cards.erase(sid)
 	Cards.unregister_forged(sid)
@@ -5928,10 +5974,15 @@ static func load_game() -> void:
 	sect_rep = clampi(int(sd.get("rep", 0)), 0, 100)
 	sect_test = bool(sd.get("test", false))
 	sect_art = bool(sd.get("art", false))
+	sect_joined = bool(sd.get("joined", false))
+	sect_contrib = maxi(0, int(sd.get("contrib", 0)))
+	sect_betrayed = bool(sd.get("betrayed", false))
 	world_seed = maxi(0, int(cf.get_value("world", "world_seed", 0)))
 	world_tier = clampi(int(cf.get_value("world", "world_tier", 1 + int(world_seed / 2))), 1, 5)
 	merchant_favor = clampi(int(cf.get_value("world", "merchant_favor", 0)), 0, 100)
 	wanted = clampi(int(cf.get_value("world", "wanted", 0)), 0, 5)
+	boss_kills = _sa(cf.get_value("world", "boss_kills", []), boss_kills)
+	jailed_days = clampi(int(cf.get_value("world", "jailed_days", 0)), 0, 3)
 	advance_lv = clampi(int(cf.get_value("world", "advance_lv", 0)), 0, Realm.MAX_LV)   # v121：进阶境界
 	insight_lv = _sd(cf.get_value("world", "insight_lv", {}), insight_lv)  # v64b：四支等级
 	exp_pool = maxi(0, int(cf.get_value("world", "exp_pool", 0)))   # ㊾：经验池
@@ -6036,11 +6087,13 @@ static func save_game() -> void:
 	# v64b：阅历线（阅历值 ＋ 四支各自升到第几段）
 	cf.set_value("world", "insight", insight)
 	cf.set_value("world", "action", action)
-	cf.set_value("world", "sect", {"favor": sect_favor, "rep": sect_rep, "test": sect_test, "art": sect_art})
+	cf.set_value("world", "sect", {"favor": sect_favor, "rep": sect_rep, "test": sect_test, "art": sect_art, "joined": sect_joined, "contrib": sect_contrib, "betrayed": sect_betrayed})
 	cf.set_value("world", "world_seed", world_seed)
 	cf.set_value("world", "world_tier", world_tier)
 	cf.set_value("world", "merchant_favor", merchant_favor)
 	cf.set_value("world", "wanted", wanted)
+	cf.set_value("world", "boss_kills", boss_kills)
+	cf.set_value("world", "jailed_days", jailed_days)
 	cf.set_value("world", "advance_lv", advance_lv)          # v121：进阶境界
 	cf.set_value("world", "insight_lv", insight_lv)
 	cf.set_value("world", "exp_pool", exp_pool)   # ㊾：经验池
@@ -6205,10 +6258,15 @@ static func reset() -> void:
 	sect_rep = 0
 	sect_test = false
 	sect_art = false
+	sect_joined = false
+	sect_contrib = 0
+	sect_betrayed = false
 	world_seed = 0
 	world_tier = 1
 	merchant_favor = 0
 	wanted = 0
+	boss_kills.clear()
+	jailed_days = 0
 	_idle_last_ts = _idle_now()
 	_idle_save()
 	level_notes.clear()

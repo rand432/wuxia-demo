@@ -34,7 +34,7 @@ func _ready() -> void:
 		_choice_btns.append(b)
 	_result_lb = UiKit.make_label(panel, Vector2(50, 470), Vector2(520, 90), 17, UiKit.SEAL)
 	_result_lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_close_btn = UiKit.make_button(panel, Vector2(210, 600), Vector2(200, 46), "回 村", 18)
+	_close_btn = UiKit.make_button(panel, Vector2(210, 600), Vector2(200, 46), "出 狱", 18)
 	_close_btn.pressed.connect(_finish)
 	_close_btn.visible = false
 	visible = false
@@ -47,7 +47,7 @@ func open() -> void:
 	for b in _choice_btns:
 		(b as Button).visible = true
 		(b as Button).disabled = false
-	_sub_lb.text = "县衙牢房 · 通缉 " + str(_wanted)
+	_sub_lb.text = "县衙牢房 · 关押中 · 通缉 " + str(_wanted)
 	_body_lb.text = "石墙冰冷，铁栏外有个打盹的老狱卒。\n案卷压在桌上，墨还没干。"
 	_choice_btns[0].text = "认罚（" + str(40 * _wanted) + " 两）"
 	_choice_btns[1].text = "塞钱（" + str(100 * _wanted) + " 两）"
@@ -85,6 +85,7 @@ func _on_choice(i: int) -> void:
 				GS.add_coin("silver", -half)
 				GS.wanted = 0
 				msg = "你刚翻上墙就被按了下来。挨了板子，银子去了一半，案子倒压下去了。"
+	GS.jailed_days = 0
 	GS.save_game()
 	_result_lb.text = msg
 	for b in _choice_btns:

@@ -28,8 +28,18 @@ const SectPanel := preload("res://journey/explore/sect_panel.gd")
 const POIPanel := preload("res://journey/explore/poi_panel.gd")
 const MerchantPanel := preload("res://journey/explore/merchant_panel.gd")
 const JailPanel := preload("res://journey/explore/jail_panel.gd")
+const BossCodex := preload("res://journey/explore/boss_codex.gd")
+const RelationshipPanel := preload("res://journey/explore/relationship_panel.gd")
 const ROOM_W := 10
 const ROOM_H := 10
+
+# v255：精英词缀（世界档 ≥2）
+const ELITE_AFFIXES := [
+	{"id": "frenzy", "name": "狂暴", "hp": 0.9, "atk": 1.3, "scale": 1.18, "spd": 0},
+	{"id": "iron", "name": "铁壁", "hp": 1.4, "atk": 0.9, "scale": 1.08, "spd": 0},
+	{"id": "swift", "name": "疾风", "hp": 1.0, "atk": 1.05, "scale": 1.12, "spd": 20},
+	{"id": "sharp", "name": "利刃", "hp": 1.0, "atk": 1.15, "scale": 1.16, "spd": 5},
+]
 
 signal finished
 
@@ -72,6 +82,10 @@ var _sect_pending := false
 var _poi_panel: Control
 var _merchant_panel: Control
 var _jail_panel: Control
+var _codex_panel: Control
+var _codex_btn: Button
+var _rel_panel: Control
+var _rel_btn: Button
 var _poi_pending := -1
 var _poi_active := -1
 var _poi_cells: Array = []
@@ -83,6 +97,7 @@ var _boss_node: Node2D
 var _boss_panel: Control
 var _boss_pending := false
 var _boss_fight_pending := false
+var _arena_done := false
 var _chest_cells: Array = []
 var _obstacles: Array = []
 var _enemy_cells: Array = []
@@ -163,7 +178,8 @@ func _gen_world() -> void:
 		_poi_types.append(poi_order[(_poi_cells.size() - 1 + poff) % poi_order.size()])
 	var hunter_n := mini(2, GameState.wanted)
 	var guard_n := 1 if GameState.wanted > 0 else 0
-	var enemy_n := mini(8, 3 + int(GameState.world_tier / 3) + (1 if _land_id == 2 else 0) + hunter_n + guard_n)
+	var elite_n := 1 if GameState.world_tier >= 2 else 0
+	var enemy_n := mini(9, 3 + int(GameState.world_tier / 3) + (1 if _land_id == 2 else 0) + hunter_n + guard_n + elite_n)
 	guard = 0
 	while _enemy_cells.size() < enemy_n and guard < 500:
 		guard += 1
@@ -263,15 +279,48 @@ func _spawn_toast() -> void:
 	back.pressed.connect(_return_village)
 	_toast_layer.add_child(back)
 	_back_btn = back
+	var rel := Button.new()
+	rel.text = "关 系"
+	rel.position = Vector2(24, 1172)
+	rel.size = Vector2(112, 44)
+	rel.focus_mode = Control.FOCUS_NONE
+	rel.add_theme_font_size_override("font_size", 20)
+	rel.add_theme_color_override("font_color", Color("#f0d68a"))
+	var rn := normal.duplicate() as StyleBoxFlat
+	var rh := hover.duplicate() as StyleBoxFlat
+	rel.add_theme_stylebox_override("normal", rn)
+	rel.add_theme_stylebox_override("hover", rh)
+	rel.add_theme_stylebox_override("pressed", rh)
+	rel.pressed.connect(_open_relations)
+	_toast_layer.add_child(rel)
+	_rel_btn = rel
+	var codex := Button.new()
+	codex.text = "图 鉴"
+	codex.position = Vector2(144, 1172)
+	codex.size = Vector2(112, 44)
+	codex.focus_mode = Control.FOCUS_NONE
+	codex.add_theme_font_size_override("font_size", 20)
+	codex.add_theme_color_override("font_color", Color("#f0d68a"))
+	var cn := normal.duplicate() as StyleBoxFlat
+	var ch := hover.duplicate() as StyleBoxFlat
+	codex.add_theme_stylebox_override("normal", cn)
+	codex.add_theme_stylebox_override("hover", ch)
+	codex.add_theme_stylebox_override("pressed", ch)
+	codex.pressed.connect(_open_codex)
+	_toast_layer.add_child(codex)
+	_codex_btn = codex
 
 func _spawn_boss() -> void:
 	_boss_node = Node2D.new()
 	_boss_node.position = _cell_pos(_boss_cell.x, _boss_cell.y)
 	var tier := clampi(GameState.world_tier, 1, 5)
+	var hp := 280 + tier * 70
+	if GameState.boss_kills.has(_boss_name):
+		hp = int(hp * 0.9)   # 图鉴弱点：首杀后识破，再战气血 -10%
 	_boss_node.set_meta("boss", true)
 	_boss_node.set_meta("foe_name", _boss_name)
 	_boss_node.set_meta("beaten", false)
-	_boss_node.set_meta("foe", {"hp": 280 + tier * 70, "atk": 14 + tier * 2, "scale": 1.3})
+	_boss_node.set_meta("foe", {"hp": hp, "atk": 14 + tier * 2, "scale": 1.3})
 	add_child(_boss_node)
 
 func _spawn_enemies() -> void:
@@ -280,41 +329,129 @@ func _spawn_enemies() -> void:
 		spots = [Vector2i(16, 16), Vector2i(7, 9), Vector2i(11, 17)]
 	var hunters := mini(2, GameState.wanted)
 	var guards := 1 if GameState.wanted > 0 else 0
+	var elites := 1 if GameState.world_tier >= 2 else 0
 	for i in spots.size():
 		var is_hunter := hunters > 0 and i >= spots.size() - hunters
 		var is_guard := guards > 0 and i == spots.size() - hunters - 1
-		_enemies.append(_make_enemy(spots[i], i, is_hunter, is_guard))
+		var is_elite := elites > 0 and i == spots.size() - hunters - guards - 1
+		var e := _make_enemy(spots[i], i, is_hunter, is_guard, is_elite)
+		if is_guard:
+			_setup_guard(e, spots[i])
+		_enemies.append(e)
+
+func _setup_guard(e: Node2D, fallback: Vector2i) -> void:
+	var gc := Vector2i(START_CELL.x + 3, START_CELL.y)
+	if _astar.is_point_solid(gc):
+		gc = fallback
+	var a := _cell_pos(gc.x, gc.y)
+	var gb := Vector2i(gc.x + 2, gc.y)
+	if _astar.is_in_boundsv(gb) and not _astar.is_point_solid(gb):
+		var b := _cell_pos(gb.x, gb.y)
+		e.position = a
+		e.set_meta("patrol_a", a)
+		e.set_meta("patrol_b", b)
+		e.set_meta("patrol_to_b", true)
+	else:
+		e.position = a
+		e.set_meta("patrol_a", a)
+		e.set_meta("patrol_b", a)
+		e.set_meta("patrol_to_b", true)
 
 # ---------- 程序化敌人模型 ----------
 
-func _make_enemy(cell: Vector2i, i: int, hunter := false, guard := false) -> Node2D:
+func _make_enemy(cell: Vector2i, i: int, hunter := false, guard := false, elite := false) -> Node2D:
 	var e := Node2D.new()
 	e.position = _cell_pos(cell.x, cell.y)
+	var tier0 := clampi(GameState.world_tier, 1, 5)
 	var kinds := ["竹妖", "野狼", "山贼"]
-	var kind: String = "捕快" if guard else ("赏金猎人" if hunter else kinds[(i + GameState.world_seed) % kinds.size()])
+	if tier0 >= 2:
+		kinds.append("山魈")
+	if tier0 >= 3:
+		kinds.append("铁甲尸")
+	if tier0 >= 4:
+		kinds.append("剑客")
+	if tier0 >= 5:
+		kinds.append("雾鬼")
+	var base_kind: String = kinds[(i + GameState.world_seed + GameState.world_tier) % kinds.size()]
+	var kind: String = base_kind
+	if guard:
+		base_kind = "山贼"
+		kind = "捕快"
+	elif hunter:
+		base_kind = "山贼"
+		kind = "赏金猎人"
+	var aff: Dictionary = {}
+	if elite:
+		aff = ELITE_AFFIXES[(i + GameState.world_seed) % ELITE_AFFIXES.size()]
+		kind = "精英·" + str(aff["name"]) + "·" + kind
 	var tier := clampi(GameState.world_tier, 1, 5)
 	e.set_meta("foe_name", kind)
 	e.set_meta("hunter", hunter)
 	e.set_meta("guard", guard)
+	e.set_meta("elite", elite)
 	var hp := 50 + i * 18 + (tier - 1) * 28
 	var atk := 7 + i * 2 + (tier - 1) * 2
+	var sc := 1.0
+	var spd := 95
+	var td := 0
+	match base_kind:
+		"山魈":
+			hp += 40
+			atk += 2
+			sc = 1.12
+		"铁甲尸":
+			hp += 60
+			atk -= 1
+			td = 8
+			sc = 1.05
+		"剑客":
+			hp += 10
+			atk += 4
+			spd = 108
+		"雾鬼":
+			hp -= 15
+			atk += 2
+			spd = 112
 	if hunter:
 		hp += 30
 		atk += 3
 	if guard:
 		hp += 60
 		atk += 5
-	e.set_meta("foe", {"hp": hp, "atk": atk})
+	if elite:
+		hp += 80 + tier * 20
+		atk += 4
+		sc = 1.18
+		hp = int(round(float(hp) * float(aff["hp"])))
+		atk = int(round(float(atk) * float(aff["atk"])))
+		sc *= float(aff["scale"])
+		e.set_meta("elite_affix", str(aff["id"]))
+	var foe := {"hp": hp, "atk": atk, "scale": sc, "spd": spd}
+	if td > 0:
+		foe["def"] = td
+	if elite:
+		foe["spd"] = spd + int(aff["spd"])
+	e.set_meta("foe", foe)
 	e.set_meta("beaten", false)
 	e.draw.connect(func() -> void:
-		match kind:
+		match base_kind:
 			"竹妖":
 				_draw_zhuyiao(e)
 			"野狼":
 				_draw_wolf(e)
+			"山魈":
+				_draw_shanxiao(e)
+			"铁甲尸":
+				_draw_ironcorpse(e)
+			"剑客":
+				_draw_swordsman(e)
+			"雾鬼":
+				_draw_wraith(e)
 			_:
 				_draw_bandit(e)
-		e.draw_string(ThemeDB.fallback_font, Vector2(-20, -46), kind, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("#f0d68a"))
+		if elite:
+			e.draw_circle(Vector2(0, -60), 4.0, Color("#ffd36a"))
+		e.draw_string(ThemeDB.fallback_font, Vector2(-20, -46), kind, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("#ffd36a") if elite else Color("#f0d68a"))
 	)
 	add_child(e)
 	return e
@@ -350,6 +487,42 @@ func _draw_bandit(e: Node2D) -> void:
 	e.draw_line(Vector2(-12, 2), Vector2(-20, 12), Color("#c89a6a"), 4.0)
 	e.draw_line(Vector2(12, 2), Vector2(20, 8), Color("#c89a6a"), 4.0)
 	e.draw_line(Vector2(20, 8), Vector2(30, -8), Color("#d8d2c2"), 3.0)
+
+func _draw_shanxiao(e: Node2D) -> void:
+	e.draw_circle(Vector2(0, -12), 24.0, Color("#5a4630"))
+	e.draw_rect(Rect2(-20, -6, 40, 26), Color("#4a3828"))
+	e.draw_circle(Vector2(0, -36), 13.0, Color("#6b5438"))
+	e.draw_circle(Vector2(-6, -38), 2.0, Color("#1b1a18"))
+	e.draw_circle(Vector2(6, -38), 2.0, Color("#1b1a18"))
+	e.draw_line(Vector2(-22, -8), Vector2(-34, 12), Color("#5a4630"), 6.0)
+	e.draw_line(Vector2(22, -8), Vector2(34, 12), Color("#5a4630"), 6.0)
+	e.draw_line(Vector2(-10, 16), Vector2(-12, 30), Color("#4a3828"), 6.0)
+	e.draw_line(Vector2(10, 16), Vector2(12, 30), Color("#4a3828"), 6.0)
+
+func _draw_ironcorpse(e: Node2D) -> void:
+	e.draw_rect(Rect2(-16, -10, 32, 30), Color("#5d625f"))
+	e.draw_rect(Rect2(-12, -24, 24, 22), Color("#4a4f4c"))
+	e.draw_rect(Rect2(-10, -38, 20, 12), Color("#7a7f78"))
+	e.draw_line(Vector2(-18, -6), Vector2(-28, 12), Color("#3f4440"), 5.0)
+	e.draw_line(Vector2(18, -6), Vector2(28, 12), Color("#3f4440"), 5.0)
+	e.draw_line(Vector2(-8, 20), Vector2(-8, 32), Color("#3f4440"), 5.0)
+	e.draw_line(Vector2(8, 20), Vector2(8, 32), Color("#3f4440"), 5.0)
+
+func _draw_swordsman(e: Node2D) -> void:
+	e.draw_circle(Vector2(0, -8), 15.0, Color("#3a3f52"))
+	e.draw_rect(Rect2(-11, -2, 22, 22), Color("#2a2f40"))
+	e.draw_circle(Vector2(0, -28), 9.0, Color("#d6b88a"))
+	e.draw_rect(Rect2(-9, -34, 18, 5), Color("#2a2f40"))
+	e.draw_line(Vector2(12, 0), Vector2(30, -18), Color("#e8e2d2"), 3.0)
+	e.draw_line(Vector2(30, -18), Vector2(36, -22), Color("#8a6a3a"), 3.0)
+
+func _draw_wraith(e: Node2D) -> void:
+	e.draw_circle(Vector2(0, -10), 20.0, Color(0.55, 0.75, 0.82, 0.55))
+	e.draw_circle(Vector2(0, -30), 11.0, Color(0.7, 0.85, 0.9, 0.62))
+	e.draw_circle(Vector2(-4, -32), 2.0, Color("#d7f2f8"))
+	e.draw_circle(Vector2(4, -32), 2.0, Color("#d7f2f8"))
+	e.draw_line(Vector2(-18, 0), Vector2(-30, 16), Color(0.55, 0.75, 0.82, 0.45), 4.0)
+	e.draw_line(Vector2(18, 0), Vector2(30, 16), Color(0.55, 0.75, 0.82, 0.45), 4.0)
 
 # ---------- 程序化环境 ----------
 
@@ -475,6 +648,7 @@ func _draw_boss() -> void:
 		return
 	var p := _cell_pos(_boss_cell.x, _boss_cell.y)
 	var dead := _boss_node != null and bool(_boss_node.get_meta("beaten", false))
+	var calm := _boss_node != null and bool(_boss_node.get_meta("appeased", false))
 	draw_circle(p + Vector2(0, 22), 38.0, Color(0.03, 0.04, 0.03, 0.45))
 	draw_rect(Rect2(p + Vector2(-30, 4), Vector2(60, 18)), Color("#3a3128"))
 	draw_circle(p + Vector2(0, -8), 20.0, Color("#d8d0bc") if not dead else Color("#6b655c"))
@@ -483,7 +657,8 @@ func _draw_boss() -> void:
 	draw_line(p + Vector2(-6, 2), p + Vector2(6, 2), Color("#1b1a18"), 2.0)
 	draw_colored_polygon(PackedVector2Array([p + Vector2(-22, -20), p + Vector2(-34, -44), p + Vector2(-12, -30)]), Color("#5a3f2a"))
 	draw_colored_polygon(PackedVector2Array([p + Vector2(22, -20), p + Vector2(34, -44), p + Vector2(12, -30)]), Color("#5a3f2a"))
-	draw_string(ThemeDB.fallback_font, p + Vector2(-30, -56), _boss_name + ("·已伏" if dead else ""), HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color("#9a927f") if dead else Color("#e06a5a"))
+	var status := "·已伏" if dead else ("·已安抚" if calm else "")
+	draw_string(ThemeDB.fallback_font, p + Vector2(-30, -56), _boss_name + status, HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color("#9a927f") if (dead or calm) else Color("#e06a5a"))
 
 func _draw_pois() -> void:
 	for i in _poi_cells.size():
@@ -667,6 +842,12 @@ func _unhandled_input(event: InputEvent) -> void:
 	if _merchant_panel != null and _merchant_panel.visible:
 		return
 	if _jail_panel != null and _jail_panel.visible:
+		return
+	if _codex_panel != null and _codex_panel.visible:
+		return
+	if _rel_panel != null and _rel_panel.visible:
+		return
+	if _boss_panel != null and _boss_panel.visible:
 		return
 	if event.is_action_pressed("ui_cancel"):
 		_return_village()
@@ -899,8 +1080,88 @@ func _boss_near() -> bool:
 		return false
 	return _player.position.distance_to(_cell_pos(_boss_cell.x, _boss_cell.y)) < 118.0
 
+func _open_relations() -> void:
+	if _busy:
+		return
+	if _rel_panel == null:
+		var rp = RelationshipPanel.new()
+		rp.connect("closed", _on_relations_closed)
+		_toast_layer.add_child(rp)
+		_rel_panel = rp
+	var bs := "未动"
+	if _boss_node != null:
+		if bool(_boss_node.get_meta("beaten", false)):
+			bs = "已伏"
+		elif bool(_boss_node.get_meta("appeased", false)):
+			bs = "已安抚"
+	_rel_panel.call("open", {"boss": _boss_name, "boss_state": bs})
+	_busy = true
+	_moving = false
+	_has_click = false
+	for e_v in _enemies:
+		var e: Node2D = e_v
+		if is_instance_valid(e):
+			e.visible = false
+	if _action_lb != null:
+		_action_lb.visible = false
+	if _back_btn != null:
+		_back_btn.visible = false
+	if _codex_btn != null:
+		_codex_btn.visible = false
+	if _rel_btn != null:
+		_rel_btn.visible = false
+
+func _on_relations_closed() -> void:
+	_busy = false
+	for e_v in _enemies:
+		var e: Node2D = e_v
+		if is_instance_valid(e):
+			e.visible = not bool(e.get_meta("beaten", false))
+	if _action_lb != null:
+		_action_lb.visible = true
+	if _back_btn != null:
+		_back_btn.visible = true
+	if _codex_btn != null:
+		_codex_btn.visible = true
+	if _rel_btn != null:
+		_rel_btn.visible = true
+
+func _open_codex() -> void:
+	if _codex_panel == null:
+		var cp = BossCodex.new()
+		cp.connect("closed", _on_codex_closed)
+		_toast_layer.add_child(cp)
+		_codex_panel = cp
+	_codex_panel.call("open")
+	_busy = true
+	_moving = false
+	_has_click = false
+	for e_v in _enemies:
+		var e: Node2D = e_v
+		if is_instance_valid(e):
+			e.visible = false
+	if _action_lb != null:
+		_action_lb.visible = false
+	if _back_btn != null:
+		_back_btn.visible = false
+	if _codex_btn != null:
+		_codex_btn.visible = false
+
+func _on_codex_closed() -> void:
+	_busy = false
+	for e_v in _enemies:
+		var e: Node2D = e_v
+		if is_instance_valid(e):
+			e.visible = not bool(e.get_meta("beaten", false))
+	if _action_lb != null:
+		_action_lb.visible = true
+	if _back_btn != null:
+		_back_btn.visible = true
+	if _codex_btn != null:
+		_codex_btn.visible = true
+
 func _open_boss() -> void:
-	if _boss_node == null or bool(_boss_node.get_meta("beaten", false)):
+	if _boss_node == null or bool(_boss_node.get_meta("beaten", false)) or bool(_boss_node.get_meta("appeased", false)):
 		return
 	if _boss_panel == null:
 		var bp = POIPanel.new()
@@ -911,8 +1172,8 @@ func _open_boss() -> void:
 	var data := {
 		"title": _boss_name,
 		"sub": "盘踞在此的一方凶物。",
-		"body": "山风忽然停了。\n\n（失败会被抬回村，战利品全留）",
-		"choices": [{"id": "fight", "label": "拔 剑"}, {"id": "leave", "label": "绕 开"}],
+		"body": "山风忽然停了。\n供品要价 " + str(100 + GameState.world_tier * 20) + " 两。\n（失败会被抬回村，战利品全留）",
+		"choices": [{"id": "fight", "label": "拔 剑"}, {"id": "offer", "label": "送 供 品"}],
 	}
 	_boss_panel.call("open", data)
 	_busy = true
@@ -930,6 +1191,21 @@ func _open_boss() -> void:
 func _on_boss_pick(id: String) -> void:
 	if id == "fight":
 		_boss_fight_pending = true
+		_boss_panel.call("close")
+		return
+	if id == "offer":
+		var cost := 100 + GameState.world_tier * 20
+		if GameState.coin("silver") < cost:
+			_boss_panel.call("set_result", "供品要 " + str(cost) + " 两——不够。")
+			return
+		GameState.add_coin("silver", -cost)
+		GameState.add_material("atlas", 1)
+		GameState.add_material("jin", 1)
+		GameState.save_game()
+		_boss_node.set_meta("appeased", true)
+		_set_msg("你把供品摆在骸骨前。山风缓了，凶物没现身。")
+		_boss_panel.call("close")
+		return
 	_boss_panel.call("close")
 
 func _on_boss_closed() -> void:
@@ -951,6 +1227,7 @@ func _open_sect() -> void:
 	if _sect_panel == null:
 		var sp = SectPanel.new()
 		sp.connect("closed", _on_sect_closed)
+		sp.connect("arena_requested", _on_sect_arena)
 		_toast_layer.add_child(sp)
 		_sect_panel = sp
 	_sect_panel.open()
@@ -965,6 +1242,84 @@ func _open_sect() -> void:
 		_action_lb.visible = false
 	if _back_btn != null:
 		_back_btn.visible = false
+
+func _on_sect_arena() -> void:
+	call_deferred("_arena_battle")
+
+func _arena_battle() -> void:
+	if _arena_done:
+		_set_msg("这一趟已经挑战过师兄了")
+		return
+	if _busy or _battle_active:
+		return
+	if not GameState.action_spend(2):
+		_set_msg("行动不够——挑战师兄要 2 点行动")
+		return
+	_arena_done = true
+	_busy = true
+	_battle_active = true
+	_has_click = false
+	_moving = false
+	queue_redraw()
+	_update_action_label()
+	if _action_lb != null:
+		_action_lb.visible = false
+	if _wanted_lb != null:
+		_wanted_lb.visible = false
+	if _codex_btn != null:
+		_codex_btn.visible = false
+	if _back_btn != null:
+		_back_btn.visible = false
+	_map_pos_before_battle = _player.position
+	_camera.enabled = false
+	for e_v in _enemies:
+		var e: Node2D = e_v
+		if is_instance_valid(e):
+			e.visible = false
+	_player.visible = false
+	var tier := clampi(GameState.world_tier, 1, 5)
+	var node := {
+		"t": "battle", "name": "青岚师兄",
+		"foe": {"hp": 110 + tier * 35, "atk": 9 + tier * 2, "scale": 1.05},
+		"money": [0, 0], "stick_enemies": true,
+	}
+	var bp := StickFighter.new()
+	bp.position = Vector2(210.0, 950.0)
+	add_child(bp)
+	var battle := DuelBattle.new()
+	add_child(battle)
+	var res: Dictionary = await battle.run(_state, bp, _fx, node, false, [])
+	if is_instance_valid(battle):
+		battle.queue_free()
+	if is_instance_valid(bp):
+		bp.queue_free()
+	_player.visible = true
+	_player.position = _map_pos_before_battle
+	_camera.enabled = true
+	var won := bool(res.get("win", false))
+	_battle_active = false
+	_busy = false
+	if _back_btn != null:
+		_back_btn.visible = true
+	if _action_lb != null:
+		_action_lb.visible = true
+	if _wanted_lb != null:
+		_wanted_lb.visible = GameState.wanted > 0
+	if _codex_btn != null:
+		_codex_btn.visible = true
+	for e_v in _enemies:
+		var e: Node2D = e_v
+		if is_instance_valid(e):
+			e.visible = not bool(e.get_meta("beaten", false))
+	_update_action_label()
+	if won:
+		GameState.sect_contrib += 30
+		GameState.save_game()
+		GameState.note_push("演武场胜了青岚师兄：宗门贡献 +30。")
+		_set_msg("胜了师兄。宗门贡献 +30。", 3.0)
+	else:
+		_set_msg("师兄留了手。歇一歇再来。", 3.0)
+	queue_redraw()
 
 func _on_sect_closed() -> void:
 	_busy = false
@@ -1007,6 +1362,14 @@ func _on_click(pos: Vector2) -> void:
 			_open_poi(pi)
 			return
 		_poi_pending = pi
+	if cell == _boss_cell:
+		if _boss_node != null and (bool(_boss_node.get_meta("beaten", false)) or bool(_boss_node.get_meta("appeased", false))):
+			_set_msg("这里已经了结了")
+			return
+		if _boss_near():
+			_open_boss()
+			return
+		_boss_pending = true
 	if _chest_cells.has(cell):
 		_open_chest(cell)
 		return
@@ -1055,6 +1418,23 @@ func _process(delta: float) -> void:
 			return
 	if _busy or _battle_active or _player == null:
 		return
+	if not _in_house:
+		for e_v in _enemies:
+			var eg: Node2D = e_v
+			if not is_instance_valid(eg) or bool(eg.get_meta("beaten", false)) or not bool(eg.get_meta("guard", false)):
+				continue
+			var pa: Vector2 = eg.get_meta("patrol_a", eg.position)
+			var pb: Vector2 = eg.get_meta("patrol_b", eg.position)
+			var to_b := bool(eg.get_meta("patrol_to_b", true))
+			var target := pb if to_b else pa
+			var gd := target - eg.position
+			if gd.length() < 3.0:
+				eg.set_meta("patrol_to_b", not to_b)
+			else:
+				eg.position += gd.normalized() * minf(58.0 * delta, gd.length())
+			if eg.position.distance_to(_player.position) <= ENEMY_REACH:
+				_try_battle(eg)
+				return
 	if _sect_pending and not _in_house and _near_sect():
 		_sect_pending = false
 		_moving = false
@@ -1069,6 +1449,13 @@ func _process(delta: float) -> void:
 		_path.clear()
 		_has_click = false
 		_open_poi(pi2)
+		return
+	if _boss_pending and not _in_house and _boss_near():
+		_boss_pending = false
+		_moving = false
+		_path.clear()
+		_has_click = false
+		_open_boss()
 		return
 	if _in_house:
 		if not _moving:
@@ -1125,6 +1512,7 @@ func _try_battle(enemy: Node2D) -> void:
 			e.visible = false
 	queue_redraw()
 	var is_guard := bool(enemy.get_meta("guard", false))
+	var is_boss := bool(enemy.get_meta("boss", false))
 	var node := {
 		"t": "battle",
 		"name": str(enemy.get_meta("foe_name", "敌人")),
@@ -1132,6 +1520,7 @@ func _try_battle(enemy: Node2D) -> void:
 		"money": [12 + GameState.world_tier * 4, 25 + GameState.world_tier * 6],
 		"stick_enemies": true,   # v242：探险战斗的敌人也用火柴人
 		"guard": is_guard,
+		"boss": is_boss,
 	}
 	# 战斗里主角用火柴人（地图上仍用 Q 版立绘）：另起一个火柴人替身，
 	# 打完收掉，地图上的立绘原样还回来。
@@ -1165,8 +1554,17 @@ func _try_battle(enemy: Node2D) -> void:
 			GameState.wanted = mini(5, GameState.wanted + 1)
 			_update_wanted_label()
 		_grant_battle_loot(enemy)
+		if is_boss:
+			GameState.note_push("击败「" + str(enemy.get_meta("foe_name", "凶物")) + "」——此方凶物已伏。")
 	elif is_guard:
-		_open_jail()
+		GameState.jailed_days = 3
+		GameState.save_game()
+		GameState.note_push("被捕快拿住——押回县衙，先服刑、打点或越狱。")
+		_return_village()
+		return
+	elif is_boss:
+		GameState.note_push("被「" + str(enemy.get_meta("foe_name", "凶物")) + "」打下山，抬回村。战利品全留。")
+		_return_village()
 		return
 	queue_redraw()
 
@@ -1178,11 +1576,60 @@ func _grant_battle_loot(enemy: Node2D) -> void:
 		silver += 30
 	if bool(enemy.get_meta("guard", false)):
 		silver += 50
+	if bool(enemy.get_meta("elite", false)):
+		silver += 60
+		stones += 3
+	var fname := str(enemy.get_meta("foe_name", ""))
+	var extra_mat := ""
+	if fname.contains("山魈"):
+		GameState.add_material("bone", 4)
+		extra_mat += " · 兽骨碎 +4"
+	if fname.contains("铁甲尸"):
+		stones += 4
+		extra_mat += " · 锻造石 +4"
+	if fname.contains("剑客") and randf() < 0.25:
+		GameState.add_material("jin", 1)
+		extra_mat += " · 金髓 +1"
+	if fname.contains("雾鬼") and randf() < 0.2:
+		GameState.add_material("atlas", 1)
+		_loot_atlas += 1
+		extra_mat += " · 舆图 +1"
+	if bool(enemy.get_meta("elite", false)):
+		if fname.contains("山魈"):
+			GameState.add_material("bone", 2)
+			extra_mat += " · 兽骨碎 +2"
+	var is_boss := bool(enemy.get_meta("boss", false))
+	var first_boss := false
+	var boss_drop := ""
+	if is_boss:
+		silver += 180
+		stones += 8
+		GameState.add_material("atlas", 1)
+		GameState.add_material("jin", 1)
+		_loot_atlas += 1
+		var bname := str(enemy.get_meta("foe_name", "凶物"))
+		if not GameState.boss_kills.has(bname):
+			GameState.boss_kills.append(bname)
+			first_boss = true
+			stones += 10
+			GameState.add_material("jin", 2)
+			GameState.add_material("atlas", 1)
+			_loot_atlas += 1
+			var drop := GameState.grant_boss_weapon(bname)
+			boss_drop = str(drop.get("name", ""))
 	GameState.add_coin("silver", silver)
 	GameState.add_material("forge_stone", stones)
 	_loot_silver += silver
 	_loot_stones += stones
 	GameState.save_game()
 	var tail := " · 通缉 +1" if bool(enemy.get_meta("guard", false)) else ""
-	_set_msg("击败「" + str(enemy.get_meta("foe_name", "敌人")) + "」：银两 +" + str(silver) + " · 锻造石 +" + str(stones) + tail, 3.0)
+	if bool(enemy.get_meta("elite", false)):
+		tail += " · 精英 +60 两 +3 石"
+	if is_boss:
+		tail += " · 舆图 +1 · 金髓 +1"
+		if first_boss:
+			tail += " · 首杀：金髓 +2 · 舆图 +1 · 锻造石 +10"
+			if boss_drop != "":
+				tail += " · 专属「" + boss_drop + "」"
+	_set_msg("击败「" + fname + "」：银两 +" + str(silver) + " · 锻造石 +" + str(stones) + tail + extra_mat, 3.0)
 

@@ -1,0 +1,145 @@
+extends Control
+# v254：江湖关系——把货郎 / 山门 / 凶物 / 此方世界收在一页。
+signal closed
+
+const UiKit := preload("res://shared/ui_kit.gd")
+const GS := preload("res://shared/game_state.gd")
+
+const LAND_NAMES := ["山多·路窄", "水多·雾重", "林密·怪多", "石多·宝多"]
+
+var _dealer_lb: Label
+var _sect_lb: Label
+var _boss_lb: Label
+var _world_lb: Label
+var _gift_btn: Button
+var _wash_btn: Button
+var _appease_btn: Button
+var _msg_lb: Label
+var _last_info := {}
+
+func _ready() -> void:
+	set_anchors_preset(Control.PRESET_FULL_RECT)
+	mouse_filter = Control.MOUSE_FILTER_STOP
+	var veil := UiKit.make_veil(self, Vector2(720, 1280), 0.64)
+	var panel := UiKit.make_paper_panel(veil, Rect2(40, 160, 640, 960))
+	panel.add_theme_stylebox_override("panel", UiKit.paper_box(1.0))
+	var title := UiKit.make_label(panel, Vector2(0, 20), Vector2(640, 46), 34, UiKit.INK)
+	UiKit.set_text(title, "江 湖 关 系")
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var sub := UiKit.make_label(panel, Vector2(0, 70), Vector2(640, 24), 15, UiKit.DIM)
+	UiKit.set_text(sub, "货郎 · 山门 · 凶物 · 此方世界")
+	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+
+	_dealer_lb = _section("货 郎 老 赵", 110)
+	_sect_lb = _section("青 岚 山 门", 250)
+	_boss_lb = _section("凶 物", 410)
+	_world_lb = _section("此 方 世 界", 590)
+	_gift_btn = UiKit.make_button(panel, Vector2(40, 760), Vector2(170, 46), "送礼 50两", 14)
+	_gift_btn.pressed.connect(_gift)
+	_wash_btn = UiKit.make_button(panel, Vector2(220, 760), Vector2(190, 46), "洗 白", 15)
+	_wash_btn.pressed.connect(_wash)
+	_appease_btn = UiKit.make_button(panel, Vector2(420, 760), Vector2(190, 46), "赔 礼", 15)
+	_appease_btn.pressed.connect(_appease)
+	_msg_lb = UiKit.make_label(panel, Vector2(40, 815), Vector2(560, 50), 14, Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.72))
+	_msg_lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	var back := UiKit.make_button(panel, Vector2(220, 880), Vector2(200, 46), "关 闭", 18)
+	back.pressed.connect(close)
+	visible = false
+
+func _section(title: String, y: float) -> Label:
+	var t := UiKit.make_label(_panel_parent(), Vector2(40, y), Vector2(560, 30), 19, UiKit.SEAL)
+	UiKit.set_text(t, title)
+	var lb := UiKit.make_label(_panel_parent(), Vector2(40, y + 34), Vector2(560, 100), 15, Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.76))
+	lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	return lb
+
+func _panel_parent() -> Node:
+	# 题目/正文都挂在同一张纸板上；_ready 里第一张 Panel 即父级。
+	for c in get_children():
+		if c is ColorRect:
+			for p in c.get_children():
+				if p is Panel:
+					return p
+	return self
+
+func open(info: Dictionary) -> void:
+	_last_info = info
+	var d := int(round(minf(0.2, float(GS.merchant_favor) * 0.002) * 100.0))
+	_dealer_lb.text = "人情 " + str(GS.merchant_favor) + "/100 · 价 -" + str(d) + "%\n通缉 " + str(GS.wanted) + "/5 · " + ("暂不做你生意" if GS.wanted > 0 else "照常做生意")
+	var sect := ""
+	if GS.sect_betrayed:
+		sect = "已叛门 · 山门已封（可赔礼 500 两）"
+	elif GS.sect_joined:
+		var rank := "外门弟子"
+		if GS.sect_contrib >= 250:
+			rank = "真传弟子"
+		elif GS.sect_contrib >= 100:
+			rank = "内门弟子"
+		sect = rank + " · 贡献 " + str(GS.sect_contrib)
+	else:
+		sect = "尚未入门"
+	sect += "\n好感 " + str(GS.sect_favor) + "/60 · 声望 " + str(GS.sect_rep) + "/60 · 考验 " + ("过" if GS.sect_test else "未过")
+	if GS.wanted > 0:
+		sect += "\n通缉在身：山门不纳"
+	else:
+		sect += "\n山门可入"
+	_sect_lb.text = sect
+	var bl := ""
+	for n in ["山君", "夜叉", "老妖"]:
+		bl += n + "：" + ("已首杀 · 弱点已识破" if GS.boss_kills.has(n) else "未首杀") + "\n"
+	_boss_lb.text = bl.strip_edges()
+	_world_lb.text = "世界档 " + str(GS.world_tier) + " · 地脉 " + str(LAND_NAMES[GS.world_seed % LAND_NAMES.size()]) + "\n本图 Boss：" + str(info.get("boss", "凶物")) + "（" + str(info.get("boss_state", "未动")) + "）"
+	_gift_btn.disabled = GS.merchant_favor >= 100 or GS.coin("silver") < 50
+	var wash_cost := 80 * GS.wanted
+	_wash_btn.visible = GS.wanted > 0
+	_wash_btn.text = "洗白（" + str(wash_cost) + " 两）"
+	_wash_btn.disabled = GS.coin("silver") < wash_cost
+	_appease_btn.visible = GS.sect_betrayed
+	_appease_btn.text = "赔礼（500 两）"
+	_appease_btn.disabled = GS.coin("silver") < 500
+	visible = true
+
+func _gift() -> void:
+	if GS.merchant_favor >= 100 or GS.coin("silver") < 50:
+		_msg_lb.text = "礼送不出去。"
+		return
+	GS.add_coin("silver", -50)
+	GS.merchant_favor = mini(100, GS.merchant_favor + 10)
+	GS.save_game()
+	_msg_lb.text = "老赵收了礼，人情 +10。"
+	open(_last_info)
+
+func _wash() -> void:
+	var cost := 80 * GS.wanted
+	if GS.wanted <= 0 or GS.coin("silver") < cost:
+		_msg_lb.text = "洗白要 " + str(cost) + " 两——不够。"
+		return
+	GS.add_coin("silver", -cost)
+	GS.wanted = 0
+	GS.save_game()
+	_msg_lb.text = "案子抹平了。通缉清零。"
+	open(_last_info)
+
+func _appease() -> void:
+	if not GS.sect_betrayed or GS.coin("silver") < 500:
+		_msg_lb.text = "赔礼要 500 两——不够。"
+		return
+	GS.add_coin("silver", -500)
+	GS.sect_betrayed = false
+	GS.sect_joined = false
+	GS.sect_contrib = 0
+	GS.sect_favor = 0
+	GS.sect_rep = 0
+	GS.sect_test = false
+	GS.save_game()
+	_msg_lb.text = "赔了礼，山门封条揭了。重走四门可再入。"
+	open(_last_info)
+
+func close() -> void:
+	visible = false
+	closed.emit()
+
+func _input(event: InputEvent) -> void:
+	if event.is_action_pressed("ui_cancel"):
+		get_viewport().set_input_as_handled()
+		close()
