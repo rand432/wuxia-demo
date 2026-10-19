@@ -470,6 +470,7 @@ func _spawn_boss() -> void:
 	if _boss_name == "雪魈":
 		foe["def"] = 8
 		foe["spd"] = 105
+		foe["frostburst"] = true
 	_boss_node.set_meta("foe", foe)
 	add_child(_boss_node)
 
@@ -2401,6 +2402,8 @@ func _try_battle(enemy: Node2D) -> void:
 		"boss": is_boss,
 		"chill": is_snow_boss,
 	}
+	if is_snow_boss:
+		node["affixes"] = ["berserk"]
 	# 战斗里主角用火柴人（地图上仍用 Q 版立绘）：另起一个火柴人替身，
 	# 打完收掉，地图上的立绘原样还回来。
 	var battle_player := StickFighter.new()

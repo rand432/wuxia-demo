@@ -1064,7 +1064,13 @@ func _foe_weapon() -> String:
 func _set_foe_hp(v: int) -> void:
 	var c := _cur()
 	if not c.is_empty():
+		var was_half := int(c.get("hp", 0)) * 2 > _foe_hp_max()
 		c["hp"] = maxi(0, v)
+		if was_half and int(c["hp"]) * 2 <= _foe_hp_max() and bool(c.get("frostburst", false)) and not bool(c.get("frostburst_done", false)):
+			c["frostburst_done"] = true
+			St.apply(_a(), "weak", 2, 1)
+			_blog("雪魈的冰甲碎了——寒气反扑：虚弱 1 层 · 2 手", "guard")
+			_update_bars()
 
 # ---- 建阵容 ----
 # 多少人、都是谁：
@@ -1188,6 +1194,7 @@ func _build_foes(node: Dictionary, foe: Dictionary) -> void:
 			# v35：防御值——表里带了就用，没带按攻击折一半（GameData.foe_def）
 			"def": f_def,
 			"spd": int(f.get("spd", 95)),
+			"frostburst": bool(f.get("frostburst", false)),
 			"hat": str(f.get("hat", "toujin")),
 			"cape": str(f.get("cape", "none")),
 			"color": f.get("color", [0.5, 0.3, 0.28]),
@@ -2415,7 +2422,9 @@ func run(state, player: Node2D, fx: Control, node: Dictionary, foe_first := fals
 	if bool(node.get("chill", false)):
 		var chill_msg: String = St.apply(_a(), "slow", 3, 2)
 		_blog("雪魈的寒霜压住身法：" + chill_msg, "guard")
-		_banner("寒 霜", Color(0.55, 0.75, 0.85))
+		St.apply(_cur(), "rockskin", 3, 2)
+		_blog("雪魈披上冰甲：减伤 2 层 · 再 3 手", "guard")
+		_banner("寒 霜 · 冰 甲", Color(0.55, 0.75, 0.85))
 		_update_bars()
 		await _wait(0.8)
 
