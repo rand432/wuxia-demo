@@ -894,6 +894,7 @@ static var north_wins := 0
 static var north_weapon := false
 static var north_tax_day := ""
 static var ng_plus := 0
+static var map_owners: Dictionary = {}
 static var north_garrison := false
 static var broker_weapon := false
 # v260：听雨楼密信剧情（0=未触发 / 1=交青岚 / 2=卖赤水 / 3=烧掉）
@@ -4848,6 +4849,12 @@ static func broker_rank_name() -> String:
 static func ng_mul() -> float:
 	return 1.0 + 0.15 * float(ng_plus)
 
+static func map_owner_of(seed: int) -> int:
+	return clampi(int(map_owners.get(str(seed), 0)), 0, 3)
+
+static func set_map_owner(seed: int, owner: int) -> void:
+	map_owners[str(seed)] = clampi(owner, 0, 3)
+
 static func cycle_title() -> String:
 	if ng_plus <= 0:
 		return "初入江湖"
@@ -4861,6 +4868,7 @@ static func cycle_title() -> String:
 
 static func begin_new_cycle() -> void:
 	ng_plus = mini(99, ng_plus + 1)
+	map_owners.clear()
 	world_seed += 1
 	world_tier = mini(5, 1 + ng_plus)
 	red_water = 0
@@ -6144,6 +6152,7 @@ static func load_game() -> void:
 	north_weapon = bool(cf.get_value("world", "north_weapon", false))
 	north_tax_day = str(cf.get_value("world", "north_tax_day", ""))
 	ng_plus = clampi(int(cf.get_value("world", "ng_plus", 0)), 0, 99)
+	map_owners = _sd(cf.get_value("world", "map_owners", {}), map_owners)
 	north_garrison = bool(cf.get_value("world", "north_garrison", false))
 	broker_weapon = bool(cf.get_value("world", "broker_weapon", false))
 	story_letter = clampi(int(cf.get_value("world", "story_letter", 0)), 0, 3)
@@ -6302,6 +6311,7 @@ static func save_game() -> void:
 	cf.set_value("world", "north_weapon", north_weapon)
 	cf.set_value("world", "north_tax_day", north_tax_day)
 	cf.set_value("world", "ng_plus", ng_plus)
+	cf.set_value("world", "map_owners", map_owners)
 	cf.set_value("world", "north_garrison", north_garrison)
 	cf.set_value("world", "broker_weapon", broker_weapon)
 	cf.set_value("world", "story_letter", story_letter)
@@ -6507,6 +6517,7 @@ static func reset() -> void:
 	north_tax_day = ""
 	north_garrison = false
 	ng_plus = 0
+	map_owners.clear()
 	turf_tax_day = ""
 	war_notes.clear()
 	_idle_last_ts = _idle_now()

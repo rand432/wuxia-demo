@@ -82,6 +82,11 @@ func _discount() -> float:
 			turf = 0.10
 		else:
 			turf = 0.08 if GS.red_water_market else 0.05
+	var owner := GS.map_owner_of(GS.world_seed)
+	if owner == 1:
+		turf += 0.02
+	elif owner == 2:
+		turf += 0.03
 	return minf(0.25, float(GS.merchant_favor) * 0.002 + turf)
 
 func _price(base: int) -> int:

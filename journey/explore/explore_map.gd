@@ -128,6 +128,7 @@ var _obstacles: Array = []
 var _enemy_cells: Array = []
 var _reveal_r := 3
 var _land_id := 0
+var _map_owner := 0
 
 func _ready() -> void:
 	var dep: Dictionary = GameState.deploy_take()
@@ -166,6 +167,7 @@ func setup(role_id := "player", diff := 1, party: Array = [], fates: Array = [])
 
 func _gen_world() -> void:
 	_land_id = GameState.world_seed % 5
+	_map_owner = GameState.map_owner_of(GameState.world_seed)
 	_reveal_r = 2 if (_land_id == 1 or _land_id == 2 or _land_id == 4) else 3
 	_obstacles.clear()
 	_chest_cells.clear()
@@ -208,7 +210,7 @@ func _gen_world() -> void:
 	var hunter_n := mini(2, GameState.wanted)
 	var guard_n := 1 if GameState.wanted > 0 else 0
 	var elite_n := 1 if GameState.world_tier >= 2 else 0
-	var enemy_n := mini(9, 3 + int(GameState.world_tier / 3) + (1 if (_land_id == 2 or _land_id == 4) else 0) + hunter_n + guard_n + elite_n)
+	var enemy_n := mini(9, 3 + int(GameState.world_tier / 3) + (1 if (_land_id == 2 or _land_id == 4) else 0) + (1 if _map_owner == 3 else 0) + hunter_n + guard_n + elite_n)
 	guard = 0
 	while _enemy_cells.size() < enemy_n and guard < 500:
 		guard += 1
@@ -822,6 +824,7 @@ func _draw() -> void:
 	if _has_click:
 		draw_circle(_click_pos, 9.0, Color("#e0b45a"))
 		draw_circle(_click_pos, 4.0, Color("#fff1c9"))
+	_draw_faction_flag()
 	if _msg != "":
 		draw_string(ThemeDB.fallback_font, Vector2(24, 42), _msg, HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color("#f0d68a"))
 
@@ -938,6 +941,16 @@ func _draw_brawl() -> void:
 	draw_colored_polygon(PackedVector2Array([p + Vector2(24, -26), p + Vector2(4, -18), p + Vector2(24, -8)]), Color("#6b655c") if done else Color("#1f2226"))
 	draw_line(p + Vector2(-10, 0), p + Vector2(10, -16), Color("#d8d2c2" if not done else "#6b655c"), 3.0)
 	draw_string(ThemeDB.fallback_font, p + Vector2(-34, -42), "两寨火并" if not done else "火并·已散", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("#9a927f") if done else Color("#e06a5a"))
+
+func _draw_faction_flag() -> void:
+	if _map_owner <= 0:
+		return
+	var p := _cell_pos(START_CELL.x + 1, START_CELL.y - 1)
+	var col := Color("#5a8a9a") if _map_owner == 1 else (Color("#8d2f2a") if _map_owner == 2 else Color("#c9a64a"))
+	var nm := "青岚" if _map_owner == 1 else ("赤水" if _map_owner == 2 else "黑风")
+	draw_line(p + Vector2(0, 18), p + Vector2(0, -28), Color("#3a2a1c"), 4.0)
+	draw_colored_polygon(PackedVector2Array([p + Vector2(0, -28), p + Vector2(28, -20), p + Vector2(0, -10)]), col)
+	draw_string(ThemeDB.fallback_font, p + Vector2(-18, -38), "本图：" + nm, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, col)
 
 func _draw_boss() -> void:
 	if _boss_cell.x < 0:
@@ -1875,6 +1888,7 @@ func _rival_battle() -> void:
 			if GameState.sect_joined:
 				GameState.sect_contrib += 80
 				GameState.red_water = 2
+				GameState.set_map_owner(GameState.world_seed, 1)
 				GameState.war_score = mini(100, GameState.war_score + 25)
 				GameState.note_war("青岚拿下赤水寨")
 			else:
@@ -2252,6 +2266,7 @@ func _north_battle() -> void:
 	if won:
 		if _north_final:
 			GameState.north_peace = true
+			GameState.set_map_owner(GameState.world_seed, 1)
 			GameState.add_coin("silver", 300)
 			GameState.add_material("atlas", 2)
 			if not GameState.north_weapon:
@@ -2451,12 +2466,14 @@ func _on_brawl_pick(id: String) -> void:
 		GameState.war_score = mini(100, GameState.war_score + 10)
 		GameState.north_score = maxi(0, GameState.north_score - 10)
 		GameState.add_coin("silver", 80)
+		GameState.set_map_owner(GameState.world_seed, 2)
 		GameState.note_war("两寨火并，你帮了赤水")
 		_set_msg("赤水的人赢了这一阵。战线 +10 · 北境 -10 · 银两 +80。")
 	elif id == "black":
 		GameState.north_score = mini(100, GameState.north_score + 10)
 		GameState.war_score = maxi(0, GameState.war_score - 10)
 		GameState.add_coin("silver", 80)
+		GameState.set_map_owner(GameState.world_seed, 3)
 		GameState.note_war("两寨火并，你帮了黑风")
 		_set_msg("黑风的人赢了这一阵。北境 +10 · 赤水 -10 · 银两 +80。")
 	else:
@@ -2949,6 +2966,10 @@ func _grant_battle_loot(enemy: Node2D) -> void:
 			boss_drop = str(drop.get("name", ""))
 	if GameState.story_title == "江湖散人":
 		silver = int(round(float(silver) * 1.1))
+	if _map_owner == 1:
+		silver = int(round(float(silver) * 1.1))
+	elif _map_owner == 3:
+		silver = int(round(float(silver) * 1.2))
 	GameState.add_coin("silver", silver)
 	GameState.add_material("forge_stone", stones)
 	_loot_silver += silver
