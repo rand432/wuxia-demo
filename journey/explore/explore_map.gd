@@ -98,6 +98,11 @@ var _boss_panel: Control
 var _boss_pending := false
 var _boss_fight_pending := false
 var _arena_done := false
+var _rival_cell := Vector2i(-1, -1)
+var _rival_panel: Control
+var _rival_pending := false
+var _rival_fight_pending := false
+var _rival_done := false
 var _chest_cells: Array = []
 var _obstacles: Array = []
 var _enemy_cells: Array = []
@@ -187,6 +192,18 @@ func _gen_world() -> void:
 		if _reserved(c3, 1) or _obstacles.has(c3) or _chest_cells.has(c3) or _poi_cells.has(c3) or _enemy_cells.has(c3):
 			continue
 		_enemy_cells.append(c3)
+	# 赤水寨：敌对势力据点（拔寨 / 买路）
+	_rival_cell = Vector2i(-1, -1)
+	guard = 0
+	while guard < 500:
+		guard += 1
+		var cr := Vector2i(rng.randi_range(1, MAP_W - 2), rng.randi_range(1, MAP_H - 2))
+		if _reserved(cr, 2) or _obstacles.has(cr) or _chest_cells.has(cr) or _poi_cells.has(cr) or _enemy_cells.has(cr):
+			continue
+		if Vector2(cr).distance_to(Vector2(START_CELL)) < 7.0:
+			continue
+		_rival_cell = cr
+		break
 	# Boss 落在离起点远、避开所有已占格的位置；找不到就退到 (3,3)
 	var bnames := ["山君", "夜叉", "老妖"]
 	_boss_name = str(bnames[GameState.world_seed % bnames.size()])
@@ -578,6 +595,7 @@ func _draw() -> void:
 			_draw_rock(_cell_pos(cell.x, cell.y))
 	_draw_house()
 	_draw_sect_gate()
+	_draw_rival()
 	_draw_boss()
 	_draw_pois()
 	_draw_chests()
@@ -642,6 +660,20 @@ func _draw_sect_gate() -> void:
 	draw_rect(Rect2(p + Vector2(-26, -118), Vector2(52, 22)), Color("#e6d7b4"))
 	draw_string(ThemeDB.fallback_font, p + Vector2(-22, -102), "山门", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("#6b2f22"))
 	draw_string(ThemeDB.fallback_font, p + Vector2(-32, -132), "青岚山门", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("#f0d68a"))
+
+func _draw_rival() -> void:
+	if _rival_cell.x < 0:
+		return
+	var p := _cell_pos(_rival_cell.x, _rival_cell.y)
+	draw_circle(p + Vector2(0, 22), 38.0, Color(0.03, 0.03, 0.03, 0.4))
+	draw_rect(Rect2(p + Vector2(-34, 2), Vector2(68, 20)), Color("#3a2a22"))
+	draw_rect(Rect2(p + Vector2(-40, -56), Vector2(12, 58)), Color("#4a2a24"))
+	draw_rect(Rect2(p + Vector2(28, -56), Vector2(12, 58)), Color("#4a2a24"))
+	draw_rect(Rect2(p + Vector2(-50, -64), Vector2(100, 12)), Color("#2a1814"))
+	draw_colored_polygon(PackedVector2Array([p + Vector2(-58, -64), p + Vector2(58, -64), p + Vector2(0, -88)]), Color("#5a1f1a"))
+	draw_rect(Rect2(p + Vector2(-28, -112), Vector2(56, 22)), Color("#6b655c") if _rival_done else Color("#d8b06a"))
+	draw_string(ThemeDB.fallback_font, p + Vector2(-24, -96), "赤水寨", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("#2a1814"))
+	draw_string(ThemeDB.fallback_font, p + Vector2(-28, -126), "赤水寨·已拔" if _rival_done else "赤水寨", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("#9a927f") if _rival_done else Color("#e06a5a"))
 
 func _draw_boss() -> void:
 	if _boss_cell.x < 0:
@@ -846,6 +878,8 @@ func _unhandled_input(event: InputEvent) -> void:
 	if _codex_panel != null and _codex_panel.visible:
 		return
 	if _rel_panel != null and _rel_panel.visible:
+		return
+	if _rival_panel != null and _rival_panel.visible:
 		return
 	if _boss_panel != null and _boss_panel.visible:
 		return
@@ -1223,6 +1257,160 @@ func _on_boss_closed() -> void:
 		_boss_fight_pending = false
 		call_deferred("_try_battle", _boss_node)
 
+func _rival_near() -> bool:
+	if _rival_cell.x < 0:
+		return false
+	return _player.position.distance_to(_cell_pos(_rival_cell.x, _rival_cell.y)) < 112.0
+
+func _open_rival() -> void:
+	if _rival_done:
+		_set_msg("赤水寨已经了结了")
+		return
+	if _rival_panel == null:
+		var rp = POIPanel.new()
+		rp.connect("picked", _on_rival_pick)
+		rp.connect("closed", _on_rival_closed)
+		_toast_layer.add_child(rp)
+		_rival_panel = rp
+	var data := {
+		"title": "赤 水 寨",
+		"sub": "山道上的敌对寨子，红幡压着路口。",
+		"body": "寨门半开，里面有人磨刀。\n拔寨要 3 行动；买路要 50 两。\n（失败不会被抓，只退回来）",
+		"choices": [{"id": "fight", "label": "拔 寨（3行动）"}, {"id": "pay", "label": "买 路（50两）"}],
+	}
+	_rival_panel.call("open", data)
+	_busy = true
+	_moving = false
+	_has_click = false
+	for e_v in _enemies:
+		var e: Node2D = e_v
+		if is_instance_valid(e):
+			e.visible = false
+	if _action_lb != null:
+		_action_lb.visible = false
+	if _back_btn != null:
+		_back_btn.visible = false
+	if _codex_btn != null:
+		_codex_btn.visible = false
+	if _rel_btn != null:
+		_rel_btn.visible = false
+
+func _on_rival_pick(id: String) -> void:
+	if id == "fight":
+		_rival_fight_pending = true
+		_rival_panel.call("close")
+		return
+	if id == "pay":
+		if GameState.coin("silver") < 50:
+			_rival_panel.call("set_result", "买路要 50 两——不够。")
+			return
+		GameState.add_coin("silver", -50)
+		GameState.save_game()
+		_rival_done = true
+		_rival_panel.call("close")
+		_set_msg("你交了买路钱。赤水寨放你过去。")
+		queue_redraw()
+		return
+	_rival_panel.call("close")
+
+func _on_rival_closed() -> void:
+	_busy = false
+	_rival_pending = false
+	for e_v in _enemies:
+		var e: Node2D = e_v
+		if is_instance_valid(e):
+			e.visible = not bool(e.get_meta("beaten", false))
+	if _action_lb != null:
+		_action_lb.visible = true
+	if _back_btn != null:
+		_back_btn.visible = true
+	if _codex_btn != null:
+		_codex_btn.visible = true
+	if _rel_btn != null:
+		_rel_btn.visible = true
+	if _rival_fight_pending:
+		_rival_fight_pending = false
+		call_deferred("_rival_battle")
+
+func _rival_battle() -> void:
+	if _rival_done or _busy or _battle_active:
+		return
+	if not GameState.action_spend(3):
+		_set_msg("行动不够——拔寨要 3 点行动")
+		return
+	_busy = true
+	_battle_active = true
+	_has_click = false
+	_moving = false
+	queue_redraw()
+	_update_action_label()
+	if _action_lb != null:
+		_action_lb.visible = false
+	if _wanted_lb != null:
+		_wanted_lb.visible = false
+	if _codex_btn != null:
+		_codex_btn.visible = false
+	if _rel_btn != null:
+		_rel_btn.visible = false
+	if _back_btn != null:
+		_back_btn.visible = false
+	_map_pos_before_battle = _player.position
+	_camera.enabled = false
+	for e_v in _enemies:
+		var e: Node2D = e_v
+		if is_instance_valid(e):
+			e.visible = false
+	_player.visible = false
+	var tier := clampi(GameState.world_tier, 1, 5)
+	var node := {
+		"t": "battle", "name": "赤水寨主",
+		"foe": {"hp": 220 + tier * 55, "atk": 12 + tier * 2, "scale": 1.2},
+		"money": [0, 0], "stick_enemies": true,
+	}
+	var bp := StickFighter.new()
+	bp.position = Vector2(210.0, 950.0)
+	add_child(bp)
+	var battle := DuelBattle.new()
+	add_child(battle)
+	var res: Dictionary = await battle.run(_state, bp, _fx, node, false, [])
+	if is_instance_valid(battle):
+		battle.queue_free()
+	if is_instance_valid(bp):
+		bp.queue_free()
+	_player.visible = true
+	_player.position = _map_pos_before_battle
+	_camera.enabled = true
+	var won := bool(res.get("win", false))
+	_battle_active = false
+	_busy = false
+	if _back_btn != null:
+		_back_btn.visible = true
+	if _action_lb != null:
+		_action_lb.visible = true
+	if _wanted_lb != null:
+		_wanted_lb.visible = GameState.wanted > 0
+	if _codex_btn != null:
+		_codex_btn.visible = true
+	if _rel_btn != null:
+		_rel_btn.visible = true
+	for e_v in _enemies:
+		var e: Node2D = e_v
+		if is_instance_valid(e):
+			e.visible = not bool(e.get_meta("beaten", false))
+	_update_action_label()
+	if won:
+		_rival_done = true
+		GameState.add_coin("silver", 150)
+		GameState.add_material("atlas", 1)
+		if GameState.sect_joined:
+			GameState.sect_contrib += 80
+		GameState.save_game()
+		GameState.note_push("拔了赤水寨：银两 +150 · 舆图 +1" + (" · 宗门贡献 +80" if GameState.sect_joined else ""))
+		_set_msg("赤水寨的旗倒了。银两 +150 · 舆图 +1。", 3.0)
+	else:
+		_set_msg("寨主把你逼退了。歇一歇再来。", 3.0)
+	queue_redraw()
+
 func _open_sect() -> void:
 	if _sect_panel == null:
 		var sp = SectPanel.new()
@@ -1370,6 +1558,14 @@ func _on_click(pos: Vector2) -> void:
 			_open_boss()
 			return
 		_boss_pending = true
+	if cell == _rival_cell:
+		if _rival_done:
+			_set_msg("赤水寨已经了结了")
+			return
+		if _rival_near():
+			_open_rival()
+			return
+		_rival_pending = true
 	if _chest_cells.has(cell):
 		_open_chest(cell)
 		return
@@ -1456,6 +1652,13 @@ func _process(delta: float) -> void:
 		_path.clear()
 		_has_click = false
 		_open_boss()
+		return
+	if _rival_pending and not _in_house and _rival_near():
+		_rival_pending = false
+		_moving = false
+		_path.clear()
+		_has_click = false
+		_open_rival()
 		return
 	if _in_house:
 		if not _moving:
