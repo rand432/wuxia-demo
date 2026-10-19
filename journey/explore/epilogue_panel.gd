@@ -36,6 +36,8 @@ func open() -> void:
 	lines.append("周目：第 " + str(GS.ng_plus + 1) + " 周 · " + GS.cycle_title())
 	var need := GS.prosperity_need(mini(5, GS.world_tier + 1)) if GS.world_tier < 5 else GS.world_prosperity
 	lines.append("世界：第 " + str(GS.world_tier) + " 档 · 繁荣 " + str(GS.world_prosperity) + "/" + str(need) + " · 区块 " + str(GS.REGION_NAMES[GS.current_region]))
+	if GS.ng_wuxia_done:
+		lines.append("轮回：无相已破 · 破梦人")
 	lines.append("称号：" + (GS.story_title if GS.story_title != "" else "尚未定下"))
 	var rank := "外门弟子"
 	if GS.sect_contrib >= 250:

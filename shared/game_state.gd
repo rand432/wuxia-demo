@@ -921,6 +921,9 @@ static var forge_names: Array = []
 static var ng_event_seen := false
 static var ng_event_choice := -1
 static var ng_echo_seen := false
+static var ng_final_seen := false
+static var ng_final_choice := -1
+static var ng_wuxia_done := false
 static var story_title_prosperity := false
 static var north_garrison := false
 static var broker_weapon := false
@@ -3512,7 +3515,32 @@ static func disciple_ids() -> Array:
 #   journey_bag_panel 的同名注释）。
 #   ⚠ strip_restore 认的是前缀（"已换上"／"已装上"／"已卸下"），下面**别改前缀**。
 
+static func _salvage_loot_gear(sid: String, n: int) -> bool:
+	var s: Dictionary = Cards.by_id(sid)
+	var pool := str(s.get("pool", ""))
+	if not ["weapon", "armor", "helm", "cloak"].has(pool):
+		return false
+	if bool(s.get("forge", false)):
+		return false
+	var q := Cards.q_idx(sid)
+	var stones: int = int([1, 3, 5, 8, 12][clampi(q, 0, 4)]) * n
+	add_material("forge_stone", stones)
+	var extra := ""
+	if q == 1:
+		add_material("bone", n)
+		extra = " · 兽骨碎 +" + str(n)
+	elif q == 2:
+		add_material("rice", n)
+		extra = " · 灵米 +" + str(n)
+	elif q >= 3:
+		add_material("jin", n)
+		extra = " · 金髓 +" + str(n)
+	note_push("拆解「" + Cards.name_of(sid) + "」：锻造石 +" + str(stones) + extra)
+	return true
+
 static func vault_add_item(sid: String, n := 1) -> void:
+	if _salvage_loot_gear(sid, n):
+		return
 	vault_items[sid] = int(vault_items.get(sid, 0)) + n
 	# v58：新到手的份数**当场摇元素**（上品起的兵器）。这里摇、也就是"到手那一刻随机"，
 	#   摇完就落盘；懒补（_elem_topup）只是老档与漏网路径的兜底。
@@ -3553,6 +3581,7 @@ static func grant_boss_weapon(boss_name: String) -> Dictionary:
 		"夜叉": {"name": "夜叉鬼爪", "kind": "dual", "atk": 42, "dmg": 6, "affix": "yinrui"},
 		"老妖": {"name": "老妖杖", "kind": "staff", "atk": 40, "dmg": 6, "affix": "buzhe"},
 		"石傀": {"name": "石傀重锤", "kind": "staff", "atk": 48, "dmg": 7, "affix": "buzhe"},
+		"无相": {"name": "无相刃", "kind": "sword", "atk": 60, "dmg": 9, "affix": "fengrui"},
 		"雪魈": {"name": "雪魈獠牙", "kind": "dual", "atk": 44, "dmg": 6, "affix": "qingshen"},
 	}
 	var d: Dictionary = data.get(boss_name, {"name": "凶骨刃", "kind": "sword", "atk": 40, "dmg": 5, "affix": "pojun"})
@@ -3610,6 +3639,33 @@ static func grant_broker_weapon() -> Dictionary:
 		"base_atk": float(atk), "base_dmg": float(dmg),
 		"inspired_left": 0, "round_inspired": false, "awaiting": false,
 		"affixes": ["fengrui", "qingshen"], "rule": "no_break", "source": "broker",
+	})
+	if forge_bag.size() > 40:
+		forge_bag.pop_front()
+	return {"sid": sid, "name": nm}
+
+static func grant_ng_weapon() -> Dictionary:
+	var nm := "旧梦"
+	note_forge(nm)
+	var kind := "sword"
+	var atk := 58 + mini(20, ng_plus * 4)
+	var dmg := 8 + mini(6, ng_plus)
+	var st := {"atk": atk, "dmg": dmg, "crit": 6, "spd": 3}
+	var sid := forge_next_sid()
+	var set := {
+		"id": sid, "name": nm, "item": nm, "pool": "weapon",
+		"quality": "绝品", "weapon": kind, "no_drop": true, "forge": true,
+		"parts": [], "item_stats": st, "desc": "轮回旧梦专属",
+	}
+	forge_cards[sid] = set
+	Cards.register_forged(sid, set)
+	vault_add_item(sid, 1)
+	forge_bag.append({
+		"sid": sid, "blank": "ng", "weapon": nm, "kind": kind,
+		"quality": 4, "cap": 4, "enhance": 10, "cracks": 0,
+		"base_atk": float(atk), "base_dmg": float(dmg),
+		"inspired_left": 0, "round_inspired": false, "awaiting": false,
+		"affixes": ["fengrui"], "rule": "no_break", "source": "ng",
 	})
 	if forge_bag.size() > 40:
 		forge_bag.pop_front()
@@ -5027,6 +5083,9 @@ static func begin_new_cycle() -> void:
 	ng_event_seen = false
 	ng_event_choice = -1
 	ng_echo_seen = false
+	ng_final_seen = false
+	ng_final_choice = -1
+	ng_wuxia_done = false
 	current_region = 0
 	region_unlocked = [true, true, true, false, false]
 	world_seed += 1
@@ -6342,6 +6401,9 @@ static func load_game() -> void:
 	ng_event_seen = bool(cf.get_value("world", "ng_event_seen", false))
 	ng_event_choice = clampi(int(cf.get_value("world", "ng_event_choice", -1)), -1, 1)
 	ng_echo_seen = bool(cf.get_value("world", "ng_echo_seen", false))
+	ng_final_seen = bool(cf.get_value("world", "ng_final_seen", false))
+	ng_final_choice = clampi(int(cf.get_value("world", "ng_final_choice", -1)), -1, 1)
+	ng_wuxia_done = bool(cf.get_value("world", "ng_wuxia_done", false))
 	story_title_prosperity = bool(cf.get_value("world", "story_title_prosperity", false))
 	while region_unlocked.size() < 5:
 		region_unlocked.append(false)
@@ -6524,6 +6586,9 @@ static func save_game() -> void:
 	cf.set_value("world", "ng_event_seen", ng_event_seen)
 	cf.set_value("world", "ng_event_choice", ng_event_choice)
 	cf.set_value("world", "ng_echo_seen", ng_echo_seen)
+	cf.set_value("world", "ng_final_seen", ng_final_seen)
+	cf.set_value("world", "ng_final_choice", ng_final_choice)
+	cf.set_value("world", "ng_wuxia_done", ng_wuxia_done)
 	cf.set_value("world", "story_title_prosperity", story_title_prosperity)
 	cf.set_value("world", "north_garrison", north_garrison)
 	cf.set_value("world", "broker_weapon", broker_weapon)
@@ -6721,6 +6786,9 @@ static func reset() -> void:
 	ng_event_seen = false
 	ng_event_choice = -1
 	ng_echo_seen = false
+	ng_final_seen = false
+	ng_final_choice = -1
+	ng_wuxia_done = false
 	merchant_favor = 0
 	wanted = 0
 	boss_kills.clear()

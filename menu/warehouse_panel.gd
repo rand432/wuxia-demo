@@ -231,6 +231,14 @@ func _build() -> void:
 		btn.pressed.connect(_on_tab.bind(i))
 		_panel.add_child(btn)
 		_tab_btns.append(btn)
+	# 货仓不再展示装备页：隐藏装备页签，其余 5 页重新居中。
+	if _tab_btns.size() > 0:
+		_tab_btns[0].visible = false
+		var tw5 := 88.0
+		var tg5 := 8.0
+		var tx5 := (PANEL_W - (tw5 * 5.0 + tg5 * 4.0)) * 0.5
+		for i in range(1, _tab_btns.size()):
+			_tab_btns[i].position = Vector2(tx5 + float(i - 1) * (tw5 + tg5), 100)
 
 	# ---- 格子区：竖向可滑（v60）----
 	#   格子在 _grid（ScrollContainer 里的内容节点）里**按需现建**：件数一多就往下滑，
@@ -816,7 +824,7 @@ func refresh() -> void:
 		_sort_btn.text = "整理：" + str(SORT_CN[_sort_mode])
 	for i in _tab_btns.size():
 		var btn: Button = _tab_btns[i]
-		btn.visible = not picking
+		btn.visible = picking or i != 0
 		if not picking:
 			var tid := str(TABS[i]["id"])
 			btn.text = str(TABS[i]["name"]) + " " + str(_cat_total(tid))
@@ -1498,7 +1506,7 @@ func _on_tab(i: int) -> void:
 
 func open() -> void:
 	_pick_cat = ""
-	_tab = 0
+	_tab = 1
 	_msg_lb.text = ""
 	# v63c：开面板先把两个弹窗都清掉——不管上一回是怎么离开的，这次都是白纸一张
 	_close_equip_win()
@@ -1508,7 +1516,7 @@ func open() -> void:
 
 func begin_pick(cat: String) -> void:
 	_pick_cat = cat
-	_tab = 1 if cat == "arts" else 0
+	_tab = 0 if ["weapon", "armor", "helm", "cloak"].has(cat) else 1
 	_msg_lb.text = ""
 	# v63c：选件模式同理——弟子页跳过来时不能带着上一回留下的旧弹窗
 	_close_equip_win()

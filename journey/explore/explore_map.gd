@@ -81,6 +81,20 @@ var _region_lb: Label
 var _side_panel: Control
 var _ng_panel: Control
 var _ng_echo_mode := false
+var _ng_final_mode := false
+var _wuxia_cell := Vector2i(-1, -1)
+var _wuxia_pending := false
+var _wuxia_panel: Control
+var _wuxia_node: Node2D
+var _flag_cell := Vector2i(-1, -1)
+var _flag_pending := false
+var _flag_panel: Control
+var _flag_node: Node2D
+var _counter_cell := Vector2i(-1, -1)
+var _counter_faction := 0
+var _counter_pending := false
+var _counter_panel: Control
+var _counter_node: Node2D
 var _wanted_lb: Label
 var _action_empty := false
 var _exit_timer := 0.0
@@ -380,6 +394,73 @@ func _gen_world() -> void:
 			if pc2.x >= 0:
 				_npcs.append(_make_npc(pc2, "story", str(nm)))
 	GameState.save_game()
+	# 新周目专属：轮回台（在所有占用格之后找空位）
+	_wuxia_cell = Vector2i(-1, -1)
+	if GameState.ng_plus > 0 and not GameState.ng_wuxia_done:
+		var wg := 0
+		while wg < 300:
+			wg += 1
+			var wc := Vector2i(rng.randi_range(1, MAP_W - 2), rng.randi_range(1, MAP_H - 2))
+			if _reserved(wc, 2) or _obstacles.has(wc) or _chest_cells.has(wc) or _poi_cells.has(wc) or _node_cells.has(wc) or _enemy_cells.has(wc):
+				continue
+			if wc == _boss_cell or wc == _rival_cell or wc == _broker_cell or wc == _north_cell or wc == _brawl_cell:
+				continue
+			var npc_taken := false
+			for npc_v in _npcs:
+				if Vector2i(npc_v["cell"]) == wc:
+					npc_taken = true
+					break
+			if npc_taken:
+				continue
+			if Vector2(wc).distance_to(Vector2(START_CELL)) < 7.0:
+				continue
+			_wuxia_cell = wc
+			break
+	# 势力旗：非青岚归属 + 已入青岚时，每图一处夺旗点
+	_flag_cell = Vector2i(-1, -1)
+	if GameState.sect_joined and _map_owner != 1:
+		var fg := 0
+		while fg < 300:
+			fg += 1
+			var fc := Vector2i(rng.randi_range(1, MAP_W - 2), rng.randi_range(1, MAP_H - 2))
+			if _reserved(fc, 2) or _obstacles.has(fc) or _chest_cells.has(fc) or _poi_cells.has(fc) or _node_cells.has(fc) or _enemy_cells.has(fc):
+				continue
+			if fc == _boss_cell or fc == _rival_cell or fc == _broker_cell or fc == _north_cell or fc == _brawl_cell or fc == _wuxia_cell:
+				continue
+			var taken2 := false
+			for npc_v2 in _npcs:
+				if Vector2i(npc_v2["cell"]) == fc:
+					taken2 = true
+					break
+			if taken2:
+				continue
+			if Vector2(fc).distance_to(Vector2(START_CELL)) < 6.0:
+				continue
+			_flag_cell = fc
+			break
+	# 反扑：青岚已控的图，若赤水残部 / 黑风仍在，可能来抢
+	_counter_cell = Vector2i(-1, -1)
+	if _map_owner == 1:
+		var fac := 2 if GameState.red_water < 2 else (3 if not GameState.north_peace else 0)
+		var cchance := 0.45
+		if fac == 2:
+			cchance = 0.25 + 0.003 * float(100 - clampi(GameState.war_score, 0, 100))
+		else:
+			cchance = 0.25 + 0.003 * float(clampi(GameState.north_score, 0, 100))
+		if fac > 0 and rng.randf() < cchance:
+			var cg2 := 0
+			while cg2 < 300:
+				cg2 += 1
+				var cc2 := Vector2i(rng.randi_range(1, MAP_W - 2), rng.randi_range(1, MAP_H - 2))
+				if _reserved(cc2, 2) or _obstacles.has(cc2) or _chest_cells.has(cc2) or _poi_cells.has(cc2) or _node_cells.has(cc2) or _enemy_cells.has(cc2):
+					continue
+				if cc2 == _boss_cell or cc2 == _rival_cell or cc2 == _broker_cell or cc2 == _north_cell or cc2 == _brawl_cell or cc2 == _wuxia_cell or cc2 == _flag_cell:
+					continue
+				if Vector2(cc2).distance_to(Vector2(START_CELL)) < 7.0:
+					continue
+				_counter_cell = cc2
+				_counter_faction = fac
+				break
 	_apply_story_followup()
 
 func _apply_story_followup() -> void:
@@ -623,6 +704,16 @@ func _maybe_ng_event() -> void:
 			"body": "旧影没有散尽。它站在路边，等你再给一个答案。",
 			"choices": [{"id": "take", "label": "受 它 一 礼"}, {"id": "cut", "label": "就 此 别 过"}],
 		})
+	elif not GameState.ng_final_seen:
+		GameState.ng_final_seen = true
+		GameState.save_game()
+		_ng_final_mode = true
+		_show_ng_panel({
+			"title": "旧 梦 终 章",
+			"sub": "第 " + str(GameState.ng_plus + 1) + " 周 · 最后一次回望",
+			"body": "旧影已经淡了。它把一件东西放在路边，等你决定带不带走。",
+			"choices": [{"id": "keep", "label": "留 下 旧 梦"}, {"id": "new", "label": "走 进 新 梦"}],
+		})
 
 func _show_ng_panel(data: Dictionary) -> void:
 	if _ng_panel == null:
@@ -642,7 +733,20 @@ func _show_ng_panel(data: Dictionary) -> void:
 
 func _on_ng_pick(id: String) -> void:
 	var msg := "你站了一会儿，旧影散了。"
-	if _ng_echo_mode:
+	if _ng_final_mode:
+		if id == "keep":
+			var w: Dictionary = GameState.grant_ng_weapon()
+			GameState.ng_final_choice = 0
+			GameState.add_prosperity(10, "旧梦终章")
+			msg = "你带走了旧梦：「" + str(w.get("name", "旧梦")) + "」入库 · 繁荣 +10。"
+		else:
+			GameState.ng_final_choice = 1
+			GameState.add_material("atlas", 2)
+			GameState.add_material("jin", 2)
+			GameState.action_add(30)
+			GameState.add_prosperity(10, "旧梦终章")
+			msg = "你把旧梦留在路边：舆图 +2 · 金髓 +2 · 食物 +30 · 繁荣 +10。"
+	elif _ng_echo_mode:
 		if id == "take":
 			GameState.add_material("atlas", 1)
 			GameState.add_region_rep(GameState.current_region, 5)
@@ -673,10 +777,197 @@ func _on_ng_pick(id: String) -> void:
 func _on_ng_closed() -> void:
 	_busy = false
 	_ng_echo_mode = false
+	_ng_final_mode = false
 	if _action_lb != null:
 		_action_lb.visible = true
 	if _back_btn != null:
 		_back_btn.visible = true
+
+func _open_wuxia() -> void:
+	if _wuxia_cell.x < 0:
+		return
+	if GameState.ng_wuxia_done:
+		_set_msg("轮回台已经破了。")
+		return
+	if _wuxia_panel == null:
+		var wp = POIPanel.new()
+		wp.connect("picked", _on_wuxia_pick)
+		wp.connect("closed", _on_wuxia_closed)
+		_toast_layer.add_child(wp)
+		_wuxia_panel = wp
+	_wuxia_panel.call("open", {
+		"title": "轮 回 台",
+		"sub": "第 " + str(GameState.ng_plus + 1) + " 周 · 无相",
+		"body": "台上没有香火，只有一面没有脸的影子。\n它等你很久了。",
+		"choices": [{"id": "fight", "label": "登 台"}, {"id": "leave", "label": "退 下"}],
+	})
+	_busy = true
+	_moving = false
+	_has_click = false
+	for e_v in _enemies:
+		var e: Node2D = e_v
+		if is_instance_valid(e):
+			e.visible = false
+	if _action_lb != null:
+		_action_lb.visible = false
+	if _back_btn != null:
+		_back_btn.visible = false
+
+func _on_wuxia_pick(id: String) -> void:
+	_wuxia_panel.call("close")
+	if id == "fight":
+		_busy = false
+		_start_wuxia_battle()
+
+func _on_wuxia_closed() -> void:
+	_busy = false
+	_wuxia_pending = false
+	for e_v in _enemies:
+		var e: Node2D = e_v
+		if is_instance_valid(e):
+			e.visible = not bool(e.get_meta("beaten", false))
+	if _action_lb != null:
+		_action_lb.visible = true
+	if _back_btn != null:
+		_back_btn.visible = true
+
+func _start_wuxia_battle() -> void:
+	if _wuxia_cell.x < 0 or GameState.ng_wuxia_done:
+		return
+	var tier := clampi(GameState.world_tier, 1, 5)
+	var foe := {
+		"hp": int(round(float(120 + tier * 15) * GameState.ng_mul())),
+		"atk": maxi(1, int(round(float(2 + tier / 2.0) * GameState.ng_mul()))),
+		"def": 0, "spd": 95, "scale": 1.0,
+	}
+	_wuxia_node = Node2D.new()
+	_wuxia_node.position = _cell_pos(_wuxia_cell.x, _wuxia_cell.y)
+	_wuxia_node.set_meta("boss", true)
+	_wuxia_node.set_meta("special_boss", true)
+	_wuxia_node.set_meta("foe_name", "无相")
+	_wuxia_node.set_meta("display_name", "无相")
+	_wuxia_node.set_meta("beaten", false)
+	_wuxia_node.set_meta("foe", foe)
+	add_child(_wuxia_node)
+	_try_battle(_wuxia_node)
+
+func _open_flag() -> void:
+	if _flag_cell.x < 0 or _map_owner == 1:
+		return
+	if _flag_panel == null:
+		var fp = POIPanel.new()
+		fp.connect("picked", _on_flag_pick)
+		fp.connect("closed", _on_flag_closed)
+		_toast_layer.add_child(fp)
+		_flag_panel = fp
+	var owner_nm := "赤水" if _map_owner == 2 else ("黑风" if _map_owner == 3 else "无主")
+	_flag_panel.call("open", {
+		"title": "势 力 旗",
+		"sub": "此图归属：" + owner_nm,
+		"body": "旗还插着。守旗的人不多。\n夺下来，这张图就归青岚。",
+		"choices": [{"id": "fight", "label": "夺 旗"}, {"id": "leave", "label": "退 下"}],
+	})
+	_busy = true
+	_moving = false
+	_has_click = false
+	if _action_lb != null:
+		_action_lb.visible = false
+	if _back_btn != null:
+		_back_btn.visible = false
+
+func _on_flag_pick(id: String) -> void:
+	_flag_panel.call("close")
+	if id == "fight":
+		_busy = false
+		_start_flag_battle()
+
+func _on_flag_closed() -> void:
+	_busy = false
+	_flag_pending = false
+	if _action_lb != null:
+		_action_lb.visible = true
+	if _back_btn != null:
+		_back_btn.visible = true
+
+func _start_flag_battle() -> void:
+	if _flag_cell.x < 0 or _map_owner == 1:
+		return
+	var tier := clampi(GameState.world_tier, 1, 5)
+	var guard := "赤水守旗" if _map_owner == 2 else ("黑风守旗" if _map_owner == 3 else "无主守卫")
+	_flag_node = Node2D.new()
+	_flag_node.position = _cell_pos(_flag_cell.x, _flag_cell.y)
+	_flag_node.set_meta("faction_flag", true)
+	_flag_node.set_meta("foe_name", guard)
+	_flag_node.set_meta("display_name", guard)
+	_flag_node.set_meta("beaten", false)
+	_flag_node.set_meta("foe", {"hp": int(round(float(160 + tier * 30) * GameState.ng_mul())), "atk": maxi(1, int(round(float(5 + tier) * GameState.ng_mul()))), "scale": 1.0})
+	add_child(_flag_node)
+	_try_battle(_flag_node)
+
+func _open_counter() -> void:
+	if _counter_cell.x < 0:
+		return
+	if _counter_panel == null:
+		var cp = POIPanel.new()
+		cp.connect("picked", _on_counter_pick)
+		cp.connect("closed", _on_counter_closed)
+		_toast_layer.add_child(cp)
+		_counter_panel = cp
+	var nm := "赤水残部" if _counter_faction == 2 else "黑风悍匪"
+	_counter_panel.call("open", {
+		"title": "势 力 反 扑",
+		"sub": nm + " 来抢旗了",
+		"body": "旗还没插热，他们就摸上来了。\n迎战，还是让出这张图？",
+		"choices": [{"id": "fight", "label": "迎 战"}, {"id": "cede", "label": "让 出"}],
+	})
+	_busy = true
+	_moving = false
+	_has_click = false
+	if _action_lb != null:
+		_action_lb.visible = false
+	if _back_btn != null:
+		_back_btn.visible = false
+
+func _on_counter_pick(id: String) -> void:
+	_counter_panel.call("close")
+	if id == "cede":
+		GameState.set_map_owner(GameState.world_seed, _counter_faction)
+		if _counter_faction == 2:
+			GameState.war_score = maxi(0, GameState.war_score - 5)
+		else:
+			GameState.north_score = mini(100, GameState.north_score + 5)
+		GameState.note_war("让出了反扑的图")
+		GameState.save_game()
+		_map_owner = _counter_faction
+		_counter_cell = Vector2i(-1, -1)
+		queue_redraw()
+		return
+	_busy = false
+	_start_counter_battle()
+
+func _on_counter_closed() -> void:
+	_busy = false
+	_counter_pending = false
+	if _action_lb != null:
+		_action_lb.visible = true
+	if _back_btn != null:
+		_back_btn.visible = true
+
+func _start_counter_battle() -> void:
+	if _counter_cell.x < 0:
+		return
+	var tier := clampi(GameState.world_tier, 1, 5)
+	var nm := "赤水残部" if _counter_faction == 2 else "黑风悍匪"
+	_counter_node = Node2D.new()
+	_counter_node.position = _cell_pos(_counter_cell.x, _counter_cell.y)
+	_counter_node.set_meta("faction_counter", true)
+	_counter_node.set_meta("counter_faction", _counter_faction)
+	_counter_node.set_meta("foe_name", nm)
+	_counter_node.set_meta("display_name", nm)
+	_counter_node.set_meta("beaten", false)
+	_counter_node.set_meta("foe", {"hp": int(round(float(180 + tier * 30) * GameState.ng_mul())), "atk": maxi(1, int(round(float(5 + tier) * GameState.ng_mul()))), "scale": 1.0})
+	add_child(_counter_node)
+	_try_battle(_counter_node)
 
 func _open_character_panel() -> void:
 	if _busy:
@@ -1387,6 +1678,9 @@ func _draw() -> void:
 	_draw_north()
 	_draw_brawl()
 	_draw_boss()
+	_draw_wuxia()
+	_draw_faction_camp()
+	_draw_counter()
 	_draw_pois()
 	_draw_chests()
 	_draw_nodes()
@@ -1556,6 +1850,46 @@ func _draw_boss() -> void:
 	draw_colored_polygon(PackedVector2Array([p + Vector2(22, -20), p + Vector2(34, -44), p + Vector2(12, -30)]), Color("#5a3f2a"))
 	var status := "·已伏" if dead else ("·已安抚" if calm else "")
 	draw_string(ThemeDB.fallback_font, p + Vector2(-34, -56), _boss_display + status, HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color("#9a927f") if (dead or calm) else Color("#e06a5a"))
+
+func _draw_wuxia() -> void:
+	if _wuxia_cell.x < 0 or not _detail_visible(_wuxia_cell):
+		return
+	var p := _cell_pos(_wuxia_cell.x, _wuxia_cell.y)
+	var done := GameState.ng_wuxia_done
+	_mark_landmark("wuxia")
+	draw_circle(p + Vector2(0, 18), 34.0, Color(0.02, 0.02, 0.02, 0.45))
+	draw_rect(Rect2(p + Vector2(-32, 4), Vector2(64, 20)), Color("#3a3128"))
+	draw_rect(Rect2(p + Vector2(-24, -12), Vector2(48, 18)), Color("#4a4030"))
+	draw_colored_polygon(PackedVector2Array([p + Vector2(-18, -12), p + Vector2(18, -12), p + Vector2(12, -26), p + Vector2(-12, -26)]), Color("#6b6252") if not done else Color("#4a4640"))
+	draw_circle(p + Vector2(0, -20), 8.0, Color("#d8d0bc") if not done else Color("#6b655c"))
+	draw_circle(p + Vector2(-3, -21), 2.0, Color("#1b1a18"))
+	draw_circle(p + Vector2(3, -21), 2.0, Color("#1b1a18"))
+	draw_string(ThemeDB.fallback_font, p + Vector2(-30, -44), "轮回台" if not done else "轮回台·已破", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color("#e06a5a") if not done else Color("#6b655c"))
+
+func _draw_faction_camp() -> void:
+	if _flag_cell.x < 0 or not _detail_visible(_flag_cell):
+		return
+	var p := _cell_pos(_flag_cell.x, _flag_cell.y)
+	var col := Color("#8d2f2a") if _map_owner == 2 else (Color("#1f2226") if _map_owner == 3 else Color("#6b655c"))
+	var nm := "赤水旗" if _map_owner == 2 else ("黑风旗" if _map_owner == 3 else "无主旗")
+	draw_circle(p + Vector2(0, 18), 26.0, Color(0.03, 0.04, 0.03, 0.38))
+	draw_rect(Rect2(p + Vector2(-24, 2), Vector2(48, 16)), Color("#332a22"))
+	draw_line(p + Vector2(0, 12), p + Vector2(0, -30), Color("#3a2a1c"), 4.0)
+	draw_colored_polygon(PackedVector2Array([p + Vector2(0, -30), p + Vector2(28, -22), p + Vector2(0, -10)]), col)
+	draw_string(ThemeDB.fallback_font, p + Vector2(-24, -42), nm, HORIZONTAL_ALIGNMENT_LEFT, -1, 13, col)
+
+func _draw_counter() -> void:
+	if _counter_cell.x < 0 or not _detail_visible(_counter_cell):
+		return
+	var p := _cell_pos(_counter_cell.x, _counter_cell.y)
+	var col := Color("#8d2f2a") if _counter_faction == 2 else Color("#1f2226")
+	var nm := "赤水反扑" if _counter_faction == 2 else "黑风反扑"
+	draw_circle(p + Vector2(0, 18), 28.0, Color(0.03, 0.04, 0.03, 0.4))
+	draw_rect(Rect2(p + Vector2(-24, 2), Vector2(48, 16)), Color("#332a22"))
+	draw_line(p + Vector2(0, 10), p + Vector2(0, -28), Color("#3a2a1c"), 4.0)
+	draw_colored_polygon(PackedVector2Array([p + Vector2(0, -28), p + Vector2(26, -20), p + Vector2(0, -8)]), col)
+	draw_circle(p + Vector2(-24, -14), 5.0, Color("#e06a5a"))
+	draw_string(ThemeDB.fallback_font, p + Vector2(-30, -42), nm, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color("#e06a5a"))
 
 func _draw_pois() -> void:
 	for i in _poi_cells.size():
@@ -2620,11 +2954,11 @@ func _rival_battle() -> void:
 	_player.visible = false
 	var tier := clampi(GameState.world_tier, 1, 5)
 	var rival_ng := GameState.ng_mul()
-	var foe_hp := int(round(float((420 + tier * 90) if _rival_final else (220 + tier * 55)) * rival_ng))
+	var foe_hp := int(round(float((300 + tier * 55) if _rival_final else (180 + tier * 40)) * rival_ng))
 	if _rival_final and _rival_broker_help:
 		foe_hp = int(round(float(foe_hp) * 0.85))
-	var foe_atk := maxi(1, int(round(float((18 + tier * 3) if _rival_final else (12 + tier * 2)) * rival_ng)))
-	var foe_scale := 1.35 if _rival_final else 1.2
+	var foe_atk := maxi(1, int(round(float((10 + tier * 2) if _rival_final else (6 + tier)) * rival_ng)))
+	var foe_scale := 1.1 if _rival_final else 1.0
 	var node := {
 		"t": "battle", "name": "赤水寨主" if not _rival_final else "赤水寨主·决战",
 		"foe": {"hp": foe_hp, "atk": foe_atk, "scale": foe_scale},
@@ -2643,7 +2977,7 @@ func _rival_battle() -> void:
 	_player.visible = true
 	_player.position = _map_pos_before_battle
 	_camera.enabled = true
-	var won := bool(res.get("win", false))
+	var won := bool(res.get("won", res.get("win", false)))
 	_battle_active = false
 	_busy = false
 	if _back_btn != null:
@@ -3022,15 +3356,15 @@ func _north_battle() -> void:
 	_player.visible = false
 	var tier := clampi(GameState.world_tier, 1, 5)
 	var north_ng := GameState.ng_mul()
-	var foe_hp := int(round(float((420 + tier * 90) if _north_final else (240 + tier * 60)) * north_ng))
-	var foe_atk := maxi(1, int(round(float((18 + tier * 3) if _north_final else (12 + tier * 2)) * north_ng)))
-	var foe_scale := 1.3 if _north_final else 1.15
+	var foe_hp := int(round(float((320 + tier * 60) if _north_final else (160 + tier * 30)) * north_ng))
+	var foe_atk := maxi(1, int(round(float((11 + tier * 2) if _north_final else (5 + tier)) * north_ng)))
+	var foe_scale := 1.1 if _north_final else 1.0
 	var node := {
 		"t": "battle", "name": "黑风寨主" if not _north_final else "黑风寨主·决战",
 		"foe": {"hp": foe_hp, "atk": foe_atk, "scale": foe_scale},
 		"money": [0, 0], "stick_enemies": true,
 	}
-	node["affixes"] = ["leech", "berserk"] if _north_final else ["leech"]
+	node["affixes"] = ["leech", "berserk"] if _north_final else []
 	if _north_final:
 		node["arts"] = [{"name": "黑风乱斩", "kind": "dash", "mult": 1.1, "follow": 0.6, "cd": 3, "apply": {"id": "weak", "turns": 2, "stacks": 1}}]
 	else:
@@ -3048,7 +3382,7 @@ func _north_battle() -> void:
 	_player.visible = true
 	_player.position = _map_pos_before_battle
 	_camera.enabled = true
-	var won := bool(res.get("win", false))
+	var won := bool(res.get("won", res.get("win", false)))
 	_battle_active = false
 	_busy = false
 	if _back_btn != null:
@@ -3382,7 +3716,7 @@ func _arena_battle() -> void:
 	_player.visible = true
 	_player.position = _map_pos_before_battle
 	_camera.enabled = true
-	var won := bool(res.get("win", false))
+	var won := bool(res.get("won", res.get("win", false)))
 	_battle_active = false
 	_busy = false
 	if _back_btn != null:
@@ -3463,6 +3797,27 @@ func _on_click(pos: Vector2) -> void:
 			_gather_node(node_i)
 			return
 		_node_pending = node_i
+	if cell == _counter_cell:
+		if _player.position.distance_to(_cell_pos(cell.x, cell.y)) < 104.0:
+			_open_counter()
+			return
+		_counter_pending = true
+	if cell == _flag_cell:
+		if _map_owner == 1:
+			_set_msg("这里已经归青岚了")
+			return
+		if _player.position.distance_to(_cell_pos(cell.x, cell.y)) < 104.0:
+			_open_flag()
+			return
+		_flag_pending = true
+	if cell == _wuxia_cell:
+		if GameState.ng_wuxia_done:
+			_set_msg("轮回台已经破了")
+			return
+		if _player.position.distance_to(_cell_pos(cell.x, cell.y)) < 104.0:
+			_open_wuxia()
+			return
+		_wuxia_pending = true
 	if cell == _boss_cell:
 		if _boss_node != null and (bool(_boss_node.get_meta("beaten", false)) or bool(_boss_node.get_meta("appeased", false))):
 			_set_msg("这里已经了结了")
@@ -3617,6 +3972,27 @@ func _process(delta: float) -> void:
 		_has_click = false
 		_open_npc(ni3)
 		return
+	if _counter_pending and not _in_house and _player.position.distance_to(_cell_pos(_counter_cell.x, _counter_cell.y)) < 104.0:
+		_counter_pending = false
+		_moving = false
+		_path.clear()
+		_has_click = false
+		_open_counter()
+		return
+	if _flag_pending and not _in_house and _player.position.distance_to(_cell_pos(_flag_cell.x, _flag_cell.y)) < 104.0:
+		_flag_pending = false
+		_moving = false
+		_path.clear()
+		_has_click = false
+		_open_flag()
+		return
+	if _wuxia_pending and not _in_house and _player.position.distance_to(_cell_pos(_wuxia_cell.x, _wuxia_cell.y)) < 104.0:
+		_wuxia_pending = false
+		_moving = false
+		_path.clear()
+		_has_click = false
+		_open_wuxia()
+		return
 	if _boss_pending and not _in_house and _boss_near():
 		_boss_pending = false
 		_moving = false
@@ -3708,10 +4084,14 @@ func _try_battle(enemy: Node2D) -> void:
 	queue_redraw()
 	var is_guard := bool(enemy.get_meta("guard", false))
 	var is_boss := bool(enemy.get_meta("boss", false))
+	var is_special := bool(enemy.get_meta("special_boss", false))
+	var is_flag := bool(enemy.get_meta("faction_flag", false))
+	var is_counter := bool(enemy.get_meta("faction_counter", false))
 	var is_snow_boss := is_boss and str(enemy.get_meta("foe_name", "")) == "雪魈"
+	var display_name := str(enemy.get_meta("display_name", _boss_display if is_boss else str(enemy.get_meta("foe_name", "敌人"))))
 	var node := {
 		"t": "battle",
-		"name": (_boss_display if is_boss else str(enemy.get_meta("foe_name", "敌人"))),
+		"name": display_name,
 		"foe": (enemy.get_meta("foe", {}) as Dictionary).duplicate(true),
 		"money": [12 + GameState.world_tier * 4, 25 + GameState.world_tier * 6],
 		"stick_enemies": true,   # v242：探险战斗的敌人也用火柴人
@@ -3722,7 +4102,10 @@ func _try_battle(enemy: Node2D) -> void:
 	}
 	if is_snow_boss:
 		node["affixes"] = ["berserk"]
-	if is_boss and GameState.ng_plus > 0:
+	if is_special:
+		node["affixes"] = ["berserk"]
+		node["arts"] = [{"name": "无相斩", "kind": "damage", "mult": 1.45, "cd": 2, "apply": {"id": "weak", "turns": 2, "stacks": 1}}]
+	elif is_boss and GameState.ng_plus > 0:
 		node["arts"] = [{"name": "轮回斩", "kind": "damage", "mult": 1.35, "cd": 3, "apply": {"id": "weak", "turns": 2, "stacks": 1}}]
 	# 战斗里主角用火柴人（地图上仍用 Q 版立绘）：另起一个火柴人替身，
 	# 打完收掉，地图上的立绘原样还回来。
@@ -3740,7 +4123,7 @@ func _try_battle(enemy: Node2D) -> void:
 	_player.visible = true
 	_player.position = _map_pos_before_battle
 	_camera.enabled = true
-	var won := bool(res.get("win", false))
+	var won := bool(res.get("won", res.get("win", false)))
 	if won:
 		enemy.set_meta("beaten", true)
 	_battle_active = false
@@ -3756,6 +4139,32 @@ func _try_battle(enemy: Node2D) -> void:
 			GameState.wanted = mini(5, GameState.wanted + 1)
 			_update_wanted_label()
 		_grant_battle_loot(enemy)
+		if is_flag:
+			GameState.set_map_owner(GameState.world_seed, 1)
+			GameState.war_score = mini(100, GameState.war_score + 3)
+			GameState.add_prosperity(5, "夺旗")
+			GameState.add_region_rep(GameState.current_region, 5)
+			GameState.note_war("夺下势力旗")
+			GameState.save_game()
+			_map_owner = 1
+			_flag_cell = Vector2i(-1, -1)
+			if is_instance_valid(_flag_node):
+				_flag_node.queue_free()
+			_set_msg("旗倒了。这张图归青岚。", 3.0)
+		if is_counter:
+			GameState.war_score = mini(100, GameState.war_score + 2)
+			GameState.add_prosperity(5, "守住反扑")
+			GameState.add_region_rep(GameState.current_region, 5)
+			GameState.note_war("守住势力反扑")
+			GameState.save_game()
+			_counter_cell = Vector2i(-1, -1)
+			if is_instance_valid(_counter_node):
+				_counter_node.queue_free()
+			_set_msg("反扑退了。这张图还在青岚手里。", 3.0)
+		if is_special:
+			GameState.ng_wuxia_done = true
+			GameState.save_game()
+			GameState.note_push("踏破轮回台——无相已破。")
 		if is_boss:
 			GameState.note_push("击败「" + str(enemy.get_meta("foe_name", "凶物")) + "」——此方凶物已伏。")
 	elif is_guard:
@@ -3764,6 +4173,18 @@ func _try_battle(enemy: Node2D) -> void:
 		GameState.note_push("被捕快拿住——押回县衙，先服刑、打点或越狱。")
 		_return_village()
 		return
+	elif is_counter:
+		var cf := int(enemy.get_meta("counter_faction", 2))
+		GameState.set_map_owner(GameState.world_seed, cf)
+		if cf == 2:
+			GameState.war_score = maxi(0, GameState.war_score - 5)
+		else:
+			GameState.north_score = mini(100, GameState.north_score + 5)
+		GameState.note_war("没能守住反扑的图")
+		GameState.save_game()
+		_map_owner = cf
+		_counter_cell = Vector2i(-1, -1)
+		_set_msg("旗被拔了。这张图归" + ("赤水" if cf == 2 else "黑风") + "。", 3.0)
 	elif is_boss:
 		GameState.note_push("被「" + str(enemy.get_meta("foe_name", "凶物")) + "」打下山，抬回村。战利品全留。")
 		_return_village()

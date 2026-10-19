@@ -99,6 +99,9 @@ func _confirm() -> void:
 	GS.ng_event_seen = false
 	GS.ng_event_choice = -1
 	GS.ng_echo_seen = false
+	GS.ng_final_seen = false
+	GS.ng_final_choice = -1
+	GS.ng_wuxia_done = false
 	GS.save_game()
 	_msg_lb.text = "新世界展开：" + _world_name(GS.world_tier) + " · 第 " + str(GS.world_tier) + " 档。下一趟进图生效。"
 	changed.emit()

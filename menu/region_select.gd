@@ -12,7 +12,7 @@ var _hint_lb: Label
 var _buttons: Array = []
 var _markers: Array = []
 var _fog_rects: Array = []
-const LANDMARK_NAMES := {"house": "竹屋", "sect": "山门", "merchant": "货郎", "temple": "破庙", "well": "古井", "tea": "茶棚", "snow_cave": "雪洞", "mine": "矿洞", "ferry": "渡口", "hunter": "猎户", "herb_garden": "药圃", "redwater": "赤水寨", "broker": "听雨楼", "north": "黑风寨", "outpost": "北境哨"}
+const LANDMARK_NAMES := {"house": "竹屋", "sect": "山门", "merchant": "货郎", "temple": "破庙", "well": "古井", "tea": "茶棚", "snow_cave": "雪洞", "mine": "矿洞", "ferry": "渡口", "hunter": "猎户", "herb_garden": "药圃", "wuxia": "轮回台", "redwater": "赤水寨", "broker": "听雨楼", "north": "黑风寨", "outpost": "北境哨"}
 
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
