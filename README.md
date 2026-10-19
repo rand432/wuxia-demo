@@ -58,6 +58,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File D:\1\wuxia-demo\tools\autoco
 
 ## 文档
 
+- [世界生成设计稿](docs/世界生成_设计稿.md)
 - [游历设计稿](docs/游历2_设计稿.md)
 - [锻造设计稿](docs/锻造_设计稿.md)
 - [验收记录](docs/验收记录_2026-10-19.md)
