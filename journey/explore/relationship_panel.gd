@@ -4,6 +4,7 @@ signal closed
 
 const UiKit := preload("res://shared/ui_kit.gd")
 const GS := preload("res://shared/game_state.gd")
+const WarReportPanel := preload("res://journey/explore/war_report_panel.gd")
 
 const LAND_NAMES := ["山多·路窄", "水多·雾重", "林密·怪多", "石多·宝多"]
 
@@ -15,6 +16,9 @@ var _gift_btn: Button
 var _wash_btn: Button
 var _appease_btn: Button
 var _msg_lb: Label
+var _war_btn: Button
+var _war_panel: Control
+var _close_btn: Button
 var _last_info := {}
 
 func _ready() -> void:
@@ -42,8 +46,10 @@ func _ready() -> void:
 	_appease_btn.pressed.connect(_appease)
 	_msg_lb = UiKit.make_label(panel, Vector2(40, 815), Vector2(560, 50), 14, Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.72))
 	_msg_lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	var back := UiKit.make_button(panel, Vector2(220, 880), Vector2(200, 46), "关 闭", 18)
-	back.pressed.connect(close)
+	_war_btn = UiKit.make_button(panel, Vector2(500, 20), Vector2(110, 34), "战 报", 14)
+	_war_btn.pressed.connect(_open_war)
+	_close_btn = UiKit.make_button(panel, Vector2(220, 880), Vector2(200, 46), "关 闭", 18)
+	_close_btn.pressed.connect(close)
 	visible = false
 
 func _section(title: String, y: float) -> Label:
@@ -88,7 +94,17 @@ func open(info: Dictionary) -> void:
 	for n in ["山君", "夜叉", "老妖"]:
 		bl += n + "：" + ("已首杀 · 弱点已识破" if GS.boss_kills.has(n) else "未首杀") + "\n"
 	_boss_lb.text = bl.strip_edges()
-	_world_lb.text = "世界档 " + str(GS.world_tier) + " · 地脉 " + str(LAND_NAMES[GS.world_seed % LAND_NAMES.size()]) + "\n本图 Boss：" + str(info.get("boss", "凶物")) + "（" + str(info.get("boss_state", "未动")) + "）"
+	var rw: String = str(["未动", "已破", "青岚控制"][clampi(GS.red_water, 0, 2)])
+	if GS.red_water == 2:
+		var disc := 8 if GS.red_water_market else 5
+		rw += "（货郎价 -" + str(disc) + "%" + (" · 寨墙" if GS.red_water_wall else "") + (" · 驻军" if GS.red_water_garrison else "") + (" · 税所" if GS.red_water_taxpost else "") + "）"
+		rw += " · 战线 " + str(GS.war_score) + (" · 已平" if GS.red_water_peace else "")
+	var last_war := ""
+	if not GS.war_notes.is_empty():
+		last_war = "\n战报：" + str(GS.war_notes[GS.war_notes.size() - 1])
+	_war_btn.visible = not GS.war_notes.is_empty()
+	_war_btn.text = "战报 " + str(GS.war_notes.size())
+	_world_lb.text = "世界档 " + str(GS.world_tier) + " · 地脉 " + str(LAND_NAMES[GS.world_seed % LAND_NAMES.size()]) + "\n赤水寨：" + str(rw) + "\n听雨楼：名声 " + str(GS.broker_rep) + "/100 · " + GS.broker_rank_name() + "\n本图 Boss：" + str(info.get("boss", "凶物")) + "（" + str(info.get("boss_state", "未动")) + "）" + last_war
 	_gift_btn.disabled = GS.merchant_favor >= 100 or GS.coin("silver") < 50
 	var wash_cost := 80 * GS.wanted
 	_wash_btn.visible = GS.wanted > 0
@@ -98,6 +114,20 @@ func open(info: Dictionary) -> void:
 	_appease_btn.text = "赔礼（500 两）"
 	_appease_btn.disabled = GS.coin("silver") < 500
 	visible = true
+
+func _open_war() -> void:
+	if _war_panel == null:
+		var wp = WarReportPanel.new()
+		wp.connect("closed", _on_war_closed)
+		add_child(wp)
+		_war_panel = wp
+	_war_panel.call("open")
+	if _close_btn != null:
+		_close_btn.visible = false
+
+func _on_war_closed() -> void:
+	if _close_btn != null:
+		_close_btn.visible = true
 
 func _gift() -> void:
 	if GS.merchant_favor >= 100 or GS.coin("silver") < 50:
@@ -131,6 +161,7 @@ func _appease() -> void:
 	GS.sect_favor = 0
 	GS.sect_rep = 0
 	GS.sect_test = false
+	GS.note_war("向青岚赔礼，封条揭了")
 	GS.save_game()
 	_msg_lb.text = "赔了礼，山门封条揭了。重走四门可再入。"
 	open(_last_info)
@@ -140,6 +171,8 @@ func close() -> void:
 	closed.emit()
 
 func _input(event: InputEvent) -> void:
+	if _war_panel != null and _war_panel.visible:
+		return
 	if event.is_action_pressed("ui_cancel"):
 		get_viewport().set_input_as_handled()
 		close()

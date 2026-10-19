@@ -103,6 +103,13 @@ var _rival_panel: Control
 var _rival_pending := false
 var _rival_fight_pending := false
 var _rival_done := false
+var _rival_contest := false
+var _rival_final := false
+var _rival_broker_help := false
+var _broker_cell := Vector2i(-1, -1)
+var _broker_panel: Control
+var _broker_pending := false
+var _broker_done := false
 var _chest_cells: Array = []
 var _obstacles: Array = []
 var _enemy_cells: Array = []
@@ -204,6 +211,22 @@ func _gen_world() -> void:
 			continue
 		_rival_cell = cr
 		break
+	var contest_chance := 0.0 if (GameState.red_water_garrison or GameState.red_water_peace) else (0.25 if GameState.red_water_wall else 0.55)
+	if GameState.red_water == 2 and not GameState.red_water_peace and GameState.world_tier >= 3 and rng.randf() < contest_chance:
+		_rival_contest = true
+	# 听雨楼：江湖情报贩子（世界档 ≥2）
+	_broker_cell = Vector2i(-1, -1)
+	if GameState.world_tier >= 2:
+		guard = 0
+		while guard < 500:
+			guard += 1
+			var cb := Vector2i(rng.randi_range(1, MAP_W - 2), rng.randi_range(1, MAP_H - 2))
+			if _reserved(cb, 2) or _obstacles.has(cb) or _chest_cells.has(cb) or _poi_cells.has(cb) or _enemy_cells.has(cb) or cb == _rival_cell:
+				continue
+			if Vector2(cb).distance_to(Vector2(START_CELL)) < 6.0:
+				continue
+			_broker_cell = cb
+			break
 	# Boss 落在离起点远、避开所有已占格的位置；找不到就退到 (3,3)
 	var bnames := ["山君", "夜叉", "老妖"]
 	_boss_name = str(bnames[GameState.world_seed % bnames.size()])
@@ -212,7 +235,7 @@ func _gen_world() -> void:
 	while guard < 500:
 		guard += 1
 		var cb := Vector2i(rng.randi_range(1, MAP_W - 2), rng.randi_range(1, MAP_H - 2))
-		if _reserved(cb, 2) or _obstacles.has(cb) or _chest_cells.has(cb) or _poi_cells.has(cb) or _enemy_cells.has(cb):
+		if _reserved(cb, 2) or _obstacles.has(cb) or _chest_cells.has(cb) or _poi_cells.has(cb) or _enemy_cells.has(cb) or cb == _broker_cell:
 			continue
 		if Vector2(cb).distance_to(Vector2(START_CELL)) < 9.0:
 			continue
@@ -596,6 +619,7 @@ func _draw() -> void:
 	_draw_house()
 	_draw_sect_gate()
 	_draw_rival()
+	_draw_broker()
 	_draw_boss()
 	_draw_pois()
 	_draw_chests()
@@ -665,15 +689,43 @@ func _draw_rival() -> void:
 	if _rival_cell.x < 0:
 		return
 	var p := _cell_pos(_rival_cell.x, _rival_cell.y)
+	var st := GameState.red_water
+	var contest := _rival_contest and not _rival_done
+	var peace := GameState.red_water_peace
+	var flag := Color("#5a1f1a")
+	var edge := Color("#4a2a24")
+	if st == 2 and not contest:
+		flag = Color("#2a4a4a")
+		edge = Color("#2a3a3a")
+	elif st == 1:
+		flag = Color("#3a3a36")
+		edge = Color("#4a4a46")
+	var done := (_rival_done or st > 0) and not contest
+	var label := "赤水残部" if contest else ("青岚·赤水寨（已平）" if peace else ("青岚·赤水寨" if st == 2 else ("赤水寨·已破" if st == 1 else ("赤水寨·已了" if _rival_done else "赤水寨"))))
 	draw_circle(p + Vector2(0, 22), 38.0, Color(0.03, 0.03, 0.03, 0.4))
 	draw_rect(Rect2(p + Vector2(-34, 2), Vector2(68, 20)), Color("#3a2a22"))
-	draw_rect(Rect2(p + Vector2(-40, -56), Vector2(12, 58)), Color("#4a2a24"))
-	draw_rect(Rect2(p + Vector2(28, -56), Vector2(12, 58)), Color("#4a2a24"))
+	draw_rect(Rect2(p + Vector2(-40, -56), Vector2(12, 58)), edge)
+	draw_rect(Rect2(p + Vector2(28, -56), Vector2(12, 58)), edge)
 	draw_rect(Rect2(p + Vector2(-50, -64), Vector2(100, 12)), Color("#2a1814"))
-	draw_colored_polygon(PackedVector2Array([p + Vector2(-58, -64), p + Vector2(58, -64), p + Vector2(0, -88)]), Color("#5a1f1a"))
-	draw_rect(Rect2(p + Vector2(-28, -112), Vector2(56, 22)), Color("#6b655c") if _rival_done else Color("#d8b06a"))
+	draw_colored_polygon(PackedVector2Array([p + Vector2(-58, -64), p + Vector2(58, -64), p + Vector2(0, -88)]), flag)
+	draw_rect(Rect2(p + Vector2(-28, -112), Vector2(56, 22)), Color("#6b655c") if done else Color("#d8b06a"))
 	draw_string(ThemeDB.fallback_font, p + Vector2(-24, -96), "赤水寨", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("#2a1814"))
-	draw_string(ThemeDB.fallback_font, p + Vector2(-28, -126), "赤水寨·已拔" if _rival_done else "赤水寨", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("#9a927f") if _rival_done else Color("#e06a5a"))
+	draw_string(ThemeDB.fallback_font, p + Vector2(-34, -126), label, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("#9a927f") if done else Color("#e06a5a"))
+
+func _draw_broker() -> void:
+	if _broker_cell.x < 0:
+		return
+	var p := _cell_pos(_broker_cell.x, _broker_cell.y)
+	var col := Color("#6b655c") if _broker_done else Color("#3a4a5a")
+	draw_circle(p + Vector2(0, 22), 32.0, Color(0.03, 0.03, 0.03, 0.38))
+	draw_rect(Rect2(p + Vector2(-30, 0), Vector2(60, 20)), Color("#2a2e34"))
+	draw_rect(Rect2(p + Vector2(-34, -38), Vector2(68, 40)), Color("#2a3038"))
+	draw_colored_polygon(PackedVector2Array([p + Vector2(-44, -38), p + Vector2(44, -38), p + Vector2(0, -58)]), col)
+	draw_rect(Rect2(p + Vector2(-6, -22), Vector2(12, 20)), Color("#1a1d20"))
+	draw_circle(p + Vector2(20, -30), 4.0, Color("#d8b06a") if not _broker_done else Color("#6b655c"))
+	draw_rect(Rect2(p + Vector2(-28, -82), Vector2(56, 20)), Color("#d8b06a") if not _broker_done else Color("#6b655c"))
+	draw_string(ThemeDB.fallback_font, p + Vector2(-24, -67), "听雨楼", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("#2a1814"))
+	draw_string(ThemeDB.fallback_font, p + Vector2(-26, -96), "听雨楼", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("#9ab0c0") if not _broker_done else Color("#9a927f"))
 
 func _draw_boss() -> void:
 	if _boss_cell.x < 0:
@@ -880,6 +932,8 @@ func _unhandled_input(event: InputEvent) -> void:
 	if _rel_panel != null and _rel_panel.visible:
 		return
 	if _rival_panel != null and _rival_panel.visible:
+		return
+	if _broker_panel != null and _broker_panel.visible:
 		return
 	if _boss_panel != null and _boss_panel.visible:
 		return
@@ -1263,7 +1317,20 @@ func _rival_near() -> bool:
 	return _player.position.distance_to(_cell_pos(_rival_cell.x, _rival_cell.y)) < 112.0
 
 func _open_rival() -> void:
-	if _rival_done:
+	var contest := _rival_contest and not _rival_done
+	if GameState.red_water_peace:
+		_set_msg("赤水寨已平，寨门挂着青岚旗。")
+		return
+	_rival_final = false
+	_rival_broker_help = false
+	if GameState.red_water == 2 and not contest and GameState.war_score < 100:
+		if GameState.red_water_wall and GameState.red_water_market and GameState.red_water_garrison and GameState.red_water_taxpost:
+			_set_msg("寨墙、货栈、驻军、税所都齐了。赤水寨安稳。")
+			return
+	elif GameState.red_water == 1:
+		_set_msg("赤水寨已经破了")
+		return
+	elif not contest and _rival_done:
 		_set_msg("赤水寨已经了结了")
 		return
 	if _rival_panel == null:
@@ -1272,12 +1339,49 @@ func _open_rival() -> void:
 		rp.connect("closed", _on_rival_closed)
 		_toast_layer.add_child(rp)
 		_rival_panel = rp
-	var data := {
-		"title": "赤 水 寨",
-		"sub": "山道上的敌对寨子，红幡压着路口。",
-		"body": "寨门半开，里面有人磨刀。\n拔寨要 3 行动；买路要 50 两。\n（失败不会被抓，只退回来）",
-		"choices": [{"id": "fight", "label": "拔 寨（3行动）"}, {"id": "pay", "label": "买 路（50两）"}],
-	}
+	var data := {}
+	if contest:
+		data = {
+			"title": "赤水寨·反扑",
+			"sub": "青岚控制的地盘，赤水残部摸了回来。",
+			"body": "寨门外火把乱晃。\n迎战要 3 行动；让出则地盘归赤水。",
+			"choices": [{"id": "defend", "label": "迎 战（3行动）"}, {"id": "cede", "label": "让 出"}],
+		}
+	elif GameState.red_water == 2 and GameState.war_score >= 100:
+		_rival_broker_help = GameState.broker_rep >= 60
+		var help_txt := "\n听雨楼递来布防图：寨主少一成半气血。" if _rival_broker_help else ""
+		data = {
+			"title": "赤水寨·决战",
+			"sub": "青岚与赤水的账，今天一次算清。",
+			"body": "寨主披甲站在门外，背后是全部残部。\n决战要 5 行动。胜了，赤水寨永平。" + help_txt,
+			"choices": [{"id": "final", "label": "决 战（5行动）"}],
+		}
+	elif GameState.red_water == 2:
+		var opts: Array = []
+		var defense_done := GameState.red_water_wall and GameState.red_water_market and GameState.red_water_garrison
+		if defense_done:
+			if not GameState.red_water_taxpost:
+				opts.append({"id": "taxpost", "label": "设税所（250两）"})
+		else:
+			if not GameState.red_water_wall:
+				opts.append({"id": "wall", "label": "修寨墙（200两）"})
+			if not GameState.red_water_market:
+				opts.append({"id": "market", "label": "设货栈（150两）"})
+			if not GameState.red_water_garrison:
+				opts.append({"id": "garrison", "label": "驻军（300两）"})
+		data = {
+			"title": "赤水寨·寨务",
+			"sub": "青岚控制的地盘。",
+			"body": "寨墙压反扑，货栈压货价，驻军绝后患，税所添日税。\n寨墙 200 · 货栈 150 · 驻军 300 · 税所 250。",
+			"choices": opts,
+		}
+	else:
+		data = {
+			"title": "赤 水 寨",
+			"sub": "山道上的敌对寨子，红幡压着路口。",
+			"body": "寨门半开，里面有人磨刀。\n拔寨要 3 行动；买路要 50 两。\n（失败不会被抓，只退回来）",
+			"choices": [{"id": "fight", "label": "拔 寨（3行动）"}, {"id": "pay", "label": "买 路（50两）"}],
+		}
 	_rival_panel.call("open", data)
 	_busy = true
 	_moving = false
@@ -1296,6 +1400,80 @@ func _open_rival() -> void:
 		_rel_btn.visible = false
 
 func _on_rival_pick(id: String) -> void:
+	if _rival_contest:
+		if id == "defend":
+			_rival_fight_pending = true
+			_rival_panel.call("close")
+			return
+		if id == "cede":
+			GameState.red_water = 1
+			GameState.war_score = maxi(0, GameState.war_score - 20)
+			GameState.note_war("让出了赤水寨")
+			GameState.save_game()
+			_rival_done = true
+			_rival_panel.call("close")
+			_set_msg("你让出了赤水寨。地盘归赤水残部。")
+			queue_redraw()
+			return
+		_rival_panel.call("close")
+		return
+	if id == "final":
+		_rival_final = true
+		_rival_fight_pending = true
+		_rival_panel.call("close")
+		return
+	if id == "wall":
+		if GameState.coin("silver") < 200:
+			_rival_panel.call("set_result", "修寨墙要 200 两——不够。")
+			return
+		GameState.add_coin("silver", -200)
+		GameState.red_water_wall = true
+		GameState.war_score = mini(100, GameState.war_score + 5)
+		GameState.note_war("赤水寨修了寨墙")
+		GameState.save_game()
+		_rival_panel.call("close")
+		_set_msg("寨墙修好了。赤水残部再来会少些。")
+		queue_redraw()
+		return
+	if id == "market":
+		if GameState.coin("silver") < 150:
+			_rival_panel.call("set_result", "设货栈要 150 两——不够。")
+			return
+		GameState.add_coin("silver", -150)
+		GameState.red_water_market = true
+		GameState.war_score = mini(100, GameState.war_score + 5)
+		GameState.note_war("赤水寨开了货栈")
+		GameState.save_game()
+		_rival_panel.call("close")
+		_set_msg("货栈开了。货郎那边的价还会再低些。")
+		queue_redraw()
+		return
+	if id == "taxpost":
+		if GameState.coin("silver") < 250:
+			_rival_panel.call("set_result", "设税所要 250 两——不够。")
+			return
+		GameState.add_coin("silver", -250)
+		GameState.red_water_taxpost = true
+		GameState.war_score = mini(100, GameState.war_score + 5)
+		GameState.note_war("赤水寨设了税所")
+		GameState.save_game()
+		_rival_panel.call("close")
+		_set_msg("税所开了。每日地盘税会多一些。")
+		queue_redraw()
+		return
+	if id == "garrison":
+		if GameState.coin("silver") < 300:
+			_rival_panel.call("set_result", "驻军要 300 两——不够。")
+			return
+		GameState.add_coin("silver", -300)
+		GameState.red_water_garrison = true
+		GameState.war_score = mini(100, GameState.war_score + 5)
+		GameState.note_war("赤水寨驻了军")
+		GameState.save_game()
+		_rival_panel.call("close")
+		_set_msg("驻军进了寨。赤水残部不敢再来了。")
+		queue_redraw()
+		return
 	if id == "fight":
 		_rival_fight_pending = true
 		_rival_panel.call("close")
@@ -1305,6 +1483,8 @@ func _on_rival_pick(id: String) -> void:
 			_rival_panel.call("set_result", "买路要 50 两——不够。")
 			return
 		GameState.add_coin("silver", -50)
+		GameState.war_score = maxi(0, GameState.war_score - 5)
+		GameState.note_war("向赤水寨买了路")
 		GameState.save_game()
 		_rival_done = true
 		_rival_panel.call("close")
@@ -1335,8 +1515,9 @@ func _on_rival_closed() -> void:
 func _rival_battle() -> void:
 	if _rival_done or _busy or _battle_active:
 		return
-	if not GameState.action_spend(3):
-		_set_msg("行动不够——拔寨要 3 点行动")
+	var cost := 5 if _rival_final else 3
+	if not GameState.action_spend(cost):
+		_set_msg("行动不够——要 " + str(cost) + " 点行动")
 		return
 	_busy = true
 	_battle_active = true
@@ -1362,9 +1543,14 @@ func _rival_battle() -> void:
 			e.visible = false
 	_player.visible = false
 	var tier := clampi(GameState.world_tier, 1, 5)
+	var foe_hp := (420 + tier * 90) if _rival_final else (220 + tier * 55)
+	if _rival_final and _rival_broker_help:
+		foe_hp = int(round(float(foe_hp) * 0.85))
+	var foe_atk := (18 + tier * 3) if _rival_final else (12 + tier * 2)
+	var foe_scale := 1.35 if _rival_final else 1.2
 	var node := {
-		"t": "battle", "name": "赤水寨主",
-		"foe": {"hp": 220 + tier * 55, "atk": 12 + tier * 2, "scale": 1.2},
+		"t": "battle", "name": "赤水寨主" if not _rival_final else "赤水寨主·决战",
+		"foe": {"hp": foe_hp, "atk": foe_atk, "scale": foe_scale},
 		"money": [0, 0], "stick_enemies": true,
 	}
 	var bp := StickFighter.new()
@@ -1400,16 +1586,151 @@ func _rival_battle() -> void:
 	_update_action_label()
 	if won:
 		_rival_done = true
-		GameState.add_coin("silver", 150)
-		GameState.add_material("atlas", 1)
-		if GameState.sect_joined:
-			GameState.sect_contrib += 80
-		GameState.save_game()
-		GameState.note_push("拔了赤水寨：银两 +150 · 舆图 +1" + (" · 宗门贡献 +80" if GameState.sect_joined else ""))
-		_set_msg("赤水寨的旗倒了。银两 +150 · 舆图 +1。", 3.0)
+		if _rival_final:
+			GameState.red_water = 2
+			GameState.red_water_peace = true
+			GameState.war_score = 100
+			GameState.add_coin("silver", 300)
+			GameState.add_material("atlas", 2)
+			GameState.note_war("青岚平定赤水寨" + ("（听雨楼助战）" if _rival_broker_help else ""))
+			GameState.save_game()
+			_set_msg("寨主倒了。赤水寨永平。银两 +300 · 舆图 +2。", 3.5)
+		elif _rival_contest:
+			GameState.red_water = 2
+			GameState.add_coin("silver", 80)
+			if GameState.sect_joined:
+				GameState.sect_contrib += 30
+			GameState.war_score = mini(100, GameState.war_score + 15)
+			GameState.note_war("青岚守住赤水寨")
+			GameState.save_game()
+			_set_msg("赤水残部退了。青岚仍控赤水寨：银两 +80。", 3.0)
+		else:
+			GameState.add_coin("silver", 150)
+			GameState.add_material("atlas", 1)
+			if GameState.sect_joined:
+				GameState.sect_contrib += 80
+				GameState.red_water = 2
+				GameState.war_score = mini(100, GameState.war_score + 25)
+				GameState.note_war("青岚拿下赤水寨")
+			else:
+				GameState.red_water = 1
+				GameState.note_war("赤水寨被破")
+			GameState.save_game()
+			GameState.note_push("拔了赤水寨：银两 +150 · 舆图 +1" + (" · 宗门贡献 +80" if GameState.sect_joined else ""))
+			_set_msg("赤水寨的旗倒了。银两 +150 · 舆图 +1。", 3.0)
 	else:
-		_set_msg("寨主把你逼退了。歇一歇再来。", 3.0)
+		if _rival_final:
+			GameState.war_score = 80
+			GameState.note_war("决战失利，赤水寨还在")
+			GameState.save_game()
+			_set_msg("寨主太硬。决战失利，战线退到 80。", 3.0)
+		elif _rival_contest:
+			_rival_done = true
+			GameState.red_water = 1
+			GameState.war_score = maxi(0, GameState.war_score - 20)
+			GameState.note_war("赤水寨夺回地盘")
+			GameState.save_game()
+			_set_msg("赤水残部夺回了寨子。青岚丢了赤水寨。", 3.0)
+		else:
+			_set_msg("寨主把你逼退了。歇一歇再来。", 3.0)
 	queue_redraw()
+
+func _broker_near() -> bool:
+	if _broker_cell.x < 0:
+		return false
+	return _player.position.distance_to(_cell_pos(_broker_cell.x, _broker_cell.y)) < 106.0
+
+func _broker_buy_price() -> int:
+	return maxi(40, 80 - GameState.broker_rep / 4)
+
+func _broker_sell_price() -> int:
+	return 60 + GameState.broker_rep / 5
+
+func _open_broker() -> void:
+	if _broker_done:
+		_set_msg("听雨楼的灯灭了")
+		return
+	if _broker_panel == null:
+		var bp = POIPanel.new()
+		bp.connect("picked", _on_broker_pick)
+		bp.connect("closed", _on_broker_closed)
+		_toast_layer.add_child(bp)
+		_broker_panel = bp
+	var data := {
+		"title": "听 雨 楼",
+		"sub": "檐下两盏雨灯，不问来路。名声 " + str(GameState.broker_rep) + "/100 · " + GameState.broker_rank_name() + "。",
+		"body": "楼里卖两样东西：别人的布防，和你的行踪。\n买消息 " + str(_broker_buy_price()) + " 两；卖消息 +" + str(_broker_sell_price()) + " 两。",
+		"choices": [{"id": "buy", "label": "买消息（" + str(_broker_buy_price()) + "两）"}, {"id": "sell", "label": "卖消息（+" + str(_broker_sell_price()) + "两）"}],
+	}
+	_broker_panel.call("open", data)
+	_busy = true
+	_moving = false
+	_has_click = false
+	for e_v in _enemies:
+		var e: Node2D = e_v
+		if is_instance_valid(e):
+			e.visible = false
+	if _action_lb != null:
+		_action_lb.visible = false
+	if _back_btn != null:
+		_back_btn.visible = false
+	if _codex_btn != null:
+		_codex_btn.visible = false
+	if _rel_btn != null:
+		_rel_btn.visible = false
+
+func _on_broker_pick(id: String) -> void:
+	if id == "buy":
+		var cost := _broker_buy_price()
+		if GameState.coin("silver") < cost:
+			_broker_panel.call("set_result", "买消息要 " + str(cost) + " 两——不够。")
+			return
+		GameState.add_coin("silver", -cost)
+		for k in 5:
+			_reveal_at(_cell_pos(randi_range(1, MAP_W - 2), randi_range(1, MAP_H - 2)))
+		var got_score := GameState.red_water == 2 and not GameState.red_water_peace
+		var score_gain := 10 + GameState.broker_rep / 10
+		if got_score:
+			GameState.war_score = mini(100, GameState.war_score + score_gain)
+		GameState.broker_rep = mini(100, GameState.broker_rep + 5)
+		GameState.note_war("听雨楼卖了赤水布防")
+		GameState.save_game()
+		_broker_done = true
+		_broker_panel.call("close")
+		_set_msg("布防图到手，地图亮了一角。" + (" 战线 +" + str(score_gain) + "。" if got_score else ""))
+		queue_redraw()
+		return
+	if id == "sell":
+		GameState.add_coin("silver", _broker_sell_price())
+		GameState.broker_rep = maxi(0, GameState.broker_rep - 5)
+		if not GameState.red_water_peace:
+			GameState.war_score = maxi(0, GameState.war_score - 10)
+		if GameState.sect_joined:
+			GameState.sect_favor = maxi(0, GameState.sect_favor - 5)
+		GameState.note_war("把青岚行踪卖给了听雨楼")
+		GameState.save_game()
+		_broker_done = true
+		_broker_panel.call("close")
+		_set_msg(str(_broker_sell_price()) + " 两落袋。山门那边会有人记着。")
+		queue_redraw()
+		return
+	_broker_panel.call("close")
+
+func _on_broker_closed() -> void:
+	_busy = false
+	_broker_pending = false
+	for e_v in _enemies:
+		var e: Node2D = e_v
+		if is_instance_valid(e):
+			e.visible = not bool(e.get_meta("beaten", false))
+	if _action_lb != null:
+		_action_lb.visible = true
+	if _back_btn != null:
+		_back_btn.visible = true
+	if _codex_btn != null:
+		_codex_btn.visible = true
+	if _rel_btn != null:
+		_rel_btn.visible = true
 
 func _open_sect() -> void:
 	if _sect_panel == null:
@@ -1559,6 +1880,9 @@ func _on_click(pos: Vector2) -> void:
 			return
 		_boss_pending = true
 	if cell == _rival_cell:
+		if not (_rival_contest and not _rival_done) and GameState.red_water > 0:
+			_set_msg("赤水寨已归青岚" if GameState.red_water == 2 else "赤水寨已经破了")
+			return
 		if _rival_done:
 			_set_msg("赤水寨已经了结了")
 			return
@@ -1566,6 +1890,14 @@ func _on_click(pos: Vector2) -> void:
 			_open_rival()
 			return
 		_rival_pending = true
+	if cell == _broker_cell:
+		if _broker_done:
+			_set_msg("听雨楼的灯灭了")
+			return
+		if _broker_near():
+			_open_broker()
+			return
+		_broker_pending = true
 	if _chest_cells.has(cell):
 		_open_chest(cell)
 		return
@@ -1659,6 +1991,13 @@ func _process(delta: float) -> void:
 		_path.clear()
 		_has_click = false
 		_open_rival()
+		return
+	if _broker_pending and not _in_house and _broker_near():
+		_broker_pending = false
+		_moving = false
+		_path.clear()
+		_has_click = false
+		_open_broker()
 		return
 	if _in_house:
 		if not _moving:

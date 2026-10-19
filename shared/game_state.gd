@@ -876,6 +876,17 @@ static var wanted := 0
 static var boss_kills: Array = []
 # v252：常驻牢房（0=自由，3=关押中）
 static var jailed_days := 0
+# v256：赤水寨归属（0=未动 / 1=已破 / 2=青岚控制）
+static var red_water := 0
+static var red_water_wall := false
+static var red_water_market := false
+static var red_water_garrison := false
+static var red_water_taxpost := false
+static var red_water_peace := false
+static var war_score := 0
+static var broker_rep := 0
+static var turf_tax_day := ""
+static var war_notes: Array = []
 
 static func action_add(n: int) -> int:
 	action = clampi(action + n, 0, ACTION_MAX)
@@ -4753,6 +4764,25 @@ static func note_push(s: String) -> void:
 		return
 	pending_note = s if pending_note == "" else pending_note + "｜" + s
 
+static func broker_rank_name() -> String:
+	if broker_rep >= 90:
+		return "楼主"
+	if broker_rep >= 60:
+		return "贵客"
+	if broker_rep >= 30:
+		return "熟客"
+	return "生客"
+
+static func note_war(s: String) -> void:
+	if s == "":
+		return
+	var ts := Time.get_datetime_string_from_system()
+	if ts.length() >= 16:
+		ts = ts.substr(5, 11).replace("T", " ")
+	war_notes.append(ts + " · " + s)
+	while war_notes.size() > 12:
+		war_notes.pop_front()
+
 # ============================================================
 # v40：**新手关卡礼包**（测试版）
 #   用户："引子下山通关后额外在仓库塞入一个新手关卡礼包，50 关获取一本主角专武功法、
@@ -5983,6 +6013,16 @@ static func load_game() -> void:
 	wanted = clampi(int(cf.get_value("world", "wanted", 0)), 0, 5)
 	boss_kills = _sa(cf.get_value("world", "boss_kills", []), boss_kills)
 	jailed_days = clampi(int(cf.get_value("world", "jailed_days", 0)), 0, 3)
+	red_water = clampi(int(cf.get_value("world", "red_water", 0)), 0, 2)
+	red_water_wall = bool(cf.get_value("world", "red_water_wall", false))
+	red_water_market = bool(cf.get_value("world", "red_water_market", false))
+	red_water_garrison = bool(cf.get_value("world", "red_water_garrison", false))
+	red_water_taxpost = bool(cf.get_value("world", "red_water_taxpost", false))
+	red_water_peace = bool(cf.get_value("world", "red_water_peace", false))
+	war_score = clampi(int(cf.get_value("world", "war_score", 0)), 0, 100)
+	broker_rep = clampi(int(cf.get_value("world", "broker_rep", 0)), 0, 100)
+	turf_tax_day = str(cf.get_value("world", "turf_tax_day", ""))
+	war_notes = _sa(cf.get_value("world", "war_notes", []), war_notes)
 	advance_lv = clampi(int(cf.get_value("world", "advance_lv", 0)), 0, Realm.MAX_LV)   # v121：进阶境界
 	insight_lv = _sd(cf.get_value("world", "insight_lv", {}), insight_lv)  # v64b：四支等级
 	exp_pool = maxi(0, int(cf.get_value("world", "exp_pool", 0)))   # ㊾：经验池
@@ -6026,6 +6066,17 @@ static func load_game() -> void:
 		var fsid := str(fsid_v)
 		Cards.register_forged(fsid, forge_cards[fsid])
 	materials = _sd(vlt.get("materials", {}), materials)
+	# v257：青岚控制赤水寨 → 每日地盘税（一天一次）
+	if red_water == 2:
+		var today := Time.get_date_string_from_system()
+		if turf_tax_day != today:
+			turf_tax_day = today
+			var tax_s := (100 if red_water_taxpost else 60) + (20 if red_water_peace else 0)
+			var tax_st := (4 if red_water_taxpost else 2) + (1 if red_water_peace else 0)
+			add_coin("silver", tax_s)
+			add_material("forge_stone", tax_st)
+			note_war("青岚地盘税：银两 +" + str(tax_s) + " · 锻造石 +" + str(tax_st))
+			note_push("青岚地盘税入账：银两 +" + str(tax_s) + " · 锻造石 +" + str(tax_st))
 	# v244：老档 / 新档给一张舆图；用掉后 world_seed > 0，不再补发
 	if int(materials.get("atlas", 0)) <= 0 and world_seed == 0:
 		materials["atlas"] = 1
@@ -6094,6 +6145,16 @@ static func save_game() -> void:
 	cf.set_value("world", "wanted", wanted)
 	cf.set_value("world", "boss_kills", boss_kills)
 	cf.set_value("world", "jailed_days", jailed_days)
+	cf.set_value("world", "red_water", red_water)
+	cf.set_value("world", "red_water_wall", red_water_wall)
+	cf.set_value("world", "red_water_market", red_water_market)
+	cf.set_value("world", "red_water_garrison", red_water_garrison)
+	cf.set_value("world", "red_water_taxpost", red_water_taxpost)
+	cf.set_value("world", "red_water_peace", red_water_peace)
+	cf.set_value("world", "war_score", war_score)
+	cf.set_value("world", "broker_rep", broker_rep)
+	cf.set_value("world", "turf_tax_day", turf_tax_day)
+	cf.set_value("world", "war_notes", war_notes)
 	cf.set_value("world", "advance_lv", advance_lv)          # v121：进阶境界
 	cf.set_value("world", "insight_lv", insight_lv)
 	cf.set_value("world", "exp_pool", exp_pool)   # ㊾：经验池
@@ -6267,6 +6328,16 @@ static func reset() -> void:
 	wanted = 0
 	boss_kills.clear()
 	jailed_days = 0
+	red_water = 0
+	red_water_wall = false
+	red_water_market = false
+	red_water_garrison = false
+	red_water_taxpost = false
+	red_water_peace = false
+	war_score = 0
+	broker_rep = 0
+	turf_tax_day = ""
+	war_notes.clear()
 	_idle_last_ts = _idle_now()
 	_idle_save()
 	level_notes.clear()

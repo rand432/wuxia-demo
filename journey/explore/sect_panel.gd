@@ -216,6 +216,7 @@ func _betray() -> void:
 	GS.sect_test = false
 	GS.sect_betrayed = true
 	GS.wanted = mini(5, GS.wanted + 2)
+	GS.note_war("你叛出青岚山门")
 	GS.save_game()
 	_betray_armed = false
 	_refresh()
@@ -234,6 +235,7 @@ func _appease() -> void:
 	GS.sect_favor = 0
 	GS.sect_rep = 0
 	GS.sect_test = false
+	GS.note_war("向青岚赔礼，封条揭了")
 	GS.save_game()
 	_refresh()
 	_say("礼赔了，山门收了。先把通缉洗白，再重走四门。")
@@ -279,6 +281,7 @@ func _learn() -> void:
 			_say("四门还没足——重归山门也要把好感、声望、考验补齐。")
 			return
 		GS.sect_joined = true
+		GS.note_war("重回青岚山门")
 		GS.save_game()
 		_refresh()
 		_say("你重新入了青岚山门。上次的功法仍在你身上。")

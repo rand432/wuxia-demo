@@ -76,7 +76,13 @@ func _input(event: InputEvent) -> void:
 		close()
 
 func _discount() -> float:
-	return minf(0.2, float(GS.merchant_favor) * 0.002)
+	var turf := 0.0
+	if GS.red_water == 2:
+		if GS.red_water_peace:
+			turf = 0.10
+		else:
+			turf = 0.08 if GS.red_water_market else 0.05
+	return minf(0.25, float(GS.merchant_favor) * 0.002 + turf)
 
 func _price(base: int) -> int:
 	return maxi(1, int(round(float(base) * (1.0 - _discount()))))
@@ -84,7 +90,8 @@ func _price(base: int) -> int:
 func _refresh() -> void:
 	var d := int(round(_discount() * 100.0))
 	var w := GS.wanted
-	_favor_lb.text = "行商老赵 · 人情 " + str(GS.merchant_favor) + " · 价 -" + str(d) + "%" + (" · 通缉 " + str(w) if w > 0 else "")
+	var turf_txt := " · 青岚地盘" if GS.red_water == 2 else ""
+	_favor_lb.text = "行商老赵 · 人情 " + str(GS.merchant_favor) + " · 价 -" + str(d) + "%" + turf_txt + (" · 通缉 " + str(w) if w > 0 else "")
 	for i in GOODS.size():
 		var g: Dictionary = GOODS[i]
 		var p := _price(int(g["base"]))
