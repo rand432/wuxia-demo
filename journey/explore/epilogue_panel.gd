@@ -33,7 +33,7 @@ func _ready() -> void:
 
 func open() -> void:
 	var lines: Array = []
-	lines.append("周目：第 " + str(GS.ng_plus + 1) + " 周")
+	lines.append("周目：第 " + str(GS.ng_plus + 1) + " 周 · " + GS.cycle_title())
 	lines.append("称号：" + (GS.story_title if GS.story_title != "" else "尚未定下"))
 	var rank := "外门弟子"
 	if GS.sect_contrib >= 250:

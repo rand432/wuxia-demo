@@ -93,6 +93,7 @@ var _poi_types: Array = []
 var _poi_used := {}
 var _boss_cell := Vector2i(-1, -1)
 var _boss_name := "山君"
+var _boss_display := "山君"
 var _boss_node: Node2D
 var _boss_panel: Control
 var _boss_pending := false
@@ -274,6 +275,7 @@ func _gen_world() -> void:
 	# Boss 落在离起点远、避开所有已占格的位置；找不到就退到 (3,3)
 	var bnames := ["山君", "夜叉", "老妖"]
 	_boss_name = "雪魈" if _land_id == 4 else str(bnames[GameState.world_seed % bnames.size()])
+	_boss_display = _boss_name + ("·轮回" if GameState.ng_plus > 0 else "")
 	_boss_cell = Vector2i(3, 3)
 	guard = 0
 	while guard < 500:
@@ -498,13 +500,13 @@ func _spawn_boss() -> void:
 	_boss_node = Node2D.new()
 	_boss_node.position = _cell_pos(_boss_cell.x, _boss_cell.y)
 	var tier := clampi(GameState.world_tier, 1, 5)
-	var hp := 280 + tier * 70
+	var hp := int(round(float(280 + tier * 70) * GameState.ng_mul()))
 	if GameState.boss_kills.has(_boss_name):
 		hp = int(hp * 0.9)   # 图鉴弱点：首杀后识破，再战气血 -10%
 	_boss_node.set_meta("boss", true)
 	_boss_node.set_meta("foe_name", _boss_name)
 	_boss_node.set_meta("beaten", false)
-	var foe := {"hp": hp, "atk": 14 + tier * 2, "scale": 1.3}
+	var foe := {"hp": hp, "atk": maxi(1, int(round(float(14 + tier * 2) * GameState.ng_mul()))), "scale": 1.3}
 	if _boss_name == "雪魈":
 		foe["def"] = 8
 		foe["spd"] = 105
@@ -622,6 +624,9 @@ func _make_enemy(cell: Vector2i, i: int, hunter := false, guard := false, elite 
 		atk = int(round(float(atk) * float(aff["atk"])))
 		sc *= float(aff["scale"])
 		e.set_meta("elite_affix", str(aff["id"]))
+	var ng := GameState.ng_mul()
+	hp = int(round(float(hp) * ng))
+	atk = maxi(1, int(round(float(atk) * ng)))
 	var foe := {"hp": hp, "atk": atk, "scale": sc, "spd": spd}
 	if td > 0:
 		foe["def"] = td
@@ -950,7 +955,7 @@ func _draw_boss() -> void:
 	draw_colored_polygon(PackedVector2Array([p + Vector2(-22, -20), p + Vector2(-34, -44), p + Vector2(-12, -30)]), Color("#5a3f2a"))
 	draw_colored_polygon(PackedVector2Array([p + Vector2(22, -20), p + Vector2(34, -44), p + Vector2(12, -30)]), Color("#5a3f2a"))
 	var status := "·已伏" if dead else ("·已安抚" if calm else "")
-	draw_string(ThemeDB.fallback_font, p + Vector2(-30, -56), _boss_name + status, HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color("#9a927f") if (dead or calm) else Color("#e06a5a"))
+	draw_string(ThemeDB.fallback_font, p + Vector2(-34, -56), _boss_display + status, HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color("#9a927f") if (dead or calm) else Color("#e06a5a"))
 
 func _draw_pois() -> void:
 	for i in _poi_cells.size():
@@ -1517,7 +1522,7 @@ func _open_boss() -> void:
 		_toast_layer.add_child(bp)
 		_boss_panel = bp
 	var data := {
-		"title": _boss_name,
+		"title": _boss_display,
 		"sub": "盘踞在此的一方凶物。",
 		"body": "山风忽然停了。\n供品要价 " + str(100 + GameState.world_tier * 20) + " 两。\n（失败会被抬回村，战利品全留）",
 		"choices": [{"id": "fight", "label": "拔 剑"}, {"id": "offer", "label": "送 供 品"}],
@@ -1802,10 +1807,11 @@ func _rival_battle() -> void:
 			e.visible = false
 	_player.visible = false
 	var tier := clampi(GameState.world_tier, 1, 5)
-	var foe_hp := (420 + tier * 90) if _rival_final else (220 + tier * 55)
+	var rival_ng := GameState.ng_mul()
+	var foe_hp := int(round(float((420 + tier * 90) if _rival_final else (220 + tier * 55)) * rival_ng))
 	if _rival_final and _rival_broker_help:
 		foe_hp = int(round(float(foe_hp) * 0.85))
-	var foe_atk := (18 + tier * 3) if _rival_final else (12 + tier * 2)
+	var foe_atk := maxi(1, int(round(float((18 + tier * 3) if _rival_final else (12 + tier * 2)) * rival_ng)))
 	var foe_scale := 1.35 if _rival_final else 1.2
 	var node := {
 		"t": "battle", "name": "赤水寨主" if not _rival_final else "赤水寨主·决战",
@@ -2197,8 +2203,9 @@ func _north_battle() -> void:
 			e.visible = false
 	_player.visible = false
 	var tier := clampi(GameState.world_tier, 1, 5)
-	var foe_hp := (420 + tier * 90) if _north_final else (240 + tier * 60)
-	var foe_atk := (18 + tier * 3) if _north_final else (12 + tier * 2)
+	var north_ng := GameState.ng_mul()
+	var foe_hp := int(round(float((420 + tier * 90) if _north_final else (240 + tier * 60)) * north_ng))
+	var foe_atk := maxi(1, int(round(float((18 + tier * 3) if _north_final else (12 + tier * 2)) * north_ng)))
 	var foe_scale := 1.3 if _north_final else 1.15
 	var node := {
 		"t": "battle", "name": "黑风寨主" if not _north_final else "黑风寨主·决战",
@@ -2832,7 +2839,7 @@ func _try_battle(enemy: Node2D) -> void:
 	var is_snow_boss := is_boss and str(enemy.get_meta("foe_name", "")) == "雪魈"
 	var node := {
 		"t": "battle",
-		"name": str(enemy.get_meta("foe_name", "敌人")),
+		"name": (_boss_display if is_boss else str(enemy.get_meta("foe_name", "敌人"))),
 		"foe": (enemy.get_meta("foe", {}) as Dictionary).duplicate(true),
 		"money": [12 + GameState.world_tier * 4, 25 + GameState.world_tier * 6],
 		"stick_enemies": true,   # v242：探险战斗的敌人也用火柴人
@@ -2843,6 +2850,8 @@ func _try_battle(enemy: Node2D) -> void:
 	}
 	if is_snow_boss:
 		node["affixes"] = ["berserk"]
+	if is_boss and GameState.ng_plus > 0:
+		node["arts"] = [{"name": "轮回斩", "kind": "damage", "mult": 1.35, "cd": 3, "apply": {"id": "weak", "turns": 2, "stacks": 1}}]
 	# 战斗里主角用火柴人（地图上仍用 Q 版立绘）：另起一个火柴人替身，
 	# 打完收掉，地图上的立绘原样还回来。
 	var battle_player := StickFighter.new()

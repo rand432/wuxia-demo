@@ -3469,7 +3469,7 @@ static func grant_boss_weapon(boss_name: String) -> Dictionary:
 	var atk := int(d["atk"])
 	var dmg := int(d["dmg"])
 	var affix := str(d["affix"])
-	var mul := 1.2
+	var mul := 1.2 * ng_mul()
 	var st := {"atk": int(round(atk * mul)), "dmg": int(round(dmg * mul))}
 	var af := {"fengrui": {"crit": 5}, "buzhe": {"def": 3}, "yinrui": {"atk": 4}, "pojun": {"dmg": 4}, "qingshen": {"spd": 3}, "tiegu": {"hp": 80}}
 	for k_v in (af.get(affix, {}) as Dictionary).keys():
@@ -4845,10 +4845,24 @@ static func broker_rank_name() -> String:
 		return "熟客"
 	return "生客"
 
+static func ng_mul() -> float:
+	return 1.0 + 0.15 * float(ng_plus)
+
+static func cycle_title() -> String:
+	if ng_plus <= 0:
+		return "初入江湖"
+	if ng_plus == 1:
+		return "轮回客"
+	if ng_plus == 2:
+		return "两世客"
+	if ng_plus == 3:
+		return "三生客"
+	return "百世客"
+
 static func begin_new_cycle() -> void:
 	ng_plus = mini(99, ng_plus + 1)
 	world_seed += 1
-	world_tier = 1
+	world_tier = mini(5, 1 + ng_plus)
 	red_water = 0
 	red_water_wall = false
 	red_water_market = false
