@@ -61,7 +61,7 @@ func _ready() -> void:
 func open() -> void:
 	visible = true
 	if GS.wanted > 0:
-		_msg_lb.text = "老赵缩在担子后：你身上有案子，生意做不了。"
+		_msg_lb.text = "老赵把担子掀开一条缝：明面不做，黑市价。"
 	else:
 		_msg_lb.text = "老赵把担子放下：看看货？"
 	_refresh()
@@ -85,19 +85,25 @@ func _discount() -> float:
 	return minf(0.25, float(GS.merchant_favor) * 0.002 + turf)
 
 func _price(base: int) -> int:
+	if GS.wanted > 0:
+		return maxi(1, int(round(float(base) * 1.5)))
 	return maxi(1, int(round(float(base) * (1.0 - _discount()))))
 
 func _refresh() -> void:
 	var d := int(round(_discount() * 100.0))
 	var w := GS.wanted
 	var turf_txt := " · 青岚地盘" if GS.red_water == 2 else ""
-	_favor_lb.text = "行商老赵 · 人情 " + str(GS.merchant_favor) + " · 价 -" + str(d) + "%" + turf_txt + (" · 通缉 " + str(w) if w > 0 else "")
+	if w > 0:
+		_favor_lb.text = "行商老赵 · 黑市价 +50% · 通缉 " + str(w)
+	else:
+		_favor_lb.text = "行商老赵 · 人情 " + str(GS.merchant_favor) + " · 价 -" + str(d) + "%" + turf_txt
 	for i in GOODS.size():
 		var g: Dictionary = GOODS[i]
 		var p := _price(int(g["base"]))
 		_price_lbs[i].text = str(p) + " 两"
-		_buy_btns[i].disabled = w > 0 or GS.coin("silver") < p
-	_sell_btn.disabled = w > 0 or GS.material_count("forge_stone") < 5
+		_buy_btns[i].disabled = GS.coin("silver") < p
+	_sell_btn.disabled = GS.material_count("forge_stone") < 5
+	_sell_btn.text = "销赃（5锻造石 +20两）" if w > 0 else "卖锻造石 ×5（+15两）"
 	_rob_btn.visible = w <= 0
 	_wash_btn.visible = w > 0
 	if w > 0:
@@ -115,9 +121,13 @@ func _buy(i: int) -> void:
 		return
 	GS.add_coin("silver", -p)
 	GS.add_material(str(g["id"]), int(g["n"]))
-	GS.merchant_favor = mini(100, GS.merchant_favor + 2)
+	if GS.wanted <= 0:
+		GS.merchant_favor = mini(100, GS.merchant_favor + 2)
 	GS.save_game()
-	_msg_lb.text = "买下 " + GS.mat_name(str(g["id"])) + " ×" + str(g["n"]) + "。老赵记了你一份人情。"
+	if GS.wanted > 0:
+		_msg_lb.text = "黑市价买下 " + GS.mat_name(str(g["id"])) + " ×" + str(g["n"]) + "。不记人情。"
+	else:
+		_msg_lb.text = "买下 " + GS.mat_name(str(g["id"])) + " ×" + str(g["n"]) + "。老赵记了你一份人情。"
 	_refresh()
 
 func _rob() -> void:
@@ -154,8 +164,13 @@ func _sell() -> void:
 		_msg_lb.text = "锻造石不够五块。"
 		return
 	GS.add_material("forge_stone", -5)
-	GS.add_coin("silver", 15)
-	GS.merchant_favor = mini(100, GS.merchant_favor + 1)
-	GS.save_game()
-	_msg_lb.text = "卖了五块锻造石，换 15 两。"
+	if GS.wanted > 0:
+		GS.add_coin("silver", 20)
+		GS.save_game()
+		_msg_lb.text = "五块锻造石走了黑市，换 20 两。不记人情。"
+	else:
+		GS.add_coin("silver", 15)
+		GS.merchant_favor = mini(100, GS.merchant_favor + 1)
+		GS.save_game()
+		_msg_lb.text = "卖了五块锻造石，换 15 两。"
 	_refresh()

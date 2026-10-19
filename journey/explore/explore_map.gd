@@ -112,6 +112,16 @@ var _broker_pending := false
 var _broker_done := false
 var _story_pending := false
 var _story_panel: Control
+var _north_cell := Vector2i(-1, -1)
+var _north_panel: Control
+var _north_pending := false
+var _north_done := false
+var _north_fight_pending := false
+var _north_final := false
+var _brawl_cell := Vector2i(-1, -1)
+var _brawl_panel: Control
+var _brawl_pending := false
+var _brawl_done := false
 var _chest_cells: Array = []
 var _obstacles: Array = []
 var _enemy_cells: Array = []
@@ -233,6 +243,34 @@ func _gen_world() -> void:
 				continue
 			_broker_cell = cb
 			break
+	# 北境黑风寨：第二处真实据点（未平定且世界档 ≥2）
+	_north_cell = Vector2i(-1, -1)
+	if GameState.world_tier >= 2:
+		guard = 0
+		while guard < 500:
+			guard += 1
+			var cn := Vector2i(rng.randi_range(1, MAP_W - 2), rng.randi_range(1, MAP_H - 2))
+			if _reserved(cn, 2) or _obstacles.has(cn) or _chest_cells.has(cn) or _poi_cells.has(cn) or _enemy_cells.has(cn) or cn == _rival_cell or cn == _broker_cell:
+				continue
+			if Vector2(cn).distance_to(Vector2(START_CELL)) < 7.0:
+				continue
+			if Vector2(cn).distance_to(Vector2(SECT_CELL)) < 8.0:
+				continue
+			_north_cell = cn
+			break
+	# 两寨火并：赤水已控 + 北境未平时，地图出现一处多方混战
+	_brawl_cell = Vector2i(-1, -1)
+	if GameState.red_water == 2 and not GameState.north_peace and GameState.world_tier >= 3:
+		guard = 0
+		while guard < 500:
+			guard += 1
+			var cw := Vector2i(rng.randi_range(1, MAP_W - 2), rng.randi_range(1, MAP_H - 2))
+			if _reserved(cw, 2) or _obstacles.has(cw) or _chest_cells.has(cw) or _poi_cells.has(cw) or _enemy_cells.has(cw) or cw == _rival_cell or cw == _broker_cell or cw == _north_cell:
+				continue
+			if Vector2(cw).distance_to(Vector2(START_CELL)) < 7.0:
+				continue
+			_brawl_cell = cw
+			break
 	# Boss 落在离起点远、避开所有已占格的位置；找不到就退到 (3,3)
 	var bnames := ["山君", "夜叉", "老妖"]
 	_boss_name = "雪魈" if _land_id == 4 else str(bnames[GameState.world_seed % bnames.size()])
@@ -241,7 +279,7 @@ func _gen_world() -> void:
 	while guard < 500:
 		guard += 1
 		var cb := Vector2i(rng.randi_range(1, MAP_W - 2), rng.randi_range(1, MAP_H - 2))
-		if _reserved(cb, 2) or _obstacles.has(cb) or _chest_cells.has(cb) or _poi_cells.has(cb) or _enemy_cells.has(cb) or cb == _broker_cell:
+		if _reserved(cb, 2) or _obstacles.has(cb) or _chest_cells.has(cb) or _poi_cells.has(cb) or _enemy_cells.has(cb) or cb == _broker_cell or cb == _north_cell or cb == _brawl_cell:
 			continue
 		if Vector2(cb).distance_to(Vector2(START_CELL)) < 9.0:
 			continue
@@ -757,6 +795,8 @@ func _draw() -> void:
 	_draw_sect_gate()
 	_draw_rival()
 	_draw_broker()
+	_draw_north()
+	_draw_brawl()
 	_draw_boss()
 	_draw_pois()
 	_draw_chests()
@@ -863,6 +903,36 @@ func _draw_broker() -> void:
 	draw_rect(Rect2(p + Vector2(-28, -82), Vector2(56, 20)), Color("#d8b06a") if not _broker_done else Color("#6b655c"))
 	draw_string(ThemeDB.fallback_font, p + Vector2(-24, -67), "听雨楼", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("#2a1814"))
 	draw_string(ThemeDB.fallback_font, p + Vector2(-26, -96), "听雨楼", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("#9ab0c0") if not _broker_done else Color("#9a927f"))
+
+func _draw_north() -> void:
+	if _north_cell.x < 0:
+		return
+	var p := _cell_pos(_north_cell.x, _north_cell.y)
+	var peace := GameState.north_peace
+	var col := Color("#6b655c") if _north_done else (Color("#2a4a4a") if peace else Color("#262a2e"))
+	draw_circle(p + Vector2(0, 22), 34.0, Color(0.03, 0.03, 0.03, 0.4))
+	draw_rect(Rect2(p + Vector2(-34, 2), Vector2(68, 20)), Color("#2a2a28"))
+	draw_rect(Rect2(p + Vector2(-38, -52), Vector2(10, 54)), Color("#1f2226"))
+	draw_rect(Rect2(p + Vector2(28, -52), Vector2(10, 54)), Color("#1f2226"))
+	draw_rect(Rect2(p + Vector2(-46, -60), Vector2(92, 10)), Color("#141618"))
+	draw_colored_polygon(PackedVector2Array([p + Vector2(-54, -60), p + Vector2(54, -60), p + Vector2(0, -82)]), col)
+	draw_rect(Rect2(p + Vector2(-26, -108), Vector2(52, 20)), Color("#6b655c") if _north_done else Color("#c9a64a"))
+	draw_string(ThemeDB.fallback_font, p + Vector2(-22, -93), "北境哨" if peace else "黑风寨", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("#141618"))
+	draw_string(ThemeDB.fallback_font, p + Vector2(-30, -132), ("青岚·北境哨" if not _north_done else "北境哨·已取") if peace else ("黑风寨·已平" if _north_done else "黑风寨"), HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("#9a927f") if _north_done else Color("#c9a64a"))
+
+func _draw_brawl() -> void:
+	if _brawl_cell.x < 0:
+		return
+	var p := _cell_pos(_brawl_cell.x, _brawl_cell.y)
+	var done := _brawl_done
+	draw_circle(p + Vector2(0, 18), 30.0, Color(0.03, 0.03, 0.03, 0.36))
+	draw_rect(Rect2(p + Vector2(-28, 4), Vector2(56, 16)), Color("#332a22"))
+	draw_line(p + Vector2(-24, 12), p + Vector2(-24, -26), Color("#3a2a1c"), 5.0)
+	draw_line(p + Vector2(24, 12), p + Vector2(24, -26), Color("#3a2a1c"), 5.0)
+	draw_colored_polygon(PackedVector2Array([p + Vector2(-24, -26), p + Vector2(-4, -18), p + Vector2(-24, -8)]), Color("#6b655c") if done else Color("#8d2f2a"))
+	draw_colored_polygon(PackedVector2Array([p + Vector2(24, -26), p + Vector2(4, -18), p + Vector2(24, -8)]), Color("#6b655c") if done else Color("#1f2226"))
+	draw_line(p + Vector2(-10, 0), p + Vector2(10, -16), Color("#d8d2c2" if not done else "#6b655c"), 3.0)
+	draw_string(ThemeDB.fallback_font, p + Vector2(-34, -42), "两寨火并" if not done else "火并·已散", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("#9a927f") if done else Color("#e06a5a"))
 
 func _draw_boss() -> void:
 	if _boss_cell.x < 0:
@@ -1077,6 +1147,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if _broker_panel != null and _broker_panel.visible:
 		return
+	if _north_panel != null and _north_panel.visible:
+		return
+	if _brawl_panel != null and _brawl_panel.visible:
+		return
 	if _boss_panel != null and _boss_panel.visible:
 		return
 	if event.is_action_pressed("ui_cancel"):
@@ -1146,9 +1220,14 @@ func _poi_data(typ: String) -> Dictionary:
 				"body": "供桌积着灰，香炉冷透。梁上似乎还藏着东西。\n\n（只能探一次）",
 				"choices": [{"id": "loot", "label": "搜供桌"}, {"id": "incense", "label": "上一炷香"}]}
 		"snow_cave":
+			var cc: Array = [{"id": "warm", "label": "避 风（行动+3）"}, {"id": "probe", "label": "探 洞"}]
+			if not GameState.snow_charm:
+				cc.append({"id": "charm", "label": "买护符（80两）"})
+			elif not GameState.snow_charm2:
+				cc.append({"id": "charm", "label": "升护符（150两）"})
 			return {"title": "雪　洞", "sub": "雪坡上裂开一口黑黢黢的洞。",
 				"body": "洞里没有风，反倒有些暖。\n\n（只能探一次）",
-				"choices": [{"id": "warm", "label": "避 风（行动+3）"}, {"id": "probe", "label": "探 洞"}]}
+				"choices": cc}
 		"well":
 			return {"title": "古　井", "sub": "井沿磨得发亮，井水黑得看不见底。",
 				"body": "水桶还在，绳子没烂。\n\n（只能探一次）",
@@ -1232,6 +1311,25 @@ func _on_poi_pick(id: String) -> void:
 					GameState.add_coin("silver", 15)
 					used = true
 					msg = "洞里只有几块冻石和 15 两碎银。"
+			elif id == "charm":
+				if GameState.snow_charm2:
+					msg = "护符已经暖透了。"
+				elif not GameState.snow_charm:
+					if GameState.coin("silver") < 80:
+						msg = "护符要 80 两——不够。"
+					else:
+						GameState.add_coin("silver", -80)
+						GameState.snow_charm = true
+						GameState.save_game()
+						msg = "你从洞壁暗格里摸出一枚暖玉护符。雪魈的寒霜会轻些；洞还能再进，护符也能再养。"
+				else:
+					if GameState.coin("silver") < 150:
+						msg = "养护符要 150 两——不够。"
+					else:
+						GameState.add_coin("silver", -150)
+						GameState.snow_charm2 = true
+						used = true
+						msg = "护符吃足了洞里的暖意。雪魈的寒霜再也压不住你了。"
 		"tea":
 			if id == "drink":
 				if GameState.coin("silver") < 10:
@@ -2068,6 +2166,316 @@ func _on_broker_closed() -> void:
 	if _rel_btn != null:
 		_rel_btn.visible = true
 
+func _north_battle() -> void:
+	if _north_done or GameState.north_peace or _battle_active:
+		return
+	var cost := 5 if _north_final else 2
+	if not GameState.action_spend(cost):
+		_set_msg("行动不够——要 " + str(cost) + " 点。")
+		return
+	_busy = true
+	_battle_active = true
+	_has_click = false
+	_moving = false
+	queue_redraw()
+	_update_action_label()
+	if _action_lb != null:
+		_action_lb.visible = false
+	if _wanted_lb != null:
+		_wanted_lb.visible = false
+	if _codex_btn != null:
+		_codex_btn.visible = false
+	if _rel_btn != null:
+		_rel_btn.visible = false
+	if _back_btn != null:
+		_back_btn.visible = false
+	_map_pos_before_battle = _player.position
+	_camera.enabled = false
+	for e_v in _enemies:
+		var e: Node2D = e_v
+		if is_instance_valid(e):
+			e.visible = false
+	_player.visible = false
+	var tier := clampi(GameState.world_tier, 1, 5)
+	var foe_hp := (420 + tier * 90) if _north_final else (240 + tier * 60)
+	var foe_atk := (18 + tier * 3) if _north_final else (12 + tier * 2)
+	var foe_scale := 1.3 if _north_final else 1.15
+	var node := {
+		"t": "battle", "name": "黑风寨主" if not _north_final else "黑风寨主·决战",
+		"foe": {"hp": foe_hp, "atk": foe_atk, "scale": foe_scale},
+		"money": [0, 0], "stick_enemies": true,
+	}
+	node["affixes"] = ["leech", "berserk"] if _north_final else ["leech"]
+	if _north_final:
+		node["arts"] = [{"name": "黑风乱斩", "kind": "dash", "mult": 1.1, "follow": 0.6, "cd": 3, "apply": {"id": "weak", "turns": 2, "stacks": 1}}]
+	else:
+		node["arts"] = [{"name": "黑风刀法", "kind": "damage", "mult": 1.4, "cd": 3, "apply": {"id": "sunder", "turns": 2, "stacks": 1}}]
+	var bp := StickFighter.new()
+	bp.position = Vector2(210.0, 950.0)
+	add_child(bp)
+	var battle := DuelBattle.new()
+	add_child(battle)
+	var res: Dictionary = await battle.run(_state, bp, _fx, node, false, [])
+	if is_instance_valid(battle):
+		battle.queue_free()
+	if is_instance_valid(bp):
+		bp.queue_free()
+	_player.visible = true
+	_player.position = _map_pos_before_battle
+	_camera.enabled = true
+	var won := bool(res.get("win", false))
+	_battle_active = false
+	_busy = false
+	if _back_btn != null:
+		_back_btn.visible = true
+	if _action_lb != null:
+		_action_lb.visible = true
+	if _wanted_lb != null:
+		_wanted_lb.visible = GameState.wanted > 0
+	if _codex_btn != null:
+		_codex_btn.visible = true
+	if _rel_btn != null:
+		_rel_btn.visible = true
+	for e_v in _enemies:
+		var e: Node2D = e_v
+		if is_instance_valid(e):
+			e.visible = not bool(e.get_meta("beaten", false))
+	_update_action_label()
+	_north_done = true
+	if won:
+		if _north_final:
+			GameState.north_peace = true
+			GameState.add_coin("silver", 300)
+			GameState.add_material("atlas", 2)
+			if not GameState.north_weapon:
+				var nw: Dictionary = GameState.grant_north_weapon()
+				GameState.north_weapon = true
+				GameState.note_war("北境平定，取黑风刀")
+				_set_msg("黑风寨的旗倒了：银两 +300 · 舆图 +2 · 黑风刀入库。", 3.0)
+			else:
+				GameState.note_war("北境黑风寨平定")
+				_set_msg("黑风寨的旗倒了：银两 +300 · 舆图 +2。", 3.0)
+		else:
+			GameState.north_score = mini(100, GameState.north_score + 15)
+			GameState.north_wins += 1
+			GameState.add_coin("silver", 80)
+			GameState.note_war("北境小胜")
+			_set_msg("攻寨得手：战线 +15 · 银两 +80。", 3.0)
+	else:
+		if _north_final:
+			GameState.north_score = 80
+			GameState.note_war("北境决战失利")
+			_set_msg("决战失利，北境战线退回 80。", 3.0)
+		else:
+			GameState.north_score = maxi(0, GameState.north_score - 10)
+			GameState.note_war("北境失利")
+			_set_msg("攻寨失利：战线 -10。", 3.0)
+	GameState.save_game()
+	queue_redraw()
+
+func _north_near() -> bool:
+	if _north_cell.x < 0:
+		return false
+	return _player.position.distance_to(_cell_pos(_north_cell.x, _north_cell.y)) < 110.0
+
+func _open_north() -> void:
+	if _north_done:
+		_set_msg("这趟已经处理过北境了")
+		return
+	if _north_panel == null:
+		var np = POIPanel.new()
+		np.connect("picked", _on_north_pick)
+		np.connect("closed", _on_north_closed)
+		_toast_layer.add_child(np)
+		_north_panel = np
+	var data := {}
+	if GameState.north_peace:
+		var pchoices: Array = [{"id": "supply", "label": "取补给"}]
+		if not GameState.north_garrison:
+			pchoices.append({"id": "garrison", "label": "驻军（150两）"})
+		data = {
+			"title": "青岚·北境哨",
+			"sub": "黑风寨旧址上立起了青岚的哨旗。",
+			"body": "哨里的弟子认得你，搬出一只补给箱。\n（一图一次）",
+			"choices": pchoices,
+		}
+	else:
+		var choices: Array = []
+		if GameState.north_score >= 100:
+			choices.append({"id": "final", "label": "决 战（5行动）"})
+		else:
+			choices.append({"id": "raid", "label": "攻 寨（2行动）"})
+			choices.append({"id": "pay", "label": "买 路（60两）"})
+		data = {
+			"title": "黑 风 寨",
+			"sub": "北境马贼的寨子，黑幡压着风口。",
+			"body": "寨墙上有人张弓。\n" + ("战线已满，可决战。" if GameState.north_score >= 100 else "攻寨 2 行动；买路 60 两。"),
+			"choices": choices,
+		}
+	_north_panel.call("open", data)
+	_busy = true
+	_moving = false
+	_has_click = false
+	for e_v in _enemies:
+		var e: Node2D = e_v
+		if is_instance_valid(e):
+			e.visible = false
+	if _action_lb != null:
+		_action_lb.visible = false
+	if _back_btn != null:
+		_back_btn.visible = false
+	if _codex_btn != null:
+		_codex_btn.visible = false
+	if _rel_btn != null:
+		_rel_btn.visible = false
+
+func _on_north_pick(id: String) -> void:
+	if GameState.north_peace:
+		if id == "supply":
+			var ss := 50 if GameState.north_garrison else 30
+			var sst := 2 if GameState.north_garrison else 1
+			GameState.add_coin("silver", ss)
+			GameState.add_material("forge_stone", sst)
+			_north_done = true
+			GameState.save_game()
+			_north_panel.call("close")
+			_set_msg("北境哨补给：银两 +" + str(ss) + " · 锻造石 +" + str(sst) + "。")
+			queue_redraw()
+			return
+		if id == "garrison":
+			if GameState.coin("silver") < 150:
+				_north_panel.call("set_result", "驻军要 150 两——不够。")
+				return
+			GameState.add_coin("silver", -150)
+			GameState.north_garrison = true
+			GameState.note_war("北境哨驻了军")
+			GameState.save_game()
+			_north_panel.call("close")
+			_set_msg("青岚的兵进了哨。北境哨税会多些。")
+			queue_redraw()
+			return
+		_north_panel.call("close")
+		return
+	if id == "pay":
+		if GameState.coin("silver") < 60:
+			_north_panel.call("set_result", "买路要 60 两——不够。")
+			return
+		GameState.add_coin("silver", -60)
+		_north_done = true
+		GameState.save_game()
+		_north_panel.call("close")
+		_set_msg("你交了买路钱。黑风寨放你过去。")
+		queue_redraw()
+		return
+	if id == "raid":
+		_north_final = false
+		_north_fight_pending = true
+		_north_panel.call("close")
+		return
+	if id == "final":
+		if GameState.north_score < 100:
+			return
+		_north_final = true
+		_north_fight_pending = true
+		_north_panel.call("close")
+		return
+	_north_panel.call("close")
+
+func _on_north_closed() -> void:
+	_busy = false
+	_north_pending = false
+	for e_v in _enemies:
+		var e: Node2D = e_v
+		if is_instance_valid(e):
+			e.visible = not bool(e.get_meta("beaten", false))
+	if _action_lb != null:
+		_action_lb.visible = true
+	if _back_btn != null:
+		_back_btn.visible = true
+	if _codex_btn != null:
+		_codex_btn.visible = true
+	if _rel_btn != null:
+		_rel_btn.visible = true
+	if _north_fight_pending:
+		_north_fight_pending = false
+		call_deferred("_north_battle")
+
+func _brawl_near() -> bool:
+	if _brawl_cell.x < 0:
+		return false
+	return _player.position.distance_to(_cell_pos(_brawl_cell.x, _brawl_cell.y)) < 108.0
+
+func _open_brawl() -> void:
+	if _brawl_done:
+		_set_msg("火并已经散了")
+		return
+	if _brawl_panel == null:
+		var bp = POIPanel.new()
+		bp.connect("picked", _on_brawl_pick)
+		bp.connect("closed", _on_brawl_closed)
+		_toast_layer.add_child(bp)
+		_brawl_panel = bp
+	var data := {
+		"title": "两 寨 火 并",
+		"sub": "赤水与黑风的人在谷口撞上了。",
+		"body": "两拨人杀得难分，地上已经躺了几个。\n帮一边，还是等他们散？",
+		"choices": [{"id": "red", "label": "帮赤水"}, {"id": "black", "label": "帮黑风"}, {"id": "watch", "label": "观 战"}],
+	}
+	_brawl_panel.call("open", data)
+	_busy = true
+	_moving = false
+	_has_click = false
+	for e_v in _enemies:
+		var e: Node2D = e_v
+		if is_instance_valid(e):
+			e.visible = false
+	if _action_lb != null:
+		_action_lb.visible = false
+	if _back_btn != null:
+		_back_btn.visible = false
+	if _codex_btn != null:
+		_codex_btn.visible = false
+	if _rel_btn != null:
+		_rel_btn.visible = false
+
+func _on_brawl_pick(id: String) -> void:
+	_brawl_done = true
+	if id == "red":
+		GameState.war_score = mini(100, GameState.war_score + 10)
+		GameState.north_score = maxi(0, GameState.north_score - 10)
+		GameState.add_coin("silver", 80)
+		GameState.note_war("两寨火并，你帮了赤水")
+		_set_msg("赤水的人赢了这一阵。战线 +10 · 北境 -10 · 银两 +80。")
+	elif id == "black":
+		GameState.north_score = mini(100, GameState.north_score + 10)
+		GameState.war_score = maxi(0, GameState.war_score - 10)
+		GameState.add_coin("silver", 80)
+		GameState.note_war("两寨火并，你帮了黑风")
+		_set_msg("黑风的人赢了这一阵。北境 +10 · 赤水 -10 · 银两 +80。")
+	else:
+		GameState.add_coin("silver", 30)
+		GameState.note_war("你在两寨火并后捡了尸")
+		_set_msg("等他们散尽，你从地上捡了 30 两。")
+	GameState.save_game()
+	_brawl_panel.call("close")
+	queue_redraw()
+
+func _on_brawl_closed() -> void:
+	_busy = false
+	_brawl_pending = false
+	for e_v in _enemies:
+		var e: Node2D = e_v
+		if is_instance_valid(e):
+			e.visible = not bool(e.get_meta("beaten", false))
+	if _action_lb != null:
+		_action_lb.visible = true
+	if _back_btn != null:
+		_back_btn.visible = true
+	if _codex_btn != null:
+		_codex_btn.visible = true
+	if _rel_btn != null:
+		_rel_btn.visible = true
+
 func _open_sect() -> void:
 	if _sect_panel == null:
 		var sp = SectPanel.new()
@@ -2234,6 +2642,22 @@ func _on_click(pos: Vector2) -> void:
 			_open_broker()
 			return
 		_broker_pending = true
+	if cell == _north_cell:
+		if _north_done:
+			_set_msg("北境已经处理过了")
+			return
+		if _north_near():
+			_open_north()
+			return
+		_north_pending = true
+	if cell == _brawl_cell:
+		if _brawl_done:
+			_set_msg("火并已经散了")
+			return
+		if _brawl_near():
+			_open_brawl()
+			return
+		_brawl_pending = true
 	if _chest_cells.has(cell):
 		_open_chest(cell)
 		return
@@ -2335,6 +2759,20 @@ func _process(delta: float) -> void:
 		_has_click = false
 		_open_broker()
 		return
+	if _north_pending and not _in_house and _north_near():
+		_north_pending = false
+		_moving = false
+		_path.clear()
+		_has_click = false
+		_open_north()
+		return
+	if _brawl_pending and not _in_house and _brawl_near():
+		_brawl_pending = false
+		_moving = false
+		_path.clear()
+		_has_click = false
+		_open_brawl()
+		return
 	if _in_house:
 		if not _moving:
 			return
@@ -2401,6 +2839,7 @@ func _try_battle(enemy: Node2D) -> void:
 		"guard": is_guard,
 		"boss": is_boss,
 		"chill": is_snow_boss,
+		"chill_guard": 2 if GameState.snow_charm2 else (1 if GameState.snow_charm else 0),
 	}
 	if is_snow_boss:
 		node["affixes"] = ["berserk"]

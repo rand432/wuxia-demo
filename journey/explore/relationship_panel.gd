@@ -6,6 +6,7 @@ const UiKit := preload("res://shared/ui_kit.gd")
 const GS := preload("res://shared/game_state.gd")
 const WarReportPanel := preload("res://journey/explore/war_report_panel.gd")
 const EpiloguePanel := preload("res://journey/explore/epilogue_panel.gd")
+const WarTablePanel := preload("res://journey/explore/war_table_panel.gd")
 
 const LAND_NAMES := ["山多·路窄", "水多·雾重", "林密·怪多", "石多·宝多", "雪原·苦寒"]
 
@@ -22,6 +23,8 @@ var _war_btn: Button
 var _war_panel: Control
 var _epi_btn: Button
 var _epi_panel: Control
+var _war_table_btn: Button
+var _war_table_panel: Control
 var _close_btn: Button
 var _last_info := {}
 
@@ -54,6 +57,8 @@ func _ready() -> void:
 	_war_btn.pressed.connect(_open_war)
 	_epi_btn = UiKit.make_button(panel, Vector2(380, 20), Vector2(110, 34), "后 记", 14)
 	_epi_btn.pressed.connect(_open_epi)
+	_war_table_btn = UiKit.make_button(panel, Vector2(260, 20), Vector2(110, 34), "战 线", 14)
+	_war_table_btn.pressed.connect(_open_war_table)
 	_close_btn = UiKit.make_button(panel, Vector2(220, 880), Vector2(200, 46), "关 闭", 18)
 	_close_btn.pressed.connect(close)
 	visible = false
@@ -101,7 +106,7 @@ func open(info: Dictionary) -> void:
 		sect += "\n山门可入"
 	_sect_lb.text = sect
 	var bl := ""
-	for n in ["山君", "夜叉", "老妖"]:
+	for n in ["山君", "夜叉", "老妖", "雪魈"]:
 		bl += n + "：" + ("已首杀 · 弱点已识破" if GS.boss_kills.has(n) else "未首杀") + "\n"
 	_boss_lb.text = bl.strip_edges()
 	var rw: String = str(["未动", "已破", "青岚控制"][clampi(GS.red_water, 0, 2)])
@@ -136,6 +141,20 @@ func _open_war() -> void:
 		_close_btn.visible = false
 
 func _on_war_closed() -> void:
+	if _close_btn != null:
+		_close_btn.visible = true
+
+func _open_war_table() -> void:
+	if _war_table_panel == null:
+		var wt = WarTablePanel.new()
+		wt.connect("closed", _on_war_table_closed)
+		add_child(wt)
+		_war_table_panel = wt
+	_war_table_panel.call("open")
+	if _close_btn != null:
+		_close_btn.visible = false
+
+func _on_war_table_closed() -> void:
 	if _close_btn != null:
 		_close_btn.visible = true
 
@@ -198,6 +217,8 @@ func _input(event: InputEvent) -> void:
 	if _war_panel != null and _war_panel.visible:
 		return
 	if _epi_panel != null and _epi_panel.visible:
+		return
+	if _war_table_panel != null and _war_table_panel.visible:
 		return
 	if event.is_action_pressed("ui_cancel"):
 		get_viewport().set_input_as_handled()

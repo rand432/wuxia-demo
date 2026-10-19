@@ -887,11 +887,21 @@ static var war_score := 0
 static var broker_rep := 0
 static var broker_quest := 0
 static var broker_pardon := false
+# v263：北境黑风寨战线（抽象战线）
+static var north_score := 0
+static var north_peace := false
+static var north_wins := 0
+static var north_weapon := false
+static var north_tax_day := ""
+static var ng_plus := 0
+static var north_garrison := false
 static var broker_weapon := false
 # v260：听雨楼密信剧情（0=未触发 / 1=交青岚 / 2=卖赤水 / 3=烧掉）
 static var story_letter := 0
 static var story_follow := 0
 static var story_title := ""
+static var snow_charm := false
+static var snow_charm2 := false
 static var turf_tax_day := ""
 static var war_notes: Array = []
 
@@ -3511,6 +3521,33 @@ static func grant_broker_weapon() -> Dictionary:
 		forge_bag.pop_front()
 	return {"sid": sid, "name": nm}
 
+static func grant_north_weapon() -> Dictionary:
+	# v264：北境平定专属——黑风刀。
+	var nm := "黑风刀"
+	var kind := "dual"
+	var atk := 52
+	var dmg := 7
+	var st := {"atk": atk + 4, "dmg": dmg, "spd": 3}
+	var sid := forge_next_sid()
+	var set := {
+		"id": sid, "name": nm, "item": nm, "pool": "weapon",
+		"quality": "绝品", "weapon": kind, "no_drop": true, "forge": true,
+		"parts": [], "item_stats": st, "desc": "北境平定专属",
+	}
+	forge_cards[sid] = set
+	Cards.register_forged(sid, set)
+	vault_add_item(sid, 1)
+	forge_bag.append({
+		"sid": sid, "blank": "north", "weapon": nm, "kind": kind,
+		"quality": 4, "cap": 4, "enhance": 10, "cracks": 0,
+		"base_atk": float(atk), "base_dmg": float(dmg),
+		"inspired_left": 0, "round_inspired": false, "awaiting": false,
+		"affixes": ["yinrui", "qingshen"], "rule": "no_break", "source": "north",
+	})
+	if forge_bag.size() > 40:
+		forge_bag.pop_front()
+	return {"sid": sid, "name": nm}
+
 static func forge_remove(sid: String) -> void:
 	forge_cards.erase(sid)
 	Cards.unregister_forged(sid)
@@ -4808,6 +4845,35 @@ static func broker_rank_name() -> String:
 		return "熟客"
 	return "生客"
 
+static func begin_new_cycle() -> void:
+	ng_plus = mini(99, ng_plus + 1)
+	world_seed += 1
+	world_tier = 1
+	red_water = 0
+	red_water_wall = false
+	red_water_market = false
+	red_water_garrison = false
+	red_water_taxpost = false
+	red_water_peace = false
+	war_score = 0
+	turf_tax_day = ""
+	north_score = 0
+	north_peace = false
+	north_garrison = false
+	north_wins = 0
+	north_tax_day = ""
+	story_letter = 0
+	story_follow = 0
+	broker_rep = 0
+	broker_quest = 0
+	broker_pardon = false
+	boss_kills.clear()
+	wanted = 0
+	jailed_days = 0
+	action = ACTION_MAX
+	war_notes.clear()
+	save_game()
+
 static func note_war(s: String) -> void:
 	if s == "":
 		return
@@ -6058,10 +6124,19 @@ static func load_game() -> void:
 	broker_rep = clampi(int(cf.get_value("world", "broker_rep", 0)), 0, 100)
 	broker_quest = clampi(int(cf.get_value("world", "broker_quest", 0)), 0, 3)
 	broker_pardon = bool(cf.get_value("world", "broker_pardon", false))
+	north_score = clampi(int(cf.get_value("world", "north_score", 0)), 0, 100)
+	north_peace = bool(cf.get_value("world", "north_peace", false))
+	north_wins = clampi(int(cf.get_value("world", "north_wins", 0)), 0, 999)
+	north_weapon = bool(cf.get_value("world", "north_weapon", false))
+	north_tax_day = str(cf.get_value("world", "north_tax_day", ""))
+	ng_plus = clampi(int(cf.get_value("world", "ng_plus", 0)), 0, 99)
+	north_garrison = bool(cf.get_value("world", "north_garrison", false))
 	broker_weapon = bool(cf.get_value("world", "broker_weapon", false))
 	story_letter = clampi(int(cf.get_value("world", "story_letter", 0)), 0, 3)
 	story_follow = clampi(int(cf.get_value("world", "story_follow", 0)), 0, 1)
 	story_title = str(cf.get_value("world", "story_title", ""))
+	snow_charm = bool(cf.get_value("world", "snow_charm", false))
+	snow_charm2 = bool(cf.get_value("world", "snow_charm2", false))
 	turf_tax_day = str(cf.get_value("world", "turf_tax_day", ""))
 	war_notes = _sa(cf.get_value("world", "war_notes", []), war_notes)
 	advance_lv = clampi(int(cf.get_value("world", "advance_lv", 0)), 0, Realm.MAX_LV)   # v121：进阶境界
@@ -6118,6 +6193,17 @@ static func load_game() -> void:
 			add_material("forge_stone", tax_st)
 			note_war("青岚地盘税：银两 +" + str(tax_s) + " · 锻造石 +" + str(tax_st))
 			note_push("青岚地盘税入账：银两 +" + str(tax_s) + " · 锻造石 +" + str(tax_st))
+	# v265：北境平定 → 每日哨税（40 两 +1 石）
+	if north_peace:
+		var today2 := Time.get_date_string_from_system()
+		if north_tax_day != today2:
+			north_tax_day = today2
+			var ns := 60 if north_garrison else 40
+			var nst := 2 if north_garrison else 1
+			add_coin("silver", ns)
+			add_material("forge_stone", nst)
+			note_war("北境哨税：银两 +" + str(ns) + " · 锻造石 +" + str(nst))
+			note_push("北境哨税入账：银两 +" + str(ns) + " · 锻造石 +" + str(nst))
 	# v244：老档 / 新档给一张舆图；用掉后 world_seed > 0，不再补发
 	if int(materials.get("atlas", 0)) <= 0 and world_seed == 0:
 		materials["atlas"] = 1
@@ -6196,10 +6282,19 @@ static func save_game() -> void:
 	cf.set_value("world", "broker_rep", broker_rep)
 	cf.set_value("world", "broker_quest", broker_quest)
 	cf.set_value("world", "broker_pardon", broker_pardon)
+	cf.set_value("world", "north_score", north_score)
+	cf.set_value("world", "north_peace", north_peace)
+	cf.set_value("world", "north_wins", north_wins)
+	cf.set_value("world", "north_weapon", north_weapon)
+	cf.set_value("world", "north_tax_day", north_tax_day)
+	cf.set_value("world", "ng_plus", ng_plus)
+	cf.set_value("world", "north_garrison", north_garrison)
 	cf.set_value("world", "broker_weapon", broker_weapon)
 	cf.set_value("world", "story_letter", story_letter)
 	cf.set_value("world", "story_follow", story_follow)
 	cf.set_value("world", "story_title", story_title)
+	cf.set_value("world", "snow_charm", snow_charm)
+	cf.set_value("world", "snow_charm2", snow_charm2)
 	cf.set_value("world", "turf_tax_day", turf_tax_day)
 	cf.set_value("world", "war_notes", war_notes)
 	cf.set_value("world", "advance_lv", advance_lv)          # v121：进阶境界
@@ -6389,6 +6484,15 @@ static func reset() -> void:
 	story_letter = 0
 	story_follow = 0
 	story_title = ""
+	snow_charm = false
+	snow_charm2 = false
+	north_score = 0
+	north_peace = false
+	north_wins = 0
+	north_weapon = false
+	north_tax_day = ""
+	north_garrison = false
+	ng_plus = 0
 	turf_tax_day = ""
 	war_notes.clear()
 	_idle_last_ts = _idle_now()

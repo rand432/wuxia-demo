@@ -2420,8 +2420,13 @@ func run(state, player: Node2D, fx: Control, node: Dictionary, foe_first := fals
 		_blog("来敌先手！", "hit")
 		_banner("来敌先手！", UiKit.SEAL)
 	if bool(node.get("chill", false)):
-		var chill_msg: String = St.apply(_a(), "slow", 3, 2)
-		_blog("雪魈的寒霜压住身法：" + chill_msg, "guard")
+		var guard := int(node.get("chill_guard", 0))
+		var slow_n := maxi(0, 2 - guard)
+		if slow_n > 0:
+			var chill_msg: String = St.apply(_a(), "slow", 3, slow_n)
+			_blog("雪魈的寒霜压住身法：" + chill_msg, "guard")
+		else:
+			_blog("雪魈的寒霜被护符挡下了", "guard")
 		St.apply(_cur(), "rockskin", 3, 2)
 		_blog("雪魈披上冰甲：减伤 2 层 · 再 3 手", "guard")
 		_banner("寒 霜 · 冰 甲", Color(0.55, 0.75, 0.85))
