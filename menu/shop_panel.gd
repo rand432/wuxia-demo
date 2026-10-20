@@ -40,6 +40,11 @@ const ICON_MAP := {
 	"bone": preload("res://assets/items/mat_bone.png"),
 	"rice": preload("res://assets/items/mat_rice.png"),
 	"jin": preload("res://assets/items/mat_jin.png"),
+	"guo": preload("res://assets/items/mat_guo.png"),
+	"zhi": preload("res://assets/items/mat_zhi.png"),
+	"shen": preload("res://assets/items/mat_shen.png"),
+	"finished_weapon": preload("res://assets/items/it_sword.png"),
+	"finished_gear": preload("res://assets/items/it_armor.png"),
 	"weapon_card": preload("res://assets/items/it_sword.png"),
 	"art_card": preload("res://assets/items/it_book.png"),
 	"gear_card": preload("res://assets/items/it_armor.png"),
@@ -48,6 +53,10 @@ const ICON_MAP := {
 	"tupo_liang": preload("res://assets/ui/shop_pill.png"),
 	"adv_fan": preload("res://assets/ui/shop_pill.png"),
 	"adv_liang": preload("res://assets/ui/shop_pill.png"),
+	"dragon_scale": preload("res://assets/items/it_armor.png"),
+	"regret_ink": preload("res://assets/items/it_scroll.png"),
+	"quench_oil": preload("res://assets/items/it_jar.png"),
+	"star_sand": preload("res://assets/items/it_ingot.png"),
 }
 const ICON_TOOL := preload("res://assets/items/it_token.png")
 
@@ -384,6 +393,10 @@ func _add_card(it: Dictionary) -> void:
 		chip_txt += " · 包裹 " + str(GameState.pill_count(str(it.get("pid", key)))) + " 颗"
 	elif kd == "tool":
 		chip_txt += " · 现有 " + str(GameState.appraise_tool_count(str(it.get("tid", "")))) + " 个"
+	elif kd == "forge_tool":
+		chip_txt += " · 现有 " + str(GameState.forge_tool_count(key)) + " 个"
+	elif kd == "finished":
+		chip_txt += " · 凡 / 良随机"
 	else:
 		chip_txt += " · 现有 " + str(GameState.material_count(key))
 	var chip := _label(chip_txt, 11,
@@ -464,6 +477,10 @@ func _kind_cn(it: Dictionary) -> String:
 			return "丹药"
 		"tool":
 			return "鉴宝道具"
+		"forge_tool":
+			return "锻炉道具"
+		"finished":
+			return "成品"
 		_:
 			return "材料"
 

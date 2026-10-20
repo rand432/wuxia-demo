@@ -4,7 +4,7 @@ extends RefCounted
 # 规则见 docs/锻造_设计稿.md：
 #   · 五结果只在强化时掷；升阶不另掷
 #   · +2%/级，+20 = +40%；升阶基础 ×1.5、强化归 0
-#   · 入神：+10 触发，接下来 7 锤不碎
+#   · 入神：+10 触发，7 秒内最多 6 锤不碎
 #   · 每锤 1 锻造石；开炉 10~30 两；升阶 银两 + 金髓 1
 # ============================================================
 
@@ -128,6 +128,13 @@ static func roll_percents(it: Dictionary) -> Array:
 		p = []
 		for v in (b.get("probs", [8, 45, 25, 17, 5]) as Array):
 			p.append(float(v))
+	var lucky := int(it.get("lucky_success", 0)) + int(it.get("lucky_great", 0)) * 2
+	if lucky > 0:
+		p[1] = maxf(1.0, p[1] - float(lucky) * 5.0)
+		p[0] = maxf(0.0, p[0] - float(lucky) * 3.0)
+		p[2] += float(lucky) * 4.0
+		p[3] += float(lucky) * 3.0
+		p[4] += float(lucky) * 1.5
 	var e := float(it.get("enhance", 0))
 	var cr := float(it.get("cracks", 0))
 	var extra_break := e * 0.15 + cr * 2.0 + float(it.get("damage_bias", 0)) * 5.0
@@ -265,7 +272,7 @@ static func hammer_stones(q: int) -> int:
 	return [1, 2, 3, 4, 5][clampi(q, 0, 4)]
 
 static func ascend_cost(q: int) -> Dictionary:
-	return {"silver": 20 + 20 * clampi(q, 0, 4), "jin": 1}
+	return {"silver": 20 + 20 * clampi(q, 0, 4), "star_iron": 1}
 
 static func card_set(it: Dictionary, sid: String) -> Dictionary:
 	var nm := item_name(it)
@@ -312,46 +319,58 @@ static func trait_of(it: Dictionary) -> String:
 # 图鉴合（V0.1 一条）：石头试组合；合中才进图鉴，之后扣材料一键造胚。
 #   试错只亏石头，材料不动；正式造胚才吃材料。
 # ============================================================
+# 锻炉消耗道具：探险 NPC / 怪物掉落 / 宝箱奖励 / 货栈限购。
+const TOOLS := [
+	{"id": "dragon_scale", "name": "龙鳞", "desc": "下一锤不会破坏", "icon": "it_armor"},
+	{"id": "regret_ink", "name": "悔恨法条", "desc": "清空这把兵器的成功衰减", "icon": "it_scroll"},
+	{"id": "quench_oil", "name": "淬火油", "desc": "下一锤成功/大成功概率提高", "icon": "it_jar"},
+	{"id": "star_sand", "name": "星砂", "desc": "重掷一次词缀", "icon": "it_ingot"},
+]
+static func tool_def(id: String) -> Dictionary:
+	for t in TOOLS:
+		if str((t as Dictionary)["id"]) == id:
+			return (t as Dictionary).duplicate(true)
+	return {}
 const TRIAL_STONES := 3
 const COMBOS := [
-	{"id": "qingfeng", "blank": "qingfeng", "name": "青锋剑胚",
-		"trial": ["bone", "rice"], "hint": "骨粉养锋，米浆淬火",
-		"cost": {"bone": 3, "rice": 2}},
-	{"id": "zhujian", "blank": "zhujian", "name": "竹剑胚",
-		"trial": ["zhi", "rice"], "hint": "紫芝养竹，米浆润节",
-		"cost": {"zhi": 2, "rice": 1}},
-	{"id": "xuantie", "blank": "xuantie", "name": "玄铁刀胚",
-		"trial": ["bone", "jin"], "hint": "骨炭沉锋，金髓定钢",
-		"cost": {"bone": 4, "jin": 1}},
-	{"id": "shangpin", "blank": "shangpin", "name": "上品青锋",
-		"trial": ["zhi", "jin"], "hint": "紫芝养魂，金髓定锋（天生不折）",
-		"cost": {"zhi": 3, "jin": 2}},
-	{"id": "bicheng", "blank": "bicheng", "name": "天生·必成",
-		"trial": ["rice", "jin"], "hint": "米浆定火，金髓锁锋（强化必成）",
-		"cost": {"rice": 3, "jin": 1}},
+	{"id": "qingfeng", "blank": "qingfeng", "name": "凡品剑胚",
+		"trial": ["iron_sand", "bone_coal"], "hint": "铁砂养锋，骨炭定火",
+		"cost": {"iron_sand": 3, "bone_coal": 2}},
+	{"id": "zhujian", "blank": "zhujian", "name": "凡品竹剑胚",
+		"trial": ["iron_sand", "bone_coal"], "hint": "铁砂磨刃，骨炭收口",
+		"cost": {"iron_sand": 2, "bone_coal": 1}},
+	{"id": "xuantie", "blank": "xuantie", "name": "中品刀胚",
+		"trial": ["iron_sand", "fine_iron"], "hint": "铁砂沉锋，精铁定钢",
+		"cost": {"iron_sand": 4, "fine_iron": 1}},
+	{"id": "shangpin", "blank": "shangpin", "name": "上品剑胚",
+		"trial": ["iron_sand", "fine_iron"], "hint": "铁砂养魂，精铁定锋（天生不折）",
+		"cost": {"iron_sand": 4, "fine_iron": 2}},
+	{"id": "bicheng", "blank": "bicheng", "name": "特殊·必成剑胚",
+		"trial": ["iron_sand", "forge_oil"], "hint": "铁砂定形，锻油锁火（强化必成）",
+		"cost": {"iron_sand": 3, "forge_oil": 1}},
 	{"id": "sword_ji", "blank": "sword_ji", "name": "极品剑胚",
-		"trial": ["bone", "jin"], "hint": "骨炭沉锋，金髓定钢", "cost": {"bone": 5, "jin": 2}},
+		"trial": ["iron_sand", "fine_iron"], "hint": "铁砂沉锋，精铁定钢", "cost": {"iron_sand": 5, "fine_iron": 2}},
 	{"id": "sword_jue", "blank": "sword_jue", "name": "绝品剑胚",
-		"trial": ["jin", "zhi"], "hint": "金髓定魂，紫芝养锋", "cost": {"bone": 6, "jin": 3, "zhi": 2}},
+		"trial": ["iron_sand", "star_iron"], "hint": "铁砂聚魂，星铁定锋", "cost": {"iron_sand": 6, "star_iron": 1}},
 	{"id": "gen_fan", "blank": "gen_fan", "name": "凡品胚子",
-		"trial": ["bone", "rice"], "hint": "骨粉定形，米浆收口", "cost": {"bone": 1, "rice": 1}},
+		"trial": ["iron_sand", "bone_coal"], "hint": "铁砂定形，骨炭收口", "cost": {"iron_sand": 2, "bone_coal": 2}},
 	{"id": "gen_zhong", "blank": "gen_zhong", "name": "中品胚子",
-		"trial": ["bone", "rice"], "hint": "骨粉定形，米浆收口", "cost": {"bone": 2, "rice": 2}},
+		"trial": ["iron_sand", "bone_coal"], "hint": "铁砂定形，骨炭收口", "cost": {"iron_sand": 3, "bone_coal": 3}},
 	{"id": "gen_shang", "blank": "gen_shang", "name": "上品胚子",
-		"trial": ["bone", "jin"], "hint": "骨炭沉锋，金髓定钢", "cost": {"bone": 3, "rice": 2}},
+		"trial": ["iron_sand", "fine_iron"], "hint": "铁砂沉锋，精铁定钢", "cost": {"iron_sand": 4, "fine_iron": 1}},
 	{"id": "gen_ji", "blank": "gen_ji", "name": "极品胚子",
-		"trial": ["jin", "rice"], "hint": "金髓锁锋，米浆定火", "cost": {"bone": 4, "rice": 3, "jin": 1}},
+		"trial": ["iron_sand", "fine_iron"], "hint": "铁砂沉锋，精铁定钢", "cost": {"iron_sand": 5, "fine_iron": 2}},
 	{"id": "gen_jue", "blank": "gen_jue", "name": "绝品胚子",
-		"trial": ["jin", "zhi"], "hint": "金髓定魂，紫芝养锋", "cost": {"bone": 5, "rice": 4, "jin": 2}},
+		"trial": ["iron_sand", "star_iron"], "hint": "铁砂聚魂，星铁定锋", "cost": {"iron_sand": 6, "star_iron": 1}},
 	{"id": "armor_bu", "blank": "armor_bu", "name": "青布甲",
-		"trial": ["bone", "rice"], "hint": "骨粉衬里，米浆固布",
-		"cost": {"bone": 2, "rice": 2}},
+		"trial": ["iron_sand", "bone_coal"], "hint": "铁砂衬里，骨炭固布",
+		"cost": {"iron_sand": 2, "bone_coal": 2}},
 	{"id": "helm_mu", "blank": "helm_mu", "name": "木冠",
-		"trial": ["zhi", "bone"], "hint": "紫芝养木，兽骨做骨",
-		"cost": {"zhi": 2, "bone": 1}},
+		"trial": ["iron_sand", "bone_coal"], "hint": "铁砂做骨，骨炭定形",
+		"cost": {"iron_sand": 2, "bone_coal": 1}},
 	{"id": "cloak_ma", "blank": "cloak_ma", "name": "麻布披风",
-		"trial": ["rice", "zhi"], "hint": "米浆浸麻，紫芝染风",
-		"cost": {"rice": 2, "zhi": 1}},
+		"trial": ["iron_sand", "forge_oil"], "hint": "铁砂浸麻，锻油染风",
+		"cost": {"iron_sand": 2, "forge_oil": 1}},
 ]
 
 const SELL_BASE := [8, 25, 75, 220, 600]
@@ -364,7 +383,7 @@ static func sell_price(it: Dictionary) -> int:
 static func scrap_return(it: Dictionary) -> Dictionary:
 	var q := clampi(int(it.get("quality", 0)), 0, 4)
 	var stones := 2 + q * 2 + int(it.get("enhance", 0)) / 5
-	var mats := {"bone": 1} if q <= 1 else {"jin": 1}
+	var mats := {"iron_sand": 1} if q <= 1 else {"fine_iron": 1}
 	return {"stones": stones, "mats": mats}
 
 static func combo(id: String) -> Dictionary:

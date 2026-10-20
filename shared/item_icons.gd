@@ -101,11 +101,17 @@ static func for_mat(k: String) -> Texture2D:
 			return _t("mat_bone")
 		"lingguo":
 			return _t("mat_rice")
-		"jianpei":
+		"jianpei", "iron_sand", "bone_coal":
 			return _t("it_ingot")
+		"forge_oil", "fine_iron", "star_iron":
+			return _t("mat_jin")
 		"atlas":
 			return _t("it_scroll")
 	return _t("it_herb")
+
+# 锻炉道具：TOOLS 里直接写素材图标名
+static func for_tool(icon_name: String) -> Texture2D:
+	return _t(icon_name)
 
 # 丹药 / 消耗
 static func for_pill() -> Texture2D:

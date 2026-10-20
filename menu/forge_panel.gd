@@ -5,8 +5,8 @@ extends Control
 # 规则见 docs/锻造_设计稿.md：
 #   · 五结果只在强化时掷；升阶不另掷
 #   · +2%/级，+20 = +40%；升阶基础 ×1.5、强化归 0
-#   · 入神：+10 触发，接下来 7 锤不碎
-#   · 每锤 1 锻造石；开炉 10~30 两；升阶 银两 + 金髓 1
+#   · 入神：+10 触发，7 秒内最多 6 锤不碎
+#   · 首锤收银两，后续按品质收锻造石；升阶 银两 + 星铁 1
 #
 # V0.1：先出成品入「锻造库」，四槽装备接入下一步。
 # ============================================================
@@ -16,6 +16,7 @@ const UiKit := preload("res://shared/ui_kit.gd")
 const Ui := preload("res://menu/menu_theme.gd")
 const ForgeData := preload("res://menu/data_forge.gd")
 const ItemIcons := preload("res://shared/item_icons.gd")
+const Audio := preload("res://shared/audio.gd")
 
 signal closed
 
@@ -34,6 +35,12 @@ var _bag_lb: Label
 var _hammer_btn: Button
 var _ascend_btn: Button
 var _take_btn: Button
+var _swing_fx: Control
+var _spark_fx: Control
+var _sparks: Array = []
+var _swing_t := 0.0
+var _inspire_bar: ProgressBar
+var _inspire_lb: Label
 var _blank_btns: Array = []
 var _grade_lbs: Array = []
 var _fx_lb: Label
@@ -59,6 +66,7 @@ var _comp_recipe_lb: Label
 var _comp_try_btn: Button
 var _comp_make_btn: Button
 var _comp_page_btn: Button
+var _comp_mode_btn: Button
 var _comp_mat_btns := {}
 var _comp_sel: Array = []
 var _comp_idx := 0
@@ -67,6 +75,10 @@ var _bag_scroll: ScrollContainer
 var _bag_grid: GridContainer
 var _bag_cards := {}
 var _bag_blink: Array = []
+var _bag_from_picker := false
+var _tool_panel: Panel
+var _tool_grid: GridContainer
+var _tool_cards := {}
 var _bag_name_lb: Label
 var _bag_stat_lb: Label
 var _bag_price_lb: Label
@@ -89,6 +101,34 @@ func _process(d: float) -> void:
 	if not visible:
 		return
 	_t += d
+	var ins_it: Dictionary = GameState.forge_item
+	if not ins_it.is_empty() and float(ins_it.get("inspired_left", 0.0)) > 0.0:
+		ins_it["inspired_left"] = maxf(0.0, float(ins_it.get("inspired_left", 0.0)) - d)
+		if float(ins_it.get("inspired_left", 0.0)) <= 0.0:
+			ins_it["inspired_left"] = 0.0
+			ins_it["inspired_hits"] = 0
+			GameState.save_game()
+			refresh()
+		elif _inspire_bar != null:
+			_inspire_bar.visible = true
+			_inspire_bar.value = float(ins_it.get("inspired_left", 0.0))
+			if _inspire_lb != null:
+				_inspire_lb.visible = true
+				_inspire_lb.text = "入 神 · " + ("%.1f" % float(ins_it.get("inspired_left", 0.0))) + " 秒"
+	if _swing_t > 0.0:
+		_swing_t = maxf(0.0, _swing_t - d)
+		if _swing_fx != null:
+			_swing_fx.visible = _swing_t > 0.0
+			_swing_fx.queue_redraw()
+	if not _sparks.is_empty():
+		for sp_v in _sparks:
+			var sp: Dictionary = sp_v
+			sp["life"] = float(sp.get("life", 0.0)) - d
+			sp["p"] = (sp.get("p", Vector2.ZERO) as Vector2) + (sp.get("v", Vector2.ZERO) as Vector2) * d
+			sp["v"] = (sp.get("v", Vector2.ZERO) as Vector2) + Vector2(0, 460) * d
+		_sparks = _sparks.filter(func(x: Dictionary) -> bool: return float(x.get("life", 0.0)) > 0.0)
+		if _spark_fx != null:
+			_spark_fx.queue_redraw()
 	if _shake_t > 0.0:
 		_shake_t -= d
 		var j := Vector2(randf_range(-7.0, 7.0), randf_range(-5.0, 5.0))
@@ -192,6 +232,41 @@ func _build() -> void:
 	_hammer_btn.pressed.connect(_hammer)
 	_take_btn = UiKit.make_button(_panel, Vector2(450, 470), Vector2(160, 64), "卸 下", 23)
 	_take_btn.pressed.connect(_detach)
+	_swing_fx = Control.new()
+	_swing_fx.position = Vector2(290, 235)
+	_swing_fx.size = Vector2(260, 220)
+	_swing_fx.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_swing_fx.visible = false
+	_swing_fx.draw.connect(_draw_swing)
+	_panel.add_child(_swing_fx)
+	_spark_fx = Control.new()
+	_spark_fx.position = Vector2(280, 225)
+	_spark_fx.size = Vector2(280, 220)
+	_spark_fx.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_spark_fx.draw.connect(_draw_sparks)
+	_panel.add_child(_spark_fx)
+	_inspire_lb = _label("", 16, Color(0.72, 0.48, 0.08))
+	_inspire_lb.position = Vector2(160, 424)
+	_inspire_lb.size = Vector2(300, 22)
+	_inspire_lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_inspire_lb.visible = false
+	_panel.add_child(_inspire_lb)
+	_inspire_bar = ProgressBar.new()
+	_inspire_bar.position = Vector2(170, 448)
+	_inspire_bar.size = Vector2(280, 12)
+	_inspire_bar.show_percentage = false
+	_inspire_bar.max_value = 7
+	_inspire_bar.visible = false
+	_inspire_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var ibg := StyleBoxFlat.new()
+	ibg.bg_color = Color(0.20, 0.18, 0.16, 0.22)
+	ibg.set_corner_radius_all(6)
+	var ifg := StyleBoxFlat.new()
+	ifg.bg_color = Color(0.86, 0.62, 0.18, 0.95)
+	ifg.set_corner_radius_all(6)
+	_inspire_bar.add_theme_stylebox_override("background", ibg)
+	_inspire_bar.add_theme_stylebox_override("fill", ifg)
+	_panel.add_child(_inspire_bar)
 
 	# 五档成器概率条（替代原来那一大块文字日志）
 	_grade_lbs = []
@@ -225,19 +300,19 @@ func _build() -> void:
 	_bag_lb.size = Vector2(580, 22)
 	_panel.add_child(_bag_lb)
 
-	var tab_names := ["武 器", "材料合成", "图 鉴", "成品库", "关 闭"]
+	var tab_names := ["武 器 / 装 备", "材料合成", "道 具", "关 闭"]
 	_tab_btns = []
 	for ti in tab_names.size():
-		var tb := UiKit.make_button(_panel, Vector2(20 + ti * 120, 864), Vector2(116, 54), str(tab_names[ti]), 20)
+		var tb := UiKit.make_button(_panel, Vector2(20 + ti * 150, 864), Vector2(140, 54), str(tab_names[ti]), 18)
 		_tab_btns.append(tb)
 	_tab_btns[0].pressed.connect(_open_blank_picker)
 	_tab_btns[1].pressed.connect(func() -> void: _comp_open("synthesis"))
-	_tab_btns[2].pressed.connect(func() -> void: _comp_open("codex"))
-	_tab_btns[3].pressed.connect(_bag_open)
-	_tab_btns[4].pressed.connect(close)
+	_tab_btns[2].pressed.connect(_open_tools)
+	_tab_btns[3].pressed.connect(close)
 	_build_compendium()
 	_build_bag()
 	_build_blank_picker()
+	_build_tools()
 
 func _build_compendium() -> void:
 	_comp_dim = ColorRect.new()
@@ -273,6 +348,8 @@ func _build_compendium() -> void:
 
 	_comp_page_btn = UiKit.make_button(_comp_panel, Vector2(404, 12), Vector2(154, 38), "下一条", 17)
 	_comp_page_btn.pressed.connect(_comp_next)
+	_comp_mode_btn = UiKit.make_button(_comp_panel, Vector2(404, 52), Vector2(154, 34), "图 鉴", 16)
+	_comp_mode_btn.pressed.connect(_comp_mode_toggle)
 
 	var pick := _label("放两味料试试（试错只亏石头，材料不动）", 13, Color(INK.r, INK.g, INK.b, 0.54))
 	pick.position = Vector2(22, 84)
@@ -280,22 +357,22 @@ func _build_compendium() -> void:
 	_comp_panel.add_child(pick)
 
 	_comp_mat_btns = {}
-	var mats := ["bone", "rice", "jin", "zhi"]
+	var mats := ["iron_sand", "bone_coal", "forge_oil", "fine_iron", "star_iron"]
 	for i in mats.size():
 		var k := str(mats[i])
-		var col := i % 2
-		var row := i / 2
-		var mb := UiKit.make_button(_comp_panel, Vector2(22 + col * 274, 108 + row * 50), Vector2(258, 44), "", 17)
+		var col := i % 3
+		var row := i / 3
+		var mb := UiKit.make_button(_comp_panel, Vector2(22 + col * 178, 106 + row * 48), Vector2(170, 42), "", 15)
 		mb.toggle_mode = true
 		mb.pressed.connect(_comp_toggle.bind(k))
 		_comp_mat_btns[k] = mb
 
-	_comp_try_btn = UiKit.make_button(_comp_panel, Vector2(22, 224), Vector2(258, 48), "试 合", 21)
+	_comp_try_btn = UiKit.make_button(_comp_panel, Vector2(22, 210), Vector2(258, 48), "试 合", 21)
 	_comp_try_btn.pressed.connect(_comp_try)
 
 	_comp_recipe_lb = _label("", 14, Color(INK.r, INK.g, INK.b, 0.78))
-	_comp_recipe_lb.position = Vector2(22, 288)
-	_comp_recipe_lb.size = Vector2(536, 70)
+	_comp_recipe_lb.position = Vector2(22, 270)
+	_comp_recipe_lb.size = Vector2(536, 84)
 	_comp_recipe_lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_comp_panel.add_child(_comp_recipe_lb)
 
@@ -358,22 +435,23 @@ func _build_blank_picker() -> void:
 	sb.set_border_width_all(2)
 	_blank_panel.add_theme_stylebox_override("panel", sb)
 	_panel.add_child(_blank_panel)
-	var t := _label("选 胚 子", 26, INK)
+	var t := _label("武 器 / 装 备", 26, INK)
 	t.position = Vector2(22, 14)
-	t.size = Vector2(260, 34)
+	t.size = Vector2(300, 34)
 	_blank_panel.add_child(t)
-	var tip := _label("选可强化的武器，或选一块胚子开炉", 16, Color(INK.r, INK.g, INK.b, 0.58))
+	var tip := _label("选可强化的成品，或选一块胚子开炉", 16, Color(INK.r, INK.g, INK.b, 0.58))
 	tip.position = Vector2(22, 92)
 	tip.size = Vector2(520, 24)
 	_blank_panel.add_child(tip)
 	_pick_tabs = []
-	var pick_names := ["武 器", "装 备", "胚 子"]
+	var pick_names := ["武 器", "装 备", "胚 子", "成品库"]
 	for pi in pick_names.size():
-		var pb := UiKit.make_button(_blank_panel, Vector2(22 + pi * 160, 48), Vector2(150, 38), str(pick_names[pi]), 18)
+		var pb := UiKit.make_button(_blank_panel, Vector2(20 + pi * 136, 48), Vector2(128, 38), str(pick_names[pi]), 17)
 		_pick_tabs.append(pb)
 	_pick_tabs[0].pressed.connect(_show_pick.bind("weapon"))
 	_pick_tabs[1].pressed.connect(_show_pick.bind("gear"))
 	_pick_tabs[2].pressed.connect(_show_pick.bind("blank"))
+	_pick_tabs[3].pressed.connect(_bag_pick_open)
 	_blank_scroll = ScrollContainer.new()
 	_blank_scroll.position = Vector2(12, 124)
 	_blank_scroll.size = Vector2(546, 480)
@@ -514,6 +592,54 @@ func _label(text: String, fs: int, col: Color) -> Label:
 # ============================================================
 # 画铁砧 / 剑胚
 # ============================================================
+func _play_hammer_sfx() -> void:
+	Audio.sfx("swing", -13.0, randf_range(0.88, 0.96))
+	await get_tree().create_timer(0.55).timeout
+	Audio.sfx("hit_heavy", -6.0, randf_range(0.76, 0.86))
+	Audio.sfx("wood_down", -10.0, randf_range(0.68, 0.76))
+	_spawn_sparks()
+
+func _spawn_sparks() -> void:
+	_sparks.clear()
+	var c := Vector2(140, 104)
+	for i in 34:
+		var ang := randf_range(-PI * 0.90, -PI * 0.10)
+		var spd := randf_range(140.0, 340.0)
+		_sparks.append({
+			"p": c + Vector2(randf_range(-22.0, 22.0), randf_range(-8.0, 8.0)),
+			"v": Vector2(cos(ang), sin(ang)) * spd,
+			"life": randf_range(0.70, 1.35),
+			"max": 1.35,
+		})
+	if _spark_fx != null:
+		_spark_fx.queue_redraw()
+
+func _draw_sparks() -> void:
+	if _spark_fx == null:
+		return
+	for sp_v in _sparks:
+		var sp: Dictionary = sp_v
+		var p: Vector2 = sp.get("p", Vector2.ZERO)
+		var v: Vector2 = sp.get("v", Vector2.ZERO)
+		var a := clampf(float(sp.get("life", 0.0)) / float(sp.get("max", 0.62)), 0.0, 1.0)
+		_spark_fx.draw_line(p, p - v * 0.045, Color(1.0, 0.68, 0.16, a * 0.85), 2.4)
+		_spark_fx.draw_circle(p, 1.6 + a * 1.8, Color(1.0, 0.93, 0.55, a))
+
+func _draw_swing() -> void:
+	if _swing_fx == null or _swing_t <= 0.0:
+		return
+	var phase := 1.0 - _swing_t / 1.0
+	var ang := lerpf(-0.95, 0.62, clampf(phase / 0.55, 0.0, 1.0))
+	if phase > 0.55:
+		ang = lerpf(0.62, -0.45, clampf((phase - 0.55) / 0.45, 0.0, 1.0))
+	_swing_fx.draw_set_transform(Vector2(120, 186), ang, Vector2.ONE)
+	_swing_fx.draw_line(Vector2.ZERO, Vector2(0, -112), Color("#5a4024"), 15.0)
+	_swing_fx.draw_line(Vector2(1, 0), Vector2(1, -108), Color("#8a6a3a"), 6.0)
+	_swing_fx.draw_rect(Rect2(Vector2(-34, -142), Vector2(68, 38)), Color("#3b3b40"))
+	_swing_fx.draw_rect(Rect2(Vector2(-38, -136), Vector2(76, 12)), Color("#8f9298"))
+	_swing_fx.draw_rect(Rect2(Vector2(-32, -114), Vector2(64, 8)), Color("#232327"))
+	_swing_fx.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
 func _draw_anvil() -> void:
 	if _anvil == null:
 		return
@@ -547,13 +673,21 @@ func _draw_anvil() -> void:
 	var q := clampi(int(it.get("quality", 0)), 0, 4)
 	var cols := [Color("#b9b4a5"), Color("#8fb07a"), Color("#7fa3c9"), Color("#b98fc9"), Color("#d4a04a")]
 	var blade: Color = cols[q]
-	var inspired := int(it.get("inspired_left", 0)) > 0
+	var inspired := float(it.get("inspired_left", 0.0)) > 0.0
 	var y := h - 112.0
 	if inspired:
 		blade = blade.lerp(Color("#ffb347"), 0.55)
 	# 剑身：横在砧上
 	var x0 := cx - 168.0
 	var x1 := cx + 150.0
+	if inspired:
+		var hue := fmod(_t * 0.22, 1.0)
+		var glow := Color.from_hsv(hue, 0.62, 1.0, 0.30)
+		_anvil.draw_line(Vector2(x0 - 8, y), Vector2(x1 + 8, y), glow, 22.0)
+		_anvil.draw_line(Vector2(x0 - 2, y - 5), Vector2(x1 + 2, y - 5), Color.from_hsv(fmod(hue + 0.35, 1.0), 0.55, 1.0, 0.26), 10.0)
+		for k in 3:
+			var rr := 26.0 + float(k) * 18.0 + sin(_t * 3.0 + float(k)) * 3.0
+			_anvil.draw_arc(Vector2(cx, y), rr * 1.7, 0.0, TAU, 40, Color.from_hsv(fmod(hue + float(k) * 0.18, 1.0), 0.55, 1.0, 0.18), 2.0)
 	_anvil.draw_line(Vector2(x0, y), Vector2(x1, y), blade.darkened(0.35), 13.0)
 	_anvil.draw_line(Vector2(x0 + 8, y - 2), Vector2(x1 - 6, y - 2), blade, 7.0)
 	_anvil.draw_line(Vector2(x0 + 12, y - 4), Vector2(x1 - 18, y - 4), Color(1, 1, 1, 0.35), 2.0)
@@ -569,11 +703,7 @@ func _draw_anvil() -> void:
 		var on := i < int(it.get("enhance", 0))
 		var col2 := Color("#c9a64a") if on else Color(0.28, 0.24, 0.18, 0.45)
 		_anvil.draw_rect(Rect2(bx + float(i) * 16.0, by, 11.0, 8.0), col2)
-	# 入神：7 个亮点
-	var left := int(it.get("inspired_left", 0))
-	if left > 0:
-		for i in left:
-			_anvil.draw_circle(Vector2(bx + 168.0 + float(i) * 18.0, by - 24.0), 4.0, Color("#ffb347"))
+
 
 # ============================================================
 # 操作
@@ -622,6 +752,11 @@ func _hammer() -> void:
 		_push_log("锻造石不够——这一锤要 " + str(stone_cost) + " 块。")
 		return
 	GameState.add_material("forge_stone", -stone_cost)
+	if _swing_fx != null:
+		_swing_t = 1.0
+		_swing_fx.visible = true
+		_swing_fx.queue_redraw()
+	_play_hammer_sfx()
 	if str(it.get("blank_class", "")) == "generic" and not bool(it.get("generic_rolled", false)):
 		ForgeData.randomize_generic(it)
 		it["generic_rolled"] = true
@@ -629,6 +764,10 @@ func _hammer() -> void:
 	if first:
 		it["craft_grade"] = 2
 	var outcome := _roll(it)
+	if outcome == 4 and bool(it.get("guard_break", false)):
+		outcome = 2
+		it.erase("guard_break")
+	it.erase("boost_next")
 	# 第一锤不碎：保证能定型。
 	if first and outcome == 4:
 		outcome = 2
@@ -641,16 +780,18 @@ func _hammer() -> void:
 		GameState.forge_item = {}
 		_push_log("破坏——兵刃碎了")
 		GameState.save_game()
-		await get_tree().create_timer(0.55).timeout
+		await get_tree().create_timer(1.02).timeout
 		_hit_busy = false
 		refresh()
 		return
 	match outcome:
 		0:
 			it["craft_grade"] = mini(4, int(it.get("craft_grade", 2)) + 2)
+			it["lucky_great"] = int(it.get("lucky_great", 0)) + 1
 			text = "大成功！属性大增"
 		1:
 			it["craft_grade"] = mini(4, int(it.get("craft_grade", 2)) + 1)
+			it["lucky_success"] = int(it.get("lucky_success", 0)) + 1
 			text = "成功——属性提升"
 		2:
 			text = "维持——属性不变"
@@ -659,6 +800,17 @@ func _hammer() -> void:
 			it["cracks"] = int(it.get("cracks", 0)) + 1
 			it["damage_bias"] = int(it.get("damage_bias", 0)) + 1
 			text = "损伤——属性下降，破坏率上升"
+	if float(it.get("inspired_left", 0.0)) > 0.0:
+		it["inspired_hits"] = int(it.get("inspired_hits", 0)) + 1
+		if int(it.get("inspired_hits", 0)) >= 6:
+			it["inspired_left"] = 0.0
+			it["inspired_hits"] = 0
+			text += "｜入神散去"
+	if int(it.get("enhance", 0)) >= 10 and not bool(it.get("round_inspired", false)):
+		it["round_inspired"] = true
+		it["inspired_left"] = 7.0
+		it["inspired_hits"] = 0
+		text += "｜入神！7 秒内最多 6 锤不碎"
 	if outcome == 0:
 		var affs: Array = it.get("affixes", [])
 		if affs.size() < 2 and randf() < 0.30:
@@ -676,7 +828,7 @@ func _hammer() -> void:
 	_play_hit_fx(4 - outcome, old_st, new_st)
 	_push_log(text)
 	GameState.save_game()
-	await get_tree().create_timer(0.55).timeout
+	await get_tree().create_timer(1.02).timeout
 	_hit_busy = false
 	refresh()
 
@@ -689,9 +841,22 @@ func _roll(it: Dictionary) -> int:
 	var p: Array = []
 	for v in (b.get("probs", [8, 45, 25, 17, 5]) as Array):
 		p.append(float(v))
+	if bool(it.get("boost_next", false)):
+		p[0] = float(p[0]) + 15.0
+		p[1] = float(p[1]) + 15.0
+		p[2] = maxf(0.0, float(p[2]) - 8.0)
+		p[3] = maxf(0.0, float(p[3]) - 8.0)
+		p[4] = maxf(0.0, float(p[4]) - 4.0)
+	var lucky := int(it.get("lucky_success", 0)) + int(it.get("lucky_great", 0)) * 2
+	if lucky > 0:
+		p[1] = maxf(1.0, float(p[1]) - float(lucky) * 5.0)
+		p[0] = maxf(0.0, float(p[0]) - float(lucky) * 3.0)
+		p[2] = float(p[2]) + float(lucky) * 4.0
+		p[3] = float(p[3]) + float(lucky) * 3.0
+		p[4] = float(p[4]) + float(lucky) * 1.5
 	var e := float(it.get("enhance", 0))
 	var cr := float(it.get("cracks", 0))
-	var extra_break := e * 0.15 + cr * 2.0
+	var extra_break := e * 0.15 + cr * 2.0 + float(it.get("damage_bias", 0)) * 5.0
 	var extra_dmg := e * 0.08 + cr * 1.0
 	p[4] += extra_break
 	p[3] += extra_dmg
@@ -699,7 +864,7 @@ func _roll(it: Dictionary) -> int:
 	# 特殊胚「天生不折」：破坏率永远 0
 	if str(it.get("rule", "")) == "no_break":
 		p[4] = 0.0
-	if int(it.get("inspired_left", 0)) > 0:
+	if float(it.get("inspired_left", 0.0)) > 0.0:
 		p[4] = 0.0
 		p[0] += 8.0
 		p[1] += 8.0
@@ -727,19 +892,20 @@ func _try_ascend(it: Dictionary) -> void:
 		return
 	var cost: Dictionary = ForgeData.ascend_cost(int(it.get("quality", 0)))
 	var need_s := int(cost["silver"])
-	var need_j := int(cost["jin"])
-	if GameState.coin("silver") < need_s or GameState.material_count("jin") < need_j:
+	var need_j := int(cost.get("star_iron", 1))
+	if GameState.coin("silver") < need_s or GameState.material_count("star_iron") < need_j:
 		it["awaiting"] = true
-		_push_log("够 +20 了——升阶要 " + str(need_s) + " 两 · 金髓 " + str(need_j) + "。")
+		_push_log("够 +20 了——升阶要 " + str(need_s) + " 两 · 星铁 " + str(need_j) + "。")
 		return
 	GameState.add_coin("silver", -need_s)
-	GameState.add_material("jin", -need_j)
+	GameState.add_material("star_iron", -need_j)
 	it["quality"] = int(it.get("quality", 0)) + 1
 	it["base_atk"] = float(it.get("base_atk", 0.0)) * 1.5
 	it["base_dmg"] = float(it.get("base_dmg", 0.0)) * 1.5
 	it["enhance"] = 0
 	it["cracks"] = 0
-	it["inspired_left"] = 0
+	it["inspired_left"] = 0.0
+	it["inspired_hits"] = 0
 	it["round_inspired"] = false
 	it["awaiting"] = false
 	GameState.forge_item = it
@@ -778,6 +944,16 @@ func _bag_current() -> Dictionary:
 	_bag_idx = clampi(_bag_idx, 0, list.size() - 1)
 	return list[_bag_idx]
 
+func _bag_pick_open() -> void:
+	if _comp_panel != null:
+		_comp_panel.visible = false
+	if _tool_panel != null:
+		_tool_panel.visible = false
+	if _blank_panel != null:
+		_blank_panel.visible = false
+	_bag_from_picker = true
+	_bag_open()
+
 func _bag_open() -> void:
 	if _comp_panel != null:
 		_comp_panel.visible = false
@@ -790,6 +966,13 @@ func _bag_open() -> void:
 func _bag_close() -> void:
 	if _bag_panel != null:
 		_bag_panel.visible = false
+	if _bag_from_picker:
+		_bag_from_picker = false
+		_comp_dim.visible = false
+		if _blank_panel != null:
+			_blank_panel.visible = true
+			_show_pick("weapon")
+		return
 	if _comp_panel == null or not _comp_panel.visible:
 		_comp_dim.visible = false
 
@@ -799,6 +982,124 @@ func _bag_next() -> void:
 		return
 	_bag_idx = (_bag_idx + 1) % list.size()
 	_bag_refresh()
+
+func _build_tools() -> void:
+	_tool_panel = Panel.new()
+	_tool_panel.position = Vector2(30, 105)
+	_tool_panel.size = Vector2(580, 720)
+	_tool_panel.z_index = 20
+	_tool_panel.visible = false
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.958, 0.938, 0.892, 1.0)
+	sb.set_corner_radius_all(6)
+	sb.border_color = Color(0.42, 0.33, 0.20, 0.60)
+	sb.set_border_width_all(2)
+	_tool_panel.add_theme_stylebox_override("panel", sb)
+	_panel.add_child(_tool_panel)
+	var t := _label("锻 炉 道 具", 26, INK)
+	t.position = Vector2(22, 14)
+	t.size = Vector2(360, 34)
+	_tool_panel.add_child(t)
+	var tip := _label("点道具直接使用；只对砧上这把生效", 16, Color(INK.r, INK.g, INK.b, 0.58))
+	tip.position = Vector2(22, 50)
+	tip.size = Vector2(530, 24)
+	_tool_panel.add_child(tip)
+	var scroll := ScrollContainer.new()
+	scroll.position = Vector2(12, 82)
+	scroll.size = Vector2(556, 540)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	scroll.get_v_scroll_bar().modulate.a = 0.30
+	_tool_panel.add_child(scroll)
+	_tool_grid = GridContainer.new()
+	_tool_grid.columns = 3
+	_tool_grid.add_theme_constant_override("h_separation", 10)
+	_tool_grid.add_theme_constant_override("v_separation", 10)
+	_tool_grid.custom_minimum_size = Vector2(536, 0)
+	scroll.add_child(_tool_grid)
+	var back := UiKit.make_button(_tool_panel, Vector2(210, 648), Vector2(160, 48), "返 回", 22)
+	back.pressed.connect(func() -> void: _tool_panel.visible = false)
+
+func _open_tools() -> void:
+	if _comp_panel != null:
+		_comp_panel.visible = false
+	if _bag_panel != null:
+		_bag_panel.visible = false
+	if _blank_panel != null:
+		_blank_panel.visible = false
+	_tool_panel.visible = true
+	_tool_refresh()
+
+func _tool_refresh() -> void:
+	if _tool_panel == null or not _tool_panel.visible:
+		return
+	for c in _tool_grid.get_children():
+		c.queue_free()
+	_tool_cards.clear()
+	for t_v in ForgeData.TOOLS:
+		var t: Dictionary = t_v
+		var tid := str(t.get("id", ""))
+		var n := GameState.forge_tool_count(tid)
+		var btn := Button.new()
+		btn.custom_minimum_size = Vector2(164, 190)
+		btn.focus_mode = Control.FOCUS_NONE
+		btn.expand_icon = true
+		btn.add_theme_constant_override("icon_max_width", 62)
+		btn.icon = ItemIcons.for_tool(str(t.get("icon", "")))
+		btn.text = str(t.get("name", tid)) + "\n×" + str(n)
+		btn.add_theme_font_size_override("font_size", 18)
+		btn.tooltip_text = str(t.get("desc", ""))
+		var sb2 := StyleBoxFlat.new()
+		sb2.set_corner_radius_all(8)
+		sb2.bg_color = Color(0.94, 0.91, 0.84, 0.95)
+		sb2.border_color = Color(0.42, 0.33, 0.20, 0.55)
+		sb2.set_border_width_all(2)
+		btn.add_theme_stylebox_override("normal", sb2)
+		btn.add_theme_stylebox_override("hover", sb2)
+		btn.add_theme_stylebox_override("pressed", sb2)
+		btn.add_theme_stylebox_override("disabled", sb2)
+		btn.add_theme_color_override("font_color", INK)
+		btn.add_theme_color_override("font_disabled_color", Color(0.35, 0.32, 0.28, 0.55))
+		btn.disabled = n <= 0
+		btn.pressed.connect(_use_tool.bind(tid))
+		_tool_grid.add_child(btn)
+		_tool_cards[tid] = btn
+
+func _use_tool(tid: String) -> void:
+	var it: Dictionary = GameState.forge_item
+	if it.is_empty():
+		_push_log("砧上无物——先上胚子。")
+		return
+	if GameState.forge_tool_count(tid) <= 0:
+		_push_log("这个道具用完了。")
+		return
+	match tid:
+		"dragon_scale":
+			it["guard_break"] = true
+		"regret_ink":
+			it["lucky_success"] = 0
+			it["lucky_great"] = 0
+		"quench_oil":
+			it["boost_next"] = true
+		"star_sand":
+			if (it.get("affixes", []) as Array).is_empty():
+				_push_log("这把还没有词缀——星砂用不上。")
+				return
+			var affs2: Array = it.get("affixes", [])
+			affs2.clear()
+			var af2 := ForgeData.random_affix(it)
+			if not af2.is_empty():
+				affs2.append(str(af2["id"]))
+			it["affixes"] = affs2
+		_:
+			return
+	GameState.forge_tool_take(tid)
+	GameState.forge_item = it
+	_sync_anvil(it)
+	_push_log("使用道具：" + str(ForgeData.tool_def(tid).get("name", tid)))
+	GameState.save_game()
+	_tool_refresh()
+	refresh()
 
 func _bag_reward_for(q0: int) -> Dictionary:
 	var q := clampi(q0, 0, 4)
@@ -994,6 +1295,12 @@ func _bag_gift() -> void:
 
 func _comp_open(mode := "synthesis") -> void:
 	_comp_mode = mode
+	if _blank_panel != null:
+		_blank_panel.visible = false
+	if _tool_panel != null:
+		_tool_panel.visible = false
+	if _comp_mode_btn != null:
+		_comp_mode_btn.text = "图 鉴" if mode == "synthesis" else "合 成"
 	if _bag_panel != null:
 		_bag_panel.visible = false
 	_comp_dim.visible = true
@@ -1002,6 +1309,8 @@ func _comp_open(mode := "synthesis") -> void:
 	_comp_title.text = "材 料 合 成" if synth else "锻 造 图 鉴"
 	for k_v in _comp_mat_btns.keys():
 		(_comp_mat_btns[k_v] as Button).visible = synth
+	if _comp_mode_btn != null:
+		_comp_mode_btn.visible = true
 	_comp_try_btn.visible = synth
 	if not synth:
 		_comp_make_btn.visible = false
@@ -1012,6 +1321,9 @@ func _tab_main() -> void:
 	if _bag_panel != null:
 		_bag_panel.visible = false
 	refresh()
+
+func _comp_mode_toggle() -> void:
+	_comp_open("codex" if _comp_mode == "synthesis" else "synthesis")
 
 func _comp_close() -> void:
 	if _comp_panel != null:
@@ -1087,6 +1399,7 @@ func _comp_refresh() -> void:
 		var k := str(k_v)
 		var b: Button = _comp_mat_btns[k]
 		b.text = GameState.mat_name(k) + " " + str(GameState.material_count(k))
+		b.visible = _comp_mode == "synthesis"
 	_comp_page_btn.text = "下一条 " + str(_comp_idx + 1) + "/" + str(ForgeData.COMBOS.size())
 	_comp_hint_lb.text = "已入图鉴：「" + str(c["name"]) + "」" if unlocked else "老铁匠说：" + str(c["hint"])
 	_comp_try_btn.disabled = unlocked or stones < ForgeData.TRIAL_STONES
@@ -1247,13 +1560,19 @@ func refresh() -> void:
 		_comp_refresh()
 	if _bag_panel != null:
 		_bag_refresh()
+	if _tool_panel != null and _tool_panel.visible:
+		_tool_refresh()
 	if it.is_empty():
-		_item_lb.text = "砧上无物——点下方［胚子］选一块"
+		_item_lb.text = "砧上无物——点下方［武器/装备］选一块"
 		_stat_lb.text = "选定胚子后锤第一下成器；成器直接进成品库"
 		_hammer_btn.disabled = true
 		_hammer_btn.text = "先 选 胚 子"
 		if _take_btn != null:
 			_take_btn.visible = false
+		if _inspire_bar != null:
+			_inspire_bar.visible = false
+		if _inspire_lb != null:
+			_inspire_lb.visible = false
 	else:
 		_item_lb.text = ForgeData.item_name(it)
 		var st: Dictionary = ForgeData.item_stats(it)
@@ -1278,6 +1597,14 @@ func refresh() -> void:
 		if _take_btn != null:
 			_take_btn.visible = true
 			_take_btn.disabled = _hit_busy
+		var ins := float(it.get("inspired_left", 0.0))
+		if _inspire_bar != null:
+			_inspire_bar.visible = ins > 0.0
+			_inspire_bar.max_value = 7
+			_inspire_bar.value = ins
+		if _inspire_lb != null:
+			_inspire_lb.visible = ins > 0.0
+			_inspire_lb.text = "入 神 · " + ("%.1f" % ins) + " 秒"
 	_bag_lb.text = "成品库：" + str(GameState.forge_bag.size()) + " 件"
 	if _anvil != null:
 		_anvil.queue_redraw()
@@ -1299,6 +1626,8 @@ func open() -> void:
 func close() -> void:
 	if not visible:
 		return
+	if _tool_panel != null:
+		_tool_panel.visible = false
 	UiKit.hide_panel(self)
 	closed.emit()
 

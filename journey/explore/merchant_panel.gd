@@ -6,10 +6,10 @@ const UiKit := preload("res://shared/ui_kit.gd")
 const GS := preload("res://shared/game_state.gd")
 
 const GOODS := [
-	{"id": "forge_stone", "n": 3, "base": 30},
-	{"id": "atlas", "n": 1, "base": 90},
-	{"id": "rice", "n": 2, "base": 24},
-	{"id": "bone", "n": 3, "base": 18},
+	{"id": "iron_sand", "n": 4, "base": 42},
+	{"id": "bone_coal", "n": 3, "base": 38},
+	{"id": "zhi", "n": 2, "base": 58},
+	{"id": "bone", "n": 3, "base": 32},
 ]
 
 var _favor_lb: Label

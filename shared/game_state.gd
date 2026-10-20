@@ -814,6 +814,7 @@ static var vault_items := {}
 static var forge_item := {}
 static var forge_bag: Array = []
 static var forge_made := {}       # blank_id -> 首次成器品质
+static var forge_tools := {}      # 锻炉道具：id -> 数量
 static var forge_claimed := {}   # 成品库里每把锻成兵器领过奖励的 sid
 # v242：锻造动态件（sid -> Cards 动态卡集）——存档载入时重建
 static var forge_cards := {}
@@ -1011,8 +1012,11 @@ const SHOP_CFG := "user://shop.cfg"
 const SHOP_ITEMS := [
 	# ㊿：兽骨碎/灵米只用于养灵丹，而养灵丹要炼丹阁（300 关）——所以这两样跟着炉子
 	#   一起上架。不然第 1 关就能买一堆，压在包里到 300 关才用得上（"上架闸"）。
-	{"key": "bone", "name": "兽骨碎", "price": 14, "cat": "basic", "need": "dange", "desc": "养灵丹主料——猎人剩下的硬货"},
-	{"key": "rice", "name": "灵米", "price": 11, "cat": "basic", "need": "dange", "desc": "养灵丹辅料——喂灵兽的细粮"},   # v62：10 → 15（×1.4 后被"取整到十"吃掉了，手工补上）
+	{"key": "guo", "name": "朱果", "price": 48, "cat": "basic", "kind": "mat", "limit": 50, "desc": "气血 / 暴击类丹药材料"},
+	{"key": "zhi", "name": "紫芝", "price": 56, "cat": "basic", "kind": "mat", "limit": 50, "desc": "强身 / 轻身类丹药材料"},
+	{"key": "shen", "name": "雪参", "price": 72, "cat": "basic", "kind": "mat", "limit": 50, "desc": "淬体类丹药材料"},
+	{"key": "bone", "name": "兽骨碎", "price": 38, "cat": "basic", "kind": "mat", "limit": 50, "desc": "攻伐 / 破军类丹药材料"},
+	{"key": "rice", "name": "灵米", "price": 44, "cat": "basic", "kind": "mat", "limit": 50, "desc": "守御 / 疾行类丹药材料"},
 	# ============================================================
 	# v64（用户："商店的基础残兵 基础残装备 基础功法 价格下调40% 增加限购 10/每种
 	#   同时增加特殊效果 购买时 弥补仓库最缺的那一件或者没有的那一件残页或者残兵 残装备
@@ -1037,6 +1041,8 @@ const SHOP_ITEMS := [
 	{"key": "weapon_card_l", "name": "良品兵器残卡", "price": 150, "cat": "weapon", "desc": "一张良品兵器残卡", "kind": "card", "pool": "weapon", "q": 1, "limit": 5},
 	{"key": "art_card_l", "name": "良品武学残页", "price": 120, "cat": "arts", "desc": "一张良品武学残页", "kind": "card", "pool": "arts", "q": 1, "limit": 5},
 	{"key": "gear_card_l", "name": "良品装备残卡", "price": 120, "cat": "gear", "desc": "一张良品装备残卡", "kind": "card", "pool": "gear", "q": 1, "limit": 5},
+	{"key": "finished_weapon", "name": "成品兵器", "price": 700, "cat": "weapon", "kind": "finished", "pool": "weapon", "limit": 2, "desc": "随机凡品 / 良品成品兵器"},
+	{"key": "finished_gear", "name": "成品装备", "price": 520, "cat": "gear", "kind": "finished", "pool": "gear", "limit": 1, "desc": "随机凡品 / 良品成品装备"},
 	# v62c（用户："商店卖的那个血脉变为随机 90%紫色 8.9%金色 0.1%红色"）：
 	#   名字从「金纹血脉囊」改成**「血脉囊」**——原来名字里写死"金"，现在九成是紫的，
 	#   挂着"金纹"就是名不副实（想改回去只动 name 这一处）。
@@ -1052,10 +1058,8 @@ const SHOP_ITEMS := [
 	#     高品挂在店里既没人买得起，又显得"花钱就能一路突破"。
 	{"key": "tupo_fan", "name": "突破丹（凡品）", "price": 147, "cat": "pill", "kind": "pill", "pid": "tupo_fan", "limit": 3, "desc": "突破使用的丹药"},
 	{"key": "tupo_liang", "name": "突破丹（良品）", "price": 413, "cat": "pill", "kind": "pill", "pid": "tupo_liang", "limit": 2, "desc": "突破使用的丹药"},
-	{"key": "adv_fan", "name": "进阶丹（凡品）", "price": 800, "cat": "pill", "kind": "pill", "pid": "adv_fan", "limit": 2, "desc": "冲境界使用的丹药"},
-	{"key": "adv_liang", "name": "进阶丹（良品）", "price": 2400, "cat": "pill", "kind": "pill", "pid": "adv_liang", "limit": 1, "desc": "冲境界使用的丹药"},
 	# v41：金色材料「金髓」——洗灵丹的硬门槛。贵、且每日只放一块（其余靠宝箱与搜刮）
-	{"key": "jin", "name": "◆金髓", "price": 910, "cat": "basic", "need": "dange", "limit": 1, "desc": "稀有材料"},
+	{"key": "jin", "name": "◆金髓", "price": 1500, "cat": "basic", "kind": "mat", "limit": 50, "desc": "凝神 / 洗灵类丹药材料"},
 	# v39：鉴宝行的侦查道具（过 400 关才上架）——三样各管一段信息，见 shared/data_appraise.gd
 	{"key": "tool_sight", "name": "描影镜", "price": 119, "cat": "jianbao", "kind": "tool", "tid": "sight", "limit": 3,
 		"need": "jianbao", "desc": "照出货仓里最值钱的一件"},
@@ -1076,6 +1080,10 @@ const SHOP_ITEMS := [
 		"need": "jianbao", "desc": "标出全部金档货"},
 	{"key": "tool_sift_r", "name": "朱砂筛", "price": 1050, "cat": "jianbao", "kind": "tool", "tid": "sift_r", "limit": 1,
 		"need": "jianbao", "desc": "标出全部红档货"},
+	{"key": "dragon_scale", "name": "龙鳞", "price": 888, "cat": "item", "kind": "forge_tool", "limit": 1, "desc": "下一锤不会破坏"},
+	{"key": "regret_ink", "name": "悔恨法条", "price": 500, "cat": "item", "kind": "forge_tool", "limit": 1, "desc": "清空成功衰减"},
+	{"key": "quench_oil", "name": "淬火油", "price": 300, "cat": "item", "kind": "forge_tool", "limit": 1, "desc": "下一锤成功概率提高"},
+	{"key": "star_sand", "name": "星砂", "price": 700, "cat": "item", "kind": "forge_tool", "limit": 1, "desc": "重掷一次词缀"},
 ]
 
 # ㊿：上架闸——这一条现在该不该摆在货架上。
@@ -1096,6 +1104,7 @@ const SHOP_CATS := [
 	{"id": "arts", "name": "武学"},
 	{"id": "gear", "name": "装备"},
 	{"id": "pill", "name": "丹药"},
+	{"id": "item", "name": "道具"},
 	{"id": "jianbao", "name": "鉴宝"},  # v39：三种侦查道具（过 400 关才上架）
 ]
 
@@ -1166,7 +1175,7 @@ static func shop_left(k: String) -> int:
 	var kd := str(item.get("kind", "mat"))
 	# v36：突破丹（kind="pill"）也是限购货——口径与残卡、血脉囊一样
 	# v39：鉴宝道具（kind="tool"）同样每日限购
-	if kd != "card" and kd != "blood" and kd != "pill" and kd != "tool":
+	if kd != "card" and kd != "blood" and kd != "pill" and kd != "tool" and kd != "forge_tool" and kd != "finished" and kd != "mat":
 		return -1
 	_shop_sync_day()
 	return maxi(0, int(item.get("limit", 0)) - int(shop_used.get(k, 0)))
@@ -1208,7 +1217,11 @@ static func buy_material(k: String, n: int) -> Dictionary:
 	if str(item.get("kind", "mat")) == "pill":
 		return _buy_pill(item, maxi(n, 1))   # v36：突破丹（每日限购）
 	if str(item.get("kind", "mat")) == "tool":
-		return _buy_tool(item, maxi(n, 1))   # v39：鉴宝道具（每日限购）
+		return _buy_tool(item, maxi(n, 1))
+	if str(item.get("kind", "mat")) == "forge_tool":
+		return _buy_forge_tool(item, maxi(n, 1))
+	if str(item.get("kind", "mat")) == "finished":
+		return _buy_finished(item, maxi(n, 1))   # v39：鉴宝道具（每日限购）
 	if str(item.get("kind", "mat")) == "card":
 		return _buy_card(item, maxi(n, 1))
 	var price := int(item["price"]) * n
@@ -1361,6 +1374,76 @@ static func _buy_pill(item: Dictionary, n: int) -> Dictionary:
 	return {"ok": true, "msg": "买了「" + str(item["name"]) + "」×" + str(cnt) + "（花 " + str(price) + " 两 · 包裹共 " + str(int(pills.get(pid, 0))) + " 颗 · 今日还剩 " + str(left - cnt) + "）"}
 
 # v39：鉴宝道具（货栈这一路）——与突破丹同一个限购口径。
+static func _buy_finished(item: Dictionary, n: int) -> Dictionary:
+	_shop_sync_day()
+	var key := str(item.get("key", ""))
+	var lim := int(item.get("limit", 1))
+	var left := maxi(0, lim - int(shop_used.get(key, 0)))
+	if left <= 0:
+		return {"ok": false, "msg": "「" + str(item["name"]) + "」今日卖完了"}
+	var cnt := mini(n, left)
+	var price := int(item.get("price", 0)) * cnt
+	if coin("silver") < price:
+		return {"ok": false, "msg": "银两不够：要 " + str(price) + "（现有 " + str(coin("silver")) + "）"}
+	add_coin("silver", -price)
+	var names := []
+	for j in cnt:
+		var q := 0 if randf() < 0.65 else 1
+		var pool := str(item.get("pool", "weapon"))
+		var kind := ""
+		var nm := ""
+		var st := {}
+		if pool == "weapon":
+			var roll := randi() % 3
+			kind = ["sword", "dual", "staff"][roll]
+			nm = ["青锋剑", "柳叶双刀", "铁棍"][roll]
+			st = {"atk": 16 + q * 10, "dmg": 2 + q}
+		else:
+			var roll2 := randi() % 3
+			kind = ["armor", "helm", "cloak"][roll2]
+			nm = ["青布甲", "木冠", "麻布披风"][roll2]
+			pool = kind
+			if kind == "armor":
+				st = {"def": 4 + q * 3, "hp": 30 + q * 25}
+			elif kind == "helm":
+				st = {"def": 2 + q * 2, "hp": 14 + q * 12}
+			else:
+				st = {"def": 1 + q * 2, "hp": 8 + q * 8, "dodge": 3 + q}
+		var sid := forge_next_sid()
+		var rec := {"sid": sid, "weapon": nm, "kind": kind, "pool": pool,
+			"quality": q, "craft_grade": 2, "enhance": 0, "forge": true,
+			"base_atk": float(st.get("atk", 0)), "base_dmg": float(st.get("dmg", 0)),
+			"base_def": float(st.get("def", 0)), "base_hp": float(st.get("hp", 0)),
+			"base_dodge": float(st.get("dodge", 0))}
+		var set := {"id": sid, "name": nm, "weapon": kind, "kind": kind, "pool": pool,
+			"quality": "凡品" if q == 0 else "良品", "item_stats": st.duplicate(),
+			"no_drop": true, "forge": true, "parts": []}
+		forge_add(sid, set)
+		forge_bag.append(rec)
+		names.append(nm + "（" + ("凡品" if q == 0 else "良品") + "）")
+	shop_used[key] = int(shop_used.get(key, 0)) + cnt
+	_shop_save()
+	save_game()
+	return {"ok": true, "msg": "买了「" + str(item["name"]) + "」：" + "、".join(names)}
+
+static func _buy_forge_tool(item: Dictionary, n: int) -> Dictionary:
+	_shop_sync_day()
+	var key := str(item.get("key", ""))
+	var lim := int(item.get("limit", 1))
+	var left := maxi(0, lim - int(shop_used.get(key, 0)))
+	if left <= 0:
+		return {"ok": false, "msg": "「" + str(item["name"]) + "」今日卖完了"}
+	var cnt := mini(n, left)
+	var price := int(item.get("price", 0)) * cnt
+	if coin("silver") < price:
+		return {"ok": false, "msg": "银两不够：要 " + str(price) + "（现有 " + str(coin("silver")) + "）"}
+	add_coin("silver", -price)
+	forge_tool_add(key, cnt)
+	shop_used[key] = int(shop_used.get(key, 0)) + cnt
+	_shop_save()
+	save_game()
+	return {"ok": true, "msg": "买了「" + str(item["name"]) + "」×" + str(cnt) + "（花 " + str(price) + " 两 · 现有 " + str(forge_tool_count(key)) + " 个）"}
+
 static func _buy_tool(item: Dictionary, n: int) -> Dictionary:
 	_shop_sync_day()
 	var key := str(item.get("key", ""))
@@ -3634,6 +3717,20 @@ static func note_story_title(title: String) -> void:
 	story_title_prosperity = true
 	add_prosperity(5, "称号")
 
+static func forge_tool_count(id: String) -> int:
+	return int(forge_tools.get(id, 0))
+
+static func forge_tool_add(id: String, n := 1) -> void:
+	if id == "":
+		return
+	forge_tools[id] = maxi(0, forge_tool_count(id) + n)
+
+static func forge_tool_take(id: String) -> bool:
+	if forge_tool_count(id) <= 0:
+		return false
+	forge_tools[id] = forge_tool_count(id) - 1
+	return true
+
 static func forge_add(sid: String, set: Dictionary) -> void:
 	forge_cards[sid] = set
 	Cards.register_forged(sid, set)
@@ -4064,7 +4161,7 @@ static func chest_open(cid: String, n := 1) -> Dictionary:
 		for r in int(d.get("rolls", 1)):
 			if randf() < float(d.get("mat_chance", 0.45)):
 				var mn: Array = d.get("mat_n", [1, 1])
-				var mid := Tower.chest_roll_mat()
+				var mid := Tower.chest_roll_mat(int(d.get("grad", 0)))
 				mats[mid] = int(mats.get(mid, 0)) + randi_range(int(mn[0]), int(mn[1]))
 	# 落账
 	add_coin("silver", silver)
@@ -4189,12 +4286,14 @@ const MAT_CN := {"zhi": "紫芝", "shen": "雪参", "guo": "朱果", "bone": "�
 	"forge_stone": "锻造石", "jingshi": "境界石（金）", "daoxin": "道心砂（红）", "atlas": "舆图",
 	"soul": "兽魂", "lingguo": "灵兽果",
 	"daoguo": "悟道果", "hundun": "混沌砂", "xinghui": "星辉",
-	"pojing": "破境花", "xuantie": "玄铁精", "jianpei": "剑胚"}
+	"pojing": "破境花", "xuantie": "玄铁精", "jianpei": "剑胚",
+	"iron_sand": "铁矿砂", "bone_coal": "骨炭", "forge_oil": "锻油", "fine_iron": "精铁", "star_iron": "星铁"}
 # v271：材料四类——战斗 / 成长 / 突破 / 宠物。
 const MAT_GROUP := {"guo": "battle", "bone": "battle", "rice": "battle",
 	"zhi": "growth", "shen": "growth", "jin": "growth",
 	"jingshi": "advance", "daoxin": "advance", "daoguo": "advance", "hundun": "advance", "xinghui": "advance",
-	"pojing": "break", "xuantie": "break", "soul": "pet", "lingguo": "pet", "jianpei": "forge"}
+	"pojing": "break", "xuantie": "break", "soul": "pet", "lingguo": "pet", "jianpei": "forge",
+	"iron_sand": "forge", "bone_coal": "forge", "forge_oil": "forge", "fine_iron": "forge", "star_iron": "forge"}
 const MAT_GROUP_CN := {"battle": "战斗材料", "growth": "成长材料", "advance": "进阶材料", "break": "突破材料", "pet": "宠物材料", "forge": "锻造材料"}
 const PILL_GROUP_CN := {"battle": "战斗丹", "growth": "成长丹", "advance": "进阶丹", "break": "突破丹", "pet": "宠物丹"}
 const PILL_GROUP_ORDER := ["battle", "growth", "advance", "break", "pet"]
@@ -6767,6 +6866,7 @@ static func load_game() -> void:
 	forge_item = _sd(vlt.get("forge_item", {}), forge_item)
 	forge_bag = _sa(vlt.get("forge_bag", []), forge_bag)
 	forge_made = _sd(vlt.get("forge_made", {}), forge_made)
+	forge_tools = _sd(vlt.get("forge_tools", {}), forge_tools)
 	forge_claimed = _sd(vlt.get("forge_claimed", {}), forge_claimed)
 	forge_cards = _sd(vlt.get("forge_cards", {}), {})
 	forge_seq = int(vlt.get("forge_seq", forge_seq))
@@ -6932,7 +7032,7 @@ static func save_game() -> void:
 	cf.set_value("world", "strip_saved", strip_saved)
 	cf.set_value("world", "vault", {
 		"cards": vault_cards, "items": vault_items, "materials": materials, "material_q": material_q,
-		"forge_item": forge_item, "forge_bag": forge_bag, "forge_made": forge_made, "forge_claimed": forge_claimed,
+		"forge_item": forge_item, "forge_bag": forge_bag, "forge_made": forge_made, "forge_tools": forge_tools, "forge_claimed": forge_claimed,
 		"forge_cards": forge_cards, "forge_seq": forge_seq,
 		"forge_compendium": forge_compendium,
 		"fragments": fragments, "pills": pills, "wines": wines,
@@ -7064,6 +7164,7 @@ static func reset() -> void:
 	forge_item.clear()
 	forge_bag.clear()
 	forge_made.clear()
+	forge_tools.clear()
 	forge_claimed.clear()
 	forge_cards.clear()
 	forge_seq = 0

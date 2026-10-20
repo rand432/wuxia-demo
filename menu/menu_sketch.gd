@@ -2127,8 +2127,13 @@ func _unhandled_input(ev: InputEvent) -> void:
 	if ke.keycode == KEY_Z:
 		GameState.add_material("jianpei", 3)
 		GameState.add_material("forge_stone", 30)
+		GameState.add_material("iron_sand", 20)
+		GameState.add_material("bone_coal", 10)
+		GameState.add_material("forge_oil", 3)
+		GameState.add_material("fine_iron", 2)
+		GameState.add_material("star_iron", 1)
 		GameState.save_game()
-		_show_toast("测试：剑胚 +3 · 锻造石 +30", 2.4)
+		_show_toast("测试：剑胚+3 · 锻造石+30 · 锻造材料一包", 2.4)
 		return
 	if ke.keycode == KEY_J:
 		# ㉙：存档版本自检——模拟"盘上是新版档"，看会不会改名留档而不是静默丢。

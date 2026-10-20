@@ -476,7 +476,8 @@ static func chest_card_pool(kind: String, grad: int) -> Array:
 # v121（用户："突破境界需要很多材料【增加新材料】"）：境界石 / 道心砂 从宝箱出（进阶专用）
 const CHEST_MATS := {"zhi": 8, "guo": 8, "shen": 6, "bone": 6, "rice": 3, "jin": 1,
 	"forge_stone": 70, "jingshi": 2, "daoxin": 1, "daoguo": 1, "hundun": 1, "xinghui": 1,
-	"pojing": 1, "xuantie": 1, "soul": 1, "lingguo": 1, "atlas": 1}
+	"pojing": 1, "xuantie": 1, "soul": 1, "lingguo": 1, "atlas": 1,
+	"iron_sand": 12, "bone_coal": 8, "forge_oil": 3, "fine_iron": 2, "star_iron": 1}
 #   ⚠ v41：`jin`（金髓）是**稀有金色材料**——洗髓丹/洗灵丹的硬门槛，所以权重压到 3（约 3%）。
 #     想让它更好出就抬这个数；它同时也是货栈每日限购那件（900 两、日限 1）。
 
@@ -531,15 +532,36 @@ static func chest_silver_total(i: int, cid: String) -> int:
 	return maxi(1, int(round(per * float(d.get("rolls", 1)))))
 
 # 材料池按权重挑一个（纯数据，不开箱——开箱在 game_state 里落账）
-static func chest_roll_mat() -> String:
+# 箱子品质越高，越容易出稀有锻造 / 炼丹材料；木箱基本是铁矿砂、骨炭和普通药草。
+static func chest_roll_mat(grade := 0) -> String:
+	var pool: Dictionary = CHEST_MATS.duplicate()
+	if int(grade) <= 1:
+		pool["star_iron"] = 0
+		pool["fine_iron"] = 0
+		pool["jin"] = 0
+		pool["forge_oil"] = 0
+		pool["iron_sand"] = 22
+		pool["bone_coal"] = 16
+	elif int(grade) == 2:
+		pool["star_iron"] = 1
+		pool["fine_iron"] = 5
+		pool["forge_oil"] = 6
+		pool["iron_sand"] = 12
+		pool["bone_coal"] = 9
+	else:
+		pool["star_iron"] = 5
+		pool["fine_iron"] = 9
+		pool["forge_oil"] = 9
+		pool["jin"] = 4
+		pool["shen"] = 10
 	var total := 0
-	for k in CHEST_MATS.keys():
-		total += int(CHEST_MATS[k])
+	for k in pool.keys():
+		total += int(pool[k])
 	if total <= 0:
 		return "wood"
 	var r := randi() % total
-	for k2 in CHEST_MATS.keys():
-		r -= int(CHEST_MATS[k2])
+	for k2 in pool.keys():
+		r -= int(pool[k2])
 		if r < 0:
 			return str(k2)
 	return "wood"

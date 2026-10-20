@@ -846,8 +846,11 @@ func _ready() -> void:
 	#   所以开局直接吃的是变量声明处的假数据 —— `var _wave := 12` / `var _lv := 7`。
 	#   表现就是"一进场就是第 13 波、Lv8"。开一局必须走一次 _restart_run() 才是干净的第一波。
 	#   ⚠ 放在 _ach_load() 之后：那边读的是成就/名声档，_restart_run 里要把它们发下来。
-	_restart_run()
-	_sync_avatar()
+	#   ⚠ 弹窗专用进来时**不能开局**：存档 / 成就只看窗口，棋盘不能自己跑起来。
+	if not boot_popup_only:
+		_started = true
+		_restart_run()
+		_sync_avatar()
 
 # v17v（用户："存档和成就按钮放在困兽测试按钮出的窗口里"）：
 #   主界面选关窗里点［存档］/［成就］时，先设这个，困兽开屏后自动把那个窗弹出来。
@@ -855,11 +858,16 @@ static var boot_popup := ""
 static var boot_popup_only := false
 var _popup_only := false
 var _popup_only_pending := false
+var _started := false
 
 func open() -> void:
 	_want_open = true
 	visible = true
 	move_to_front()
+	if not _started and not boot_popup_only:
+		_started = true
+		_restart_run()
+		_sync_avatar()
 		# v17v：带着指定的窗进来就直接弹（主界面选关窗的［存档］/［成就］走这条）
 	if boot_popup != "":
 		var bp := boot_popup

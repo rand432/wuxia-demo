@@ -1419,14 +1419,20 @@ func _gather_node(i: int) -> void:
 			msg = "采到雪参 ×2"
 		"ore":
 			var os := randi_range(2, 4)
+			var ir := randi_range(1, 3)
 			GameState.add_material("forge_stone", os, _loot_q())
+			GameState.add_material("iron_sand", ir, _loot_q())
 			_loot_pop("forge_stone", os)
-			msg = "挖到锻造石 ×" + str(os)
+			_loot_pop("iron_sand", ir, 0.12)
+			msg = "挖到锻造石 ×" + str(os) + " · 铁矿砂 ×" + str(ir)
 		"bone":
 			var bs := randi_range(2, 4)
+			var bc := randi_range(1, 2)
 			GameState.add_material("bone", bs, _loot_q())
+			GameState.add_material("bone_coal", bc, _loot_q())
 			_loot_pop("bone", bs)
-			msg = "捡到兽骨碎 ×" + str(bs)
+			_loot_pop("bone_coal", bc, 0.12)
+			msg = "捡到兽骨碎 ×" + str(bs) + " · 骨炭 ×" + str(bc)
 		"rice":
 			var rs := randi_range(1, 3)
 			GameState.add_material("rice", rs, _loot_q())
@@ -2387,22 +2393,44 @@ func _open_chest(cell: Vector2i) -> void:
 	GameState.add_coin("silver", silver)
 	_loot_stones += stones
 	_loot_silver += silver
-	var extra := ""
+	var isand := randi_range(2, 5)
+	var coal := randi_range(1, 3)
+	GameState.add_material("iron_sand", isand, cq)
+	GameState.add_material("bone_coal", coal, cq)
+	_loot_pop("iron_sand", isand, 0.12)
+	_loot_pop("bone_coal", coal, 0.22)
+	var extra := " · 铁矿砂 ×" + str(isand) + " · 骨炭 ×" + str(coal)
+	if q >= 1 and randf() < 0.45:
+		GameState.add_material("forge_oil", 1, cq)
+		_loot_pop("forge_oil", 1, 0.32)
+		extra += " · 锻油 ×1"
+	if q >= 2 and randf() < 0.30:
+		GameState.add_material("fine_iron", 1, cq)
+		_loot_pop("fine_iron", 1, 0.42)
+		extra += " · 精铁 ×1"
 	if q == 1:
 		GameState.add_material("rice", 3, cq)
+		GameState.add_material("zhi", 2, cq)
+		GameState.add_material("shen", 1, cq)
 		_loot_pop("rice", 3, 0.12)
-		extra = " · 灵米 ×3"
+		_loot_pop("zhi", 2, 0.20)
+		_loot_pop("shen", 1, 0.30)
+		extra += " · 灵米 ×3 · 紫芝 ×2 · 雪参 ×1"
 	elif q == 2:
 		GameState.add_material("atlas", 1, cq)
 		GameState.add_material("jin", 1, cq)
 		_loot_pop("jin", 1, 0.12)
 		_loot_pop("atlas", 1, 0.22)
 		_loot_atlas += 1
-		extra = " · 舆图 ×1 · 金髓 ×1"
+		extra += " · 舆图 ×1 · 金髓 ×1"
+		if randf() < 0.35:
+			GameState.add_material("star_iron", 1, cq)
+			_loot_pop("star_iron", 1, 0.30)
+			extra += " · 星铁 ×1"
 	elif randf() < 0.22:
 		GameState.add_material("atlas", 1)
 		_loot_atlas += 1
-		extra = " · 舆图 ×1"
+		extra += " · 舆图 ×1"
 	GameState.save_game()
 	var qn := "" if q == 0 else ("〔精制〕" if q == 1 else "〔秘藏〕")
 	_set_msg(qn + "拾得：锻造石 ×" + str(stones) + " · 银两 +" + str(silver) + extra)
@@ -4670,6 +4698,7 @@ func _grant_battle_loot(enemy: Node2D) -> void:
 	var is_boss := bool(enemy.get_meta("boss", false))
 	var first_boss := false
 	var boss_drop := ""
+	var boss_tool := ""
 	if is_boss:
 		silver += 180
 		stones += 8
@@ -4689,6 +4718,11 @@ func _grant_battle_loot(enemy: Node2D) -> void:
 			_loot_atlas += 1
 			var drop := GameState.grant_boss_weapon(bname)
 			boss_drop = str(drop.get("name", ""))
+			var bt := str({"山君": "龙鳞", "夜叉": "淬火油", "老妖": "悔恨法条", "无相": "星砂", "雪魈": "龙鳞"}.get(bname, ""))
+			var btid := str({"龙鳞": "dragon_scale", "淬火油": "quench_oil", "悔恨法条": "regret_ink", "星砂": "star_sand"}.get(bt, ""))
+			if btid != "":
+				GameState.forge_tool_add(btid, 1)
+				boss_tool = bt
 	if GameState.story_title == "江湖散人":
 		silver = int(round(float(silver) * 1.1))
 	if _map_owner == 1:
@@ -4701,6 +4735,13 @@ func _grant_battle_loot(enemy: Node2D) -> void:
 	GameState.add_coin("silver", silver)
 	GameState.add_material("forge_stone", stones, _loot_q())
 	_loot_pop("forge_stone", stones, 0.35)
+	var iron_drop := randi_range(1, 3)
+	var coal_drop := randi_range(1, 2)
+	GameState.add_material("iron_sand", iron_drop, _loot_q())
+	GameState.add_material("bone_coal", coal_drop, _loot_q())
+	_loot_pop("iron_sand", iron_drop, 0.45)
+	_loot_pop("bone_coal", coal_drop, 0.55)
+	extra_mat += " · 铁矿砂 +" + str(iron_drop) + " · 骨炭 +" + str(coal_drop)
 	_loot_silver += silver
 	_loot_stones += stones
 	GameState.save_game()
@@ -4714,6 +4755,8 @@ func _grant_battle_loot(enemy: Node2D) -> void:
 			tail += " · 首杀：金髓 +2 · 舆图 +1 · 锻造石 +10"
 			if boss_drop != "":
 				tail += " · 专属「" + boss_drop + "」"
+			if boss_tool != "":
+				tail += " · 锻炉道具「" + boss_tool + "」"
 	_set_msg("击败「" + fname + "」：银两 +" + str(silver) + " · 锻造石 +" + str(stones) + tail + extra_mat, 3.0)
 	GameState.log_explore("战斗：击败「" + fname + "」 · 锻造石 +" + str(stones) + tail)
 
