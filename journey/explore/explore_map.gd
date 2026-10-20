@@ -82,6 +82,9 @@ var _side_panel: Control
 var _ng_panel: Control
 var _ng_echo_mode := false
 var _ng_final_mode := false
+const EXPLORE_HP_MUL := 1.20
+const EXPLORE_ATK_MUL := 1.10
+
 var _wuxia_cell := Vector2i(-1, -1)
 var _wuxia_pending := false
 var _wuxia_panel: Control
@@ -1009,10 +1012,51 @@ func _open_character_panel() -> void:
 	_hide_for_side()
 	cp.call("open")
 
+func _on_pill_used(sid: String) -> void:
+	if _state == null:
+		return
+	var r: Dictionary = GameState.recipe_of(sid)
+	var eff := str(r.get("effect", ""))
+	if eff == "heal":
+		var full := true
+		for mi in _state.member_count():
+			var m: Dictionary = _state.member_at(mi)
+			if int(m.get("hp", 0)) < int(m.get("hp_max", 1)):
+				full = false
+				break
+		if full:
+			_set_msg("气血已满，不必服丹。")
+			return
+		if not GameState.take_pill(sid, 1):
+			return
+		var pct := float(r.get("add", 35))
+		for mi2 in _state.member_count():
+			var m2: Dictionary = _state.member_at(mi2)
+			var mx := int(m2.get("hp_max", 1))
+			var add := maxi(1, int(round(float(mx) * pct / 100.0)))
+			m2["hp"] = mini(mx, int(m2.get("hp", 0)) + add)
+		_set_msg("服下气血丹——全队回复 " + str(int(round(pct))) + "% 气血。", 2.5)
+	elif eff == "rage":
+		if not GameState.take_pill(sid, 1):
+			return
+		var rv := minf(100.0, float(r.get("add", 60)))
+		_state.set_pill_buff("rage", rv)
+		_set_msg("服下怒气丹——下一场战斗开场怒气 " + str(int(rv)) + "。", 2.5)
+	elif ["atk", "crit", "def", "spd", "dodge", "critdmg", "dmg"].has(eff):
+		if not GameState.take_pill(sid, 1):
+			return
+		var av := float(r.get("add", 15))
+		_state.set_pill_buff(eff, av)
+		var label: String = str({"atk": "攻击 +", "crit": "暴击 +", "def": "受到伤害 -", "spd": "速度 +", "dodge": "闪避 +", "critdmg": "暴击伤害 +", "dmg": "造成伤害 +"}.get(eff, ""))
+		_set_msg("服下" + str(r.get("name", "丹")) + "——下一场战斗 " + str(label) + str(int(av)) + "%。", 2.5)
+	GameState.save_game()
+
 func _open_inventory_panel() -> void:
 	if _busy:
 		return
 	var wp = WarehousePanel.new()
+	wp.pill_used.connect(_on_pill_used)
+	wp.enable_pill_use()
 	wp.connect("closed", _on_side_closed)
 	_toast_layer.add_child(wp)
 	_side_panel = wp
@@ -1405,13 +1449,13 @@ func _spawn_boss() -> void:
 	_boss_node = Node2D.new()
 	_boss_node.position = _cell_pos(_boss_cell.x, _boss_cell.y)
 	var tier := clampi(GameState.world_tier, 1, 5)
-	var hp := int(round(float(280 + tier * 70) * GameState.ng_mul()))
+	var hp := int(round(float(280 + tier * 70) * GameState.ng_mul() * EXPLORE_HP_MUL))
 	if GameState.boss_kills.has(_boss_name):
 		hp = int(hp * 0.9)   # 图鉴弱点：首杀后识破，再战气血 -10%
 	_boss_node.set_meta("boss", true)
 	_boss_node.set_meta("foe_name", _boss_name)
 	_boss_node.set_meta("beaten", false)
-	var foe := {"hp": hp, "atk": maxi(1, int(round(float(14 + tier * 2) * GameState.ng_mul()))), "scale": 1.3}
+	var foe := {"hp": hp, "atk": maxi(1, int(round(float(14 + tier * 2) * GameState.ng_mul() * EXPLORE_ATK_MUL))), "scale": 1.3}
 	if _boss_name == "雪魈":
 		foe["def"] = 8
 		foe["spd"] = 105
@@ -1530,8 +1574,8 @@ func _make_enemy(cell: Vector2i, i: int, hunter := false, guard := false, elite 
 		sc *= float(aff["scale"])
 		e.set_meta("elite_affix", str(aff["id"]))
 	var ng := GameState.ng_mul()
-	hp = int(round(float(hp) * ng))
-	atk = maxi(1, int(round(float(atk) * ng)))
+	hp = int(round(float(hp) * ng * EXPLORE_HP_MUL))
+	atk = maxi(1, int(round(float(atk) * ng * EXPLORE_ATK_MUL)))
 	var foe := {"hp": hp, "atk": atk, "scale": sc, "spd": spd}
 	if td > 0:
 		foe["def"] = td
@@ -2055,6 +2099,9 @@ func _open_chest(cell: Vector2i) -> void:
 	elif q == 2:
 		stones *= 3
 		silver *= 2
+	var rm := GameState.world_resource_mul()
+	stones = int(round(float(stones) * rm))
+	silver = int(round(float(silver) * rm))
 	GameState.add_material("forge_stone", stones)
 	GameState.add_coin("silver", silver)
 	_loot_stones += stones
@@ -4279,6 +4326,9 @@ func _grant_battle_loot(enemy: Node2D) -> void:
 		silver = int(round(float(silver) * 1.1))
 	elif _map_owner == 3:
 		silver = int(round(float(silver) * 1.2))
+	var rm2 := GameState.world_resource_mul()
+	silver = int(round(float(silver) * rm2))
+	stones = int(round(float(stones) * rm2))
 	GameState.add_coin("silver", silver)
 	GameState.add_material("forge_stone", stones)
 	_loot_silver += silver

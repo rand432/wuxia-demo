@@ -793,6 +793,10 @@ const SLOT_CN := {"weapon": "兵器", "armor": "护甲", "helm": "玉佩", "cloa
 
 static var village_stage := 0
 static var first_journey_done := false
+static var first_explore_done := false
+static var world_difficulty := 1
+static var world_created := false
+static var world_history: Array = []
 # v139（调试）：**强制重播引子**——只活在内存里，不写盘。
 #   存档里 first_journey_done 已经是 true 的档，想再测一遍引子就靠它（主界面 F9 开）。
 static var intro_force := false
@@ -1410,6 +1414,9 @@ static func appraise_tool_line() -> String:
 	return " · ".join(PackedStringArray(out))
 
 # ---- 报价单 ----
+static func world_resource_mul() -> float:
+	return [1.0, 1.3, 1.6][clampi(world_difficulty - 1, 0, 2)]
+
 static func gear_salvage_mats(sid: String) -> Dictionary:
 	var q := Cards.q_idx(sid)
 	var out := {"forge_stone": int([2, 4, 6, 8, 12][clampi(q, 0, 4)])}
@@ -1451,6 +1458,16 @@ static func _appraise_new_offer(hid: String, free := false) -> Dictionary:
 	_appraise_uid += 1
 	var raw_items: Array = Ladder.roll_hold(int(d.get("cells", 24)), int(d.get("tier", 0)),
 		Ladder.base_q_now(ladder_phase()), float(d.get("luck", 1.0)))
+	var items: Array = _appraise_strip_gear(raw_items)
+	# v270：货仓塞战斗丹——品质跟货仓档位走；可以开出高品质
+	if randf() < 0.35:
+		var pq := clampi(int(d.get("tier", 0)), 0, 4)
+		var pbase: String = str(["combat_hp", "combat_atk", "combat_crit", "combat_def", "combat_spd", "combat_dodge", "combat_critdmg", "combat_dmg"][randi() % 8])
+		if pq >= 3 and randf() < 0.25:
+			pbase = "combat_rage"
+			pq = 4
+		var pid := ("combat_rage" if pbase == "combat_rage" else str(pbase) + "#" + str(pq))
+		items.append({"kind": "pill", "id": pid, "name": pill_full_name(pid), "gap": 1})
 	return {
 		"uid": _appraise_uid,
 		"hid": hid,
@@ -1459,7 +1476,7 @@ static func _appraise_new_offer(hid: String, free := false) -> Dictionary:
 		#   每一行只抽**它自己那一档的色**（用户："每档只能抽它自己那一行的色"），
 		#   村里炉火进度（ladder_phase）决定基准难度：0→凡品 1→良品 2→上品 3→极品，
 		#   绝品只能靠"红行 +1/+2"越阶（"后面就是良品了/16之后就是上品"）。
-		"items": _appraise_strip_gear(raw_items),
+		"items": items,
 		"seen": {},
 		"best": -1,
 		"free": free,
@@ -3984,6 +4001,15 @@ static func chest_open(cid: String, n := 1) -> Dictionary:
 				var pid := str(pl[randi() % pl.size()])
 				var pn: Array = d.get("pill_n", [1, 1])
 				pill_got[pid] = int(pill_got.get(pid, 0)) + randi_range(int(pn[0]), int(pn[1]))
+		# ③ v270：战斗丹药——品质跟箱子走，可以塞货仓 / 宝箱
+		if randf() < 0.25:
+			var bq := clampi(int(d.get("grad", 0)), 0, 4)
+			var bbase: String = str(["combat_hp", "combat_atk", "combat_crit", "combat_def", "combat_spd", "combat_dodge", "combat_critdmg", "combat_dmg"][randi() % 8])
+			if bq >= 3 and randf() < 0.25:
+				bbase = "combat_rage"
+				bq = 4
+			var bpid := ("combat_rage" if bbase == "combat_rage" else str(bbase) + "#" + str(bq))
+			pill_got[bpid] = int(pill_got.get(bpid, 0)) + 1
 		# ④ v133：武学残页（几率**比角色碎片低**，品质跟箱子走）
 		if randf() < float(d.get("page_chance", 0.0)):
 			_chest_pages_into(pages, "arts", int(d.get("grad", 0)), d.get("page_n", [1, 1]))
@@ -4179,6 +4205,17 @@ const DAN_RECIPES := [
 	{"id": "tupo_shang", "name": "突破丹（上品）", "desc": "境界 17~24 重用的突破丹", "stat": "break", "add": 0, "cost": {"shen": 2, "guo": 2, "bone": 2}, "min": 12},
 	{"id": "tupo_ji", "name": "突破丹（极品）", "desc": "境界 25~32 重用的突破丹", "stat": "break", "add": 0, "cost": {"zhi": 3, "shen": 3, "rice": 2}, "min": 16},
 	{"id": "tupo_jue", "name": "突破丹（绝品）", "desc": "境界 33~39 重用的突破丹", "stat": "break", "add": 0, "cost": {"zhi": 4, "shen": 4, "guo": 4, "rice": 3}, "min": 20},
+	# v269：探险战斗丹（简单三味；不入永久属性）
+	{"id": "combat_hp", "name": "气血丹", "desc": "探险中服下：全队回复 35% 气血", "stat": "combat", "effect": "heal", "add": 35, "cost": {"zhi": 2, "bone": 1}, "min": 2, "combat": true},
+	{"id": "combat_rage", "name": "怒气丹", "desc": "下一场战斗：全队开场怒气满（固定极品）", "stat": "combat", "effect": "rage", "add": 100, "cost": {"guo": 2, "rice": 1}, "min": 2, "combat": true},
+	{"id": "combat_atk", "name": "攻丹", "desc": "下一场战斗：全队攻击提升", "stat": "combat", "effect": "atk", "add": 15, "cost": {"bone": 3, "guo": 1}, "min": 3, "combat": true},
+	{"id": "combat_crit", "name": "暴击丹", "desc": "下一场战斗：全队暴击提升", "stat": "combat", "effect": "crit", "add": 5, "cost": {"guo": 2, "shen": 1}, "min": 3, "combat": true},
+	{"id": "combat_def", "name": "守丹", "desc": "下一场战斗：全队受到伤害降低", "stat": "combat", "effect": "def", "add": 10, "cost": {"shen": 2, "bone": 2}, "min": 3, "combat": true},
+	{"id": "combat_spd", "name": "疾丹", "desc": "下一场战斗：全队速度提升", "stat": "combat", "effect": "spd", "add": 10, "cost": {"zhi": 1, "shen": 1}, "min": 2, "combat": true},
+	{"id": "combat_dodge", "name": "闪丹", "desc": "下一场战斗：全队闪避提升", "stat": "combat", "effect": "dodge", "add": 5, "cost": {"rice": 2, "zhi": 1}, "min": 2, "combat": true},
+	{"id": "combat_critdmg", "name": "暴伤丹", "desc": "下一场战斗：全队暴击伤害提升", "stat": "combat", "effect": "critdmg", "add": 15, "cost": {"guo": 2, "bone": 2}, "min": 3, "combat": true},
+	{"id": "combat_dmg", "name": "破军丹", "desc": "下一场战斗：全队造成伤害提升（直接乘最终伤害）", "stat": "combat", "effect": "dmg", "add": 10, "cost": {"bone": 2, "guo": 2}, "min": 3, "combat": true},
+
 ]
 const PILLS_PER_REALM := 3
 const GENGU_PER_REALM := 1
@@ -4294,10 +4331,78 @@ static func furnace_tender_text() -> String:
 			names.append(tend_name(tid))
 	return "" if names.is_empty() else " · ".join(PackedStringArray(names))
 
+# v270：丹药品质——货仓能掉带品质的战斗丹；基础配方炼出来是凡品。
+static func pill_base(rid: String) -> String:
+	return rid.split("#")[0]
+
+static func pill_quality(rid: String) -> int:
+	if pill_base(rid) == "combat_rage":
+		return 4
+	var parts := rid.split("#")
+	if parts.size() > 1:
+		return clampi(int(parts[1]), 0, 4)
+	return 0
+
+static func pill_quality_name(rid: String) -> String:
+	return str(Cards.QUALITY_ORDER[pill_quality(rid)])
+
+static func pill_full_name(rid: String) -> String:
+	var r := recipe_of(rid)
+	return str(r.get("name", rid))
+
+static func pill_entries() -> Array:
+	var out: Array = []
+	for rid_v in pills.keys():
+		var rid := str(rid_v)
+		var n := pill_count(rid)
+		if n <= 0:
+			continue
+		var r := recipe_of(rid)
+		if r.is_empty():
+			continue
+		out.append({"id": rid, "name": str(r.get("name", rid)), "count": n})
+	return out
+
 static func recipe_of(rid: String) -> Dictionary:
+	var base: String = pill_base(rid)
+	var q: int = pill_quality(rid)
 	for r in DAN_RECIPES:
-		if str(r["id"]) == rid:
-			return r
+		if str(r["id"]) != base:
+			continue
+		var out: Dictionary = (r as Dictionary).duplicate(true)
+		if base == "combat_rage":
+			out.erase("quality")
+			out["id"] = "combat_rage"
+			out["name"] = "怒气丹"
+			out["add"] = 100
+			out["desc"] = "下一场战斗：全队开场怒气满。固定效果，不分品质。"
+			return out
+		if q <= 0 and rid == base:
+			return out
+		out["id"] = rid
+		out["quality"] = q
+		out["name"] = str(r.get("name", base)) + "（" + str(Cards.QUALITY_ORDER[q]) + "）"
+		var eff := str(r.get("effect", ""))
+		if eff == "heal":
+			out["add"] = 35 + q * 10
+		elif eff == "rage":
+			out["add"] = 60 + q * 10
+		elif eff == "atk":
+			out["add"] = 15 + q * 8
+		elif eff == "crit":
+			out["add"] = 5 + q * 4
+		elif eff == "def":
+			out["add"] = 10 + q * 6
+		elif eff == "spd":
+			out["add"] = 10 + q * 5
+		elif eff == "dodge":
+			out["add"] = 5 + q * 3
+		elif eff == "critdmg":
+			out["add"] = 15 + q * 10
+		elif eff == "dmg":
+			out["add"] = 10 + q * 9
+		out["desc"] = str(r.get("desc", "")) + "（" + str(Cards.QUALITY_ORDER[q]) + "）"
+		return out
 	return {}
 
 static func cost_text(cost: Dictionary) -> String:
@@ -4464,6 +4569,15 @@ static func alchemy_collect(slot := -1) -> Dictionary:
 
 static func pill_count(rid: String) -> int:
 	return int(pills.get(rid, 0))
+
+static func take_pill(rid: String, n := 1) -> bool:
+	var have := pill_count(rid)
+	if have < n:
+		return false
+	pills[rid] = have - n
+	return true
+
+# v269：战斗丹药
 
 # v36：每"境"能给几颗——境＝**境界**（突破次数），不再是"每 10 级"。
 #   境界 39 时：属性丹 120 颗、洗髓 40 颗。
@@ -6340,6 +6454,12 @@ static func load_game() -> void:
 	var vd := _sd(cf.get_value("world", "village", {}), {})
 	village_stage = int(vd.get("stage", village_stage))
 	first_journey_done = bool(vd.get("first_journey_done", first_journey_done))
+	first_explore_done = bool(vd.get("first_explore_done", first_explore_done))
+	world_difficulty = clampi(int(vd.get("world_difficulty", world_difficulty)), 1, 3)
+	world_created = bool(vd.get("world_created", world_created))
+	if not world_created and (first_explore_done or not world_flags.is_empty()):
+		world_created = true
+	world_history = (vd.get("world_history", world_history) as Array).duplicate(true)
 	player_name = str(vd.get("player_name", player_name))   # v83
 	disciple_joined = bool(vd.get("disciple_joined", disciple_joined))
 	qingluan_joined = bool(vd.get("qingluan_joined", qingluan_joined))
@@ -6555,7 +6675,7 @@ static func save_game() -> void:
 	cf.load(SAVE_CFG)
 	cf.set_value("save", "ver", SAVE_VER)
 	cf.set_value("world", "village", {
-		"stage": village_stage, "first_journey_done": first_journey_done,
+		"stage": village_stage, "first_journey_done": first_journey_done, "first_explore_done": first_explore_done, "world_difficulty": world_difficulty, "world_created": world_created, "world_history": world_history,
 		"player_name": player_name,   # v83：玩家起的名字
 		"disciple_joined": disciple_joined, "qingluan_joined": qingluan_joined,
 		"map_found": map_found, "b2_built": b2_built, "cave_opened": cave_opened,
@@ -6761,6 +6881,10 @@ static func debug_pet_fill() -> void:
 static func reset() -> void:
 	village_stage = 0
 	first_journey_done = false
+	first_explore_done = false
+	world_difficulty = 1
+	world_created = false
+	world_history.clear()
 	disciple_joined = false
 	qingluan_joined = false
 	pending_note = ""

@@ -113,6 +113,17 @@ const PARTY_MAX := 3
 
 var members: Array = []       # 每项见 _blank_member()
 var active_i := 0             # 当前"对谁操作"（面板/换装/结算挨个来）
+# v269：探险战斗丹——地图上吃下，下一场战斗生效，打完清空。
+var pill_buff := {}
+
+func set_pill_buff(kind: String, v: float) -> void:
+	pill_buff[kind] = v
+
+func clear_pill_buff() -> void:
+	pill_buff.clear()
+
+func pill_fx() -> Dictionary:
+	return pill_buff
 
 static func _blank_member() -> Dictionary:
 	return {

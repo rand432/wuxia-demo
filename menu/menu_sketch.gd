@@ -79,6 +79,7 @@ const PetPanel := preload("res://menu/pet_panel.gd")
 const ShopPanel := preload("res://menu/shop_panel.gd")
 const JourneyDepart := preload("res://menu/journey_depart.gd")
 const RegionSelectPanel := preload("res://menu/region_select.gd")
+const WorldPanel := preload("res://menu/world_panel.gd")
 const InsightPanel := preload("res://menu/insight_panel.gd")   # v64b：阅历线（底排第 6 格）
 const JourneySave := preload("res://journey/journey_save.gd")
 const BattleLite := preload("res://menu/battle_lite.gd")
@@ -262,6 +263,7 @@ var _pet_panel = null
 var _shop_panel = null
 var _depart = null
 var _region_panel = null
+var _world_panel = null
 var _battle = null
 var _veil = null
 var _marks_root: Control
@@ -2765,7 +2767,7 @@ func _tag_fire(i: int) -> void:
 				return
 			# R1 闸：首趟（引子·五问）走老路；之后都先过「出征屏」
 			if GameState.first_journey_done:
-				_open_depart()
+				_open_world_panel()
 				return
 			print("[主界面] 首趟历练（引子）→ ", Conf.JOURNEY_SCENE)
 			var err := get_tree().change_scene_to_file(Conf.JOURNEY_SCENE)
@@ -2934,6 +2936,28 @@ func _on_form_cancel() -> void:
 
 # ---- 出征屏（R1）：正式游历的入口——选人·选难度·看携宠；点出发才切场 ----
 
+func _open_world_panel() -> void:
+	_clear_toast()
+	if _world_panel == null:
+		_world_panel = WorldPanel.new()
+		_world_panel.enter_requested.connect(_on_world_enter)
+		_world_panel.world_generated.connect(_on_world_generated)
+		_world_panel.closed.connect(_on_world_closed)
+		add_child(_world_panel)
+	_world_panel.open()
+
+func _on_world_enter() -> void:
+	_on_world_closed()
+	_open_depart()
+
+func _on_world_generated() -> void:
+	_on_world_closed()
+	_open_depart()
+
+func _on_world_closed() -> void:
+	if _world_panel != null:
+		_world_panel.visible = false
+
 func _open_depart() -> void:
 	_clear_toast()
 	if _depart == null:
@@ -2954,18 +2978,29 @@ func _open_insight() -> void:
 	_insight_panel.open()
 
 func _on_deploy_started(party: Array, diff: int) -> void:
+	diff = GameState.world_difficulty
+	GameState.deploy_set(party, diff)
 	if GameState.action <= 0:
 		_show_toast("食物空了——先去「挂机」收一次，或爬塔攒一点", 3.2)
 		return
-	if _region_panel == null:
-		_region_panel = RegionSelectPanel.new()
-		_region_panel.entered.connect(_on_region_entered)
-		_region_panel.closed.connect(_on_region_closed)
-		add_child(_region_panel)
-	_region_panel.open()
+	if not GameState.world_created:
+		_show_toast("还没有世界——先在世界窗口生成一个", 3.2)
+		_open_world_panel()
+		return
+	if not GameState.first_explore_done:
+		GameState.world_difficulty = 1
+	GameState.first_explore_done = true
+	GameState.save_game()
+	print("[主界面] 直接入图：", GameState.REGION_NAMES[GameState.current_region], " · 难度 ", GameState.world_difficulty)
+	var err := get_tree().change_scene_to_file(Conf.EXPLORE_SCENE)
+	if err != OK:
+		_show_toast("进不去游历：路径＝" + Conf.EXPLORE_SCENE)
 
 func _on_region_entered(region: int) -> void:
 	GameState.current_region = clampi(region, 0, 4)
+	if not GameState.first_explore_done:
+		GameState.world_difficulty = 1
+	GameState.first_explore_done = true
 	GameState.save_game()
 	if _region_panel != null:
 		_region_panel.close()

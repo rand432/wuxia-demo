@@ -25,6 +25,7 @@ signal picked(sid: String)
 #   仓库里点［装备（去弟子页）］时发这一条——主界面收到后关仓库、开弟子页、把这件装上。
 #   ⚠ 装配本身不在这里做：仍走 GameState.equip_*，与弟子面板那条路同一个口
 signal equip_requested(sid: String)
+signal pill_used(sid: String)
 
 const INK := Color(0.14, 0.13, 0.15)
 const PAPER := Color(0.905, 0.878, 0.795)
@@ -65,6 +66,7 @@ var _title_lb: Label
 var _sub_lb: Label
 var _tab_btns: Array = []
 var _tab := 0
+var _pill_use := false
 var _pick_cat := ""            # "" = 普通；"weapon"/"armor"/"helm"/"cloak"/"arts" = 联动取用
 # v132：功法的**归类粗筛**（""=全部；"atk"/"buff"/"ctrl"/"pass"/"elem"/"ex"）——只筛「武学」页
 var _cat_grp := ""
@@ -733,19 +735,21 @@ func _stacks() -> Array:
 # 丹药页：把包裹里（GameState.pills）现有的丹逐种列出来
 func _pill_stacks() -> Array:
 	var out: Array = []
-	for i in GameState.DAN_RECIPES.size():
-		var r: Dictionary = GameState.DAN_RECIPES[i]
-		var rid := str(r["id"])
-		var n := GameState.pill_count(rid)
-		if n > 0:
-			out.append({
-				"kind": "pill",
-				"sid": rid,
-				"set_name": "丹药",
-				"title": str(r.get("name", rid)),
-				"part_name": str(r.get("name", rid)),
-				"count": n,
-			})
+	for e_v in GameState.pill_entries():
+		var e: Dictionary = e_v
+		var rid := str(e.get("id", ""))
+		var n := int(e.get("count", 0))
+		if n <= 0:
+			continue
+		var nm := str(e.get("name", rid))
+		out.append({
+			"kind": "pill",
+			"sid": rid,
+			"set_name": "丹药",
+			"title": nm,
+			"part_name": nm,
+			"count": n,
+		})
 	return out
 
 # v60（用户："宝箱开的材料在仓库不显示"）：材料页——把村账里现有的材料逐种列出来。
@@ -770,8 +774,8 @@ func _mat_stacks() -> Array:
 func _cat_total(tab_id: String) -> int:
 	if tab_id == "pill":
 		var np := 0
-		for i in GameState.DAN_RECIPES.size():
-			np += GameState.pill_count(str(GameState.DAN_RECIPES[i]["id"]))
+		for pv in GameState.pills.values():
+			np += int(pv)
 		return np
 	if tab_id == "mat":
 		var nm := 0
@@ -1166,7 +1170,11 @@ func _open_drawer(k: int) -> void:
 	elif kd == "pill":
 		var r2: Dictionary = GameState.recipe_of(sid)
 		kind_txt = "丹药 · 存 " + str(count) + " 颗"
-		desc = str(r2.get("desc", "")) + "\n去「弟子」面板点右下［服药］吃；宠物粮去「宠物」面板喂。"
+		if _pill_use and bool(r2.get("combat", false)):
+			desc = str(r2.get("desc", "")) + "\n在探险中服用：只作用于下一场战斗。"
+			primary = "服　用"
+		else:
+			desc = str(r2.get("desc", "")) + "\n去「弟子」面板点右下［服药］吃；宠物粮去「宠物」面板喂。"
 	elif kd == "mat":
 		kind_txt = "材料 · 现有 ×" + str(count)
 		desc = _mat_use(sid)
@@ -1215,6 +1223,15 @@ func _drawer_go() -> void:
 			_equip_go(sid)
 		"card":
 			_ask_synth(sid)
+		"pill":
+			if _pill_use:
+				var rr: Dictionary = GameState.recipe_of(sid)
+				if bool(rr.get("combat", false)):
+					pill_used.emit(sid)
+					_close_drawer()
+					refresh()
+					return
+			_close_drawer()
 		_:
 			_close_drawer()
 
@@ -1495,6 +1512,9 @@ func _on_tab(i: int) -> void:
 		_scroll.set_deferred("scroll_vertical", 0)
 
 # ---- 开合 ----
+
+func enable_pill_use() -> void:
+	_pill_use = true
 
 func open() -> void:
 	_pick_cat = ""

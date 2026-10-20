@@ -115,6 +115,10 @@ var _tier_name_lb: Array = []
 var _tier_info_lb: Array = []
 var _phase_lb: Label = null
 var _phase_note: Label = null
+var _diff_title: Label = null
+var _phase_l_btn: Button = null
+var _phase_r_btn: Button = null
+var _first_note: Label = null
 var _pick_tier := 1               # 模式：0 简单 / 1 普通 / 2 困难（默认普通）
 var _pick_phase := 0              # 品级：0 凡 / 1 良 / 2 上 / 3 极（默认取最高已解锁）
 var _pool_choice := -1            # 货源品阶：-1＝跟进度自动（ladder_phase）
@@ -322,10 +326,15 @@ func _build() -> void:
 	_pet_btn.add_child(_pet_lb)
 
 	# ---- 三 · 游历难度（三档）＋ 货源品阶 ----
-	var s3 := _label("游历难度", 17, Color(INK.r, INK.g, INK.b, 0.72))
-	s3.position = Vector2(28, 440)
-	s3.size = Vector2(300, 22)
-	_panel.add_child(s3)
+	_diff_title = _label("当前世界 · 第1周 · 难度", 17, Color(INK.r, INK.g, INK.b, 0.72))
+	_diff_title.position = Vector2(28, 440)
+	_diff_title.size = Vector2(300, 22)
+	_panel.add_child(_diff_title)
+	_first_note = _label("当前世界 · 第1周 · 简单", 20, SEAL)
+	_first_note.position = Vector2(28, 462)
+	_first_note.size = Vector2(584, 32)
+	_first_note.visible = false
+	_panel.add_child(_first_note)
 
 	for i in MODES.size():
 		var t: Dictionary = MODES[i]
@@ -358,7 +367,8 @@ func _build() -> void:
 	_panel.add_child(_sel_lb)
 
 	# 货源品阶步进器（◀ 凡品 ▶）
-	var ph_l := Button.new()
+	_phase_l_btn = Button.new()
+	var ph_l := _phase_l_btn
 	ph_l.text = "◀"
 	ph_l.position = Vector2(28, 596)
 	ph_l.size = Vector2(62, 52)
@@ -372,7 +382,8 @@ func _build() -> void:
 	_phase_lb.size = Vector2(262, 52)
 	_phase_lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_panel.add_child(_phase_lb)
-	var ph_r := Button.new()
+	_phase_r_btn = Button.new()
+	var ph_r := _phase_r_btn
 	ph_r.text = "▶"
 	ph_r.position = Vector2(364, 596)
 	ph_r.size = Vector2(62, 52)
@@ -1769,6 +1780,26 @@ func _open_world() -> void:
 func _on_world_closed() -> void:
 	_refresh_world_btn()
 
+func _apply_first_hide(first: bool) -> void:
+	var wk := "第" + str(GameState.ng_plus + 1) + "周"
+	var dn: String = str(["简单", "普通", "困难"][clampi(GameState.world_difficulty - 1, 0, 2)])
+	_first_note.text = "当前世界 · " + wk + " · " + dn
+	if _diff_title != null:
+		_diff_title.text = "当前世界 · " + wk + " · 难度"
+	_first_note.visible = true
+	for b in _tier_btns:
+		b.visible = not first
+	if _diff_title != null:
+		_diff_title.visible = not first
+	if _phase_l_btn != null:
+		_phase_l_btn.visible = not first
+	if _phase_r_btn != null:
+		_phase_r_btn.visible = not first
+	if _phase_lb != null:
+		_phase_lb.visible = not first
+	if _phase_note != null:
+		_phase_note.visible = not first
+
 func open() -> void:
 	_msg_lb.text = ""
 	_refresh_world_btn()
@@ -1781,6 +1812,8 @@ func open() -> void:
 	#   点人仍可当场改（改不改回账上，见 _on_formation_saved 的说明）。
 	_pick_roles = GameState.formation.duplicate()
 	_pick_diff = 0
+	_pick_phase = 0
+	_pick_tier = clampi(GameState.world_difficulty - 1, 0, 2)
 	# v12：每开一次出征屏，重新提醒一遍"谁还没挑随身功法"（挑过的那几个人记在 _art_seen 里，
 	#   同一次开屏内不再啰嗦；关掉重开＝重新提一次）
 	_art_seen.clear()
@@ -1790,6 +1823,8 @@ func open() -> void:
 	_close_fate_pick()
 	_close_art_pick()
 	_refresh()
+	_pick_diff = GameState.world_difficulty
+	_apply_first_hide(true)
 	visible = true
 	if GameState.jailed_days > 0:
 		_maybe_open_jail()

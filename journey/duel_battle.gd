@@ -1497,6 +1497,25 @@ func _setup_ally(rid: String, nd: Node2D, idx: int) -> Dictionary:
 	else:
 		al["hp"] = hpm
 	al["rage"] = int(fb.get("open_rage", 0))
+	# v269：地图上吃的战斗丹——本场生效，打完在 run() 末尾清空
+	var pb: Dictionary = _state.pill_fx()
+	if not pb.is_empty():
+		if pb.has("atk"):
+			al["atk"] = maxf(1.0, float(al["atk"]) * (1.0 + float(pb["atk"]) / 100.0))
+		if pb.has("def"):
+			al["cut_add"] = float(al["cut_add"]) + float(pb["def"]) / 100.0
+		if pb.has("spd"):
+			al["spd"] = int(round(float(al["spd"]) * (1.0 + float(pb["spd"]) / 100.0)))
+		if pb.has("crit"):
+			al["crit_add"] = float(al["crit_add"]) + float(pb["crit"])
+		if pb.has("dodge"):
+			al["dodge"] = float(al["dodge"]) + float(pb["dodge"])
+		if pb.has("critdmg"):
+			al["critdmg_add"] = float(al.get("critdmg_add", 0.0)) + float(pb["critdmg"])
+		if pb.has("dmg"):
+			al["dmg_pct"] = float(pb["dmg"]) / 100.0
+		if pb.has("rage"):
+			al["rage"] = maxi(int(al["rage"]), int(pb["rage"]))
 	al["ult"] = (acc.get("ult", {}) as Dictionary).duplicate(true)
 	return al
 # 一轮的出手顺序：每个活着的我方 + 每个活着的敌人，按 spd 从高到低。
@@ -2595,6 +2614,7 @@ func run(state, player: Node2D, fx: Control, node: Dictionary, foe_first := fals
 	#   不收回去的话，出战斗后面板/结算默认对着的是最后出手的那个人。
 	if _state != null:
 		_state.use_member(0)
+		_state.clear_pill_buff()
 	return {"won": won, "gain": gain}
 
 func _player_spd() -> int:
@@ -2608,6 +2628,7 @@ func _roll_p_damage(mult: float) -> Dictionary:
 	#   · **元素不可暴击**：下面 crit 那一整段直接跳过（不是把暴击率调 0——是压根不掷）
 	var base := float(st["atk"]) * Elem.atk_bonus(st, _cur_elem) * Elem.channel_mul(_cur_elem) * mult * _next_mult
 	base *= 1.0 + float(_fx_buff.get("atk_pct", 0.0))
+	base *= 1.0 + float(_a().get("dmg_pct", 0.0))   # 破军丹：直接放大最终伤害
 	base *= 1.0 + float(_a().get("bless_atk", 0.0))   # ㊿：加持（锐锋旗令等）
 	base *= _talent_wpn   # ㉗：剑心通明（使剑/空手才算，开打时已判过）
 	_next_mult = 1.0
@@ -2656,7 +2677,8 @@ func _roll_p_damage(mult: float) -> Dictionary:
 	if crit:
 		# ㊿y2：暴击伤害是**真属性**了——倍率 = 1.0 + 暴伤/100（以前写死 1.6 倍），
 		#   再乘角色星·青鸾「凝息」的 crit_mul_up
-		base *= (1.0 + float(st.get("crit_dmg", 50.0)) / 100.0) * (1.0 + float(_fx_buff.get("crit_mul_up", 0.0)))
+		var cdm := float(st.get("crit_dmg", 50.0)) + float(_a().get("critdmg_add", 0.0))
+		base *= (1.0 + cdm / 100.0) * (1.0 + float(_fx_buff.get("crit_mul_up", 0.0)))
 	return {"dmg": maxi(1, int(round(base * randf_range(0.92, 1.08)))), "crit": crit}
 
 # ㊿z6：专武·铁壁桩功——自己**每击中一名敌人**，反刺累计 +10%（封顶 +100%）。
