@@ -8,12 +8,14 @@ signal world_generated
 
 const UiKit := preload("res://shared/ui_kit.gd")
 const GS := preload("res://shared/game_state.gd")
+const InsightPanel := preload("res://menu/insight_panel.gd")
 
 var _panel: Panel
 var _title: Label
 var _body: Control
 var _mode := "main"
 var _diff := 1
+var _insight_panel = null
 
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -70,23 +72,14 @@ func _build_main() -> void:
 	var diff_l := _label("难度：" + _diff_name(GS.world_difficulty) + " · 资源 ×" + str(GS.world_resource_mul()), 17, UiKit.DIM)
 	diff_l.position = Vector2(20, 90)
 	diff_l.size = Vector2(520, 28)
-	var rl := _label("去处（只列已生成的区块）", 17, UiKit.DIM)
-	rl.position = Vector2(20, 126)
-	rl.size = Vector2(520, 26)
-	var idx := 0
-	for i in 5:
-		if not bool(GS.region_unlocked[i]):
-			continue
-		var mark := "● " if i == GS.current_region else ""
-		var rb := _button(mark + str(GS.REGION_NAMES[i]), Vector2(20 + idx * 100, 158), Vector2(92, 44))
-		rb.pressed.connect(_pick_region.bind(i))
-		idx += 1
-	var enter := _button("进 入 世 界", Vector2(130, 230), Vector2(300, 56))
+	var enter := _button("进 入 世 界", Vector2(130, 150), Vector2(300, 56))
 	enter.pressed.connect(_on_enter)
 	var rec := _button("游 历 记 录", Vector2(80, 320), Vector2(200, 48))
 	rec.pressed.connect(_on_records)
 	var create := _button("创 建 新 世 界", Vector2(300, 320), Vector2(200, 48))
 	create.pressed.connect(_on_create)
+	var insight := _button("阅 历", Vector2(210, 390), Vector2(200, 48))
+	insight.pressed.connect(_open_insight)
 	var close_b2 := _button("关 闭", Vector2(210, 620), Vector2(140, 44))
 	close_b2.pressed.connect(close)
 
@@ -123,20 +116,47 @@ func _build_create() -> void:
 
 func _build_records() -> void:
 	_title.text = "游 历 记 录"
-	if GS.world_history.is_empty():
-		var l := _label("还没有旧世界。\n当前世界是第一段游历。", 20, UiKit.DIM)
-		l.position = Vector2(20, 80)
-		l.size = Vector2(520, 100)
+	var scroll := ScrollContainer.new()
+	scroll.position = Vector2(10, 0)
+	scroll.size = Vector2(540, 600)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	scroll.get_v_scroll_bar().modulate.a = 0.35
+	_body.add_child(scroll)
+	var list := VBoxContainer.new()
+	list.custom_minimum_size = Vector2(520, 0)
+	list.add_theme_constant_override("separation", 10)
+	scroll.add_child(list)
+	var head1 := _label("最近行踪", 22, UiKit.SEAL)
+	_body.remove_child(head1)
+	list.add_child(head1)
+	if GS.explore_log.is_empty():
+		var empty := _label("最近还没有出门。", 19, UiKit.DIM)
+		_body.remove_child(empty)
+		list.add_child(empty)
 	else:
-		var y := 20.0
-		for i in mini(5, GS.world_history.size()):
-			var e: Dictionary = GS.world_history[GS.world_history.size() - 1 - i]
-			var txt := "第" + str(int(e.get("week", 1))) + "周 · " + str(e.get("regions", "山/水/林")) + "\n繁荣 " + str(int(e.get("prosperity", 0))) + " · " + str(e.get("title", "无名"))
-			var lb := _label(txt, 16, UiKit.INK)
-			lb.position = Vector2(20, y)
-			lb.size = Vector2(520, 56)
+		var n := mini(12, GS.explore_log.size())
+		for i in n:
+			var e := "· " + str(GS.explore_log[GS.explore_log.size() - 1 - i])
+			var lb := _label(e, 19, UiKit.INK)
+			lb.custom_minimum_size = Vector2(510, 0)
 			lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-			y += 66.0
+			lb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			_body.remove_child(lb)
+			list.add_child(lb)
+	if not GS.world_history.is_empty():
+		var head2 := _label("旧世界", 22, UiKit.SEAL)
+		_body.remove_child(head2)
+		list.add_child(head2)
+		for i in mini(5, GS.world_history.size()):
+			var e2: Dictionary = GS.world_history[GS.world_history.size() - 1 - i]
+			var txt := "第" + str(int(e2.get("week", 1))) + "周 · " + str(e2.get("regions", "山/水/林")) + "\n繁荣 " + str(int(e2.get("prosperity", 0))) + " · " + str(e2.get("title", "无名"))
+			var lb2 := _label(txt, 19, UiKit.INK)
+			lb2.custom_minimum_size = Vector2(510, 0)
+			lb2.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			lb2.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			_body.remove_child(lb2)
+			list.add_child(lb2)
 	var back2 := _button("返 回", Vector2(210, 620), Vector2(140, 44))
 	back2.pressed.connect(func() -> void: _mode = "main"; _rebuild())
 
@@ -145,10 +165,11 @@ func _on_create() -> void:
 	_diff = clampi(GS.world_difficulty, 1, 3)
 	_rebuild()
 
-func _pick_region(i: int) -> void:
-	GS.current_region = clampi(i, 0, 4)
-	GS.save_game()
-	_rebuild()
+func _open_insight() -> void:
+	if _insight_panel == null or not is_instance_valid(_insight_panel):
+		_insight_panel = InsightPanel.new()
+		add_child(_insight_panel)
+	_insight_panel.open()
 
 func _on_records() -> void:
 	_mode = "records"
@@ -177,7 +198,6 @@ func _generate() -> void:
 			"title": GS.story_title,
 		})
 	GS.world_flags.clear()
-	GS.current_region = 0
 	GS.region_unlocked = [true, true, true, false, false]
 	# 一键默认：舆图够就自动把石 / 雪加进去（先石后雪）
 	if GS.material_count("atlas") >= 2:
@@ -192,6 +212,8 @@ func _generate() -> void:
 	GS.world_difficulty = 1 if first else clampi(_diff, 1, 3)
 	GS.world_created = true
 	GS.first_explore_done = false
+	if not bool(GS.region_unlocked[clampi(GS.current_region, 0, 4)]):
+		GS.current_region = 0
 	GS.time_slot = 0
 	GS.time_day = 1
 	GS.slot_progress = 0

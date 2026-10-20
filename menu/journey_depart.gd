@@ -183,6 +183,7 @@ func _build() -> void:
 	psb.border_color = Color(0.32, 0.27, 0.22, 0.55)
 	psb.set_border_width_all(2)
 	_panel.add_theme_stylebox_override("panel", psb)
+	_panel.set_meta("skin_header", true)
 	add_child(_panel)
 
 	# ============================================================

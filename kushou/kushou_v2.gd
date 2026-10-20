@@ -852,6 +852,9 @@ func _ready() -> void:
 # v17v（用户："存档和成就按钮放在困兽测试按钮出的窗口里"）：
 #   主界面选关窗里点［存档］/［成就］时，先设这个，困兽开屏后自动把那个窗弹出来。
 static var boot_popup := ""
+static var boot_popup_only := false
+var _popup_only := false
+var _popup_only_pending := false
 
 func open() -> void:
 	_want_open = true
@@ -861,14 +864,19 @@ func open() -> void:
 	if boot_popup != "":
 		var bp := boot_popup
 		boot_popup = ""
+		_popup_only_pending = boot_popup_only
+		boot_popup_only = false
 		_open_large.call_deferred(bp)
 	# v16q（用户："换一首吧"）：战斗曲改成**可换**的（原来写死 bgm_battle，那首里有呐喊）
 	Audio.play_bgm(Audio.battle_track(), 0.6)
 
 func close() -> void:
 	_want_open = false
+	_popup_only = false
+	_popup_only_pending = false
 	visible = false
 	_close_popup()
+	Audio.stop_bgm(0.15)
 	Audio.play_bgm(Audio.menu_track(), 1.2)   # 回主界面：换回玩家选的那首
 
 # ============================================================
@@ -7985,6 +7993,10 @@ func _is_large(k: String) -> bool:
 	return ["卡组", "技能", "装备", "关卡", "装备详情", "当前宝物", "成长武器详情", "装备详情", "成长武器详情", "挑战", "存档", "成就", "角色", "队员", "仓库", "卡牌详情", "局终", "黑市", "招募", "成长武器", "宝物三选一", "图鉴", "任务"].has(k)
 
 func _close_popup() -> void:
+	if _popup_only:
+		_popup_only = false
+		close()
+		return
 	if _popup != null and is_instance_valid(_popup):
 		_popup.queue_free()
 	_popup = null
@@ -8001,6 +8013,9 @@ func _open_large(kind: String) -> void:
 
 func _open_popup(kind: String, large: bool) -> void:
 	_close_popup()
+	if _popup_only_pending:
+		_popup_only = true
+		_popup_only_pending = false
 	_popup_kind = kind
 	var vp := get_viewport_rect().size
 	var layer := Control.new()

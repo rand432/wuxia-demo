@@ -1363,14 +1363,9 @@ func _compose_allies(player: Node2D, party_nodes: Array = []) -> void:
 		var nd: Node2D = null
 		if i == 0:
 			nd = player
-		elif i - 1 < party_nodes.size():
-			# 舞台的同伴：位置/装扮它自己管好了，战斗只借来打架
-			var pv = party_nodes[i - 1]
-			if pv != null and is_instance_valid(pv):
-				nd = pv
-		if nd == null and i > 0:
-			# 现开一个（并记下来：收尾时由战斗自己负责收掉）
-			nd = ActorFactory.make(str(_state.member_at(i).get("role_id", "player")))
+		else:
+			# 探险战斗统一火柴人：不再借舞台上的 Q 版立绘，也不现开素材人。
+			nd = StickFighter.new()
 			add_child(nd)
 			nd.position = Vector2(210.0 + ALLY_ROW_DX * float(i), 950.0 + ALLY_ROW_DY * float(i))
 			if nd.has_method("set_equipment"):

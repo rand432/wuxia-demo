@@ -375,10 +375,16 @@ func _open_blank(id: String) -> void:
 	var b: Dictionary = ForgeData.blank(id)
 	if b.is_empty():
 		return
+	var need := str(b.get("need", ""))
+	if need != "" and GameState.material_count(need) < 1:
+		_push_log("没有剑胚——先去弄一块剑胚。")
+		return
 	var cost := int(b.get("open", 10))
 	if GameState.coin("silver") < cost:
 		_push_log("开炉要 " + str(cost) + " 两——银两不够。")
 		return
+	if need != "":
+		GameState.add_material(need, -1)
 	GameState.add_coin("silver", -cost)
 	GameState.forge_item = ForgeData.make_item(id)
 	_push_log("开炉：" + str(b.get("name", "胚子")) + "（-" + str(cost) + " 两）")
@@ -810,14 +816,19 @@ func _push_log(s: String) -> void:
 func refresh() -> void:
 	if _panel == null:
 		return
-	_res_lb.text = "锻造石 " + str(GameState.material_count("forge_stone")) + " · 银两 " + str(GameState.coin("silver")) + " · 金髓 " + str(GameState.material_count("jin"))
+	_res_lb.text = "锻造石 " + str(GameState.material_count("forge_stone")) + " · 银两 " + str(GameState.coin("silver")) + " · 剑胚 " + str(GameState.material_count("jianpei"))
 	var it: Dictionary = GameState.forge_item
 	for e_v in _blank_btns:
 		var e: Dictionary = e_v
 		var b: Dictionary = ForgeData.blank(str(e["id"]))
 		var btn: Button = e["btn"]
-		btn.text = str(b.get("name", "胚子")) + "  " + str(int(b.get("open", 10))) + "两 · " + str(b.get("trait", ""))
-		btn.disabled = not it.is_empty()
+		var need_k := str(b.get("need", ""))
+		if need_k != "":
+			btn.text = str(b.get("name", "胚子")) + "  剑胚×" + str(GameState.material_count(need_k))
+			btn.disabled = not it.is_empty() or GameState.material_count(need_k) < 1
+		else:
+			btn.text = str(b.get("name", "胚子")) + "  " + str(int(b.get("open", 10))) + "两 · " + str(b.get("trait", ""))
+			btn.disabled = not it.is_empty()
 	if _comp_panel != null:
 		_comp_refresh()
 	if _bag_panel != null:

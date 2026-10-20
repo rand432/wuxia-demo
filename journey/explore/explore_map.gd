@@ -1367,6 +1367,8 @@ func _gather_node(i: int) -> void:
 	_update_action_label()
 	queue_redraw()
 	_set_msg(msg + "（食物 -1）")
+	GameState.log_explore("采集：" + msg)
+	_try_extra_loot()
 
 func _npc_free_cell(rng: RandomNumberGenerator) -> Vector2i:
 	for i in 220:
@@ -1390,7 +1392,8 @@ func _npc_key(cell: Vector2i) -> String:
 
 func _npc_price(base: int) -> int:
 	var rep := int(GameState.region_rep[clampi(GameState.current_region, 0, 4)]) if GameState.region_rep.size() >= 5 else 0
-	return maxi(1, int(round(float(base) * (1.0 - float(rep) * 0.002))))
+	var cut := float(GameState.insight_fx().get("shop_cut", 0.0))
+	return maxi(1, int(round(float(base) * (1.0 - float(rep) * 0.002) * (1.0 - cut))))
 
 func _npc_default_name(typ: String) -> String:
 	return str({"merchant": "行商·赵四", "doctor": "游医·白芷", "storyteller": "说书人·柳先生", "swordsman": "落魄剑客·秦三", "thief": "偷儿·小六"}.get(typ, "江湖客"))
@@ -2334,6 +2337,8 @@ func _open_chest(cell: Vector2i) -> void:
 	GameState.save_game()
 	var qn := "" if q == 0 else ("〔精制〕" if q == 1 else "〔秘藏〕")
 	_set_msg(qn + "拾得：锻造石 ×" + str(stones) + " · 银两 +" + str(silver) + extra)
+	GameState.log_explore("开箱：锻造石 ×" + str(stones) + " · 银两 +" + str(silver) + extra)
+	_try_extra_loot()
 
 func _loot_q() -> int:
 	return clampi(GameState.world_tier - 1, 0, 4)
@@ -2392,6 +2397,16 @@ func _loot_pop(mat_id: String, amount: int, delay := 0.0) -> void:
 			pt.tween_property(_bag_btn, "scale", Vector2.ONE, 0.12)
 	)
 
+func _try_extra_loot() -> void:
+	var ch := float(GameState.insight_fx().get("extra_loot", 0.0))
+	if ch <= 0.0 or randf() >= ch:
+		return
+	var pool := ["forge_stone", "rice", "bone", "zhi", "shen", "guo"]
+	var k: String = str(pool[randi() % pool.size()])
+	GameState.add_material(k, 1, _loot_q())
+	GameState.save_game()
+	_loot_pop(k, 1, 0.18)
+
 func _set_msg(text: String, sec := 2.6) -> void:
 	_msg = text
 	_msg_t = sec
@@ -2440,6 +2455,7 @@ func _return_village() -> void:
 		GameState.note_push("游历归来：" + " · ".join(PackedStringArray(parts)))
 	elif _action_empty:
 		GameState.note_push("食物资源耗尽——安全回村，战利品已入账")
+	GameState.log_explore("回村：" + (" · ".join(PackedStringArray(parts)) if not parts.is_empty() else "空手而归"))
 	GameState.save_game()
 	print("[游历] 回村：锻造石=", GameState.material_count("forge_stone"), " 银两=", GameState.coin("silver"), " 食物=", GameState.action)
 	get_tree().change_scene_to_file("res://menu_sketch.tscn")
@@ -3404,13 +3420,15 @@ func _broker_buy_price() -> int:
 	var p := maxi(40, 80 - GameState.broker_rep / 4)
 	if GameState.story_title == "听雨客":
 		p = maxi(30, p - 10)
-	return p
+	var cut := float(GameState.insight_fx().get("shop_cut", 0.0))
+	return maxi(1, int(round(float(p) * (1.0 - cut))))
 
 func _broker_sell_price() -> int:
 	var p := 60 + GameState.broker_rep / 5
 	if GameState.story_title == "听雨客":
 		p += 10
-	return p
+	var add := float(GameState.insight_fx().get("sell_pct", 0.0))
+	return int(round(float(p) * (1.0 + add)))
 
 func _open_broker() -> void:
 	if _broker_done:
@@ -4229,6 +4247,12 @@ func _on_click(pos: Vector2) -> void:
 	var food_cost := 0
 	if steps > 0:
 		food_cost = maxi(1, int(ceil(float(steps) / 5.0)))
+	var food_saved := false
+	if food_cost > 0:
+		var save_chance := float(GameState.insight_fx().get("food_save", 0.0))
+		if randf() < save_chance:
+			food_saved = true
+			food_cost = 0
 	if food_cost > 0 and not GameState.action_spend(food_cost):
 		_set_msg("食物不够走这一程——先回村吃点东西")
 		return
@@ -4240,7 +4264,9 @@ func _on_click(pos: Vector2) -> void:
 	if not GameState.region_seen[ri] and int(GameState.region_walk[ri]) >= 8:
 		GameState.region_seen[ri] = true
 		GameState.save_game()
-	if food_cost > 0:
+	if food_saved:
+		_set_msg("走了 " + str(steps) + " 格，这一程没耗粮", 1.2)
+	elif food_cost > 0:
 		_set_msg("走了 " + str(steps) + " 格，食物 -" + str(food_cost), 1.2)
 	_path = path
 	_path_i = 1
@@ -4604,6 +4630,7 @@ func _grant_battle_loot(enemy: Node2D) -> void:
 	_loot_silver += silver
 	_loot_stones += stones
 	GameState.save_game()
+	_try_extra_loot()
 	var tail := " · 通缉 +1" if bool(enemy.get_meta("guard", false)) else ""
 	if bool(enemy.get_meta("elite", false)):
 		tail += " · 精英 +60 两 +3 石"
@@ -4614,4 +4641,5 @@ func _grant_battle_loot(enemy: Node2D) -> void:
 			if boss_drop != "":
 				tail += " · 专属「" + boss_drop + "」"
 	_set_msg("击败「" + fname + "」：银两 +" + str(silver) + " · 锻造石 +" + str(stones) + tail + extra_mat, 3.0)
+	GameState.log_explore("战斗：击败「" + fname + "」 · 锻造石 +" + str(stones) + tail)
 

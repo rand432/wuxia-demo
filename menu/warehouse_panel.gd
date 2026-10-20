@@ -764,7 +764,7 @@ func _pill_stacks() -> Array:
 #   数量取 material_count ✓（宝箱、搜刮、货栈买的全进这一个账）。
 func _mat_stacks() -> Array:
 	var out: Array = []
-	var order := ["battle", "growth", "advance", "break", "pet", ""]
+	var order := ["battle", "growth", "advance", "break", "pet", "forge", ""]
 	for g_v in order:
 		var g := str(g_v)
 		for k_v in GameState.MAT_CN.keys():

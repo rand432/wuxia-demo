@@ -21,6 +21,9 @@ const Q_BASE := [
 
 # 胚子：probs = [大成功, 成功, 维持, 损伤, 破坏]
 const BLANKS := [
+	{"id": "jianpei", "name": "入门剑胚", "weapon": "青锋剑", "kind": "sword",
+		"quality": 0, "cap": 2, "atk": 18, "dmg": 2, "open": 0, "need": "jianpei",
+		"probs": [15, 55, 20, 8, 2], "trait": "入门"},
 	{"id": "qingfeng", "name": "青锋剑胚", "weapon": "青锋剑", "kind": "sword",
 		"quality": 0, "cap": 2, "atk": 15, "dmg": 2, "open": 10,
 		"probs": [8, 45, 25, 17, 5], "trait": "稳"},

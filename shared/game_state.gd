@@ -797,6 +797,8 @@ static var first_explore_done := false
 static var world_difficulty := 1
 static var world_created := false
 static var world_history: Array = []
+# 最近在探险里做过的事（采集 / 开箱 / 战斗 / 回村）——游历记录页显示。
+static var explore_log: Array = []
 # v139（调试）：**强制重播引子**——只活在内存里，不写盘。
 #   存档里 first_journey_done 已经是 true 的档，想再测一遍引子就靠它（主界面 F9 开）。
 static var intro_force := false
@@ -4166,13 +4168,13 @@ const MAT_CN := {"zhi": "紫芝", "shen": "雪参", "guo": "朱果", "bone": "�
 	"forge_stone": "锻造石", "jingshi": "境界石（金）", "daoxin": "道心砂（红）", "atlas": "舆图",
 	"soul": "兽魂", "lingguo": "灵兽果",
 	"daoguo": "悟道果", "hundun": "混沌砂", "xinghui": "星辉",
-	"pojing": "破境花", "xuantie": "玄铁精"}
+	"pojing": "破境花", "xuantie": "玄铁精", "jianpei": "剑胚"}
 # v271：材料四类——战斗 / 成长 / 突破 / 宠物。
 const MAT_GROUP := {"guo": "battle", "bone": "battle", "rice": "battle",
 	"zhi": "growth", "shen": "growth", "jin": "growth",
 	"jingshi": "advance", "daoxin": "advance", "daoguo": "advance", "hundun": "advance", "xinghui": "advance",
-	"pojing": "break", "xuantie": "break", "soul": "pet", "lingguo": "pet"}
-const MAT_GROUP_CN := {"battle": "战斗材料", "growth": "成长材料", "advance": "进阶材料", "break": "突破材料", "pet": "宠物材料"}
+	"pojing": "break", "xuantie": "break", "soul": "pet", "lingguo": "pet", "jianpei": "forge"}
+const MAT_GROUP_CN := {"battle": "战斗材料", "growth": "成长材料", "advance": "进阶材料", "break": "突破材料", "pet": "宠物材料", "forge": "锻造材料"}
 const PILL_GROUP_CN := {"battle": "战斗丹", "growth": "成长丹", "advance": "进阶丹", "break": "突破丹", "pet": "宠物丹"}
 const PILL_GROUP_ORDER := ["battle", "growth", "advance", "break", "pet"]
 
@@ -5247,9 +5249,23 @@ static func finish_journey() -> void:
 	first_journey_done = true
 	# v40：**引子下山通关那一下**，仓库里塞一只「新手关卡礼包」（测试版的专武来路）
 	note_push(grant_stage_gift())
+	# 新手起手：百工坊开门，铁砧上给一块剑胚——第一把兵器自己锤出来。
+	if not cave_opened:
+		cave_opened = true
+		winery_built = true
+		add_material("jianpei", 1)
+		add_material("forge_stone", 3)
+		note_push("百工坊起了——铁砧台上放着一块剑胚，去锻第一把兵器")
 
 # v40：回村播报是"一条串"——以前各处直接 `pending_note = "..."`，后写的会把先写的吃掉
 #   （引子那趟就是：先记了礼包，紧接着"回到村子…"把它覆盖了）。以后一律走这一口。
+static func log_explore(s: String) -> void:
+	if s == "":
+		return
+	explore_log.append(str(s))
+	while explore_log.size() > 20:
+		explore_log.pop_front()
+
 static func note_push(s: String) -> void:
 	if s == "":
 		return
@@ -6580,6 +6596,10 @@ static func load_game() -> void:
 	if not world_created and (first_explore_done or not world_flags.is_empty()):
 		world_created = true
 	world_history = (vd.get("world_history", world_history) as Array).duplicate(true)
+	var el: Array = vd.get("explore_log", []) as Array
+	explore_log = el.duplicate()
+	while explore_log.size() > 20:
+		explore_log.pop_front()
 	player_name = str(vd.get("player_name", player_name))   # v83
 	disciple_joined = bool(vd.get("disciple_joined", disciple_joined))
 	qingluan_joined = bool(vd.get("qingluan_joined", qingluan_joined))
@@ -6800,7 +6820,7 @@ static func save_game() -> void:
 	cf.load(SAVE_CFG)
 	cf.set_value("save", "ver", SAVE_VER)
 	cf.set_value("world", "village", {
-		"stage": village_stage, "first_journey_done": first_journey_done, "first_explore_done": first_explore_done, "world_difficulty": world_difficulty, "world_created": world_created, "world_history": world_history,
+		"stage": village_stage, "first_journey_done": first_journey_done, "first_explore_done": first_explore_done, "world_difficulty": world_difficulty, "world_created": world_created, "world_history": world_history, "explore_log": explore_log,
 		"player_name": player_name,   # v83：玩家起的名字
 		"disciple_joined": disciple_joined, "qingluan_joined": qingluan_joined,
 		"map_found": map_found, "b2_built": b2_built, "cave_opened": cave_opened,
@@ -7010,6 +7030,7 @@ static func reset() -> void:
 	world_difficulty = 1
 	world_created = false
 	world_history.clear()
+	explore_log.clear()
 	disciple_joined = false
 	qingluan_joined = false
 	pending_note = ""

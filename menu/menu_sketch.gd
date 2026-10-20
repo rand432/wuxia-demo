@@ -658,6 +658,17 @@ func _ready() -> void:
 	InkTouch.attach()            # v65：点击水墨扩散
 	FadeIn.attach()              # v68：进场淡入
 	GameState.load_game()   # 优化批㉒：先进游戏先读全局档（只读一次）
+	# 老档兼容：引子已经走通的，百工坊直接开；否则旧玩家会永远卡在「没起屋」。
+	if GameState.first_journey_done:
+		var _unlock_done := false
+		if not GameState.cave_opened:
+			GameState.cave_opened = true
+			_unlock_done = true
+		if not GameState.winery_built:
+			GameState.winery_built = true
+			_unlock_done = true
+		if _unlock_done:
+			GameState.save_game()
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_font = Draw.pick_font(get_theme_default_font())
@@ -1006,11 +1017,10 @@ func _build_plaques() -> void:
 	_plaques.add_rail("cave", 0.905, 0.492, "洞", "山洞", PlaqueLayer.RAIL_CAVE_TEX, _click_cave)
 	_plaques.add_rail("treasure", 0.905, 0.642, "宝", "藏宝阁", PlaqueLayer.RAIL_TREASURE_TEX, _click_treasure)
 	_plaques.add_rail("craft", 0.905, 0.792, "坊", "百工坊", PlaqueLayer.RAIL_CRAFT_TEX, _click_craft)
-	# ===== v211 中央朱砂「历练」大碑（主操作压在拇指区，接原来那个 _open_out）=====
-	_plaques.add_stele("stele", 0.5, 0.828, "历练", _open_out, "开始游历", {"w": 452.0, "h": 138.0})
+	# ===== 中央朱砂「游历」大碑：接世界窗口（不是旧出村）=====
+	_plaques.add_stele("stele", 0.5, 0.828, "游 历", _open_journey_entry, "开始游历", {"w": 452.0, "h": 138.0})
 	# ===== 画上的地点牌（跟着画卷左右滑）=====
 	var V := {"page": "village", "white": true}
-	_plaques.add_arrow("out", 0.104, 0.575, "出村", _open_out, -1, V)
 	_plaques.add_hang("hill", 0.215, 0.695, "后山", _click_hill, "", "", {"page": "village", "white": true, "w": 76.0})
 	# v237：一次性提示不再占右栏——直接放进画里，用掉就消失
 	_plaques.add_hang("cave_scene", 0.660, 0.560, "山洞", _click_cave, "", "", {"page": "village", "white": true, "w": 80.0})
@@ -1041,7 +1051,6 @@ func _refresh_plaques() -> void:
 	var rail_on := not _cover_mode
 	_plaques.set_vis("shop", rail_on)
 	_plaques.set_vis("kushou_test", rail_on)
-	_plaques.set_vis("stele", rail_on)
 	# v237：后山把两只宠物都收完就没东西了——牌子直接消失，不再留个"白狐的老家"占位
 	var hill_done := GameState.pet_has("fox") and GameState.pet_has("qing_sun")
 	_plaques.set_vis("hill", rail_on and not hill_done)
@@ -1051,6 +1060,7 @@ func _refresh_plaques() -> void:
 	_plaques.set_vis("treasure_map", rail_on and GameState.map_found and not GameState.b2_built)
 	_plaques.set_vis("cave_scene", rail_on and GameState.b2_built and not GameState.cave_opened)
 	_plaques.set_vis("craft", rail_on and GameState.cave_opened)
+	_plaques.set_vis("stele", rail_on)
 	# v211：右栏按"当前可见的格子"重排（隐藏一格，下面的平滑往上顶）
 	_plaques.layout_rail(PlaqueLayer.RAIL_IDS, PlaqueLayer.RAIL_TOP, PlaqueLayer.RAIL_H, PlaqueLayer.RAIL_GAP)
 	# v98：商店**固定**（用户点名）——不再按剧情显隐，也不随风摆
@@ -1067,11 +1077,12 @@ func _refresh_plaques() -> void:
 		rooms.append("炼丹")
 	if GameState.jianbao_ok():
 		rooms.append("鉴宝")
+	if GameState.winery_built:
+		rooms.append("锻造")
 	_plaques.set_sub("craft", "点我进屋\n" + "/".join(PackedStringArray(rooms)))
 	_plaques.set_sub("shop", "换材料")
-	_plaques.set_sub("out", "历练去")
-	# v211：中央大碑副题（主操作永远告诉玩家下一步）
 	_plaques.set_sub("stele", "开始游历 · 已历 " + str(GameState.stage_progress) + " 关")
+	# v211：中央大碑副题（主操作永远告诉玩家下一步）
 	# ⚠ 「挂机」那一块的副标题（攒了多久/收不收）由 _refresh_idle_btn 每 0.5 秒喂，
 	#   这里**不要**碰它——每帧清一次的话，那行字根本显示不出来。
 
@@ -1358,6 +1369,7 @@ func _pick_popup(which: String) -> void:
 	var kz = load("res://kushou/kushou_v2.gd")
 	if kz != null:
 		kz.boot_popup = which
+		kz.boot_popup_only = true
 	if _stage_ov != null and is_instance_valid(_stage_ov):
 		_stage_ov.queue_free()
 		_stage_ov = null
@@ -1692,16 +1704,24 @@ func _click_cave() -> void:
 #   所以老档照样认；这里只管"屋起没起、门开不开"。
 # ============================================================
 func _click_craft() -> void:
+	# 老档兜底：引子已经走通的，百工坊不再卡旗标；第一下就直接开门。
+	if GameState.first_journey_done:
+		GameState.cave_opened = true
+		GameState.winery_built = true
 	if not GameState.cave_opened:
 		_show_toast("这屋子还没影——先把山洞那段过了")
 		return
 	if not GameState.winery_built:
 		GameState.winery_built = true
 		_spawn_build_fx(Vector2(1040.0, 852.0))
-		_show_toast("「百工坊」起好了——里头先开了品酒坊；炼丹阁要过 " + str(HERB_STAGE) + " 关、鉴宝行要过 " + str(JIANBAO_STAGE) + " 关", 3.2)
-		return
+		_show_toast("「百工坊」起好了——里面能进品酒坊了", 2.6)
 	_clear_toast()
+	print("[主界面] 开百工坊：cave=", GameState.cave_opened, " wine=", GameState.winery_built)
+	if _craft_panel == null:
+		_show_toast("百工坊面板没挂上——看控制台")
+		return
 	_craft_panel.open()
+	_craft_panel.move_to_front()
 
 # 门厅里点了哪一间：能开就开；炼丹阁还带"起炉"那一步（与原来 _click_dange 同一笔账）
 func _on_craft_room(room: String) -> void:
@@ -2671,9 +2691,6 @@ func _tap_at(p: Vector2) -> void:
 		return      # v98：一屏村景＋牌子，点的判定全在牌子层里；老那套世界坐标点景作废（代码留着）
 	if p.y < Conf.CONTENT_TOP or p.y > Conf.CONTENT_BOT:
 		return
-	if _out_vis() and p.x <= 150.0 and p.y > 500.0 and p.y < 790.0:
-		_open_out()
-		return
 	var c := p.x + _cam
 	if absf(c - Conf.SUN_X) < 72.0 and absf(p.y - Draw.sy_at(Conf.SUN_Y)) < 72.0:
 		_show_toast("日出东方——他往后的路，也从这儿亮起来")
@@ -2759,21 +2776,8 @@ func _tag_fire(i: int) -> void:
 	Audio.ui_click()      # v98：底排页签原来一声都没有（用户："点击需要有一点反馈的音效"）
 	match i:
 		0:
-			# R4 ④b：有没走完的趟——先问一句（继续／重新开始）
-			# ㊿c3 探针：看一眼入口判成了什么（验收后可留可删）
-			print("[续行] 入口检查：has_save()=", JourneySave.has_save(), " 用户目录=", OS.get_user_data_dir())
-			if JourneySave.has_save():
-				JourneySave.show_prompt(self, Conf.JOURNEY_SCENE, _tag_fire.bind(0))
-				return
-			# R1 闸：首趟（引子·五问）走老路；之后都先过「出征屏」
-			if GameState.first_journey_done:
-				_open_world_panel()
-				return
-			print("[主界面] 首趟历练（引子）→ ", Conf.JOURNEY_SCENE)
-			var err := get_tree().change_scene_to_file(Conf.JOURNEY_SCENE)
-			if err != OK:
-				print("[主界面] 打不开游历，错误码=", err, "；检查路径：", Conf.JOURNEY_SCENE)
-				_show_toast("进不去游历：路径＝" + Conf.JOURNEY_SCENE)
+			_open_out()
+			return
 		1:
 			if not _disciple_ready():
 				_show_toast("还没有弟子——先去历练，山下会有人等你")
@@ -2935,6 +2939,9 @@ func _on_form_cancel() -> void:
 	_open_out()
 
 # ---- 出征屏（R1）：正式游历的入口——选人·选难度·看携宠；点出发才切场 ----
+
+func _open_journey_entry() -> void:
+	_open_world_panel()
 
 func _open_world_panel() -> void:
 	_clear_toast()
