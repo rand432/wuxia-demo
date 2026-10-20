@@ -601,14 +601,44 @@ func _spawn_fx() -> void:
 func _spawn_toast() -> void:
 	_toast_layer = CanvasLayer.new()
 	add_child(_toast_layer)
+	# v243：顶部墨金信息条 + 底部卷轴操作带（原来字和按钮直接浮在黑底上）
+	var top := Panel.new()
+	top.position = Vector2.ZERO
+	top.size = Vector2(720, 76)
+	top.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var tsb := StyleBoxFlat.new()
+	tsb.bg_color = Color(0.045, 0.040, 0.034, 0.82)
+	tsb.border_color = Color(0.72, 0.58, 0.22, 0.55)
+	tsb.set_border_width_all(0)
+	tsb.border_width_bottom = 2
+	top.add_theme_stylebox_override("panel", tsb)
+	_toast_layer.add_child(top)
+	var bot := Panel.new()
+	bot.position = Vector2(0, 1030)
+	bot.size = Vector2(720, 250)
+	bot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var bsb2 := StyleBoxFlat.new()
+	bsb2.bg_color = Color(0.040, 0.036, 0.030, 0.94)
+	bsb2.border_color = Color(0.72, 0.58, 0.22, 0.55)
+	bsb2.set_border_width_all(0)
+	bsb2.border_width_top = 2
+	bot.add_theme_stylebox_override("panel", bsb2)
+	_toast_layer.add_child(bot)
+	var walk_hint := Label.new()
+	walk_hint.position = Vector2(24, 1048)
+	walk_hint.size = Vector2(560, 26)
+	walk_hint.add_theme_font_size_override("font_size", 14)
+	walk_hint.add_theme_color_override("font_color", Color(0.72, 0.66, 0.52, 0.82))
+	walk_hint.text = "行走：点地格移动 · 食物每 5 格 -1 · 时间每 20 食物推进一段"
+	_toast_layer.add_child(walk_hint)
 	_toast = Label.new()
-	_toast.position = Vector2(24, 24)
+	_toast.position = Vector2(24, 86)
 	_toast.add_theme_font_size_override("font_size", 18)
 	_toast.add_theme_color_override("font_color", Color("#f0d68a"))
 	_toast.visible = false
 	_toast_layer.add_child(_toast)
 	_action_lb = Label.new()
-	_action_lb.position = Vector2(76, 60)
+	_action_lb.position = Vector2(76, 24)
 	_action_lb.add_theme_font_size_override("font_size", 16)
 	_toast_layer.add_child(_action_lb)
 	_food_meter = FoodMeter.new()
@@ -629,7 +659,7 @@ func _spawn_toast() -> void:
 	_action_lb.add_child(_region_lb)
 	_update_action_label()
 	_wanted_lb = Label.new()
-	_wanted_lb.position = Vector2(584, 26)
+	_wanted_lb.position = Vector2(584, 84)
 	_wanted_lb.size = Vector2(112, 22)
 	_wanted_lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_wanted_lb.add_theme_font_size_override("font_size", 14)
@@ -637,10 +667,10 @@ func _spawn_toast() -> void:
 	_toast_layer.add_child(_wanted_lb)
 	_update_wanted_label()
 	var normal := StyleBoxFlat.new()
-	normal.bg_color = Color(0.06, 0.05, 0.04, 0.84)
-	normal.border_color = Color(0.72, 0.58, 0.22, 0.82)
+	normal.bg_color = Color(0.075, 0.066, 0.060, 0.95)
+	normal.border_color = Color(0.72, 0.58, 0.22, 0.62)
 	normal.set_border_width_all(1)
-	normal.set_corner_radius_all(8)
+	normal.set_corner_radius_all(4)
 	var hover := normal.duplicate() as StyleBoxFlat
 	hover.bg_color = Color(0.14, 0.11, 0.08, 0.92)
 	var bar := Button.new()

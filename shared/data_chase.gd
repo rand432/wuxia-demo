@@ -543,7 +543,8 @@ static func reward_item(i: int) -> String:
 	if not is_boss(i):
 		return ""
 	var q := reward_q(i)
-	var kinds := ["arts", "weapon", "gear"]
+	# v268：追剿只服务功法收集——boss 只给功法残页，整本留给货仓
+	var kinds := ["arts"]
 	var kind := str(kinds[randi() % kinds.size()])
 	var pool: Array = Tower.chest_card_pool(kind, q)
 	if pool.is_empty():
@@ -552,9 +553,9 @@ static func reward_item(i: int) -> String:
 
 # 一行预览（出村面板 / 战斗抬头用）
 static func reward_line(i: int) -> String:
-	var s := "银两+" + str(reward_silver(i)) + " · 经验+" + str(reward_exp(i)) + " · " + chest_summary(reward_chests(i))
+	var s := "银两+" + str(reward_silver(i)) + " · 经验+" + str(reward_exp(i)) + " · 食物+" + str(3 + reward_q(i)) + " · " + chest_summary(reward_chests(i))
 	if is_boss(i):
-		s += " · 整件" + reward_q_cn(i) + "（功法/兵器/装备）"
+		s += " · 功法残页" + reward_q_cn(i)
 	return s
 
 # 当前这一档的说明（面板上那行小字）

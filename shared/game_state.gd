@@ -1410,11 +1410,47 @@ static func appraise_tool_line() -> String:
 	return " · ".join(PackedStringArray(out))
 
 # ---- 报价单 ----
+static func gear_salvage_mats(sid: String) -> Dictionary:
+	var q := Cards.q_idx(sid)
+	var out := {"forge_stone": int([2, 4, 6, 8, 12][clampi(q, 0, 4)])}
+	if q == 1:
+		out["bone"] = 1
+	elif q == 2:
+		out["rice"] = 1
+	elif q >= 3:
+		out["jin"] = 1
+	return out
+
+static func _appraise_strip_gear(items: Array) -> Array:
+	var out: Array = []
+	for e_v in items:
+		var e: Dictionary = e_v
+		var ek := str(e.get("kind", ""))
+		var eid := str(e.get("id", ""))
+		var s: Dictionary = Cards.by_id(eid)
+		var pool := str(s.get("pool", ""))
+		if (ek == "item" or ek == "card") and ["weapon", "armor", "helm", "cloak"].has(pool):
+			var q := Cards.q_idx(eid)
+			var stones: int = [2, 4, 6, 8, 12][clampi(q, 0, 4)]
+			out.append({"kind": "mat", "id": "forge_stone", "name": "锻造石 ×" + str(stones),
+				"amount": stones, "gap": 2, "red": false})
+			if q == 1:
+				out.append({"kind": "mat", "id": "bone", "name": "兽骨碎 ×1", "amount": 1, "gap": 1, "red": false})
+			elif q == 2:
+				out.append({"kind": "mat", "id": "rice", "name": "灵米 ×1", "amount": 1, "gap": 1, "red": false})
+			elif q >= 3:
+				out.append({"kind": "mat", "id": "jin", "name": "金髓 ×1", "amount": 1, "gap": 1, "red": false})
+			continue
+		out.append(e)
+	return out
+
 static func _appraise_new_offer(hid: String, free := false) -> Dictionary:
 	var d: Dictionary = Appraise.hold_def(hid)
 	if d.is_empty():
 		return {}
 	_appraise_uid += 1
+	var raw_items: Array = Ladder.roll_hold(int(d.get("cells", 24)), int(d.get("tier", 0)),
+		Ladder.base_q_now(ladder_phase()), float(d.get("luck", 1.0)))
 	return {
 		"uid": _appraise_uid,
 		"hid": hid,
@@ -1423,8 +1459,7 @@ static func _appraise_new_offer(hid: String, free := false) -> Dictionary:
 		#   每一行只抽**它自己那一档的色**（用户："每档只能抽它自己那一行的色"），
 		#   村里炉火进度（ladder_phase）决定基准难度：0→凡品 1→良品 2→上品 3→极品，
 		#   绝品只能靠"红行 +1/+2"越阶（"后面就是良品了/16之后就是上品"）。
-		"items": Ladder.roll_hold(int(d.get("cells", 24)), int(d.get("tier", 0)),
-			Ladder.base_q_now(ladder_phase()), float(d.get("luck", 1.0))),
+		"items": _appraise_strip_gear(raw_items),
 		"seen": {},
 		"best": -1,
 		"free": free,
@@ -1458,6 +1493,9 @@ static func _appraise_drop_retired_offers() -> void:
 static func appraise_ensure_offers() -> void:
 	if not jianbao_unlocked:
 		return
+	for o_v in appraise_offers:
+		var o: Dictionary = o_v
+		o["items"] = _appraise_strip_gear(o.get("items", []))
 	Appraise.sync_phase(hold_phase())        # v59：先把手里的货色相位交给鉴宝行（价与闸都看它）· v110：夹到 2~3
 	while appraise_offers.size() < Appraise.OFFER_N:
 		var o: Dictionary = _appraise_new_offer(Appraise.roll_hold_id(hold_phase()))   # v110：货仓档位同上品/极品
@@ -1795,6 +1833,9 @@ static func chase_clear(i: int, save_now := true) -> bool:
 	chase_progress += 1
 	add_coin("silver", silver)
 	exp_pool += exp
+	# 追剿＝食物储存主路：清一关给粮
+	var chase_food := 3 + Chase.reward_q(i)
+	action_add(chase_food)
 	for c_v in chests:
 		chest_add(str(c_v))
 	# 开箱的赏格按"最后清掉的那一关"算（与爬塔同一条口径）
@@ -1802,11 +1843,15 @@ static func chase_clear(i: int, save_now := true) -> bool:
 	var got: Array = []
 	got.append("银两 +" + str(silver))
 	got.append("经验 +" + str(exp))
+	got.append("食物 +" + str(chase_food))
 	got.append(Chase.chest_summary(chests))
 	if item != "":
-		vault_add_item(item, 1)
+		var pi := randi() % maxi(1, Cards.part_count(item))
+		var bucket: Dictionary = vault_cards.get(item, {})
+		bucket[pi] = int(bucket.get(pi, 0)) + 1
+		vault_cards[item] = bucket
 		chase_last_gift = item          # v143：后台推进的汇总要数它（别再掷第二次）
-		got.append("整件「" + Cards.item_name(item) + "」（" + Cards.quality_of(item) + "）已入仓库")
+		got.append("功法残页「" + Cards.card_name(item, pi) + "」（" + Cards.quality_of(item) + "）")
 	last_chase_line = "、".join(PackedStringArray(got))
 	# v143：后台批量推进时由调用方统一落盘一次（save_now=false），别一关一次
 	if save_now:
@@ -3515,32 +3560,7 @@ static func disciple_ids() -> Array:
 #   journey_bag_panel 的同名注释）。
 #   ⚠ strip_restore 认的是前缀（"已换上"／"已装上"／"已卸下"），下面**别改前缀**。
 
-static func _salvage_loot_gear(sid: String, n: int) -> bool:
-	var s: Dictionary = Cards.by_id(sid)
-	var pool := str(s.get("pool", ""))
-	if not ["weapon", "armor", "helm", "cloak"].has(pool):
-		return false
-	if bool(s.get("forge", false)):
-		return false
-	var q := Cards.q_idx(sid)
-	var stones: int = int([1, 3, 5, 8, 12][clampi(q, 0, 4)]) * n
-	add_material("forge_stone", stones)
-	var extra := ""
-	if q == 1:
-		add_material("bone", n)
-		extra = " · 兽骨碎 +" + str(n)
-	elif q == 2:
-		add_material("rice", n)
-		extra = " · 灵米 +" + str(n)
-	elif q >= 3:
-		add_material("jin", n)
-		extra = " · 金髓 +" + str(n)
-	note_push("拆解「" + Cards.name_of(sid) + "」：锻造石 +" + str(stones) + extra)
-	return true
-
 static func vault_add_item(sid: String, n := 1) -> void:
-	if _salvage_loot_gear(sid, n):
-		return
 	vault_items[sid] = int(vault_items.get(sid, 0)) + n
 	# v58：新到手的份数**当场摇元素**（上品起的兵器）。这里摇、也就是"到手那一刻随机"，
 	#   摇完就落盘；懒补（_elem_topup）只是老档与漏网路径的兜底。
@@ -3906,6 +3926,16 @@ static func _chest_pages_into(acc: Dictionary, kind: String, grad: int, n_rng: A
 		bucket[p] = int(bucket.get(p, 0)) + 1
 	acc[sid] = bucket
 
+static func _chest_gear_into(mats: Dictionary, kind: String, grad: int, n_rng: Array) -> void:
+	var ids: Array = Tower.chest_card_pool(kind, grad)
+	if ids.is_empty():
+		return
+	var sid := str(ids[randi() % ids.size()])
+	var n := randi_range(int(n_rng[0]), int(n_rng[1]))
+	var mm: Dictionary = gear_salvage_mats(sid)
+	for k in mm.keys():
+		mats[str(k)] = int(mats.get(str(k), 0)) + int(mm[k]) * n
+
 static func _bucket_sum(d: Dictionary) -> int:
 	var n := 0
 	for k in d.keys():
@@ -3939,8 +3969,6 @@ static func chest_open(cid: String, n := 1) -> Dictionary:
 	var pill_got: Dictionary = {}
 	# v133：三条残卡线（武学残页 / 残兵 / 残装备）——都按"套 → 页"收，最后一次性进仓库
 	var pages: Dictionary = {}
-	var blades: Dictionary = {}
-	var gears: Dictionary = {}
 	for k in cnt:
 		# ① 角色碎片（有几率）
 		if randf() < float(d.get("frag_chance", 0.0)):
@@ -3961,10 +3989,10 @@ static func chest_open(cid: String, n := 1) -> Dictionary:
 			_chest_pages_into(pages, "arts", int(d.get("grad", 0)), d.get("page_n", [1, 1]))
 		# ⑤ v133：残兵残卡（比残页再低一点）
 		if randf() < float(d.get("blade_chance", 0.0)):
-			_chest_pages_into(blades, "weapon", int(d.get("grad", 0)), d.get("blade_n", [1, 1]))
+			_chest_gear_into(mats, "weapon", int(d.get("grad", 0)), d.get("blade_n", [1, 1]))
 		# ⑥ v133：残装备残片（护甲/玉佩/披风三池合一）
 		if randf() < float(d.get("gear_chance", 0.0)):
-			_chest_pages_into(gears, "gear", int(d.get("grad", 0)), d.get("gear_n", [1, 1]))
+			_chest_gear_into(mats, "gear", int(d.get("grad", 0)), d.get("gear_n", [1, 1]))
 		# ⑦ 银两与材料（掷 rolls 次）
 		silver += Tower.chest_silver_total(_chest_stage_hint, cid)
 		# v134：材料那一掷的命中率改成**表里可调**（mat_chance，默认 0.45 是旧值）——
@@ -3983,10 +4011,6 @@ static func chest_open(cid: String, n := 1) -> Dictionary:
 	# v133：残卡进仓库（vault_deposit 吃 {套id: {页号: 张数}}）
 	if not pages.is_empty():
 		vault_deposit(pages)
-	if not blades.is_empty():
-		vault_deposit(blades)
-	if not gears.is_empty():
-		vault_deposit(gears)
 	for k4 in pill_got.keys():
 		pills[str(k4)] = int(pills.get(str(k4), 0)) + int(pill_got[k4])
 	# 明细（面板显示 + 日志）
@@ -3999,10 +4023,6 @@ static func chest_open(cid: String, n := 1) -> Dictionary:
 	# v133：三条残卡线的明细（写清"哪一套、缺的哪几页"，开箱完一眼知道凑到哪了）
 	for k6b in pages.keys():
 		got.append(_chest_pages_text(str(k6b), pages[k6b]))
-	for k6c in blades.keys():
-		got.append(_chest_pages_text(str(k6c), blades[k6c]))
-	for k6d in gears.keys():
-		got.append(_chest_pages_text(str(k6d), gears[k6d]))
 	for k7 in pill_got.keys():
 		got.append(str(recipe_of(str(k7)).get("name", k7)) + " ×" + str(int(pill_got[k7])))
 	chest_notes = got.duplicate()
@@ -4013,10 +4033,6 @@ static func chest_open(cid: String, n := 1) -> Dictionary:
 	# v133：残卡排在**最前面**（比角色碎片更稀罕——先飞出来的就是好东西）
 	for k7p in pages.keys():
 		items.append({"kind": "page", "name": Cards.item_name(str(k7p)) + "残页", "n": _bucket_sum(pages[k7p])})
-	for k7q in blades.keys():
-		items.append({"kind": "blade", "name": Cards.item_name(str(k7q)) + "残兵", "n": _bucket_sum(blades[k7q])})
-	for k7r in gears.keys():
-		items.append({"kind": "gear", "name": Cards.item_name(str(k7r)) + "残片", "n": _bucket_sum(gears[k7r])})
 	for k7b in frags.keys():
 		items.append({"kind": "frag", "name": fragment_name(str(k7b)), "n": int(frags[k7b])})
 	for k8 in pill_got.keys():
@@ -4044,6 +4060,9 @@ static func stage_clear(i: int) -> bool:
 	chest_add(Tower.chest_for_stage(i))   # v36：每清一关给一个宝箱
 	# ㊿n：木料收益取消（折进经验）；银两按系数实发
 	add_coin("silver", stage_silver(i))
+	# 爬塔＝食物储存主路：清一关给粮，越往后越多
+	var stage_food := 2 + mini(12, int(i / 80))
+	action_add(stage_food)
 	if is_boss(i):
 		add_coin("silver", boss_silver_gain(i))   # ㉞：首领赏随档涨，要传关号
 	exp_pool += stage_exp_gain(i)
@@ -4060,14 +4079,29 @@ static func stage_clear(i: int) -> bool:
 		var got: Dictionary = Tower.gift_next(tower_gifts, have_of)
 		if not got.is_empty():
 			var sid := str(got.get("sid", ""))
-			if bool(got.get("complete", false)):
-				# 凡品：整套直接进仓库
+			var gpool := str(Cards.by_id(sid).get("pool", ""))
+			if ["weapon", "armor", "helm", "cloak"].has(gpool):
+				# 爬塔不给装备：装备赏改成粮草
+				var food_gain := 4 + mini(8, int(i / 80))
+				action_add(food_gain)
 				if not tower_gifts.has(sid):
 					tower_gifts.append(sid)
-				vault_add_item(sid, 1)
 				last_stage_gift = sid
-				last_stage_gift_line = Cards.item_name(sid) + "（整套 · " + Cards.quality_of(sid) + "）"
-				print("[账本] 首领赏：第 ", i + 1, " 关 → ", last_stage_gift_line, "（整套已入仓库）")
+				last_stage_gift_line = "粮草 +" + str(food_gain)
+				print("[账本] 首领赏：第 ", i + 1, " 关 → 粮草 +", food_gain, "（装备赏已换成粮草）")
+				return true
+			if bool(got.get("complete", false)):
+				# v268：整本不出；拆成一页残页（整本的主路留给货仓）
+				var part0 := 0
+				var bucket0: Dictionary = vault_cards.get(sid, {})
+				bucket0[part0] = int(bucket0.get(part0, 0)) + 1
+				vault_cards[sid] = bucket0
+				if not tower_gifts.has(sid):
+					tower_gifts.append(sid)
+				last_stage_gift = sid
+				last_stage_gift_line = Cards.card_name(sid, part0) + "（残页 · " + Cards.quality_of(sid) + "）"
+				print("[账本] 首领赏：第 ", i + 1, " 关 → ", last_stage_gift_line, "（整本不出，只给残页）")
+				return true
 			else:
 				var part := int(got.get("part", 0))
 				var bucket: Dictionary = vault_cards.get(sid, {})

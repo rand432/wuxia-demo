@@ -416,35 +416,35 @@ const CHESTS := [
 	#   ⚠ 这么一来残卡只剩"细水长流"——**整品的主路是追剿的 boss 赏与爬塔首领赏**，
 	#     宝箱这条线是补充。嫌太稀就把这六个数一起抬（都是同一把尺）。
 	{"id": "wood", "name": "木箱", "grad": 0, "rolls": 2, "silver_mul": 0.6,
-		"frag_chance": 0.03, "frag": [1, 2], "mat_chance": 0.30, "mat_n": [2, 4],
-		"pill_chance": 0.015, "pill_n": [1, 1], "pills": ["tupo_fan"],
-		"page_chance": 0.004, "page_n": [1, 1],
-		"blade_chance": 0.003, "blade_n": [1, 1],
-		"gear_chance": 0.003, "gear_n": [1, 1]},
+		"frag_chance": 0.01, "frag": [1, 2], "mat_chance": 0.55, "mat_n": [2, 4],
+		"pill_chance": 0.01, "pill_n": [1, 1], "pills": ["tupo_fan"],
+		"page_chance": 0.002, "page_n": [1, 1],
+		"blade_chance": 0.0, "blade_n": [1, 1],
+		"gear_chance": 0.0, "gear_n": [1, 1]},
 	{"id": "iron", "name": "银箱", "grad": 1, "rolls": 3, "silver_mul": 1.0,
-		"frag_chance": 0.05, "frag": [2, 3], "mat_chance": 0.30, "mat_n": [3, 5],
-		"pill_chance": 0.028, "pill_n": [1, 1], "pills": ["tupo_fan", "tupo_liang"],
-		"page_chance": 0.0064, "page_n": [1, 1],
-		"blade_chance": 0.0048, "blade_n": [1, 1],
-		"gear_chance": 0.0048, "gear_n": [1, 1]},
+		"frag_chance": 0.015, "frag": [2, 3], "mat_chance": 0.55, "mat_n": [3, 5],
+		"pill_chance": 0.02, "pill_n": [1, 1], "pills": ["tupo_fan", "tupo_liang"],
+		"page_chance": 0.003, "page_n": [1, 1],
+		"blade_chance": 0.0, "blade_n": [1, 1],
+		"gear_chance": 0.0, "gear_n": [1, 1]},
 	{"id": "gold", "name": "金箱", "grad": 2, "rolls": 4, "silver_mul": 1.6,
-		"frag_chance": 0.08, "frag": [3, 5], "mat_chance": 0.30, "mat_n": [4, 7],
-		"pill_chance": 0.040, "pill_n": [1, 1], "pills": ["tupo_fan", "tupo_liang", "tupo_shang"],
-		"page_chance": 0.010, "page_n": [1, 1],
-		"blade_chance": 0.008, "blade_n": [1, 1],
-		"gear_chance": 0.008, "gear_n": [1, 1]},
+		"frag_chance": 0.02, "frag": [3, 5], "mat_chance": 0.55, "mat_n": [4, 7],
+		"pill_chance": 0.03, "pill_n": [1, 1], "pills": ["tupo_fan", "tupo_liang", "tupo_shang"],
+		"page_chance": 0.005, "page_n": [1, 1],
+		"blade_chance": 0.0, "blade_n": [1, 1],
+		"gear_chance": 0.0, "gear_n": [1, 1]},
 	{"id": "jade", "name": "玉箱", "grad": 3, "rolls": 5, "silver_mul": 2.4,
-		"frag_chance": 0.14, "frag": [5, 9], "mat_chance": 0.30, "mat_n": [5, 9],
-		"pill_chance": 0.060, "pill_n": [1, 1], "pills": ["tupo_liang", "tupo_shang", "tupo_ji"],
-		"page_chance": 0.018, "page_n": [1, 1],
-		"blade_chance": 0.014, "blade_n": [1, 1],
-		"gear_chance": 0.014, "gear_n": [1, 1]},
+		"frag_chance": 0.03, "frag": [5, 9], "mat_chance": 0.55, "mat_n": [5, 9],
+		"pill_chance": 0.05, "pill_n": [1, 1], "pills": ["tupo_liang", "tupo_shang", "tupo_ji"],
+		"page_chance": 0.008, "page_n": [1, 1],
+		"blade_chance": 0.0, "blade_n": [1, 1],
+		"gear_chance": 0.0, "gear_n": [1, 1]},
 	{"id": "dragon", "name": "龙箱", "grad": 4, "rolls": 6, "silver_mul": 3.5,
-		"frag_chance": 0.25, "frag": [8, 16], "mat_chance": 0.30, "mat_n": [6, 12],
-		"pill_chance": 0.100, "pill_n": [1, 1], "pills": ["tupo_shang", "tupo_ji", "tupo_jue"],
-		"page_chance": 0.032, "page_n": [1, 1],
-		"blade_chance": 0.024, "blade_n": [1, 1],
-		"gear_chance": 0.024, "gear_n": [1, 1]},
+		"frag_chance": 0.05, "frag": [8, 16], "mat_chance": 0.55, "mat_n": [6, 12],
+		"pill_chance": 0.08, "pill_n": [1, 1], "pills": ["tupo_shang", "tupo_ji", "tupo_jue"],
+		"page_chance": 0.012, "page_n": [1, 1],
+		"blade_chance": 0.0, "blade_n": [1, 1],
+		"gear_chance": 0.0, "gear_n": [1, 1]},
 ]
 
 # v133：宝箱那三条残卡线各取哪个池（"gear" 是三池合一）
@@ -474,8 +474,8 @@ static func chest_card_pool(kind: String, grad: int) -> Array:
 	return []
 # 材料权重（开箱那几掷在这个池子里挑；键＝game_state.MAT_CN 的键）
 # v121（用户："突破境界需要很多材料【增加新材料】"）：境界石 / 道心砂 从宝箱出（进阶专用）
-const CHEST_MATS := {"zhi": 20, "guo": 20, "shen": 15, "bone": 10, "rice": 5, "jin": 3,
-	"forge_stone": 24, "jingshi": 9, "daoxin": 3, "atlas": 2}
+const CHEST_MATS := {"zhi": 8, "guo": 8, "shen": 6, "bone": 6, "rice": 3, "jin": 1,
+	"forge_stone": 70, "jingshi": 2, "daoxin": 1, "atlas": 1}
 #   ⚠ v41：`jin`（金髓）是**稀有金色材料**——洗髓丹/洗灵丹的硬门槛，所以权重压到 3（约 3%）。
 #     想让它更好出就抬这个数；它同时也是货栈每日限购那件（900 两、日限 1）。
 
