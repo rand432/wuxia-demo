@@ -1725,12 +1725,18 @@ func _click_craft() -> void:
 
 # 门厅里点了哪一间：能开就开；炼丹阁还带"起炉"那一步（与原来 _click_dange 同一笔账）
 func _on_craft_room(room: String) -> void:
+	# 进作坊前先把门厅收掉；否则门厅那张纸会压在新面板上面（用户："原百工坊窗口覆盖了品酒坊"）。
+	if _craft_panel != null:
+		_craft_panel.visible = false
 	match room:
 		"wine":
 			_open_winery()
+			if _winery_panel != null:
+				_winery_panel.move_to_front()
 		"alchemy":
 			if GameState.dange_built:
 				_alchemy_panel.open()
+				_alchemy_panel.move_to_front()
 				return
 			if not _dange_ready():
 				_show_toast("炼丹阁要过第 " + str(HERB_STAGE) + " 关（灵草剧情）才起得了炉")
@@ -1739,14 +1745,18 @@ func _on_craft_room(room: String) -> void:
 			_spawn_build_fx(Vector2(1872.0, 815.0))
 			_show_toast("「炼丹阁」起好了——开炉前可以先派个没出战的人看火", 2.8)
 			_alchemy_panel.open()
+			_alchemy_panel.move_to_front()
 		"jianbao":
 			if not GameState.jianbao_ok():
 				_show_toast("鉴宝行还没开张——过第 " + str(JIANBAO_STAGE) + " 关（打捞上来的货仓）")
 				return
 			_open_appraise()
+			if _appraise_panel != null:
+				_appraise_panel.move_to_front()
 		"forge":
 			_clear_toast()
 			_forge_panel.open()
+			_forge_panel.move_to_front()
 
 func _click_winery() -> void:
 	_click_craft()

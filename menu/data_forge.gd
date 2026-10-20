@@ -50,6 +50,45 @@ static func blank(id: String) -> Dictionary:
 static func quality_name(q: int) -> String:
 	return QUALITY_CN[clampi(q, 0, QUALITY_CN.size() - 1)]
 
+# 第一锤的成器档位：与「品质」分开，凡品也有破损/完美之分。
+const CRAFT_GRADES := [
+	{"id": "broken", "name": "破损的", "mul": 0.55, "col": Color(0.70, 0.24, 0.18)},
+	{"id": "rough", "name": "粗劣的", "mul": 0.75, "col": Color(0.62, 0.42, 0.20)},
+	{"id": "plain", "name": "寻常的", "mul": 1.00, "col": Color(0.45, 0.40, 0.33)},
+	{"id": "fine", "name": "精良的", "mul": 1.15, "col": Color(0.28, 0.52, 0.34)},
+	{"id": "perfect", "name": "完美的", "mul": 1.35, "col": Color(0.72, 0.56, 0.18)},
+]
+
+static func grade_name(g: int) -> String:
+	return str((CRAFT_GRADES[clampi(g, 0, 4)] as Dictionary)["name"])
+
+static func grade_col(g: int) -> Color:
+	return (CRAFT_GRADES[clampi(g, 0, 4)] as Dictionary)["col"]
+
+static func grade_mul(g: int) -> float:
+	return float((CRAFT_GRADES[clampi(g, 0, 4)] as Dictionary)["mul"])
+
+static func grade_weights(it: Dictionary) -> Array:
+	var w := [10.0, 20.0, 35.0, 25.0, 10.0]
+	if str(it.get("rule", "")) == "always_success":
+		w = [0.0, 5.0, 25.0, 45.0, 25.0]
+	elif str(it.get("rule", "")) == "no_break":
+		w = [0.0, 5.0, 30.0, 40.0, 25.0]
+	return w
+
+static func roll_craft_grade(it: Dictionary) -> int:
+	var w := grade_weights(it)
+	var total := 0.0
+	for v in w:
+		total += float(v)
+	var r := randf() * total
+	var acc := 0.0
+	for i in w.size():
+		acc += float(w[i])
+		if r <= acc:
+			return i
+	return 2
+
 static func make_item(blank_id: String) -> Dictionary:
 	var b := blank(blank_id)
 	if b.is_empty():
@@ -68,18 +107,21 @@ static func make_item(blank_id: String) -> Dictionary:
 		"round_inspired": false,
 		"awaiting": false,
 		"affixes": [],
+		"craft_grade": -1,
 		"rule": str(b.get("rule", "")),
 	}
 
 static func item_name(it: Dictionary) -> String:
 	if it.is_empty():
 		return "（无）"
-	return quality_name(int(it.get("quality", 0))) + "·" + str(it.get("weapon", "兵器")) + " +" + str(int(it.get("enhance", 0)))
+	var g := int(it.get("craft_grade", -1))
+	var pre := "" if g < 0 else (grade_name(g) + "·")
+	return pre + quality_name(int(it.get("quality", 0))) + "·" + str(it.get("weapon", "兵器")) + " +" + str(int(it.get("enhance", 0)))
 
 static func item_stats(it: Dictionary) -> Dictionary:
 	if it.is_empty():
 		return {"atk": 0, "dmg": 0}
-	var mul := 1.0 + float(it.get("enhance", 0)) * 0.02
+	var mul := (1.0 + float(it.get("enhance", 0)) * 0.02) * grade_mul(int(it.get("craft_grade", 2)))
 	var out := {
 		"atk": int(round(float(it.get("base_atk", 0.0)) * mul)),
 		"dmg": int(round(float(it.get("base_dmg", 0.0)) * mul)),

@@ -34,9 +34,14 @@ var _hammer_btn: Button
 var _ascend_btn: Button
 var _take_btn: Button
 var _blank_btns: Array = []
+var _grade_lbs: Array = []
+var _blank_panel: Panel
 var _anvil: Control
 var _log_lines: Array = []
 var _comp_panel: Panel
+var _comp_title: Label
+var _comp_mode := "synthesis"
+var _tab_btns: Array = []
 var _comp_dim: ColorRect
 var _comp_hint_lb: Label
 var _comp_recipe_lb: Label
@@ -47,9 +52,14 @@ var _comp_mat_btns := {}
 var _comp_sel: Array = []
 var _comp_idx := 0
 var _bag_panel: Panel
+var _bag_scroll: ScrollContainer
+var _bag_grid: GridContainer
+var _bag_cards := {}
+var _bag_blink: Array = []
 var _bag_name_lb: Label
 var _bag_stat_lb: Label
 var _bag_price_lb: Label
+var _bag_claim_btn: Button
 var _bag_page_btn: Button
 var _bag_sell_btn: Button
 var _bag_scrap_btn: Button
@@ -70,6 +80,12 @@ func _process(d: float) -> void:
 	_t += d
 	if _anvil != null:
 		_anvil.queue_redraw()
+	if _bag_panel != null and _bag_panel.visible:
+		var a := 0.68 + 0.32 * absf(sin(_t * 4.2))
+		for b_v in _bag_blink:
+			var b = b_v
+			if b != null and is_instance_valid(b):
+				b.modulate = Color(1, 1, 1, a)
 
 func _build() -> void:
 	var vp := get_viewport_rect().size
@@ -104,12 +120,12 @@ func _build() -> void:
 	title.size = Vector2(220, 46)
 	_panel.add_child(title)
 
-	var sub := _label("选胚 · 开炉 · 一锤一锤；+20 自动升阶", 14, Color(INK.r, INK.g, INK.b, 0.62))
+	var sub := _label("选胚 · 一锤成器 · 成品库领奖", 16, Color(INK.r, INK.g, INK.b, 0.62))
 	sub.position = Vector2(30, 58)
 	sub.size = Vector2(380, 22)
 	_panel.add_child(sub)
 
-	_res_lb = _label("", 15, Color(INK.r, INK.g, INK.b, 0.68))
+	_res_lb = _label("", 17, Color(INK.r, INK.g, INK.b, 0.68))
 	_res_lb.position = Vector2(300, 58)
 	_res_lb.size = Vector2(312, 22)
 	_res_lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -132,47 +148,54 @@ func _build() -> void:
 	_anvil.draw.connect(_draw_anvil)
 	_panel.add_child(_anvil)
 
-	_hammer_btn = UiKit.make_button(_panel, Vector2(210, 470), Vector2(220, 62), "锤 一 下", 22)
+	_hammer_btn = UiKit.make_button(_panel, Vector2(170, 470), Vector2(300, 64), "锤 一 下", 26)
 	_hammer_btn.pressed.connect(_hammer)
 
-	_log_lb = _label("", 13, Color(INK.r, INK.g, INK.b, 0.74))
-	_log_lb.position = Vector2(30, 544)
-	_log_lb.size = Vector2(580, 60)
+	# 五档成器概率条（替代原来那一大块文字日志）
+	_grade_lbs = []
+	for i in 5:
+		var gl := Button.new()
+		gl.position = Vector2(20 + i * 116, 540)
+		gl.size = Vector2(108, 56)
+		gl.focus_mode = Control.FOCUS_NONE
+		gl.disabled = true
+		gl.add_theme_font_size_override("font_size", 15)
+		var gsb := StyleBoxFlat.new()
+		gsb.set_corner_radius_all(6)
+		gsb.bg_color = Color(0.94, 0.91, 0.84, 0.9)
+		gsb.border_color = ForgeData.grade_col(i)
+		gsb.set_border_width_all(2)
+		gl.add_theme_stylebox_override("normal", gsb)
+		gl.add_theme_stylebox_override("disabled", gsb)
+		gl.add_theme_color_override("font_color", ForgeData.grade_col(i))
+		gl.add_theme_color_override("font_disabled_color", ForgeData.grade_col(i))
+		_panel.add_child(gl)
+		_grade_lbs.append(gl)
+
+	_log_lb = _label("", 16, Color(INK.r, INK.g, INK.b, 0.74))
+	_log_lb.position = Vector2(24, 604)
+	_log_lb.size = Vector2(592, 56)
 	_log_lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_panel.add_child(_log_lb)
 
-	var pick := _label("挑一口胚子开炉（不占手上兵器）", 14, Color(INK.r, INK.g, INK.b, 0.54))
-	pick.position = Vector2(30, 624)
-	pick.size = Vector2(580, 20)
-	_panel.add_child(pick)
-
-	_blank_btns = []
-	for i in ForgeData.BLANKS.size():
-		var b: Dictionary = ForgeData.BLANKS[i]
-		var col := i % 2
-		var row := i / 2
-		var btn := UiKit.make_button(_panel, Vector2(30 + col * 300, 650 + row * 50), Vector2(280, 42), "", 14)
-		btn.pressed.connect(_open_blank.bind(str(b["id"])))
-		_blank_btns.append({"id": str(b["id"]), "btn": btn})
-
-	_take_btn = UiKit.make_button(_panel, Vector2(30, 800), Vector2(180, 48), "收 下", 18)
-	_take_btn.pressed.connect(_take)
-	_ascend_btn = UiKit.make_button(_panel, Vector2(230, 800), Vector2(180, 48), "升 阶", 18)
-	_ascend_btn.pressed.connect(_ascend)
-	var close_btn := UiKit.make_button(_panel, Vector2(430, 800), Vector2(180, 48), "关 闭", 18)
-	close_btn.pressed.connect(close)
-
-	_bag_lb = _label("", 13, Color(INK.r, INK.g, INK.b, 0.58))
-	_bag_lb.position = Vector2(30, 858)
+	_bag_lb = _label("", 15, Color(INK.r, INK.g, INK.b, 0.58))
+	_bag_lb.position = Vector2(30, 832)
 	_bag_lb.size = Vector2(580, 22)
 	_panel.add_child(_bag_lb)
 
-	var bag_btn := UiKit.make_button(_panel, Vector2(404, 12), Vector2(104, 36), "成品库", 15)
-	bag_btn.pressed.connect(_bag_open)
-	var comp_btn := UiKit.make_button(_panel, Vector2(516, 12), Vector2(94, 36), "图 鉴", 16)
-	comp_btn.pressed.connect(_comp_open)
+	var tab_names := ["胚 子", "材料合成", "图 鉴", "成品库", "关 闭"]
+	_tab_btns = []
+	for ti in tab_names.size():
+		var tb := UiKit.make_button(_panel, Vector2(20 + ti * 120, 872), Vector2(112, 46), str(tab_names[ti]), 18)
+		_tab_btns.append(tb)
+	_tab_btns[0].pressed.connect(_open_blank_picker)
+	_tab_btns[1].pressed.connect(func() -> void: _comp_open("synthesis"))
+	_tab_btns[2].pressed.connect(func() -> void: _comp_open("codex"))
+	_tab_btns[3].pressed.connect(_bag_open)
+	_tab_btns[4].pressed.connect(close)
 	_build_compendium()
 	_build_bag()
+	_build_blank_picker()
 
 func _build_compendium() -> void:
 	_comp_dim = ColorRect.new()
@@ -196,17 +219,17 @@ func _build_compendium() -> void:
 	_comp_panel.add_theme_stylebox_override("panel", csb)
 	_panel.add_child(_comp_panel)
 
-	var t := _label("锻 造 图 鉴", 24, INK)
-	t.position = Vector2(22, 14)
-	t.size = Vector2(300, 32)
-	_comp_panel.add_child(t)
+	_comp_title = _label("材 料 合 成", 24, INK)
+	_comp_title.position = Vector2(22, 14)
+	_comp_title.size = Vector2(300, 32)
+	_comp_panel.add_child(_comp_title)
 
 	_comp_hint_lb = _label("", 14, Color(INK.r, INK.g, INK.b, 0.74))
 	_comp_hint_lb.position = Vector2(22, 52)
 	_comp_hint_lb.size = Vector2(536, 24)
 	_comp_panel.add_child(_comp_hint_lb)
 
-	_comp_page_btn = UiKit.make_button(_comp_panel, Vector2(404, 14), Vector2(154, 34), "下一条", 14)
+	_comp_page_btn = UiKit.make_button(_comp_panel, Vector2(404, 12), Vector2(154, 38), "下一条", 17)
 	_comp_page_btn.pressed.connect(_comp_next)
 
 	var pick := _label("放两味料试试（试错只亏石头，材料不动）", 13, Color(INK.r, INK.g, INK.b, 0.54))
@@ -220,12 +243,12 @@ func _build_compendium() -> void:
 		var k := str(mats[i])
 		var col := i % 2
 		var row := i / 2
-		var mb := UiKit.make_button(_comp_panel, Vector2(22 + col * 274, 110 + row * 48), Vector2(258, 40), "", 14)
+		var mb := UiKit.make_button(_comp_panel, Vector2(22 + col * 274, 108 + row * 50), Vector2(258, 44), "", 17)
 		mb.toggle_mode = true
 		mb.pressed.connect(_comp_toggle.bind(k))
 		_comp_mat_btns[k] = mb
 
-	_comp_try_btn = UiKit.make_button(_comp_panel, Vector2(22, 224), Vector2(258, 48), "试 合", 18)
+	_comp_try_btn = UiKit.make_button(_comp_panel, Vector2(22, 224), Vector2(258, 48), "试 合", 21)
 	_comp_try_btn.pressed.connect(_comp_try)
 
 	_comp_recipe_lb = _label("", 14, Color(INK.r, INK.g, INK.b, 0.78))
@@ -234,16 +257,16 @@ func _build_compendium() -> void:
 	_comp_recipe_lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_comp_panel.add_child(_comp_recipe_lb)
 
-	_comp_make_btn = UiKit.make_button(_comp_panel, Vector2(22, 370), Vector2(258, 48), "照图鉴造胚", 17)
+	_comp_make_btn = UiKit.make_button(_comp_panel, Vector2(22, 370), Vector2(258, 48), "照图鉴造胚", 20)
 	_comp_make_btn.pressed.connect(_comp_make)
 
-	var back := UiKit.make_button(_comp_panel, Vector2(300, 370), Vector2(258, 48), "返 回", 18)
+	var back := UiKit.make_button(_comp_panel, Vector2(300, 370), Vector2(258, 48), "返 回", 21)
 	back.pressed.connect(_comp_close)
 
 func _build_bag() -> void:
 	_bag_panel = Panel.new()
-	_bag_panel.position = Vector2(60, 150)
-	_bag_panel.size = Vector2(520, 380)
+	_bag_panel.position = Vector2(30, 105)
+	_bag_panel.size = Vector2(580, 720)
 	_bag_panel.z_index = 20
 	_bag_panel.visible = false
 	var bsb := StyleBoxFlat.new()
@@ -254,44 +277,84 @@ func _build_bag() -> void:
 	_bag_panel.add_theme_stylebox_override("panel", bsb)
 	_panel.add_child(_bag_panel)
 
-	var t := _label("锻 造 库", 24, INK)
-	t.position = Vector2(20, 12)
-	t.size = Vector2(240, 32)
+	var t := _label("成 品 库", 26, INK)
+	t.position = Vector2(22, 14)
+	t.size = Vector2(240, 34)
 	_bag_panel.add_child(t)
+	var tip := _label("造过的兵器才会亮；点亮的卡可领一次奖励。", 16, Color(INK.r, INK.g, INK.b, 0.58))
+	tip.position = Vector2(22, 50)
+	tip.size = Vector2(530, 24)
+	_bag_panel.add_child(tip)
 
-	_bag_page_btn = UiKit.make_button(_bag_panel, Vector2(320, 12), Vector2(180, 34), "下一条", 14)
-	_bag_page_btn.pressed.connect(_bag_next)
+	_bag_scroll = ScrollContainer.new()
+	_bag_scroll.position = Vector2(12, 82)
+	_bag_scroll.size = Vector2(556, 540)
+	_bag_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_bag_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	_bag_scroll.get_v_scroll_bar().modulate.a = 0.30
+	_bag_panel.add_child(_bag_scroll)
+	_bag_grid = GridContainer.new()
+	_bag_grid.columns = 3
+	_bag_grid.add_theme_constant_override("h_separation", 10)
+	_bag_grid.add_theme_constant_override("v_separation", 10)
+	_bag_grid.custom_minimum_size = Vector2(536, 0)
+	_bag_scroll.add_child(_bag_grid)
 
-	_bag_name_lb = _label("", 22, SEAL)
-	_bag_name_lb.position = Vector2(20, 56)
-	_bag_name_lb.size = Vector2(480, 30)
-	_bag_panel.add_child(_bag_name_lb)
-
-	_bag_stat_lb = _label("", 14, Color(INK.r, INK.g, INK.b, 0.70))
-	_bag_stat_lb.position = Vector2(20, 92)
-	_bag_stat_lb.size = Vector2(480, 22)
-	_bag_panel.add_child(_bag_stat_lb)
-
-	_bag_price_lb = _label("", 13, Color(INK.r, INK.g, INK.b, 0.56))
-	_bag_price_lb.position = Vector2(20, 124)
-	_bag_price_lb.size = Vector2(480, 22)
-	_bag_panel.add_child(_bag_price_lb)
-
-	_bag_sell_btn = UiKit.make_button(_bag_panel, Vector2(20, 170), Vector2(150, 46), "卖 掉", 17)
-	_bag_sell_btn.pressed.connect(_bag_sell)
-	_bag_scrap_btn = UiKit.make_button(_bag_panel, Vector2(185, 170), Vector2(150, 46), "拆 掉", 17)
-	_bag_scrap_btn.pressed.connect(_bag_scrap)
-	_bag_gift_btn = UiKit.make_button(_bag_panel, Vector2(350, 170), Vector2(150, 46), "送 同 伴", 16)
-	_bag_gift_btn.pressed.connect(_bag_gift)
-
-	var back := UiKit.make_button(_bag_panel, Vector2(185, 240), Vector2(150, 42), "返 回", 17)
+	var back := UiKit.make_button(_bag_panel, Vector2(210, 648), Vector2(160, 48), "返 回", 22)
 	back.pressed.connect(_bag_close)
 
-	var note := _label("卖掉得银两；拆掉得锻造石与材料；送同伴会直接装到陈石/苏青鸾身上。", 12, Color(INK.r, INK.g, INK.b, 0.54))
-	note.position = Vector2(20, 300)
-	note.size = Vector2(480, 50)
-	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_bag_panel.add_child(note)
+func _build_blank_picker() -> void:
+	_blank_panel = Panel.new()
+	_blank_panel.position = Vector2(60, 210)
+	_blank_panel.size = Vector2(520, 430)
+	_blank_panel.z_index = 20
+	_blank_panel.visible = false
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.958, 0.938, 0.892, 1.0)
+	sb.set_corner_radius_all(6)
+	sb.border_color = Color(0.42, 0.33, 0.20, 0.60)
+	sb.set_border_width_all(2)
+	_blank_panel.add_theme_stylebox_override("panel", sb)
+	_panel.add_child(_blank_panel)
+	var t := _label("选 胚 子", 24, INK)
+	t.position = Vector2(20, 14)
+	t.size = Vector2(220, 32)
+	_blank_panel.add_child(t)
+	_blank_btns = []
+	for i in ForgeData.BLANKS.size():
+		var b: Dictionary = ForgeData.BLANKS[i]
+		var btn := UiKit.make_button(_blank_panel, Vector2(20, 58 + i * 54), Vector2(480, 46), "", 18)
+		var bid := str(b.get("id", ""))
+		btn.pressed.connect(_pick_blank.bind(bid))
+		_blank_btns.append({"id": bid, "btn": btn})
+	var back := UiKit.make_button(_blank_panel, Vector2(180, 378), Vector2(160, 44), "返 回", 20)
+	back.pressed.connect(func() -> void: _blank_panel.visible = false)
+
+func _open_blank_picker() -> void:
+	if _comp_panel != null:
+		_comp_panel.visible = false
+	if _bag_panel != null:
+		_bag_panel.visible = false
+	_blank_panel.visible = true
+	for e_v in _blank_btns:
+		var e: Dictionary = e_v
+		var bid := str(e["id"])
+		var b: Dictionary = ForgeData.blank(bid)
+		var btn: Button = e["btn"]
+		var own := GameState.material_count(bid) > 0
+		var busy := not (GameState.forge_item as Dictionary).is_empty()
+		if bid == "jianpei":
+			btn.visible = true
+			btn.text = "入门剑胚 ×" + str(GameState.material_count("jianpei"))
+			btn.disabled = (not own) or busy
+		else:
+			btn.visible = true
+			btn.text = str(b.get("name", bid)) + " · 去材料合成"
+			btn.disabled = true
+
+func _pick_blank(bid: String) -> void:
+	_blank_panel.visible = false
+	_open_blank(bid)
 
 func _label(text: String, fs: int, col: Color) -> Label:
 	var lb := Label.new()
@@ -396,6 +459,9 @@ func _hammer() -> void:
 	if it.is_empty():
 		_push_log("砧上无物——先挑一口胚子。")
 		return
+	if bool(it.get("finished", false)):
+		_push_log("已经成器——先收下这把。")
+		return
 	if bool(it.get("awaiting", false)):
 		_push_log("已经 +20 了——先升阶。")
 		return
@@ -406,6 +472,13 @@ func _hammer() -> void:
 		_push_log("锻造石不够——去游历、宝箱或塔里找。")
 		return
 	GameState.add_material("forge_stone", -1)
+	# 胚子第一锤就成器：普通胚出凡品成品；上品/必成等特殊胚保留自己的品级。
+	if int(it.get("enhance", 0)) == 0 and not bool(it.get("finished", false)):
+		it["enhance"] = 1
+		it["finished"] = true
+		it["craft_grade"] = ForgeData.roll_craft_grade(it)
+		_auto_collect(it)
+		return
 
 	var outcome := _roll(it)
 	var text := ""
@@ -571,50 +644,127 @@ func _bag_next() -> void:
 	_bag_idx = (_bag_idx + 1) % list.size()
 	_bag_refresh()
 
+func _bag_reward_for(q0: int) -> Dictionary:
+	var q := clampi(q0, 0, 4)
+	return {
+		"stones": [3, 5, 8, 12, 18][q],
+		"silver": [20, 40, 80, 160, 320][q],
+		"exp": [60, 120, 260, 520, 1000][q],
+		"pill": ["tupo_fan", "tupo_fan", "tupo_liang", "tupo_shang", "tupo_jue"][q],
+		"wine": q >= 2,
+	}
+
+func _bag_made_info(bid: String) -> Dictionary:
+	if GameState.forge_made.has(bid):
+		var v = GameState.forge_made[bid]
+		if v is Dictionary:
+			return {"q": int((v as Dictionary).get("q", 0)), "grade": int((v as Dictionary).get("grade", 2))}
+		return {"q": int(v), "grade": 2}
+	for rec_v in GameState.forge_bag:
+		var rec: Dictionary = rec_v
+		if str(rec.get("blank", "")) == bid:
+			return {"q": int(rec.get("quality", 0)), "grade": int(rec.get("craft_grade", 2))}
+	return {}
+
+func _bag_claim(bid: String) -> void:
+	var info := _bag_made_info(bid)
+	if info.is_empty() or GameState.forge_claimed.has(bid):
+		return
+	var q := int(info.get("q", 0))
+	var rw := _bag_reward_for(q)
+	GameState.add_material("forge_stone", int(rw["stones"]))
+	GameState.add_coin("silver", int(rw["silver"]))
+	GameState.exp_pool += int(rw["exp"])
+	var pid := str(rw["pill"])
+	GameState.pills[pid] = int(GameState.pills.get(pid, 0)) + 1
+	if bool(rw["wine"]):
+		var wv := 20 + q * 16
+		GameState.add_wine("锻礼·" + ForgeData.quality_name(q), {"color": wv, "aroma": wv + 4, "taste": wv + 2, "after": wv + 6, "body": wv}, 20 + q * 18, "成品库领的锻礼酒，不算自酿。")
+	GameState.forge_claimed[bid] = true
+	GameState.save_game()
+	_push_log("领取成品奖励：" + ForgeData.quality_name(q) + "（锻造石 +" + str(int(rw["stones"])) + " · 银两 +" + str(int(rw["silver"])) + "）")
+	_bag_reward_burst(rw)
+	_bag_refresh()
+	refresh()
+
 func _bag_refresh() -> void:
-	if _bag_panel == null or not _bag_panel.visible:
+	if _bag_panel == null or not _bag_panel.visible or _bag_grid == null:
 		return
-	var list := _bag_list()
-	_bag_page_btn.text = "0/0" if list.is_empty() else ("下一条 " + str(_bag_idx + 1) + "/" + str(list.size()))
-	if list.is_empty():
-		_bag_name_lb.text = "库房空着——先锻一把出来"
-		_bag_stat_lb.text = ""
-		_bag_price_lb.text = ""
-		_bag_sell_btn.visible = false
-		_bag_scrap_btn.visible = false
-		_bag_gift_btn.visible = false
+	for c in _bag_grid.get_children():
+		c.queue_free()
+	_bag_cards.clear()
+	_bag_blink.clear()
+	for b_v in ForgeData.BLANKS:
+		var b: Dictionary = b_v
+		var bid := str(b.get("id", ""))
+		var info := _bag_made_info(bid)
+		var made := not info.is_empty()
+		var q := int(info.get("q", int(b.get("quality", 0))))
+		var g := int(info.get("grade", 2))
+		var claimed := GameState.forge_claimed.has(bid)
+		var btn := Button.new()
+		btn.custom_minimum_size = Vector2(168, 178)
+		btn.focus_mode = Control.FOCUS_NONE
+		btn.add_theme_font_size_override("font_size", 17)
+		var state := "locked"
+		if made and not claimed:
+			state = "ready"
+		elif made and claimed:
+			state = "claimed"
+		var shown := str(b.get("name" if bid == "jianpei" else "weapon", "兵器"))
+		var grade_txt := "" if state == "locked" else (ForgeData.grade_name(g) + " · ")
+		btn.text = "◆ " + shown + "\n" + grade_txt + ForgeData.quality_name(q) + "\n" + ("未打造" if state == "locked" else ("可领取" if state == "ready" else "已领取"))
+		var st := StyleBoxFlat.new()
+		st.set_corner_radius_all(8)
+		st.set_border_width_all(2)
+		if state == "locked":
+			st.bg_color = Color(0.20, 0.18, 0.16, 0.30)
+			st.border_color = Color(0.35, 0.31, 0.26, 0.25)
+			btn.add_theme_color_override("font_color", Color(0.35, 0.32, 0.28, 0.55))
+			btn.add_theme_color_override("font_disabled_color", Color(0.35, 0.32, 0.28, 0.55))
+			btn.disabled = true
+		elif state == "ready":
+			st.bg_color = Color(0.22, 0.14, 0.10, 0.96)
+			st.border_color = Color(0.86, 0.68, 0.24, 0.95)
+			btn.add_theme_color_override("font_color", Color(0.98, 0.88, 0.54))
+			btn.add_theme_color_override("font_disabled_color", Color(0.98, 0.88, 0.54))
+			btn.tooltip_text = "点击领取奖励"
+			btn.pressed.connect(_bag_claim.bind(bid))
+			_bag_blink.append(btn)
+		else:
+			st.bg_color = Color(0.91, 0.86, 0.74, 0.95)
+			st.border_color = Color(0.62, 0.49, 0.20, 0.75)
+			btn.add_theme_color_override("font_color", Color(0.30, 0.25, 0.18))
+			btn.add_theme_color_override("font_disabled_color", Color(0.30, 0.25, 0.18))
+			btn.disabled = true
+		btn.add_theme_stylebox_override("normal", st)
+		btn.add_theme_stylebox_override("hover", st)
+		btn.add_theme_stylebox_override("pressed", st)
+		btn.add_theme_stylebox_override("disabled", st)
+		_bag_grid.add_child(btn)
+		_bag_cards[bid] = btn
+
+func _bag_reward_burst(rw: Dictionary) -> void:
+	if _bag_panel == null:
 		return
-	_bag_idx = clampi(_bag_idx, 0, list.size() - 1)
-	var rec: Dictionary = list[_bag_idx]
-	var sid := str(rec.get("sid", ""))
-	var st: Dictionary = ForgeData.item_stats(rec)
-	_bag_name_lb.text = ForgeData.item_name(rec)
-	var extra := ""
-	var affs: Array = rec.get("affixes", [])
-	if not affs.is_empty():
-		var names: Array = []
-		for aid in affs:
-			names.append(str(ForgeData.affix(str(aid)).get("name", aid)))
-		extra = " · 词缀 " + "、".join(PackedStringArray(names))
-	if str(rec.get("rule", "")) == "no_break":
-		extra += " · 天生不折"
-	_bag_stat_lb.text = "攻 " + str(int(st["atk"])) + " · 伤 " + str(int(st["dmg"])) + " · 强化 +" + str(int(rec.get("enhance", 0))) + extra
-	var ret: Dictionary = ForgeData.scrap_return(rec)
-	var mats_txt := ""
-	for k_v in (ret.get("mats", {}) as Dictionary).keys():
-		var k := str(k_v)
-		mats_txt += GameState.mat_name(k) + " " + str(int(ret["mats"][k])) + " "
-	_bag_price_lb.text = "卖价 " + str(ForgeData.sell_price(rec)) + " 两 · 拆得 锻造石 " + str(int(ret["stones"])) + " · " + mats_txt.strip_edges()
-	var wearer := GameState.forge_wearer(sid)
-	if wearer != "":
-		_bag_stat_lb.text += " · 已装备在" + wearer
-	var has := GameState.vault_item_count(sid) > 0
-	_bag_sell_btn.visible = true
-	_bag_scrap_btn.visible = true
-	_bag_gift_btn.visible = true
-	_bag_sell_btn.disabled = not has
-	_bag_scrap_btn.disabled = not has
-	_bag_gift_btn.disabled = not has
+	var names := ["锻造石 +" + str(int(rw["stones"])), "银两 +" + str(int(rw["silver"])), "经验 +" + str(int(rw["exp"])), "突破丹 ×1"]
+	if bool(rw["wine"]):
+		names.append("锻礼酒 ×1")
+	for i in names.size():
+		var lb := Label.new()
+		lb.text = str(names[i])
+		lb.add_theme_font_size_override("font_size", 19)
+		lb.add_theme_color_override("font_color", Color(0.72, 0.20, 0.15))
+		lb.z_index = 30
+		var p := Vector2(290, 220 + float(i) * 4)
+		lb.position = p
+		_bag_panel.add_child(lb)
+		var tw := create_tween()
+		tw.tween_property(lb, "position", p + Vector2(randf_range(-90, 90), -70 - float(i) * 12), 0.22)
+		tw.tween_interval(0.16)
+		tw.tween_property(lb, "position", Vector2(300, 610), 0.42).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+		tw.parallel().tween_property(lb, "modulate:a", 0.0, 0.42)
+		tw.tween_callback(lb.queue_free)
 
 func _bag_drop_record(sid: String) -> void:
 	for i in range(GameState.forge_bag.size() - 1, -1, -1):
@@ -683,12 +833,26 @@ func _bag_gift() -> void:
 	_bag_refresh()
 	refresh()
 
-func _comp_open() -> void:
+func _comp_open(mode := "synthesis") -> void:
+	_comp_mode = mode
 	if _bag_panel != null:
 		_bag_panel.visible = false
 	_comp_dim.visible = true
 	_comp_panel.visible = true
+	var synth := mode == "synthesis"
+	_comp_title.text = "材 料 合 成" if synth else "锻 造 图 鉴"
+	for k_v in _comp_mat_btns.keys():
+		(_comp_mat_btns[k_v] as Button).visible = synth
+	_comp_try_btn.visible = synth
+	if not synth:
+		_comp_make_btn.visible = false
 	_comp_refresh()
+
+func _tab_main() -> void:
+	_comp_close()
+	if _bag_panel != null:
+		_bag_panel.visible = false
+	refresh()
 
 func _comp_close() -> void:
 	if _comp_panel != null:
@@ -778,7 +942,8 @@ func _comp_refresh() -> void:
 		_comp_recipe_lb.text = "图鉴：「" + str(c["name"]) + "」\n造胚耗：" + cost_txt + "\n造出来直接上砧，不再收开炉银两。"
 	else:
 		_comp_recipe_lb.text = "图鉴：未合中\n试合：选两味料 + " + str(ForgeData.TRIAL_STONES) + " 锻造石\n（合不中只亏石头，材料原样退回）"
-	_comp_make_btn.visible = unlocked
+	_comp_make_btn.visible = unlocked and _comp_mode == "synthesis"
+	_comp_try_btn.visible = _comp_mode == "synthesis"
 	var can_make := true
 	for k_v in cost.keys():
 		var k := str(k_v)
@@ -786,6 +951,25 @@ func _comp_refresh() -> void:
 			can_make = false
 	_comp_make_btn.disabled = not can_make or not (GameState.forge_item as Dictionary).is_empty()
 	_comp_make_btn.text = "照图鉴造胚（" + cost_txt + "）"
+
+func _auto_collect(it: Dictionary) -> void:
+	if it.is_empty():
+		return
+	var nm := ForgeData.item_name(it)
+	var sid := GameState.forge_next_sid()
+	var set := ForgeData.card_set(it, sid)
+	GameState.forge_add(sid, set)
+	it["sid"] = sid
+	GameState.forge_bag.append(it.duplicate(true))
+	var bid := str(it.get("blank", ""))
+	if bid != "":
+		GameState.forge_made[bid] = {"q": int(it.get("quality", 0)), "grade": int(it.get("craft_grade", 2))}
+	if GameState.forge_bag.size() > 40:
+		GameState.forge_bag.pop_front()
+	GameState.forge_item = {}
+	_push_log("成器入成品库：" + nm)
+	GameState.save_game()
+	refresh()
 
 func _take() -> void:
 	var it: Dictionary = GameState.forge_item
@@ -797,6 +981,9 @@ func _take() -> void:
 	GameState.forge_add(sid, set)
 	it["sid"] = sid
 	GameState.forge_bag.append(it.duplicate(true))
+	var bid := str(it.get("blank", ""))
+	if bid != "":
+		GameState.forge_made[bid] = {"q": int(it.get("quality", 0)), "grade": int(it.get("craft_grade", 2))}
 	if GameState.forge_bag.size() > 40:
 		GameState.forge_bag.pop_front()
 	GameState.forge_item = {}
@@ -818,65 +1005,29 @@ func refresh() -> void:
 		return
 	_res_lb.text = "锻造石 " + str(GameState.material_count("forge_stone")) + " · 银两 " + str(GameState.coin("silver")) + " · 剑胚 " + str(GameState.material_count("jianpei"))
 	var it: Dictionary = GameState.forge_item
-	for e_v in _blank_btns:
-		var e: Dictionary = e_v
-		var b: Dictionary = ForgeData.blank(str(e["id"]))
-		var btn: Button = e["btn"]
-		var need_k := str(b.get("need", ""))
-		if need_k != "":
-			btn.text = str(b.get("name", "胚子")) + "  剑胚×" + str(GameState.material_count(need_k))
-			btn.disabled = not it.is_empty() or GameState.material_count(need_k) < 1
-		else:
-			btn.text = str(b.get("name", "胚子")) + "  " + str(int(b.get("open", 10))) + "两 · " + str(b.get("trait", ""))
-			btn.disabled = not it.is_empty()
+	var gw := ForgeData.grade_weights(it)
+	for i in _grade_lbs.size():
+		var gl: Button = _grade_lbs[i]
+		gl.text = ForgeData.grade_name(i) + "\n" + str(int(round(float(gw[i])))) + "%"
 	if _comp_panel != null:
 		_comp_refresh()
 	if _bag_panel != null:
 		_bag_refresh()
 	if it.is_empty():
-		_item_lb.text = "砧上无物——挑一口胚子开炉"
-		_stat_lb.text = "开炉后每锤耗 1 锻造石；+10 入神，+20 自动升阶"
+		_item_lb.text = "砧上无物——点下方［胚子］选一块"
+		_stat_lb.text = "选定胚子后锤第一下成器；成器直接进成品库"
 		_hammer_btn.disabled = true
-		_hammer_btn.text = "锤 一 下"
-		_ascend_btn.visible = false
-		_take_btn.visible = false
+		_hammer_btn.text = "先 选 胚 子"
 	else:
 		_item_lb.text = ForgeData.item_name(it)
 		var st: Dictionary = ForgeData.item_stats(it)
-		var insp := ""
-		if int(it.get("inspired_left", 0)) > 0:
-			insp = " · 入神 " + str(int(it.get("inspired_left", 0))) + "/7"
 		var extra_txt := ""
-		var affs: Array = it.get("affixes", [])
-		if not affs.is_empty():
-			var aff_names: Array = []
-			for aid in affs:
-				aff_names.append(str(ForgeData.affix(str(aid)).get("name", aid)))
-			extra_txt += " · 词缀 " + "、".join(PackedStringArray(aff_names))
-		if st.has("crit"):
-			extra_txt += " · 暴 " + str(int(st["crit"]))
-		if st.has("def"):
-			extra_txt += " · 防 " + str(int(st["def"]))
-		if st.has("spd"):
-			extra_txt += " · 速 " + str(int(st["spd"]))
-		if st.has("hp"):
-			extra_txt += " · 血 " + str(int(st["hp"]))
 		if str(it.get("rule", "")) == "no_break":
 			extra_txt += " · 天生不折"
-		_stat_lb.text = "攻 " + str(int(st["atk"])) + " · 伤 " + str(int(st["dmg"])) + " · 强化 +" + str(int(it.get("enhance", 0))) + "/20 · 裂纹 " + str(int(it.get("cracks", 0))) + insp + extra_txt
-		var waiting := bool(it.get("awaiting", false))
-		_hammer_btn.disabled = waiting or int(it.get("enhance", 0)) >= 20 or GameState.material_count("forge_stone") < 1
-		_hammer_btn.text = "先 升 阶" if waiting or int(it.get("enhance", 0)) >= 20 else "锤 一 下（锻造石 1）"
-		_ascend_btn.visible = waiting or int(it.get("enhance", 0)) >= 20
-		if int(it.get("quality", 0)) >= int(it.get("cap", 4)):
-			_ascend_btn.text = "潜力封顶"
-			_ascend_btn.disabled = true
-		else:
-			var cost: Dictionary = ForgeData.ascend_cost(int(it.get("quality", 0)))
-			_ascend_btn.text = "升 阶 " + str(int(cost["silver"])) + "两·金髓1"
-			_ascend_btn.disabled = GameState.coin("silver") < int(cost["silver"]) or GameState.material_count("jin") < int(cost["jin"])
-		_take_btn.visible = true
-	_bag_lb.text = "锻造库：" + str(GameState.forge_bag.size()) + " 件" + ("（最近：" + ForgeData.item_name(GameState.forge_bag[GameState.forge_bag.size() - 1]) + "）" if not GameState.forge_bag.is_empty() else "")
+		_stat_lb.text = "攻 " + str(int(st["atk"])) + " · 伤 " + str(int(st["dmg"])) + " · 品质 " + ForgeData.quality_name(int(it.get("quality", 0))) + extra_txt
+		_hammer_btn.disabled = GameState.material_count("forge_stone") < 1
+		_hammer_btn.text = "锤 一 下（锻造石 1）"
+	_bag_lb.text = "成品库：" + str(GameState.forge_bag.size()) + " 件"
 	if _anvil != null:
 		_anvil.queue_redraw()
 

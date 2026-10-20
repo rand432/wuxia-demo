@@ -198,7 +198,7 @@ func _build() -> void:
 		title.add_theme_constant_override("outline_size", 2)
 	add_child(title)
 
-	_silver_lb = _label("", 16, SEAL if Ui.SKIN != 1 else Color(0.62, 0.44, 0.08))
+	_silver_lb = _label("", 18, SEAL if Ui.SKIN != 1 else Color(0.62, 0.44, 0.08))
 	_silver_lb.position = Vector2(px + PW - 232.0, py + 26.0)
 	_silver_lb.size = Vector2(204, 28)
 	_silver_lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -212,13 +212,13 @@ func _build() -> void:
 	_next_btn = _mk_btn("›", Rect2(px + PW - 84.0, py + 60.0, 56.0, 48.0), 24)
 	_next_btn.pressed.connect(_on_next)
 	add_child(_next_btn)
-	_win_lb = _label("", 18, INK)
+	_win_lb = _label("", 22, INK)
 	_win_lb.position = Vector2(px + 90.0, py + 68.0)
 	_win_lb.size = Vector2(PW - 180.0, 32.0)
 	_win_lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	add_child(_win_lb)
 
-	_hint_lb = _label("", 13, Color(INK.r, INK.g, INK.b, 0.60))   # v61（手游）：12 → 13 号
+	_hint_lb = _label("", 16, Color(INK.r, INK.g, INK.b, 0.60))   # v61（手游）：12 → 13 号
 	_hint_lb.position = Vector2(px + 28.0, py + 112.0)
 	_hint_lb.size = Vector2(PW - 56.0, 26.0)
 	_hint_lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -241,20 +241,20 @@ func _build() -> void:
 		_seat_btns.append(b)
 		var d := (seat - _tc).normalized()
 		var lp := seat + d * 34.0
-		var nl := _label("", 16, INK)
+		var nl := _label("", 18, INK)
 		nl.position = Vector2(lp.x - 60.0, lp.y - 12.0)
 		nl.size = Vector2(120.0, 22.0)
 		nl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		add_child(nl)
 		_name_lbs.append(nl)
-		var sl := _label("", 13, GOLD)
+		var sl := _label("", 15, GOLD)
 		sl.position = Vector2(lp.x - 60.0, lp.y + 8.0)
 		sl.size = Vector2(120.0, 20.0)
 		sl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		add_child(sl)
 		_star_lbs.append(sl)
 
-	_note_lb = _label("", 16, INK)
+	_note_lb = _label("", 18, INK)
 	_note_lb.position = Vector2(px + 46.0, py + 592.0)
 	_note_lb.size = Vector2(PW - 92.0, 48.0)
 	_note_lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -262,28 +262,28 @@ func _build() -> void:
 	_note_lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	add_child(_note_lb)
 
-	_price_lb = _label("", 14, Color(SEAL.r, SEAL.g, SEAL.b, 0.92))
+	_price_lb = _label("", 17, Color(SEAL.r, SEAL.g, SEAL.b, 0.92))
 	_price_lb.position = Vector2(px + 28.0, py + 646.0)
 	_price_lb.size = Vector2(PW - 56.0, 24.0)
 	_price_lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	add_child(_price_lb)
 
-	_brew_btn = _mk_btn("酿一坛", Rect2(px + 40.0, py + 676.0, 180.0, 56.0), 18, true)
+	_brew_btn = _mk_btn("酿一坛", Rect2(px + 40.0, py + 676.0, 180.0, 56.0), 22, true)
 	_brew_btn.pressed.connect(_on_brew)
 	add_child(_brew_btn)
-	_sell_btn = _mk_btn("卖掉这坛", Rect2(px + 240.0, py + 676.0, 200.0, 56.0), 18, true)
+	_sell_btn = _mk_btn("卖掉这坛", Rect2(px + 240.0, py + 676.0, 200.0, 56.0), 22, true)
 	_sell_btn.pressed.connect(_on_sell)
 	add_child(_sell_btn)
-	var close_btn := _mk_btn("关闭", Rect2(px + 460.0, py + 676.0, 172.0, 56.0), 20)
+	var close_btn := _mk_btn("关闭", Rect2(px + 460.0, py + 676.0, 172.0, 56.0), 24)
 	close_btn.pressed.connect(close)
 	add_child(close_btn)
 
-	# v218：规矩那行原来是一整句、中文又没空格，Label 的最小宽度把右半截顶出面板。
-	#   直接在 "｜" 处显式断行（5 行，每行都短），比跟 Label 的最小尺寸较劲可靠。
-	_msg_lb = _label(FOOT.replace("｜", "\n"), 13, Color(INK.r, INK.g, INK.b, 0.55))
+	# 把底部那一大段设计规则撤掉，只留状态消息。
+	_msg_lb = _label("", 16, Color(SEAL.r, SEAL.g, SEAL.b, 0.90))
 	_msg_lb.position = Vector2(px + 28.0, py + 748.0)
-	_msg_lb.size = Vector2(PW - 56.0, 96.0)
+	_msg_lb.size = Vector2(PW - 56.0, 72.0)
 	_msg_lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_msg_lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	add_child(_msg_lb)
 
 # ---- 状态 ----

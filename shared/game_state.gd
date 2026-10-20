@@ -813,6 +813,8 @@ static var vault_items := {}
 # v242：锻造 V0.1——砧上那一把 ＋ 已收下的成品
 static var forge_item := {}
 static var forge_bag: Array = []
+static var forge_made := {}       # blank_id -> 首次成器品质
+static var forge_claimed := {}   # 成品库里每把锻成兵器领过奖励的 sid
 # v242：锻造动态件（sid -> Cards 动态卡集）——存档载入时重建
 static var forge_cards := {}
 static var forge_seq := 0
@@ -6745,6 +6747,8 @@ static func load_game() -> void:
 	vault_items = _sd(vlt.get("items", {}), vault_items)
 	forge_item = _sd(vlt.get("forge_item", {}), forge_item)
 	forge_bag = _sa(vlt.get("forge_bag", []), forge_bag)
+	forge_made = _sd(vlt.get("forge_made", {}), forge_made)
+	forge_claimed = _sd(vlt.get("forge_claimed", {}), forge_claimed)
 	forge_cards = _sd(vlt.get("forge_cards", {}), {})
 	forge_seq = int(vlt.get("forge_seq", forge_seq))
 	forge_compendium = _sd(vlt.get("forge_compendium", {}), {})
@@ -6909,7 +6913,7 @@ static func save_game() -> void:
 	cf.set_value("world", "strip_saved", strip_saved)
 	cf.set_value("world", "vault", {
 		"cards": vault_cards, "items": vault_items, "materials": materials, "material_q": material_q,
-		"forge_item": forge_item, "forge_bag": forge_bag,
+		"forge_item": forge_item, "forge_bag": forge_bag, "forge_made": forge_made, "forge_claimed": forge_claimed,
 		"forge_cards": forge_cards, "forge_seq": forge_seq,
 		"forge_compendium": forge_compendium,
 		"fragments": fragments, "pills": pills, "wines": wines,
@@ -6984,6 +6988,8 @@ static func debug_unlock_chain() -> void:
 	winery_built = true
 	herbs_granted = true
 	dange_built = true
+	jianbao_unlocked = true
+	appraise_ensure_offers()
 	add_coin("silver", 100)
 	add_material("zhi", 2)
 	add_material("shen", 2)
@@ -7038,6 +7044,8 @@ static func reset() -> void:
 	vault_items.clear()
 	forge_item.clear()
 	forge_bag.clear()
+	forge_made.clear()
+	forge_claimed.clear()
 	forge_cards.clear()
 	forge_seq = 0
 	forge_compendium.clear()
