@@ -936,7 +936,7 @@ func _ready() -> void:
 	print("[主界面] v27：历练先过出征屏（首趟仍走引子）· 后山二遭可收青隼（先狐后隼）· K 键重播整条宠链")
 	print("[主界面] 挂机档位：第 ", GameState.idle_tier() + 1, " 档 · ", GameState.idle_rate_text())
 	print("[主界面] 账本：灵草=", GameState.material_count("zhi"), "/", GameState.material_count("shen"), "/", GameState.material_count("guo"), " 宠料=", GameState.material_count("bone"), "/", GameState.material_count("rice"), " 弟子=", GameState.disciple_joined, " 青鸾=", GameState.qingluan_joined, " 宠物=", GameState.pet_id, " 阶=", GameState.pet_stage(), " 关卡=", GameState.stage_progress, "/", GameState.STAGE_MAX, " 自动=", GameState.auto_climb, " 阵容=", GameState.formation, " 货币=", GameState.coin_line())
-	print("[主界面] 测试键：F 出战配置 · I 入门 · K 后山 · M 仓库货 · T 挂机+1时 · Y 挂机灌满 · G 建筑链+炼丹 · H 酒 · C 炼丹料 · V 炉火快进 · X 推到满关 · W 窗口 · P 宠物 · Q 女侠 · N 下一季 · O 导出调参配置 · J 存档版本自检")
+	print("[主界面] 测试键：F 出战配置 · I 入门 · K 后山 · M 仓库货 · T 挂机+1时 · Y 挂机灌满 · G 建筑链+炼丹 · H 酒 · C 炼丹料 · V 炉火快进 · X 推到满关 · W 窗口 · P 宠物 · Q 女侠 · N 下一季 · O 导出调参配置 · J 存档版本自检 · Z 剑胚+锻造石")
 	print("[主界面] 测试键（数字，v42）：0 进度归零 · 1→49关 · 2→149关 · 3→299关 · 4→399关(鉴宝行) · 5→499关 · 6 进度+25 · 7 进度-25 · 8 发新手礼包 · 9 直接开鉴宝行")
 	# ㊿p（B 案）：新档开机——不进村，直接进引子（十六岁·五问；走到结算回村为止）
 	#   只认"首趟未走通"；首趟走过一次后这条路自动关闭（first_journey_done=true）。
@@ -2123,6 +2123,12 @@ func _unhandled_input(ev: InputEvent) -> void:
 		GameState.intro_force = true
 		print("[主界面][测试] F9：强制重播引子（存档不动）")
 		_boot_journey()
+		return
+	if ke.keycode == KEY_Z:
+		GameState.add_material("jianpei", 3)
+		GameState.add_material("forge_stone", 30)
+		GameState.save_game()
+		_show_toast("测试：剑胚 +3 · 锻造石 +30", 2.4)
 		return
 	if ke.keycode == KEY_J:
 		# ㉙：存档版本自检——模拟"盘上是新版档"，看会不会改名留档而不是静默丢。

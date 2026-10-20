@@ -3640,6 +3640,25 @@ static func forge_add(sid: String, set: Dictionary) -> void:
 	vault_add_item(sid, 1)
 	note_forge(str(set.get("name", "")))
 
+# 砧上继续锤时：只更新已有的锻造成品，不再进一把新的。
+static func forge_discard(sid: String) -> void:
+	if sid == "":
+		return
+	for i in range(forge_bag.size() - 1, -1, -1):
+		if str((forge_bag[i] as Dictionary).get("sid", "")) == sid:
+			forge_bag.remove_at(i)
+			break
+	vault_items[sid] = maxi(0, vault_item_count(sid) - 1)
+	forge_cards.erase(sid)
+
+static func forge_update(sid: String, rec: Dictionary, set: Dictionary) -> void:
+	forge_cards[sid] = set
+	Cards.register_forged(sid, set)
+	for i in range(forge_bag.size() - 1, -1, -1):
+		if str((forge_bag[i] as Dictionary).get("sid", "")) == sid:
+			forge_bag[i] = rec.duplicate(true)
+			break
+
 static func grant_boss_weapon(boss_name: String) -> Dictionary:
 	# v250：Boss 首杀专属兵器——直接进锻造库 / 仓库，可装备。
 	var data := {

@@ -320,44 +320,36 @@ func _refresh_texts() -> void:
 	var limit_txt := GameState.wine_limit_text()
 	if n == 0:
 		_win_lb.text = "酒窖空着——先酿一坛"
-		_hint_lb.text = "酿一坛花 " + str(GameState.BREW_COST) + " 两（银两从清缴 / 挂机 / 卖酒来）　·　" + limit_txt
+		_hint_lb.text = "酿一坛 " + str(GameState.BREW_COST) + " 两　·　" + limit_txt
 		_price_lb.text = ""
 		_note_lb.text = ""
 		_sell_btn.disabled = true
 		_prev_btn.disabled = true
 		_next_btn.disabled = true
-		_brew_btn.text = "酿一坛（" + str(GameState.BREW_COST) + " 两）"
+		_brew_btn.text = "酿 一 坛"
 		_brew_btn.disabled = GameState.wine_left_today() == 0
-		_msg_lb.text = _msg if _msg != "" else FOOT.replace("｜", "\n")
+		_msg_lb.text = _msg
 		return
 	_wi = clampi(_wi, 0, n - 1)
 	var w: Dictionary = GameState.wines[_wi]
 	var nm := str(w.get("name", "酒"))
 	var rated: Dictionary = w.get("rated", {})
 	_win_lb.text = "「" + nm + "」　第 " + str(_wi + 1) + " / " + str(n) + " 坛"
-	_hint_lb.text = str(w.get("hint", "")) + "　·　" + limit_txt
-	var tail := "　—　五家品定，价到头了" if rated.size() >= SEAT_N else "（品得越多，价越高）"
-	# v35：一口没品过＝生酒，价钱只有四成半——估价行说清楚，别让人以为"酿了就能赚"
-	#   （这一行只有 616px、字号 14：生酒那句**替掉**"价到头了/品得越多"，不追加，免得顶出框）
-	var price_txt := "估价 " + str(GameState.wine_price(w)) + " 两 · 已品 " + str(rated.size()) + "/" + str(SEAT_N)
-	if rated.is_empty():
-		price_txt += "　·　还没品过：现按「生酒」贱卖"
-	else:
-		price_txt += tail
-	_price_lb.text = price_txt
+	_hint_lb.text = limit_txt
+	_price_lb.text = "估价 " + str(GameState.wine_price(w)) + " 两 · 已品 " + str(rated.size()) + "/" + str(SEAT_N)
 	if _anim_phase == 1 and _anim_seat >= 0:
 		_note_lb.text = "正给「" + str(GameState.TASTERS[_anim_seat].get("name", "?")) + "」斟酒……"
 	elif _last_seat >= 0 and _last_say != "":
 		_note_lb.text = "「" + str(GameState.TASTERS[_last_seat].get("name", "?")) + "」：" + _last_say + "　" + _star_text(_last_stars)
 	else:
-		_note_lb.text = "点桌上任意一位，给他斟上一杯"
+		_note_lb.text = "点桌上一位品酒"
 	_prev_btn.disabled = false
 	_next_btn.disabled = false
 	_sell_btn.disabled = false
-	_sell_btn.text = "卖掉这坛（" + str(GameState.wine_price(w)) + " 两）"
-	_brew_btn.text = "酿一坛（" + str(GameState.BREW_COST) + " 两）"
+	_sell_btn.text = "卖 掉"
+	_brew_btn.text = "酿 一 坛"
 	_brew_btn.disabled = GameState.wine_left_today() == 0
-	_msg_lb.text = _msg if _msg != "" else FOOT.replace("｜", "\n")
+	_msg_lb.text = _msg
 
 func _reset_note() -> void:
 	_anim_phase = 0
