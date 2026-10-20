@@ -127,31 +127,31 @@ func _build_records() -> void:
 	list.custom_minimum_size = Vector2(520, 0)
 	list.add_theme_constant_override("separation", 10)
 	scroll.add_child(list)
-	var head1 := _label("最近行踪", 22, UiKit.SEAL)
+	var head1 := _label("最近行踪", 25, UiKit.SEAL)
 	_body.remove_child(head1)
 	list.add_child(head1)
 	if GS.explore_log.is_empty():
-		var empty := _label("最近还没有出门。", 19, UiKit.DIM)
+		var empty := _label("最近还没有出门。", 22, UiKit.DIM)
 		_body.remove_child(empty)
 		list.add_child(empty)
 	else:
 		var n := mini(12, GS.explore_log.size())
 		for i in n:
 			var e := "· " + str(GS.explore_log[GS.explore_log.size() - 1 - i])
-			var lb := _label(e, 19, UiKit.INK)
+			var lb := _label(e, 23, UiKit.INK)
 			lb.custom_minimum_size = Vector2(510, 0)
 			lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 			lb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			_body.remove_child(lb)
 			list.add_child(lb)
 	if not GS.world_history.is_empty():
-		var head2 := _label("旧世界", 22, UiKit.SEAL)
+		var head2 := _label("旧世界", 25, UiKit.SEAL)
 		_body.remove_child(head2)
 		list.add_child(head2)
 		for i in mini(5, GS.world_history.size()):
 			var e2: Dictionary = GS.world_history[GS.world_history.size() - 1 - i]
 			var txt := "第" + str(int(e2.get("week", 1))) + "周 · " + str(e2.get("regions", "山/水/林")) + "\n繁荣 " + str(int(e2.get("prosperity", 0))) + " · " + str(e2.get("title", "无名"))
-			var lb2 := _label(txt, 19, UiKit.INK)
+			var lb2 := _label(txt, 23, UiKit.INK)
 			lb2.custom_minimum_size = Vector2(510, 0)
 			lb2.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 			lb2.size_flags_horizontal = Control.SIZE_EXPAND_FILL

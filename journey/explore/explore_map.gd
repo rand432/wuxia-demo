@@ -20,6 +20,7 @@ const CharacterPanel := preload("res://menu/character_panel.gd")
 const WarehousePanel := preload("res://menu/warehouse_panel.gd")
 const RegionSelectPanel := preload("res://menu/region_select.gd")
 const ItemIcons := preload("res://shared/item_icons.gd")
+const UI_FONT := preload("res://fonts/ink.ttf")   # v249：地图面板也用毛笔字体
 
 const MAP_W := 24
 const MAP_H := 30
@@ -82,6 +83,7 @@ var _nav_drag := false
 var _nav_last := Vector2.ZERO
 var _nav_touches := {}
 var _nav_pinch := 0.0
+var _world_from_nav := false   # 从地图面板开「世界」选区块，取消要回地图而不是回村
 var _toast: Label
 var _back_btn: Button
 var _bag_btn: Button
@@ -93,8 +95,10 @@ var _side_panel: Control
 var _ng_panel: Control
 var _ng_echo_mode := false
 var _ng_final_mode := false
-const EXPLORE_HP_MUL := 1.20
-const EXPLORE_ATK_MUL := 1.10
+const EXPLORE_HP_MUL := 1.50
+const EXPLORE_ATK_MUL := 1.35
+const BOSS_HP_MUL := 1.90
+const BOSS_ATK_MUL := 1.55
 
 var _wuxia_cell := Vector2i(-1, -1)
 var _wuxia_pending := false
@@ -1101,7 +1105,7 @@ func _open_nav_map() -> void:
 		_nav_layer.add_child(_nav_view)
 		var close_b := Button.new()
 		close_b.text = "返 回"
-		close_b.position = Vector2(280, 1080)
+		close_b.position = Vector2(180, 1080)
 		close_b.size = Vector2(160, 52)
 		close_b.add_theme_font_size_override("font_size", 21)
 		close_b.add_theme_color_override("font_color", Color(0.94, 0.90, 0.80))
@@ -1111,6 +1115,33 @@ func _open_nav_map() -> void:
 		close_b.focus_mode = Control.FOCUS_NONE
 		close_b.pressed.connect(_close_nav_map)
 		_nav_layer.add_child(close_b)
+		# v249：地图面板的［世界］——切区块（跟主界面「江湖图」同一张选区域页）
+		var world_b := Button.new()
+		world_b.text = "世 界"
+		world_b.position = Vector2(380, 1080)
+		world_b.size = Vector2(160, 52)
+		world_b.add_theme_font_size_override("font_size", 21)
+		world_b.add_theme_color_override("font_color", Color(0.94, 0.90, 0.80))
+		world_b.add_theme_stylebox_override("normal", _nav_btn_box())
+		world_b.add_theme_stylebox_override("hover", _nav_btn_box())
+		world_b.add_theme_stylebox_override("pressed", _nav_btn_box())
+		world_b.focus_mode = Control.FOCUS_NONE
+		world_b.pressed.connect(_open_world_from_nav)
+		_nav_layer.add_child(world_b)
+		# v252：触屏除双指外，再给一对 +/- 缩放钮（放在图例右侧）
+		for zi in 2:
+			var zb := Button.new()
+			zb.text = "−" if zi == 0 else "+"
+			zb.position = Vector2(566.0 + float(zi) * 54.0, 990.0)
+			zb.size = Vector2(44, 44)
+			zb.add_theme_font_size_override("font_size", 24)
+			zb.add_theme_color_override("font_color", Color(0.94, 0.90, 0.80))
+			zb.add_theme_stylebox_override("normal", _nav_btn_box())
+			zb.add_theme_stylebox_override("hover", _nav_btn_box())
+			zb.add_theme_stylebox_override("pressed", _nav_btn_box())
+			zb.focus_mode = Control.FOCUS_NONE
+			zb.pressed.connect(_nav_zoom_at.bind(0.87 if zi == 0 else 1.15))
+			_nav_layer.add_child(zb)
 	_nav_open = true
 	_nav_zoom = 1.0
 	_nav_off = Vector2.ZERO
@@ -1131,12 +1162,32 @@ func _draw_nav() -> void:
 		return
 	var veil := Color(0.02, 0.02, 0.02, 0.78)
 	_nav_layer.draw_rect(Rect2(0, 0, 720, 1280), veil)
-	_nav_layer.draw_rect(Rect2(30, 130, 660, 1010), Color("#e6dac0"))
-	_nav_layer.draw_rect(Rect2(30, 130, 660, 1010), Color("#3a2a1a"), false, 2.0)
-	_nav_layer.draw_string(ThemeDB.fallback_font, Vector2(0, 190), "地  图", HORIZONTAL_ALIGNMENT_CENTER, 720, 34, Color("#2a241c"))
-	_nav_layer.draw_string(ThemeDB.fallback_font, Vector2(0, 226), str(GameState.REGION_NAMES[GameState.current_region]) + " · 第" + str(GameState.ng_plus + 1) + "周 · " + ["简单", "普通", "困难"][clampi(GameState.world_difficulty - 1, 0, 2)], HORIZONTAL_ALIGNMENT_CENTER, 720, 17, Color(0.22, 0.18, 0.13, 0.7))
-	_nav_layer.draw_string(ThemeDB.fallback_font, Vector2(0, 1038), "拖动地图 · 滚轮 / 双指缩放。", HORIZONTAL_ALIGNMENT_CENTER, 720, 18, Color(0.22, 0.18, 0.13, 0.72))
-	_nav_layer.draw_string(ThemeDB.fallback_font, Vector2(0, 248), "缩放 " + str(snappedf(_nav_zoom, 0.1)) + "×", HORIZONTAL_ALIGNMENT_RIGHT, 610, 16, Color(0.30, 0.25, 0.18, 0.72))
+	_nav_layer.draw_rect(Rect2(30, 130, 660, 1010), Color("#e9dfc7"))
+	# v253：纸面撒一点旧纸斑点，别是一整块平色
+	for si in 70:
+		var sx := 30.0 + float((si * 137) % 660)
+		var sy := 130.0 + float((si * 311) % 1010)
+		_nav_layer.draw_circle(Vector2(sx, sy), 1.2, Color(0.35, 0.28, 0.18, 0.045))
+	# v249：外框改暗金 2px + 内圈 1px 细金，跟纸面弹窗一套
+	_nav_layer.draw_rect(Rect2(30, 130, 660, 1010), Color(0.72, 0.58, 0.22, 0.75), false, 2.0)
+	_nav_layer.draw_rect(Rect2(34, 134, 652, 1002), Color(0.72, 0.58, 0.22, 0.28), false, 1.0)
+	_nav_layer.draw_string(UI_FONT, Vector2(0, 190), "地  图", HORIZONTAL_ALIGNMENT_CENTER, 720, 34, Color("#2a241c"))
+	_nav_layer.draw_string(UI_FONT, Vector2(0, 226), str(GameState.REGION_NAMES[GameState.current_region]) + " · 第" + str(GameState.ng_plus + 1) + "周 · " + ["简单", "普通", "困难"][clampi(GameState.world_difficulty - 1, 0, 2)], HORIZONTAL_ALIGNMENT_CENTER, 720, 17, Color(0.22, 0.18, 0.13, 0.7))
+	_nav_layer.draw_string(UI_FONT, Vector2(0, 1038), "拖动地图 · 滚轮 / 双指缩放。点［世界］可切区块。", HORIZONTAL_ALIGNMENT_CENTER, 720, 18, Color(0.22, 0.18, 0.13, 0.72))
+	_nav_layer.draw_string(UI_FONT, Vector2(0, 248), "缩放 " + str(snappedf(_nav_zoom, 0.1)) + "×", HORIZONTAL_ALIGNMENT_RIGHT, 610, 16, Color(0.30, 0.25, 0.18, 0.72))
+	# 地图视口外的暗金细框
+	_nav_layer.draw_rect(Rect2(82, 248, 556, 694), Color(0.72, 0.58, 0.22, 0.42), false, 1.0)
+	# v250：地图图例——色点含义写在面板上，不用玩家猜
+	var ly := 974.0
+	_nav_layer.draw_circle(Vector2(192, ly), 4.5, Color("#c9a64a"))
+	_nav_layer.draw_string(UI_FONT, Vector2(204, ly + 5.0), "地标", HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color(0.28, 0.23, 0.17, 0.78))
+	_nav_layer.draw_circle(Vector2(292, ly), 4.5, Color("#8a5a2a"))
+	_nav_layer.draw_string(UI_FONT, Vector2(304, ly + 5.0), "宝箱", HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color(0.28, 0.23, 0.17, 0.78))
+	_nav_layer.draw_circle(Vector2(392, ly), 4.0, Color("#b04a3a"))
+	_nav_layer.draw_string(UI_FONT, Vector2(404, ly + 5.0), "敌人", HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color(0.28, 0.23, 0.17, 0.78))
+	_nav_layer.draw_circle(Vector2(492, ly), 5.0, Color("#f4e6c0"))
+	_nav_layer.draw_circle(Vector2(492, ly), 3.0, Color("#8d2f2a"))
+	_nav_layer.draw_string(UI_FONT, Vector2(504, ly + 5.0), "你", HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color(0.28, 0.23, 0.17, 0.78))
 
 func _draw_nav_inner() -> void:
 	if _nav_view == null:
@@ -1150,12 +1201,17 @@ func _draw_nav_inner() -> void:
 	var ox := origin.x
 	var oy := origin.y
 	# 雾底
-	_nav_view.draw_rect(Rect2(0, 0, vw, vh), Color("#12140f"))
+	_nav_view.draw_rect(Rect2(0, 0, vw, vh), Color("#0c0e0a"))
 	for x in MAP_W:
 		for y in MAP_H:
 			var c := Vector2i(x, y)
 			var r := Rect2(ox + x * cell, oy + y * cell, cell - 0.6, cell - 0.6)
 			if not _explored.has(c):
+				# v249：未探索不再是一整块纯黑——铺一层极暗的墨绿格，
+				#   玩家看得出"地图有 24×30 格"，但又看不清地形。
+				# v253：格与格之间给一点极轻的明暗差，免得像 Excel。
+				var sh := 0.070 + float((x * 17 + y * 29) % 7) * 0.0035
+				_nav_view.draw_rect(r, Color(sh, sh + 0.009, sh - 0.004))
 				continue
 			var floor_col := _nav_floor_col()
 			if _obstacles.has(c):
@@ -1180,7 +1236,7 @@ func _draw_nav_inner() -> void:
 	var pp := Vector2(ox + (pc.x + 0.5) * cell, oy + (pc.y + 0.5) * cell)
 	_nav_view.draw_circle(pp, 8.0, Color("#f4e6c0"))
 	_nav_view.draw_circle(pp, 5.0, Color("#8d2f2a"))
-	_nav_view.draw_string(ThemeDB.fallback_font, pp + Vector2(-18, -14), "你", HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color("#2a241c"))
+	_nav_view.draw_string(UI_FONT, pp + Vector2(-18, -14), "你", HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color("#2a241c"))
 	# 图框
 	_nav_view.draw_rect(Rect2(ox, oy, cell * float(MAP_W), cell * float(MAP_H)), Color("#5a4a30"), false, 2.0)
 
@@ -1255,10 +1311,10 @@ func _redraw_nav() -> void:
 
 func _nav_btn_box() -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color("#2a241c")
-	sb.border_color = Color("#8a744a")
-	sb.set_border_width_all(2)
-	sb.set_corner_radius_all(8)
+	sb.bg_color = Color(0.075, 0.066, 0.060, 0.95)
+	sb.border_color = Color(0.72, 0.58, 0.22, 0.55)
+	sb.set_border_width_all(1)
+	sb.set_corner_radius_all(4)
 	return sb
 
 func _nav_floor_col() -> Color:
@@ -1275,6 +1331,13 @@ func _open_region_panel() -> void:
 	_hide_for_side()
 	rp.call("open")
 
+func _open_world_from_nav() -> void:
+	_world_from_nav = true
+	# 打开地图面板时 _hide_for_side 已把 _busy 置真；这里要放行一次，
+	# 否则「世界」按钮会被 _busy 闸门挡掉、点了没反应。
+	_busy = false
+	_open_region_panel()
+
 func _on_map_region_entered(region: int) -> void:
 	GameState.current_region = clampi(region, 0, 4)
 	GameState.deploy_set(_party_ids, _diff, _fates_keep)
@@ -1282,6 +1345,12 @@ func _on_map_region_entered(region: int) -> void:
 	get_tree().reload_current_scene()
 
 func _on_map_closed() -> void:
+	if _world_from_nav:
+		# 从地图面板开的世界页：取消就回地图，不要一脚踢回村
+		_world_from_nav = false
+		_on_side_closed()
+		_hide_for_side()   # 地图还开着：把刚恢复的 HUD 再藏回去
+		return
 	_return_village()
 
 func _quit_to_menu() -> void:
@@ -1659,13 +1728,13 @@ func _spawn_boss() -> void:
 	_boss_node = Node2D.new()
 	_boss_node.position = _cell_pos(_boss_cell.x, _boss_cell.y)
 	var tier := clampi(GameState.world_tier, 1, 5)
-	var hp := int(round(float(280 + tier * 70) * GameState.ng_mul() * EXPLORE_HP_MUL))
+	var hp := int(round(float(280 + tier * 70) * GameState.ng_mul() * BOSS_HP_MUL))
 	if GameState.boss_kills.has(_boss_name):
 		hp = int(hp * 0.9)   # 图鉴弱点：首杀后识破，再战气血 -10%
 	_boss_node.set_meta("boss", true)
 	_boss_node.set_meta("foe_name", _boss_name)
 	_boss_node.set_meta("beaten", false)
-	var foe := {"hp": hp, "atk": maxi(1, int(round(float(14 + tier * 2) * GameState.ng_mul() * EXPLORE_ATK_MUL))), "scale": 1.3}
+	var foe := {"hp": hp, "atk": maxi(1, int(round(float(14 + tier * 2) * GameState.ng_mul() * BOSS_ATK_MUL))), "scale": 1.3}
 	if _boss_name == "雪魈":
 		foe["def"] = 8
 		foe["spd"] = 105
@@ -2526,6 +2595,11 @@ func _reveal_at(pos: Vector2) -> void:
 # ---------- 点击移动 / 接战 ----------
 
 func _unhandled_input(event: InputEvent) -> void:
+	# v251：地图面板开着时，返回键先关地图，不要直接回村
+	if _nav_open:
+		if event.is_action_pressed("ui_cancel"):
+			_close_nav_map()
+		return
 	if _sect_panel != null and _sect_panel.visible:
 		return
 	if _poi_panel != null and _poi_panel.visible:

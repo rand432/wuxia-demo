@@ -38,7 +38,7 @@ func _ready() -> void:
 	var title := UiKit.make_label(panel, Vector2(30, 20), Vector2(220, 46), 34, UiKit.INK)
 	UiKit.set_text(title, "江 湖 关 系")
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	_sub_lb = UiKit.make_label(panel, Vector2(0, 70), Vector2(640, 28), 20, UiKit.DIM)
+	_sub_lb = UiKit.make_label(panel, Vector2(0, 70), Vector2(640, 30), 22, UiKit.DIM)
 	UiKit.set_text(_sub_lb, "货郎 · 山门 · 凶物 · 此方世界")
 	_sub_lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
@@ -46,28 +46,28 @@ func _ready() -> void:
 	_sect_lb = _section("青 岚 山 门", 250)
 	_boss_lb = _section("凶 物", 410)
 	_world_lb = _section("此 方 世 界", 590)
-	_gift_btn = UiKit.make_button(panel, Vector2(40, 758), Vector2(170, 48), "送礼 50两", 19)
+	_gift_btn = UiKit.make_button(panel, Vector2(40, 758), Vector2(170, 48), "送礼 50两", 21)
 	_gift_btn.pressed.connect(_gift)
-	_wash_btn = UiKit.make_button(panel, Vector2(220, 758), Vector2(190, 48), "洗 白", 19)
+	_wash_btn = UiKit.make_button(panel, Vector2(220, 758), Vector2(190, 48), "洗 白", 21)
 	_wash_btn.pressed.connect(_wash)
-	_appease_btn = UiKit.make_button(panel, Vector2(420, 758), Vector2(190, 48), "赔 礼", 19)
+	_appease_btn = UiKit.make_button(panel, Vector2(420, 758), Vector2(190, 48), "赔 礼", 21)
 	_appease_btn.pressed.connect(_appease)
-	_msg_lb = UiKit.make_label(panel, Vector2(40, 810), Vector2(560, 56), 18, Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.72))
+	_msg_lb = UiKit.make_label(panel, Vector2(40, 808), Vector2(560, 58), 20, Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.72))
 	_msg_lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_war_btn = UiKit.make_button(panel, Vector2(500, 20), Vector2(110, 36), "战 报", 18)
+	_war_btn = UiKit.make_button(panel, Vector2(500, 20), Vector2(110, 36), "战 报", 20)
 	_war_btn.pressed.connect(_open_war)
-	_epi_btn = UiKit.make_button(panel, Vector2(380, 20), Vector2(110, 36), "后 记", 18)
+	_epi_btn = UiKit.make_button(panel, Vector2(380, 20), Vector2(110, 36), "后 记", 20)
 	_epi_btn.pressed.connect(_open_epi)
-	_war_table_btn = UiKit.make_button(panel, Vector2(260, 20), Vector2(110, 36), "战 线", 18)
+	_war_table_btn = UiKit.make_button(panel, Vector2(260, 20), Vector2(110, 36), "战 线", 20)
 	_war_table_btn.pressed.connect(_open_war_table)
-	_close_btn = UiKit.make_button(panel, Vector2(220, 878), Vector2(200, 48), "关 闭", 22)
+	_close_btn = UiKit.make_button(panel, Vector2(220, 878), Vector2(200, 48), "关 闭", 24)
 	_close_btn.pressed.connect(close)
 	visible = false
 
 func _section(title: String, y: float) -> Label:
-	var t := UiKit.make_label(_panel_parent(), Vector2(40, y), Vector2(560, 30), 24, UiKit.SEAL)
+	var t := UiKit.make_label(_panel_parent(), Vector2(40, y), Vector2(560, 30), 26, UiKit.SEAL)
 	UiKit.set_text(t, title)
-	var lb := UiKit.make_label(_panel_parent(), Vector2(40, y + 34), Vector2(560, 100), 19, Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.76))
+	var lb := UiKit.make_label(_panel_parent(), Vector2(40, y + 34), Vector2(560, 100), 21, Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.76))
 	lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	return lb
 

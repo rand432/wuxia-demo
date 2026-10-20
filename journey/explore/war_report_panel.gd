@@ -5,7 +5,7 @@ signal closed
 const UiKit := preload("res://shared/ui_kit.gd")
 const GS := preload("res://shared/game_state.gd")
 
-var _list_lb: Label
+var _list_lb: RichTextLabel
 var _sub_lb: Label
 
 func _ready() -> void:
@@ -20,8 +20,29 @@ func _ready() -> void:
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_sub_lb = UiKit.make_label(panel, Vector2(0, 70), Vector2(620, 24), 14, UiKit.DIM)
 	_sub_lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_list_lb = UiKit.make_label(panel, Vector2(40, 112), Vector2(540, 560), 14, Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.82))
+	# v254：战报最多 12 条，条目一长就会顶出面板——放进滚动区，超了能拖
+	var sc := ScrollContainer.new()
+	sc.position = Vector2(40, 112)
+	sc.size = Vector2(540, 560)
+	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	sc.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	UiKit.drag_scroll(sc)
+	UiKit.style_scroll(sc)
+	panel.add_child(sc)
+	_list_lb = RichTextLabel.new()
+	_list_lb.custom_minimum_size = Vector2(526, 0)
+	_list_lb.size = Vector2(526, 560)
+	_list_lb.fit_content = true
+	_list_lb.scroll_active = false
+	_list_lb.bbcode_enabled = false
 	_list_lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_list_lb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_list_lb.add_theme_font_size_override("normal_font_size", 14)
+	_list_lb.add_theme_color_override("default_color", Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.82))
+	var lf := UiKit.font()
+	if lf != null:
+		_list_lb.add_theme_font_override("normal_font", lf)
+	sc.add_child(_list_lb)
 	var back := UiKit.make_button(panel, Vector2(210, 800), Vector2(200, 46), "关 闭", 18)
 	back.pressed.connect(close)
 	visible = false

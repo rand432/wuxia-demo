@@ -227,6 +227,25 @@ static func drag_scroll(sc: ScrollContainer) -> void:
 		return
 	sc.gui_input.connect(_on_drag_scroll.bind(sc))
 
+# v254：纸面长文/长列表的细金滚动条（默认主题那条灰条太出戏）
+static func style_scroll(sc: ScrollContainer) -> void:
+	if sc == null:
+		return
+	var v := sc.get_v_scroll_bar()
+	if v == null:
+		return
+	v.custom_minimum_size.x = 5
+	var track := StyleBoxFlat.new()
+	track.bg_color = Color(0.14, 0.12, 0.10, 0.16)
+	track.set_corner_radius_all(2)
+	var grab := StyleBoxFlat.new()
+	grab.bg_color = Color(0.72, 0.58, 0.22, 0.55)
+	grab.set_corner_radius_all(2)
+	v.add_theme_stylebox_override("scroll", track)
+	v.add_theme_stylebox_override("grabber", grab)
+	v.add_theme_stylebox_override("grabber_highlight", grab)
+	v.add_theme_stylebox_override("grabber_pressed", grab)
+
 static func _on_drag_scroll(ev: InputEvent, sc: ScrollContainer) -> void:
 	if ev is InputEventMouseMotion:
 		var mm := ev as InputEventMouseMotion

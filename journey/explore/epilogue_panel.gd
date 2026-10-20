@@ -6,7 +6,7 @@ const UiKit := preload("res://shared/ui_kit.gd")
 const GS := preload("res://shared/game_state.gd")
 const POIPanel := preload("res://journey/explore/poi_panel.gd")
 
-var _body_lb: Label
+var _body_lb: RichTextLabel
 var _new_btn: Button
 var _back_btn: Button
 var _confirm_panel: Control
@@ -23,8 +23,29 @@ func _ready() -> void:
 	var sub := UiKit.make_label(panel, Vector2(0, 70), Vector2(620, 24), 14, UiKit.DIM)
 	UiKit.set_text(sub, "走过的路，都记在这里")
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_body_lb = UiKit.make_label(panel, Vector2(40, 112), Vector2(540, 700), 15, Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.82))
+	# v254：后记条目会随周目变长——正文放进滚动区，按钮仍在滚动区下方
+	var sc := ScrollContainer.new()
+	sc.position = Vector2(40, 112)
+	sc.size = Vector2(540, 640)
+	sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	sc.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	UiKit.drag_scroll(sc)
+	UiKit.style_scroll(sc)
+	panel.add_child(sc)
+	_body_lb = RichTextLabel.new()
+	_body_lb.custom_minimum_size = Vector2(526, 0)
+	_body_lb.size = Vector2(526, 640)
+	_body_lb.fit_content = true
+	_body_lb.scroll_active = false
+	_body_lb.bbcode_enabled = false
 	_body_lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_body_lb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_body_lb.add_theme_font_size_override("normal_font_size", 15)
+	_body_lb.add_theme_color_override("default_color", Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.82))
+	var bf := UiKit.font()
+	if bf != null:
+		_body_lb.add_theme_font_override("normal_font", bf)
+	sc.add_child(_body_lb)
 	_new_btn = UiKit.make_button(panel, Vector2(210, 760), Vector2(200, 46), "再入江湖", 16)
 	_new_btn.pressed.connect(_open_confirm)
 	_back_btn = UiKit.make_button(panel, Vector2(210, 830), Vector2(200, 46), "关 闭", 18)
