@@ -1059,7 +1059,7 @@ func _refresh_plaques() -> void:
 	_plaques.set_vis("cave", false)
 	_plaques.set_vis("treasure_map", rail_on and GameState.map_found and not GameState.b2_built)
 	_plaques.set_vis("cave_scene", rail_on and GameState.b2_built and not GameState.cave_opened)
-	_plaques.set_vis("craft", rail_on and GameState.cave_opened)
+	_plaques.set_vis("craft", rail_on and (GameState.cave_opened or GameState.first_journey_done))
 	_plaques.set_vis("stele", rail_on)
 	# v211：右栏按"当前可见的格子"重排（隐藏一格，下面的平滑往上顶）
 	_plaques.layout_rail(PlaqueLayer.RAIL_IDS, PlaqueLayer.RAIL_TOP, PlaqueLayer.RAIL_H, PlaqueLayer.RAIL_GAP)
@@ -1835,6 +1835,9 @@ func _apply_layer_transforms() -> void:
 		_plaques.scale = Vector2(z, z)
 		_plaques.set_slide(_sc)          # v98：村里的牌子跟着画卷一起滑
 		_refresh_plaques()
+		# 百工坊是后加的右栏格：老档/早期帧可能停在 vis=false，直接补亮（只限村景页）。
+		if (not _cover_mode) and GameState.first_journey_done:
+			_plaques.force_vis("craft", true)
 	# v98：两页画卷——村景页（画心 _ink_clip）与封面页（_cover_win）一左一右，_sc 是卷轴位置。
 	#   V＝"卷位"（画卷在长卷坐标里的位置）：村景页 1560 · 封面页 2280——装裱层按 V 画包边/木轴/引首。
 	var V := Conf.OPEN_CAM - (Conf.DW - _sc)

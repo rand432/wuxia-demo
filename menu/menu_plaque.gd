@@ -276,6 +276,16 @@ func set_vis(id: String, v: bool) -> void:
 		if hb != null:
 			(hb as Control).visible = v
 
+func force_vis(id: String, v: bool) -> void:
+	var i := find_i(id)
+	if i < 0:
+		return
+	(items[i] as Dictionary)["vis"] = v
+	var hb := get_node_or_null(NodePath("hit_" + id))
+	if hb != null:
+		(hb as Control).visible = v
+	_place_hit(items[i] as Dictionary)
+
 func set_sub(id: String, s: String) -> void:
 	var i := find_i(id)
 	if i < 0:
@@ -325,6 +335,7 @@ func set_ry(id: String, ry: float) -> void:
 	if str(it["kind"]) == "rail":
 		if float(it.get("el", -1.0)) < 0.0:
 			it["cy"] = ry * DH          # 还没入场：直接到位，别让新格子从旧位置飞过来
+			_place_hit(it)              # 命中盒也要立刻跟到新位置（百工坊就是漏了这一下）
 		return
 	it["cy"] = ry * DH
 	_relayout(it)
