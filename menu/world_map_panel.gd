@@ -4,6 +4,7 @@ signal closed
 signal changed
 
 const UiKit := preload("res://shared/ui_kit.gd")
+const Ui := preload("res://menu/menu_theme.gd")   # v245：禁用态暗金
 const GS := preload("res://shared/game_state.gd")
 
 const WORLD_NAMES := ["青岚界", "赤水界", "玄霜界", "黄泉界", "无相界"]
@@ -39,6 +40,15 @@ func _ready() -> void:
 	_hint_lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 
 	_go_btn = UiKit.make_button(panel, Vector2(170, 360), Vector2(280, 56), "展开舆图", 22)
+	if Ui.SKIN == 1:
+		# 禁用态别用主题灰块，改成"墨底暗金"——跟纸面金框一套
+		var dsb := StyleBoxFlat.new()
+		dsb.bg_color = Color(0.075, 0.066, 0.060, 0.88)
+		dsb.set_corner_radius_all(4)
+		dsb.border_color = Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.22)
+		dsb.set_border_width_all(1)
+		_go_btn.add_theme_stylebox_override("disabled", dsb)
+		_go_btn.add_theme_color_override("font_disabled_color", Color(0.72, 0.66, 0.52, 0.75))
 	_go_btn.pressed.connect(_confirm)
 	_msg_lb = UiKit.make_label(panel, Vector2(40, 440), Vector2(540, 54), 14, Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.72))
 	_msg_lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART

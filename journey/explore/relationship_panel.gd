@@ -34,9 +34,10 @@ func _ready() -> void:
 	var veil := UiKit.make_veil(self, Vector2(720, 1280), 0.64)
 	var panel := UiKit.make_paper_panel(veil, Rect2(40, 160, 640, 960))
 	panel.add_theme_stylebox_override("panel", UiKit.paper_box(1.0))
-	var title := UiKit.make_label(panel, Vector2(0, 20), Vector2(640, 46), 34, UiKit.INK)
+	# v244：标题改左对齐——右上「战线/后记/战报」三颗钮原来正压在居中标题上
+	var title := UiKit.make_label(panel, Vector2(30, 20), Vector2(220, 46), 34, UiKit.INK)
 	UiKit.set_text(title, "江 湖 关 系")
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	_sub_lb = UiKit.make_label(panel, Vector2(0, 70), Vector2(640, 28), 20, UiKit.DIM)
 	UiKit.set_text(_sub_lb, "货郎 · 山门 · 凶物 · 此方世界")
 	_sub_lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

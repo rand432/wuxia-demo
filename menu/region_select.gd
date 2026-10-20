@@ -31,10 +31,12 @@ var _hint_lb: Label
 var _buttons: Array = []
 var _canvas
 var _scroll: ScrollContainer
+var _map_font: Font = null
 
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
+	_map_font = UiKit.font()
 	var veil := UiKit.make_veil(self, Vector2(720, 1280), 0.66)
 	var panel := UiKit.make_paper_panel(veil, Rect2(30, 105, 660, 1070))
 	panel.add_theme_stylebox_override("panel", UiKit.paper_box(1.0))
@@ -146,7 +148,7 @@ func _draw_map(c: Control) -> void:
 		_draw_region(c, i)
 	# 罗盘
 	c.draw_circle(Vector2(1010, 90), 40, Color(0.25, 0.20, 0.14, 0.12))
-	c.draw_string(ThemeDB.fallback_font, Vector2(988, 70), "北", HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color("#5a3a20"))
+	c.draw_string(_map_font if _map_font != null else ThemeDB.fallback_font, Vector2(988, 70), "北", HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color("#5a3a20"))
 	c.draw_line(Vector2(1010, 84), Vector2(1010, 112), Color("#5a3a20"), 4.0)
 	c.draw_colored_polygon(PackedVector2Array([Vector2(1010, 72), Vector2(1000, 88), Vector2(1020, 88)]), Color("#5a3a20"))
 
@@ -187,10 +189,11 @@ func _draw_region(c: Control, i: int) -> void:
 		_draw_fog(c, center)
 		return
 	# 名称 / 状态
-	c.draw_string(ThemeDB.fallback_font, center + Vector2(-120, -70), nm, HORIZONTAL_ALIGNMENT_LEFT, 240, 32, Color("#2a241c"))
-	c.draw_string(ThemeDB.fallback_font, center + Vector2(-120, -36), "D" + str(GS.REGION_DIFFS[i]) + " · " + str(GS.REGION_BOSSES[i]), HORIZONTAL_ALIGNMENT_LEFT, 240, 18, Color("#5a4a34"))
+	var mf: Font = _map_font if _map_font != null else ThemeDB.fallback_font
+	c.draw_string(mf, center + Vector2(-120, -70), nm, HORIZONTAL_ALIGNMENT_LEFT, 240, 32, Color("#2a241c"))
+	c.draw_string(mf, center + Vector2(-120, -36), "D" + str(GS.REGION_DIFFS[i]) + " · " + str(GS.REGION_BOSSES[i]), HORIZONTAL_ALIGNMENT_LEFT, 240, 18, Color("#5a4a34"))
 	if not unlocked:
-		c.draw_string(ThemeDB.fallback_font, center + Vector2(-100, 118), "需舆图 ×" + str(GS.region_cost(i)), HORIZONTAL_ALIGNMENT_LEFT, 200, 22, Color("#8d2f2a"))
+		c.draw_string(mf, center + Vector2(-100, 118), "需舆图 ×" + str(GS.region_cost(i)), HORIZONTAL_ALIGNMENT_LEFT, 200, 22, Color("#8d2f2a"))
 	# 地标
 	var lms: Array = GS.landmarks(i)
 	var y := 62.0
@@ -200,14 +203,14 @@ func _draw_region(c: Control, i: int) -> void:
 			continue
 		var p2 := center + Vector2(-130, y)
 		c.draw_circle(p2 + Vector2(8, -6), 5, Color("#8d2f2a"))
-		c.draw_string(ThemeDB.fallback_font, p2 + Vector2(20, 0), str(LANDMARK_NAMES[id]), HORIZONTAL_ALIGNMENT_LEFT, 190, 18, Color("#3a3024"))
+		c.draw_string(_map_font if _map_font != null else ThemeDB.fallback_font, p2 + Vector2(20, 0), str(LANDMARK_NAMES[id]), HORIZONTAL_ALIGNMENT_LEFT, 190, 18, Color("#3a3024"))
 		y += 28.0
 		if y > 130:
 			break
 	# 当前区块
 	if i == GS.current_region:
 		c.draw_arc(center, 186.0, 0, TAU, 64, Color("#8d2f2a"), 5.0)
-		c.draw_string(ThemeDB.fallback_font, center + Vector2(-40, -110), "所 在", HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color("#8d2f2a"))
+		c.draw_string(_map_font if _map_font != null else ThemeDB.fallback_font, center + Vector2(-40, -110), "所 在", HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color("#8d2f2a"))
 
 func _draw_fog(c: Control, center: Vector2) -> void:
 	# 一片厚云：多个同色圆叠起来，地形完全看不见，边缘是软的。
@@ -224,6 +227,10 @@ func _draw_fog(c: Control, center: Vector2) -> void:
 	for k in 5:
 		var ang2 := float(k) * TAU / 5.0 + 0.6
 		c.draw_circle(center + Vector2(cos(ang2), sin(ang2)) * 78.0, 42.0, Color(0.17, 0.18, 0.14, 0.12))
+	# v245：雾区也要看得出"这里有一块地方"，并写清未探索
+	c.draw_arc(center, 152.0, 0.0, TAU, 56, Color(0.72, 0.58, 0.22, 0.32), 2.0)
+	c.draw_string(_map_font if _map_font != null else ThemeDB.fallback_font, center + Vector2(-80, 4),
+		"未 探 索", HORIZONTAL_ALIGNMENT_CENTER, 160, 20, Color(0.78, 0.72, 0.56, 0.88))
 
 func _biome_col(i: int) -> Color:
 	return [Color("#9a9a78"), Color("#7898a0"), Color("#6a8a58"), Color("#8a7a68"), Color("#c9d3d6")][clampi(i, 0, 4)]

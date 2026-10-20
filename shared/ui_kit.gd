@@ -82,9 +82,13 @@ static func style_button(btn: Button) -> void:
 		btn.add_theme_stylebox_override("normal", ink_box(Color(0.094, 0.080, 0.070, 0.94)))
 		btn.add_theme_stylebox_override("hover", ink_box(Color(0.165, 0.133, 0.110, 0.96)))
 		btn.add_theme_stylebox_override("pressed", ink_box(Color(0.055, 0.046, 0.042, 0.98)))
-		btn.add_theme_stylebox_override("disabled", ink_box(Color(0.16, 0.15, 0.14, 0.42)))
+		# v246：禁用态不再用"半透明灰"——压在纸面上会变一块灰砖；
+		#   改成墨底暗金，跟纸面金框一套（所有 make_button 都吃这一口）
+		var dsb := ink_box(Color(0.075, 0.066, 0.060, 0.94))
+		dsb.border_color = Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.18)
+		btn.add_theme_stylebox_override("disabled", dsb)
 		btn.add_theme_color_override("font_color", Color(0.941, 0.914, 0.839))
-		btn.add_theme_color_override("font_disabled_color", Color(0.94, 0.91, 0.84, 0.30))
+		btn.add_theme_color_override("font_disabled_color", Color(0.90, 0.84, 0.68, 0.55))
 		var f0 := font()
 		if f0 != null:
 			btn.add_theme_font_override("font", f0)

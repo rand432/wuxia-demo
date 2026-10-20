@@ -22,13 +22,9 @@ func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	var veil := UiKit.make_veil(self, Vector2(720, 1280), 0.64)
-	var panel := UiKit.make_paper_panel(veil, Rect2(50, 280, 620, 760))
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.93, 0.90, 0.83, 1.0)
-	sb.border_color = Color(0.42, 0.33, 0.20, 0.60)
-	sb.set_border_width_all(2)
-	sb.set_corner_radius_all(4)
-	panel.add_theme_stylebox_override("panel", sb)
+	var panel := UiKit.make_paper_panel(veil, Rect2(50, 280, 620, 700))
+	# v247：原来自己造了一个没有金边的 StyleBox，把 make_paper_panel 的金框盖掉了
+	panel.add_theme_stylebox_override("panel", UiKit.paper_box(1.0))
 	panel.z_index = 200
 	panel.modulate = Color(1, 1, 1, 1)
 	var title := UiKit.make_label(panel, Vector2(0, 20), Vector2(620, 46), 32, UiKit.INK)

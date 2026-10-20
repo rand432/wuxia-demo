@@ -15,7 +15,7 @@ func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	var veil := UiKit.make_veil(self, Vector2(720, 1280), 0.64)
-	var panel := UiKit.make_paper_panel(veil, Rect2(50, 160, 620, 900))
+	var panel := UiKit.make_paper_panel(veil, Rect2(50, 160, 620, 720))
 	panel.add_theme_stylebox_override("panel", UiKit.paper_box(1.0))
 	var title := UiKit.make_label(panel, Vector2(0, 20), Vector2(620, 46), 32, UiKit.INK)
 	UiKit.set_text(title, "势 力 战 线")

@@ -31,6 +31,14 @@ func _ready() -> void:
 	for i in BOSSES.size():
 		var b: Dictionary = BOSSES[i]
 		var y := 90.0 + float(i) * 112.0
+		if i > 0:
+			# v248：六只凶物之间加一道极细金线，免得名字/弱点/典故糊成一片
+			var sep := ColorRect.new()
+			sep.position = Vector2(40, y - 8.0)
+			sep.size = Vector2(540, 1)
+			sep.color = Color(0.72, 0.58, 0.22, 0.22)
+			sep.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			panel.add_child(sep)
 		var nm := UiKit.make_label(panel, Vector2(40, y), Vector2(540, 34), 24, UiKit.SEAL)
 		UiKit.set_text(nm, str(b["name"]))
 		var st := UiKit.make_label(panel, Vector2(40, y + 30), Vector2(540, 20), 15, UiKit.INK)
