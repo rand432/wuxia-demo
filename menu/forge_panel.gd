@@ -38,9 +38,19 @@ var _take_btn: Button
 var _swing_fx: Control
 var _spark_fx: Control
 var _sparks: Array = []
+var _confetti_fx: Control
+var _confetti: Array = []
+var _inspire_intro_t := 0.0
 var _swing_t := 0.0
 var _inspire_bar: ProgressBar
 var _inspire_lb: Label
+var _busy_block: ColorRect
+var _queued_hammer := false
+var _quench_panel: Panel
+var _quench_name_lb: Label
+var _quench_desc_lb: Label
+var _quench_cost_lb: Label
+var _quench_do_btn: Button
 var _blank_btns: Array = []
 var _grade_lbs: Array = []
 var _fx_lb: Label
@@ -102,7 +112,15 @@ func _process(d: float) -> void:
 		return
 	_t += d
 	var ins_it: Dictionary = GameState.forge_item
-	if not ins_it.is_empty() and float(ins_it.get("inspired_left", 0.0)) > 0.0:
+	if _inspire_intro_t > 0.0:
+		_inspire_intro_t = maxf(0.0, _inspire_intro_t - d)
+		if _inspire_bar != null:
+			_inspire_bar.visible = false
+		if _inspire_lb != null:
+			_inspire_lb.visible = false
+		if _inspire_intro_t <= 0.0:
+			refresh()
+	elif not ins_it.is_empty() and float(ins_it.get("inspired_left", 0.0)) > 0.0:
 		ins_it["inspired_left"] = maxf(0.0, float(ins_it.get("inspired_left", 0.0)) - d)
 		if float(ins_it.get("inspired_left", 0.0)) <= 0.0:
 			ins_it["inspired_left"] = 0.0
@@ -114,7 +132,7 @@ func _process(d: float) -> void:
 			_inspire_bar.value = float(ins_it.get("inspired_left", 0.0))
 			if _inspire_lb != null:
 				_inspire_lb.visible = true
-				_inspire_lb.text = "入 神 · " + ("%.1f" % float(ins_it.get("inspired_left", 0.0))) + " 秒"
+				_inspire_lb.text = "入 神 · 限定时间内不会损坏"
 	if _swing_t > 0.0:
 		_swing_t = maxf(0.0, _swing_t - d)
 		if _swing_fx != null:
@@ -129,6 +147,16 @@ func _process(d: float) -> void:
 		_sparks = _sparks.filter(func(x: Dictionary) -> bool: return float(x.get("life", 0.0)) > 0.0)
 		if _spark_fx != null:
 			_spark_fx.queue_redraw()
+	if not _confetti.is_empty():
+		for cf_v in _confetti:
+			var cf: Dictionary = cf_v
+			cf["life"] = float(cf.get("life", 0.0)) - d
+			cf["p"] = (cf.get("p", Vector2.ZERO) as Vector2) + (cf.get("v", Vector2.ZERO) as Vector2) * d
+			cf["v"] = (cf.get("v", Vector2.ZERO) as Vector2) + Vector2(sin(_t * 4.0 + float(cf.get("seed", 0.0))) * 20.0, 26.0) * d
+			cf["rot"] = float(cf.get("rot", 0.0)) + float(cf.get("spin", 0.0)) * d
+		_confetti = _confetti.filter(func(x: Dictionary) -> bool: return float(x.get("life", 0.0)) > 0.0)
+		if _confetti_fx != null:
+			_confetti_fx.queue_redraw()
 	if _shake_t > 0.0:
 		_shake_t -= d
 		var j := Vector2(randf_range(-7.0, 7.0), randf_range(-5.0, 5.0))
@@ -245,19 +273,28 @@ func _build() -> void:
 	_spark_fx.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_spark_fx.draw.connect(_draw_sparks)
 	_panel.add_child(_spark_fx)
+	_confetti_fx = Control.new()
+	_confetti_fx.position = Vector2.ZERO
+	_confetti_fx.size = Vector2(PANEL_W, PANEL_H)
+	_confetti_fx.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_confetti_fx.z_index = 14
+	_confetti_fx.draw.connect(_draw_confetti)
+	_panel.add_child(_confetti_fx)
 	_inspire_lb = _label("", 16, Color(0.72, 0.48, 0.08))
-	_inspire_lb.position = Vector2(160, 424)
-	_inspire_lb.size = Vector2(300, 22)
+	_inspire_lb.position = Vector2(160, 156)
+	_inspire_lb.size = Vector2(300, 20)
 	_inspire_lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_inspire_lb.visible = false
+	_inspire_lb.z_index = 18
 	_panel.add_child(_inspire_lb)
 	_inspire_bar = ProgressBar.new()
-	_inspire_bar.position = Vector2(170, 448)
-	_inspire_bar.size = Vector2(280, 12)
+	_inspire_bar.position = Vector2(170, 178)
+	_inspire_bar.size = Vector2(280, 10)
 	_inspire_bar.show_percentage = false
 	_inspire_bar.max_value = 7
 	_inspire_bar.visible = false
 	_inspire_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_inspire_bar.z_index = 18
 	var ibg := StyleBoxFlat.new()
 	ibg.bg_color = Color(0.20, 0.18, 0.16, 0.22)
 	ibg.set_corner_radius_all(6)
@@ -300,19 +337,30 @@ func _build() -> void:
 	_bag_lb.size = Vector2(580, 22)
 	_panel.add_child(_bag_lb)
 
-	var tab_names := ["武 器 / 装 备", "材料合成", "道 具", "关 闭"]
+	var tab_names := ["武 器 / 装 备", "淬 火", "材料合成", "道 具", "关 闭"]
 	_tab_btns = []
 	for ti in tab_names.size():
-		var tb := UiKit.make_button(_panel, Vector2(20 + ti * 150, 864), Vector2(140, 54), str(tab_names[ti]), 18)
+		var tb := UiKit.make_button(_panel, Vector2(16 + ti * 122, 864), Vector2(116, 54), str(tab_names[ti]), 15)
 		_tab_btns.append(tb)
 	_tab_btns[0].pressed.connect(_open_blank_picker)
-	_tab_btns[1].pressed.connect(func() -> void: _comp_open("synthesis"))
-	_tab_btns[2].pressed.connect(_open_tools)
-	_tab_btns[3].pressed.connect(close)
+	_tab_btns[1].pressed.connect(_open_quench)
+	_tab_btns[2].pressed.connect(func() -> void: _comp_open("synthesis"))
+	_tab_btns[3].pressed.connect(_open_tools)
+	_tab_btns[4].pressed.connect(close)
 	_build_compendium()
 	_build_bag()
 	_build_blank_picker()
 	_build_tools()
+	_build_quench()
+	_busy_block = ColorRect.new()
+	_busy_block.position = Vector2.ZERO
+	_busy_block.size = Vector2(PANEL_W, PANEL_H)
+	_busy_block.color = Color(0, 0, 0, 0)
+	_busy_block.mouse_filter = Control.MOUSE_FILTER_STOP
+	_busy_block.z_index = 60
+	_busy_block.visible = false
+	_busy_block.gui_input.connect(_on_busy_input)
+	_panel.add_child(_busy_block)
 
 func _build_compendium() -> void:
 	_comp_dim = ColorRect.new()
@@ -547,10 +595,11 @@ func _show_pick(mode: String) -> void:
 		var bid := str(b.get("id", ""))
 		var nm2 := str(b.get("name", bid))
 		var qn := ForgeData.quality_name(int(b.get("quality", 0)))
-		var can := bid == "jianpei" and GameState.material_count("jianpei") > 0 and not busy
-		var txt2 := nm2 + (" ×" + str(GameState.material_count("jianpei")) if bid == "jianpei" else "") + "\n" + qn
+		var own := GameState.material_count(bid) > 0
+		var can := own and not busy
+		var txt2 := nm2 + (" ×" + str(GameState.material_count(bid)) if own else "") + "\n" + qn
 		var pb2 := _pick_card(ItemIcons.for_pool("weapon", str(b.get("kind", "sword")), bid), txt2, can, _pick_blank.bind(bid))
-		pb2.tooltip_text = ("点击开炉" if bid == "jianpei" else "去材料合成")
+		pb2.tooltip_text = ("点击开炉" if own else "去材料合成")
 
 func _retrieve_weapon(sid: String) -> void:
 	if not (GameState.forge_item as Dictionary).is_empty():
@@ -572,7 +621,8 @@ func _retrieve_weapon(sid: String) -> void:
 	GameState.vault_items[sid] = maxi(0, GameState.vault_item_count(sid) - 1)
 	GameState.forge_item = rec
 	GameState.forge_item["finished"] = true
-	_hit_busy = false
+	_queued_hammer = false
+	_set_hit_busy(false)
 	_blank_panel.visible = false
 	GameState.save_game()
 	refresh()
@@ -598,6 +648,38 @@ func _play_hammer_sfx() -> void:
 	Audio.sfx("hit_heavy", -6.0, randf_range(0.76, 0.86))
 	Audio.sfx("wood_down", -10.0, randf_range(0.68, 0.76))
 	_spawn_sparks()
+
+func _start_inspire_celebration() -> void:
+	_inspire_intro_t = 1.0
+	_confetti.clear()
+	var cols := [Color("#d84a3a"), Color("#e8b23a"), Color("#4a9a62"), Color("#4a7ab8"), Color("#c46a9a"), Color("#f0e0b0")]
+	for i in 58:
+		var c: Color = cols[randi() % cols.size()]
+		_confetti.append({
+			"p": Vector2(randf_range(0.0, PANEL_W), randf_range(-80.0, 260.0)),
+			"v": Vector2(randf_range(-55.0, 55.0), randf_range(90.0, 210.0)),
+			"rot": randf_range(0.0, TAU),
+			"spin": randf_range(-5.0, 5.0),
+			"w": randf_range(7.0, 15.0),
+			"h": randf_range(3.0, 7.0),
+			"life": randf_range(1.1, 1.8),
+			"seed": randf_range(0.0, 10.0),
+			"col": c,
+		})
+	if _confetti_fx != null:
+		_confetti_fx.queue_redraw()
+
+func _draw_confetti() -> void:
+	if _confetti_fx == null:
+		return
+	for cf_v in _confetti:
+		var cf: Dictionary = cf_v
+		var p: Vector2 = cf.get("p", Vector2.ZERO)
+		var a := clampf(float(cf.get("life", 0.0)) / 1.8, 0.0, 1.0)
+		var col: Color = cf.get("col", Color.WHITE)
+		_confetti_fx.draw_set_transform(p, float(cf.get("rot", 0.0)), Vector2.ONE)
+		_confetti_fx.draw_rect(Rect2(Vector2(-float(cf.get("w", 8.0)) * 0.5, -float(cf.get("h", 4.0)) * 0.5), Vector2(float(cf.get("w", 8.0)), float(cf.get("h", 4.0)))), Color(col.r, col.g, col.b, a))
+		_confetti_fx.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 func _spawn_sparks() -> void:
 	_sparks.clear()
@@ -728,6 +810,7 @@ func _open_blank(id: String) -> void:
 
 func _hammer() -> void:
 	if _hit_busy:
+		_queued_hammer = true
 		return
 	var it: Dictionary = GameState.forge_item
 	if it.is_empty():
@@ -748,58 +831,128 @@ func _hammer() -> void:
 			_push_log("首锤定型要 " + str(fee) + " 两——银两不够。")
 			return
 		GameState.add_coin("silver", -fee)
-	if GameState.material_count("forge_stone") < stone_cost:
-		_push_log("锻造石不够——这一锤要 " + str(stone_cost) + " 块。")
-		return
-	GameState.add_material("forge_stone", -stone_cost)
+	var free_hit := bool(it.get("free_hammer", false))
+	if free_hit:
+		it.erase("free_hammer")
+	else:
+		if GameState.material_count("forge_stone") < stone_cost:
+			_push_log("锻造石不够——这一锤要 " + str(stone_cost) + " 块。")
+			return
+		GameState.add_material("forge_stone", -stone_cost)
 	if _swing_fx != null:
 		_swing_t = 1.0
 		_swing_fx.visible = true
 		_swing_fx.queue_redraw()
 	_play_hammer_sfx()
+	_set_hit_busy(true)
 	if str(it.get("blank_class", "")) == "generic" and not bool(it.get("generic_rolled", false)):
 		ForgeData.randomize_generic(it)
 		it["generic_rolled"] = true
+		if str(it.get("quench_trait", "")).begins_with("type_"):
+			it.erase("quench_trait")
 	var old_st := ForgeData.item_stats(it)
 	if first:
 		it["craft_grade"] = 2
 	var outcome := _roll(it)
+	it.erase("trait_next_success")
+	it.erase("trait_next_guard")
+	it.erase("trait_next_great")
+	# 第一锤不碎：保证能定型。
+	if first and outcome == 4:
+		outcome = 2
 	if outcome == 4 and bool(it.get("guard_break", false)):
 		outcome = 2
 		it.erase("guard_break")
 	it.erase("boost_next")
-	# 第一锤不碎：保证能定型。
-	if first and outcome == 4:
+	var mingdao_saved := false
+	var mingdao_left := 0
+	var guard_name := ""
+	var qt_id := str(it.get("quench_trait", ""))
+	if outcome == 4 and (qt_id == "mingdao" or qt_id == "xiren"):
+		var max_c := 3 if qt_id == "mingdao" else 1
+		var md := clampi(int(it.get("mingdao_charges", max_c)), 0, max_c)
+		if md > 0:
+			outcome = 2
+			mingdao_left = md - 1
+			it["mingdao_charges"] = mingdao_left
+			it["cracks"] = 0
+			it["damage_bias"] = 0
+			mingdao_saved = true
+			guard_name = str(ForgeData.quench_trait(qt_id).get("name", "名刀"))
+			if mingdao_left <= 0:
+				it.erase("quench_trait")
+				it.erase("mingdao_charges")
+	var huihuo_saved := false
+	if outcome == 3 and bool(it.get("huihuo_ready", false)):
 		outcome = 2
+		it.erase("huihuo_ready")
+		huihuo_saved = true
 	it["enhance"] = mini(20, int(it.get("enhance", 0)) + 1)
 	it["finished"] = true
 	var text := ""
+	if mingdao_saved:
+		text += "｜" + guard_name + "护主（余 " + str(mingdao_left) + " 次）"
+	if huihuo_saved:
+		text += "｜回火：损伤转维持"
 	if outcome == 4:
 		_play_hit_fx(0, old_st, old_st)
 		GameState.forge_discard(str(it.get("sid", "")))
 		GameState.forge_item = {}
 		_push_log("破坏——兵刃碎了")
+		_queued_hammer = false
 		GameState.save_game()
 		await get_tree().create_timer(1.02).timeout
-		_hit_busy = false
-		refresh()
+		_finish_hit_anim()
 		return
 	match outcome:
 		0:
 			it["craft_grade"] = mini(4, int(it.get("craft_grade", 2)) + 2)
 			it["lucky_great"] = int(it.get("lucky_great", 0)) + 1
-			text = "大成功！属性大增"
+			text += "大成功！属性大增"
+			if str(it.get("quench_trait", "")) == "xifeng":
+				it["cracks"] = 0
+				it["damage_bias"] = 0
+				text += "｜洗锋：破坏累积清空"
+			elif str(it.get("quench_trait", "")) == "yuwei":
+				it["trait_next_guard"] = true
+				text += "｜余威：下一锤更稳"
+			elif str(it.get("quench_trait", "")) == "jiehuo":
+				it["free_hammer"] = true
+				text += "｜借火：下一锤免石"
 		1:
 			it["craft_grade"] = mini(4, int(it.get("craft_grade", 2)) + 1)
 			it["lucky_success"] = int(it.get("lucky_success", 0)) + 1
-			text = "成功——属性提升"
+			text += "成功——属性提升"
+			if str(it.get("quench_trait", "")) == "huihuo":
+				it["huihuo_ready"] = true
+				text += "｜回火已备"
+			elif str(it.get("quench_trait", "")) == "xuhuo":
+				GameState.add_material("forge_stone", 1)
+				text += "｜续火：返 1 石"
 		2:
-			text = "维持——属性不变"
+			text += "维持——属性不变"
+			if str(it.get("quench_trait", "")) == "jieshi":
+				it["trait_next_success"] = true
+				text += "｜借势：下一锤成功提高"
+			elif str(it.get("quench_trait", "")) == "shouzhuo":
+				GameState.add_material("forge_stone", 1)
+				text += "｜守拙：返 1 石"
+			elif str(it.get("quench_trait", "")) == "dieren":
+				it["dieren_stack"] = mini(10, int(it.get("dieren_stack", 0)) + 1)
+				text += "｜叠韧：破坏 -1%"
 		3:
 			it["craft_grade"] = maxi(0, int(it.get("craft_grade", 2)) - 1)
-			it["cracks"] = int(it.get("cracks", 0)) + 1
-			it["damage_bias"] = int(it.get("damage_bias", 0)) + 1
-			text = "损伤——属性下降，破坏率上升"
+			if str(it.get("quench_trait", "")) == "chengshang":
+				text += "（承伤：未增裂纹）"
+			else:
+				it["cracks"] = int(it.get("cracks", 0)) + 1
+				it["damage_bias"] = int(it.get("damage_bias", 0)) + 1
+			if str(it.get("quench_trait", "")) == "jianren":
+				it["jianren_stack"] = int(it.get("jianren_stack", 0)) + 1
+			elif str(it.get("quench_trait", "")) == "nifeng":
+				it["trait_next_great"] = true
+				text += "｜逆锋：下一锤大成功提高"
+			text += "损伤——属性下降，破坏率上升"
 	if float(it.get("inspired_left", 0.0)) > 0.0:
 		it["inspired_hits"] = int(it.get("inspired_hits", 0)) + 1
 		if int(it.get("inspired_hits", 0)) >= 6:
@@ -810,7 +963,11 @@ func _hammer() -> void:
 		it["round_inspired"] = true
 		it["inspired_left"] = 7.0
 		it["inspired_hits"] = 0
-		text += "｜入神！7 秒内最多 6 锤不碎"
+		if str(it.get("quench_trait", "")) == "dingshen":
+			it["enhance"] = mini(20, int(it.get("enhance", 0)) + 1)
+			text += "｜定神：强化 +1"
+		_start_inspire_celebration()
+		text += "｜入神——限定时间内不会损坏"
 	if outcome == 0:
 		var affs: Array = it.get("affixes", [])
 		if affs.size() < 2 and randf() < 0.30:
@@ -829,8 +986,7 @@ func _hammer() -> void:
 	_push_log(text)
 	GameState.save_game()
 	await get_tree().create_timer(1.02).timeout
-	_hit_busy = false
-	refresh()
+	_finish_hit_anim()
 
 func _roll(it: Dictionary) -> int:
 	var b: Dictionary = ForgeData.blank(str(it.get("blank", "")))
@@ -861,9 +1017,24 @@ func _roll(it: Dictionary) -> int:
 	p[4] += extra_break
 	p[3] += extra_dmg
 	p[1] = maxf(0.0, float(p[1]) - extra_break - extra_dmg)
-	# 特殊胚「天生不折」：破坏率永远 0
-	if str(it.get("rule", "")) == "no_break":
-		p[4] = 0.0
+	if str(it.get("quench_trait", "")) == "wending":
+		p[2] = float(p[2]) + 20.0
+	elif str(it.get("quench_trait", "")) == "fengli":
+		p[1] = float(p[1]) + 10.0
+	elif str(it.get("quench_trait", "")) == "fuyuan":
+		p[0] = float(p[0]) + 5.0
+	elif str(it.get("quench_trait", "")) == "hufeng":
+		p[4] = maxf(0.0, float(p[4]) - 3.0)
+	if str(it.get("quench_trait", "")) == "jianren":
+		p[4] = maxf(0.0, float(p[4]) - float(int(it.get("jianren_stack", 0))) * 2.0)
+	if bool(it.get("trait_next_success", false)):
+		p[1] = float(p[1]) + 15.0
+	if bool(it.get("trait_next_guard", false)):
+		p[4] = maxf(0.0, float(p[4]) - 10.0)
+	if bool(it.get("trait_next_great", false)):
+		p[0] = float(p[0]) + 10.0
+	if str(it.get("quench_trait", "")) == "dieren":
+		p[4] = maxf(0.0, float(p[4]) - float(int(it.get("dieren_stack", 0))))
 	if float(it.get("inspired_left", 0.0)) > 0.0:
 		p[4] = 0.0
 		p[0] += 8.0
@@ -982,6 +1153,116 @@ func _bag_next() -> void:
 		return
 	_bag_idx = (_bag_idx + 1) % list.size()
 	_bag_refresh()
+
+func _build_quench() -> void:
+	_quench_panel = Panel.new()
+	_quench_panel.position = Vector2(50, 250)
+	_quench_panel.size = Vector2(540, 430)
+	_quench_panel.z_index = 22
+	_quench_panel.visible = false
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.958, 0.938, 0.892, 1.0)
+	sb.set_corner_radius_all(6)
+	sb.border_color = Color(0.42, 0.33, 0.20, 0.60)
+	sb.set_border_width_all(2)
+	_quench_panel.add_theme_stylebox_override("panel", sb)
+	_panel.add_child(_quench_panel)
+	var t := _label("淬 火", 28, INK)
+	t.position = Vector2(24, 18)
+	t.size = Vector2(260, 36)
+	_quench_panel.add_child(t)
+	var tip := _label("成器前可反复淬火，刷新特性；越淬越贵", 15, Color(INK.r, INK.g, INK.b, 0.58))
+	tip.position = Vector2(24, 56)
+	tip.size = Vector2(490, 24)
+	_quench_panel.add_child(tip)
+	_quench_name_lb = _label("", 26, SEAL)
+	_quench_name_lb.position = Vector2(24, 104)
+	_quench_name_lb.size = Vector2(490, 36)
+	_quench_panel.add_child(_quench_name_lb)
+	_quench_desc_lb = _label("", 18, Color(INK.r, INK.g, INK.b, 0.78))
+	_quench_desc_lb.position = Vector2(24, 148)
+	_quench_desc_lb.size = Vector2(490, 58)
+	_quench_desc_lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_quench_panel.add_child(_quench_desc_lb)
+	_quench_cost_lb = _label("", 18, Color(0.62, 0.47, 0.16))
+	_quench_cost_lb.position = Vector2(24, 220)
+	_quench_cost_lb.size = Vector2(490, 30)
+	_quench_panel.add_child(_quench_cost_lb)
+	_quench_do_btn = UiKit.make_button(_quench_panel, Vector2(24, 276), Vector2(240, 54), "淬 火", 22)
+	_quench_do_btn.pressed.connect(_do_quench)
+	var back := UiKit.make_button(_quench_panel, Vector2(292, 276), Vector2(220, 54), "返 回", 22)
+	back.pressed.connect(func() -> void: _quench_panel.visible = false)
+
+func _open_quench() -> void:
+	if _blank_panel != null:
+		_blank_panel.visible = false
+	if _comp_panel != null:
+		_comp_panel.visible = false
+	if _bag_panel != null:
+		_bag_panel.visible = false
+	if _tool_panel != null:
+		_tool_panel.visible = false
+	_quench_panel.visible = true
+	_quench_refresh()
+
+func _quench_refresh() -> void:
+	if _quench_panel == null or not _quench_panel.visible:
+		return
+	var it: Dictionary = GameState.forge_item
+	if it.is_empty():
+		_quench_name_lb.text = "砧上无胚"
+		_quench_desc_lb.text = "先选一块胚子上砧，再淬火。"
+		_quench_cost_lb.text = ""
+		_quench_do_btn.disabled = true
+		return
+	if int(it.get("craft_grade", -1)) >= 0:
+		_quench_name_lb.text = ForgeData.item_name(it)
+		_quench_desc_lb.text = "已经成器定型，不能再淬火。"
+		_quench_cost_lb.text = "当前特性：" + str(ForgeData.quench_trait(str(it.get("quench_trait", ""))).get("name", "无"))
+		_quench_do_btn.disabled = true
+		return
+	var tid := str(it.get("quench_trait", ""))
+	var st := ForgeData.quench_trait(tid)
+	_quench_name_lb.text = "当前特性：" + (str(st.get("name", "无")) if not st.is_empty() else "无")
+	_quench_desc_lb.text = str(st.get("desc", "还没有淬出特性。"))
+	var n := int(it.get("quench_count", 0))
+	var cost := ForgeData.quench_cost(n)
+	_quench_cost_lb.text = "下一次淬火：" + str(cost) + " 两（已淬 " + str(n) + " 次）"
+	_quench_do_btn.text = "淬 火（" + str(cost) + " 两）"
+	_quench_do_btn.disabled = GameState.coin("silver") < cost
+
+func _do_quench() -> void:
+	var it: Dictionary = GameState.forge_item
+	if it.is_empty() or int(it.get("craft_grade", -1)) >= 0:
+		return
+	var n := int(it.get("quench_count", 0))
+	var cost := ForgeData.quench_cost(n)
+	if GameState.coin("silver") < cost:
+		_push_log("淬火要 " + str(cost) + " 两——银两不够。")
+		return
+	GameState.add_coin("silver", -cost)
+	it["quench_count"] = n + 1
+	it["quench_trait"] = ForgeData.roll_quench_trait()
+	it["jianren_stack"] = 0
+	it.erase("huihuo_ready")
+	it.erase("trait_next_success")
+	it.erase("trait_next_guard")
+	it.erase("trait_next_great")
+	it.erase("free_hammer")
+	it.erase("dieren_stack")
+	if str(it.get("quench_trait", "")) == "mingdao":
+		it["mingdao_charges"] = 3
+	elif str(it.get("quench_trait", "")) == "xiren":
+		it["mingdao_charges"] = 1
+	else:
+		it.erase("mingdao_charges")
+	GameState.forge_item = it
+	GameState.save_game()
+	var st := ForgeData.quench_trait(str(it["quench_trait"]))
+	_push_log("淬火：" + str(st.get("name", "?")) + "（花 " + str(cost) + " 两）")
+	Audio.sfx("wood_down", -11.0, 1.4)
+	_quench_refresh()
+	refresh()
 
 func _build_tools() -> void:
 	_tool_panel = Panel.new()
@@ -1424,8 +1705,38 @@ func _comp_refresh() -> void:
 	_comp_make_btn.disabled = not can_make or not (GameState.forge_item as Dictionary).is_empty()
 	_comp_make_btn.text = "照图鉴造胚（" + cost_txt + "）"
 
+func _set_hit_busy(v: bool) -> void:
+	_hit_busy = v
+	if _busy_block != null:
+		_busy_block.visible = v
+	if _take_btn != null:
+		_take_btn.disabled = v
+	if _hammer_btn != null and v:
+		_hammer_btn.disabled = true
+
+func _on_busy_input(event: InputEvent) -> void:
+	var pressed := false
+	if event is InputEventMouseButton:
+		var mb := event as InputEventMouseButton
+		pressed = mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT
+	elif event is InputEventScreenTouch:
+		pressed = (event as InputEventScreenTouch).pressed
+	if not pressed:
+		return
+	var gp := get_global_mouse_position()
+	if _hammer_btn != null and _hammer_btn.get_global_rect().has_point(gp):
+		_queued_hammer = true
+		accept_event()
+
+func _finish_hit_anim() -> void:
+	_set_hit_busy(false)
+	refresh()
+	if _queued_hammer:
+		_queued_hammer = false
+		call_deferred("_hammer")
+
 func _play_hit_fx(outcome: int, old_st: Dictionary, new_st: Dictionary) -> void:
-	_hit_busy = true
+	_set_hit_busy(true)
 	var gc := ForgeData.outcome_col(outcome)
 	_fx_lb.text = ForgeData.outcome_name(outcome) + "！"
 	_fx_lb.add_theme_color_override("font_color", gc)
@@ -1492,7 +1803,8 @@ func _detach() -> void:
 	var nm := ForgeData.item_name(it)
 	_register_anvil(it)
 	GameState.forge_item = {}
-	_hit_busy = false
+	_queued_hammer = false
+	_set_hit_busy(false)
 	_push_log("卸下：" + nm + "（在仓库里，可装备）")
 	GameState.save_game()
 	refresh()
@@ -1512,7 +1824,7 @@ func _auto_collect(it: Dictionary) -> void:
 	if GameState.forge_bag.size() > 40:
 		GameState.forge_bag.pop_front()
 	GameState.forge_item = {}
-	_hit_busy = false
+	_set_hit_busy(false)
 	_push_log("成器入成品库：" + nm)
 	GameState.save_game()
 	refresh()
@@ -1533,7 +1845,7 @@ func _take() -> void:
 	if GameState.forge_bag.size() > 40:
 		GameState.forge_bag.pop_front()
 	GameState.forge_item = {}
-	_hit_busy = false
+	_set_hit_busy(false)
 	_push_log("收下：" + nm + "（已入仓库，角色面板可装备）")
 	GameState.save_game()
 	refresh()
@@ -1574,11 +1886,22 @@ func refresh() -> void:
 		if _inspire_lb != null:
 			_inspire_lb.visible = false
 	else:
-		_item_lb.text = ForgeData.item_name(it)
+		if int(it.get("craft_grade", -1)) < 0:
+			var bb: Dictionary = ForgeData.blank(str(it.get("blank", "")))
+			_item_lb.text = str(bb.get("name", "胚子"))
+		else:
+			_item_lb.text = ForgeData.item_name(it)
 		var st: Dictionary = ForgeData.item_stats(it)
 		var extra_txt := ""
-		if str(it.get("rule", "")) == "no_break":
-			extra_txt += " · 天生不折"
+		var qt := ForgeData.quench_trait(str(it.get("quench_trait", "")))
+		if not qt.is_empty():
+			if str(qt.get("id", "")) == "mingdao" or str(qt.get("id", "")) == "xiren":
+				var ch := int(it.get("mingdao_charges", 3 if str(qt.get("id", "")) == "mingdao" else 1))
+				extra_txt += " · " + str(qt.get("name", "")) + "(" + str(ch) + ")"
+			elif str(qt.get("id", "")) == "dieren":
+				extra_txt += " · 叠韧(" + str(int(it.get("dieren_stack", 0))) + ")"
+			else:
+				extra_txt += " · " + str(qt.get("name", ""))
 		if st.has("atk"):
 			_stat_lb.text = "攻 " + str(int(st.get("atk", 0))) + " · 伤 " + str(int(st.get("dmg", 0))) + " · 品质 " + ForgeData.quality_name(int(it.get("quality", 0))) + extra_txt
 		else:
@@ -1592,19 +1915,22 @@ func refresh() -> void:
 			_hammer_btn.text = "锤 击 中…"
 		elif first_hammer:
 			_hammer_btn.text = "首 锤（" + str(silver_need) + "两 · 石" + str(sc) + "）"
+		elif bool(it.get("free_hammer", false)):
+			_hammer_btn.text = "锤 一 下（免 石）"
 		else:
 			_hammer_btn.text = "锤 一 下（石 " + str(sc) + "）"
 		if _take_btn != null:
 			_take_btn.visible = true
 			_take_btn.disabled = _hit_busy
 		var ins := float(it.get("inspired_left", 0.0))
+		var intro := _inspire_intro_t > 0.0
 		if _inspire_bar != null:
-			_inspire_bar.visible = ins > 0.0
+			_inspire_bar.visible = ins > 0.0 and not intro
 			_inspire_bar.max_value = 7
 			_inspire_bar.value = ins
 		if _inspire_lb != null:
-			_inspire_lb.visible = ins > 0.0
-			_inspire_lb.text = "入 神 · " + ("%.1f" % ins) + " 秒"
+			_inspire_lb.visible = ins > 0.0 and not intro
+			_inspire_lb.text = "入 神 · 限定时间内不会损坏"
 	_bag_lb.text = "成品库：" + str(GameState.forge_bag.size()) + " 件"
 	if _anvil != null:
 		_anvil.queue_redraw()
@@ -1626,6 +1952,7 @@ func open() -> void:
 func close() -> void:
 	if not visible:
 		return
+	_queued_hammer = false
 	if _tool_panel != null:
 		_tool_panel.visible = false
 	UiKit.hide_panel(self)

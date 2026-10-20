@@ -2125,7 +2125,7 @@ func _unhandled_input(ev: InputEvent) -> void:
 		_boot_journey()
 		return
 	if ke.keycode == KEY_Z:
-		GameState.add_material("jianpei", 3)
+		GameState.add_material("common", 3)
 		GameState.add_material("forge_stone", 30)
 		GameState.add_material("iron_sand", 20)
 		GameState.add_material("bone_coal", 10)

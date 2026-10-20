@@ -21,59 +21,31 @@ const Q_BASE := [
 
 # 胚子：probs = [大成功, 成功, 维持, 损伤, 破坏]
 const BLANKS := [
-	{"id": "jianpei", "name": "入门剑胚", "weapon": "青锋剑", "kind": "sword", "blank_class": "specific",
-		"quality": 0, "cap": 2, "atk": 18, "dmg": 2, "open": 0, "need": "jianpei",
-		"probs": [15, 55, 20, 8, 2], "trait": "入门"},
-	{"id": "qingfeng", "name": "凡品剑胚", "weapon": "青锋剑", "kind": "sword", "blank_class": "specific",
-		"quality": 0, "cap": 2, "atk": 15, "dmg": 2, "open": 10,
-		"probs": [8, 45, 25, 17, 5], "trait": "稳"},
-	{"id": "zhujian", "name": "凡品竹剑胚", "weapon": "竹剑", "kind": "sword", "blank_class": "specific",
-		"quality": 0, "cap": 2, "atk": 12, "dmg": 1, "open": 10,
-		"probs": [3, 35, 40, 17, 5], "trait": "便宜"},
-	{"id": "xuantie", "name": "中品刀胚", "weapon": "玄铁刀", "kind": "dual", "blank_class": "specific",
-		"quality": 1, "cap": 3, "atk": 24, "dmg": 3, "open": 20,
-		"probs": [15, 30, 18, 22, 15], "trait": "赌"},
-	{"id": "shangpin", "name": "上品剑胚", "weapon": "上品青锋剑", "kind": "sword", "blank_class": "specific",
-		"quality": 2, "cap": 4, "atk": 34, "dmg": 4, "open": 30,
-		"probs": [10, 42, 24, 18, 6], "trait": "上品", "rule": "no_break"},
-	{"id": "bicheng", "name": "特殊·必成剑胚", "weapon": "必成剑", "kind": "sword", "blank_class": "special",
-		"quality": 0, "cap": 2, "atk": 16, "dmg": 2, "open": 20,
-		"probs": [30, 70, 0, 0, 0], "trait": "必成", "rule": "always_success"},
-	{"id": "sword_ji", "name": "极品剑胚", "weapon": "极品青锋", "kind": "sword", "blank_class": "specific",
-		"quality": 3, "cap": 4, "atk": 40, "dmg": 4, "open": 0,
-		"probs": [12, 42, 22, 18, 6], "trait": "极品"},
-	{"id": "sword_jue", "name": "绝品剑胚", "weapon": "绝品青锋", "kind": "sword", "blank_class": "specific",
-		"quality": 4, "cap": 4, "atk": 50, "dmg": 5, "open": 0,
-		"probs": [14, 42, 20, 18, 6], "trait": "绝品"},
-	# 通用胚：第一锤随机定型成兵器/装备。
+	{"id": "common", "name": "普通胚子", "weapon": "待定", "kind": "generic", "pool": "weapon",
+		"quality": 0, "cap": 2, "atk": 0, "dmg": 0, "open": 0, "need": "common", "blank_class": "generic",
+		"probs": [5, 35, 35, 20, 5], "trait": "普通"},
 	{"id": "gen_fan", "name": "凡品胚子", "weapon": "待定", "kind": "generic", "pool": "weapon",
 		"quality": 0, "cap": 2, "atk": 0, "dmg": 0, "open": 0, "blank_class": "generic",
-		"probs": [8, 42, 28, 17, 5], "trait": "随机定型"},
+		"probs": [8, 42, 28, 17, 5], "trait": "凡品"},
 	{"id": "gen_zhong", "name": "中品胚子", "weapon": "待定", "kind": "generic", "pool": "weapon",
 		"quality": 1, "cap": 3, "atk": 0, "dmg": 0, "open": 0, "blank_class": "generic",
-		"probs": [10, 40, 26, 18, 6], "trait": "随机定型"},
+		"probs": [10, 40, 26, 18, 6], "trait": "中品"},
 	{"id": "gen_shang", "name": "上品胚子", "weapon": "待定", "kind": "generic", "pool": "weapon",
 		"quality": 2, "cap": 4, "atk": 0, "dmg": 0, "open": 0, "blank_class": "generic",
-		"probs": [10, 42, 24, 18, 6], "trait": "随机定型"},
+		"probs": [10, 42, 24, 18, 6], "trait": "上品"},
 	{"id": "gen_ji", "name": "极品胚子", "weapon": "待定", "kind": "generic", "pool": "weapon",
 		"quality": 3, "cap": 4, "atk": 0, "dmg": 0, "open": 0, "blank_class": "generic",
-		"probs": [12, 42, 22, 18, 6], "trait": "随机定型"},
+		"probs": [12, 42, 22, 18, 6], "trait": "极品"},
 	{"id": "gen_jue", "name": "绝品胚子", "weapon": "待定", "kind": "generic", "pool": "weapon",
 		"quality": 4, "cap": 4, "atk": 0, "dmg": 0, "open": 0, "blank_class": "generic",
-		"probs": [14, 42, 20, 18, 6], "trait": "随机定型"},
-	# 装备胚：材料合成后直接上砧。
-	{"id": "armor_bu", "name": "凡品甲胚", "weapon": "青布甲", "kind": "armor", "pool": "armor", "blank_class": "specific",
-		"quality": 0, "cap": 2, "atk": 0, "dmg": 0, "def": 4, "hp": 30, "open": 0,
-		"probs": [8, 42, 28, 17, 5], "trait": "护身"},
-	{"id": "helm_mu", "name": "凡品冠胚", "weapon": "木冠", "kind": "helm", "pool": "helm", "blank_class": "specific",
-		"quality": 0, "cap": 2, "atk": 0, "dmg": 0, "def": 2, "hp": 14, "open": 0,
-		"probs": [8, 42, 28, 17, 5], "trait": "轻便"},
-	{"id": "cloak_ma", "name": "凡品披风胚", "weapon": "麻布披风", "kind": "cloak", "pool": "cloak", "blank_class": "specific",
-		"quality": 0, "cap": 2, "atk": 0, "dmg": 0, "def": 1, "hp": 8, "dodge": 3, "open": 0,
-		"probs": [8, 42, 28, 17, 5], "trait": "轻身"},
+		"probs": [14, 42, 20, 18, 6], "trait": "绝品"},
 ]
 
 static func blank(id: String) -> Dictionary:
+	var use_id := "common" if id == "jianpei" else id
+	for b in BLANKS:
+		if str((b as Dictionary)["id"]) == use_id:
+			return (b as Dictionary).duplicate(true)
 	for b in BLANKS:
 		if str((b as Dictionary)["id"]) == id:
 			return (b as Dictionary).duplicate(true)
@@ -141,8 +113,24 @@ static func roll_percents(it: Dictionary) -> Array:
 	p[4] += extra_break
 	p[3] += e * 0.08 + cr * 1.0
 	p[1] = maxf(0.0, float(p[1]) - extra_break)
-	if str(it.get("rule", "")) == "no_break":
-		p[4] = 0.0
+	if str(it.get("quench_trait", "")) == "wending":
+		p[2] = float(p[2]) + 20.0
+	elif str(it.get("quench_trait", "")) == "fengli":
+		p[1] = float(p[1]) + 10.0
+	elif str(it.get("quench_trait", "")) == "fuyuan":
+		p[0] = float(p[0]) + 5.0
+	elif str(it.get("quench_trait", "")) == "hufeng":
+		p[4] = maxf(0.0, float(p[4]) - 3.0)
+	if str(it.get("quench_trait", "")) == "jianren":
+		p[4] = maxf(0.0, float(p[4]) - float(int(it.get("jianren_stack", 0))) * 2.0)
+	if bool(it.get("trait_next_success", false)):
+		p[1] = float(p[1]) + 15.0
+	if bool(it.get("trait_next_guard", false)):
+		p[4] = maxf(0.0, float(p[4]) - 10.0)
+	if bool(it.get("trait_next_great", false)):
+		p[0] = float(p[0]) + 10.0
+	if str(it.get("quench_trait", "")) == "dieren":
+		p[4] = maxf(0.0, float(p[4]) - float(int(it.get("dieren_stack", 0))))
 	var total := 0.0
 	for v in p:
 		total += float(v)
@@ -152,10 +140,6 @@ static func roll_percents(it: Dictionary) -> Array:
 
 static func grade_weights(it: Dictionary) -> Array:
 	var w := [10.0, 20.0, 35.0, 25.0, 10.0]
-	if str(it.get("rule", "")) == "always_success":
-		w = [0.0, 5.0, 25.0, 45.0, 25.0]
-	elif str(it.get("rule", "")) == "no_break":
-		w = [0.0, 5.0, 30.0, 40.0, 25.0]
 	return w
 
 static func roll_craft_grade(it: Dictionary) -> int:
@@ -201,6 +185,19 @@ static func make_item(blank_id: String) -> Dictionary:
 static func randomize_generic(it: Dictionary) -> void:
 	var q := clampi(int(it.get("quality", 0)), 0, 4)
 	var roll := randi() % 6
+	match str(it.get("quench_trait", "")):
+		"type_sword":
+			roll = 0
+		"type_dual":
+			roll = 1
+		"type_staff":
+			roll = 2
+		"type_armor":
+			roll = 3
+		"type_helm":
+			roll = 4
+		"type_cloak":
+			roll = 5
 	var names := ["长剑", "双刀", "长棍", "战甲", "头冠", "披风"]
 	var kinds := ["sword", "dual", "staff", "armor", "helm", "cloak"]
 	var pools := ["weapon", "weapon", "weapon", "armor", "helm", "cloak"]
@@ -333,25 +330,8 @@ static func tool_def(id: String) -> Dictionary:
 	return {}
 const TRIAL_STONES := 3
 const COMBOS := [
-	{"id": "qingfeng", "blank": "qingfeng", "name": "凡品剑胚",
-		"trial": ["iron_sand", "bone_coal"], "hint": "铁砂养锋，骨炭定火",
-		"cost": {"iron_sand": 3, "bone_coal": 2}},
-	{"id": "zhujian", "blank": "zhujian", "name": "凡品竹剑胚",
-		"trial": ["iron_sand", "bone_coal"], "hint": "铁砂磨刃，骨炭收口",
-		"cost": {"iron_sand": 2, "bone_coal": 1}},
-	{"id": "xuantie", "blank": "xuantie", "name": "中品刀胚",
-		"trial": ["iron_sand", "fine_iron"], "hint": "铁砂沉锋，精铁定钢",
-		"cost": {"iron_sand": 4, "fine_iron": 1}},
-	{"id": "shangpin", "blank": "shangpin", "name": "上品剑胚",
-		"trial": ["iron_sand", "fine_iron"], "hint": "铁砂养魂，精铁定锋（天生不折）",
-		"cost": {"iron_sand": 4, "fine_iron": 2}},
-	{"id": "bicheng", "blank": "bicheng", "name": "特殊·必成剑胚",
-		"trial": ["iron_sand", "forge_oil"], "hint": "铁砂定形，锻油锁火（强化必成）",
-		"cost": {"iron_sand": 3, "forge_oil": 1}},
-	{"id": "sword_ji", "blank": "sword_ji", "name": "极品剑胚",
-		"trial": ["iron_sand", "fine_iron"], "hint": "铁砂沉锋，精铁定钢", "cost": {"iron_sand": 5, "fine_iron": 2}},
-	{"id": "sword_jue", "blank": "sword_jue", "name": "绝品剑胚",
-		"trial": ["iron_sand", "star_iron"], "hint": "铁砂聚魂，星铁定锋", "cost": {"iron_sand": 6, "star_iron": 1}},
+	{"id": "common", "blank": "common", "name": "普通胚子",
+		"trial": ["iron_sand", "bone_coal"], "hint": "铁砂定形，骨炭收口", "cost": {"iron_sand": 1, "bone_coal": 1}},
 	{"id": "gen_fan", "blank": "gen_fan", "name": "凡品胚子",
 		"trial": ["iron_sand", "bone_coal"], "hint": "铁砂定形，骨炭收口", "cost": {"iron_sand": 2, "bone_coal": 2}},
 	{"id": "gen_zhong", "blank": "gen_zhong", "name": "中品胚子",
@@ -362,16 +342,58 @@ const COMBOS := [
 		"trial": ["iron_sand", "fine_iron"], "hint": "铁砂沉锋，精铁定钢", "cost": {"iron_sand": 5, "fine_iron": 2}},
 	{"id": "gen_jue", "blank": "gen_jue", "name": "绝品胚子",
 		"trial": ["iron_sand", "star_iron"], "hint": "铁砂聚魂，星铁定锋", "cost": {"iron_sand": 6, "star_iron": 1}},
-	{"id": "armor_bu", "blank": "armor_bu", "name": "青布甲",
-		"trial": ["iron_sand", "bone_coal"], "hint": "铁砂衬里，骨炭固布",
-		"cost": {"iron_sand": 2, "bone_coal": 2}},
-	{"id": "helm_mu", "blank": "helm_mu", "name": "木冠",
-		"trial": ["iron_sand", "bone_coal"], "hint": "铁砂做骨，骨炭定形",
-		"cost": {"iron_sand": 2, "bone_coal": 1}},
-	{"id": "cloak_ma", "blank": "cloak_ma", "name": "麻布披风",
-		"trial": ["iron_sand", "forge_oil"], "hint": "铁砂浸麻，锻油染风",
-		"cost": {"iron_sand": 2, "forge_oil": 1}},
 ]
+
+# 淬火特性：只在成器前可刷，费用逐次暴涨。
+# rank：0 凡品 / 1 良品 / 2 上品 / 3 极品。越好越少见。
+const QUENCH_TRAITS := [
+	{"id": "wending", "name": "稳定", "desc": "维持概率 +20%", "rank": 1, "weight": 10},
+	{"id": "fengli", "name": "锋利", "desc": "成功概率 +10%", "rank": 1, "weight": 10},
+	{"id": "hufeng", "name": "护锋", "desc": "破坏概率 -3%", "rank": 1, "weight": 10},
+	{"id": "chengshang", "name": "承伤", "desc": "损伤时，不增加裂纹与破坏累积", "rank": 1, "weight": 10},
+	{"id": "jianren", "name": "坚韧", "desc": "每次损伤，破坏率额外 -2%（可叠加）", "rank": 1, "weight": 8},
+	{"id": "jieshi", "name": "借势", "desc": "维持后，下一锤成功 +15%", "rank": 1, "weight": 8},
+	{"id": "fuyuan", "name": "福缘", "desc": "大成功概率 +5%", "rank": 1, "weight": 6},
+	{"id": "type_sword", "name": "剑胚", "desc": "首锤必成剑类", "rank": 0, "weight": 7},
+	{"id": "type_dual", "name": "刀胚", "desc": "首锤必成刀类", "rank": 0, "weight": 7},
+	{"id": "type_staff", "name": "棍胚", "desc": "首锤必成棍类", "rank": 0, "weight": 6},
+	{"id": "type_armor", "name": "甲胚", "desc": "首锤必成护甲", "rank": 0, "weight": 6},
+	{"id": "type_helm", "name": "冠胚", "desc": "首锤必成头冠", "rank": 0, "weight": 5},
+	{"id": "type_cloak", "name": "披风胚", "desc": "首锤必成披风", "rank": 0, "weight": 5},
+	{"id": "dingshen", "name": "定神", "desc": "入神触发时，强化额外 +1", "rank": 2, "weight": 4},
+	{"id": "huihuo", "name": "回火", "desc": "成功后，下一次损伤转为维持", "rank": 2, "weight": 4},
+	{"id": "yuwei", "name": "余威", "desc": "大成功后，下一锤破坏 -10%", "rank": 2, "weight": 4},
+	{"id": "xiren", "name": "惜刃", "desc": "免疫 1 次破坏，触发后消失", "rank": 2, "weight": 5},
+	{"id": "xifeng", "name": "洗锋", "desc": "大成功时，清空裂纹与破坏累积", "rank": 3, "weight": 2},
+	{"id": "mingdao", "name": "名刀", "desc": "免疫 3 次破坏；每次挡下清空裂纹与破坏累积", "rank": 3, "weight": 1},
+	{"id": "xuhuo", "name": "续火", "desc": "成功时，返还 1 锻造石", "rank": 2, "weight": 4},
+	{"id": "jiehuo", "name": "借火", "desc": "大成功后，下一锤不耗锻造石", "rank": 2, "weight": 4},
+	{"id": "shouzhuo", "name": "守拙", "desc": "维持时，返还 1 锻造石", "rank": 1, "weight": 8},
+	{"id": "nifeng", "name": "逆锋", "desc": "损伤后，下一锤大成功 +10%", "rank": 1, "weight": 8},
+	{"id": "dieren", "name": "叠韧", "desc": "每次维持，破坏率 -1%（可叠加）", "rank": 1, "weight": 8},
+]
+const QUENCH_COSTS := [50, 200, 800, 3000, 12000, 50000]
+
+static func quench_cost(n: int) -> int:
+	var i := clampi(n, 0, QUENCH_COSTS.size() - 1)
+	return int(QUENCH_COSTS[i])
+
+static func quench_trait(id: String) -> Dictionary:
+	for t in QUENCH_TRAITS:
+		if str((t as Dictionary)["id"]) == id:
+			return (t as Dictionary).duplicate(true)
+	return {}
+
+static func roll_quench_trait() -> String:
+	var total := 0
+	for t in QUENCH_TRAITS:
+		total += int((t as Dictionary)["weight"])
+	var r := randi() % maxi(1, total)
+	for t in QUENCH_TRAITS:
+		r -= int((t as Dictionary)["weight"])
+		if r < 0:
+			return str((t as Dictionary)["id"])
+	return "wending"
 
 const SELL_BASE := [8, 25, 75, 220, 600]
 

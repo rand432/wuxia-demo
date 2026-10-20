@@ -3792,7 +3792,7 @@ static func grant_boss_weapon(boss_name: String) -> Dictionary:
 		"quality": 2, "cap": 4, "enhance": 10, "cracks": 0,
 		"base_atk": float(atk), "base_dmg": float(dmg),
 		"inspired_left": 0, "round_inspired": false, "awaiting": false,
-		"affixes": [affix], "rule": "no_break", "source": "boss",
+		"affixes": [affix], "source": "boss",
 	})
 	if forge_bag.size() > 40:
 		forge_bag.pop_front()
@@ -3820,7 +3820,7 @@ static func grant_broker_weapon() -> Dictionary:
 		"quality": 4, "cap": 4, "enhance": 10, "cracks": 0,
 		"base_atk": float(atk), "base_dmg": float(dmg),
 		"inspired_left": 0, "round_inspired": false, "awaiting": false,
-		"affixes": ["fengrui", "qingshen"], "rule": "no_break", "source": "broker",
+		"affixes": ["fengrui", "qingshen"], "source": "broker",
 	})
 	if forge_bag.size() > 40:
 		forge_bag.pop_front()
@@ -3847,7 +3847,7 @@ static func grant_ng_weapon() -> Dictionary:
 		"quality": 4, "cap": 4, "enhance": 10, "cracks": 0,
 		"base_atk": float(atk), "base_dmg": float(dmg),
 		"inspired_left": 0, "round_inspired": false, "awaiting": false,
-		"affixes": ["fengrui"], "rule": "no_break", "source": "ng",
+		"affixes": ["fengrui"], "source": "ng",
 	})
 	if forge_bag.size() > 40:
 		forge_bag.pop_front()
@@ -3875,7 +3875,7 @@ static func grant_north_weapon() -> Dictionary:
 		"quality": 4, "cap": 4, "enhance": 10, "cracks": 0,
 		"base_atk": float(atk), "base_dmg": float(dmg),
 		"inspired_left": 0, "round_inspired": false, "awaiting": false,
-		"affixes": ["yinrui", "qingshen"], "rule": "no_break", "source": "north",
+		"affixes": ["yinrui", "qingshen"], "source": "north",
 	})
 	if forge_bag.size() > 40:
 		forge_bag.pop_front()
@@ -4286,13 +4286,13 @@ const MAT_CN := {"zhi": "紫芝", "shen": "雪参", "guo": "朱果", "bone": "�
 	"forge_stone": "锻造石", "jingshi": "境界石（金）", "daoxin": "道心砂（红）", "atlas": "舆图",
 	"soul": "兽魂", "lingguo": "灵兽果",
 	"daoguo": "悟道果", "hundun": "混沌砂", "xinghui": "星辉",
-	"pojing": "破境花", "xuantie": "玄铁精", "jianpei": "剑胚",
+	"pojing": "破境花", "xuantie": "玄铁精", "jianpei": "剑胚", "common": "普通胚子",
 	"iron_sand": "铁矿砂", "bone_coal": "骨炭", "forge_oil": "锻油", "fine_iron": "精铁", "star_iron": "星铁"}
 # v271：材料四类——战斗 / 成长 / 突破 / 宠物。
 const MAT_GROUP := {"guo": "battle", "bone": "battle", "rice": "battle",
 	"zhi": "growth", "shen": "growth", "jin": "growth",
 	"jingshi": "advance", "daoxin": "advance", "daoguo": "advance", "hundun": "advance", "xinghui": "advance",
-	"pojing": "break", "xuantie": "break", "soul": "pet", "lingguo": "pet", "jianpei": "forge",
+	"pojing": "break", "xuantie": "break", "soul": "pet", "lingguo": "pet", "jianpei": "forge", "common": "forge",
 	"iron_sand": "forge", "bone_coal": "forge", "forge_oil": "forge", "fine_iron": "forge", "star_iron": "forge"}
 const MAT_GROUP_CN := {"battle": "战斗材料", "growth": "成长材料", "advance": "进阶材料", "break": "突破材料", "pet": "宠物材料", "forge": "锻造材料"}
 const PILL_GROUP_CN := {"battle": "战斗丹", "growth": "成长丹", "advance": "进阶丹", "break": "突破丹", "pet": "宠物丹"}
@@ -5373,9 +5373,9 @@ static func finish_journey() -> void:
 	if not cave_opened:
 		cave_opened = true
 		winery_built = true
-		add_material("jianpei", 1)
+		add_material("common", 1)
 		add_material("forge_stone", 3)
-		note_push("百工坊起了——铁砧台上放着一块剑胚，去锻第一把兵器")
+		note_push("百工坊起了——铁砧台上放着一块普通胚子，去锻第一把兵器")
 
 # v40：回村播报是"一条串"——以前各处直接 `pending_note = "..."`，后写的会把先写的吃掉
 #   （引子那趟就是：先记了礼包，紧接着"回到村子…"把它覆盖了）。以后一律走这一口。
