@@ -19,6 +19,7 @@ const FoodMeter := preload("res://journey/explore/food_meter.gd")
 const CharacterPanel := preload("res://menu/character_panel.gd")
 const WarehousePanel := preload("res://menu/warehouse_panel.gd")
 const RegionSelectPanel := preload("res://menu/region_select.gd")
+const ItemIcons := preload("res://shared/item_icons.gd")
 
 const MAP_W := 24
 const MAP_H := 30
@@ -72,8 +73,18 @@ var _chest_open := {}
 var _msg := ""
 var _msg_t := 0.0
 var _toast_layer: CanvasLayer
+var _nav_layer: Control
+var _nav_view: Control
+var _nav_open := false
+var _nav_zoom := 1.0
+var _nav_off := Vector2.ZERO
+var _nav_drag := false
+var _nav_last := Vector2.ZERO
+var _nav_touches := {}
+var _nav_pinch := 0.0
 var _toast: Label
 var _back_btn: Button
+var _bag_btn: Button
 var _action_lb: Label
 var _food_meter: Control
 var _time_lb: Label
@@ -593,6 +604,10 @@ func _spawn_player() -> void:
 	_camera.position_smoothing_enabled = true
 	_camera.position_smoothing_speed = 8.0
 	_camera.enabled = true
+	_camera.limit_left = 0
+	_camera.limit_top = 0
+	_camera.limit_right = int(MAP_W * TILE)
+	_camera.limit_bottom = int(MAP_H * TILE)
 	_player.add_child(_camera)
 	# setup 时相机还没完全进树，make_current 会抢半拍；推迟到下一帧。
 	_camera.call_deferred("make_current")
@@ -628,21 +643,21 @@ func _spawn_toast() -> void:
 	bot.add_theme_stylebox_override("panel", bsb2)
 	_toast_layer.add_child(bot)
 	var walk_hint := Label.new()
-	walk_hint.position = Vector2(24, 1048)
-	walk_hint.size = Vector2(560, 26)
-	walk_hint.add_theme_font_size_override("font_size", 14)
+	walk_hint.position = Vector2(18, 1042)
+	walk_hint.size = Vector2(684, 40)
+	walk_hint.add_theme_font_size_override("font_size", 20)
 	walk_hint.add_theme_color_override("font_color", Color(0.72, 0.66, 0.52, 0.82))
 	walk_hint.text = "行走：点地格移动 · 食物每 5 格 -1 · 时间每 20 食物推进一段"
 	_toast_layer.add_child(walk_hint)
 	_toast = Label.new()
 	_toast.position = Vector2(24, 86)
-	_toast.add_theme_font_size_override("font_size", 18)
+	_toast.add_theme_font_size_override("font_size", 20)
 	_toast.add_theme_color_override("font_color", Color("#f0d68a"))
 	_toast.visible = false
 	_toast_layer.add_child(_toast)
 	_action_lb = Label.new()
 	_action_lb.position = Vector2(76, 24)
-	_action_lb.add_theme_font_size_override("font_size", 16)
+	_action_lb.add_theme_font_size_override("font_size", 20)
 	_toast_layer.add_child(_action_lb)
 	_food_meter = FoodMeter.new()
 	_food_meter.position = Vector2(-58, -8)
@@ -650,14 +665,14 @@ func _spawn_toast() -> void:
 	_action_lb.add_child(_food_meter)
 	_time_lb = Label.new()
 	_time_lb.position = Vector2(270, -2)
-	_time_lb.add_theme_font_size_override("font_size", 15)
+	_time_lb.add_theme_font_size_override("font_size", 19)
 	_time_lb.add_theme_color_override("font_color", Color("#b9a878"))
 	_action_lb.add_child(_time_lb)
 	_region_lb = Label.new()
 	_region_lb.position = Vector2(500, -12)
 	_region_lb.size = Vector2(120, 20)
 	_region_lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	_region_lb.add_theme_font_size_override("font_size", 12)
+	_region_lb.add_theme_font_size_override("font_size", 17)
 	_region_lb.add_theme_color_override("font_color", Color(0.62, 0.55, 0.4, 0.85))
 	_action_lb.add_child(_region_lb)
 	_update_action_label()
@@ -665,7 +680,7 @@ func _spawn_toast() -> void:
 	_wanted_lb.position = Vector2(584, 84)
 	_wanted_lb.size = Vector2(112, 22)
 	_wanted_lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	_wanted_lb.add_theme_font_size_override("font_size", 14)
+	_wanted_lb.add_theme_font_size_override("font_size", 17)
 	_wanted_lb.add_theme_color_override("font_color", Color("#e06a5a"))
 	_toast_layer.add_child(_wanted_lb)
 	_update_wanted_label()
@@ -695,7 +710,7 @@ func _spawn_toast() -> void:
 		b.position = Vector2(8 + i * 144, 10)
 		b.size = Vector2(128, 44)
 		b.focus_mode = Control.FOCUS_NONE
-		b.add_theme_font_size_override("font_size", 18)
+		b.add_theme_font_size_override("font_size", 26)
 		b.add_theme_color_override("font_color", Color("#f0d68a"))
 		b.add_theme_stylebox_override("normal", normal.duplicate() as StyleBoxFlat)
 		b.add_theme_stylebox_override("hover", hover.duplicate() as StyleBoxFlat)
@@ -704,6 +719,7 @@ func _spawn_toast() -> void:
 			b.pressed.connect(_open_character_panel)
 			_codex_btn = b
 		elif i == 1:
+			_bag_btn = b
 			b.pressed.connect(_open_inventory_panel)
 		elif i == 2:
 			b.pressed.connect(_open_map_panel)
@@ -1066,6 +1082,191 @@ func _open_inventory_panel() -> void:
 func _open_map_panel() -> void:
 	if _busy:
 		return
+	_open_nav_map()
+
+func _open_nav_map() -> void:
+	if _nav_layer == null:
+		_nav_layer = Control.new()
+		_nav_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
+		_nav_layer.mouse_filter = Control.MOUSE_FILTER_STOP
+		_nav_layer.draw.connect(_draw_nav)
+		_toast_layer.add_child(_nav_layer)
+		_nav_view = Control.new()
+		_nav_view.position = Vector2(84, 250)
+		_nav_view.size = Vector2(552, 690)
+		_nav_view.clip_contents = true
+		_nav_view.mouse_filter = Control.MOUSE_FILTER_STOP
+		_nav_view.draw.connect(_draw_nav_inner)
+		_nav_view.gui_input.connect(_on_nav_gui_input)
+		_nav_layer.add_child(_nav_view)
+		var close_b := Button.new()
+		close_b.text = "返 回"
+		close_b.position = Vector2(280, 1080)
+		close_b.size = Vector2(160, 52)
+		close_b.add_theme_font_size_override("font_size", 21)
+		close_b.add_theme_color_override("font_color", Color(0.94, 0.90, 0.80))
+		close_b.add_theme_stylebox_override("normal", _nav_btn_box())
+		close_b.add_theme_stylebox_override("hover", _nav_btn_box())
+		close_b.add_theme_stylebox_override("pressed", _nav_btn_box())
+		close_b.focus_mode = Control.FOCUS_NONE
+		close_b.pressed.connect(_close_nav_map)
+		_nav_layer.add_child(close_b)
+	_nav_open = true
+	_nav_zoom = 1.0
+	_nav_off = Vector2.ZERO
+	_nav_touches.clear()
+	_nav_drag = false
+	_nav_layer.visible = true
+	_nav_layer.queue_redraw()
+	_hide_for_side()
+
+func _close_nav_map() -> void:
+	_nav_open = false
+	if _nav_layer != null:
+		_nav_layer.visible = false
+	_on_side_closed()
+
+func _draw_nav() -> void:
+	if _nav_layer == null:
+		return
+	var veil := Color(0.02, 0.02, 0.02, 0.78)
+	_nav_layer.draw_rect(Rect2(0, 0, 720, 1280), veil)
+	_nav_layer.draw_rect(Rect2(30, 130, 660, 1010), Color("#e6dac0"))
+	_nav_layer.draw_rect(Rect2(30, 130, 660, 1010), Color("#3a2a1a"), false, 2.0)
+	_nav_layer.draw_string(ThemeDB.fallback_font, Vector2(0, 190), "地  图", HORIZONTAL_ALIGNMENT_CENTER, 720, 34, Color("#2a241c"))
+	_nav_layer.draw_string(ThemeDB.fallback_font, Vector2(0, 226), str(GameState.REGION_NAMES[GameState.current_region]) + " · 第" + str(GameState.ng_plus + 1) + "周 · " + ["简单", "普通", "困难"][clampi(GameState.world_difficulty - 1, 0, 2)], HORIZONTAL_ALIGNMENT_CENTER, 720, 17, Color(0.22, 0.18, 0.13, 0.7))
+	_nav_layer.draw_string(ThemeDB.fallback_font, Vector2(0, 1038), "拖动地图 · 滚轮 / 双指缩放。", HORIZONTAL_ALIGNMENT_CENTER, 720, 18, Color(0.22, 0.18, 0.13, 0.72))
+	_nav_layer.draw_string(ThemeDB.fallback_font, Vector2(0, 248), "缩放 " + str(snappedf(_nav_zoom, 0.1)) + "×", HORIZONTAL_ALIGNMENT_RIGHT, 610, 16, Color(0.30, 0.25, 0.18, 0.72))
+
+func _draw_nav_inner() -> void:
+	if _nav_view == null:
+		return
+	var vw := _nav_view.size.x
+	var vh := _nav_view.size.y
+	var base := minf(vw / float(MAP_W), vh / float(MAP_H))
+	var cell := base * _nav_zoom
+	var map_size := Vector2(float(MAP_W), float(MAP_H)) * cell
+	var origin := (Vector2(vw, vh) - map_size) * 0.5 + _nav_off
+	var ox := origin.x
+	var oy := origin.y
+	# 雾底
+	_nav_view.draw_rect(Rect2(0, 0, vw, vh), Color("#12140f"))
+	for x in MAP_W:
+		for y in MAP_H:
+			var c := Vector2i(x, y)
+			var r := Rect2(ox + x * cell, oy + y * cell, cell - 0.6, cell - 0.6)
+			if not _explored.has(c):
+				continue
+			var floor_col := _nav_floor_col()
+			if _obstacles.has(c):
+				floor_col = Color("#4c4a3a")
+			_nav_view.draw_rect(r, floor_col)
+	# 地标 / 宝箱 / 敌人
+	for i in _poi_cells.size():
+		var c2: Vector2i = _poi_cells[i]
+		if _explored.has(c2):
+			_nav_view.draw_circle(Vector2(ox + (c2.x + 0.5) * cell, oy + (c2.y + 0.5) * cell), 4.5, Color("#c9a64a"))
+	for c3 in _chest_cells:
+		if _explored.has(c3):
+			_nav_view.draw_rect(Rect2(ox + c3.x * cell + 5, oy + c3.y * cell + 5, cell - 10, cell - 10), Color("#8a5a2a"))
+	for e_v in _enemies:
+		var e: Node2D = e_v
+		if is_instance_valid(e) and not bool(e.get_meta("beaten", false)):
+			var ec := Vector2i(int(e.position.x / TILE), int(e.position.y / TILE))
+			if _explored.has(ec):
+				_nav_view.draw_circle(Vector2(ox + (ec.x + 0.5) * cell, oy + (ec.y + 0.5) * cell), 3.2, Color("#b04a3a"))
+	# 玩家
+	var pc := Vector2i(int(_player.position.x / TILE), int(_player.position.y / TILE))
+	var pp := Vector2(ox + (pc.x + 0.5) * cell, oy + (pc.y + 0.5) * cell)
+	_nav_view.draw_circle(pp, 8.0, Color("#f4e6c0"))
+	_nav_view.draw_circle(pp, 5.0, Color("#8d2f2a"))
+	_nav_view.draw_string(ThemeDB.fallback_font, pp + Vector2(-18, -14), "你", HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color("#2a241c"))
+	# 图框
+	_nav_view.draw_rect(Rect2(ox, oy, cell * float(MAP_W), cell * float(MAP_H)), Color("#5a4a30"), false, 2.0)
+
+func _on_nav_gui_input(event: InputEvent) -> void:
+	if event is InputEventMouseButton:
+		var mb := event as InputEventMouseButton
+		if mb.button_index == MOUSE_BUTTON_WHEEL_UP or mb.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+			if mb.pressed:
+				_nav_zoom_at(1.12 if mb.button_index == MOUSE_BUTTON_WHEEL_UP else 0.89)
+			_nav_view.accept_event()
+			return
+		if mb.button_index == MOUSE_BUTTON_LEFT:
+			_nav_drag = mb.pressed
+			_nav_last = mb.position
+			_nav_view.accept_event()
+			return
+	if event is InputEventMouseMotion and _nav_drag:
+		var mm := event as InputEventMouseMotion
+		_nav_off += mm.relative
+		_clamp_nav()
+		_redraw_nav()
+		_nav_view.accept_event()
+		return
+	if event is InputEventScreenTouch:
+		var st := event as InputEventScreenTouch
+		if st.pressed:
+			_nav_touches[st.index] = st.position
+		else:
+			_nav_touches.erase(st.index)
+		if _nav_touches.size() == 2:
+			var ks := _nav_touches.keys()
+			_nav_pinch = (_nav_touches[ks[0]] as Vector2).distance_to(_nav_touches[ks[1]])
+		_nav_view.accept_event()
+		return
+	if event is InputEventScreenDrag:
+		var sd := event as InputEventScreenDrag
+		_nav_touches[sd.index] = sd.position
+		if _nav_touches.size() >= 2:
+			var ks2 := _nav_touches.keys()
+			var d := (_nav_touches[ks2[0]] as Vector2).distance_to(_nav_touches[ks2[1]])
+			if _nav_pinch > 1.0 and d > 1.0:
+				_nav_zoom_at(d / _nav_pinch)
+			_nav_pinch = d
+		else:
+			_nav_off += sd.relative
+			_clamp_nav()
+			_redraw_nav()
+		_nav_view.accept_event()
+		return
+
+func _nav_zoom_at(mul: float) -> void:
+	var old := _nav_zoom
+	_nav_zoom = clampf(_nav_zoom * mul, 0.8, 3.0)
+	_nav_off *= _nav_zoom / old
+	_clamp_nav()
+	_redraw_nav()
+
+func _clamp_nav() -> void:
+	if _nav_view == null:
+		return
+	var base := minf(_nav_view.size.x / float(MAP_W), _nav_view.size.y / float(MAP_H))
+	var cell := base * _nav_zoom
+	var extra := (Vector2(float(MAP_W), float(MAP_H)) * cell - _nav_view.size) * 0.5
+	_nav_off.x = clampf(_nav_off.x, -maxf(0.0, extra.x), maxf(0.0, extra.x))
+	_nav_off.y = clampf(_nav_off.y, -maxf(0.0, extra.y), maxf(0.0, extra.y))
+
+func _redraw_nav() -> void:
+	if _nav_view != null:
+		_nav_view.queue_redraw()
+	if _nav_layer != null:
+		_nav_layer.queue_redraw()
+
+func _nav_btn_box() -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color("#2a241c")
+	sb.border_color = Color("#8a744a")
+	sb.set_border_width_all(2)
+	sb.set_corner_radius_all(8)
+	return sb
+
+func _nav_floor_col() -> Color:
+	return [Color("#8d8a68"), Color("#6f8f95"), Color("#5f7f50"), Color("#7d7162"), Color("#c1ccd0")][clampi(GameState.current_region, 0, 4)]
+
+func _open_region_panel() -> void:
+	if _busy:
+		return
 	var rp = RegionSelectPanel.new()
 	rp.connect("entered", _on_map_region_entered)
 	rp.connect("closed", _on_map_closed)
@@ -1136,25 +1337,31 @@ func _gather_node(i: int) -> void:
 	match typ:
 		"herb":
 			if randf() < 0.5:
-				GameState.add_material("zhi", 2)
+				GameState.add_material("zhi", 2, _loot_q())
+				_loot_pop("zhi", 2)
 				msg = "采到紫芝 ×2"
 			else:
-				GameState.add_material("shen", 1)
+				GameState.add_material("shen", 1, _loot_q())
+				_loot_pop("shen", 1)
 				msg = "采到雪参 ×1"
 		"snowherb":
-			GameState.add_material("shen", 2)
+			GameState.add_material("shen", 2, _loot_q())
+			_loot_pop("shen", 2)
 			msg = "采到雪参 ×2"
 		"ore":
 			var os := randi_range(2, 4)
 			GameState.add_material("forge_stone", os, _loot_q())
+			_loot_pop("forge_stone", os)
 			msg = "挖到锻造石 ×" + str(os)
 		"bone":
 			var bs := randi_range(2, 4)
 			GameState.add_material("bone", bs, _loot_q())
+			_loot_pop("bone", bs)
 			msg = "捡到兽骨碎 ×" + str(bs)
 		"rice":
 			var rs := randi_range(1, 3)
 			GameState.add_material("rice", rs, _loot_q())
+			_loot_pop("rice", rs)
 			msg = "采到灵米 ×" + str(rs)
 	GameState.save_game()
 	_update_action_label()
@@ -1228,7 +1435,7 @@ func _draw_npcs() -> void:
 		draw_line(p + Vector2(8, 4), p + Vector2(16, 12), Color("#d8c8a8"), 3.0)
 		draw_string(ThemeDB.fallback_font, p + Vector2(-28, -40), str(n["name"]), HORIZONTAL_ALIGNMENT_LEFT, -1, 12, col)
 		if bool(n.get("done", false)):
-			draw_string(ThemeDB.fallback_font, p + Vector2(-10, 34), "已了", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(0.55, 0.5, 0.4, 0.8))
+			draw_string(ThemeDB.fallback_font, p + Vector2(-10, 34), "已了", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(0.55, 0.5, 0.4, 0.8))
 
 func _open_npc(i: int) -> void:
 	if i < 0 or i >= _npcs.size():
@@ -1603,7 +1810,7 @@ func _make_enemy(cell: Vector2i, i: int, hunter := false, guard := false, elite 
 				_draw_bandit(e)
 		if elite:
 			e.draw_circle(Vector2(0, -60), 4.0, Color("#ffd36a"))
-		e.draw_string(ThemeDB.fallback_font, Vector2(-20, -46), kind, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("#ffd36a") if elite else Color("#f0d68a"))
+		e.draw_string(ThemeDB.fallback_font, Vector2(-20, -46), kind, HORIZONTAL_ALIGNMENT_LEFT, -1, 17, Color("#ffd36a") if elite else Color("#f0d68a"))
 	)
 	add_child(e)
 	return e
@@ -1804,7 +2011,7 @@ func _draw_house() -> void:
 	draw_colored_polygon(PackedVector2Array([p + Vector2(-44, -22), p + Vector2(44, -22), p + Vector2(0, -60)]), Color("#6b4a30"))
 	draw_rect(Rect2(p + Vector2(-10, 2), Vector2(20, 18)), Color("#2a1e14"))
 	draw_circle(p + Vector2(6, 12), 2.0, Color("#c9a64a"))
-	draw_string(ThemeDB.fallback_font, p + Vector2(-18, -70), "竹屋", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("#f0d68a"))
+	draw_string(ThemeDB.fallback_font, p + Vector2(-18, -70), "竹屋", HORIZONTAL_ALIGNMENT_LEFT, -1, 17, Color("#f0d68a"))
 
 func _draw_sect_gate() -> void:
 	if not _detail_visible(SECT_CELL):
@@ -1819,8 +2026,8 @@ func _draw_sect_gate() -> void:
 	draw_colored_polygon(PackedVector2Array([p + Vector2(-58, -62), p + Vector2(58, -62), p + Vector2(0, -88)]), Color("#5a3f2a"))
 	draw_colored_polygon(PackedVector2Array([p + Vector2(-44, -62), p + Vector2(44, -62), p + Vector2(0, -82)]), Color("#7a5432"))
 	draw_rect(Rect2(p + Vector2(-26, -118), Vector2(52, 22)), Color("#e6d7b4"))
-	draw_string(ThemeDB.fallback_font, p + Vector2(-22, -102), "山门", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("#6b2f22"))
-	draw_string(ThemeDB.fallback_font, p + Vector2(-32, -132), "青岚山门", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("#f0d68a"))
+	draw_string(ThemeDB.fallback_font, p + Vector2(-22, -102), "山门", HORIZONTAL_ALIGNMENT_LEFT, -1, 17, Color("#6b2f22"))
+	draw_string(ThemeDB.fallback_font, p + Vector2(-32, -132), "青岚山门", HORIZONTAL_ALIGNMENT_LEFT, -1, 17, Color("#f0d68a"))
 
 func _draw_rival() -> void:
 	if _rival_cell.x < 0 or not _detail_visible(_rival_cell):
@@ -1847,8 +2054,8 @@ func _draw_rival() -> void:
 	draw_rect(Rect2(p + Vector2(-50, -64), Vector2(100, 12)), Color("#2a1814"))
 	draw_colored_polygon(PackedVector2Array([p + Vector2(-58, -64), p + Vector2(58, -64), p + Vector2(0, -88)]), flag)
 	draw_rect(Rect2(p + Vector2(-28, -112), Vector2(56, 22)), Color("#6b655c") if done else Color("#d8b06a"))
-	draw_string(ThemeDB.fallback_font, p + Vector2(-24, -96), "赤水寨", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("#2a1814"))
-	draw_string(ThemeDB.fallback_font, p + Vector2(-34, -126), label, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("#9a927f") if done else Color("#e06a5a"))
+	draw_string(ThemeDB.fallback_font, p + Vector2(-24, -96), "赤水寨", HORIZONTAL_ALIGNMENT_LEFT, -1, 17, Color("#2a1814"))
+	draw_string(ThemeDB.fallback_font, p + Vector2(-34, -126), label, HORIZONTAL_ALIGNMENT_LEFT, -1, 17, Color("#9a927f") if done else Color("#e06a5a"))
 
 func _draw_broker() -> void:
 	if _broker_cell.x < 0 or not _detail_visible(_broker_cell):
@@ -1863,8 +2070,8 @@ func _draw_broker() -> void:
 	draw_rect(Rect2(p + Vector2(-6, -22), Vector2(12, 20)), Color("#1a1d20"))
 	draw_circle(p + Vector2(20, -30), 4.0, Color("#d8b06a") if not _broker_done else Color("#6b655c"))
 	draw_rect(Rect2(p + Vector2(-28, -82), Vector2(56, 20)), Color("#d8b06a") if not _broker_done else Color("#6b655c"))
-	draw_string(ThemeDB.fallback_font, p + Vector2(-24, -67), "听雨楼", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("#2a1814"))
-	draw_string(ThemeDB.fallback_font, p + Vector2(-26, -96), "听雨楼", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("#9ab0c0") if not _broker_done else Color("#9a927f"))
+	draw_string(ThemeDB.fallback_font, p + Vector2(-24, -67), "听雨楼", HORIZONTAL_ALIGNMENT_LEFT, -1, 17, Color("#2a1814"))
+	draw_string(ThemeDB.fallback_font, p + Vector2(-26, -96), "听雨楼", HORIZONTAL_ALIGNMENT_LEFT, -1, 17, Color("#9ab0c0") if not _broker_done else Color("#9a927f"))
 
 func _draw_north() -> void:
 	if _north_cell.x < 0 or not _detail_visible(_north_cell):
@@ -1880,8 +2087,8 @@ func _draw_north() -> void:
 	draw_rect(Rect2(p + Vector2(-46, -60), Vector2(92, 10)), Color("#141618"))
 	draw_colored_polygon(PackedVector2Array([p + Vector2(-54, -60), p + Vector2(54, -60), p + Vector2(0, -82)]), col)
 	draw_rect(Rect2(p + Vector2(-26, -108), Vector2(52, 20)), Color("#6b655c") if _north_done else Color("#c9a64a"))
-	draw_string(ThemeDB.fallback_font, p + Vector2(-22, -93), "北境哨" if peace else "黑风寨", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("#141618"))
-	draw_string(ThemeDB.fallback_font, p + Vector2(-30, -132), ("青岚·北境哨" if not _north_done else "北境哨·已取") if peace else ("黑风寨·已平" if _north_done else "黑风寨"), HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("#9a927f") if _north_done else Color("#c9a64a"))
+	draw_string(ThemeDB.fallback_font, p + Vector2(-22, -93), "北境哨" if peace else "黑风寨", HORIZONTAL_ALIGNMENT_LEFT, -1, 17, Color("#141618"))
+	draw_string(ThemeDB.fallback_font, p + Vector2(-30, -132), ("青岚·北境哨" if not _north_done else "北境哨·已取") if peace else ("黑风寨·已平" if _north_done else "黑风寨"), HORIZONTAL_ALIGNMENT_LEFT, -1, 17, Color("#9a927f") if _north_done else Color("#c9a64a"))
 
 func _draw_brawl() -> void:
 	if _brawl_cell.x < 0 or not _detail_visible(_brawl_cell):
@@ -1895,7 +2102,7 @@ func _draw_brawl() -> void:
 	draw_colored_polygon(PackedVector2Array([p + Vector2(-24, -26), p + Vector2(-4, -18), p + Vector2(-24, -8)]), Color("#6b655c") if done else Color("#8d2f2a"))
 	draw_colored_polygon(PackedVector2Array([p + Vector2(24, -26), p + Vector2(4, -18), p + Vector2(24, -8)]), Color("#6b655c") if done else Color("#1f2226"))
 	draw_line(p + Vector2(-10, 0), p + Vector2(10, -16), Color("#d8d2c2" if not done else "#6b655c"), 3.0)
-	draw_string(ThemeDB.fallback_font, p + Vector2(-34, -42), "两寨火并" if not done else "火并·已散", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("#9a927f") if done else Color("#e06a5a"))
+	draw_string(ThemeDB.fallback_font, p + Vector2(-34, -42), "两寨火并" if not done else "火并·已散", HORIZONTAL_ALIGNMENT_LEFT, -1, 17, Color("#9a927f") if done else Color("#e06a5a"))
 
 func _draw_faction_flag() -> void:
 	if _map_owner <= 0:
@@ -1923,7 +2130,7 @@ func _draw_boss() -> void:
 	draw_colored_polygon(PackedVector2Array([p + Vector2(-22, -20), p + Vector2(-34, -44), p + Vector2(-12, -30)]), Color("#5a3f2a"))
 	draw_colored_polygon(PackedVector2Array([p + Vector2(22, -20), p + Vector2(34, -44), p + Vector2(12, -30)]), Color("#5a3f2a"))
 	var status := "·已伏" if dead else ("·已安抚" if calm else "")
-	draw_string(ThemeDB.fallback_font, p + Vector2(-34, -56), _boss_display + status, HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color("#9a927f") if (dead or calm) else Color("#e06a5a"))
+	draw_string(ThemeDB.fallback_font, p + Vector2(-34, -56), _boss_display + status, HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color("#9a927f") if (dead or calm) else Color("#e06a5a"))
 
 func _draw_wuxia() -> void:
 	if _wuxia_cell.x < 0 or not _detail_visible(_wuxia_cell):
@@ -1938,7 +2145,7 @@ func _draw_wuxia() -> void:
 	draw_circle(p + Vector2(0, -20), 8.0, Color("#d8d0bc") if not done else Color("#6b655c"))
 	draw_circle(p + Vector2(-3, -21), 2.0, Color("#1b1a18"))
 	draw_circle(p + Vector2(3, -21), 2.0, Color("#1b1a18"))
-	draw_string(ThemeDB.fallback_font, p + Vector2(-30, -44), "轮回台" if not done else "轮回台·已破", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color("#e06a5a") if not done else Color("#6b655c"))
+	draw_string(ThemeDB.fallback_font, p + Vector2(-30, -44), "轮回台" if not done else "轮回台·已破", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color("#e06a5a") if not done else Color("#6b655c"))
 
 func _draw_faction_camp() -> void:
 	if _flag_cell.x < 0 or not _detail_visible(_flag_cell):
@@ -1963,7 +2170,7 @@ func _draw_counter() -> void:
 	draw_line(p + Vector2(0, 10), p + Vector2(0, -28), Color("#3a2a1c"), 4.0)
 	draw_colored_polygon(PackedVector2Array([p + Vector2(0, -28), p + Vector2(26, -20), p + Vector2(0, -8)]), col)
 	draw_circle(p + Vector2(-24, -14), 5.0, Color("#e06a5a"))
-	draw_string(ThemeDB.fallback_font, p + Vector2(-30, -42), nm, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color("#e06a5a"))
+	draw_string(ThemeDB.fallback_font, p + Vector2(-30, -42), nm, HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color("#e06a5a"))
 
 func _draw_pois() -> void:
 	for i in _poi_cells.size():
@@ -2028,9 +2235,9 @@ func _draw_pois() -> void:
 				draw_circle(p + Vector2(0, 4), 17.0, Color("#14181b"))
 				draw_arc(p + Vector2(0, 2), 22.0, PI, TAU, 14, Color("#8fa0a6"), 3.0)
 		var nm: String = str({"temple": "破庙", "well": "古井", "tea": "茶棚", "merchant": "货郎", "snow_cave": "雪洞", "mine": "矿洞", "ferry": "渡口", "hunter": "猎户", "herb_garden": "药圃"}.get(typ, "旧迹"))
-		draw_string(ThemeDB.fallback_font, p + Vector2(-22, -50), nm, HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("#b9a878") if used else Color("#f0d68a"))
+		draw_string(ThemeDB.fallback_font, p + Vector2(-22, -50), nm, HORIZONTAL_ALIGNMENT_LEFT, -1, 17, Color("#b9a878") if used else Color("#f0d68a"))
 		if used:
-			draw_string(ThemeDB.fallback_font, p + Vector2(-18, -34), "已探", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.72, 0.66, 0.54, 0.8))
+			draw_string(ThemeDB.fallback_font, p + Vector2(-18, -34), "已探", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(0.72, 0.66, 0.54, 0.8))
 
 func _draw_chests() -> void:
 	for cell_v in _chest_cells:
@@ -2051,7 +2258,7 @@ func _draw_chests() -> void:
 			draw_rect(Rect2(p + Vector2(-16, -14), Vector2(32, 7)), Color("#5a3a20"))
 			draw_rect(Rect2(p + Vector2(-4, -18), Vector2(8, 6)), Color("#f0d68a"))
 		if q > 0 and not opened:
-			draw_string(ThemeDB.fallback_font, p + Vector2(-18, -28), "精制" if q == 1 else "秘藏", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color("#e8c46a") if q == 1 else Color("#e06a5a"))
+			draw_string(ThemeDB.fallback_font, p + Vector2(-18, -28), "精制" if q == 1 else "秘藏", HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color("#e8c46a") if q == 1 else Color("#e06a5a"))
 
 func _draw_nodes() -> void:
 	for i in _node_cells.size():
@@ -2080,9 +2287,9 @@ func _draw_nodes() -> void:
 				for k in 5:
 					draw_circle(p + Vector2(-8 + k * 4, -6 - (k % 2) * 5), 3.0, Color("#d9b56a"))
 		var nm := "草药" if typ == "herb" else ("雪参" if typ == "snowherb" else ("矿脉" if typ == "ore" else ("兽骨" if typ == "bone" else "灵米")))
-		draw_string(ThemeDB.fallback_font, p + Vector2(-20, -30), nm, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.55, 0.5, 0.4, 0.9) if used else Color("#b9d68a"))
+		draw_string(ThemeDB.fallback_font, p + Vector2(-20, -30), nm, HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color(0.55, 0.5, 0.4, 0.9) if used else Color("#b9d68a"))
 		if used:
-			draw_string(ThemeDB.fallback_font, p + Vector2(-14, 4), "采", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.55, 0.5, 0.4, 0.75))
+			draw_string(ThemeDB.fallback_font, p + Vector2(-14, 4), "采", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(0.55, 0.5, 0.4, 0.75))
 
 func _open_chest(cell: Vector2i) -> void:
 	if bool(_chest_open.get(cell, false)):
@@ -2104,16 +2311,20 @@ func _open_chest(cell: Vector2i) -> void:
 	silver = int(round(float(silver) * rm))
 	var cq := clampi(q + _loot_q(), 0, 4)
 	GameState.add_material("forge_stone", stones, cq)
+	_loot_pop("forge_stone", stones)
 	GameState.add_coin("silver", silver)
 	_loot_stones += stones
 	_loot_silver += silver
 	var extra := ""
 	if q == 1:
 		GameState.add_material("rice", 3, cq)
+		_loot_pop("rice", 3, 0.12)
 		extra = " · 灵米 ×3"
 	elif q == 2:
 		GameState.add_material("atlas", 1, cq)
 		GameState.add_material("jin", 1, cq)
+		_loot_pop("jin", 1, 0.12)
+		_loot_pop("atlas", 1, 0.22)
 		_loot_atlas += 1
 		extra = " · 舆图 ×1 · 金髓 ×1"
 	elif randf() < 0.22:
@@ -2126,6 +2337,60 @@ func _open_chest(cell: Vector2i) -> void:
 
 func _loot_q() -> int:
 	return clampi(GameState.world_tier - 1, 0, 4)
+
+func _loot_pop(mat_id: String, amount: int, delay := 0.0) -> void:
+	if _toast_layer == null or _player == null or amount <= 0:
+		return
+	var tex := ItemIcons.for_mat(mat_id)
+	if tex == null:
+		return
+	if delay > 0.0:
+		await get_tree().create_timer(delay).timeout
+	var screen := get_viewport().get_canvas_transform() * _player.global_position
+	var box := Control.new()
+	box.position = screen + Vector2(-28, -96)
+	box.size = Vector2(96, 64)
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_toast_layer.add_child(box)
+	var tr := TextureRect.new()
+	tr.texture = tex
+	tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	tr.position = Vector2(0, 0)
+	tr.size = Vector2(54, 54)
+	tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(tr)
+	var lb := Label.new()
+	lb.text = "+" + str(amount)
+	lb.position = Vector2(46, 28)
+	lb.add_theme_font_size_override("font_size", 20)
+	lb.add_theme_color_override("font_color", Color("#f0d68a"))
+	lb.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.7))
+	lb.add_theme_constant_override("shadow_offset_x", 1)
+	lb.add_theme_constant_override("shadow_offset_y", 1)
+	box.add_child(lb)
+	box.pivot_offset = Vector2(28, 28)
+	box.scale = Vector2(0.8, 0.8)
+	var target := Vector2(360, 1190)
+	if is_instance_valid(_bag_btn):
+		target = _bag_btn.global_position + _bag_btn.size * 0.5
+	var tw := create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(box, "position", screen + Vector2(-28, -156), 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(box, "scale", Vector2(1.15, 1.15), 0.22).set_trans(Tween.TRANS_BACK)
+	tw.set_parallel(false)
+	tw.tween_interval(0.16)
+	tw.tween_property(box, "position", target, 0.42).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tw.parallel().tween_property(box, "scale", Vector2(0.35, 0.35), 0.42)
+	tw.parallel().tween_property(box, "modulate:a", 0.0, 0.42)
+	tw.tween_callback(func() -> void:
+		if is_instance_valid(box):
+			box.queue_free()
+		if is_instance_valid(_bag_btn):
+			var pt := create_tween()
+			pt.tween_property(_bag_btn, "scale", Vector2(1.08, 1.08), 0.08)
+			pt.tween_property(_bag_btn, "scale", Vector2.ONE, 0.12)
+	)
 
 func _set_msg(text: String, sec := 2.6) -> void:
 	_msg = text
@@ -2211,7 +2476,7 @@ func _draw_interior() -> void:
 	var np := Vector2(7 * TILE + TILE * 0.5, 5 * TILE)
 	draw_circle(np + Vector2(0, -18), 10.0, Color("#c89a6a"))
 	draw_rect(Rect2(np + Vector2(-10, -8), Vector2(20, 24)), Color("#4a5a6a"))
-	draw_string(ThemeDB.fallback_font, np + Vector2(-20, -38), "老掌柜", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("#f0d68a"))
+	draw_string(ThemeDB.fallback_font, np + Vector2(-20, -38), "老掌柜", HORIZONTAL_ALIGNMENT_LEFT, -1, 17, Color("#f0d68a"))
 	# 提示
 	draw_string(ThemeDB.fallback_font, Vector2(24, 30), "竹屋内 · 点门或按 E 出去", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color("#d8cba0"))
 
@@ -4335,6 +4600,7 @@ func _grant_battle_loot(enemy: Node2D) -> void:
 	stones = int(round(float(stones) * rm2))
 	GameState.add_coin("silver", silver)
 	GameState.add_material("forge_stone", stones, _loot_q())
+	_loot_pop("forge_stone", stones, 0.35)
 	_loot_silver += silver
 	_loot_stones += stones
 	GameState.save_game()

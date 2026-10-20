@@ -70,11 +70,22 @@ func _build_main() -> void:
 	var diff_l := _label("难度：" + _diff_name(GS.world_difficulty) + " · 资源 ×" + str(GS.world_resource_mul()), 17, UiKit.DIM)
 	diff_l.position = Vector2(20, 90)
 	diff_l.size = Vector2(520, 28)
-	var enter := _button("进 入 世 界", Vector2(130, 170), Vector2(300, 56))
+	var rl := _label("去处（只列已生成的区块）", 17, UiKit.DIM)
+	rl.position = Vector2(20, 126)
+	rl.size = Vector2(520, 26)
+	var idx := 0
+	for i in 5:
+		if not bool(GS.region_unlocked[i]):
+			continue
+		var mark := "● " if i == GS.current_region else ""
+		var rb := _button(mark + str(GS.REGION_NAMES[i]), Vector2(20 + idx * 100, 158), Vector2(92, 44))
+		rb.pressed.connect(_pick_region.bind(i))
+		idx += 1
+	var enter := _button("进 入 世 界", Vector2(130, 230), Vector2(300, 56))
 	enter.pressed.connect(_on_enter)
-	var rec := _button("游 历 记 录", Vector2(80, 270), Vector2(200, 48))
+	var rec := _button("游 历 记 录", Vector2(80, 320), Vector2(200, 48))
 	rec.pressed.connect(_on_records)
-	var create := _button("创 建 新 世 界", Vector2(300, 270), Vector2(200, 48))
+	var create := _button("创 建 新 世 界", Vector2(300, 320), Vector2(200, 48))
 	create.pressed.connect(_on_create)
 	var close_b2 := _button("关 闭", Vector2(210, 620), Vector2(140, 44))
 	close_b2.pressed.connect(close)
@@ -132,6 +143,11 @@ func _build_records() -> void:
 func _on_create() -> void:
 	_mode = "create"
 	_diff = clampi(GS.world_difficulty, 1, 3)
+	_rebuild()
+
+func _pick_region(i: int) -> void:
+	GS.current_region = clampi(i, 0, 4)
+	GS.save_game()
 	_rebuild()
 
 func _on_records() -> void:

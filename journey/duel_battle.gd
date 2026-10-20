@@ -4637,7 +4637,7 @@ func _script_count_action() -> void:
 	var i := _script_acts - 1
 	if i >= 0 and i < taunts.size():
 		var tv: Array = _script_cfg.get("taunt_voices", [])
-		if i < tv.size():
+		if i < tv.size() and str(_state.mode) != "intro":
 			Voice.say_file(str(tv[i]))
 		_banner("「" + str(taunts[i]) + "」", Color(0.72, 0.24, 0.18))
 		_blog("敌方：「" + str(taunts[i]) + "」", "bomb")

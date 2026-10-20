@@ -1147,7 +1147,7 @@ func _enter_node() -> void:
 	_step_t = 0.0
 	# v139：这一节挂了配音就念（缺文件静默跳过，不会卡）
 	var vk := str(_cur_node.get("voice", ""))
-	if vk != "":
+	if vk != "" and _state.mode != "intro":
 		Voice.say_file(vk)
 	print("[游历] 第 ", _node + 1, " / ", _nodes.size(), " 节：", str(_cur_node.get("t", "")))
 	UiKit.set_text(_node_label, "第 " + str(_node + 1) + " / " + str(_nodes.size()) + " 节")

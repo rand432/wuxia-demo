@@ -398,32 +398,6 @@ func _build() -> void:
 	_phase_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_panel.add_child(_phase_note)
 
-	# ---- 右列三个小盒：临时仓库 / 命数 / 随身功法 ----
-	var bx := 430.0
-	var bw := PANEL_W - 28.0 - bx
-	# v102（用户："三人随身功法待挑去掉【反正点出发会给提示的】给难度和档位腾出空间 格子和按钮再大一些"）：
-	#   右列那一盒整段撤掉——_art_btn 留 null（_paint_art_btn / _on_go 都有判空与"点出发再提示"的兜底）。
-	_expand_btn = Button.new()
-	_fate_btn = Button.new()
-
-	# v101（用户："把临时仓库和命数按键移动到随身携带显示【不要随身显示了】提示按钮和字体变大"）：
-	#   原来"随身清单"那一块整段撤掉，位置让给两颗大按钮——字与按钮都比原来大一号。
-	_expand_btn.position = Vector2(28, 696)
-	_expand_btn.size = Vector2(286, 106)
-	_expand_btn.add_theme_font_size_override("font_size", 22)
-	_expand_btn.focus_mode = Control.FOCUS_NONE
-	_expand_btn.pressed.connect(_on_expand)
-	_style_light_button(_expand_btn)
-	_panel.add_child(_expand_btn)
-
-	_fate_btn.position = Vector2(326, 696)
-	_fate_btn.size = Vector2(286, 106)
-	_fate_btn.add_theme_font_size_override("font_size", 23)
-	_fate_btn.focus_mode = Control.FOCUS_NONE
-	_fate_btn.pressed.connect(_ask_fate_pick)
-	_style_light_button(_fate_btn)
-	_panel.add_child(_fate_btn)
-
 	_foot_lb = _label("", 14, Color(INK.r, INK.g, INK.b, 0.55))
 	_foot_lb.position = Vector2(28, 820)
 	_foot_lb.size = Vector2(584, 36)
@@ -1038,7 +1012,7 @@ func _paint() -> void:
 		_phase_note.text = "品级＝难度主轴（凡→良→上→极）" + nxt + "\n" + wk
 	_paint_carry()
 	_paint_bonds()
-	_foot_lb.text = "本趟残卡到结算收进仓库；盘缠不带出；随身装备与功法出征前已自动卸回仓库。"
+	_foot_lb.text = ""
 	_paint_fate_btn()
 	_paint_art_btn()   # v11：随身功法那一行
 	_go_btn.disabled = (_pick_roles.is_empty() or _pick_diff <= 0)

@@ -46,9 +46,6 @@ func _show_intro() -> void:
 	var t1 := UiKit.make_label(panel, Vector2(0, 80), Vector2(640, 44), 32, UiKit.INK)
 	# v82：标题也跟着剧情改了（原来写"山门"——那是旧开场的词）
 	UiKit.set_text(t1, "崖　下")
-	# v82（用户："剧情的独白语音可以加上了"）：每一页念一句旁白。
-	#   **没录就没有**——Voice 内部对缺文件静默跳过，不会卡住开场。
-	Voice.say("narr", _intro_idx + 1)
 	t1.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
 	var body := UiKit.make_label(panel, Vector2(50, 150), Vector2(540, 156), 26, Color(UiKit.INK.r, UiKit.INK.g, UiKit.INK.b, 0.92))
@@ -97,8 +94,6 @@ func _ask_question(i: int) -> void:
 	_clear()
 	_intro_active = false
 	_q_idx = i
-	# v139（用户："五问的独白是解说的声音"）：五问也由**旁白**念——narr_06 ~ narr_10 对应第 1~5 问。
-	Voice.say("narr", 6 + i)
 	print("[游历] 第 ", i + 1, " 问 / 共 ", Creation.QUESTIONS.size(), " 问")
 	var q: Dictionary = Creation.QUESTIONS[i]
 	var opts: Array = q.get("opts", [])
@@ -141,7 +136,6 @@ func _on_answer(opt: Dictionary) -> void:
 func _show_verdict() -> void:
 	_clear()
 	_intro_active = false
-	Voice.say("narr", 11)   # v139：临别页那句也归旁白（narr_11）
 	print("[游历] 到临别页（接下来按［上路］）")
 	var veil := UiKit.make_veil(self, size, 0.52)
 	var panel := UiKit.make_paper_panel(veil, Rect2(20, 390, 680, 500))
