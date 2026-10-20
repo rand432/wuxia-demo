@@ -815,6 +815,7 @@ static var forge_item := {}
 static var forge_bag: Array = []
 static var forge_made := {}       # blank_id -> 首次成器品质
 static var forge_tools := {}      # 锻炉道具：id -> 数量
+static var forge_trait_blanks: Array = []   # 探险/Boss 掉落的带特性胚子
 static var forge_claimed := {}   # 成品库里每把锻成兵器领过奖励的 sid
 # v242：锻造动态件（sid -> Cards 动态卡集）——存档载入时重建
 static var forge_cards := {}
@@ -1505,7 +1506,13 @@ static func appraise_tool_line() -> String:
 
 # ---- 报价单 ----
 static func world_resource_mul() -> float:
-	return [1.0, 1.3, 1.6][clampi(world_difficulty - 1, 0, 2)]
+	return [0.7, 1.5, 3.0][clampi(world_difficulty - 1, 0, 2)]
+
+static func world_diff_enemy_mul() -> float:
+	return [0.7, 1.5, 3.0][clampi(world_difficulty - 1, 0, 2)]
+
+static func world_diff_boss_mul() -> float:
+	return world_diff_enemy_mul() * 1.35
 
 static func gear_salvage_mats(sid: String) -> Dictionary:
 	var q := Cards.q_idx(sid)
@@ -3716,6 +3723,11 @@ static func note_story_title(title: String) -> void:
 		return
 	story_title_prosperity = true
 	add_prosperity(5, "称号")
+
+static func forge_trait_blank_add(blank: String, trait_id: String) -> void:
+	forge_trait_blanks.append({"blank": blank, "trait": trait_id})
+	while forge_trait_blanks.size() > 20:
+		forge_trait_blanks.pop_front()
 
 static func forge_tool_count(id: String) -> int:
 	return int(forge_tools.get(id, 0))
@@ -6867,6 +6879,7 @@ static func load_game() -> void:
 	forge_bag = _sa(vlt.get("forge_bag", []), forge_bag)
 	forge_made = _sd(vlt.get("forge_made", {}), forge_made)
 	forge_tools = _sd(vlt.get("forge_tools", {}), forge_tools)
+	forge_trait_blanks = _sa(vlt.get("forge_trait_blanks", []), forge_trait_blanks)
 	forge_claimed = _sd(vlt.get("forge_claimed", {}), forge_claimed)
 	forge_cards = _sd(vlt.get("forge_cards", {}), {})
 	forge_seq = int(vlt.get("forge_seq", forge_seq))
@@ -6881,6 +6894,11 @@ static func load_game() -> void:
 		for mk in materials.keys():
 			if int(materials[mk]) > 0:
 				material_q[_mq_key(str(mk), 0)] = int(materials[mk])
+	# 旧档迁移：剑胚已并入普通胚子。
+	if material_count("jianpei") > 0:
+		var jp_old := material_count("jianpei")
+		add_material("jianpei", -jp_old)
+		add_material("common", jp_old)
 	# v257：青岚控制赤水寨 → 每日地盘税（一天一次）
 	if red_water == 2:
 		var today := Time.get_date_string_from_system()
@@ -7032,7 +7050,7 @@ static func save_game() -> void:
 	cf.set_value("world", "strip_saved", strip_saved)
 	cf.set_value("world", "vault", {
 		"cards": vault_cards, "items": vault_items, "materials": materials, "material_q": material_q,
-		"forge_item": forge_item, "forge_bag": forge_bag, "forge_made": forge_made, "forge_tools": forge_tools, "forge_claimed": forge_claimed,
+		"forge_item": forge_item, "forge_bag": forge_bag, "forge_made": forge_made, "forge_tools": forge_tools, "forge_trait_blanks": forge_trait_blanks, "forge_claimed": forge_claimed,
 		"forge_cards": forge_cards, "forge_seq": forge_seq,
 		"forge_compendium": forge_compendium,
 		"fragments": fragments, "pills": pills, "wines": wines,
@@ -7165,6 +7183,7 @@ static func reset() -> void:
 	forge_bag.clear()
 	forge_made.clear()
 	forge_tools.clear()
+	forge_trait_blanks.clear()
 	forge_claimed.clear()
 	forge_cards.clear()
 	forge_seq = 0

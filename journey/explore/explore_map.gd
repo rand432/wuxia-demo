@@ -20,6 +20,7 @@ const CharacterPanel := preload("res://menu/character_panel.gd")
 const WarehousePanel := preload("res://menu/warehouse_panel.gd")
 const RegionSelectPanel := preload("res://menu/region_select.gd")
 const ItemIcons := preload("res://shared/item_icons.gd")
+const ForgeData := preload("res://menu/data_forge.gd")
 const UI_FONT := preload("res://fonts/ink.ttf")   # v249：地图面板也用毛笔字体
 
 const MAP_W := 24
@@ -1403,38 +1404,42 @@ func _gather_node(i: int) -> void:
 	GameState.world_mark("node", _flag_key(cell))
 	var typ := str(_node_types[i])
 	var msg := ""
+	var rm := GameState.world_resource_mul()
+	var zhi_n := maxi(1, int(round(2.0 * rm)))
+	var shen_n := maxi(1, int(round(1.0 * rm)))
+	var os := maxi(1, int(round(float(randi_range(2, 4)) * rm)))
+	var ir := maxi(1, int(round(float(randi_range(1, 3)) * rm)))
+	var bs := maxi(1, int(round(float(randi_range(2, 4)) * rm)))
+	var bc := maxi(1, int(round(float(randi_range(1, 2)) * rm)))
+	var rs := maxi(1, int(round(float(randi_range(1, 3)) * rm)))
 	match typ:
 		"herb":
 			if randf() < 0.5:
-				GameState.add_material("zhi", 2, _loot_q())
-				_loot_pop("zhi", 2)
-				msg = "采到紫芝 ×2"
+				GameState.add_material("zhi", zhi_n, _loot_q())
+				_loot_pop("zhi", zhi_n)
+				msg = "采到紫芝 ×" + str(zhi_n)
 			else:
-				GameState.add_material("shen", 1, _loot_q())
-				_loot_pop("shen", 1)
-				msg = "采到雪参 ×1"
+				GameState.add_material("shen", shen_n, _loot_q())
+				_loot_pop("shen", shen_n)
+				msg = "采到雪参 ×" + str(shen_n)
 		"snowherb":
-			GameState.add_material("shen", 2, _loot_q())
-			_loot_pop("shen", 2)
-			msg = "采到雪参 ×2"
+			var shen2 := maxi(1, int(round(2.0 * rm)))
+			GameState.add_material("shen", shen2, _loot_q())
+			_loot_pop("shen", shen2)
+			msg = "采到雪参 ×" + str(shen2)
 		"ore":
-			var os := randi_range(2, 4)
-			var ir := randi_range(1, 3)
 			GameState.add_material("forge_stone", os, _loot_q())
 			GameState.add_material("iron_sand", ir, _loot_q())
 			_loot_pop("forge_stone", os)
 			_loot_pop("iron_sand", ir, 0.12)
 			msg = "挖到锻造石 ×" + str(os) + " · 铁矿砂 ×" + str(ir)
 		"bone":
-			var bs := randi_range(2, 4)
-			var bc := randi_range(1, 2)
 			GameState.add_material("bone", bs, _loot_q())
 			GameState.add_material("bone_coal", bc, _loot_q())
 			_loot_pop("bone", bs)
 			_loot_pop("bone_coal", bc, 0.12)
 			msg = "捡到兽骨碎 ×" + str(bs) + " · 骨炭 ×" + str(bc)
 		"rice":
-			var rs := randi_range(1, 3)
 			GameState.add_material("rice", rs, _loot_q())
 			_loot_pop("rice", rs)
 			msg = "采到灵米 ×" + str(rs)
@@ -1460,7 +1465,7 @@ func _npc_free_cell(rng: RandomNumberGenerator) -> Vector2i:
 	return Vector2i(-1, -1)
 
 func _make_npc(cell: Vector2i, typ: String, nm: String) -> Dictionary:
-	return {"cell": cell, "type": typ, "name": nm, "done": false, "stock_slot": -1, "stock": {}}
+	return {"cell": cell, "type": typ, "name": nm, "done": false, "dead": false, "combat": typ == "swordsman" or typ == "thief", "stock_slot": -1, "stock": {}}
 
 func _npc_key(cell: Vector2i) -> String:
 	return str(GameState.world_seed) + ":" + str(GameState.current_region) + ":" + _flag_key(cell)
@@ -1504,6 +1509,15 @@ func _draw_npcs() -> void:
 		var p := _cell_pos(c.x, c.y)
 		var typ := str(n["type"])
 		var col := Color("#c9a64a") if typ == "merchant" else (Color("#8ab46a") if typ == "doctor" else (Color("#b9a878") if typ == "storyteller" else (Color("#8fa0b0") if typ == "swordsman" else (Color("#9a6a8a") if typ == "thief" else Color("#e0c070")))))
+		if bool(n.get("dead", false)):
+			draw_circle(p + Vector2(0, 16), 14.0, Color(0.12, 0.08, 0.07, 0.45))
+			draw_line(p + Vector2(-20, 8), p + Vector2(22, 12), Color("#5a3a32"), 10.0)
+			draw_circle(p + Vector2(-26, 6), 8.0, Color("#c9b89a"))
+			draw_line(p + Vector2(-30, 3), p + Vector2(-23, 9), Color("#3a1f1a"), 2.0)
+			draw_line(p + Vector2(-30, 9), p + Vector2(-23, 3), Color("#3a1f1a"), 2.0)
+			draw_line(p + Vector2(-14, 14), p + Vector2(-24, 22), Color("#5a3a32"), 4.0)
+			draw_string(ThemeDB.fallback_font, p + Vector2(-36, -30), str(n["name"]) + "（尸）", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.55, 0.45, 0.40, 0.9))
+			continue
 		if bool(n.get("done", false)):
 			col = Color("#6b655c")
 		draw_circle(p + Vector2(0, 18), 16.0, Color(0.04, 0.05, 0.04, 0.32))
@@ -1515,10 +1529,82 @@ func _draw_npcs() -> void:
 		if bool(n.get("done", false)):
 			draw_string(ThemeDB.fallback_font, p + Vector2(-10, 34), "已了", HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(0.55, 0.5, 0.4, 0.8))
 
+func _npc_foe(n: Dictionary) -> Dictionary:
+	var typ := str(n.get("type", "story"))
+	var ref := _party_ref()
+	var dm := GameState.world_diff_enemy_mul()
+	var hp_mul := 2.4
+	var atk_mul := 0.016
+	var sc := 1.0
+	match typ:
+		"swordsman":
+			hp_mul = 4.8
+			atk_mul = 0.026
+			sc = 1.08
+		"thief":
+			hp_mul = 3.4
+			atk_mul = 0.020
+			sc = 0.98
+		"story":
+			hp_mul = 3.8
+			atk_mul = 0.022
+			sc = 1.02
+		"merchant":
+			hp_mul = 2.2
+			atk_mul = 0.012
+		"doctor":
+			hp_mul = 2.0
+			atk_mul = 0.010
+		"storyteller":
+			hp_mul = 1.8
+			atk_mul = 0.008
+	var hp := maxi(1, int(float(ref["atk"]) * hp_mul * dm))
+	var atk := maxi(1, int(float(ref["hp"]) * atk_mul * dm))
+	return {"hp": hp, "atk": atk, "scale": sc}
+
+func _npc_view_text(n: Dictionary) -> String:
+	var f := _npc_foe(n)
+	var tags := "可动手" if bool(n.get("combat", false)) else "江湖人"
+	return "姓名：" + str(n["name"]) + "\n身份：" + _npc_type_name(str(n["type"])) + "\n" + tags + "\n气血 " + str(int(f["hp"])) + " · 攻击 " + str(int(f["atk"]))
+
+func _start_npc_battle(i: int) -> void:
+	if i < 0 or i >= _npcs.size() or _battle_active:
+		return
+	var n: Dictionary = _npcs[i]
+	if bool(n.get("dead", false)):
+		return
+	var nc: Vector2i = n["cell"]
+	var node := Node2D.new()
+	node.position = _cell_pos(nc.x, nc.y)
+	node.set_meta("foe_name", str(n["name"]))
+	node.set_meta("display_name", str(n["name"]))
+	node.set_meta("foe", _npc_foe(n))
+	add_child(node)
+	await _try_battle(node)
+	var won := bool(node.get_meta("beaten", false))
+	if won:
+		n["dead"] = true
+		GameState.world_mark("npc_dead", _flag_key(n["cell"]))
+		GameState.add_region_rep(GameState.current_region, -8)
+		var rm := GameState.world_resource_mul()
+		var silver := int(round(90.0 * rm))
+		GameState.add_coin("silver", silver)
+		GameState.add_material("iron_sand", maxi(1, int(round(5.0 * rm))))
+		GameState.add_material("bone", maxi(1, int(round(4.0 * rm))))
+		GameState.log_explore("击杀：" + str(n["name"]) + " · 银两 +" + str(silver))
+		_set_msg("你杀了「" + str(n["name"]) + "」。尸首留在原地。", 3.0)
+		GameState.save_game()
+		queue_redraw()
+	if is_instance_valid(node):
+		node.queue_free()
+
 func _open_npc(i: int) -> void:
 	if i < 0 or i >= _npcs.size():
 		return
 	var n: Dictionary = _npcs[i]
+	if bool(n.get("dead", false)):
+		_set_msg(str(n["name"]) + "倒在这里，已经没气了。")
+		return
 	if bool(n.get("done", false)):
 		_set_msg(str(n["name"]) + "：话已经说完了。")
 		return
@@ -1552,9 +1638,13 @@ func _open_npc(i: int) -> void:
 		_toast_layer.add_child(np)
 		_npc_panel = np
 	_npc_active = i
+	choices.insert(0, {"id": "view", "label": "查 看"})
+	choices.append({"id": "fight", "label": "动 手"})
 	var body := "一个" + _npc_type_name(typ) + "在路边歇脚。"
 	if typ == "story":
 		body = "旧识在此，似乎有话要说。"
+	if bool(n.get("combat", false)):
+		body += "此人身上带着兵器。"
 	_npc_panel.call("open", {"title": str(n["name"]), "sub": _npc_type_name(typ), "body": body, "choices": choices})
 	_busy = true
 	_moving = false
@@ -1576,8 +1666,15 @@ func _on_npc_pick(id: String) -> void:
 	if _npc_active < 0 or _npc_active >= _npcs.size():
 		return
 	var n: Dictionary = _npcs[_npc_active]
+	var idx := _npc_active
 	var msg := "你退开了。"
 	match id:
+		"view":
+			msg = _npc_view_text(n)
+		"fight":
+			_npc_panel.call("close")
+			_start_npc_battle.call_deferred(idx)
+			return
 		"food":
 			var st: Dictionary = n.get("stock", {})
 			var price := _npc_price(10)
@@ -1727,8 +1824,29 @@ func _apply_world_flags() -> void:
 		var nc: Vector2i = npc["cell"]
 		if GameState.world_has("npc", _flag_key(nc)):
 			npc["done"] = true
+		if GameState.world_has("npc_dead", _flag_key(nc)):
+			npc["dead"] = true
 	if _boss_node != null and GameState.world_has("boss", _boss_name):
 		_boss_node.set_meta("beaten", true)
+
+func _party_ref() -> Dictionary:
+	var ids: Array = GameState.deploy_party
+	if ids.is_empty() and str(GameState.deploy_role) != "":
+		ids = [GameState.deploy_role]
+	var atk_sum := 0
+	var hp_sum := 0
+	var n := 0
+	for id_v in ids:
+		var rid := str(id_v)
+		if rid == "":
+			continue
+		var st: Dictionary = GameState.squad_stats(rid)
+		atk_sum += int(st.get("atk", 0))
+		hp_sum += int(st.get("hp", 0))
+		n += 1
+	if n <= 0:
+		return {"atk": 50, "hp": 800}
+	return {"atk": maxi(1, atk_sum / n), "hp": maxi(1, hp_sum / n)}
 
 func _spawn_boss() -> void:
 	_boss_node = Node2D.new()
@@ -1737,10 +1855,14 @@ func _spawn_boss() -> void:
 	var hp := int(round(float(280 + tier * 70) * GameState.ng_mul() * BOSS_HP_MUL))
 	if GameState.boss_kills.has(_boss_name):
 		hp = int(hp * 0.9)   # 图鉴弱点：首杀后识破，再战气血 -10%
+	var b_ref := _party_ref()
+	var b_dm := GameState.world_diff_boss_mul()
+	hp = maxi(int(round(float(hp) * b_dm)), int(float(b_ref["atk"]) * 9.0 * b_dm))
+	var boss_atk := maxi(int(round(float(14 + tier * 2) * GameState.ng_mul() * BOSS_ATK_MUL * b_dm)), int(float(b_ref["hp"]) * 0.035 * b_dm))
 	_boss_node.set_meta("boss", true)
 	_boss_node.set_meta("foe_name", _boss_name)
 	_boss_node.set_meta("beaten", false)
-	var foe := {"hp": hp, "atk": maxi(1, int(round(float(14 + tier * 2) * GameState.ng_mul() * BOSS_ATK_MUL))), "scale": 1.3}
+	var foe := {"hp": hp, "atk": boss_atk, "scale": 1.3}
 	if _boss_name == "雪魈":
 		foe["def"] = 8
 		foe["spd"] = 105
@@ -1859,8 +1981,10 @@ func _make_enemy(cell: Vector2i, i: int, hunter := false, guard := false, elite 
 		sc *= float(aff["scale"])
 		e.set_meta("elite_affix", str(aff["id"]))
 	var ng := GameState.ng_mul()
-	hp = int(round(float(hp) * ng * EXPLORE_HP_MUL))
-	atk = maxi(1, int(round(float(atk) * ng * EXPLORE_ATK_MUL)))
+	var e_ref := _party_ref()
+	var e_dm := GameState.world_diff_enemy_mul()
+	hp = maxi(int(round(float(hp) * ng * EXPLORE_HP_MUL * e_dm)), int(float(e_ref["atk"]) * 2.2 * e_dm))
+	atk = maxi(1, maxi(int(round(float(atk) * ng * EXPLORE_ATK_MUL * e_dm)), int(float(e_ref["hp"]) * 0.022 * e_dm)))
 	var foe := {"hp": hp, "atk": atk, "scale": sc, "spd": spd}
 	if td > 0:
 		foe["def"] = td
@@ -2393,13 +2517,25 @@ func _open_chest(cell: Vector2i) -> void:
 	GameState.add_coin("silver", silver)
 	_loot_stones += stones
 	_loot_silver += silver
-	var isand := randi_range(2, 5)
-	var coal := randi_range(1, 3)
+	var isand := maxi(1, int(round(float(randi_range(2, 5)) * rm)))
+	var coal := maxi(1, int(round(float(randi_range(1, 3)) * rm)))
 	GameState.add_material("iron_sand", isand, cq)
 	GameState.add_material("bone_coal", coal, cq)
 	_loot_pop("iron_sand", isand, 0.12)
 	_loot_pop("bone_coal", coal, 0.22)
 	var extra := " · 铁矿砂 ×" + str(isand) + " · 骨炭 ×" + str(coal)
+	if randf() < minf(0.65, 0.32 * rm):
+		if randf() < 0.65:
+			var tb_blank: String = "gen_fan" if q >= 1 else "common"
+			var tb_trait := ForgeData.roll_quench_trait()
+			GameState.forge_trait_blank_add(tb_blank, tb_trait)
+			var tb_nm := str(ForgeData.blank(tb_blank).get("name", "胚子")) + "·" + str(ForgeData.quench_trait(tb_trait).get("name", "特性"))
+			extra += " · 特性胚「" + tb_nm + "」"
+		else:
+			var blank_drop: String = "common" if q == 0 else "gen_fan"
+			GameState.add_material(blank_drop, 1, cq)
+			_loot_pop(blank_drop, 1, 0.42)
+			extra += " · " + GameState.mat_name(blank_drop) + " ×1"
 	if q >= 1 and randf() < 0.45:
 		GameState.add_material("forge_oil", 1, cq)
 		_loot_pop("forge_oil", 1, 0.32)
@@ -3737,23 +3873,32 @@ func _on_broker_pick(id: String) -> void:
 		GameState.broker_quest = stage + 1
 		if stage == 0:
 			GameState.broker_rep = mini(100, GameState.broker_rep + 10)
-			GameState.add_coin("silver", 120)
+			var qrm := GameState.world_resource_mul()
+			GameState.add_coin("silver", int(round(120.0 * qrm)))
+			var q0t := ForgeData.roll_quench_trait()
+			GameState.forge_trait_blank_add("common", q0t)
 			GameState.note_war("替听雨楼跑了一趟委托")
-			_set_msg("信送到了。听雨楼给 120 两，名声 +10。")
+			_set_msg("信送到了。听雨楼给 " + str(int(round(120.0 * qrm))) + " 两、一块特性胚，名声 +10。")
 		elif stage == 1:
 			GameState.broker_rep = mini(100, GameState.broker_rep + 15)
-			GameState.add_coin("silver", 120)
+			var qrm2 := GameState.world_resource_mul()
+			GameState.add_coin("silver", int(round(120.0 * qrm2)))
 			if GameState.red_water == 2 and not GameState.red_water_peace:
 				GameState.war_score = mini(100, GameState.war_score + 20)
+			var iron_n := maxi(1, int(round(4.0 * qrm2)))
+			GameState.add_material("iron_sand", iron_n)
 			GameState.note_war("替听雨楼查了赤水布防")
-			_set_msg("布防查清了。听雨楼给 120 两，名声 +15。")
+			_set_msg("布防查清了。听雨楼给 " + str(int(round(120.0 * qrm2))) + " 两、铁矿砂 ×" + str(iron_n) + "，名声 +15。")
 		else:
 			GameState.broker_rep = mini(100, GameState.broker_rep + 20)
-			GameState.add_coin("silver", 200)
+			var qrm3 := GameState.world_resource_mul()
+			GameState.add_coin("silver", int(round(200.0 * qrm3)))
 			GameState.add_material("atlas", 1)
-			GameState.add_material("jin", 2)
+			GameState.add_material("jin", maxi(1, int(round(2.0 * qrm3))))
+			var q2t := ForgeData.roll_quench_trait()
+			GameState.forge_trait_blank_add("gen_fan", q2t)
 			GameState.note_war("办完了听雨楼楼主的托付")
-			_set_msg("楼主托付办完。银两 +200 · 舆图 +1 · 金髓 +2，名声 +20。")
+			_set_msg("楼主托付办完。银两 +" + str(int(round(200.0 * qrm3))) + " · 舆图 +1 · 金髓 +" + str(maxi(1, int(round(2.0 * qrm3)))) + " · 特性胚 ×1，名声 +20。")
 		GameState.save_game()
 		_broker_panel.call("close")
 		queue_redraw()
@@ -4699,6 +4844,7 @@ func _grant_battle_loot(enemy: Node2D) -> void:
 	var first_boss := false
 	var boss_drop := ""
 	var boss_tool := ""
+	var boss_blank := ""
 	if is_boss:
 		silver += 180
 		stones += 8
@@ -4723,6 +4869,20 @@ func _grant_battle_loot(enemy: Node2D) -> void:
 			if btid != "":
 				GameState.forge_tool_add(btid, 1)
 				boss_tool = bt
+			var cleared := GameState.boss_kills.size()
+			var tb_blank := "gen_fan"
+			if cleared >= 15:
+				tb_blank = "gen_jue"
+			elif cleared >= 9:
+				tb_blank = "gen_ji"
+			elif cleared >= 6:
+				tb_blank = "gen_shang"
+			elif cleared >= 4:
+				tb_blank = "gen_zhong"
+			var tb_trait := ForgeData.roll_quench_trait()
+			GameState.forge_trait_blank_add(tb_blank, tb_trait)
+			var tb_name := str(ForgeData.quench_trait(tb_trait).get("name", "特性"))
+			boss_blank = str(ForgeData.blank(tb_blank).get("name", "胚子")) + "·" + tb_name
 	if GameState.story_title == "江湖散人":
 		silver = int(round(float(silver) * 1.1))
 	if _map_owner == 1:
@@ -4735,13 +4895,16 @@ func _grant_battle_loot(enemy: Node2D) -> void:
 	GameState.add_coin("silver", silver)
 	GameState.add_material("forge_stone", stones, _loot_q())
 	_loot_pop("forge_stone", stones, 0.35)
-	var iron_drop := randi_range(1, 3)
-	var coal_drop := randi_range(1, 2)
+	var iron_drop := maxi(1, int(round(float(randi_range(1, 3)) * rm2)))
+	var coal_drop := maxi(1, int(round(float(randi_range(1, 2)) * rm2)))
 	GameState.add_material("iron_sand", iron_drop, _loot_q())
 	GameState.add_material("bone_coal", coal_drop, _loot_q())
 	_loot_pop("iron_sand", iron_drop, 0.45)
 	_loot_pop("bone_coal", coal_drop, 0.55)
 	extra_mat += " · 铁矿砂 +" + str(iron_drop) + " · 骨炭 +" + str(coal_drop)
+	if randf() < 0.06:
+		GameState.add_material("common", 1, _loot_q())
+		extra_mat += " · 普通胚子 +1"
 	_loot_silver += silver
 	_loot_stones += stones
 	GameState.save_game()
@@ -4757,6 +4920,8 @@ func _grant_battle_loot(enemy: Node2D) -> void:
 				tail += " · 专属「" + boss_drop + "」"
 			if boss_tool != "":
 				tail += " · 锻炉道具「" + boss_tool + "」"
+			if boss_blank != "":
+				tail += " · 特性胚「" + boss_blank + "」"
 	_set_msg("击败「" + fname + "」：银两 +" + str(silver) + " · 锻造石 +" + str(stones) + tail + extra_mat, 3.0)
 	GameState.log_explore("战斗：击败「" + fname + "」 · 锻造石 +" + str(stones) + tail)
 

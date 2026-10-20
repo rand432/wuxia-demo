@@ -340,7 +340,7 @@ func _build() -> void:
 	var tab_names := ["武 器 / 装 备", "淬 火", "材料合成", "道 具", "关 闭"]
 	_tab_btns = []
 	for ti in tab_names.size():
-		var tb := UiKit.make_button(_panel, Vector2(16 + ti * 122, 864), Vector2(116, 54), str(tab_names[ti]), 15)
+		var tb := UiKit.make_button(_panel, Vector2(8 + ti * 124, 850), Vector2(118, 70), str(tab_names[ti]), 16)
 		_tab_btns.append(tb)
 	_tab_btns[0].pressed.connect(_open_blank_picker)
 	_tab_btns[1].pressed.connect(_open_quench)
@@ -372,8 +372,8 @@ func _build_compendium() -> void:
 	_comp_dim.visible = false
 	_panel.add_child(_comp_dim)
 	_comp_panel = Panel.new()
-	_comp_panel.position = Vector2(30, 70)
-	_comp_panel.size = Vector2(580, 500)
+	_comp_panel.position = Vector2(10, 40)
+	_comp_panel.size = Vector2(620, 760)
 	_comp_panel.z_index = 20
 	_comp_panel.visible = false
 	var csb := StyleBoxFlat.new()
@@ -384,24 +384,24 @@ func _build_compendium() -> void:
 	_comp_panel.add_theme_stylebox_override("panel", csb)
 	_panel.add_child(_comp_panel)
 
-	_comp_title = _label("材 料 合 成", 24, INK)
-	_comp_title.position = Vector2(22, 14)
-	_comp_title.size = Vector2(300, 32)
+	_comp_title = _label("材 料 合 成", 28, INK)
+	_comp_title.position = Vector2(24, 14)
+	_comp_title.size = Vector2(360, 36)
 	_comp_panel.add_child(_comp_title)
 
-	_comp_hint_lb = _label("", 14, Color(INK.r, INK.g, INK.b, 0.74))
-	_comp_hint_lb.position = Vector2(22, 52)
-	_comp_hint_lb.size = Vector2(536, 24)
+	_comp_hint_lb = _label("", 15, Color(INK.r, INK.g, INK.b, 0.74))
+	_comp_hint_lb.position = Vector2(24, 56)
+	_comp_hint_lb.size = Vector2(570, 26)
 	_comp_panel.add_child(_comp_hint_lb)
 
-	_comp_page_btn = UiKit.make_button(_comp_panel, Vector2(404, 12), Vector2(154, 38), "下一条", 17)
+	_comp_page_btn = UiKit.make_button(_comp_panel, Vector2(444, 12), Vector2(160, 40), "下一条", 18)
 	_comp_page_btn.pressed.connect(_comp_next)
-	_comp_mode_btn = UiKit.make_button(_comp_panel, Vector2(404, 52), Vector2(154, 34), "图 鉴", 16)
+	_comp_mode_btn = UiKit.make_button(_comp_panel, Vector2(444, 56), Vector2(160, 38), "图 鉴", 17)
 	_comp_mode_btn.pressed.connect(_comp_mode_toggle)
 
-	var pick := _label("放两味料试试（试错只亏石头，材料不动）", 13, Color(INK.r, INK.g, INK.b, 0.54))
-	pick.position = Vector2(22, 84)
-	pick.size = Vector2(536, 20)
+	var pick := _label("材料库存", 14, Color(INK.r, INK.g, INK.b, 0.54))
+	pick.position = Vector2(24, 94)
+	pick.size = Vector2(570, 22)
 	_comp_panel.add_child(pick)
 
 	_comp_mat_btns = {}
@@ -410,24 +410,28 @@ func _build_compendium() -> void:
 		var k := str(mats[i])
 		var col := i % 3
 		var row := i / 3
-		var mb := UiKit.make_button(_comp_panel, Vector2(22 + col * 178, 106 + row * 48), Vector2(170, 42), "", 15)
+		var mb := UiKit.make_button(_comp_panel, Vector2(14 + col * 200, 120 + row * 78), Vector2(192, 70), "", 18)
 		mb.toggle_mode = true
+		mb.expand_icon = true
+		mb.add_theme_constant_override("icon_max_width", 46)
+		mb.icon = ItemIcons.for_mat(k)
+		mb.add_theme_color_override("font_disabled_color", Color(INK.r, INK.g, INK.b, 0.62))
 		mb.pressed.connect(_comp_toggle.bind(k))
 		_comp_mat_btns[k] = mb
 
-	_comp_try_btn = UiKit.make_button(_comp_panel, Vector2(22, 210), Vector2(258, 48), "试 合", 21)
+	_comp_try_btn = UiKit.make_button(_comp_panel, Vector2(14, 292), Vector2(300, 60), "试 合", 23)
 	_comp_try_btn.pressed.connect(_comp_try)
 
-	_comp_recipe_lb = _label("", 14, Color(INK.r, INK.g, INK.b, 0.78))
-	_comp_recipe_lb.position = Vector2(22, 270)
-	_comp_recipe_lb.size = Vector2(536, 84)
+	_comp_recipe_lb = _label("", 17, Color(INK.r, INK.g, INK.b, 0.78))
+	_comp_recipe_lb.position = Vector2(14, 280)
+	_comp_recipe_lb.size = Vector2(592, 190)
 	_comp_recipe_lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_comp_panel.add_child(_comp_recipe_lb)
 
-	_comp_make_btn = UiKit.make_button(_comp_panel, Vector2(22, 370), Vector2(258, 48), "照图鉴造胚", 20)
+	_comp_make_btn = UiKit.make_button(_comp_panel, Vector2(14, 510), Vector2(280, 60), "照图鉴造胚", 21)
 	_comp_make_btn.pressed.connect(_comp_make)
 
-	var back := UiKit.make_button(_comp_panel, Vector2(300, 370), Vector2(258, 48), "返 回", 21)
+	var back := UiKit.make_button(_comp_panel, Vector2(310, 510), Vector2(280, 60), "返 回", 23)
 	back.pressed.connect(_comp_close)
 
 func _build_bag() -> void:
@@ -588,6 +592,17 @@ func _show_pick(mode: String) -> void:
 		if not any2:
 			_blank_grid.add_child(_label("还没有锻成的装备。\n装备胚在「材料合成」里造。", 18, Color(INK.r, INK.g, INK.b, 0.55)))
 		return
+	for i in range(GameState.forge_trait_blanks.size() - 1, -1, -1):
+		var tb: Dictionary = GameState.forge_trait_blanks[i]
+		var tb_blank := str(tb.get("blank", "gen_fan"))
+		var tb_trait := str(tb.get("trait", ""))
+		var tb_td := ForgeData.quench_trait(tb_trait)
+		if tb_td.is_empty():
+			continue
+		var tbd := ForgeData.blank(tb_blank)
+		var ttxt := str(tbd.get("name", "胚子")) + "\n" + str(tb_td.get("name", "特性"))
+		var tpb := _pick_card(ItemIcons.for_pool("weapon", str(tbd.get("kind", "sword")), tb_blank), ttxt, not busy, _use_trait_blank.bind(i))
+		tpb.tooltip_text = "带特性胚子：" + str(tb_td.get("desc", ""))
 	for b_v in ForgeData.BLANKS:
 		var b: Dictionary = b_v
 		if str(b.get("pool", "weapon")) != "weapon":
@@ -600,6 +615,29 @@ func _show_pick(mode: String) -> void:
 		var txt2 := nm2 + (" ×" + str(GameState.material_count(bid)) if own else "") + "\n" + qn
 		var pb2 := _pick_card(ItemIcons.for_pool("weapon", str(b.get("kind", "sword")), bid), txt2, can, _pick_blank.bind(bid))
 		pb2.tooltip_text = ("点击开炉" if own else "去材料合成")
+
+func _use_trait_blank(idx: int) -> void:
+	if idx < 0 or idx >= GameState.forge_trait_blanks.size():
+		return
+	if not (GameState.forge_item as Dictionary).is_empty():
+		_push_log("先收下砧上这把，再换胚子。")
+		return
+	var tb: Dictionary = GameState.forge_trait_blanks[idx]
+	var blank_id := str(tb.get("blank", "gen_fan"))
+	var trait_id := str(tb.get("trait", ""))
+	if trait_id == "":
+		return
+	GameState.forge_trait_blanks.remove_at(idx)
+	GameState.forge_item = ForgeData.make_item(blank_id)
+	GameState.forge_item["quench_trait"] = trait_id
+	GameState.forge_item["quench_count"] = 0
+	if trait_id == "mingdao":
+		GameState.forge_item["mingdao_charges"] = 3
+	elif trait_id == "xiren":
+		GameState.forge_item["mingdao_charges"] = 1
+	_blank_panel.visible = false
+	GameState.save_game()
+	refresh()
 
 func _retrieve_weapon(sid: String) -> void:
 	if not (GameState.forge_item as Dictionary).is_empty():
@@ -799,7 +837,7 @@ func _open_blank(id: String) -> void:
 		return
 	var need := str(b.get("need", ""))
 	if need != "" and GameState.material_count(need) < 1:
-		_push_log("没有剑胚——先去弄一块剑胚。")
+		_push_log("没有这种胚子——先去材料合成造一块。")
 		return
 	if need != "":
 		GameState.add_material(need, -1)
@@ -1452,7 +1490,7 @@ func _bag_refresh() -> void:
 			state = "ready"
 		elif made and claimed:
 			state = "claimed"
-		var shown := str(info.get("name", b.get("name" if bid == "jianpei" else "weapon", "兵器")))
+		var shown := str(info.get("name", b.get("name", "胚子")))
 		var grade_txt := "" if state == "locked" else (ForgeData.grade_name(g) + " · ")
 		btn.text = "◆ " + shown + "\n" + grade_txt + ForgeData.quality_name(q) + "\n" + ("未打造" if state == "locked" else ("可领取" if state == "ready" else "已领取"))
 		var st := StyleBoxFlat.new()
@@ -1592,7 +1630,7 @@ func _comp_open(mode := "synthesis") -> void:
 		(_comp_mat_btns[k_v] as Button).visible = synth
 	if _comp_mode_btn != null:
 		_comp_mode_btn.visible = true
-	_comp_try_btn.visible = synth
+	_comp_try_btn.visible = false
 	if not synth:
 		_comp_make_btn.visible = false
 	_comp_refresh()
@@ -1645,9 +1683,6 @@ func _comp_try() -> void:
 
 func _comp_make() -> void:
 	var c: Dictionary = ForgeData.COMBOS[_comp_idx]
-	if not GameState.forge_compendium.has(str(c.get("id", ""))):
-		_push_log("还没合中——图鉴上是空的。")
-		return
 	if not (GameState.forge_item as Dictionary).is_empty():
 		_push_log("先收下砧上这把，再照图鉴造胚。")
 		return
@@ -1661,7 +1696,7 @@ func _comp_make() -> void:
 		var k := str(k_v)
 		GameState.add_material(k, -int(cost[k]))
 	GameState.forge_item = ForgeData.make_item(str(c["blank"]))
-	_push_log("照图鉴造胚：「" + str(c["name"]) + "」已上砧。")
+	_push_log("造胚：「" + str(c["name"]) + "」已上砧。")
 	GameState.save_game()
 	_comp_close()
 	refresh()
@@ -1673,37 +1708,30 @@ func _comp_refresh() -> void:
 		return
 	_comp_idx = clampi(_comp_idx, 0, ForgeData.COMBOS.size() - 1)
 	var c: Dictionary = ForgeData.COMBOS[_comp_idx]
-	var cid := str(c.get("id", ""))
-	var unlocked := GameState.forge_compendium.has(cid)
-	var stones := GameState.material_count("forge_stone")
 	for k_v in _comp_mat_btns.keys():
 		var k := str(k_v)
 		var b: Button = _comp_mat_btns[k]
 		b.text = GameState.mat_name(k) + " " + str(GameState.material_count(k))
 		b.visible = _comp_mode == "synthesis"
+		b.disabled = true
 	_comp_page_btn.text = "下一条 " + str(_comp_idx + 1) + "/" + str(ForgeData.COMBOS.size())
-	_comp_hint_lb.text = "已入图鉴：「" + str(c["name"]) + "」" if unlocked else "老铁匠说：" + str(c["hint"])
-	_comp_try_btn.disabled = unlocked or stones < ForgeData.TRIAL_STONES
-	_comp_try_btn.text = "试 合（锻造石 " + str(ForgeData.TRIAL_STONES) + "）"
+	_comp_hint_lb.text = "配方：" + str(c["name"]) + " · " + str(c["hint"])
 	var cost: Dictionary = c.get("cost", {})
 	var cost_txt := ""
 	for k_v in cost.keys():
 		var k := str(k_v)
 		cost_txt += GameState.mat_name(k) + " " + str(int(cost[k])) + " · "
 	cost_txt = cost_txt.trim_suffix(" · ")
-	if unlocked:
-		_comp_recipe_lb.text = "图鉴：「" + str(c["name"]) + "」\n造胚耗：" + cost_txt + "\n造出来直接上砧，不再收开炉银两。"
-	else:
-		_comp_recipe_lb.text = "图鉴：未合中\n试合：选两味料 + " + str(ForgeData.TRIAL_STONES) + " 锻造石\n（合不中只亏石头，材料原样退回）"
-	_comp_make_btn.visible = unlocked and _comp_mode == "synthesis"
-	_comp_try_btn.visible = _comp_mode == "synthesis"
+	_comp_recipe_lb.text = "「" + str(c["name"]) + "」\n造胚耗：" + cost_txt + "\n材料够就直接上砧。"
+	_comp_make_btn.visible = _comp_mode == "synthesis"
+	_comp_try_btn.visible = false
 	var can_make := true
 	for k_v in cost.keys():
 		var k := str(k_v)
 		if GameState.material_count(k) < int(cost[k]):
 			can_make = false
 	_comp_make_btn.disabled = not can_make or not (GameState.forge_item as Dictionary).is_empty()
-	_comp_make_btn.text = "照图鉴造胚（" + cost_txt + "）"
+	_comp_make_btn.text = "直 接 造 胚（" + cost_txt + "）"
 
 func _set_hit_busy(v: bool) -> void:
 	_hit_busy = v
@@ -1862,7 +1890,7 @@ func _push_log(s: String) -> void:
 func refresh() -> void:
 	if _panel == null:
 		return
-	_res_lb.text = "锻造石 " + str(GameState.material_count("forge_stone")) + " · 银两 " + str(GameState.coin("silver")) + " · 剑胚 " + str(GameState.material_count("jianpei"))
+	_res_lb.text = "锻造石 " + str(GameState.material_count("forge_stone")) + " · 银两 " + str(GameState.coin("silver")) + " · 胚子 " + str(GameState.material_count("common"))
 	var it: Dictionary = GameState.forge_item
 	var gw := ForgeData.roll_percents(it)
 	for i in _grade_lbs.size():
