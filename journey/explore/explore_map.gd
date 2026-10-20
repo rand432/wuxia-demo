@@ -1146,15 +1146,15 @@ func _gather_node(i: int) -> void:
 			msg = "采到雪参 ×2"
 		"ore":
 			var os := randi_range(2, 4)
-			GameState.add_material("forge_stone", os)
+			GameState.add_material("forge_stone", os, _loot_q())
 			msg = "挖到锻造石 ×" + str(os)
 		"bone":
 			var bs := randi_range(2, 4)
-			GameState.add_material("bone", bs)
+			GameState.add_material("bone", bs, _loot_q())
 			msg = "捡到兽骨碎 ×" + str(bs)
 		"rice":
 			var rs := randi_range(1, 3)
-			GameState.add_material("rice", rs)
+			GameState.add_material("rice", rs, _loot_q())
 			msg = "采到灵米 ×" + str(rs)
 	GameState.save_game()
 	_update_action_label()
@@ -2102,17 +2102,18 @@ func _open_chest(cell: Vector2i) -> void:
 	var rm := GameState.world_resource_mul()
 	stones = int(round(float(stones) * rm))
 	silver = int(round(float(silver) * rm))
-	GameState.add_material("forge_stone", stones)
+	var cq := clampi(q + _loot_q(), 0, 4)
+	GameState.add_material("forge_stone", stones, cq)
 	GameState.add_coin("silver", silver)
 	_loot_stones += stones
 	_loot_silver += silver
 	var extra := ""
 	if q == 1:
-		GameState.add_material("rice", 3)
+		GameState.add_material("rice", 3, cq)
 		extra = " · 灵米 ×3"
 	elif q == 2:
-		GameState.add_material("atlas", 1)
-		GameState.add_material("jin", 1)
+		GameState.add_material("atlas", 1, cq)
+		GameState.add_material("jin", 1, cq)
 		_loot_atlas += 1
 		extra = " · 舆图 ×1 · 金髓 ×1"
 	elif randf() < 0.22:
@@ -2122,6 +2123,9 @@ func _open_chest(cell: Vector2i) -> void:
 	GameState.save_game()
 	var qn := "" if q == 0 else ("〔精制〕" if q == 1 else "〔秘藏〕")
 	_set_msg(qn + "拾得：锻造石 ×" + str(stones) + " · 银两 +" + str(silver) + extra)
+
+func _loot_q() -> int:
+	return clampi(GameState.world_tier - 1, 0, 4)
 
 func _set_msg(text: String, sec := 2.6) -> void:
 	_msg = text
@@ -4330,7 +4334,7 @@ func _grant_battle_loot(enemy: Node2D) -> void:
 	silver = int(round(float(silver) * rm2))
 	stones = int(round(float(stones) * rm2))
 	GameState.add_coin("silver", silver)
-	GameState.add_material("forge_stone", stones)
+	GameState.add_material("forge_stone", stones, _loot_q())
 	_loot_silver += silver
 	_loot_stones += stones
 	GameState.save_game()

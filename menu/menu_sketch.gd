@@ -3147,12 +3147,10 @@ func _refresh_advance_panel() -> void:
 		var nx: Dictionary = Realm.at(top + 1)
 		body += "下一境界：" + str(nx.get("name", "")) + "（全体 +" + str(int(float(nx.get("pct", 0.0)) * 100.0)) + "%）\n"
 		body += "关卡门槛：第 " + str(int(nx.get("stage_need", 0))) + " 关（现在 " + str(GameState.stage_progress) + "）\n"
-		body += "成功率：" + str(int(float(nx.get("rate", 1.0)) * 100.0)) + "%　·　失败材料与银两尽毁\n\n"
-		var cost := GameState.advance_cost()
-		for k in cost.keys():
-			var have := GameState.material_count(str(k))
-			var need := int(cost[k])
-			body += ("✔ " if have >= need else "✘ ") + str(GameState.MAT_CN.get(str(k), k)) + "　" + str(have) + " / " + str(need) + "\n"
+		body += "成功率：" + str(int(float(nx.get("rate", 1.0)) * 100.0)) + "%　·　失败进阶丹与银两尽毁\n\n"
+		var pid := GameState.advance_pill_id()
+		var have := GameState.pill_count(pid)
+		body += ("✔ " if have >= 1 else "✘ ") + GameState.advance_pill_name() + "　" + str(have) + " / 1\n"
 		var sil := GameState.advance_silver()
 		var have_s := GameState.coin("silver")
 		body += ("✔ " if have_s >= sil else "✘ ") + "银两　" + str(have_s) + " / " + str(sil) + "\n"

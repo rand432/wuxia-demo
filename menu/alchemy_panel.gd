@@ -425,8 +425,18 @@ func _open_dlg(rid := "") -> void:
 		none_lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		vb.add_child(none_lb)
 	else:
+		var last_g := "__none__"
 		for k in avail.size():
 			var rid_k := str(avail[k])
+			var rg := str(GameState.recipe_of(rid_k).get("group", ""))
+			if rg != last_g:
+				last_g = rg
+				var head := Label.new()
+				head.text = str(GameState.PILL_GROUP_CN.get(rg, "其他"))
+				head.custom_minimum_size = Vector2(304, 26)
+				head.add_theme_font_size_override("font_size", 14)
+				head.add_theme_color_override("font_color", Color(INK.r, INK.g, INK.b, 0.55))
+				vb.add_child(head)
 			var cb := Button.new()
 			cb.custom_minimum_size = Vector2(304, 52)
 			cb.add_theme_font_size_override("font_size", 17)
@@ -569,6 +579,17 @@ func _craftable() -> Array:
 		var rid := str(r.get("id", ""))
 		if _can_pay(rid, 1):
 			out.append(rid)
+	out.sort_custom(func(a: String, b: String) -> bool:
+		var ga := str(GameState.recipe_of(a).get("group", ""))
+		var gb := str(GameState.recipe_of(b).get("group", ""))
+		var ia := GameState.PILL_GROUP_ORDER.find(ga)
+		var ib := GameState.PILL_GROUP_ORDER.find(gb)
+		if ia < 0: ia = 99
+		if ib < 0: ib = 99
+		if ia != ib:
+			return ia < ib
+		return str(GameState.recipe_of(a).get("name", a)) < str(GameState.recipe_of(b).get("name", b))
+	)
 	return out
 
 # 弹窗里现在的颗数（输入框优先，空/非法就回落 1）
@@ -590,7 +611,9 @@ func _refresh_dlg() -> void:
 		for k in (r.get("cost", {}) as Dictionary).keys():
 			need[str(k)] = int(r["cost"][k]) * n
 		var ok := _can_pay(rid, n)
-		btn.text = str(r.get("name", rid)) + "　存" + str(GameState.pill_count(rid)) + ("" if ok else "（料不够）")
+		var gcn: String = str(GameState.MAT_GROUP_CN.get(str(r.get("group", "")), ""))
+		var gtag := (gcn.replace("材料", "") + " · ") if gcn != "" else ""
+		btn.text = gtag + str(r.get("name", rid)) + "　存" + str(GameState.pill_count(rid)) + ("" if ok else "（料不够）")
 		btn.disabled = false   # 料不够也点得动——点一下会告诉玩家缺什么
 		_style_tab(btn, rid == _dlg_pick)
 	_dlg_cnt_lb.text = "颗数"
@@ -611,7 +634,9 @@ func _refresh_dlg() -> void:
 	var where := "第 " + str(slot + 1) + " 号炉" if slot >= 0 else "**炉位占满**（先收一炉，或开个新炉位）"
 	if _dlg_out_lb != null:
 		_dlg_out_lb.text = str(r2.get("name", rid2)) + "　×" + str(n)
-	_dlg_prev.text = ("材料：" + GameState.cost_text(need2) + "（现有：" + GameState.cost_text(_mine(need2)) + "）"
+	var pq := GameState.estimate_quality(rid2, n)
+	var qline := "料不够" if pq < 0 else GameState.quality_cn(pq)
+	_dlg_prev.text = ("预计品质：" + qline + "\n材料：" + GameState.cost_text(need2) + "（现有：" + GameState.cost_text(_mine(need2)) + "）"
 		+ "\n炉时约 " + str(snappedf(mins, 0.1)) + " 分（" + ("没人看火 ×1.0" if _tender == "" else GameState.tend_name(_tender) + "看火 ×" + str(snappedf(GameState.tend_mul(_tender), 0.05))) + "）"
 		+ "\n下到 " + where)
 	var can := _can_pay(rid2, n) and slot >= 0

@@ -272,8 +272,7 @@ func _build_status_page() -> void:
 	lines.append("　　等级 " + str(lv) + " / " + str(cap) + "（每突破一重 +" + str(GameState.BREAK_STEP) + " 级上限）")
 	lines.append("")
 	lines.append("【属性丹额度】本境已服 " + str(used) + " / " + str(allow) + "　→　还能吃 " + str(left) + " 颗")
-	lines.append("　　额度 = (境界 + 1) × " + str(per) + "；每突破一重（境界 +1）额度 +" + str(per))
-	lines.append("　　强身丹与淬体丹**共用**这一个额度——吃哪颗都算一颗")
+	lines.append("　　突破后额度增加。")
 	lines.append("")
 	lines.append("【能喂的丹·现存】")
 	var any := false
@@ -288,9 +287,9 @@ func _build_status_page() -> void:
 	if not any:
 		lines.append("　（还没有能喂的丹——去「炼丹阁」炼一炉）")
 	lines.append("")
-	lines.append("【不在这里吃】")
-	lines.append("　· 突破丹：回「弟子」面板点［突破］，不是拿来吃的")
-	lines.append("　· 养灵丹 / 洗灵丹：宠物的丹药——去「宠物」面板喂")
+	lines.append("【其他】")
+	lines.append("　· 突破丹去［突破］用。")
+	lines.append("　· 宠物丹去宠物面板喂。")
 	_add_text_block(lines, 15)
 
 # ---- 页三：当前丹药查明 ----

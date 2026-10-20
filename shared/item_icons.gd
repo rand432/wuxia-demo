@@ -93,8 +93,14 @@ static func for_mat(k: String) -> Texture2D:
 			return _t("mat_bone")
 		"rice":
 			return _t("mat_rice")
-		"jin":
+		"jin", "daoguo", "xinghui":
 			return _t("mat_jin")
+		"pojing":
+			return _t("mat_zhi")
+		"xuantie", "hundun", "soul":
+			return _t("mat_bone")
+		"lingguo":
+			return _t("mat_rice")
 		"atlas":
 			return _t("it_scroll")
 	return _t("it_herb")

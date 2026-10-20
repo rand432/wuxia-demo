@@ -817,6 +817,7 @@ static var forge_seq := 0
 # v242：锻造图鉴（合中过的胚子 id）
 static var forge_compendium := {}
 static var materials := {}
+static var material_q := {}   # "材料|品质" -> 数量；materials 仍是总数量
 static var formation := ["player"]
 static var stage_progress := 0
 
@@ -1023,21 +1024,21 @@ const SHOP_ITEMS := [
 	#   v64b（用户："基础的就是凡品 这个价格太低了 全部120吧 兵器150"）：
 	#     **基础卡＝凡品货**，价按凡品一口价写死——**不再跟现役池顶品级涨**（原来池子一升价就跟着翻）：
 	#     兵器 **150** · 武学 **120** · 装备 **120**；补缺也只在**凡品套**里补（它就是凡品那一档的货）。
-	{"key": "weapon_card", "name": "基础兵器残卡", "price": 150, "cat": "weapon", "desc": "凡品残兵一张——补仓库最缺的那张", "kind": "card", "pool": "weapon", "q": 0, "limit": 10},
-	{"key": "art_card", "name": "基础武学残页", "price": 120, "cat": "arts", "desc": "凡品残页一张——补仓库最缺的那张", "kind": "card", "pool": "arts", "q": 0, "limit": 10},
-	{"key": "gear_card", "name": "基础装备残卡", "price": 120, "cat": "gear", "desc": "凡品残片一张——补仓库最缺的那张", "kind": "card", "pool": "gear", "q": 0, "limit": 10},
+	{"key": "weapon_card", "name": "基础兵器残卡", "price": 150, "cat": "weapon", "desc": "一张凡品兵器残卡", "kind": "card", "pool": "weapon", "q": 0, "limit": 10},
+	{"key": "art_card", "name": "基础武学残页", "price": 120, "cat": "arts", "desc": "一张凡品武学残页", "kind": "card", "pool": "arts", "q": 0, "limit": 10},
+	{"key": "gear_card", "name": "基础装备残卡", "price": 120, "cat": "gear", "desc": "一张凡品装备残卡", "kind": "card", "pool": "gear", "q": 0, "limit": 10},
 	#   ⚠ 良品卡的 price 写**凡品基价**，实际价由 shop_card_price 按它自己的 q 乘系数
 	#     （良品 ×2）——用户："良品你看着来"：就按品级系数走，与凡品同比例：
 	#     兵器 150→**300** · 武学 120→**240** · 装备 120→**240**。
-	{"key": "weapon_card_l", "name": "良品兵器残卡", "price": 150, "cat": "weapon", "desc": "良品残兵一张——补最缺的那张", "kind": "card", "pool": "weapon", "q": 1, "limit": 5},
-	{"key": "art_card_l", "name": "良品武学残页", "price": 120, "cat": "arts", "desc": "良品残页一张——补最缺的那张", "kind": "card", "pool": "arts", "q": 1, "limit": 5},
-	{"key": "gear_card_l", "name": "良品装备残卡", "price": 120, "cat": "gear", "desc": "良品残片一张——补最缺的那张", "kind": "card", "pool": "gear", "q": 1, "limit": 5},
+	{"key": "weapon_card_l", "name": "良品兵器残卡", "price": 150, "cat": "weapon", "desc": "一张良品兵器残卡", "kind": "card", "pool": "weapon", "q": 1, "limit": 5},
+	{"key": "art_card_l", "name": "良品武学残页", "price": 120, "cat": "arts", "desc": "一张良品武学残页", "kind": "card", "pool": "arts", "q": 1, "limit": 5},
+	{"key": "gear_card_l", "name": "良品装备残卡", "price": 120, "cat": "gear", "desc": "一张良品装备残卡", "kind": "card", "pool": "gear", "q": 1, "limit": 5},
 	# v62c（用户："商店卖的那个血脉变为随机 90%紫色 8.9%金色 0.1%红色"）：
 	#   名字从「金纹血脉囊」改成**「血脉囊」**——原来名字里写死"金"，现在九成是紫的，
 	#   挂着"金纹"就是名不副实（想改回去只动 name 这一处）。
 	# v63（用户："这里显示有点问题"）：血脉囊的 desc 太长 ✗ 一路溢进右边价格/按钮区 ✗。
 	#   拆短：概率放第一行（框内 19 字 ✓），纯度/用途挪进货栈自己的"开出血脉"行。
-	{"key": "blood_gold", "name": "血脉囊", "price": 273, "cat": "basic", "desc": "开血脉：紫 90% · 金 8.9% · 绝 0.1%", "kind": "blood", "limit": 1},
+	{"key": "blood_gold", "name": "血脉囊", "price": 273, "cat": "basic", "desc": "里面包裹着一个未知的血脉", "kind": "blood", "limit": 1},
 	# v36：突破丹五品（货栈这一路——每天限购几颗，炼丹阁是另一条路）。
 	#   品级跟境界走：1~8 重凡品、9~16 良品……33~40 绝品（见 GameState.BREAK_PILLS）。
 	#   ⚠ v47（用户："商店突破丹只给低级和中级的【现在阶段够用】"）：
@@ -1045,30 +1046,32 @@ const SHOP_ITEMS := [
 	#     那三品往后靠**炼丹阁**（DAN_RECIPES 五品都在）与**爬塔宝箱**（金/玉/龙箱出上品起）拿。
 	#     理由：现在游戏推进到的阶段（境界十几重上下）用得上、也买得起的就是这两品；
 	#     高品挂在店里既没人买得起，又显得"花钱就能一路突破"。
-	{"key": "tupo_fan", "name": "突破丹（凡品）", "price": 147, "cat": "pill", "kind": "pill", "pid": "tupo_fan", "limit": 3, "desc": "突破境界 1~8 重（每 25 级一重）"},
-	{"key": "tupo_liang", "name": "突破丹（良品）", "price": 413, "cat": "pill", "kind": "pill", "pid": "tupo_liang", "limit": 2, "desc": "突破境界 9~16 重"},
+	{"key": "tupo_fan", "name": "突破丹（凡品）", "price": 147, "cat": "pill", "kind": "pill", "pid": "tupo_fan", "limit": 3, "desc": "突破使用的丹药"},
+	{"key": "tupo_liang", "name": "突破丹（良品）", "price": 413, "cat": "pill", "kind": "pill", "pid": "tupo_liang", "limit": 2, "desc": "突破使用的丹药"},
+	{"key": "adv_fan", "name": "进阶丹（凡品）", "price": 800, "cat": "pill", "kind": "pill", "pid": "adv_fan", "limit": 2, "desc": "冲境界使用的丹药"},
+	{"key": "adv_liang", "name": "进阶丹（良品）", "price": 2400, "cat": "pill", "kind": "pill", "pid": "adv_liang", "limit": 1, "desc": "冲境界使用的丹药"},
 	# v41：金色材料「金髓」——洗灵丹的硬门槛。贵、且每日只放一块（其余靠宝箱与搜刮）
-	{"key": "jin", "name": "◆金髓", "price": 910, "cat": "basic", "need": "dange", "limit": 1, "desc": "稀有金色材料——眼下没丹方要用（先留着，等新丹方）"},
+	{"key": "jin", "name": "◆金髓", "price": 910, "cat": "basic", "need": "dange", "limit": 1, "desc": "稀有材料"},
 	# v39：鉴宝行的侦查道具（过 400 关才上架）——三样各管一段信息，见 shared/data_appraise.gd
 	{"key": "tool_sight", "name": "描影镜", "price": 119, "cat": "jianbao", "kind": "tool", "tid": "sight", "limit": 3,
-		"need": "jianbao", "desc": "照出这一仓里最值钱那一件的轮廓（不知是哪件，但知道它在）"},
+		"need": "jianbao", "desc": "照出货仓里最值钱的一件"},
 	{"key": "tool_lamp", "name": "透物灯", "price": 196, "cat": "jianbao", "kind": "tool", "tid": "lamp", "limit": 2,
-		"need": "jianbao", "desc": "随机照出 2~3 件的完整轮廓（看得出是什么类、几格、什么成色）"},
+		"need": "jianbao", "desc": "照出两三件货的轮廓"},
 	{"key": "tool_seal", "name": "识宝鉴", "price": 315, "cat": "jianbao", "kind": "tool", "tid": "seal", "limit": 2,
-		"need": "jianbao", "desc": "认下一件物品的完整信息（名字 · 品级 · 加成 · 估价）"},
+		"need": "jianbao", "desc": "看清一件货的详情"},
 	# v50（用户："解锁鉴宝后 商店卖限购的鉴定道具（效果较强的价格也贵）；同时增加一个
 	#   可以显示当前仓库多少格子（较贵）和显示所有紫色轮廓/金色轮廓/绿色轮廓等"）：
 	#   数格尺（最贵的那一档信息——店里不给格数）＋ 四把按成色筛的筛子。价钱按效果排。
 	{"key": "tool_count", "name": "数格尺", "price": 413, "cat": "jianbao", "kind": "tool", "tid": "count", "limit": 2,
-		"need": "jianbao", "desc": "量出这只货仓一共几格（店里不写格数，想知道就得量一次）"},
+		"need": "jianbao", "desc": "量出货仓的格数"},
 	{"key": "tool_sift_g", "name": "碧砂筛", "price": 154, "cat": "jianbao", "kind": "tool", "tid": "sift_g", "limit": 3,
-		"need": "jianbao", "desc": "把仓里所有绿档的货标成轮廓（几件、占几格、在哪儿）"},
+		"need": "jianbao", "desc": "标出全部绿档货"},
 	{"key": "tool_sift_p", "name": "紫霞筛", "price": 294, "cat": "jianbao", "kind": "tool", "tid": "sift_p", "limit": 2,
-		"need": "jianbao", "desc": "把仓里所有紫档的货标成轮廓"},
+		"need": "jianbao", "desc": "标出全部紫档货"},
 	{"key": "tool_sift_j", "name": "金纹筛", "price": 609, "cat": "jianbao", "kind": "tool", "tid": "sift_j", "limit": 2,
-		"need": "jianbao", "desc": "把仓里所有金档的货标成轮廓"},
+		"need": "jianbao", "desc": "标出全部金档货"},
 	{"key": "tool_sift_r", "name": "朱砂筛", "price": 1050, "cat": "jianbao", "kind": "tool", "tid": "sift_r", "limit": 1,
-		"need": "jianbao", "desc": "把仓里所有红件标成轮廓（最贵的一把——红件一出，这一仓就值了）"},
+		"need": "jianbao", "desc": "标出全部红档货"},
 ]
 
 # ㊿：上架闸——这一条现在该不该摆在货架上。
@@ -1088,7 +1091,7 @@ const SHOP_CATS := [
 	{"id": "weapon", "name": "兵器"},
 	{"id": "arts", "name": "武学"},
 	{"id": "gear", "name": "装备"},
-	{"id": "pill", "name": "丹药"},   # v36：突破丹五品（每日限购）
+	{"id": "pill", "name": "丹药"},
 	{"id": "jianbao", "name": "鉴宝"},  # v39：三种侦查道具（过 400 关才上架）
 ]
 
@@ -1448,6 +1451,13 @@ static func _appraise_strip_gear(items: Array) -> Array:
 			elif q >= 3:
 				out.append({"kind": "mat", "id": "jin", "name": "金髓 ×1", "amount": 1, "gap": 1, "red": false})
 			continue
+		if ek == "pill":
+			var rr: Dictionary = recipe_of(eid)
+			if not rr.is_empty():
+				for ck in (rr.get("cost", {}) as Dictionary).keys():
+					var cn := int(rr["cost"][ck])
+					out.append({"kind": "mat", "id": str(ck), "name": mat_name(str(ck)) + " ×" + str(cn), "amount": cn, "gap": 1, "red": false})
+				continue
 		out.append(e)
 	return out
 
@@ -1459,15 +1469,11 @@ static func _appraise_new_offer(hid: String, free := false) -> Dictionary:
 	var raw_items: Array = Ladder.roll_hold(int(d.get("cells", 24)), int(d.get("tier", 0)),
 		Ladder.base_q_now(ladder_phase()), float(d.get("luck", 1.0)))
 	var items: Array = _appraise_strip_gear(raw_items)
-	# v270：货仓塞战斗丹——品质跟货仓档位走；可以开出高品质
-	if randf() < 0.35:
-		var pq := clampi(int(d.get("tier", 0)), 0, 4)
-		var pbase: String = str(["combat_hp", "combat_atk", "combat_crit", "combat_def", "combat_spd", "combat_dodge", "combat_critdmg", "combat_dmg"][randi() % 8])
-		if pq >= 3 and randf() < 0.25:
-			pbase = "combat_rage"
-			pq = 4
-		var pid := ("combat_rage" if pbase == "combat_rage" else str(pbase) + "#" + str(pq))
-		items.append({"kind": "pill", "id": pid, "name": pill_full_name(pid), "gap": 1})
+	var mq := clampi(int(d.get("tier", 0)), 0, 4)
+	for e_v in items:
+		var e: Dictionary = e_v
+		if str(e.get("kind", "")) == "mat":
+			e["q"] = mq
 	return {
 		"uid": _appraise_uid,
 		"hid": hid,
@@ -1726,7 +1732,7 @@ static func _deposit_one(e: Dictionary) -> void:
 		"junk":
 			add_coin("silver", int(e.get("value", 1)) * amt)   # 杂物当场折银（与游历一个口径）
 		"mat":
-			add_material(sid, amt)
+			add_material(sid, amt, int(e.get("q", 0)))
 		"pill":
 			pills[sid] = int(pills.get(sid, 0)) + amt
 		"wine":
@@ -3275,6 +3281,26 @@ static func advance_stage_need() -> int:
 		return -1                       # 已满
 	return int(Realm.at(advance_lv + 1).get("stage_need", 0))
 
+static func advance_pill_id() -> String:
+	if advance_lv >= Realm.MAX_LV:
+		return ""
+	var t := advance_lv + 1
+	if t <= 3:
+		return "adv_fan"
+	if t <= 6:
+		return "adv_liang"
+	if t <= 8:
+		return "adv_shang"
+	if t <= 11:
+		return "adv_ji"
+	return "adv_jue"
+
+static func advance_pill_name() -> String:
+	var pid := advance_pill_id()
+	if pid == "":
+		return ""
+	return str(recipe_of(pid).get("name", pid))
+
 static func advance_can() -> Dictionary:
 	if advance_lv >= Realm.MAX_LV:
 		return {"ok": false, "msg": "已是最高境界「" + advance_name() + "」"}
@@ -3282,17 +3308,16 @@ static func advance_can() -> Dictionary:
 	var need_stage := int(nx.get("stage_need", 0))
 	if stage_progress < need_stage:
 		return {"ok": false, "msg": "关卡不够：要到第 " + str(need_stage) + " 关（现在 " + str(stage_progress) + "）"}
-	var cost := advance_cost()
+	var pid := advance_pill_id()
 	var lack: Array = []
-	for k in cost.keys():
-		if material_count(str(k)) < int(cost[k]):
-			lack.append(str(MAT_CN.get(str(k), k)) + " " + str(material_count(str(k))) + "/" + str(int(cost[k])))
+	if pill_count(pid) < 1:
+		lack.append(advance_pill_name() + " " + str(pill_count(pid)) + "/1")
 	var sil := advance_silver()
 	if coin("silver") < sil:
 		lack.append("银两 " + str(coin("silver")) + "/" + str(sil))
 	if not lack.is_empty():
 		return {"ok": false, "msg": "材料不够：" + "、".join(PackedStringArray(lack))}
-	return {"ok": true, "msg": "可以冲「" + str(nx.get("name", "")) + "」——成功率 " + str(int(float(nx.get("rate", 1.0)) * 100.0)) + "% · 银两 " + str(sil)}
+	return {"ok": true, "msg": "可以冲「" + str(nx.get("name", "")) + "」——成功率 " + str(int(float(nx.get("rate", 1.0)) * 100.0)) + "% · 用 1 颗 " + advance_pill_name() + " · 银两 " + str(sil)}
 
 static func advance_cost() -> Dictionary:
 	if advance_lv >= Realm.MAX_LV:
@@ -3324,15 +3349,15 @@ static func advance_try() -> Dictionary:
 	var chk := advance_can()
 	if not bool(chk.get("ok", false)):
 		return {"ok": false, "msg": str(chk.get("msg", ""))}
-	var cost := advance_cost()
-	for k in cost.keys():
-		add_material(str(k), -int(cost[k]))
+	var pid := advance_pill_id()
+	if not take_pill(pid, 1):
+		return {"ok": false, "msg": "没有" + advance_pill_name()}
 	add_coin("silver", -advance_silver())      # v121b：银两一起扣（失败也不退）
 	var nx: Dictionary = Realm.at(advance_lv + 1)
 	var nm := str(nx.get("name", ""))
 	if randf() > float(nx.get("rate", 1.0)):
 		return {"ok": false, "fail": true,
-			"msg": "冲「" + nm + "」失败——材料与银两尽毁，气机未成（成功率 " + str(int(float(nx.get("rate", 1.0)) * 100.0)) + "%，可再攒重来）"}
+			"msg": "冲「" + nm + "」失败——进阶丹与银两尽毁，气机未成（成功率 " + str(int(float(nx.get("rate", 1.0)) * 100.0)) + "%，可再攒重来）"}
 	advance_lv += 1
 	save_game()
 	var msg := "进阶成功：境界 → 「" + advance_name() + "」　全体属性 +" + str(int(advance_pct() * 100.0)) + "%"
@@ -3994,22 +4019,12 @@ static func chest_open(cid: String, n := 1) -> Dictionary:
 			var fid := str(pick.get("id", "frag_player"))
 			var fn := randi_range(int(fr[0]), int(fr[1]))
 			frags[fid] = int(frags.get(fid, 0)) + fn
-		# ② 突破丹（有几率）——v134：**少而厚**，一次给 pill_n 里的颗数（原来恒 1 颗）
+		# ② v273：宝箱不再出成品突破丹——改成突破材料
 		if randf() < float(d.get("pill_chance", 0.0)):
-			var pl: Array = d.get("pills", [])
-			if not pl.is_empty():
-				var pid := str(pl[randi() % pl.size()])
-				var pn: Array = d.get("pill_n", [1, 1])
-				pill_got[pid] = int(pill_got.get(pid, 0)) + randi_range(int(pn[0]), int(pn[1]))
-		# ③ v270：战斗丹药——品质跟箱子走，可以塞货仓 / 宝箱
-		if randf() < 0.25:
 			var bq := clampi(int(d.get("grad", 0)), 0, 4)
-			var bbase: String = str(["combat_hp", "combat_atk", "combat_crit", "combat_def", "combat_spd", "combat_dodge", "combat_critdmg", "combat_dmg"][randi() % 8])
-			if bq >= 3 and randf() < 0.25:
-				bbase = "combat_rage"
-				bq = 4
-			var bpid := ("combat_rage" if bbase == "combat_rage" else str(bbase) + "#" + str(bq))
-			pill_got[bpid] = int(pill_got.get(bpid, 0)) + 1
+			mats["pojing"] = int(mats.get("pojing", 0)) + 1 + int(bq / 2)
+			if bq >= 2:
+				mats["xuantie"] = int(mats.get("xuantie", 0)) + 1
 		# ④ v133：武学残页（几率**比角色碎片低**，品质跟箱子走）
 		if randf() < float(d.get("page_chance", 0.0)):
 			_chest_pages_into(pages, "arts", int(d.get("grad", 0)), d.get("page_n", [1, 1]))
@@ -4030,8 +4045,9 @@ static func chest_open(cid: String, n := 1) -> Dictionary:
 				mats[mid] = int(mats.get(mid, 0)) + randi_range(int(mn[0]), int(mn[1]))
 	# 落账
 	add_coin("silver", silver)
+	var mq2 := clampi(int(d.get("grad", 0)), 0, 4)
 	for k2 in mats.keys():
-		add_material(str(k2), int(mats[k2]))
+		add_material(str(k2), int(mats[k2]), mq2)
 	for k3 in frags.keys():
 		add_fragment(str(k3), int(frags[k3]))
 	# v133：残卡进仓库（vault_deposit 吃 {套id: {页号: 张数}}）
@@ -4147,13 +4163,24 @@ static func stage_clear(i: int) -> bool:
 
 # v121（用户："增加新材料"）：境界石 / 道心砂——进阶专用（别的路不掉、也不花）
 const MAT_CN := {"zhi": "紫芝", "shen": "雪参", "guo": "朱果", "bone": "兽骨碎", "rice": "灵米", "jin": "金髓",
-	"forge_stone": "锻造石", "jingshi": "境界石（金）", "daoxin": "道心砂（红）", "atlas": "舆图"}
+	"forge_stone": "锻造石", "jingshi": "境界石（金）", "daoxin": "道心砂（红）", "atlas": "舆图",
+	"soul": "兽魂", "lingguo": "灵兽果",
+	"daoguo": "悟道果", "hundun": "混沌砂", "xinghui": "星辉",
+	"pojing": "破境花", "xuantie": "玄铁精"}
+# v271：材料四类——战斗 / 成长 / 突破 / 宠物。
+const MAT_GROUP := {"guo": "battle", "bone": "battle", "rice": "battle",
+	"zhi": "growth", "shen": "growth", "jin": "growth",
+	"jingshi": "advance", "daoxin": "advance", "daoguo": "advance", "hundun": "advance", "xinghui": "advance",
+	"pojing": "break", "xuantie": "break", "soul": "pet", "lingguo": "pet"}
+const MAT_GROUP_CN := {"battle": "战斗材料", "growth": "成长材料", "advance": "进阶材料", "break": "突破材料", "pet": "宠物材料"}
+const PILL_GROUP_CN := {"battle": "战斗丹", "growth": "成长丹", "advance": "进阶丹", "break": "突破丹", "pet": "宠物丹"}
+const PILL_GROUP_ORDER := ["battle", "growth", "advance", "break", "pet"]
 
 # v41（用户："增加金色材料，同时让洗灵丹也能炼，也是稀有的金色材料才能炼制"）：
 #   **金髓** ＝ 稀有的**金色材料**——洗髓丹与宠物资质丹（洗灵丹）都要它才能开炉。
 #   来路三处（都偏稀）：爬塔宝箱（权重 3）· 游历搜刮的药材池（权重 5）· 货栈每日限购 1 块。
 #   `MAT_RARE` 里列的材料，凡是在界面上出现都会带一个 ◆ 前缀（一眼看出"这是那味金材料"）。
-const MAT_RARE := ["jin"]
+const MAT_RARE := ["jin", "jingshi", "daoxin", "daoguo", "hundun", "xinghui", "pojing", "xuantie", "soul", "lingguo"]
 
 static func mat_is_rare(k: String) -> bool:
 	return MAT_RARE.has(k)
@@ -4162,9 +4189,88 @@ static func mat_name(k: String) -> String:
 	var nm := str(MAT_CN.get(k, k))
 	return ("◆" + nm) if mat_is_rare(k) else nm
 
-static func add_material(k: String, n: int) -> int:
+static func _mq_key(k: String, q: int) -> String:
+	return k + "|" + str(clampi(q, 0, 4))
+
+static func material_count_q(k: String, q: int) -> int:
+	return int(material_q.get(_mq_key(k, q), 0))
+
+static func add_material(k: String, n: int, q := 0) -> int:
+	if n < 0:
+		var need := -n
+		for qi in range(4, -1, -1):
+			var key := _mq_key(k, qi)
+			var have := int(material_q.get(key, 0))
+			if have <= 0:
+				continue
+			var take := mini(have, need)
+			material_q[key] = have - take
+			need -= take
+			if need <= 0:
+				break
+		if need > 0:
+			# 老档 / 无品质栈——按凡品兜底
+			material_q[_mq_key(k, 0)] = int(material_q.get(_mq_key(k, 0), 0)) - need
+		materials[k] = maxi(0, int(materials.get(k, 0)) - (-n))
+		return int(materials[k])
+	var qq := clampi(q, 0, 4)
+	var key2 := _mq_key(k, qq)
+	material_q[key2] = int(material_q.get(key2, 0)) + n
 	materials[k] = int(materials.get(k, 0)) + n
 	return int(materials[k])
+
+static func consume_material(k: String, n: int) -> int:
+	if n <= 0:
+		return 0
+	if material_count(k) < n:
+		return -1
+	var low := 4
+	var need := n
+	for qi in range(4, -1, -1):
+		var key := _mq_key(k, qi)
+		var have := int(material_q.get(key, 0))
+		if have <= 0:
+			continue
+		var take := mini(have, need)
+		material_q[key] = have - take
+		low = mini(low, qi)
+		need -= take
+		if need <= 0:
+			break
+	if need > 0:
+		low = mini(low, 0)
+	materials[k] = maxi(0, int(materials.get(k, 0)) - n)
+	return low
+
+
+
+static func highest_material_quality(k: String) -> int:
+	for q in range(4, -1, -1):
+		if material_count_q(k, q) > 0:
+			return q
+	return 0
+
+static func estimate_quality(rid: String, count := 1) -> int:
+	var r := recipe_of(rid)
+	if r.is_empty():
+		return -1
+	var low := 4
+	for k in (r.get("cost", {}) as Dictionary).keys():
+		if material_count(str(k)) < int(r["cost"][k]) * maxi(1, count):
+			return -1
+		low = mini(low, highest_material_quality(str(k)))
+	return low
+
+static func quality_cn(q: int) -> String:
+	return str(Cards.QUALITY_ORDER[clampi(q, 0, 4)])
+
+static func material_quality_text(k: String) -> String:
+	var arr: Array = []
+	for q in range(4, -1, -1):
+		var n := material_count_q(k, q)
+		if n > 0:
+			arr.append(quality_cn(q) + "×" + str(n))
+	return " · ".join(PackedStringArray(arr))
 
 static func material_count(k: String) -> int:
 	return int(materials.get(k, 0))
@@ -4178,15 +4284,17 @@ static func grant_herbs() -> void:
 # ---- 炼丹 ----
 
 const DAN_RECIPES := [
-	{"id": "qiangshen", "name": "强身丹", "desc": "气血 +10", "stat": "hp", "add": 10, "cost": {"guo": 1}, "min": 3},
-	{"id": "cuiti", "name": "淬体丹", "desc": "攻击 +2", "stat": "atk", "add": 2, "cost": {"zhi": 1}, "min": 5},
+	{"id": "qiangshen", "name": "强身丹", "desc": "气血 +10", "stat": "hp", "add": 10, "cost": {"zhi": 2}, "min": 3, "group": "growth"},
+	{"id": "cuiti", "name": "淬体丹", "desc": "攻击 +2", "stat": "atk", "add": 2, "cost": {"shen": 2}, "min": 5, "group": "growth"},
+	{"id": "qingshen", "name": "轻身丹", "desc": "速度 +2", "stat": "spd", "add": 2, "cost": {"zhi": 1, "shen": 1}, "min": 6, "group": "growth"},
+	{"id": "ningshen", "name": "凝神丹", "desc": "暴击 +1", "stat": "crit", "add": 1, "cost": {"jin": 1}, "min": 8, "group": "growth"},
 	# v61（用户："移除洗髓丹"）：原来这里有一条
 	#   {"id": "xisui", ... "stat": "gengu", "add": 1, cost 含 jin ...}（根骨 +1）
 	#   —— 整条**删掉**：丹方、掉落（data_loot.pill_by_id）、搜刮阶梯（data_ladder）都下线了。
 	#   ⚠ 后果：**根骨再没有成长途径**，只由人物模板定（少侠 62 / 陈石 35 / 苏青鸾 48）；
 	#     「服药」弹窗、弟子面板、炼丹阁里那些"洗髓 x/y"的文案也一并去掉了。
 	#   想恢复：把这一条加回来，再把 data_loot / data_ladder 那两处一起加回来。
-	{"id": "yangling", "name": "养灵丹", "desc": "宠物灵息 +30", "stat": "pet", "add": 30, "cost": {"bone": 2, "rice": 1}, "min": 2},
+	{"id": "yangling", "name": "养灵丹", "desc": "宠物灵息 +30", "stat": "pet", "add": 30, "cost": {"soul": 1}, "min": 2, "group": "pet"},
 	# ㊿z9：洗灵丹——宠物资质丹。**炼不出来**（loot_only）：只从搜刮红件里偶尔翻到，
 	#   稀有、限量，每阶最多吃 1 颗。
 	# v41：洗灵丹（宠物资质丹）**改成能炼了**——但只有金髓能开炉（以前是 loot_only，只能搜刮）
@@ -4195,26 +4303,32 @@ const DAN_RECIPES := [
 	#   想稳定拿就在炼丹阁排炉子——不再是"攒够金髓"的攒料题。
 	#   ⚠ 连带：`金髓`（jin）从此**没有丹方在用它**了（原本只此一处）。材料本身、宝箱权重、
 	#     货栈每日限购那件都**照旧保留**（等以后有新丹方再用），只是眼下属于"先留着"的稀有料。
-	{"id": "xiling", "name": "洗灵丹", "desc": "宠物资质 +2（不用材料 · 极稀）", "stat": "pet_apt", "add": PET_APT_PILL_ADD, "cost": {}, "min": 14},
+	{"id": "xiling", "name": "洗灵丹", "desc": "宠物资质 +2（极稀）", "stat": "pet_apt", "add": PET_APT_PILL_ADD, "cost": {"soul": 1, "lingguo": 1}, "min": 14, "group": "pet"},
 	# ---- v36：突破丹五品（用户定：每 25 级突破一次，吃一颗对应品级的丹）----
 	#   stat 写成 "break"：它**不是吃的丹**——不涨属性，也不进［服药］列表，
 	#   只在角色面板点［突破］用（见 break_do）。炼丹炼得出；货栈每日限购也有卖。
 	#   成本与炉时随品级抬（min＝炉时分钟）：凡品最便宜，绝品要一堆好料 + 20 分钟。
-	{"id": "tupo_fan", "name": "突破丹（凡品）", "desc": "境界 1~8 重用的突破丹（每 25 级一重）", "stat": "break", "add": 0, "cost": {"guo": 2}, "min": 4},
-	{"id": "tupo_liang", "name": "突破丹（良品）", "desc": "境界 9~16 重用的突破丹", "stat": "break", "add": 0, "cost": {"zhi": 2, "shen": 1}, "min": 8},
-	{"id": "tupo_shang", "name": "突破丹（上品）", "desc": "境界 17~24 重用的突破丹", "stat": "break", "add": 0, "cost": {"shen": 2, "guo": 2, "bone": 2}, "min": 12},
-	{"id": "tupo_ji", "name": "突破丹（极品）", "desc": "境界 25~32 重用的突破丹", "stat": "break", "add": 0, "cost": {"zhi": 3, "shen": 3, "rice": 2}, "min": 16},
-	{"id": "tupo_jue", "name": "突破丹（绝品）", "desc": "境界 33~39 重用的突破丹", "stat": "break", "add": 0, "cost": {"zhi": 4, "shen": 4, "guo": 4, "rice": 3}, "min": 20},
+	# v272：进阶丹五品——只用于冲境界，不直接吃。
+	{"id": "adv_fan", "name": "进阶丹（凡品）", "desc": "冲境界用 · 八品~六品", "stat": "advance", "add": 0, "cost": {"jingshi": 2}, "min": 6, "group": "advance"},
+	{"id": "adv_liang", "name": "进阶丹（良品）", "desc": "冲境界用 · 五品~三品", "stat": "advance", "add": 0, "cost": {"jingshi": 3, "daoxin": 1}, "min": 10, "group": "advance"},
+	{"id": "adv_shang", "name": "进阶丹（上品）", "desc": "冲境界用 · 二品~一品", "stat": "advance", "add": 0, "cost": {"jingshi": 4, "daoxin": 2, "daoguo": 1}, "min": 14, "group": "advance"},
+	{"id": "adv_ji", "name": "进阶丹（极品）", "desc": "冲境界用 · 上品~绝品", "stat": "advance", "add": 0, "cost": {"jingshi": 5, "daoxin": 3, "daoguo": 2, "hundun": 1}, "min": 18, "group": "advance"},
+	{"id": "adv_jue", "name": "进阶丹（绝品）", "desc": "冲境界用 · 化境~神境", "stat": "advance", "add": 0, "cost": {"jingshi": 6, "daoxin": 4, "daoguo": 3, "hundun": 2, "xinghui": 1}, "min": 22, "group": "advance"},
+	{"id": "tupo_fan", "name": "突破丹（凡品）", "desc": "境界 1~8 重用的突破丹（每 25 级一重）", "stat": "break", "add": 0, "cost": {"pojing": 1}, "min": 4, "group": "break"},
+	{"id": "tupo_liang", "name": "突破丹（良品）", "desc": "境界 9~16 重用的突破丹", "stat": "break", "add": 0, "cost": {"pojing": 1, "xuantie": 1}, "min": 8, "group": "break"},
+	{"id": "tupo_shang", "name": "突破丹（上品）", "desc": "境界 17~24 重用的突破丹", "stat": "break", "add": 0, "cost": {"pojing": 2, "xuantie": 1}, "min": 12, "group": "break"},
+	{"id": "tupo_ji", "name": "突破丹（极品）", "desc": "境界 25~32 重用的突破丹", "stat": "break", "add": 0, "cost": {"pojing": 2, "xuantie": 2}, "min": 16, "group": "break"},
+	{"id": "tupo_jue", "name": "突破丹（绝品）", "desc": "境界 33~39 重用的突破丹", "stat": "break", "add": 0, "cost": {"pojing": 3, "xuantie": 3}, "min": 20, "group": "break"},
 	# v269：探险战斗丹（简单三味；不入永久属性）
-	{"id": "combat_hp", "name": "气血丹", "desc": "探险中服下：全队回复 35% 气血", "stat": "combat", "effect": "heal", "add": 35, "cost": {"zhi": 2, "bone": 1}, "min": 2, "combat": true},
-	{"id": "combat_rage", "name": "怒气丹", "desc": "下一场战斗：全队开场怒气满（固定极品）", "stat": "combat", "effect": "rage", "add": 100, "cost": {"guo": 2, "rice": 1}, "min": 2, "combat": true},
-	{"id": "combat_atk", "name": "攻丹", "desc": "下一场战斗：全队攻击提升", "stat": "combat", "effect": "atk", "add": 15, "cost": {"bone": 3, "guo": 1}, "min": 3, "combat": true},
-	{"id": "combat_crit", "name": "暴击丹", "desc": "下一场战斗：全队暴击提升", "stat": "combat", "effect": "crit", "add": 5, "cost": {"guo": 2, "shen": 1}, "min": 3, "combat": true},
-	{"id": "combat_def", "name": "守丹", "desc": "下一场战斗：全队受到伤害降低", "stat": "combat", "effect": "def", "add": 10, "cost": {"shen": 2, "bone": 2}, "min": 3, "combat": true},
-	{"id": "combat_spd", "name": "疾丹", "desc": "下一场战斗：全队速度提升", "stat": "combat", "effect": "spd", "add": 10, "cost": {"zhi": 1, "shen": 1}, "min": 2, "combat": true},
-	{"id": "combat_dodge", "name": "闪丹", "desc": "下一场战斗：全队闪避提升", "stat": "combat", "effect": "dodge", "add": 5, "cost": {"rice": 2, "zhi": 1}, "min": 2, "combat": true},
-	{"id": "combat_critdmg", "name": "暴伤丹", "desc": "下一场战斗：全队暴击伤害提升", "stat": "combat", "effect": "critdmg", "add": 15, "cost": {"guo": 2, "bone": 2}, "min": 3, "combat": true},
-	{"id": "combat_dmg", "name": "破军丹", "desc": "下一场战斗：全队造成伤害提升（直接乘最终伤害）", "stat": "combat", "effect": "dmg", "add": 10, "cost": {"bone": 2, "guo": 2}, "min": 3, "combat": true},
+	{"id": "combat_hp", "name": "气血丹", "desc": "探险中服下：全队回复 35% 气血", "stat": "combat", "effect": "heal", "add": 35, "cost": {"guo": 1}, "min": 2, "combat": true, "group": "battle"},
+	{"id": "combat_rage", "name": "怒气丹", "desc": "下一场战斗：全队开场怒气满（固定极品）", "stat": "combat", "effect": "rage", "add": 100, "cost": {"guo": 1, "rice": 1}, "min": 2, "combat": true, "group": "battle"},
+	{"id": "combat_atk", "name": "攻丹", "desc": "下一场战斗：全队攻击提升", "stat": "combat", "effect": "atk", "add": 15, "cost": {"bone": 2}, "min": 3, "combat": true, "group": "battle"},
+	{"id": "combat_crit", "name": "暴击丹", "desc": "下一场战斗：全队暴击提升", "stat": "combat", "effect": "crit", "add": 5, "cost": {"bone": 1, "guo": 1}, "min": 3, "combat": true, "group": "battle"},
+	{"id": "combat_def", "name": "守丹", "desc": "下一场战斗：全队受到伤害降低", "stat": "combat", "effect": "def", "add": 10, "cost": {"rice": 2}, "min": 3, "combat": true, "group": "battle"},
+	{"id": "combat_spd", "name": "疾丹", "desc": "下一场战斗：全队速度提升", "stat": "combat", "effect": "spd", "add": 10, "cost": {"rice": 1}, "min": 2, "combat": true, "group": "battle"},
+	{"id": "combat_dodge", "name": "闪丹", "desc": "下一场战斗：全队闪避提升", "stat": "combat", "effect": "dodge", "add": 5, "cost": {"rice": 1, "guo": 1}, "min": 2, "combat": true, "group": "battle"},
+	{"id": "combat_critdmg", "name": "暴伤丹", "desc": "下一场战斗：全队暴击伤害提升", "stat": "combat", "effect": "critdmg", "add": 15, "cost": {"bone": 2, "guo": 1}, "min": 3, "combat": true, "group": "battle"},
+	{"id": "combat_dmg", "name": "破军丹", "desc": "下一场战斗：全队造成伤害提升（直接乘最终伤害）", "stat": "combat", "effect": "dmg", "add": 10, "cost": {"bone": 2, "rice": 1}, "min": 3, "combat": true, "group": "battle"},
 
 ]
 const PILLS_PER_REALM := 3
@@ -4360,7 +4474,7 @@ static func pill_entries() -> Array:
 		var r := recipe_of(rid)
 		if r.is_empty():
 			continue
-		out.append({"id": rid, "name": str(r.get("name", rid)), "count": n})
+		out.append({"id": rid, "name": str(r.get("name", rid)), "count": n, "group": str(r.get("group", ""))})
 	return out
 
 static func recipe_of(rid: String) -> Dictionary:
@@ -4467,8 +4581,12 @@ static func alchemy_start(rid: String, tender: String, count := 1, slot := -1) -
 	for k2 in need.keys():
 		if material_count(str(k2)) < int(need[k2]):
 			return "材料不够：这一炉 ×" + str(n) + " 要 " + cost_text(need) + "（现有 " + cost_text(_have_of(need)) + "）"
+	var pq := 4
 	for k3 in need.keys():
-		add_material(str(k3), -int(need[k3]))
+		var q3 := consume_material(str(k3), int(need[k3]))
+		if q3 < 0:
+			return "材料不够：这一炉 ×" + str(n) + " 要 " + cost_text(need)
+		pq = mini(pq, q3)
 	# 时长：第 1 颗照原时长，之后每颗 ×0.8（见 batch_minutes）——单颗的老手感一点没变
 	var mins := batch_minutes(rid, n, tender)
 	var mul := 1.0
@@ -4478,7 +4596,7 @@ static func alchemy_start(rid: String, tender: String, count := 1, slot := -1) -
 		who = tend_name(tender) + "看火 ×" + str(snappedf(mul, 0.05))
 	var secs := int(ceil(mins * 60.0))
 	_ensure_furnace_slots()
-	furnaces[s] = {"recipe": rid, "tender": tender, "end_ts": int(Time.get_unix_time_from_system()) + secs, "count": n}
+	furnaces[s] = {"recipe": rid, "tender": tender, "end_ts": int(Time.get_unix_time_from_system()) + secs, "count": n, "pq": pq}
 	return ("第 " + str(s + 1) + " 号炉开火：「" + str(r["name"]) + "」×" + str(n)
 		+ "——约 " + str(snappedf(mins, 0.1)) + " 分后成丹（" + who + "）")
 
@@ -4558,10 +4676,12 @@ static func alchemy_collect(slot := -1) -> Dictionary:
 	var rid := str(f.get("recipe", ""))
 	var tender := str(f.get("tender", ""))
 	var n := maxi(1, int(f.get("count", 1)))
-	var r := recipe_of(rid)
-	pills[rid] = int(pills.get(rid, 0)) + n
+	var pq := clampi(int(f.get("pq", 0)), 0, 4)
+	var key := rid if pq <= 0 else rid + "#" + str(pq)
+	var r := recipe_of(key)
+	pills[key] = int(pills.get(key, 0)) + n
 	furnaces[s] = {}
-	var msg := "丹成：「" + str(r.get("name", rid)) + "」×" + str(n) + " 收进包裹（包裹共 " + str(int(pills.get(rid, 0))) + " 颗）"
+	var msg := "丹成：「" + str(r.get("name", key)) + "」×" + str(n) + " 收进包裹（包裹共 " + str(int(pills.get(key, 0))) + " 颗）"
 	if tender != "":
 		add_exp(tender, ALCHEMY_TEND_EXP * n)
 		msg += "｜" + tend_name(tender) + "看火 +" + str(ALCHEMY_TEND_EXP * n) + " 经验"
@@ -6613,6 +6733,11 @@ static func load_game() -> void:
 		var fsid := str(fsid_v)
 		Cards.register_forged(fsid, forge_cards[fsid])
 	materials = _sd(vlt.get("materials", {}), materials)
+	material_q = _sd(vlt.get("material_q", material_q), material_q)
+	if material_q.is_empty() and not materials.is_empty():
+		for mk in materials.keys():
+			if int(materials[mk]) > 0:
+				material_q[_mq_key(str(mk), 0)] = int(materials[mk])
 	# v257：青岚控制赤水寨 → 每日地盘税（一天一次）
 	if red_water == 2:
 		var today := Time.get_date_string_from_system()
@@ -6763,7 +6888,7 @@ static func save_game() -> void:
 	# ㊿v：出征自动卸下的那份记录——跟着存档走，中途退游戏也不丢
 	cf.set_value("world", "strip_saved", strip_saved)
 	cf.set_value("world", "vault", {
-		"cards": vault_cards, "items": vault_items, "materials": materials,
+		"cards": vault_cards, "items": vault_items, "materials": materials, "material_q": material_q,
 		"forge_item": forge_item, "forge_bag": forge_bag,
 		"forge_cards": forge_cards, "forge_seq": forge_seq,
 		"forge_compendium": forge_compendium,
@@ -6897,6 +7022,7 @@ static func reset() -> void:
 	forge_compendium.clear()
 	Cards.clear_forged()
 	materials.clear()
+	material_q.clear()
 	materials["atlas"] = 1
 	fragments.clear()
 	formation = ["player"]

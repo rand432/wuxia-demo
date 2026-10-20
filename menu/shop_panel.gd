@@ -46,6 +46,8 @@ const ICON_MAP := {
 	"blood_gold": preload("res://assets/items/it_jar.png"),
 	"tupo_fan": preload("res://assets/ui/shop_pill.png"),
 	"tupo_liang": preload("res://assets/ui/shop_pill.png"),
+	"adv_fan": preload("res://assets/ui/shop_pill.png"),
+	"adv_liang": preload("res://assets/ui/shop_pill.png"),
 }
 const ICON_TOOL := preload("res://assets/items/it_token.png")
 
@@ -459,7 +461,7 @@ func _kind_cn(it: Dictionary) -> String:
 		"blood":
 			return "血脉"
 		"pill":
-			return "突破丹"
+			return "丹药"
 		"tool":
 			return "鉴宝道具"
 		_:

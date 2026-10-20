@@ -1063,7 +1063,7 @@ func _cell_chip(e: Dictionary, st: String, w: float, flash := false) -> Panel:
 # v62：贵仓的"买之前先问一句"——一个只读的小弹窗，确认了才走原来的购买流程。
 #   文案就用户给的那一句，不加别的。
 func _big_ask_text() -> String:
-	return "你的游历越高，越容易出更高品质的武学与武器装备。\n\n确定要现在购买吗？"
+	return "确定现在买下？"
 
 func _open_big_ask(price: int) -> void:
 	_close_big_ask()

@@ -155,21 +155,21 @@ static func hold_price_now(hid: String, phase := -1) -> int:
 #   价钱按"效果强弱"排：绿色筛最便宜（绿货最多、信息最不值钱），朱砂筛最贵。
 const TOOLS := [
 	{"id": "sight", "name": "描影镜", "kind": "best", "price": 170, "limit": 3,
-		"desc": "照出这一仓里**最值钱那一件**的轮廓（不知道是哪件，但知道它在）"},
+		"desc": "照出货仓里最值钱的一件"},
 	{"id": "lamp", "name": "透物灯", "kind": "many", "price": 280, "limit": 2,
-		"desc": "随机照出 **2~3 件**的完整轮廓（看得出是什么类的东西、几格、什么成色）"},
+		"desc": "照出两三件货的轮廓"},
 	{"id": "seal", "name": "识宝鉴", "kind": "one", "price": 450, "limit": 2,
-		"desc": "认下**一件**物品的完整信息（名字 · 品级 · 加成 · 估价）"},
+		"desc": "看清一件货的详情"},
 	{"id": "count", "name": "数格尺", "kind": "slots", "price": 590, "limit": 2,
-		"desc": "量出这只货仓**一共几格**——店里不写格数，想知道就得量一次"},
+		"desc": "量出货仓的格数"},
 	{"id": "sift_g", "name": "碧砂筛", "kind": "tier", "tier": 1, "price": 220, "limit": 3,
-		"desc": "把仓里**所有绿档**的货标成轮廓（几件、占几格、在哪儿）"},
+		"desc": "标出全部绿档货"},
 	{"id": "sift_p", "name": "紫霞筛", "kind": "tier", "tier": 2, "price": 420, "limit": 2,
-		"desc": "把仓里**所有紫档**的货标成轮廓"},
+		"desc": "标出全部紫档货"},
 	{"id": "sift_j", "name": "金纹筛", "kind": "tier", "tier": 3, "price": 870, "limit": 2,
-		"desc": "把仓里**所有金档**的货标成轮廓"},
+		"desc": "标出全部金档货"},
 	{"id": "sift_r", "name": "朱砂筛", "kind": "tier", "tier": 4, "price": 1500, "limit": 1,
-		"desc": "把仓里**所有红件**标成轮廓（最贵的一把——红件一出，这一仓就值了）"},
+		"desc": "标出全部红档货"},
 ]
 const TOOL_ORDER := ["sight", "lamp", "seal", "count", "sift_g", "sift_p", "sift_j", "sift_r"]
 

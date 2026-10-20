@@ -735,21 +735,28 @@ func _stacks() -> Array:
 # 丹药页：把包裹里（GameState.pills）现有的丹逐种列出来
 func _pill_stacks() -> Array:
 	var out: Array = []
-	for e_v in GameState.pill_entries():
-		var e: Dictionary = e_v
-		var rid := str(e.get("id", ""))
-		var n := int(e.get("count", 0))
-		if n <= 0:
-			continue
-		var nm := str(e.get("name", rid))
-		out.append({
-			"kind": "pill",
-			"sid": rid,
-			"set_name": "丹药",
-			"title": nm,
-			"part_name": nm,
-			"count": n,
-		})
+	var entries: Array = GameState.pill_entries()
+	var order := GameState.PILL_GROUP_ORDER.duplicate()
+	order.append("")
+	for g_v in order:
+		var g := str(g_v)
+		for e_v in entries:
+			var e: Dictionary = e_v
+			if str(e.get("group", "")) != g:
+				continue
+			var rid := str(e.get("id", ""))
+			var n := int(e.get("count", 0))
+			if n <= 0:
+				continue
+			var nm := str(e.get("name", rid))
+			out.append({
+				"kind": "pill",
+				"sid": rid,
+				"set_name": str(GameState.PILL_GROUP_CN.get(g, "丹药")),
+				"title": nm,
+				"part_name": nm,
+				"count": n,
+			})
 	return out
 
 # v60（用户："宝箱开的材料在仓库不显示"）：材料页——把村账里现有的材料逐种列出来。
@@ -757,14 +764,20 @@ func _pill_stacks() -> Array:
 #   数量取 material_count ✓（宝箱、搜刮、货栈买的全进这一个账）。
 func _mat_stacks() -> Array:
 	var out: Array = []
-	for k_v in GameState.MAT_CN.keys():
-		var k := str(k_v)
-		var n := GameState.material_count(k)
-		if n > 0:
+	var order := ["battle", "growth", "advance", "break", "pet", ""]
+	for g_v in order:
+		var g := str(g_v)
+		for k_v in GameState.MAT_CN.keys():
+			var k := str(k_v)
+			if str(GameState.MAT_GROUP.get(k, "")) != g:
+				continue
+			var n := GameState.material_count(k)
+			if n <= 0:
+				continue
 			out.append({
 				"kind": "mat",
 				"sid": k,
-				"set_name": "材料",
+				"set_name": str(GameState.MAT_GROUP_CN.get(g, "材料")),
 				"title": GameState.mat_name(k),
 				"part_name": GameState.mat_name(k),
 				"count": n,
@@ -1094,9 +1107,11 @@ func _mat_use(k: String) -> String:
 		uses.append("锻造（铁砧）")
 	if k == "atlas":
 		uses.append("展开舆图（出征屏）")
+	var qtext := GameState.material_quality_text(k)
+	var head := "库存品质：" + (qtext if qtext != "" else "凡品")
 	if uses.is_empty():
-		return "眼下还没有配方吃它——先攒着"
-	return "用在：" + "、".join(PackedStringArray(uses))
+		return head + "\n眼下还没有配方吃它——先攒着"
+	return head + "\n用在：" + "、".join(PackedStringArray(uses))
 
 # ============================================================
 # v214：底部详情抽屉
