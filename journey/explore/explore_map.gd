@@ -420,6 +420,13 @@ func _gen_world() -> void:
 			var pc2 := _npc_free_cell(rng)
 			if pc2.x >= 0:
 				_npcs.append(_make_npc(pc2, "story", str(nm)))
+	if rng.randf() < 0.40:
+		var sc := _npc_free_cell(rng)
+		if sc.x >= 0:
+			var styp: String = ["wine_hawker", "forge_peddler", "scam_merchant"][rng.randi_range(0, 2)]
+			var sn := _make_npc(sc, styp, _npc_default_name(styp))
+			sn["offer"] = _make_special_offer(styp)
+			_npcs.append(sn)
 	GameState.save_game()
 	# 新周目专属：轮回台（在所有占用格之后找空位）
 	_wuxia_cell = Vector2i(-1, -1)
@@ -1478,6 +1485,18 @@ func _make_npc(cell: Vector2i, typ: String, nm: String) -> Dictionary:
 func _make_duel(cell: Vector2i, ta: String, tb: String, na: String, nb: String) -> Dictionary:
 	return {"cell": cell, "type": "duel", "name": na + " vs " + nb, "done": false, "dead": false, "combat": true, "duel_a": {"type": ta, "name": na}, "duel_b": {"type": tb, "name": nb}, "stock_slot": -1, "stock": {}}
 
+func _make_special_offer(typ: String) -> Dictionary:
+	if typ == "wine_hawker":
+		var w: Dictionary = GameState.wine_roll()
+		return {"wine": w, "price": int(w.get("base", 60)) * randi_range(2, 6)}
+	if typ == "scam_merchant":
+		var w2: Dictionary = GameState.wine_roll(true)
+		return {"wine": w2, "price": randi_range(90, 360)}
+	if typ == "forge_peddler":
+		var tid: String = ["dragon_scale", "regret_ink", "quench_oil", "star_sand"][randi() % 4]
+		return {"tool": tid, "price": randi_range(180, 750)}
+	return {}
+
 func _npc_key(cell: Vector2i) -> String:
 	return str(GameState.world_seed) + ":" + str(GameState.current_region) + ":" + _flag_key(cell)
 
@@ -1487,7 +1506,7 @@ func _npc_price(base: int) -> int:
 	return maxi(1, int(round(float(base) * (1.0 - float(rep) * 0.002) * (1.0 - cut))))
 
 func _npc_default_name(typ: String) -> String:
-	return str({"merchant": "行商·赵四", "doctor": "游医·白芷", "storyteller": "说书人·柳先生", "swordsman": "落魄剑客·秦三", "thief": "偷儿·小六", "guard": "捕快·赵铁"}.get(typ, "江湖客"))
+	return str({"merchant": "行商·赵四", "doctor": "游医·白芷", "storyteller": "说书人·柳先生", "swordsman": "落魄剑客·秦三", "thief": "偷儿·小六", "guard": "捕快·赵铁", "wine_hawker": "酒商·孙九", "forge_peddler": "炉客·胡三", "scam_merchant": "奸商·钱串"}.get(typ, "江湖客"))
 
 func _story_pair_kind() -> String:
 	if GameState.story_letter == 1:
@@ -1509,7 +1528,7 @@ func _npc_near(i: int) -> bool:
 	return _player.position.distance_to(_cell_pos(c.x, c.y)) < 90.0
 
 func _npc_type_name(typ: String) -> String:
-	return str({"merchant": "行商", "doctor": "游医", "storyteller": "说书人", "swordsman": "落魄剑客", "thief": "偷儿", "guard": "捕快", "story": "旧识"}.get(typ, "江湖客"))
+	return str({"merchant": "行商", "doctor": "游医", "storyteller": "说书人", "swordsman": "落魄剑客", "thief": "偷儿", "guard": "捕快", "duel": "争斗", "wine_hawker": "酒商", "forge_peddler": "锻炉商人", "scam_merchant": "奸商", "story": "旧识"}.get(typ, "江湖客"))
 
 func _draw_npcs() -> void:
 	for i in _npcs.size():
@@ -1594,9 +1613,82 @@ func _npc_foe(n: Dictionary) -> Dictionary:
 	return {"hp": hp, "atk": atk, "scale": sc}
 
 func _npc_view_text(n: Dictionary) -> String:
+	if str(n.get("type", "")) == "duel":
+		var da: Dictionary = n.get("duel_a", {})
+		var db: Dictionary = n.get("duel_b", {})
+		var fa := _duel_side_foe(n, "duel_a")
+		var fb := _duel_side_foe(n, "duel_b")
+		return str(da.get("name", "甲")) + "（" + _npc_type_name(str(da.get("type", "swordsman"))) + "）气血 " + str(int(fa["hp"])) + " · 攻 " + str(int(fa["atk"])) + "\n" + str(db.get("name", "乙")) + "（" + _npc_type_name(str(db.get("type", "thief"))) + "）气血 " + str(int(fb["hp"])) + " · 攻 " + str(int(fb["atk"]))
 	var f := _npc_foe(n)
 	var tags := "可动手" if bool(n.get("combat", false)) else "江湖人"
 	return "姓名：" + str(n["name"]) + "\n身份：" + _npc_type_name(str(n["type"])) + "\n" + tags + "\n气血 " + str(int(f["hp"])) + " · 攻击 " + str(int(f["atk"]))
+
+func _duel_side_foe(n: Dictionary, key: String) -> Dictionary:
+	var d: Dictionary = n.get(key, {})
+	var typ := str(d.get("type", "swordsman"))
+	return _npc_foe({"type": typ, "name": str(d.get("name", "江湖客"))})
+
+func _run_duel_side(n: Dictionary, key: String) -> bool:
+	var d: Dictionary = n.get(key, {})
+	var nc: Vector2i = n["cell"]
+	var node := Node2D.new()
+	node.position = _cell_pos(nc.x, nc.y) + Vector2(-20, 0)
+	node.set_meta("foe_name", str(d.get("name", "江湖客")))
+	node.set_meta("display_name", str(d.get("name", "江湖客")))
+	node.set_meta("foe", _duel_side_foe(n, key))
+	add_child(node)
+	await _try_battle(node)
+	var won := bool(node.get_meta("beaten", false))
+	if is_instance_valid(node):
+		node.queue_free()
+	return won
+
+func _npc_offer_text(n: Dictionary) -> String:
+	var offer: Dictionary = n.get("offer", {})
+	var typ := str(n.get("type", ""))
+	if typ == "forge_peddler":
+		var td := ForgeData.tool_def(str(offer.get("tool", "")))
+		return "货：" + str(td.get("name", "道具")) + "\n" + str(td.get("desc", "")) + "\n价：" + str(int(offer.get("price", 0))) + " 两"
+	var w: Dictionary = offer.get("wine", {})
+	var q: Dictionary = w.get("q", {})
+	var lines: Array = []
+	lines.append("酒名：" + str(w.get("name", "无名酒")))
+	lines.append("色 " + str(int(q.get("color", 0))) + " · 香 " + str(int(q.get("aroma", 0))) + " · 味 " + str(int(q.get("taste", 0))) + " · 韵 " + str(int(q.get("after", 0))) + " · 体 " + str(int(q.get("body", 0))))
+	lines.append("要价：" + str(int(offer.get("price", 0))) + " 两")
+	lines.append(str(w.get("hint", "")))
+	return "\n".join(PackedStringArray(lines))
+
+func _start_duel_battle(i: int, mode: String) -> void:
+	if i < 0 or i >= _npcs.size() or _battle_active:
+		return
+	var n: Dictionary = _npcs[i]
+	if bool(n.get("dead", false)):
+		return
+	var won := false
+	if mode == "help_a":
+		won = await _run_duel_side(n, "duel_b")
+	elif mode == "help_b":
+		won = await _run_duel_side(n, "duel_a")
+	elif mode == "both":
+		won = await _run_duel_side(n, "duel_a")
+		if won:
+			won = await _run_duel_side(n, "duel_b")
+	if not won:
+		return
+	n["dead"] = true
+	GameState.world_mark("npc_dead", _flag_key(n["cell"]))
+	var rm := GameState.world_resource_mul()
+	var silver := int(round(120.0 * rm))
+	GameState.add_coin("silver", silver)
+	if mode == "both":
+		GameState.add_region_rep(GameState.current_region, -10)
+	else:
+		GameState.add_region_rep(GameState.current_region, 6)
+	GameState.add_material("iron_sand", maxi(1, int(round(6.0 * rm))))
+	GameState.log_explore("了结争斗：" + str(n["name"]) + " · 银两 +" + str(silver))
+	_set_msg("争斗了结：银两 +" + str(silver) + "。尸首留在原地。", 3.0)
+	GameState.save_game()
+	queue_redraw()
 
 func _start_npc_battle(i: int) -> void:
 	if i < 0 or i >= _npcs.size() or _battle_active:
@@ -1667,6 +1759,24 @@ func _open_npc(i: int) -> void:
 			choices = [{"id": "tip", "label": "请他指点（" + str(_npc_price(50)) + "两 · 金髓×1）"}]
 		"thief":
 			choices = [{"id": "atlas", "label": "买一张舆图（" + str(_npc_price(120)) + "两）"}]
+		"wine_hawker":
+			var wo: Dictionary = n.get("offer", {})
+			choices = [{"id": "look_wine", "label": "看 货"}, {"id": "buy_wine", "label": "买下（" + str(int(wo.get("price", 0))) + " 两）"}]
+		"scam_merchant":
+			var so: Dictionary = n.get("offer", {})
+			choices = [{"id": "look_wine", "label": "看 货"}, {"id": "buy_scam", "label": "买下（" + str(int(so.get("price", 0))) + " 两）"}]
+		"forge_peddler":
+			var fo: Dictionary = n.get("offer", {})
+			var ftd := ForgeData.tool_def(str(fo.get("tool", "")))
+			choices = [{"id": "look_tool", "label": "看 货"}, {"id": "buy_tool", "label": "买下「" + str(ftd.get("name", "道具")) + "」（" + str(int(fo.get("price", 0))) + " 两）"}]
+		"duel":
+			var da: Dictionary = n.get("duel_a", {})
+			var db: Dictionary = n.get("duel_b", {})
+			choices = [
+				{"id": "help_a", "label": "帮「" + str(da.get("name", "甲")) + "」"},
+				{"id": "help_b", "label": "帮「" + str(db.get("name", "乙")) + "」"},
+				{"id": "both", "label": "两个都打"},
+			]
 		_:
 			choices = [{"id": "talk", "label": "说 几 句"}]
 	if _npc_panel == null:
@@ -1679,7 +1789,15 @@ func _open_npc(i: int) -> void:
 	choices.insert(0, {"id": "view", "label": "查 看"})
 	choices.append({"id": "fight", "label": "动 手"})
 	var body := "一个" + _npc_type_name(typ) + "在路边歇脚。"
-	if typ == "guard":
+	if typ == "wine_hawker":
+		body = "酒商压低了斗笠：手里有一坛稀世好酒，只卖有缘人。"
+	elif typ == "scam_merchant":
+		body = "那人笑得过分热情：好酒，绝对是稀世好酒。"
+	elif typ == "forge_peddler":
+		body = "炉客掀开半张油布：锻炉里的稀罕货，看看？"
+	elif typ == "duel":
+		body = "两个人正杀得难解难分。"
+	elif typ == "guard":
 		body = "一个捕快按刀站在路中间。"
 	elif typ == "story":
 		body = "旧识在此，似乎有话要说。"
@@ -1709,11 +1827,38 @@ func _on_npc_pick(id: String) -> void:
 	var idx := _npc_active
 	var msg := "你退开了。"
 	match id:
+		"look_wine", "look_tool":
+			msg = _npc_offer_text(n)
+		"buy_wine", "buy_scam":
+			var offer: Dictionary = n.get("offer", {})
+			var price := int(offer.get("price", 0))
+			if GameState.coin("silver") < price:
+				msg = "银两不够。"
+			else:
+				var w: Dictionary = offer.get("wine", {})
+				GameState.add_coin("silver", -price)
+				GameState.add_wine(str(w.get("name", "无名酒")), w.get("q", {}), int(w.get("base", 50)), str(w.get("hint", "")))
+				n["done"] = true
+				msg = "买下「" + str(w.get("name", "无名酒")) + "」——已放进酒窖。"
+		"buy_tool":
+			var toffer: Dictionary = n.get("offer", {})
+			var tprice := int(toffer.get("price", 0))
+			if GameState.coin("silver") < tprice:
+				msg = "银两不够。"
+			else:
+				GameState.add_coin("silver", -tprice)
+				GameState.forge_tool_add(str(toffer.get("tool", "")), 1)
+				n["done"] = true
+				msg = "买下锻炉道具。"
 		"view":
 			msg = _npc_view_text(n)
 		"fight":
 			_npc_panel.call("close")
 			_start_npc_battle.call_deferred(idx)
+			return
+		"help_a", "help_b", "both":
+			_npc_panel.call("close")
+			_start_duel_battle.call_deferred(idx, id)
 			return
 		"food":
 			var st: Dictionary = n.get("stock", {})

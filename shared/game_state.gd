@@ -530,6 +530,9 @@ static func elem_fixed(sid: String) -> String:
 # 现在**用**哪一把的元素：pick 有效就用 pick，否则用桶里第一种（再没有＝物理）
 #   ⚠ v58：`phys` 也是合法结果（摇到物理的那一把）——所以这里不能只认 Elem.ORDER
 static func elem_pick(sid: String) -> String:
+	var fx := Cards.elem_of(sid)
+	if Elem.ORDER.has(fx):
+		return fx
 	var b := _elem_topup(sid)
 	var p := str(item_elem_pick.get(sid, ""))
 	if p != "" and int(b.get(p, 0)) > 0:
@@ -1052,6 +1055,7 @@ const SHOP_ITEMS := [
 	#   拆短：概率放第一行（框内 19 字 ✓），纯度/用途挪进货栈自己的"开出血脉"行。
 	{"key": "blood_gold", "name": "血脉囊", "price": 273, "cat": "basic", "desc": "里面包裹着一个未知的血脉", "kind": "blood", "limit": 1},
 	{"key": "atlas", "name": "舆图", "price": 300, "cat": "basic", "kind": "weekly", "period": "week", "limit": 2, "desc": "每周限购 2 张"},
+	{"key": "star_iron", "name": "星铁", "price": 600, "cat": "basic", "kind": "weekly", "period": "week", "limit": 4, "desc": "升阶特殊材料 · 每周限购 4 块"},
 	# v36：突破丹五品（货栈这一路——每天限购几颗，炼丹阁是另一条路）。
 	#   品级跟境界走：1~8 重凡品、9~16 良品……33~40 绝品（见 GameState.BREAK_PILLS）。
 	#   ⚠ v47（用户："商店突破丹只给低级和中级的【现在阶段够用】"）：
@@ -1264,6 +1268,22 @@ static func buy_material(k: String, n: int) -> Dictionary:
 		_shop_save()
 		save_game()
 		return {"ok": true, "msg": "买了「" + str(item["name"]) + "」×" + str(wn) + "（花 " + str(wp) + " 两 · 本周还剩 " + str(wleft - wn) + "）"}
+	var day_lim := int(item.get("limit", 0))
+	if day_lim > 0:
+		_shop_sync_day()
+		var dleft := maxi(0, day_lim - int(shop_used.get(k, 0)))
+		if dleft <= 0:
+			return {"ok": false, "msg": "「" + str(item["name"]) + "」今日卖完了"}
+		var dn := mini(n, dleft)
+		var dp := int(item["price"]) * dn
+		if coin("silver") < dp:
+			return {"ok": false, "msg": "银两不够：要 " + str(dp) + "（现有 " + str(coin("silver")) + "）"}
+		add_coin("silver", -dp)
+		add_material(k, dn)
+		shop_used[k] = int(shop_used.get(k, 0)) + dn
+		_shop_save()
+		save_game()
+		return {"ok": true, "msg": "买了「" + str(item["name"]) + "」×" + str(dn) + "（花 " + str(dp) + " 两 · 今日还剩 " + str(dleft - dn) + "）"}
 	var price := int(item["price"]) * n
 	if coin("silver") < price:
 		return {"ok": false, "msg": "银两不够：要 " + str(price) + "（现有 " + str(coin("silver")) + "）"}

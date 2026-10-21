@@ -23,22 +23,22 @@ const Q_BASE := [
 const BLANKS := [
 	{"id": "common", "name": "普通胚子", "weapon": "待定", "kind": "generic", "pool": "weapon",
 		"quality": 0, "cap": 2, "atk": 0, "dmg": 0, "open": 0, "need": "common", "blank_class": "generic",
-		"probs": [5, 35, 35, 20, 5], "trait": "普通"},
+		"probs": [5, 32, 35, 22, 6], "trait": "普通"},
 	{"id": "gen_fan", "name": "凡品胚子", "weapon": "待定", "kind": "generic", "pool": "weapon",
 		"quality": 0, "cap": 2, "atk": 0, "dmg": 0, "open": 0, "blank_class": "generic",
-		"probs": [8, 42, 28, 17, 5], "trait": "凡品"},
+		"probs": [8, 39, 28, 19, 6], "trait": "凡品"},
 	{"id": "gen_zhong", "name": "中品胚子", "weapon": "待定", "kind": "generic", "pool": "weapon",
 		"quality": 1, "cap": 3, "atk": 0, "dmg": 0, "open": 0, "blank_class": "generic",
-		"probs": [10, 40, 26, 18, 6], "trait": "中品"},
+		"probs": [10, 37, 26, 20, 7], "trait": "中品"},
 	{"id": "gen_shang", "name": "上品胚子", "weapon": "待定", "kind": "generic", "pool": "weapon",
 		"quality": 2, "cap": 4, "atk": 0, "dmg": 0, "open": 0, "blank_class": "generic",
-		"probs": [10, 42, 24, 18, 6], "trait": "上品"},
+		"probs": [10, 39, 24, 20, 7], "trait": "上品"},
 	{"id": "gen_ji", "name": "极品胚子", "weapon": "待定", "kind": "generic", "pool": "weapon",
 		"quality": 3, "cap": 4, "atk": 0, "dmg": 0, "open": 0, "blank_class": "generic",
-		"probs": [12, 42, 22, 18, 6], "trait": "极品"},
+		"probs": [12, 39, 22, 20, 7], "trait": "极品"},
 	{"id": "gen_jue", "name": "绝品胚子", "weapon": "待定", "kind": "generic", "pool": "weapon",
 		"quality": 4, "cap": 4, "atk": 0, "dmg": 0, "open": 0, "blank_class": "generic",
-		"probs": [14, 42, 20, 18, 6], "trait": "绝品"},
+		"probs": [14, 39, 20, 20, 7], "trait": "绝品"},
 ]
 
 static func blank(id: String) -> Dictionary:
@@ -50,6 +50,11 @@ static func blank(id: String) -> Dictionary:
 		if str((b as Dictionary)["id"]) == id:
 			return (b as Dictionary).duplicate(true)
 	return {}
+
+const ELEM_CN := {"metal": "金", "wood": "木", "water": "水", "fire": "火", "earth": "土"}
+
+static func element_cn(e: String) -> String:
+	return str(ELEM_CN.get(e, ""))
 
 static func quality_name(q: int) -> String:
 	return QUALITY_CN[clampi(q, 0, QUALITY_CN.size() - 1)]
@@ -185,6 +190,8 @@ static func make_item(blank_id: String) -> Dictionary:
 static func randomize_generic(it: Dictionary) -> void:
 	var q := clampi(int(it.get("quality", 0)), 0, 4)
 	var roll := randi() % 6
+	if str(it.get("quench_trait", "")).begins_with("elem_"):
+		roll = randi() % 3
 	match str(it.get("quench_trait", "")):
 		"type_sword":
 			roll = 0
@@ -276,8 +283,12 @@ static func finalize_silver(q: int) -> int:
 static func hammer_stones(q: int) -> int:
 	return [1, 2, 3, 4, 5][clampi(q, 0, 4)]
 
+const ASCEND_SILVER := [100, 300, 800, 2000]
+const ASCEND_STAR_IRON := [0, 1, 2, 3]
+
 static func ascend_cost(q: int) -> Dictionary:
-	return {"silver": 20 + 20 * clampi(q, 0, 4), "star_iron": 1}
+	var qi := clampi(q, 0, ASCEND_SILVER.size() - 1)
+	return {"silver": int(ASCEND_SILVER[qi]), "star_iron": int(ASCEND_STAR_IRON[qi])}
 
 static func card_set(it: Dictionary, sid: String) -> Dictionary:
 	var nm := item_name(it)
@@ -288,6 +299,7 @@ static func card_set(it: Dictionary, sid: String) -> Dictionary:
 		"weapon": str(it.get("kind", "sword")),
 		"no_drop": true, "forge": true, "parts": [],
 		"item_stats": st.duplicate(),
+		"elem": str(it.get("elem", "")),
 		"desc": "锻造出品（" + trait_of(it) + "）",
 	}
 	var base: Dictionary = it.get("base_card", {})
@@ -375,6 +387,11 @@ const QUENCH_TRAITS := [
 	{"id": "type_armor", "name": "甲胚", "desc": "首锤必成护甲", "rank": 0, "weight": 6},
 	{"id": "type_helm", "name": "冠胚", "desc": "首锤必成头冠", "rank": 0, "weight": 5},
 	{"id": "type_cloak", "name": "披风胚", "desc": "首锤必成披风", "rank": 0, "weight": 5},
+	{"id": "elem_metal", "name": "金", "desc": "升到上品时，必为金属性", "rank": 0, "weight": 7, "elem": "metal"},
+	{"id": "elem_wood", "name": "木", "desc": "升到上品时，必为木属性", "rank": 0, "weight": 7, "elem": "wood"},
+	{"id": "elem_water", "name": "水", "desc": "升到上品时，必为水属性", "rank": 0, "weight": 7, "elem": "water"},
+	{"id": "elem_fire", "name": "火", "desc": "升到上品时，必为火属性", "rank": 0, "weight": 7, "elem": "fire"},
+	{"id": "elem_earth", "name": "土", "desc": "升到上品时，必为土属性", "rank": 0, "weight": 7, "elem": "earth"},
 	{"id": "dingshen", "name": "定神", "desc": "入神触发时，强化额外 +1", "rank": 2, "weight": 4},
 	{"id": "huihuo", "name": "回火", "desc": "成功后，下一次损伤转为维持", "rank": 2, "weight": 4},
 	{"id": "yuwei", "name": "余威", "desc": "大成功后，下一锤破坏 -10%", "rank": 2, "weight": 4},

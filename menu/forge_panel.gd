@@ -1100,6 +1100,9 @@ func _hammer() -> void:
 				affs.append(str(af["id"]))
 				it["affixes"] = affs
 				text += "｜出词缀：「" + str(af["name"]) + "」"
+	var elem_now := _apply_element(it)
+	if elem_now != "":
+		text += "｜上品定型：「" + elem_now + "」属性"
 	GameState.forge_item = it
 	if first:
 		_register_anvil(it)
@@ -1178,6 +1181,18 @@ func _roll(it: Dictionary) -> int:
 			return i
 	return 4
 
+func _apply_element(it: Dictionary) -> String:
+	if int(it.get("quality", 0)) < 2:
+		return ""
+	if str(it.get("elem", "")) != "":
+		return ""
+	var td: Dictionary = ForgeData.quench_trait(str(it.get("quench_trait", "")))
+	var e := str(td.get("elem", ""))
+	if e == "":
+		return ""
+	it["elem"] = e
+	return ForgeData.element_cn(e)
+
 func _try_ascend(it: Dictionary) -> void:
 	if int(it.get("enhance", 0)) < 20:
 		return
@@ -1195,6 +1210,9 @@ func _try_ascend(it: Dictionary) -> void:
 	GameState.add_coin("silver", -need_s)
 	GameState.add_material("star_iron", -need_j)
 	it["quality"] = int(it.get("quality", 0)) + 1
+	var ascended_elem := _apply_element(it)
+	if ascended_elem != "":
+		_push_log("上品定型：必为「" + ascended_elem + "」属性。")
 	it["base_atk"] = float(it.get("base_atk", 0.0)) * 1.5
 	it["base_dmg"] = float(it.get("base_dmg", 0.0)) * 1.5
 	it["base_def"] = float(it.get("base_def", 0.0)) * 1.5
@@ -1206,7 +1224,6 @@ func _try_ascend(it: Dictionary) -> void:
 			bex[bek] = float(bex[bek]) * 1.5
 	it["base_extra"] = bex
 	it["enhance"] = 0
-	it["cracks"] = 0
 	it["inspired_left"] = 0.0
 	it["inspired_hits"] = 0
 	it["round_inspired"] = false
@@ -2036,6 +2053,9 @@ func refresh() -> void:
 				extra_txt += " · 叠韧(" + str(int(it.get("dieren_stack", 0))) + ")"
 			else:
 				extra_txt += " · " + str(qt.get("name", ""))
+		var ecn := ForgeData.element_cn(str(it.get("elem", "")))
+		if ecn != "":
+			extra_txt += " · " + ecn + "属"
 		if st.has("atk"):
 			_stat_lb.text = "攻 " + str(int(st.get("atk", 0))) + " · 伤 " + str(int(st.get("dmg", 0))) + " · 品质 " + ForgeData.quality_name(int(it.get("quality", 0))) + extra_txt
 		else:

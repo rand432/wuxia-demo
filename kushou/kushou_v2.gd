@@ -175,6 +175,7 @@ var _run_fame := 0                                    # 本局名声（跨局那
 # ============================================================
 var _ach_sum := {}                                    # v14w：上一局成就发下去的那份账（下一局收回用）
 var _fame := 0                                        # 跨局名声（永久）
+var _fame_bought := {}                                # 名声兑换已购次数
 var _fame_own := {}                                   # 已买的名声解锁：id → true
 # v18y（用户："名声奖励改为原有游戏的奖励 比如酒啊 功法啊 装备啊 武器之类的"）：
 #   原来是四条抽象数值（灵晶/卡/攻/血），现在换成**具体的东西**——酒、功法、装备、武器。
@@ -187,13 +188,18 @@ const LOOT := preload("res://shared/data_loot.gd")
 # v19b（用户："名声兑换是换成主界面游戏的道具"）：**名声 = 跨模式货币**，
 #   兑换的东西直接落到主游戏（江湖游历）的仓库 / 酒窖 / 材料 / 碎片里 —— 那边就是真多了一件。
 #   ⚠ 这是**可重复兑换**的，不再是一次性永久加成。
+const CLEAR_FAME := 182   # 16 关首通总和 ≈ 所有兑换总价的 2/3
+
 const FAME_EXCHANGE := [
-	{"id": "x_mat", "n": "一包炼丹材料", "price": 25, "d": "随机两种材料各 2 份（朱果/紫芝/雪参/兽骨碎/灵米/金髓）"},
-	{"id": "x_jiu", "n": "一坛好酒", "price": 30, "d": "随机一坛【上品~极品】酒，直接进主游戏的酒窖"},
-	{"id": "x_frag", "n": "一叠角色碎片", "price": 40, "d": "随机一位角色 3~6 片碎片（升星用）"},
-	{"id": "x_card", "n": "一页功法残页", "price": 55, "d": "随机一门武学/功法的残页 1 页（凑齐可合成）"},
-	{"id": "x_wpn", "n": "兵器残片 ×2", "price": 45, "d": "随机一件兵器的残片 2 片（凑齐可在合成台合出成器）"},
-	{"id": "x_gear", "n": "防具残片 ×2", "price": 45, "d": "随机一件护甲/玉佩/披风的残片 2 片"},
+	{"id": "x_frag_player", "n": "少侠碎片 ×2", "price": 120, "limit": 6, "d": "固定给少侠碎片 2 片（升星用）"},
+	{"id": "x_frag_chen", "n": "陈石碎片 ×2", "price": 120, "limit": 6, "d": "固定给陈石碎片 2 片（升星用）"},
+	{"id": "x_frag_qing", "n": "苏青鸾碎片 ×2", "price": 120, "limit": 6, "d": "固定给苏青鸾碎片 2 片（升星用）"},
+	{"id": "x_jiu", "n": "一坛好酒", "price": 150, "limit": 3, "d": "随机一坛【上品~极品】酒，直接进主游戏的酒窖"},
+	{"id": "x_blank", "n": "下品胚子", "price": 80, "limit": 5, "d": "普通胚子 1 个，直接进材料库"},
+	{"id": "x_silver", "n": "银两 ×500", "price": 80, "limit": 5, "d": "主游戏银两 +500"},
+	{"id": "x_star_iron", "n": "星铁 ×1", "price": 120, "limit": 2, "d": "升阶特殊材料，直接进主游戏材料库"},
+	{"id": "x_art_low", "n": "下品功法【完整】", "price": 200, "limit": 2, "d": "随机一门凡品功法，整本直接进仓库"},
+	{"id": "x_art_mid", "n": "中品功法【完整】", "price": 320, "limit": 1, "d": "随机一门良品功法，整本直接进仓库"},
 ]
 
 # v18y 那批「开局 buff」已下线（保留常量名，老存档里买过的 id 只是不再生效）
@@ -202,18 +208,10 @@ const FAME_UNLOCKS := []
 func _fame_own_get(id: String) -> bool:
 	return bool(_fame_own.get(id, false))
 
-# 一局结束时结算名声（死掉 / 通关都走这里，只结一次）
+# 一局结束时只做存档；名声改为**通关固定给**，死在半路没有。
 func _fame_settle() -> int:
-	var w := maxi(1, _wave)
-	var gain := 2 * w
-	if _bath_used > 0:
-		gain = int(round(float(gain) * 0.6))       # 靠浴血续命的，名声少给一点
-	if int(_field.kills_total) > 0:
-		gain += mini(40, int(_field.kills_total) / 50)   # 杀敌也换一点（每 50 只 +1，最多 +40）
-	gain += _run_fame                                # 本局打 boss 挑战攒的那部分
-	_fame += gain
 	_ach_save()
-	return gain
+	return 0
 
 # 买一件名声解锁
 func _fame_buy(id: String) -> void:
@@ -242,6 +240,47 @@ func _fame_pool_of(pool: String) -> Array:
 	return out
 
 # 兑换：花名声 → 主游戏那边真入账 → 存主游戏的档
+func _fame_grant_new(id: String) -> String:
+	if id.begins_with("x_frag_"):
+		var fmap := {"x_frag_player": "frag_player", "x_frag_chen": "frag_chen", "x_frag_qing": "frag_qing"}
+		var fid := str(fmap.get(id, ""))
+		var fcn := {"frag_player": "少侠", "frag_chen": "陈石", "frag_qing": "苏青鸾"}
+		if fid == "":
+			return ""
+		GS.add_fragment(fid, 2)
+		return "换到「" + str(fcn.get(fid, fid)) + "」碎片 ×2，已进主游戏"
+	if id == "x_jiu":
+		var wn := GS.add_wine_of_grade(randi_range(2, 4))
+		return "换到一坛「" + wn + "」——主游戏的酒窖里"
+	if id == "x_star_iron":
+		GS.add_material("star_iron", 1)
+		return "换到星铁 ×1，已进材料库"
+	if id == "x_blank":
+		GS.add_material("common", 1)
+		return "换到普通胚子 ×1——已进材料库"
+	if id == "x_silver":
+		GS.add_coin("silver", 500)
+		return "换到银两 ×500"
+	if id == "x_art_low" or id == "x_art_mid":
+		var want_q := 0 if id == "x_art_low" else 1
+		var arts := _fame_pool_of("arts")
+		var pool: Array = []
+		for a_v in arts:
+			var a: Dictionary = a_v
+			if CARDS.q_idx(str(a.get("id", ""))) == want_q:
+				pool.append(a)
+		if pool.is_empty():
+			return ""
+		var pick: Dictionary = pool[randi() % pool.size()]
+		var sid := str(pick.get("id", ""))
+		var parts: Array = pick.get("parts", [])
+		var dep := {}
+		for p in parts.size():
+			dep[p] = 1
+		GS.vault_deposit({sid: dep})
+		return "换到整本「" + str(pick.get("name", sid)) + "」——已进主游戏仓库"
+	return ""
+
 func _fame_exchange(id: String) -> void:
 	var it: Dictionary = {}
 	for e_v in FAME_EXCHANGE:
@@ -252,10 +291,25 @@ func _fame_exchange(id: String) -> void:
 	if it.is_empty():
 		return
 	var price := int(it["price"])
+	var lim := int(it.get("limit", 0))
+	var bought := int(_fame_bought.get(id, 0))
+	if lim > 0 and bought >= lim:
+		_hint.text = "「" + str(it["n"]) + "」已经兑完（限购 " + str(lim) + " 次）"
+		return
 	if int(_fame) < price:
 		_hint.text = "名声不够（要 " + str(price) + "，现有 " + str(int(_fame)) + "）"
 		return
 	_fame -= price
+	var new_msg := _fame_grant_new(id)
+	if new_msg != "":
+		_fame_bought[id] = bought + 1
+		GS.save_game()
+		_ach_save()
+		_hint.text = "名声 −" + str(price) + "　" + new_msg + "（剩余名声 " + str(int(_fame)) + "）"
+		Audio.sfx("levelup", -3.0)
+		if _popup_kind == "存档":
+			_open_large("存档")
+		return
 	var msg := ""
 	match id:
 		"x_mat":
@@ -276,7 +330,7 @@ func _fame_exchange(id: String) -> void:
 		"x_frag":
 			var fr: Array = LOOT.FRAGMENTS
 			var pick: Dictionary = fr[randi() % fr.size()]
-			var n := randi_range(3, 6)
+			var n := randi_range(2, 3)
 			GS.add_fragment(str(pick["id"]), n)
 			msg = "换到「" + str(pick["name"]) + "」×" + str(n) + "（现在一共 " + str(GS.fragment_count(str(pick["id"]))) + " 片）"
 		"x_card":
@@ -305,11 +359,11 @@ func _fame_exchange(id: String) -> void:
 				var sid2 := str(e3["id"])
 				var parts: Array = e3.get("parts", [""])
 				var got: Dictionary = {}
-				for i in 2:
+				for i in 1:
 					var p2 := randi() % maxi(1, parts.size())
 					got[p2] = int(got.get(p2, 0)) + 1
 				GS.vault_deposit({sid2: got})
-				msg = "换到「" + str(e3["name"]) + "」残片 ×2（" + str(CARDS.quality_of(sid2)) + "）已进主游戏仓库"
+				msg = "换到「" + str(e3["name"]) + "」残片 ×1（" + str(CARDS.quality_of(sid2)) + "）已进主游戏仓库"
 		_:
 			pass
 	if msg == "":
@@ -317,6 +371,7 @@ func _fame_exchange(id: String) -> void:
 		_hint.text = "兑换失败：主游戏那边没有对应数据"
 		return
 	GS.save_game()
+	_fame_bought[id] = bought + 1
 	_ach_save()
 	_hint.text = "名声 −" + str(price) + "　" + msg + "（剩余名声 " + str(int(_fame)) + "）"
 	Audio.sfx("levelup", -3.0)
@@ -847,7 +902,7 @@ func _ready() -> void:
 	#   表现就是"一进场就是第 13 波、Lv8"。开一局必须走一次 _restart_run() 才是干净的第一波。
 	#   ⚠ 放在 _ach_load() 之后：那边读的是成就/名声档，_restart_run 里要把它们发下来。
 	#   ⚠ 弹窗专用进来时**不能开局**：存档 / 成就只看窗口，棋盘不能自己跑起来。
-	if not boot_popup_only:
+	if not (boot_popup_only or _popup_pause or _popup_only_pending or _popup_only):
 		_started = true
 		_restart_run()
 		_sync_avatar()
@@ -858,12 +913,18 @@ static var boot_popup := ""
 static var boot_popup_only := false
 var _popup_only := false
 var _popup_only_pending := false
+var _popup_pause := false
+var _popup_hidden: Array = []
 var _started := false
 
 func open() -> void:
 	_want_open = true
 	visible = true
 	move_to_front()
+	var popup_only_now := boot_popup_only
+	if popup_only_now:
+		_popup_pause = true
+		Audio.stop_bgm(0.2)
 	if not _started and not boot_popup_only:
 		_started = true
 		_restart_run()
@@ -876,10 +937,16 @@ func open() -> void:
 		boot_popup_only = false
 		_open_large.call_deferred(bp)
 	# v16q（用户："换一首吧"）：战斗曲改成**可换**的（原来写死 bgm_battle，那首里有呐喊）
-	Audio.play_bgm(Audio.battle_track(), 0.6)
+	if not popup_only_now:
+		Audio.play_bgm(Audio.battle_track(), 0.6)
 
 func close() -> void:
+	var from_popup_only := _popup_pause
+	_restore_popup_hidden()
+	if from_popup_only:
+		_started = false
 	_want_open = false
+	_popup_pause = false
 	_popup_only = false
 	_popup_only_pending = false
 	visible = false
@@ -5437,6 +5504,9 @@ func _all_grants() -> Array:
 func _stage_clear(id: String) -> void:
 	if bool(_stage_done.get(id, false)):
 		return
+	_fame += CLEAR_FAME
+	_ach_save()
+	_hint.text = "首通：名声 +" + str(CLEAR_FAME) + "（累计 " + str(int(_fame)) + "）"
 	var s := _stage_info(id)
 	_stage_done[id] = true
 	var got: Array = []
@@ -5964,15 +6034,18 @@ func _fill_fame_section(p: Control, ly0: float) -> float:
 	ly += 42.0
 	var fnote := _plbl(p, Vector2(24, ly), Vector2(660, 76), 19, DIM)
 	fnote.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	fnote.text = "一局结束按打到的波数结算（每波 +2，杀敌每 50 只再 +1，靠浴血续命的 ×0.6）。" \
-		+ "兑换是**可重复**的：花名声换主游戏（江湖游历）里的东西——酒 / 材料 / 碎片 / 功法残页 / 兵器 / 防具，" \
-		+ "换到就直接进那边的酒窖或仓库，回主界面就能看到。"
+	fnote.text = "名声只在**首次通关**时固定给 " + str(CLEAR_FAME) + "；打过的关再打不再给。" \
+		+ "每样兑换都有**限购次数**，活动给的名声不够把所有东西兑完——要有取舍。" \
+		+ "换到的酒 / 胚子 / 功法 / 碎片 / 银两会直接进主游戏（江湖游历）。"
 	ly += 84.0
 	for e_v in FAME_EXCHANGE:
 		var it: Dictionary = e_v
 		var eid := str(it["id"])
 		var price := int(it["price"])
-		var can := int(_fame) >= price
+		var lim := int(it.get("limit", 0))
+		var bought := int(_fame_bought.get(eid, 0))
+		var sold := lim > 0 and bought >= lim
+		var can := int(_fame) >= price and not sold
 		var sb := StyleBoxFlat.new()
 		sb.bg_color = Color(0.99, 0.97, 0.92) if can else Color(0.94, 0.92, 0.89)
 		sb.set_corner_radius_all(10)
@@ -5985,11 +6058,11 @@ func _fill_fame_section(p: Control, ly0: float) -> float:
 		box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		p.add_child(box)
 		var fl1 := _plbl(box, Vector2(14, 8), Vector2(430, 36), 24, INK if can else DIM)
-		fl1.text = str(it["n"])
+		fl1.text = str(it["n"]) + ("　限购 " + str(bought) + "/" + str(lim) if lim > 0 else "")
 		var fl2 := _plbl(box, Vector2(14, 48), Vector2(430, 40), 19, INK if can else DIM)
 		fl2.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		fl2.text = str(it["d"])
-		var btn := _pbtn(box, "名声 " + str(price), Vector2(456, 16), Vector2(170, 62), 22, can, _fame_exchange.bind(eid))
+		var btn := _pbtn(box, ("已兑完" if sold else "名声 " + str(price)), Vector2(456, 16), Vector2(170, 62), 22, can, _fame_exchange.bind(eid))
 		if not can:
 			btn.add_theme_stylebox_override("normal", _flat(Color(0.55, 0.53, 0.51, 0.95)))
 			btn.add_theme_stylebox_override("hover", _flat(Color(0.60, 0.58, 0.56, 0.95)))
@@ -6282,6 +6355,7 @@ func _ach_load() -> void:
 		if pev > 0:
 			_mate_evo[peid] = pev
 	_fame = int(cf.get_value("fame", "total", 0))
+	_fame_bought = cf.get_value("fame", "bought", {})
 	for fu_v in FAME_UNLOCKS:
 		var fid := str((fu_v as Dictionary)["id"])
 		if bool(cf.get_value("fame", fid, false)):
@@ -6308,6 +6382,7 @@ func _ach_save() -> void:
 	for pe2 in _mate_evo.keys():
 		cf.set_value("mateevo", str(pe2), int(_mate_evo[pe2]))
 	cf.set_value("fame", "total", int(_fame))
+	cf.set_value("fame", "bought", _fame_bought)
 	for fu2 in _fame_own.keys():
 		cf.set_value("fame", str(fu2), true)
 
@@ -7264,6 +7339,8 @@ func _bar(r: Rect2, col: Color) -> ColorRect:
 # 假数据每帧走一点（看得出"活着"）
 # ============================================================
 func _process(delta: float) -> void:
+	if _popup_pause:
+		return
 	# v15k（用户：当可以招募伙伴的时候 主角人物头像 会闪动可招募伙伴）：
 	#   有招募机会时，那颗［招募 N］按钮做"呼吸闪"——一眼能看到该去招募了。
 	_rec_flash += delta
@@ -7810,8 +7887,7 @@ func _on_chal_drop(kind_i: int, at: Vector2) -> void:
 		4:
 			_trea_refresh += 1            # v15s：2 → 1（宝物整体收敛；boss 本身已经给名声 ＋ 掉落）
 			# 名声是"局外"的（跨局保留），这里先记一笔本局战绩
-			_run_fame += 20
-			_hint.text = "挑战 boss 拿下：本局名声 +20（现在 " + str(_run_fame) + "）"
+			_hint.text = "挑战 boss 拿下"
 			Audio.sfx("levelup", -4.0)
 	Audio.sfx("coin", -8.0)
 
@@ -7972,8 +8048,8 @@ func _on_hero_down() -> void:
 		#   战场停住 ＋ 弹**失败结算页**（原来只改了一句提示，玩的人就卡在 0 血没去处）
 		_over = true
 		_field.running = false
-		var fg := _fame_settle()             # v14w：这一局的名声结算（只结一次）
-		_hint.text = "这一局结束：名声 +" + str(fg) + "（累计 " + str(int(_fame)) + "，去存档页看能买什么）"
+		_fame_settle()             # 只落存档；死在半路不给名声
+		_hint.text = "这一局结束：未通关，没有名声。去存档页看看已经攒下的。"
 		_open_large("局终")
 
 # 临时试玩键
@@ -8019,6 +8095,21 @@ func _open_small(kind: String) -> void:
 func _open_large(kind: String) -> void:
 	_open_popup(kind, true)
 
+func _hide_game_for_popup(popup_layer: Control) -> void:
+	_popup_hidden.clear()
+	for c in get_children():
+		if c == popup_layer:
+			continue
+		if c is CanvasItem and (c as CanvasItem).visible:
+			_popup_hidden.append(c)
+			(c as CanvasItem).visible = false
+
+func _restore_popup_hidden() -> void:
+	for c in _popup_hidden:
+		if is_instance_valid(c) and c is CanvasItem:
+			(c as CanvasItem).visible = true
+	_popup_hidden.clear()
+
 func _open_popup(kind: String, large: bool) -> void:
 	_close_popup()
 	if _popup_only_pending:
@@ -8032,10 +8123,12 @@ func _open_popup(kind: String, large: bool) -> void:
 	add_child(layer)
 	_popup = layer
 	var dim := ColorRect.new()
-	dim.color = Color(0, 0, 0, (0.42 if large else 0.18))
+	dim.color = Color(0.035, 0.030, 0.026, 1.0) if _popup_only else Color(0, 0, 0, (0.42 if large else 0.18))
 	dim.size = vp
 	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layer.add_child(dim)
+	if _popup_only:
+		_hide_game_for_popup(layer)
 	var closer := Button.new()
 	closer.position = Vector2.ZERO
 	closer.size = vp
