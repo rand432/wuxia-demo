@@ -2025,7 +2025,7 @@ func _apply_world_flags() -> void:
 func _trait_cap_for_blank(blank_id: String) -> int:
 	var b := ForgeData.blank(blank_id)
 	var q := int(b.get("quality", 0))
-	return [1, 2, 2, 3, 3][clampi(q, 0, 4)]
+	return [1, 2, 3, 4, 4][clampi(q, 0, 4)]
 
 func _rand_appraise_tool() -> String:
 	return ["sight", "sight", "lamp", "lamp", "seal", "count", "sift_g", "sift_p", "sift_j", "sift_r"][randi() % 10]
@@ -5144,7 +5144,7 @@ func _grant_battle_loot(enemy: Node2D) -> void:
 	GameState.add_material("bone_coal", coal_drop, _loot_q())
 	_loot_pop("iron_sand", iron_drop, 0.45)
 	_loot_pop("bone_coal", coal_drop, 0.55)
-	if randf() < 0.20:
+	if GameState.world_tier >= 2 and randf() < 0.20:
 		GameState.add_material("meteor_iron", 1, _loot_q())
 		_loot_pop("meteor_iron", 1, 0.34)
 		extra_mat += " · 陨铁 ×1"

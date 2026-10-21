@@ -125,8 +125,7 @@ func _process(d: float) -> void:
 	elif not ins_it.is_empty() and float(ins_it.get("inspired_left", 0.0)) > 0.0:
 		ins_it["inspired_left"] = maxf(0.0, float(ins_it.get("inspired_left", 0.0)) - d)
 		if float(ins_it.get("inspired_left", 0.0)) <= 0.0:
-			ins_it["inspired_left"] = 0.0
-			ins_it["inspired_hits"] = 0
+			_end_inspire(ins_it)
 			GameState.save_game()
 			refresh()
 		elif _inspire_bar != null:
@@ -700,7 +699,9 @@ func _use_trait_blank(idx: int) -> void:
 	GameState.forge_item["quench_trait"] = trait_id
 	GameState.forge_item["quench_count"] = 0
 	if trait_id == "mingdao":
-		GameState.forge_item["mingdao_charges"] = 3
+		GameState.forge_item["mingdao_charges"] = 2
+	elif trait_id == "xifeng":
+		GameState.forge_item["xifeng_charges"] = 3
 	elif trait_id == "xiren":
 		GameState.forge_item["mingdao_charges"] = 1
 	_blank_panel.visible = false
@@ -955,6 +956,14 @@ func _hammer() -> void:
 		it["generic_rolled"] = true
 		if str(it.get("quench_trait", "")).begins_with("type_"):
 			it.erase("quench_trait")
+	var forced_tongshen := false
+	if not first and bool(it.get("tongshen_pending", false)):
+		it.erase("tongshen_pending")
+		it["round_inspired"] = true
+		it["inspired_left"] = 10.0
+		it["inspired_hits"] = 0
+		it["inspire_need"] = int(it.get("enhance", 0)) + 10
+		forced_tongshen = true
 	var old_st := ForgeData.item_stats(it)
 	if first:
 		it["craft_grade"] = 2
@@ -974,7 +983,7 @@ func _hammer() -> void:
 	var guard_name := ""
 	var qt_id := str(it.get("quench_trait", ""))
 	if outcome == 4 and (qt_id == "mingdao" or qt_id == "xiren"):
-		var max_c := 3 if qt_id == "mingdao" else 1
+		var max_c := 2 if qt_id == "mingdao" else 1
 		var md := clampi(int(it.get("mingdao_charges", max_c)), 0, max_c)
 		if md > 0:
 			outcome = 2
@@ -995,6 +1004,8 @@ func _hammer() -> void:
 	it["enhance"] = mini(20, int(it.get("enhance", 0)) + 1)
 	it["finished"] = true
 	var text := ""
+	if forced_tongshen:
+		text += "｜通神：第二锤入神"
 	if mingdao_saved:
 		text += "｜" + guard_name + "护主（余 " + str(mingdao_left) + " 次）"
 	if huihuo_saved:
@@ -1013,11 +1024,22 @@ func _hammer() -> void:
 		0:
 			it["craft_grade"] = mini(4, int(it.get("craft_grade", 2)) + 2)
 			it["lucky_great"] = int(it.get("lucky_great", 0)) + 1
+			it.erase("yangfeng_stack")
 			text += "大成功！属性大增"
+			if str(it.get("quench_trait", "")) == "bailian" and int(it.get("enhance", 0)) < 20:
+				it["enhance"] = int(it.get("enhance", 0)) + 1
+				text += "｜百炼：强化 +1"
 			if str(it.get("quench_trait", "")) == "xifeng":
-				it["cracks"] = 0
-				it["damage_bias"] = 0
-				text += "｜洗锋：破坏累积清空"
+				var xc := clampi(int(it.get("xifeng_charges", 3)), 0, 3)
+				if xc > 0:
+					it["cracks"] = 0
+					it["damage_bias"] = 0
+					xc -= 1
+					it["xifeng_charges"] = xc
+					text += "｜洗锋：破坏累积清空（余 " + str(xc) + " 次）"
+					if xc <= 0:
+						it.erase("quench_trait")
+						it.erase("xifeng_charges")
 			elif str(it.get("quench_trait", "")) == "yuwei":
 				it["trait_next_guard"] = true
 				text += "｜余威：下一锤更稳"
@@ -1027,6 +1049,7 @@ func _hammer() -> void:
 		1:
 			it["craft_grade"] = mini(4, int(it.get("craft_grade", 2)) + 1)
 			it["lucky_success"] = int(it.get("lucky_success", 0)) + 1
+			it.erase("yangfeng_stack")
 			text += "成功——属性提升"
 			if str(it.get("quench_trait", "")) == "huihuo":
 				it["huihuo_ready"] = true
@@ -1036,6 +1059,9 @@ func _hammer() -> void:
 				text += "｜续火：返 1 石"
 		2:
 			text += "维持——属性不变"
+			if str(it.get("quench_trait", "")) == "yangfeng":
+				it["yangfeng_stack"] = mini(2, int(it.get("yangfeng_stack", 0)) + 1)
+				text += "｜养锋：成功 +8%（" + str(int(it.get("yangfeng_stack", 0))) + " 层）"
 			if str(it.get("quench_trait", "")) == "jieshi":
 				it["trait_next_success"] = true
 				text += "｜借势：下一锤成功提高"
@@ -1047,6 +1073,7 @@ func _hammer() -> void:
 				text += "｜叠韧：破坏 -1%"
 		3:
 			it["craft_grade"] = maxi(0, int(it.get("craft_grade", 2)) - 1)
+			it.erase("yangfeng_stack")
 			if str(it.get("quench_trait", "")) == "chengshang":
 				text += "（承伤：未增裂纹）"
 			else:
@@ -1061,12 +1088,12 @@ func _hammer() -> void:
 	if float(it.get("inspired_left", 0.0)) > 0.0:
 		it["inspired_hits"] = int(it.get("inspired_hits", 0)) + 1
 		if int(it.get("inspired_hits", 0)) >= 6:
-			it["inspired_left"] = 0.0
-			it["inspired_hits"] = 0
+			_end_inspire(it)
 			text += "｜入神散去"
-	if int(it.get("enhance", 0)) >= 10 and not bool(it.get("round_inspired", false)):
+	if int(it.get("enhance", 0)) >= int(it.get("inspire_need", 10)) and not bool(it.get("round_inspired", false)):
 		it["round_inspired"] = true
-		it["inspired_left"] = 7.0
+		it["inspire_need"] = int(it.get("enhance", 0)) + 10
+		it["inspired_left"] = 10.0 if str(it.get("quench_trait", "")) == "tongshen" else 7.0
 		it["inspired_hits"] = 0
 		if str(it.get("quench_trait", "")) == "dingshen":
 			it["enhance"] = mini(20, int(it.get("enhance", 0)) + 1)
@@ -1084,6 +1111,8 @@ func _hammer() -> void:
 	var elem_now := _apply_element(it)
 	if elem_now != "":
 		text += "｜上品定型：「" + elem_now + "」属性"
+	if first and qt_id == "tongshen":
+		it["tongshen_pending"] = true
 	GameState.forge_item = it
 	if first:
 		_register_anvil(it)
@@ -1095,6 +1124,12 @@ func _hammer() -> void:
 	GameState.save_game()
 	await get_tree().create_timer(1.02).timeout
 	_finish_hit_anim()
+
+func _end_inspire(it: Dictionary) -> void:
+	it["inspired_left"] = 0.0
+	it["inspired_hits"] = 0
+	it["round_inspired"] = false
+	it["inspire_need"] = int(it.get("enhance", 0)) + 10
 
 func _roll(it: Dictionary) -> int:
 	var b: Dictionary = ForgeData.blank(str(it.get("blank", "")))
@@ -1133,6 +1168,8 @@ func _roll(it: Dictionary) -> int:
 		p[0] = float(p[0]) + 5.0
 	elif str(it.get("quench_trait", "")) == "hufeng":
 		p[4] = maxf(0.0, float(p[4]) - 3.0)
+	elif str(it.get("quench_trait", "")) == "yangfeng":
+		p[1] = float(p[1]) + 8.0 * float(int(it.get("yangfeng_stack", 0)))
 	if str(it.get("quench_trait", "")) == "jianren":
 		p[4] = maxf(0.0, float(p[4]) - float(int(it.get("jianren_stack", 0))) * 2.0)
 	if bool(it.get("trait_next_success", false)):
@@ -1208,6 +1245,9 @@ func _try_ascend(it: Dictionary) -> void:
 	it["inspired_left"] = 0.0
 	it["inspired_hits"] = 0
 	it["round_inspired"] = false
+	it["inspire_need"] = 10
+	it.erase("tongshen_pending")
+	it.erase("yangfeng_stack")
 	it["awaiting"] = false
 	GameState.forge_item = it
 	_push_log("升阶！→ " + ForgeData.item_name(it) + "（强化归 0）")
@@ -1380,12 +1420,19 @@ func _do_quench() -> void:
 	it.erase("trait_next_great")
 	it.erase("free_hammer")
 	it.erase("dieren_stack")
+	it.erase("yangfeng_stack")
+	it.erase("tongshen_pending")
+	it.erase("inspire_need")
 	if str(it.get("quench_trait", "")) == "mingdao":
-		it["mingdao_charges"] = 3
+		it["mingdao_charges"] = 2
 	elif str(it.get("quench_trait", "")) == "xiren":
 		it["mingdao_charges"] = 1
 	else:
 		it.erase("mingdao_charges")
+	if str(it.get("quench_trait", "")) == "xifeng":
+		it["xifeng_charges"] = 3
+	else:
+		it.erase("xifeng_charges")
 	GameState.forge_item = it
 	GameState.save_game()
 	var st := ForgeData.quench_trait(str(it["quench_trait"]))
@@ -2027,10 +2074,14 @@ func refresh() -> void:
 		var qt := ForgeData.quench_trait(str(it.get("quench_trait", "")))
 		if not qt.is_empty():
 			if str(qt.get("id", "")) == "mingdao" or str(qt.get("id", "")) == "xiren":
-				var ch := int(it.get("mingdao_charges", 3 if str(qt.get("id", "")) == "mingdao" else 1))
+				var ch := int(it.get("mingdao_charges", 2 if str(qt.get("id", "")) == "mingdao" else 1))
 				extra_txt += " · " + str(qt.get("name", "")) + "(" + str(ch) + ")"
+			elif str(qt.get("id", "")) == "xifeng":
+				extra_txt += " · 洗锋(余" + str(int(it.get("xifeng_charges", 3))) + ")"
 			elif str(qt.get("id", "")) == "dieren":
 				extra_txt += " · 叠韧(" + str(int(it.get("dieren_stack", 0))) + ")"
+			elif str(qt.get("id", "")) == "yangfeng":
+				extra_txt += " · 养锋(" + str(int(it.get("yangfeng_stack", 0))) + ")"
 			else:
 				extra_txt += " · " + str(qt.get("name", ""))
 		var ecn := ForgeData.element_cn(str(it.get("elem", "")))

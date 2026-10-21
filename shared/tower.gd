@@ -546,7 +546,7 @@ static func chest_roll_mat(grade := 0) -> String:
 	elif int(grade) == 2:
 		pool["star_iron"] = 1
 		pool["fine_iron"] = 5
-		pool["meteor_iron"] = 3
+		pool["meteor_iron"] = 0
 		pool["forge_oil"] = 6
 		pool["iron_sand"] = 12
 		pool["bone_coal"] = 9

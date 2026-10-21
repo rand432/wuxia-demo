@@ -769,8 +769,16 @@ static func _pick_in_pool(pool: String, q: int, rng: RandomNumberGenerator) -> S
 	return str(cand[i])
 
 static func _mat_entry(Loot, rng: RandomNumberGenerator) -> Dictionary:
-	var i := (rng.randi_range(0, Loot.MATS.size() - 1) if rng != null else randi_range(0, Loot.MATS.size() - 1))
-	var m: Dictionary = Loot.MATS[i]
+	var pool: Array = []
+	for mv in Loot.MATS:
+		var mid := str((mv as Dictionary).get("id", ""))
+		if mid in ["fine_iron", "meteor_iron", "star_iron"]:
+			continue
+		pool.append(mv)
+	if pool.is_empty():
+		return {}
+	var i := (rng.randi_range(0, pool.size() - 1) if rng != null else randi_range(0, pool.size() - 1))
+	var m: Dictionary = pool[i]
 	return {"kind": "mat", "id": str(m.get("id", "")), "part": 0,
 		"name": str(m.get("name", "炼丹材料")), "gap": GAP_SMALL, "red": false}
 

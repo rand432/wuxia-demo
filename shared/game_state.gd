@@ -5664,7 +5664,7 @@ static func stage_gift_next_line() -> String:
 	var stage := int(nxt.get("stage", 0))
 	var art := Stars.exclusive_art(str(nxt.get("role", "")))
 	var who := str(Stars.ROLE_CN.get(str(nxt.get("role", "")), "?"))
-	var bonus := "下品胚子 ×2" if stage_gift_opened == 0 else ("中品胚子 ×1" if stage_gift_opened == 1 else "中品特性胚 ×1（绝品特性）")
+	var bonus := "下品胚子 ×2" if stage_gift_opened == 0 else ("中品胚子 ×1 · 星铁 ×1" if stage_gift_opened == 1 else "中品特性胚 ×1（绝品特性） · 星铁 ×2")
 	return ("第 " + str(stage) + " 关开出「" + Cards.item_name(art) + "」（" + who + "的专武）"
 		+ "；附食物 +50 · 银两 +1000 · 锻造石 +50 · " + bonus
 		+ ("——还差 " + str(stage - stage_progress) + " 关" if stage_progress < stage else "——现在就能开"))
@@ -5700,8 +5700,10 @@ static func stage_gift_open() -> Dictionary:
 		add_material("common", 2)
 	elif opened_before == 1:
 		add_material("gen_zhong", 1)
+		add_material("star_iron", 1)
 	elif opened_before >= 2:
-		forge_trait_blank_add("gen_zhong", ForgeData.roll_quench_trait_rank(3))
+		add_material("star_iron", 2)
+		forge_trait_blank_add("gen_zhong", ForgeData.roll_quench_trait_rank(4))
 	save_game()
 	var left := stage_gift_total() - stage_gift_opened
 	var msg := "「新手关卡礼包」开出「" + Cards.item_name(art) + "」（" + Cards.quality_of(art) + "）——已放进仓库"
@@ -5709,9 +5711,9 @@ static func stage_gift_open() -> Dictionary:
 	if opened_before == 0:
 		msg += " · 下品胚子 ×2"
 	elif opened_before == 1:
-		msg += " · 中品胚子 ×1"
+		msg += " · 中品胚子 ×1 · 星铁 ×1"
 	else:
-		msg += " · 中品特性胚 ×1（绝品特性）"
+		msg += " · 中品特性胚 ×1（绝品特性） · 星铁 ×2"
 	msg += "，还能开 " + str(left) + " 次" if left > 0 else "，三次都开完了"
 	print("[账本] 新手关卡礼包：", msg)
 	return {"ok": true, "msg": msg, "art": art}
