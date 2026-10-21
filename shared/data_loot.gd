@@ -162,6 +162,7 @@ const MATS := [
 	{"id": "bone_coal", "name": "骨炭", "w": 10},
 	{"id": "forge_oil", "name": "锻油", "w": 4},
 	{"id": "fine_iron", "name": "精铁", "w": 2},
+	{"id": "meteor_iron", "name": "陨铁", "w": 1},
 	{"id": "star_iron", "name": "星铁", "w": 1},
 ]
 # v14（用户："垃圾银两收益可以增加，也有不同品质的垃圾，暂定最高到紫"）：

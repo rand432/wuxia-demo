@@ -677,7 +677,12 @@ static func _make(Loot, row: String, color: String, q: int, rng: RandomNumberGen
 		#   缘由：洗灵丹自己已经压到 1/25 的"极度稀有"，材料再顺手给，等于绕开那道闸
 		#   （玩家攒够料就能在炼丹阁炼出来）→ 材料也不给了，整条线只留炼丹阁一条正经路。
 		#   注：金髓本身另有来路（金箱材料池 · 货栈每日限购 1），不必从这儿出。
-		out.append(_mat_entry(Loot, rng))
+		if color == "red":
+			var se: Dictionary = _mat_by_id(Loot, "star_iron", rng)
+			se["red"] = true
+			out.append(se)
+		else:
+			out.append(_mat_entry(Loot, rng))
 		if color == "red":
 			out.append(Loot.tupo_by_id(with_pid))
 		else:

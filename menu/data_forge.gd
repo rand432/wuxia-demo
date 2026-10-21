@@ -362,17 +362,17 @@ const COMBOS := [
 	{"id": "gen_fan", "blank": "gen_fan", "name": "凡品胚子",
 		"trial": ["iron_sand", "bone_coal"], "hint": "铁砂定形，骨炭收口", "cost": {"iron_sand": 2, "bone_coal": 2}},
 	{"id": "gen_zhong", "blank": "gen_zhong", "name": "中品胚子",
-		"trial": ["iron_sand", "bone_coal"], "hint": "铁砂定形，骨炭收口", "cost": {"iron_sand": 3, "bone_coal": 3}},
+		"trial": ["iron_sand", "bone_coal"], "hint": "铁砂定形，骨炭收口", "cost": {"iron_sand": 3, "bone_coal": 3, "fine_iron": 1}},
 	{"id": "gen_shang", "blank": "gen_shang", "name": "上品胚子",
-		"trial": ["iron_sand", "fine_iron"], "hint": "铁砂沉锋，精铁定钢", "cost": {"iron_sand": 4, "fine_iron": 1}},
+		"trial": ["iron_sand", "meteor_iron"], "hint": "铁砂沉锋，陨铁定钢", "cost": {"iron_sand": 4, "fine_iron": 2, "meteor_iron": 1}},
 	{"id": "gen_ji", "blank": "gen_ji", "name": "极品胚子",
-		"trial": ["iron_sand", "fine_iron"], "hint": "铁砂沉锋，精铁定钢", "cost": {"iron_sand": 5, "fine_iron": 2}},
+		"trial": ["iron_sand", "meteor_iron"], "hint": "铁砂沉锋，陨铁定钢", "cost": {"iron_sand": 6, "fine_iron": 3, "meteor_iron": 2}},
 	{"id": "gen_jue", "blank": "gen_jue", "name": "绝品胚子",
-		"trial": ["iron_sand", "star_iron"], "hint": "铁砂聚魂，星铁定锋", "cost": {"iron_sand": 6, "star_iron": 1}},
+		"trial": ["iron_sand", "meteor_iron"], "hint": "铁砂聚魂，陨铁定锋", "cost": {"iron_sand": 8, "fine_iron": 4, "meteor_iron": 3}},
 ]
 
 # 淬火特性：只在成器前可刷，费用逐次暴涨。
-# rank：0 凡品 / 1 良品 / 2 上品 / 3 极品。越好越少见。
+# rank：0 凡品 / 1 良品 / 2 上品 / 3 极品 / 4 绝品。越好越少见。
 const QUENCH_TRAITS := [
 	{"id": "wending", "name": "稳定", "desc": "维持概率 +20%", "rank": 1, "weight": 10},
 	{"id": "fengli", "name": "锋利", "desc": "成功概率 +10%", "rank": 1, "weight": 10},
@@ -395,11 +395,11 @@ const QUENCH_TRAITS := [
 	{"id": "dingshen", "name": "定神", "desc": "入神触发时，强化额外 +1", "rank": 2, "weight": 4},
 	{"id": "huihuo", "name": "回火", "desc": "成功后，下一次损伤转为维持", "rank": 2, "weight": 4},
 	{"id": "yuwei", "name": "余威", "desc": "大成功后，下一锤破坏 -10%", "rank": 2, "weight": 4},
-	{"id": "xiren", "name": "惜刃", "desc": "免疫 1 次破坏，触发后消失", "rank": 2, "weight": 5},
-	{"id": "xifeng", "name": "洗锋", "desc": "大成功时，清空裂纹与破坏累积", "rank": 3, "weight": 2},
-	{"id": "mingdao", "name": "名刀", "desc": "免疫 3 次破坏；每次挡下清空裂纹与破坏累积", "rank": 3, "weight": 1},
+	{"id": "xiren", "name": "惜刃", "desc": "免疫 1 次破坏，触发后消失", "rank": 3, "weight": 5},
+	{"id": "xifeng", "name": "洗锋", "desc": "大成功时，清空裂纹与破坏累积", "rank": 4, "weight": 2},
+	{"id": "mingdao", "name": "名刀", "desc": "免疫 3 次破坏；每次挡下清空裂纹与破坏累积", "rank": 4, "weight": 1},
 	{"id": "xuhuo", "name": "续火", "desc": "成功时，返还 1 锻造石", "rank": 2, "weight": 4},
-	{"id": "jiehuo", "name": "借火", "desc": "大成功后，下一锤不耗锻造石", "rank": 2, "weight": 4},
+	{"id": "jiehuo", "name": "借火", "desc": "大成功后，下一锤不耗锻造石", "rank": 3, "weight": 4},
 	{"id": "shouzhuo", "name": "守拙", "desc": "维持时，返还 1 锻造石", "rank": 1, "weight": 8},
 	{"id": "nifeng", "name": "逆锋", "desc": "损伤后，下一锤大成功 +10%", "rank": 1, "weight": 8},
 	{"id": "dieren", "name": "叠韧", "desc": "每次维持，破坏率 -1%（可叠加）", "rank": 1, "weight": 8},
@@ -417,14 +417,40 @@ static func quench_trait(id: String) -> Dictionary:
 	return {}
 
 static func roll_quench_trait() -> String:
+	return roll_quench_trait_cap(4)
+
+static func roll_quench_trait_rank(rank: int) -> String:
+	var pool: Array = []
 	var total := 0
 	for t in QUENCH_TRAITS:
-		total += int((t as Dictionary)["weight"])
+		if int((t as Dictionary).get("rank", 0)) == rank:
+			pool.append(t)
+			total += int((t as Dictionary)["weight"])
+	if pool.is_empty():
+		return "wending"
 	var r := randi() % maxi(1, total)
-	for t in QUENCH_TRAITS:
-		r -= int((t as Dictionary)["weight"])
+	for t_v in pool:
+		var t: Dictionary = t_v
+		r -= int(t["weight"])
 		if r < 0:
-			return str((t as Dictionary)["id"])
+			return str(t["id"])
+	return "wending"
+
+static func roll_quench_trait_cap(max_rank: int) -> String:
+	var pool: Array = []
+	var total := 0
+	for t in QUENCH_TRAITS:
+		if int((t as Dictionary).get("rank", 0)) <= max_rank:
+			pool.append(t)
+			total += int((t as Dictionary)["weight"])
+	if pool.is_empty():
+		return "wending"
+	var r := randi() % maxi(1, total)
+	for t_v in pool:
+		var t: Dictionary = t_v
+		r -= int(t["weight"])
+		if r < 0:
+			return str(t["id"])
 	return "wending"
 
 const SELL_BASE := [8, 25, 75, 220, 600]

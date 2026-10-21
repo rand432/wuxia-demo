@@ -121,6 +121,8 @@ static func open(st: RunState, veil: ColorRect, on_restart: Callable, on_return:
 				names.append(DataEvents.line_name(str(lid_v)))
 			mood_line += "\n本趟走完的支线：" + "、".join(PackedStringArray(names))
 	var lines := ""
+	if str(st.mode) == "intro":
+		lines += "【下山 · Boss 掉落】\n" + GameState.INTRO_BOSS_DROP_TEXT + "\n\n"
 	if first_line != "":
 		lines += first_line + "\n\n"
 	if mood_line != "":

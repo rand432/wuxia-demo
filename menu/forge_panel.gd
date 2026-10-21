@@ -28,6 +28,7 @@ const PANEL_W := 640.0
 const PANEL_H := 940.0
 
 var _panel: Panel
+var _tut_overlay: Control = null
 var _item_lb: Label
 var _stat_lb: Label
 var _res_lb: Label
@@ -400,36 +401,16 @@ func _build_compendium() -> void:
 	_comp_mode_btn = UiKit.make_button(_comp_panel, Vector2(444, 56), Vector2(160, 38), "图 鉴", 17)
 	_comp_mode_btn.pressed.connect(_comp_mode_toggle)
 
-	var pick := _label("材料库存", 14, Color(INK.r, INK.g, INK.b, 0.54))
-	pick.position = Vector2(24, 94)
-	pick.size = Vector2(570, 22)
-	_comp_panel.add_child(pick)
-
-	_comp_mat_btns = {}
-	var mats := ["iron_sand", "bone_coal", "forge_oil", "fine_iron", "star_iron"]
-	for i in mats.size():
-		var k := str(mats[i])
-		var col := i % 3
-		var row := i / 3
-		var mb := UiKit.make_button(_comp_panel, Vector2(14 + col * 200, 120 + row * 78), Vector2(192, 70), "", 18)
-		mb.toggle_mode = true
-		mb.expand_icon = true
-		mb.add_theme_constant_override("icon_max_width", 46)
-		mb.icon = ItemIcons.for_mat(k)
-		mb.add_theme_color_override("font_disabled_color", Color(INK.r, INK.g, INK.b, 0.62))
-		mb.pressed.connect(_comp_toggle.bind(k))
-		_comp_mat_btns[k] = mb
-
 	_comp_try_btn = UiKit.make_button(_comp_panel, Vector2(14, 292), Vector2(300, 60), "试 合", 23)
 	_comp_try_btn.pressed.connect(_comp_try)
 
 	_comp_recipe_lb = _label("", 17, Color(INK.r, INK.g, INK.b, 0.78))
-	_comp_recipe_lb.position = Vector2(14, 280)
-	_comp_recipe_lb.size = Vector2(592, 190)
+	_comp_recipe_lb.position = Vector2(14, 94)
+	_comp_recipe_lb.size = Vector2(592, 396)
 	_comp_recipe_lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_comp_panel.add_child(_comp_recipe_lb)
 
-	_comp_make_btn = UiKit.make_button(_comp_panel, Vector2(14, 510), Vector2(280, 60), "照图鉴造胚", 21)
+	_comp_make_btn = UiKit.make_button(_comp_panel, Vector2(14, 510), Vector2(280, 60), "合 成 胚 子", 21)
 	_comp_make_btn.pressed.connect(_comp_make)
 
 	var back := UiKit.make_button(_comp_panel, Vector2(310, 510), Vector2(280, 60), "返 回", 23)
@@ -1828,21 +1809,20 @@ func _comp_refresh() -> void:
 	_comp_page_btn.text = "下一条 " + str(_comp_idx + 1) + "/" + str(ForgeData.COMBOS.size())
 	_comp_hint_lb.text = "配方：" + str(c["name"]) + " · " + str(c["hint"])
 	var cost: Dictionary = c.get("cost", {})
-	var cost_txt := ""
-	for k_v in cost.keys():
-		var k := str(k_v)
-		cost_txt += GameState.mat_name(k) + " " + str(int(cost[k])) + " · "
-	cost_txt = cost_txt.trim_suffix(" · ")
-	_comp_recipe_lb.text = "「" + str(c["name"]) + "」\n造胚耗：" + cost_txt + "\n材料够就直接上砧。"
-	_comp_make_btn.visible = _comp_mode == "synthesis"
-	_comp_try_btn.visible = false
+	var req_lines: Array = []
 	var can_make := true
 	for k_v in cost.keys():
 		var k := str(k_v)
-		if GameState.material_count(k) < int(cost[k]):
+		var need := int(cost[k])
+		var have := GameState.material_count(k)
+		if have < need:
 			can_make = false
+		req_lines.append(("✓" if have >= need else "×") + " " + GameState.mat_name(k) + "　" + str(have) + " / " + str(need))
+	_comp_recipe_lb.text = "「" + str(c["name"]) + "」\n\n合成需求：\n" + "\n".join(PackedStringArray(req_lines)) + "\n\n材料够就直接上砧。"
+	_comp_make_btn.visible = _comp_mode == "synthesis"
+	_comp_try_btn.visible = false
 	_comp_make_btn.disabled = not can_make or not (GameState.forge_item as Dictionary).is_empty()
-	_comp_make_btn.text = "直 接 造 胚（" + cost_txt + "）"
+	_comp_make_btn.text = "合 成 胚 子"
 
 func _set_hit_busy(v: bool) -> void:
 	_hit_busy = v
@@ -2102,6 +2082,56 @@ func open() -> void:
 	refresh()
 	visible = true
 	UiKit.pop_in(_panel)
+	if GameState.first_journey_done and GameState.disciple_joined and not GameState.forge_tut_done:
+		_show_forge_tutorial.call_deferred()
+
+func _show_forge_tutorial() -> void:
+	if _tut_overlay != null and is_instance_valid(_tut_overlay):
+		return
+	var dim := ColorRect.new()
+	dim.position = Vector2.ZERO
+	dim.size = Vector2(PANEL_W, PANEL_H)
+	dim.color = Color(0.05, 0.04, 0.03, 0.74)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	dim.z_index = 80
+	_panel.add_child(dim)
+	_tut_overlay = dim
+	var box := Panel.new()
+	box.position = Vector2(50, 250)
+	box.size = Vector2(540, 430)
+	box.z_index = 81
+	box.mouse_filter = Control.MOUSE_FILTER_STOP
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.958, 0.938, 0.892, 1.0)
+	sb.set_corner_radius_all(6)
+	sb.border_color = Color(0.42, 0.33, 0.20, 0.70)
+	sb.set_border_width_all(2)
+	box.add_theme_stylebox_override("panel", sb)
+	dim.add_child(box)
+	var title := _label("第一次锻造", 30, INK)
+	title.position = Vector2(0, 24)
+	title.size = Vector2(540, 42)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	box.add_child(title)
+	var body := _label("陈石：师父，先拿一块普通胚子上砧。
+
+① 点「武器 / 装备」
+② 选「胚子」
+③ 点「锤一下」
+
+先打一把趁手的。", 21, Color(INK.r, INK.g, INK.b, 0.88))
+	body.position = Vector2(52, 86)
+	body.size = Vector2(436, 250)
+	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(body)
+	var ok := UiKit.make_button(box, Vector2(170, 350), Vector2(200, 52), "知道了", 22)
+	ok.pressed.connect(func() -> void:
+		GameState.forge_tut_done = true
+		GameState.save_game()
+		if is_instance_valid(dim):
+			dim.queue_free()
+		_tut_overlay = null
+	)
 
 func close() -> void:
 	if not visible:

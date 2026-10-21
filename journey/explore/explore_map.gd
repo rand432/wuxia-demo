@@ -196,6 +196,10 @@ func _ready() -> void:
 		party = (dep.get("party", []) as Array).duplicate()
 		fates = (dep.get("fates", []) as Array).duplicate()
 	setup(role_id, diff, party, fates)
+	if not GameState.food_tut_seen:
+		GameState.food_tut_seen = true
+		GameState.save_game()
+		_set_msg("食物是出门的行动力：走路、战斗都会消耗；归零就回村。挂机、爬塔、猎场都能补。", 10.0)
 	if GameState.action <= 0:
 		_set_msg("食物资源耗尽了——回村", 9.9)
 		call_deferred("_return_village")
@@ -1448,6 +1452,10 @@ func _gather_node(i: int) -> void:
 			_loot_pop("forge_stone", os)
 			_loot_pop("iron_sand", ir, 0.12)
 			msg = "挖到锻造石 ×" + str(os) + " · 铁矿砂 ×" + str(ir)
+			if _loot_q() >= 2 and randf() < 0.12:
+				GameState.add_material("meteor_iron", 1, _loot_q())
+				_loot_pop("meteor_iron", 1, 0.34)
+				msg += " · 陨铁 ×1"
 		"bone":
 			GameState.add_material("bone", bs, _loot_q())
 			GameState.add_material("bone_coal", bc, _loot_q())
@@ -2013,6 +2021,11 @@ func _apply_world_flags() -> void:
 			npc["dead"] = true
 	if _boss_node != null and GameState.world_has("boss", _boss_name):
 		_boss_node.set_meta("beaten", true)
+
+func _trait_cap_for_blank(blank_id: String) -> int:
+	var b := ForgeData.blank(blank_id)
+	var q := int(b.get("quality", 0))
+	return [1, 2, 2, 3, 3][clampi(q, 0, 4)]
 
 func _rand_appraise_tool() -> String:
 	return ["sight", "sight", "lamp", "lamp", "seal", "count", "sift_g", "sift_p", "sift_j", "sift_r"][randi() % 10]
@@ -2706,17 +2719,62 @@ func _open_chest(cell: Vector2i) -> void:
 	GameState.add_coin("silver", silver)
 	_loot_stones += stones
 	_loot_silver += silver
-	var isand := maxi(1, int(round(float(randi_range(2, 5)) * rm)))
-	var coal := maxi(1, int(round(float(randi_range(1, 3)) * rm)))
-	GameState.add_material("iron_sand", isand, cq)
-	GameState.add_material("bone_coal", coal, cq)
-	_loot_pop("iron_sand", isand, 0.12)
-	_loot_pop("bone_coal", coal, 0.22)
-	var extra := " · 铁矿砂 ×" + str(isand) + " · 骨炭 ×" + str(coal)
+	var extra := ""
+	var wd := clampi(GameState.world_difficulty, 1, 3)
+	if wd == 1:
+		if randf() < 0.70:
+			var e1 := randi_range(1, 2)
+			GameState.add_material("iron_sand", e1, cq)
+			_loot_pop("iron_sand", e1, 0.12)
+			extra += " · 铁矿砂 ×" + str(e1)
+		if randf() < 0.50:
+			GameState.add_material("bone_coal", 1, cq)
+			_loot_pop("bone_coal", 1, 0.22)
+			extra += " · 骨炭 ×1"
+	elif wd == 2:
+		var e2 := randi_range(2, 4)
+		GameState.add_material("iron_sand", e2, cq)
+		_loot_pop("iron_sand", e2, 0.12)
+		extra += " · 铁矿砂 ×" + str(e2)
+		if randf() < 0.70:
+			GameState.add_material("bone_coal", randi_range(1, 2), cq)
+			extra += " · 骨炭"
+		if randf() < 0.30:
+			GameState.add_material("forge_oil", 1, cq)
+			_loot_pop("forge_oil", 1, 0.32)
+			extra += " · 锻油 ×1"
+		if randf() < 0.10:
+			GameState.add_material("fine_iron", 1, cq)
+			_loot_pop("fine_iron", 1, 0.42)
+			extra += " · 精铁 ×1"
+	else:
+		var e3 := randi_range(3, 6)
+		GameState.add_material("iron_sand", e3, cq)
+		_loot_pop("iron_sand", e3, 0.12)
+		extra += " · 铁矿砂 ×" + str(e3)
+		if randf() < 0.80:
+			GameState.add_material("bone_coal", randi_range(1, 2), cq)
+			extra += " · 骨炭"
+		if randf() < 0.55:
+			GameState.add_material("forge_oil", 1, cq)
+			_loot_pop("forge_oil", 1, 0.32)
+			extra += " · 锻油 ×1"
+		if randf() < 0.30:
+			GameState.add_material("fine_iron", 1, cq)
+			_loot_pop("fine_iron", 1, 0.42)
+			extra += " · 精铁 ×1"
+		if randf() < 0.15:
+			GameState.add_material("meteor_iron", 1, cq)
+			_loot_pop("meteor_iron", 1, 0.34)
+			extra += " · 陨铁 ×1"
+		if randf() < 0.06:
+			GameState.add_material("star_iron", 1, cq)
+			_loot_pop("star_iron", 1, 0.30)
+			extra += " · 星铁 ×1"
 	if randf() < minf(0.65, 0.32 * rm):
 		if randf() < 0.65:
 			var tb_blank: String = "gen_fan" if q >= 1 else "common"
-			var tb_trait := ForgeData.roll_quench_trait()
+			var tb_trait := ForgeData.roll_quench_trait_cap(_trait_cap_for_blank(tb_blank))
 			GameState.forge_trait_blank_add(tb_blank, tb_trait)
 			var tb_nm := str(ForgeData.blank(tb_blank).get("name", "胚子")) + "·" + str(ForgeData.quench_trait(tb_trait).get("name", "特性"))
 			extra += " · 特性胚「" + tb_nm + "」"
@@ -2725,14 +2783,6 @@ func _open_chest(cell: Vector2i) -> void:
 			GameState.add_material(blank_drop, 1, cq)
 			_loot_pop(blank_drop, 1, 0.42)
 			extra += " · " + GameState.mat_name(blank_drop) + " ×1"
-	if q >= 1 and randf() < 0.45:
-		GameState.add_material("forge_oil", 1, cq)
-		_loot_pop("forge_oil", 1, 0.32)
-		extra += " · 锻油 ×1"
-	if q >= 2 and randf() < 0.30:
-		GameState.add_material("fine_iron", 1, cq)
-		_loot_pop("fine_iron", 1, 0.42)
-		extra += " · 精铁 ×1"
 	if randf() < 0.18:
 		var atid := _rand_appraise_tool()
 		GameState.appraise_tool_add(atid, 1)
@@ -2752,10 +2802,6 @@ func _open_chest(cell: Vector2i) -> void:
 		_loot_pop("atlas", 1, 0.22)
 		_loot_atlas += 1
 		extra += " · 舆图 ×1 · 金髓 ×1"
-		if randf() < 0.35:
-			GameState.add_material("star_iron", 1, cq)
-			_loot_pop("star_iron", 1, 0.30)
-			extra += " · 星铁 ×1"
 	elif randf() < 0.22:
 		GameState.add_material("atlas", 1)
 		_loot_atlas += 1
@@ -4068,7 +4114,7 @@ func _on_broker_pick(id: String) -> void:
 			GameState.broker_rep = mini(100, GameState.broker_rep + 10)
 			var qrm := GameState.world_resource_mul()
 			GameState.add_coin("silver", int(round(120.0 * qrm)))
-			var q0t := ForgeData.roll_quench_trait()
+			var q0t := ForgeData.roll_quench_trait_cap(1)
 			GameState.forge_trait_blank_add("common", q0t)
 			GameState.appraise_tool_add(_rand_appraise_tool(), 1)
 			GameState.note_war("替听雨楼跑了一趟委托")
@@ -4090,7 +4136,7 @@ func _on_broker_pick(id: String) -> void:
 			GameState.add_coin("silver", int(round(200.0 * qrm3)))
 			GameState.add_material("atlas", 1)
 			GameState.add_material("jin", maxi(1, int(round(2.0 * qrm3))))
-			var q2t := ForgeData.roll_quench_trait()
+			var q2t := ForgeData.roll_quench_trait_cap(1)
 			GameState.forge_trait_blank_add("gen_fan", q2t)
 			GameState.appraise_tool_add(_rand_appraise_tool(), 1)
 			GameState.add_material("atlas", 1)
@@ -5076,7 +5122,7 @@ func _grant_battle_loot(enemy: Node2D) -> void:
 				tb_blank = "gen_shang"
 			elif cleared >= 4:
 				tb_blank = "gen_zhong"
-			var tb_trait := ForgeData.roll_quench_trait()
+			var tb_trait := ForgeData.roll_quench_trait_cap(_trait_cap_for_blank(tb_blank))
 			GameState.forge_trait_blank_add(tb_blank, tb_trait)
 			var tb_name := str(ForgeData.quench_trait(tb_trait).get("name", "特性"))
 			boss_blank = str(ForgeData.blank(tb_blank).get("name", "胚子")) + "·" + tb_name
@@ -5098,6 +5144,10 @@ func _grant_battle_loot(enemy: Node2D) -> void:
 	GameState.add_material("bone_coal", coal_drop, _loot_q())
 	_loot_pop("iron_sand", iron_drop, 0.45)
 	_loot_pop("bone_coal", coal_drop, 0.55)
+	if randf() < 0.20:
+		GameState.add_material("meteor_iron", 1, _loot_q())
+		_loot_pop("meteor_iron", 1, 0.34)
+		extra_mat += " · 陨铁 ×1"
 	if randf() < 0.12:
 		GameState.appraise_tool_add(_rand_appraise_tool(), 1)
 		extra_mat += " · 鉴宝道具 +1"

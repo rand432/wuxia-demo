@@ -477,7 +477,7 @@ static func chest_card_pool(kind: String, grad: int) -> Array:
 const CHEST_MATS := {"zhi": 8, "guo": 8, "shen": 6, "bone": 6, "rice": 3, "jin": 1,
 	"forge_stone": 70, "jingshi": 2, "daoxin": 1, "daoguo": 1, "hundun": 1, "xinghui": 1,
 	"pojing": 1, "xuantie": 1, "soul": 1, "lingguo": 1, "atlas": 1,
-	"iron_sand": 12, "bone_coal": 8, "forge_oil": 3, "fine_iron": 2, "star_iron": 1}
+	"iron_sand": 12, "bone_coal": 8, "forge_oil": 3, "fine_iron": 2, "meteor_iron": 1, "star_iron": 1}
 #   ⚠ v41：`jin`（金髓）是**稀有金色材料**——洗髓丹/洗灵丹的硬门槛，所以权重压到 3（约 3%）。
 #     想让它更好出就抬这个数；它同时也是货栈每日限购那件（900 两、日限 1）。
 
@@ -538,6 +538,7 @@ static func chest_roll_mat(grade := 0) -> String:
 	if int(grade) <= 1:
 		pool["star_iron"] = 0
 		pool["fine_iron"] = 0
+		pool["meteor_iron"] = 0
 		pool["jin"] = 0
 		pool["forge_oil"] = 0
 		pool["iron_sand"] = 22
@@ -545,12 +546,14 @@ static func chest_roll_mat(grade := 0) -> String:
 	elif int(grade) == 2:
 		pool["star_iron"] = 1
 		pool["fine_iron"] = 5
+		pool["meteor_iron"] = 3
 		pool["forge_oil"] = 6
 		pool["iron_sand"] = 12
 		pool["bone_coal"] = 9
 	else:
 		pool["star_iron"] = 5
 		pool["fine_iron"] = 9
+		pool["meteor_iron"] = 6
 		pool["forge_oil"] = 9
 		pool["jin"] = 4
 		pool["shen"] = 10

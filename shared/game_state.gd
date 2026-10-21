@@ -66,6 +66,7 @@ extends RefCounted
 # ============================================================
 
 const Cards := preload("res://shared/data_cards.gd")
+const ForgeData := preload("res://menu/data_forge.gd")
 const DataTalents := preload("res://shared/data_talents.gd")
 const DataPets := preload("res://shared/data_pets.gd")
 const Loot := preload("res://shared/data_loot.gd")
@@ -90,7 +91,7 @@ const IDLE_CFG := "user://idle.cfg"
 const IDLE_CAP_SEC := 28800
 const IDLE_SILVER_PER_MIN := 1
 const IDLE_EXP_PER_MIN := 2
-const ACTION_START := 60      # 食物（原行动值）：开局 60，主条满值 100，库存上限 999
+const ACTION_START := 0       # 食物：开局 0，下山 boss 掉落 +60；主条满值 100，库存上限 999
 const ACTION_MAX := 999
 # ㉞：每清几关挂机收益涨一档。
 #   原来是 5——那时塔只有 50 关，顶天 10 档（+10 银两/分）还算克制。
@@ -4358,13 +4359,13 @@ const MAT_CN := {"zhi": "紫芝", "shen": "雪参", "guo": "朱果", "bone": "�
 	"soul": "兽魂", "lingguo": "灵兽果",
 	"daoguo": "悟道果", "hundun": "混沌砂", "xinghui": "星辉",
 	"pojing": "破境花", "xuantie": "玄铁精", "jianpei": "剑胚", "common": "普通胚子",
-	"iron_sand": "铁矿砂", "bone_coal": "骨炭", "forge_oil": "锻油", "fine_iron": "精铁", "star_iron": "星铁"}
+	"iron_sand": "铁矿砂", "bone_coal": "骨炭", "forge_oil": "锻油", "fine_iron": "精铁", "meteor_iron": "陨铁", "star_iron": "星铁"}
 # v271：材料四类——战斗 / 成长 / 突破 / 宠物。
 const MAT_GROUP := {"guo": "battle", "bone": "battle", "rice": "battle",
 	"zhi": "growth", "shen": "growth", "jin": "growth",
 	"jingshi": "advance", "daoxin": "advance", "daoguo": "advance", "hundun": "advance", "xinghui": "advance",
 	"pojing": "break", "xuantie": "break", "soul": "pet", "lingguo": "pet", "jianpei": "forge", "common": "forge",
-	"iron_sand": "forge", "bone_coal": "forge", "forge_oil": "forge", "fine_iron": "forge", "star_iron": "forge"}
+	"iron_sand": "forge", "bone_coal": "forge", "forge_oil": "forge", "fine_iron": "forge", "meteor_iron": "forge", "star_iron": "forge"}
 const MAT_GROUP_CN := {"battle": "战斗材料", "growth": "成长材料", "advance": "进阶材料", "break": "突破材料", "pet": "宠物材料", "forge": "锻造材料"}
 const PILL_GROUP_CN := {"battle": "战斗丹", "growth": "成长丹", "advance": "进阶丹", "break": "突破丹", "pet": "宠物丹"}
 const PILL_GROUP_ORDER := ["battle", "growth", "advance", "break", "pet"]
@@ -5436,17 +5437,48 @@ static func idle_claim() -> Dictionary:
 
 # ---- 游历回村 ----
 
+const INTRO_BOSS_DROP_TEXT := "星铁 ×1 · 银两 +500 · 凡品功法 ×2（完整） · 下品胚子 ×3 · 锻造石 ×40 · 食物 +60"
+
 static func finish_journey() -> void:
+	if first_journey_done:
+		return
 	first_journey_done = true
+	# 引子下山 boss 掉落：一次性全给（食物也从这里来，世界不再预置初始食物）
+	add_material("star_iron", 1)
+	add_coin("silver", 500)
+	add_material("common", 3)
+	add_material("forge_stone", 40)
+	action_add(60)
+	var art_names := _intro_grant_arts(2)
+	note_push("下山：星铁 ×1 · 银两 +500 · 凡品功法 ×2 · 下品胚子 ×3 · 锻造石 ×40 · 食物 +60")
+	if not art_names.is_empty():
+		note_push("功法入仓：" + "、".join(PackedStringArray(art_names)))
 	# v40：**引子下山通关那一下**，仓库里塞一只「新手关卡礼包」（测试版的专武来路）
 	note_push(grant_stage_gift())
-	# 新手起手：百工坊开门，铁砧上给一块剑胚——第一把兵器自己锤出来。
+	# 新手起手：百工坊开门，铁砧上放胚子——第一把兵器自己锤出来。
 	if not cave_opened:
 		cave_opened = true
 		winery_built = true
-		add_material("common", 1)
-		add_material("forge_stone", 3)
-		note_push("百工坊起了——铁砧台上放着一块普通胚子，去锻第一把兵器")
+		note_push("百工坊起了——去铁砧，先锻第一把兵器")
+
+static func _intro_grant_arts(n: int) -> Array:
+	var pool: Array = []
+	for s_v in Cards.SETS:
+		var s: Dictionary = s_v
+		if str(s.get("pool", "")) == "arts" and Cards.q_idx(str(s.get("id", ""))) == 0:
+			pool.append(s)
+	pool.shuffle()
+	var out: Array = []
+	for i in mini(n, pool.size()):
+		var s2: Dictionary = pool[i]
+		var sid := str(s2.get("id", ""))
+		var parts: Array = s2.get("parts", [])
+		var dep := {}
+		for p in parts.size():
+			dep[p] = 1
+		vault_deposit({sid: dep})
+		out.append(str(s2.get("name", sid)))
+	return out
 
 # v40：回村播报是"一条串"——以前各处直接 `pending_note = "..."`，后写的会把先写的吃掉
 #   （引子那趟就是：先记了礼包，紧接着"回到村子…"把它覆盖了）。以后一律走这一口。
@@ -5611,6 +5643,8 @@ static func note_war(s: String) -> void:
 # ============================================================
 static var stage_gift_got := false
 static var stage_gift_opened := 0
+static var forge_tut_done := false
+static var food_tut_seen := false
 
 static func stage_gift_total() -> int:
 	return Stars.EXCLUSIVE_STAGE.size()
@@ -5630,7 +5664,9 @@ static func stage_gift_next_line() -> String:
 	var stage := int(nxt.get("stage", 0))
 	var art := Stars.exclusive_art(str(nxt.get("role", "")))
 	var who := str(Stars.ROLE_CN.get(str(nxt.get("role", "")), "?"))
+	var bonus := "下品胚子 ×2" if stage_gift_opened == 0 else ("中品胚子 ×1" if stage_gift_opened == 1 else "中品特性胚 ×1（绝品特性）")
 	return ("第 " + str(stage) + " 关开出「" + Cards.item_name(art) + "」（" + who + "的专武）"
+		+ "；附食物 +50 · 银两 +1000 · 锻造石 +50 · " + bonus
 		+ ("——还差 " + str(stage - stage_progress) + " 关" if stage_progress < stage else "——现在就能开"))
 
 static func stage_gift_can() -> Dictionary:
@@ -5654,10 +5690,28 @@ static func stage_gift_open() -> Dictionary:
 		return {"ok": false, "msg": "这一格还没配好（表里查不到功法）"}
 	vault_add_item(art, 1)
 	mark_collected(art)
+	var opened_before := stage_gift_opened
 	stage_gift_opened += 1
+	# 每开一次都附带的资源
+	action_add(50)
+	add_coin("silver", 1000)
+	add_material("forge_stone", 50)
+	if opened_before == 0:
+		add_material("common", 2)
+	elif opened_before == 1:
+		add_material("gen_zhong", 1)
+	elif opened_before >= 2:
+		forge_trait_blank_add("gen_zhong", ForgeData.roll_quench_trait_rank(3))
 	save_game()
 	var left := stage_gift_total() - stage_gift_opened
 	var msg := "「新手关卡礼包」开出「" + Cards.item_name(art) + "」（" + Cards.quality_of(art) + "）——已放进仓库"
+	msg += "；附食物 +50 · 银两 +1000 · 锻造石 +50"
+	if opened_before == 0:
+		msg += " · 下品胚子 ×2"
+	elif opened_before == 1:
+		msg += " · 中品胚子 ×1"
+	else:
+		msg += " · 中品特性胚 ×1（绝品特性）"
 	msg += "，还能开 " + str(left) + " 次" if left > 0 else "，三次都开完了"
 	print("[账本] 新手关卡礼包：", msg)
 	return {"ok": true, "msg": msg, "art": art}
@@ -6823,6 +6877,8 @@ static func load_game() -> void:
 	# v40：新手关卡礼包
 	stage_gift_got = bool(vd.get("stage_gift", stage_gift_got))
 	stage_gift_opened = clampi(int(vd.get("stage_gift_opened", stage_gift_opened)), 0, stage_gift_total())
+	forge_tut_done = bool(vd.get("forge_tut", forge_tut_done))
+	food_tut_seen = bool(vd.get("food_tut", food_tut_seen))
 	coins = _sd(cf.get_value("world", "coins", coins), coins)
 	insight = maxi(0, int(cf.get_value("world", "insight", 0)))            # v64b：阅历值
 	action = clampi(int(cf.get_value("world", "action", ACTION_START)), 0, ACTION_MAX)   # v242：行动资源
@@ -7056,6 +7112,7 @@ static func save_game() -> void:
 		"appraise_opened": appraise_opened, "appraise_best": appraise_best,
 		# v40：新手关卡礼包（引子通关给的；开了几次）
 		"stage_gift": stage_gift_got, "stage_gift_opened": stage_gift_opened,
+		"forge_tut": forge_tut_done, "food_tut": food_tut_seen,
 	})
 	cf.set_value("world", "coins", coins)
 	# v64b：阅历线（阅历值 ＋ 四支各自升到第几段）
@@ -7381,6 +7438,8 @@ static func reset() -> void:
 	# v40：新手关卡礼包
 	stage_gift_got = false
 	stage_gift_opened = 0
+	forge_tut_done = false
+	food_tut_seen = false
 	wines.clear()
 	pills.clear()
 	alchemy = {}

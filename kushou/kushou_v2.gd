@@ -188,7 +188,7 @@ const LOOT := preload("res://shared/data_loot.gd")
 # v19b（用户："名声兑换是换成主界面游戏的道具"）：**名声 = 跨模式货币**，
 #   兑换的东西直接落到主游戏（江湖游历）的仓库 / 酒窖 / 材料 / 碎片里 —— 那边就是真多了一件。
 #   ⚠ 这是**可重复兑换**的，不再是一次性永久加成。
-const CLEAR_FAME := 182   # 16 关首通总和 ≈ 所有兑换总价的 2/3
+const FAME_BY_STAGE := [100, 126, 152, 178, 204, 230, 256, 282, 308, 334, 360, 386]   # 12 关总和 2916 ≈ 兑换总价 2/3
 
 const FAME_EXCHANGE := [
 	{"id": "x_frag_player", "n": "少侠碎片 ×2", "price": 120, "limit": 6, "d": "固定给少侠碎片 2 片（升星用）"},
@@ -5365,7 +5365,7 @@ func _mate_star_up(id: String) -> void:
 static var boot_stage := ""
 var _stage_sel := "1-1"
 var _stage_paid := false                  # 这一关的银两/通关结算过没有
-var _endless := false                      # 无尽模式（破 4-4 解锁）
+var _endless := false                      # 无尽模式（破 4-3 解锁）
 var _best_wave := 0                        # 无尽模式最高波（永久记录）
 var _stage_done := {}                     # 已通关的关卡 id（永久，存 meta）
 
@@ -5376,52 +5376,40 @@ const STAGES := [
 	{"id": "1-1", "n": "牢门初开", "mul": 1.0, "waves": 20, "boss": "看门恶犬", "btier": 1, "cat": "卡组", "un": "磐石心", "set": "panshixin",
 		"un2": {"cat": "队员", "n": "法度", "pid": "fadu"},
 		"un3": {"cat": "宝物", "n": "虎符", "trea": "虎符"}},
-	{"id": "1-2", "n": "铁栅血痕", "mul": 1.15, "waves": 20, "boss": "铁背苍狼", "btier": 1, "cat": "卡组", "un": "铁布衫", "set": "tiebushan",
+	{"id": "1-2", "n": "铁栅血痕", "mul": 1.4, "waves": 22, "boss": "铁背苍狼", "btier": 1, "cat": "卡组", "un": "铁布衫", "set": "tiebushan",
 		"un2": {"cat": "队员", "n": "铁无心", "pid": "tiexinwu"},
 		"un3": {"cat": "宠物", "n": "雷鹫", "pet": "jiu"}},
-	{"id": "1-3", "n": "断锁残灯", "mul": 1.3, "waves": 20, "boss": "毒牙蟒", "btier": 1, "cat": "队员", "un": "白婆婆", "pid": "baipopo",
+	{"id": "1-3", "n": "断锁残灯", "mul": 1.8, "waves": 24, "boss": "毒牙蟒", "btier": 1, "cat": "队员", "un": "白婆婆", "pid": "baipopo",
 		"un2": {"cat": "卡组", "n": "磐石", "set": "panshi"},
 		"un3": {"cat": "装备卡", "n": "兵器·刀", "set": "dao"}},
-	{"id": "1-4", "n": "监牢深处", "mul": 1.45, "waves": 20, "boss": "石甲巨猿", "btier": 1, "cat": "卡组", "un": "断岳", "set": "duanyue",
-		"un2": {"cat": "队员", "n": "药婆子", "pid": "yaopozi"},
-		"un3": {"cat": "宝物", "n": "玄龟甲", "trea": "玄龟甲"}},
 	# 第二章 · 进阶
-	{"id": "2-1", "n": "典吏巡夜", "mul": 1.9, "waves": 25, "boss": "双头狮", "btier": 2, "cat": "宝物", "un": "灵晶袋", "trea": "灵晶袋",
+	{"id": "2-1", "n": "典吏巡夜", "mul": 2.6, "waves": 26, "boss": "双头狮", "btier": 2, "cat": "宝物", "un": "灵晶袋", "trea": "灵晶袋",
 		"un2": {"cat": "队员", "n": "蛊师", "pid": "gushi"},
 		"un3": {"cat": "卡组", "n": "灵犀", "set": "lingxi"}},
-	{"id": "2-2", "n": "五行乱阵", "mul": 2.1, "waves": 25, "boss": "独眼狱卒", "btier": 2, "cat": "卡组", "un": "五行", "set": "wuxing",
+	{"id": "2-2", "n": "五行乱阵", "mul": 3.1, "waves": 28, "boss": "独眼狱卒", "btier": 2, "cat": "卡组", "un": "五行", "set": "wuxing",
 		"un2": {"cat": "队员", "n": "季沧海", "pid": "jicanghai"},
 		"un3": {"cat": "宠物", "n": "金蟾", "pet": "chan"}},
-	{"id": "2-3", "n": "贪墨之狱", "mul": 2.3, "waves": 25, "boss": "火尾狐妖", "btier": 2, "cat": "装备卡", "un": "聚财珠", "set": "jucaizhu",
+	{"id": "2-3", "n": "贪墨之狱", "mul": 3.7, "waves": 30, "boss": "火尾狐妖", "btier": 2, "cat": "装备卡", "un": "聚财珠", "set": "jucaizhu",
 		"un2": {"cat": "队员", "n": "苏青鸾", "pid": "suqingluan"},
 		"un3": {"cat": "卡组", "n": "聚宝", "set": "jubao"}},
-	{"id": "2-4", "n": "藤萝缠狱", "mul": 2.5, "waves": 25, "boss": "赤焰蛟", "btier": 2, "cat": "队员", "un": "沈青萝", "pid": "shenqingluo",
-		"un2": {"cat": "卡组", "n": "迅影", "set": "xunying"},
-		"un3": {"cat": "装备卡", "n": "软甲", "set": "ruanjia"}},
 	# 第三章 · 困难
-	{"id": "3-1", "n": "龙纹石壁", "mul": 3.0, "waves": 30, "boss": "场主亲养·狴犴", "btier": 3, "cat": "宝物", "un": "龙纹佩", "trea": "龙纹佩",
+	{"id": "3-1", "n": "龙纹石壁", "mul": 4.6, "waves": 30, "boss": "场主亲养·狴犴", "btier": 3, "cat": "宝物", "un": "龙纹佩", "trea": "龙纹佩",
 		"un2": {"cat": "队员", "n": "西门烈", "pid": "ximenlie"},
 		"un3": {"cat": "卡组", "n": "飞羽", "set": "feiyu"}},
-	{"id": "3-2", "n": "雷罚天牢", "mul": 3.3, "waves": 30, "boss": "血手判官", "btier": 3, "cat": "卡组", "un": "雷罚", "set": "leifa",
+	{"id": "3-2", "n": "雷罚天牢", "mul": 5.4, "waves": 33, "boss": "血手判官", "btier": 3, "cat": "卡组", "un": "雷罚", "set": "leifa",
 		"un2": {"cat": "队员", "n": "毒娘子", "pid": "duniangzi"},
 		"un3": {"cat": "装备卡", "n": "护心镜", "set": "huxinjing"}},
-	{"id": "3-3", "n": "传家之秘", "mul": 3.6, "waves": 30, "boss": "困兽之主", "btier": 3, "cat": "装备卡", "un": "传家宝", "set": "chuanjiabao",
+	{"id": "3-3", "n": "传家之秘", "mul": 6.3, "waves": 35, "boss": "困兽之主", "btier": 3, "cat": "装备卡", "un": "传家宝", "set": "chuanjiabao",
 		"un2": {"cat": "队员", "n": "鬼见愁", "pid": "guijianchou"},
 		"un3": {"cat": "卡组", "n": "猎杀", "set": "liesha"}},
-	{"id": "3-4", "n": "鹰唳九霄", "mul": 3.9, "waves": 30, "boss": "幽冥判官", "btier": 3, "cat": "队员", "un": "燕无归", "pid": "yanwugui",
-		"un2": {"cat": "卡组", "n": "金刚", "set": "jingang"},
-		"un3": {"cat": "装备卡", "n": "饮血刀", "set": "yinxue"}},
 	# 第四章 · 地狱
-	{"id": "4-1", "n": "火麟熔狱", "mul": 4.4, "waves": 35, "boss": "九幽魔君", "btier": 4, "cat": "宠物", "un": "火麟", "pet": "lin",
+	{"id": "4-1", "n": "火麟熔狱", "mul": 7.5, "waves": 35, "boss": "九幽魔君", "btier": 4, "cat": "宠物", "un": "火麟", "pet": "lin",
 		"un2": {"cat": "队员", "n": "醉太岁", "pid": "zuitaisui"},
 		"un3": {"cat": "卡组", "n": "悟道", "set": "wudao"}},
-	{"id": "4-2", "n": "诛心绝境", "mul": 4.8, "waves": 35, "boss": "血海罗刹", "btier": 4, "cat": "卡组", "un": "诛心", "set": "zhuxin",
+	{"id": "4-2", "n": "诛心绝境", "mul": 8.6, "waves": 38, "boss": "血海罗刹", "btier": 4, "cat": "卡组", "un": "诛心", "set": "zhuxin",
 		"un2": {"cat": "队员", "n": "白起后人", "pid": "baiqihouren"},
 		"un3": {"cat": "宝物", "n": "灵石", "trea": "灵石"}},
-	{"id": "4-3", "n": "连环杀狱", "mul": 5.2, "waves": 35, "boss": "万蛊虫母", "btier": 4, "cat": "队员", "un": "雷小七", "pid": "leixiaoqi",
-		"un2": {"cat": "卡组", "n": "流星", "set": "liuxing"},
-		"un3": {"cat": "宝物", "n": "聚宝盆", "trea": "聚宝盆"}},
-	{"id": "4-4", "n": "困兽之斗", "mul": 5.6, "waves": 35, "boss": "困兽·终焉", "btier": 4, "cat": "宝物", "un": "悟道果", "trea": "悟道果",
+	{"id": "4-3", "n": "困兽之斗", "mul": 9.5, "waves": 40, "boss": "困兽·终焉", "btier": 4, "cat": "宝物", "un": "悟道果", "trea": "悟道果",
 		"un2": {"cat": "队员", "n": "大内供奉", "pid": "dagongfeng"},
 		"un3": {"cat": "卡组", "n": "天命", "set": "tianming"}},
 ]
@@ -5504,9 +5492,15 @@ func _all_grants() -> Array:
 func _stage_clear(id: String) -> void:
 	if bool(_stage_done.get(id, false)):
 		return
-	_fame += CLEAR_FAME
+	var si := 0
+	for i in STAGES.size():
+		if str((STAGES[i] as Dictionary).get("id", "")) == id:
+			si = i
+			break
+	var gain := int(FAME_BY_STAGE[clampi(si, 0, FAME_BY_STAGE.size() - 1)])
+	_fame += gain
 	_ach_save()
-	_hint.text = "首通：名声 +" + str(CLEAR_FAME) + "（累计 " + str(int(_fame)) + "）"
+	_hint.text = "首通：名声 +" + str(gain) + "（累计 " + str(int(_fame)) + "）"
 	var s := _stage_info(id)
 	_stage_done[id] = true
 	var got: Array = []
@@ -5523,11 +5517,11 @@ func _stage_clear(id: String) -> void:
 	Audio.sfx("levelup", -2.0)
 
 func _endless_open() -> bool:
-	return bool(_stage_done.get("4-4", false))
+	return bool(_stage_done.get("4-3", false))
 
 func _set_endless() -> void:
 	if not _endless_open():
-		_hint.text = "无尽模式要先把 4-4「困兽之斗」打通"
+		_hint.text = "无尽模式要先把 4-3「困兽之斗」打通"
 		return
 	_endless = not _endless
 	_ach_save()
@@ -5630,7 +5624,7 @@ func _fill_stage(p: Control, y: float, sz: Vector2) -> float:
 			if cur:
 				bb.add_theme_stylebox_override("normal", _flat(Color(0.55, 0.20, 0.18, 0.95)))
 		ly += 142.0
-	# v14f：无尽模式那一行（破 4-4 解锁）
+	# v14f：无尽模式那一行（破 4-3 解锁）
 	var eo := _endless_open()
 	var ec := GOLD if eo else Color(0.55, 0.53, 0.51)
 	var esb := StyleBoxFlat.new()
@@ -5649,7 +5643,7 @@ func _fill_stage(p: Control, y: float, sz: Vector2) -> float:
 	el1.size = Vector2(420, 36)
 	el1.add_theme_font_size_override("font_size", 24)
 	el1.add_theme_color_override("font_color", ec)
-	el1.text = "无尽模式" + ("" if eo else "　（打通 4-4 解锁）") + ("　·　开" if _endless else "")
+	el1.text = "无尽模式" + ("" if eo else "　（打通 4-3 解锁）") + ("　·　开" if _endless else "")
 	ebox.add_child(el1)
 	var el2 := Label.new()
 	el2.position = Vector2(14, 48)
@@ -5775,26 +5769,26 @@ const UNLOCKS := [
 	{"id": "u_part_1_2_shigandang", "cat": "队员", "n": "石敢当", "pid": "shigandang", "stage": "1-2", "price": 0},
 	{"id": "u_part_1_3_qianduoduo", "cat": "队员", "n": "钱多多", "pid": "qianduoduo", "stage": "1-3", "price": 0},
 	{"id": "u_part_1_3_tietouseng", "cat": "队员", "n": "铁头僧", "pid": "tietouseng", "stage": "1-3", "price": 0},
-	{"id": "u_part_1_4_bingshusheng", "cat": "队员", "n": "病书生", "pid": "bingshusheng", "stage": "1-4", "price": 0},
-	{"id": "u_part_1_4_xiaoqier", "cat": "队员", "n": "小乞儿", "pid": "xiaoqier", "stage": "1-4", "price": 0},
+	{"id": "u_part_1_4_bingshusheng", "cat": "队员", "n": "病书生", "pid": "bingshusheng", "stage": "1-3", "price": 0},
+	{"id": "u_part_1_4_xiaoqier", "cat": "队员", "n": "小乞儿", "pid": "xiaoqier", "stage": "1-3", "price": 0},
 	{"id": "u_part_2_1_laobing", "cat": "队员", "n": "瘸腿老兵", "pid": "laobing", "stage": "2-1", "price": 0},
 	{"id": "u_part_2_1_xinglin", "cat": "队员", "n": "杏林医女", "pid": "xinglin", "stage": "2-1", "price": 0},
 	{"id": "u_part_2_2_qiaofu", "cat": "队员", "n": "樵夫", "pid": "qiaofu", "stage": "2-2", "price": 0},
 	{"id": "u_part_2_2_pozhen", "cat": "队员", "n": "破阵刀客", "pid": "pozhen", "stage": "2-2", "price": 0},
 	{"id": "u_part_2_3_busheren", "cat": "队员", "n": "捕蛇人", "pid": "busheren", "stage": "2-3", "price": 0},
 	{"id": "u_part_2_3_gengfu", "cat": "队员", "n": "更夫", "pid": "gengfu", "stage": "2-3", "price": 0},
-	{"id": "u_part_2_4_zuijianxian", "cat": "队员", "n": "醉剑仙", "pid": "zuijianxian", "stage": "2-4", "price": 0},
+	{"id": "u_part_2_4_zuijianxian", "cat": "队员", "n": "醉剑仙", "pid": "zuijianxian", "stage": "2-3", "price": 0},
 	{"id": "u_part_3_1_chuangong", "cat": "队员", "n": "老船工", "pid": "chuangong", "stage": "3-1", "price": 0},
 	{"id": "u_part_3_2_qihealer", "cat": "队员", "n": "气疗师", "pid": "qihealer", "stage": "3-2", "price": 0},
 	{"id": "u_part_3_3_yaowang", "cat": "队员", "n": "药王", "pid": "yaowang", "stage": "3-3", "price": 0},
-	{"id": "u_part_3_4_qizong", "cat": "队员", "n": "气宗", "pid": "qizong", "stage": "3-4", "price": 0},
+	{"id": "u_part_3_4_qizong", "cat": "队员", "n": "气宗", "pid": "qizong", "stage": "3-3", "price": 0},
 	{"id": "u_part_4_1_dunwei", "cat": "队员", "n": "盾卫", "pid": "dunwei", "stage": "4-1", "price": 0},
 	{"id": "u_part_4_1_drummaster", "cat": "队员", "n": "鼓师", "pid": "drummaster", "stage": "4-1", "price": 0},
 	{"id": "u_part_4_2_medic", "cat": "队员", "n": "医仙", "pid": "medic", "stage": "4-2", "price": 0},
 	{"id": "u_part_4_2_ironward", "cat": "队员", "n": "铁卫", "pid": "ironward", "stage": "4-2", "price": 0},
 	{"id": "u_part_4_3_xuanyin", "cat": "队员", "n": "玄阴", "pid": "xuanyin", "stage": "4-3", "price": 0},
 	{"id": "u_part_4_3_xuesha", "cat": "队员", "n": "血煞", "pid": "xuesha", "stage": "4-3", "price": 0},
-	{"id": "u_part_4_4_shieldlord", "cat": "队员", "n": "盾令官", "pid": "shieldlord", "stage": "4-4", "price": 0},
+	{"id": "u_part_4_4_shieldlord", "cat": "队员", "n": "盾令官", "pid": "shieldlord", "stage": "4-3", "price": 0},
 ]
 
 func _locked_sets() -> Array:
@@ -6034,7 +6028,7 @@ func _fill_fame_section(p: Control, ly0: float) -> float:
 	ly += 42.0
 	var fnote := _plbl(p, Vector2(24, ly), Vector2(660, 76), 19, DIM)
 	fnote.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	fnote.text = "名声只在**首次通关**时固定给 " + str(CLEAR_FAME) + "；打过的关再打不再给。" \
+	fnote.text = "名声只在**首次通关**时给：第 1 关 " + str(int(FAME_BY_STAGE[0])) + "，逐关提高，第 12 关 " + str(int(FAME_BY_STAGE[FAME_BY_STAGE.size() - 1])) + "；打过的关不再给。" \
 		+ "每样兑换都有**限购次数**，活动给的名声不够把所有东西兑完——要有取舍。" \
 		+ "换到的酒 / 胚子 / 功法 / 碎片 / 银两会直接进主游戏（江湖游历）。"
 	ly += 84.0

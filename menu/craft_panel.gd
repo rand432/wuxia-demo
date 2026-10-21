@@ -230,9 +230,15 @@ func _label(text: String, font_size: int, col: Color) -> Label:
 func refresh() -> void:
 	if _panel == null:
 		return
+	var vis_i := 0
 	for e_v in _cards:
 		var e: Dictionary = e_v
 		var rid := str(e["id"])
+		var card_c: Control = e.get("card")
+		if rid == "jianbao":
+			card_c.visible = GameState.jianbao_ok()
+			if not card_c.visible:
+				continue
 		var st: Label = e["st"]
 		var chip: Label = e["chip"]
 		var on := false
@@ -277,6 +283,8 @@ func refresh() -> void:
 		else:
 			chip.add_theme_color_override("font_color", Color(0.97, 0.94, 0.88) if on else Color(0.72, 0.70, 0.68))
 			(e["name"] as Label).add_theme_color_override("font_color", INK if on else Color(INK.r, INK.g, INK.b, 0.45))
+		card_c.position.y = CARD_Y0 + float(vis_i) * CARD_STEP
+		vis_i += 1
 
 func _on_card(ev: InputEvent, room: String) -> void:
 	if not (ev is InputEventMouseButton):
