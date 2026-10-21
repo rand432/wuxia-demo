@@ -920,6 +920,7 @@ var _started := false
 func open() -> void:
 	_want_open = true
 	visible = true
+	set_process(true)
 	move_to_front()
 	var popup_only_now := boot_popup_only
 	if popup_only_now:
@@ -943,9 +944,14 @@ func open() -> void:
 func close() -> void:
 	var from_popup_only := _popup_pause
 	_restore_popup_hidden()
-	if from_popup_only:
+	if not from_popup_only:
 		_started = false
 	_want_open = false
+	set_process(false)
+	if _field != null:
+		_field.running = false
+		_field.set_process(false)
+		_field.set_physics_process(false)
 	_popup_pause = false
 	_popup_only = false
 	_popup_only_pending = false
@@ -1040,7 +1046,6 @@ func _build_field() -> void:
 	_field.elite_down.connect(_on_elite_down)
 	_sync_battle_stats()
 	_field.set_wave(_wave)
-	_field.start_run()          # v3h：开场先站几秒（怪先走进画面），再"远快近慢"地压上去
 
 	# v18k（用户草图）：抽卡页 —— 直接盖在**战场区**上（顶上的波数/资源条、底下的面板都不动）
 	#   ⚠ 必须插在 _field 之后、圆钮之前：这样左右两列圆钮仍然画在页面**上面**（还能点）
@@ -6825,6 +6830,10 @@ func _restart_run() -> void:
 	else:
 		_hint.text = "新的一局——预备几秒，怪就压上来了"
 	_sync_avatar()                       # v14s：出战那位定了，头像跟着换
+	if _field != null:
+		_field.set_process(true)
+		_field.set_physics_process(true)
+		_field.start_run()
 
 # ---- 技能页：三选一（有技能点时）／当前招式（没点时）----
 #   数据与效果都在战场（kushou_battle.gd）里：roll_choices() 抽、apply_pick() 落。
