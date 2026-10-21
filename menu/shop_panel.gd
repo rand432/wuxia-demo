@@ -40,6 +40,7 @@ const ICON_MAP := {
 	"bone": preload("res://assets/items/mat_bone.png"),
 	"rice": preload("res://assets/items/mat_rice.png"),
 	"jin": preload("res://assets/items/mat_jin.png"),
+	"atlas": preload("res://assets/items/it_scroll.png"),
 	"guo": preload("res://assets/items/mat_guo.png"),
 	"zhi": preload("res://assets/items/mat_zhi.png"),
 	"shen": preload("res://assets/items/mat_shen.png"),

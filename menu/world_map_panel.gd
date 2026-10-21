@@ -80,18 +80,20 @@ func _refresh() -> void:
 	var atlas := GS.material_count("atlas")
 	var need := GS.prosperity_need(mini(5, GS.world_tier + 1)) if GS.world_tier < 5 else GS.world_prosperity
 	_cur_lb.text = "当前：" + _world_name(GS.world_tier) + " · 第 " + str(GS.world_tier) + " 档 · 繁荣 " + str(GS.world_prosperity) + "/" + str(need) + "\n区块：" + str(GS.REGION_NAMES[GS.current_region]) + " · 舆图 " + str(atlas) + " 张"
-	_next_lb.text = "下一世界：第 1 档 · 种 " + str(GS.world_seed + 1) + "\n繁荣 / 区块 / 一次性标记全部重置"
-	_go_btn.disabled = atlas < 1
-	_go_btn.text = "展开舆图（耗 1 张）" if atlas >= 1 else "没有舆图"
+	_next_lb.text = "下一世界：第 1 档 · 种 " + str(GS.world_seed + 1) + "\n繁荣 / 一次性标记重置；已解锁区块保留"
+	_go_btn.disabled = atlas < 2
+	_go_btn.text = "展开舆图（耗 2 张）" if atlas >= 2 else "没有舆图"
 
 func _confirm() -> void:
-	if GS.material_count("atlas") < 1:
+	if GS.material_count("atlas") < 2:
 		_msg_lb.text = "没有舆图了——爬塔宝箱 / 游历宝箱里会出。"
 		return
-	GS.add_material("atlas", -1)
+	GS.add_material("atlas", -2)
 	GS.world_flags.clear()
 	GS.current_region = 0
-	GS.region_unlocked = [true, true, true, false, false]
+	GS.region_unlocked = GS.region_ever_unlocked.duplicate()
+	while GS.region_unlocked.size() < 5:
+		GS.region_unlocked.append(false)
 	GS.world_seed += 1
 	GS.world_prosperity = 0
 	GS.world_tier = 1

@@ -912,9 +912,10 @@ static var world_prosperity := 0
 const REGION_NAMES := ["山", "水", "林", "石", "雪"]
 const REGION_BOSSES := ["山君", "夜叉", "老妖", "石傀", "雪魈"]
 const REGION_DIFFS := [1, 2, 3, 4, 5]
-const REGION_COSTS := [0, 0, 0, 2, 3]
+const REGION_COSTS := [0, 0, 0, 8, 12]
 static var current_region := 0
 static var region_unlocked: Array = [true, true, true, false, false]
+static var region_ever_unlocked: Array = [true, true, true, false, false]
 const TIME_NAMES := ["晨", "昼", "夜"]
 static var time_slot := 0
 static var time_day := 1
@@ -1050,6 +1051,7 @@ const SHOP_ITEMS := [
 	# v63（用户："这里显示有点问题"）：血脉囊的 desc 太长 ✗ 一路溢进右边价格/按钮区 ✗。
 	#   拆短：概率放第一行（框内 19 字 ✓），纯度/用途挪进货栈自己的"开出血脉"行。
 	{"key": "blood_gold", "name": "血脉囊", "price": 273, "cat": "basic", "desc": "里面包裹着一个未知的血脉", "kind": "blood", "limit": 1},
+	{"key": "atlas", "name": "舆图", "price": 300, "cat": "basic", "kind": "weekly", "period": "week", "limit": 2, "desc": "每周限购 2 张"},
 	# v36：突破丹五品（货栈这一路——每天限购几颗，炼丹阁是另一条路）。
 	#   品级跟境界走：1~8 重凡品、9~16 良品……33~40 绝品（见 GameState.BREAK_PILLS）。
 	#   ⚠ v47（用户："商店突破丹只给低级和中级的【现在阶段够用】"）：
@@ -1063,24 +1065,24 @@ const SHOP_ITEMS := [
 	{"key": "jin", "name": "◆金髓", "price": 1500, "cat": "basic", "kind": "mat", "limit": 50, "desc": "凝神 / 洗灵类丹药材料"},
 	# v39：鉴宝行的侦查道具（过 400 关才上架）——三样各管一段信息，见 shared/data_appraise.gd
 	{"key": "tool_sight", "name": "描影镜", "price": 119, "cat": "jianbao", "kind": "tool", "tid": "sight", "limit": 3,
-		"need": "jianbao", "desc": "照出货仓里最值钱的一件"},
+		"desc": "照出货仓里最值钱的一件"},
 	{"key": "tool_lamp", "name": "透物灯", "price": 196, "cat": "jianbao", "kind": "tool", "tid": "lamp", "limit": 2,
-		"need": "jianbao", "desc": "照出两三件货的轮廓"},
+		"desc": "照出两三件货的轮廓"},
 	{"key": "tool_seal", "name": "识宝鉴", "price": 315, "cat": "jianbao", "kind": "tool", "tid": "seal", "limit": 2,
-		"need": "jianbao", "desc": "看清一件货的详情"},
+		"desc": "看清一件货的详情"},
 	# v50（用户："解锁鉴宝后 商店卖限购的鉴定道具（效果较强的价格也贵）；同时增加一个
 	#   可以显示当前仓库多少格子（较贵）和显示所有紫色轮廓/金色轮廓/绿色轮廓等"）：
 	#   数格尺（最贵的那一档信息——店里不给格数）＋ 四把按成色筛的筛子。价钱按效果排。
 	{"key": "tool_count", "name": "数格尺", "price": 413, "cat": "jianbao", "kind": "tool", "tid": "count", "limit": 2,
-		"need": "jianbao", "desc": "量出货仓的格数"},
+		"desc": "量出货仓的格数"},
 	{"key": "tool_sift_g", "name": "碧砂筛", "price": 154, "cat": "jianbao", "kind": "tool", "tid": "sift_g", "limit": 3,
-		"need": "jianbao", "desc": "标出全部绿档货"},
+		"desc": "标出全部绿档货"},
 	{"key": "tool_sift_p", "name": "紫霞筛", "price": 294, "cat": "jianbao", "kind": "tool", "tid": "sift_p", "limit": 2,
-		"need": "jianbao", "desc": "标出全部紫档货"},
+		"desc": "标出全部紫档货"},
 	{"key": "tool_sift_j", "name": "金纹筛", "price": 609, "cat": "jianbao", "kind": "tool", "tid": "sift_j", "limit": 2,
-		"need": "jianbao", "desc": "标出全部金档货"},
+		"desc": "标出全部金档货"},
 	{"key": "tool_sift_r", "name": "朱砂筛", "price": 1050, "cat": "jianbao", "kind": "tool", "tid": "sift_r", "limit": 1,
-		"need": "jianbao", "desc": "标出全部红档货"},
+		"desc": "标出全部红档货"},
 	{"key": "dragon_scale", "name": "龙鳞", "price": 888, "cat": "item", "kind": "forge_tool", "limit": 1, "desc": "下一锤不会破坏"},
 	{"key": "regret_ink", "name": "悔恨法条", "price": 500, "cat": "item", "kind": "forge_tool", "limit": 1, "desc": "清空成功衰减"},
 	{"key": "quench_oil", "name": "淬火油", "price": 300, "cat": "item", "kind": "forge_tool", "limit": 1, "desc": "下一锤成功概率提高"},
@@ -1111,6 +1113,8 @@ const SHOP_CATS := [
 
 static var shop_day := ""      # 今日（真实日期；跨天自动重置）
 static var shop_used := {}     # 今日各限购品已买数
+static var shop_week := ""     # 本周（每周限购）
+static var shop_week_used := {}
 
 static func shop_item_of(k: String) -> Dictionary:
 	for it in SHOP_ITEMS:
@@ -1166,7 +1170,24 @@ static func _shop_save() -> void:
 	cf.load(SHOP_CFG)
 	cf.set_value("shop", "day", shop_day)
 	cf.set_value("shop", "used", shop_used)
+	cf.set_value("shop", "week", shop_week)
+	cf.set_value("shop", "week_used", shop_week_used)
 	cf.save(SHOP_CFG)
+
+static func _week_key() -> String:
+	return str(int(Time.get_unix_time_from_system() / 604800.0))
+
+static func _shop_sync_week() -> void:
+	var wk := _week_key()
+	if shop_week == wk:
+		return
+	shop_week = wk
+	var u := {}
+	var cf := ConfigFile.new()
+	if cf.load(SHOP_CFG) == OK and str(cf.get_value("shop", "week", "")) == wk:
+		u = cf.get_value("shop", "week_used", {})
+	shop_week_used = u
+	_shop_save()
 
 static func shop_left(k: String) -> int:
 	# -1 = 不限购；0 = 今日已售罄
@@ -1174,6 +1195,9 @@ static func shop_left(k: String) -> int:
 	if item.is_empty():
 		return 0
 	var kd := str(item.get("kind", "mat"))
+	if str(item.get("period", "")) == "week":
+		_shop_sync_week()
+		return maxi(0, int(item.get("limit", 0)) - int(shop_week_used.get(k, 0)))
 	# v36：突破丹（kind="pill"）也是限购货——口径与残卡、血脉囊一样
 	# v39：鉴宝道具（kind="tool"）同样每日限购
 	if kd != "card" and kd != "blood" and kd != "pill" and kd != "tool" and kd != "forge_tool" and kd != "finished" and kd != "mat":
@@ -1225,6 +1249,21 @@ static func buy_material(k: String, n: int) -> Dictionary:
 		return _buy_finished(item, maxi(n, 1))   # v39：鉴宝道具（每日限购）
 	if str(item.get("kind", "mat")) == "card":
 		return _buy_card(item, maxi(n, 1))
+	if str(item.get("period", "")) == "week":
+		_shop_sync_week()
+		var wleft := maxi(0, int(item.get("limit", 0)) - int(shop_week_used.get(k, 0)))
+		if wleft <= 0:
+			return {"ok": false, "msg": "「" + str(item["name"]) + "」本周卖完了"}
+		var wn := mini(n, wleft)
+		var wp := int(item["price"]) * wn
+		if coin("silver") < wp:
+			return {"ok": false, "msg": "银两不够：要 " + str(wp) + "（现有 " + str(coin("silver")) + "）"}
+		add_coin("silver", -wp)
+		add_material(k, wn)
+		shop_week_used[k] = int(shop_week_used.get(k, 0)) + wn
+		_shop_save()
+		save_game()
+		return {"ok": true, "msg": "买了「" + str(item["name"]) + "」×" + str(wn) + "（花 " + str(wp) + " 两 · 本周还剩 " + str(wleft - wn) + "）"}
 	var price := int(item["price"]) * n
 	if coin("silver") < price:
 		return {"ok": false, "msg": "银两不够：要 " + str(price) + "（现有 " + str(coin("silver")) + "）"}
@@ -5504,6 +5543,7 @@ static func begin_new_cycle() -> void:
 	ng_wuxia_done = false
 	current_region = 0
 	region_unlocked = [true, true, true, false, false]
+	region_ever_unlocked = [true, true, true, false, false]
 	world_seed += 1
 	red_water = 0
 	red_water_wall = false
@@ -6805,6 +6845,12 @@ static func load_game() -> void:
 	world_tier = tier_for_prosperity(world_prosperity)
 	current_region = clampi(int(cf.get_value("world", "current_region", 0)), 0, 4)
 	region_unlocked = _sa(cf.get_value("world", "region_unlocked", [true, true, true, false, false]), [true, true, true, false, false]).duplicate()
+	region_ever_unlocked = _sa(cf.get_value("world", "region_ever_unlocked", [true, true, true, false, false]), [true, true, true, false, false]).duplicate()
+	while region_ever_unlocked.size() < 5:
+		region_ever_unlocked.append(false)
+	for ri in mini(5, region_unlocked.size()):
+		if bool(region_unlocked[ri]):
+			region_ever_unlocked[ri] = true
 	time_slot = clampi(int(cf.get_value("world", "time_slot", 0)), 0, 2)
 	time_day = maxi(1, int(cf.get_value("world", "time_day", 1)))
 	slot_progress = maxi(0, int(cf.get_value("world", "slot_progress", 0)))
@@ -6877,11 +6923,24 @@ static func load_game() -> void:
 	vault_items = _sd(vlt.get("items", {}), vault_items)
 	forge_item = _sd(vlt.get("forge_item", {}), forge_item)
 	forge_bag = _sa(vlt.get("forge_bag", []), forge_bag)
+	# 旧档修复：锻造袋里还在的成品，仓库数量至少补到 1（此前取回砧上强化后可能漏补）。
+	for rec_v in forge_bag:
+		var rec: Dictionary = rec_v
+		var rec_sid := str(rec.get("sid", ""))
+		if rec_sid != "" and vault_item_count(rec_sid) <= 0:
+			vault_add_item(rec_sid, 1)
 	forge_made = _sd(vlt.get("forge_made", {}), forge_made)
 	forge_tools = _sd(vlt.get("forge_tools", {}), forge_tools)
 	forge_trait_blanks = _sa(vlt.get("forge_trait_blanks", []), forge_trait_blanks)
 	forge_claimed = _sd(vlt.get("forge_claimed", {}), forge_claimed)
 	forge_cards = _sd(vlt.get("forge_cards", {}), {})
+	for fsid_v in forge_cards.keys():
+		var fset: Dictionary = forge_cards[fsid_v]
+		for nk in ["name", "item"]:
+			var sn := str(fset.get(nk, ""))
+			for qn in ["凡品", "良品", "上品", "极品", "绝品"]:
+				sn = sn.replace(qn + "·" + qn, qn)
+			fset[nk] = sn
 	forge_seq = int(vlt.get("forge_seq", forge_seq))
 	forge_compendium = _sd(vlt.get("forge_compendium", {}), {})
 	Cards.clear_forged()
@@ -7010,6 +7069,7 @@ static func save_game() -> void:
 	cf.set_value("world", "world_prosperity", world_prosperity)
 	cf.set_value("world", "current_region", current_region)
 	cf.set_value("world", "region_unlocked", region_unlocked)
+	cf.set_value("world", "region_ever_unlocked", region_ever_unlocked)
 	cf.set_value("world", "time_slot", time_slot)
 	cf.set_value("world", "time_day", time_day)
 	cf.set_value("world", "slot_progress", slot_progress)
@@ -7272,6 +7332,7 @@ static func reset() -> void:
 	world_flags.clear()
 	current_region = 0
 	region_unlocked = [true, true, true, false, false]
+	region_ever_unlocked = [true, true, true, false, false]
 	turf_tax_day = ""
 	war_notes.clear()
 	_idle_last_ts = _idle_now()

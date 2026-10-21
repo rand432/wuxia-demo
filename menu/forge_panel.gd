@@ -17,6 +17,7 @@ const Ui := preload("res://menu/menu_theme.gd")
 const ForgeData := preload("res://menu/data_forge.gd")
 const ItemIcons := preload("res://shared/item_icons.gd")
 const Audio := preload("res://shared/audio.gd")
+const Cards := preload("res://shared/data_cards.gd")
 
 signal closed
 
@@ -555,6 +556,20 @@ func _pick_card(tex: Texture2D, text: String, enabled: bool, cb: Callable) -> Bu
 	_blank_grid.add_child(btn)
 	return btn
 
+func _all_equip_sets() -> Array:
+	var out: Array = []
+	var seen := {}
+	for s_v in Cards.SETS:
+		var sid := str((s_v as Dictionary).get("id", ""))
+		seen[sid] = true
+		out.append(s_v)
+	for fid_v in Cards.FORGED_SETS.keys():
+		var fsid := str(fid_v)
+		if seen.has(fsid):
+			continue
+		out.append(Cards.FORGED_SETS[fid_v])
+	return out
+
 func _show_pick(mode: String) -> void:
 	_pick_mode = mode
 	for c in _blank_grid.get_children():
@@ -574,8 +589,25 @@ func _show_pick(mode: String) -> void:
 			var txt := nm + " +" + str(int(rec.get("enhance", 0))) + "\n" + ("攻 " + str(int(rs["atk"])) if rs.has("atk") else ("防 " + str(int(rs.get("def", 0)))))
 			var pb := _pick_card(tex, txt, not busy, _retrieve_weapon.bind(sid))
 			pb.tooltip_text = ForgeData.item_name(rec)
+		for s_v in _all_equip_sets():
+			var s: Dictionary = s_v
+			var sid3 := str(s.get("id", ""))
+			if str(s.get("pool", "")) != "weapon" or sid3 == "" or GameState.vault_item_count(sid3) <= 0:
+				continue
+			var in_bag := false
+			for rec_v2 in GameState.forge_bag:
+				if str((rec_v2 as Dictionary).get("sid", "")) == sid3:
+					in_bag = true
+					break
+			if in_bag:
+				continue
+			any = true
+			var st3: Dictionary = s.get("item_stats", {})
+			var txt4 := Cards.name_of(sid3) + "\n" + ("攻 " + str(int(st3.get("atk", 0))) if st3.has("atk") else ("防 " + str(int(st3.get("def", 0)))))
+			var pb4 := _pick_card(ItemIcons.for_pool("weapon", str(s.get("weapon", "sword")), sid3), txt4, not busy, _retrieve_vault.bind(sid3))
+			pb4.tooltip_text = Cards.item_name(sid3)
 		if not any:
-			_blank_grid.add_child(_label("还没有锻成的兵器。", 18, Color(INK.r, INK.g, INK.b, 0.55)))
+			_blank_grid.add_child(_label("还没有可强化的兵器。", 18, Color(INK.r, INK.g, INK.b, 0.55)))
 		return
 	if mode == "gear":
 		var any2 := false
@@ -589,8 +621,26 @@ func _show_pick(mode: String) -> void:
 			var txt3 := str(rec2.get("weapon", "装备")) + " +" + str(int(rec2.get("enhance", 0))) + "\n防 " + str(int(rs2.get("def", 0))) + " · 血 " + str(int(rs2.get("hp", 0)))
 			var pb3 := _pick_card(ItemIcons.for_pool(str(rec2.get("pool", "armor")), str(rec2.get("kind", "armor")), sid2), txt3, not busy, _retrieve_weapon.bind(sid2))
 			pb3.tooltip_text = ForgeData.item_name(rec2)
+		for s_v2 in _all_equip_sets():
+			var s2: Dictionary = s_v2
+			var sid4 := str(s2.get("id", ""))
+			var pool4 := str(s2.get("pool", ""))
+			if pool4 == "weapon" or pool4 == "arts" or sid4 == "" or GameState.vault_item_count(sid4) <= 0:
+				continue
+			var in_bag2 := false
+			for rec_v3 in GameState.forge_bag:
+				if str((rec_v3 as Dictionary).get("sid", "")) == sid4:
+					in_bag2 = true
+					break
+			if in_bag2:
+				continue
+			any2 = true
+			var st4: Dictionary = s2.get("item_stats", {})
+			var txt5 := Cards.name_of(sid4) + "\n防 " + str(int(st4.get("def", 0))) + " · 血 " + str(int(st4.get("hp", 0)))
+			var pb5 := _pick_card(ItemIcons.for_pool(pool4, str(s2.get("weapon", "armor")), sid4), txt5, not busy, _retrieve_vault.bind(sid4))
+			pb5.tooltip_text = Cards.item_name(sid4)
 		if not any2:
-			_blank_grid.add_child(_label("还没有锻成的装备。\n装备胚在「材料合成」里造。", 18, Color(INK.r, INK.g, INK.b, 0.55)))
+			_blank_grid.add_child(_label("还没有可强化的装备。", 18, Color(INK.r, INK.g, INK.b, 0.55)))
 		return
 	for i in range(GameState.forge_trait_blanks.size() - 1, -1, -1):
 		var tb: Dictionary = GameState.forge_trait_blanks[i]
@@ -615,6 +665,43 @@ func _show_pick(mode: String) -> void:
 		var txt2 := nm2 + (" ×" + str(GameState.material_count(bid)) if own else "") + "\n" + qn
 		var pb2 := _pick_card(ItemIcons.for_pool("weapon", str(b.get("kind", "sword")), bid), txt2, can, _pick_blank.bind(bid))
 		pb2.tooltip_text = ("点击开炉" if own else "去材料合成")
+
+func _retrieve_vault(sid: String) -> void:
+	if not (GameState.forge_item as Dictionary).is_empty():
+		_push_log("先收下砧上这把，再换。")
+		return
+	if GameState.forge_wearer(sid) != "":
+		_push_log("这件正装备着——先卸下再强化。")
+		return
+	if GameState.vault_item_count(sid) <= 0:
+		_push_log("仓库里没有这一件。")
+		return
+	var card: Dictionary = Cards.by_id(sid)
+	if card.is_empty():
+		return
+	var st: Dictionary = card.get("item_stats", {})
+	var q := Cards.q_idx(sid)
+	var pool := str(card.get("pool", "weapon"))
+	var kind := str(card.get("weapon", "sword"))
+	var nm := Cards.name_of(sid)
+	var extra_st := {}
+	for stk in st.keys():
+		if str(stk) in ["atk", "dmg", "def", "hp", "dodge"]:
+			continue
+		extra_st[str(stk)] = st[stk]
+	GameState.forge_item = {
+		"sid": sid, "weapon": nm, "kind": kind, "pool": pool,
+		"quality": q, "craft_grade": 2, "enhance": 0, "finished": true,
+		"base_atk": float(st.get("atk", 0)), "base_dmg": float(st.get("dmg", 0)),
+		"base_def": float(st.get("def", 0)), "base_hp": float(st.get("hp", 0)),
+		"base_dodge": float(st.get("dodge", 0)), "base_extra": extra_st,
+		"base_card": card.duplicate(true),
+	}
+	_queued_hammer = false
+	_set_hit_busy(false)
+	_blank_panel.visible = false
+	GameState.save_game()
+	refresh()
 
 func _use_trait_blank(idx: int) -> void:
 	if idx < 0 or idx >= GameState.forge_trait_blanks.size():
@@ -656,7 +743,6 @@ func _retrieve_weapon(sid: String) -> void:
 		_push_log("这件正装备着——先卸下再强化。")
 		return
 	GameState.forge_bag.remove_at(idx)
-	GameState.vault_items[sid] = maxi(0, GameState.vault_item_count(sid) - 1)
 	GameState.forge_item = rec
 	GameState.forge_item["finished"] = true
 	_queued_hammer = false
@@ -1111,6 +1197,14 @@ func _try_ascend(it: Dictionary) -> void:
 	it["quality"] = int(it.get("quality", 0)) + 1
 	it["base_atk"] = float(it.get("base_atk", 0.0)) * 1.5
 	it["base_dmg"] = float(it.get("base_dmg", 0.0)) * 1.5
+	it["base_def"] = float(it.get("base_def", 0.0)) * 1.5
+	it["base_hp"] = float(it.get("base_hp", 0.0)) * 1.5
+	it["base_dodge"] = float(it.get("base_dodge", 0.0)) * 1.5
+	var bex: Dictionary = it.get("base_extra", {})
+	for bek in bex.keys():
+		if typeof(bex[bek]) == TYPE_INT or typeof(bex[bek]) == TYPE_FLOAT:
+			bex[bek] = float(bex[bek]) * 1.5
+	it["base_extra"] = bex
 	it["enhance"] = 0
 	it["cracks"] = 0
 	it["inspired_left"] = 0.0
@@ -1799,7 +1893,19 @@ func _play_hit_fx(outcome: int, old_st: Dictionary, new_st: Dictionary) -> void:
 	)
 
 func _register_anvil(it: Dictionary) -> void:
-	if str(it.get("sid", "")) != "":
+	var old_sid := str(it.get("sid", ""))
+	if old_sid != "":
+		if bool(it.get("vault_out", false)) or GameState.vault_item_count(old_sid) <= 0:
+			GameState.vault_add_item(old_sid, 1)
+			it.erase("vault_out")
+		var in_bag := false
+		for rec_v in GameState.forge_bag:
+			if str((rec_v as Dictionary).get("sid", "")) == old_sid:
+				in_bag = true
+				break
+		if not in_bag:
+			GameState.forge_bag.append(it.duplicate(true))
+		GameState.save_game()
 		return
 	var sid := GameState.forge_next_sid()
 	var set := ForgeData.card_set(it, sid)

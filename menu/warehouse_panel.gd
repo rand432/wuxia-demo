@@ -692,6 +692,20 @@ func _cat_pass(s: Dictionary) -> bool:
 
 # ---- 分类 ----
 
+func _all_sets() -> Array:
+	var out: Array = []
+	var seen := {}
+	for s_v in Cards.SETS:
+		var sid := str((s_v as Dictionary).get("id", ""))
+		seen[sid] = true
+		out.append(s_v)
+	for fid_v in Cards.FORGED_SETS.keys():
+		var fsid := str(fid_v)
+		if seen.has(fsid):
+			continue
+		out.append(Cards.FORGED_SETS[fid_v])
+	return out
+
 func _in_cat(s: Dictionary, tab_id: String) -> bool:
 	var pool := str(s.get("pool", ""))
 	if tab_id == "equip":
@@ -706,7 +720,10 @@ func _stacks() -> Array:
 		return _pill_stacks()
 	if _pick_cat == "" and str(TABS[_tab]["id"]) == "mat":
 		return _mat_stacks()
-	for s in Cards.SETS:
+	var all_sets: Array = Cards.SETS.duplicate()
+	for fid_v in Cards.FORGED_SETS.keys():
+		all_sets.append(Cards.FORGED_SETS[fid_v])
+	for s in all_sets:
 		var sid := str(s.get("id", ""))
 		var pool := str(s.get("pool", ""))
 		if _pick_cat != "":
@@ -796,7 +813,7 @@ func _cat_total(tab_id: String) -> int:
 			nm += GameState.material_count(str(k_v))
 		return nm
 	var n := 0
-	for s in Cards.SETS:
+	for s in _all_sets():
 		if not _in_cat(s, tab_id):
 			continue
 		var sid := str(s.get("id", ""))
@@ -1162,6 +1179,10 @@ func _open_drawer(k: int) -> void:
 	elif kd == "item":
 		var pool := str(st.get("pool", ""))
 		kind_txt = GameState.grade_of(sid) + " · " + str(GEAR_CN.get(pool, "成品")) + " · 现有 ×" + str(count)
+		if str((GameState.forge_item as Dictionary).get("sid", "")) == sid:
+			kind_txt += " · 强化中"
+		elif GameState.forge_wearer(sid) != "":
+			kind_txt += " · 装备中"
 		var lines: Array = []
 		lines.append("加成：" + Cards.bonus_text(GameState.starred_stats(sid)) + GameState.star_marks(sid))
 		if pool == "arts":
@@ -1229,6 +1250,9 @@ func _drawer_go() -> void:
 	var st: Dictionary = _stacks_now[_drawer_idx]
 	var kd := str(st.get("kind", ""))
 	var sid := str(st.get("sid", ""))
+	if kd == "item" and str((GameState.forge_item as Dictionary).get("sid", "")) == sid:
+		_drawer_desc.text = "这件正在铁砧上强化——先卸下再装备。"
+		return
 	if _pick_cat != "":
 		picked.emit(sid)
 		close()

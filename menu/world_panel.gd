@@ -90,7 +90,7 @@ func _build_create() -> void:
 	l.position = Vector2(20, 10)
 	l.size = Vector2(520, 60)
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	var cost := 0 if first else 1
+	var cost := 0 if first else 2
 	var c := _label("消耗：舆图 ×" + str(cost) + ("（首次免费）" if first else ""), 17, UiKit.DIM)
 	c.position = Vector2(20, 80)
 	c.size = Vector2(520, 26)
@@ -100,12 +100,12 @@ func _build_create() -> void:
 		dl.size = Vector2(520, 26)
 		var names := ["简单", "普通", "困难"]
 		for i in 3:
-			var b := _button(names[i] + " ×" + ["1.0", "1.3", "1.6"][i], Vector2(20 + i * 175, 164), Vector2(160, 52))
+			var b := _button(names[i] + " ×" + ["0.7", "1.5", "3.0"][i], Vector2(20 + i * 175, 164), Vector2(160, 52))
 			b.pressed.connect(_pick_diff.bind(i + 1))
 		var sel := _label("已选：" + _diff_name(_diff), 16, UiKit.SEAL)
 		sel.position = Vector2(20, 226)
 		sel.size = Vector2(520, 24)
-	var tip := _label("一键默认：山 / 水 / 林 + 舆图够就自动加石 / 雪。", 15, UiKit.DIM)
+	var tip := _label("已解锁的区块会带入新世界；未解锁的去区域选择里开。", 15, UiKit.DIM)
 	tip.position = Vector2(20, 270)
 	tip.size = Vector2(520, 46)
 	tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -185,7 +185,7 @@ func _pick_diff(d: int) -> void:
 
 func _generate() -> void:
 	var first := not GS.world_created
-	var cost := 0 if first else 1
+	var cost := 0 if first else 2
 	if GS.material_count("atlas") < cost:
 		_show_msg("舆图不够")
 		return
@@ -198,14 +198,9 @@ func _generate() -> void:
 			"title": GS.story_title,
 		})
 	GS.world_flags.clear()
-	GS.region_unlocked = [true, true, true, false, false]
-	# 一键默认：舆图够就自动把石 / 雪加进去（先石后雪）
-	if GS.material_count("atlas") >= 2:
-		GS.add_material("atlas", -2)
-		GS.region_unlocked[3] = true
-	if GS.material_count("atlas") >= 3:
-		GS.add_material("atlas", -3)
-		GS.region_unlocked[4] = true
+	GS.region_unlocked = GS.region_ever_unlocked.duplicate()
+	while GS.region_unlocked.size() < 5:
+		GS.region_unlocked.append(false)
 	GS.world_seed += 1
 	GS.world_prosperity = 0
 	GS.world_tier = 1

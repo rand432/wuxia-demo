@@ -203,7 +203,7 @@ static func randomize_generic(it: Dictionary) -> void:
 	var pools := ["weapon", "weapon", "weapon", "armor", "helm", "cloak"]
 	it["kind"] = kinds[roll]
 	it["pool"] = pools[roll]
-	it["weapon"] = quality_name(q) + names[roll]
+	it["weapon"] = str(names[roll])
 	it["base_atk"] = 0.0
 	it["base_dmg"] = 0.0
 	it["base_def"] = 0.0
@@ -236,7 +236,11 @@ static func item_name(it: Dictionary) -> String:
 		return "（无）"
 	var g := int(it.get("craft_grade", -1))
 	var pre := "" if g < 0 else (grade_name(g) + "·")
-	return pre + quality_name(int(it.get("quality", 0))) + "·" + str(it.get("weapon", "兵器")) + " +" + str(int(it.get("enhance", 0)))
+	var qn := quality_name(int(it.get("quality", 0)))
+	var wn := str(it.get("weapon", "兵器"))
+	if wn.begins_with(qn):
+		wn = wn.substr(qn.length())
+	return pre + qn + "·" + wn + " +" + str(int(it.get("enhance", 0)))
 
 static func item_stats(it: Dictionary) -> Dictionary:
 	if it.is_empty():
@@ -255,6 +259,10 @@ static func item_stats(it: Dictionary) -> Dictionary:
 		out["hp"] = int(round(float(it.get("base_hp", 0.0)) * mul))
 	if float(it.get("base_dodge", 0.0)) > 0.0:
 		out["dodge"] = int(round(float(it.get("base_dodge", 0.0)) * mul))
+	var extra: Dictionary = it.get("base_extra", {})
+	for ek in extra.keys():
+		if typeof(extra[ek]) == TYPE_INT or typeof(extra[ek]) == TYPE_FLOAT:
+			out[str(ek)] = int(round(float(extra[ek]) * mul))
 	for aid in (it.get("affixes", []) as Array):
 		var af := affix(str(aid))
 		var st: Dictionary = af.get("stats", {})
@@ -274,7 +282,7 @@ static func ascend_cost(q: int) -> Dictionary:
 static func card_set(it: Dictionary, sid: String) -> Dictionary:
 	var nm := item_name(it)
 	var st := item_stats(it)
-	return {
+	var set := {
 		"id": sid, "name": nm, "item": nm,
 		"pool": str(it.get("pool", "weapon")), "quality": quality_name(int(it.get("quality", 0))),
 		"weapon": str(it.get("kind", "sword")),
@@ -282,6 +290,13 @@ static func card_set(it: Dictionary, sid: String) -> Dictionary:
 		"item_stats": st.duplicate(),
 		"desc": "锻造出品（" + trait_of(it) + "）",
 	}
+	var base: Dictionary = it.get("base_card", {})
+	if not base.is_empty():
+		for bk in base.keys():
+			if str(bk) in ["id", "name", "item", "item_stats", "parts", "forge"]:
+				continue
+			set[bk] = base[bk]
+	return set
 
 const AFFIXES := [
 	{"id": "fengrui", "name": "锋锐", "stats": {"crit": 5}, "desc": "暴击 +5"},

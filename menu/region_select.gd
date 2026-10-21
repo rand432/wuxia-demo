@@ -123,6 +123,8 @@ func _pick(i: int) -> void:
 		return
 	GS.add_material("atlas", -cost)
 	GS.region_unlocked[i] = true
+	if GS.region_ever_unlocked.size() > i:
+		GS.region_ever_unlocked[i] = true
 	GS.save_game()
 	_hint_lb.text = str(GS.REGION_NAMES[i]) + " 开了。再点一次进去。"
 	_refresh()
