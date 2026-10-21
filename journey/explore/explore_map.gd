@@ -2771,6 +2771,10 @@ func _open_chest(cell: Vector2i) -> void:
 			GameState.add_material("star_iron", 1, cq)
 			_loot_pop("star_iron", 1, 0.30)
 			extra += " · 星铁 ×1"
+		if randf() < 0.05:
+			GameState.add_material("cold_iron", 1, cq)
+			_loot_pop("cold_iron", 1, 0.30)
+			extra += " · 寒铁 ×1"
 	if randf() < minf(0.65, 0.32 * rm):
 		if randf() < 0.65:
 			var tb_blank: String = "gen_fan" if q >= 1 else "common"
@@ -5148,6 +5152,10 @@ func _grant_battle_loot(enemy: Node2D) -> void:
 		GameState.add_material("meteor_iron", 1, _loot_q())
 		_loot_pop("meteor_iron", 1, 0.34)
 		extra_mat += " · 陨铁 ×1"
+	if GameState.world_tier >= 3 and randf() < 0.10:
+		GameState.add_material("cold_iron", 1, _loot_q())
+		_loot_pop("cold_iron", 1, 0.30)
+		extra_mat += " · 寒铁 ×1"
 	if randf() < 0.12:
 		GameState.appraise_tool_add(_rand_appraise_tool(), 1)
 		extra_mat += " · 鉴宝道具 +1"

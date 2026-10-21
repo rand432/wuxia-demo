@@ -2129,6 +2129,7 @@ func _unhandled_input(ev: InputEvent) -> void:
 		GameState.add_material("forge_oil", 3)
 		GameState.add_material("fine_iron", 2)
 		GameState.add_material("meteor_iron", 3)
+		GameState.add_material("cold_iron", 2)
 		GameState.add_material("star_iron", 1)
 		GameState.save_game()
 		_show_toast("测试：剑胚+3 · 锻造石+30 · 锻造材料一包", 2.4)

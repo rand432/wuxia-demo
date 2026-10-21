@@ -702,6 +702,7 @@ static func _make(Loot, row: String, color: String, q: int, rng: RandomNumberGen
 	return out
 
 static func _pick_of_q(pool: String, q: int, rng: RandomNumberGenerator) -> String:
+	q = mini(q, 3)
 	var cand: Array = []
 	for d_v in Cards.SETS:
 		var d: Dictionary = d_v
@@ -735,7 +736,7 @@ static func _pick_of_q(pool: String, q: int, rng: RandomNumberGenerator) -> Stri
 #   本阶没货就**往下借**（某一池某一档空了就借低一档）；一阶都没有＝空串。
 #   v137：护甲/玉佩/披风也有绝品了 → 越阶红（q=4）现在真能给到那三件，不再借回极品。
 static func pick_of_q(pool: String, q: int, rng: RandomNumberGenerator = null) -> String:
-	var top := clampi(q, 0, Cards.QUALITY_ORDER.size() - 1)
+	var top := clampi(mini(q, 3), 0, Cards.QUALITY_ORDER.size() - 1)
 	for qq in range(top, -1, -1):
 		var got := _pick_in_pool(pool, qq, rng)
 		if got != "":
@@ -757,7 +758,7 @@ static func sets_of_q(pool: String, q: int) -> Array:
 		# v138：同上——引子专用件不进货仓/补缺/开局行装
 		if bool(d.get("intro_only", false)):
 			continue
-		if Cards.q_idx(str(d.get("id", ""))) == clampi(q, 0, Cards.QUALITY_ORDER.size() - 1):
+		if Cards.q_idx(str(d.get("id", ""))) == clampi(mini(q, 3), 0, Cards.QUALITY_ORDER.size() - 1):
 			out.append(str(d.get("id", "")))
 	return out
 
@@ -772,7 +773,7 @@ static func _mat_entry(Loot, rng: RandomNumberGenerator) -> Dictionary:
 	var pool: Array = []
 	for mv in Loot.MATS:
 		var mid := str((mv as Dictionary).get("id", ""))
-		if mid in ["fine_iron", "meteor_iron", "star_iron"]:
+		if mid in ["fine_iron", "meteor_iron", "cold_iron", "star_iron"]:
 			continue
 		pool.append(mv)
 	if pool.is_empty():

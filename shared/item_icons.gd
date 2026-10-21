@@ -107,7 +107,7 @@ static func for_mat(k: String) -> Texture2D:
 			return _t("mat_bone")
 		"forge_oil":
 			return _t("it_jar")
-		"fine_iron", "meteor_iron":
+		"fine_iron", "meteor_iron", "cold_iron":
 			return _t("mat_jin")
 		"star_iron":
 			return _t("it_token")

@@ -1615,6 +1615,21 @@ static func _appraise_strip_gear(items: Array) -> Array:
 		out.append(e)
 	return out
 
+static func _appraise_region_forge_mat() -> Dictionary:
+	var rc := region_count()
+	var mid := "iron_sand"
+	var mq := 0
+	if rc >= 10:
+		mid = "cold_iron"
+		mq = 3
+	elif rc >= 6:
+		mid = "meteor_iron"
+		mq = 2
+	elif rc >= 4:
+		mid = "fine_iron"
+		mq = 1
+	return {"kind": "mat", "id": mid, "name": mat_name(mid) + " ×1", "amount": 1, "gap": 1, "red": false, "q": mq}
+
 static func _appraise_new_offer(hid: String, free := false) -> Dictionary:
 	var d: Dictionary = Appraise.hold_def(hid)
 	if d.is_empty():
@@ -1628,6 +1643,9 @@ static func _appraise_new_offer(hid: String, free := false) -> Dictionary:
 		var e: Dictionary = e_v
 		if str(e.get("kind", "")) == "mat":
 			e["q"] = mq
+	var forge_entry := _appraise_region_forge_mat()
+	if not forge_entry.is_empty():
+		items.append(forge_entry)
 	return {
 		"uid": _appraise_uid,
 		"hid": hid,
@@ -3881,7 +3899,7 @@ static func grant_broker_weapon() -> Dictionary:
 	var sid := forge_next_sid()
 	var set := {
 		"id": sid, "name": nm, "item": nm, "pool": "weapon",
-		"quality": "绝品", "weapon": kind, "no_drop": true, "forge": true,
+		"quality": "极品", "weapon": kind, "no_drop": true, "forge": true,
 		"parts": [], "item_stats": st, "desc": "听雨楼楼主藏货",
 	}
 	forge_cards[sid] = set
@@ -3889,7 +3907,7 @@ static func grant_broker_weapon() -> Dictionary:
 	vault_add_item(sid, 1)
 	forge_bag.append({
 		"sid": sid, "blank": "broker", "weapon": nm, "kind": kind,
-		"quality": 4, "cap": 4, "enhance": 10, "cracks": 0,
+		"quality": 3, "cap": 4, "enhance": 10, "cracks": 0,
 		"base_atk": float(atk), "base_dmg": float(dmg),
 		"inspired_left": 0, "round_inspired": false, "awaiting": false,
 		"affixes": ["fengrui", "qingshen"], "source": "broker",
@@ -3908,7 +3926,7 @@ static func grant_ng_weapon() -> Dictionary:
 	var sid := forge_next_sid()
 	var set := {
 		"id": sid, "name": nm, "item": nm, "pool": "weapon",
-		"quality": "绝品", "weapon": kind, "no_drop": true, "forge": true,
+		"quality": "极品", "weapon": kind, "no_drop": true, "forge": true,
 		"parts": [], "item_stats": st, "desc": "轮回旧梦专属",
 	}
 	forge_cards[sid] = set
@@ -3916,7 +3934,7 @@ static func grant_ng_weapon() -> Dictionary:
 	vault_add_item(sid, 1)
 	forge_bag.append({
 		"sid": sid, "blank": "ng", "weapon": nm, "kind": kind,
-		"quality": 4, "cap": 4, "enhance": 10, "cracks": 0,
+		"quality": 3, "cap": 4, "enhance": 10, "cracks": 0,
 		"base_atk": float(atk), "base_dmg": float(dmg),
 		"inspired_left": 0, "round_inspired": false, "awaiting": false,
 		"affixes": ["fengrui"], "source": "ng",
@@ -3936,7 +3954,7 @@ static func grant_north_weapon() -> Dictionary:
 	var sid := forge_next_sid()
 	var set := {
 		"id": sid, "name": nm, "item": nm, "pool": "weapon",
-		"quality": "绝品", "weapon": kind, "no_drop": true, "forge": true,
+		"quality": "极品", "weapon": kind, "no_drop": true, "forge": true,
 		"parts": [], "item_stats": st, "desc": "北境平定专属",
 	}
 	forge_cards[sid] = set
@@ -3944,7 +3962,7 @@ static func grant_north_weapon() -> Dictionary:
 	vault_add_item(sid, 1)
 	forge_bag.append({
 		"sid": sid, "blank": "north", "weapon": nm, "kind": kind,
-		"quality": 4, "cap": 4, "enhance": 10, "cracks": 0,
+		"quality": 3, "cap": 4, "enhance": 10, "cracks": 0,
 		"base_atk": float(atk), "base_dmg": float(dmg),
 		"inspired_left": 0, "round_inspired": false, "awaiting": false,
 		"affixes": ["yinrui", "qingshen"], "source": "north",
@@ -4359,13 +4377,13 @@ const MAT_CN := {"zhi": "紫芝", "shen": "雪参", "guo": "朱果", "bone": "�
 	"soul": "兽魂", "lingguo": "灵兽果",
 	"daoguo": "悟道果", "hundun": "混沌砂", "xinghui": "星辉",
 	"pojing": "破境花", "xuantie": "玄铁精", "jianpei": "剑胚", "common": "普通胚子",
-	"iron_sand": "铁矿砂", "bone_coal": "骨炭", "forge_oil": "锻油", "fine_iron": "精铁", "meteor_iron": "陨铁", "star_iron": "星铁"}
+	"iron_sand": "铁矿砂", "bone_coal": "骨炭", "forge_oil": "锻油", "fine_iron": "精铁", "meteor_iron": "陨铁", "cold_iron": "寒铁", "star_iron": "星铁"}
 # v271：材料四类——战斗 / 成长 / 突破 / 宠物。
 const MAT_GROUP := {"guo": "battle", "bone": "battle", "rice": "battle",
 	"zhi": "growth", "shen": "growth", "jin": "growth",
 	"jingshi": "advance", "daoxin": "advance", "daoguo": "advance", "hundun": "advance", "xinghui": "advance",
 	"pojing": "break", "xuantie": "break", "soul": "pet", "lingguo": "pet", "jianpei": "forge", "common": "forge",
-	"iron_sand": "forge", "bone_coal": "forge", "forge_oil": "forge", "fine_iron": "forge", "meteor_iron": "forge", "star_iron": "forge"}
+	"iron_sand": "forge", "bone_coal": "forge", "forge_oil": "forge", "fine_iron": "forge", "meteor_iron": "forge", "cold_iron": "forge", "star_iron": "forge"}
 const MAT_GROUP_CN := {"battle": "战斗材料", "growth": "成长材料", "advance": "进阶材料", "break": "突破材料", "pet": "宠物材料", "forge": "锻造材料"}
 const PILL_GROUP_CN := {"battle": "战斗丹", "growth": "成长丹", "advance": "进阶丹", "break": "突破丹", "pet": "宠物丹"}
 const PILL_GROUP_ORDER := ["battle", "growth", "advance", "break", "pet"]
@@ -5525,6 +5543,13 @@ static func add_prosperity(n: int, reason := "") -> void:
 
 static func region_cost(i: int) -> int:
 	return int(REGION_COSTS[clampi(i, 0, 4)])
+
+static func region_count() -> int:
+	var n := 0
+	for i in region_unlocked.size():
+		if bool(region_unlocked[i]):
+			n += 1
+	return n
 
 static func region_unlocked_at(i: int) -> bool:
 	var idx := clampi(i, 0, 4)

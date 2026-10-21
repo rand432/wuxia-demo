@@ -366,9 +366,7 @@ const COMBOS := [
 	{"id": "gen_shang", "blank": "gen_shang", "name": "上品胚子",
 		"trial": ["iron_sand", "meteor_iron"], "hint": "铁砂沉锋，陨铁定钢", "cost": {"iron_sand": 4, "fine_iron": 2, "meteor_iron": 1}},
 	{"id": "gen_ji", "blank": "gen_ji", "name": "极品胚子",
-		"trial": ["iron_sand", "meteor_iron"], "hint": "铁砂沉锋，陨铁定钢", "cost": {"iron_sand": 6, "fine_iron": 3, "meteor_iron": 2}},
-	{"id": "gen_jue", "blank": "gen_jue", "name": "绝品胚子",
-		"trial": ["iron_sand", "meteor_iron"], "hint": "铁砂聚魂，陨铁定锋", "cost": {"iron_sand": 8, "fine_iron": 4, "meteor_iron": 3}},
+		"trial": ["iron_sand", "cold_iron"], "hint": "铁砂淬寒，寒铁定锋", "cost": {"iron_sand": 6, "fine_iron": 3, "meteor_iron": 2, "cold_iron": 1}},
 ]
 
 # 淬火特性：只在成器前可刷，费用逐次暴涨。
