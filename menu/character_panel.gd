@@ -32,7 +32,7 @@ const InspectPopup := preload("res://menu/inspect_popup.gd")
 
 const PANEL_W := 720.0
 # ㊿：面板加高 1212 → 1250，把省下来的高度全给"天赋"框（见下面那段说明）
-const PANEL_H := 1180.0   # 底部留 100 给主界面导航（角色=tab，不整页盖死）
+const PANEL_H := 1280.0
 const FREE_SLOTS := 3
 
 const INK := Color(0.14, 0.13, 0.15)
@@ -134,10 +134,7 @@ var _panel: Panel
 var _deploy_btn: Button
 var _tabs: Array = []
 var _name_lb: Label
-var _avatar: TextureRect
-var _money_lb: Label
-var _plan_chips: Array = []
-var _plan_idx := 0          # v93：圆形头像（v212 起隐藏，立绘卡接替）
+var _avatar: TextureRect          # v93：圆形头像（v212 起隐藏，立绘卡接替）
 var _avatar_rid := ""
 var _portrait: TextureRect        # v212：立绘卡里的胸像（抠白底版）
 var _portrait_rid := ""
@@ -236,12 +233,12 @@ func _build() -> void:
 	var vp := get_viewport_rect().size
 	var dim := ColorRect.new()
 	dim.color = Color(0, 0, 0, 0.45)
-	dim.size = Vector2(vp.x, PANEL_H)   # 只压面板高度，底栏 100 不被遮
+	dim.size = vp
 	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(dim)
 
 	_panel = Panel.new()
-	_panel.position = Vector2((vp.x - PANEL_W) * 0.5, 0.0)   # 顶到 0，底部让出 100 给导航
+	_panel.position = Vector2((vp.x - PANEL_W) * 0.5, (vp.y - PANEL_H) * 0.5)
 	_panel.size = Vector2(PANEL_W, PANEL_H)
 	_panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	var psb := StyleBoxFlat.new()
@@ -293,10 +290,9 @@ func _build() -> void:
 	exit_btn.pressed.connect(close)
 	_apply_ink_button(exit_btn)
 	_panel.add_child(exit_btn)
-	# 参考图顶栏：头像 + 名字/等级 + 银两/元宝（标题收进小字）
-	var title := _label("角色", 13, Color(0.96, 0.90, 0.74, 0.75))
-	title.position = Vector2(18, 66)
-	title.size = Vector2(60, 18)
+	var title := _label("角色", 28, INK)
+	title.position = Vector2(104, 20)
+	title.size = Vector2(90, 44)
 	if Ui.SKIN == 1:
 		# 刊头是墨底：标题改毛笔金字
 		title.add_theme_color_override("font_color", Ui.GOLD_HI)
@@ -307,15 +303,8 @@ func _build() -> void:
 				title.add_theme_font_override("font", bf)
 	_panel.add_child(title)
 
-	_money_lb = _label("", 15, Color(0.28, 0.22, 0.14))
-	_money_lb.position = Vector2(360, 18)
-	_money_lb.size = Vector2(340, 24)
-	_money_lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	_money_lb.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_panel.add_child(_money_lb)
-
 	_deploy_btn = Button.new()
-	_deploy_btn.position = Vector2(430, 84)
+	_deploy_btn.position = Vector2(198, 18)
 	_deploy_btn.size = Vector2(168, 48)
 	_deploy_btn.add_theme_font_size_override("font_size", 16)
 	_deploy_btn.focus_mode = Control.FOCUS_NONE
@@ -324,8 +313,8 @@ func _build() -> void:
 
 	_switch_btn = Button.new()
 	_switch_btn.text = "切换角色"
-	_switch_btn.position = Vector2(510, 84)
-	_switch_btn.size = Vector2(186, 40)
+	_switch_btn.position = Vector2(430, 18)
+	_switch_btn.size = Vector2(246, 44)
 	_switch_btn.add_theme_font_size_override("font_size", 17)
 	_switch_btn.focus_mode = Control.FOCUS_NONE
 	_switch_btn.pressed.connect(_on_switch_open)
@@ -344,8 +333,8 @@ func _build() -> void:
 	#   草图上就是"圆圈头像 ＋ 名字/星级 ＋〔切换角色〕＋ 经验条"。
 	#   圆圈用一个 6 行的 canvas_item 着色器裁（不引外部素材、不增加节点层级）。
 	_avatar = TextureRect.new()
-	_avatar.position = Vector2(86, 10)
-	_avatar.size = Vector2(60, 60)
+	_avatar.position = Vector2(28, 82)
+	_avatar.size = Vector2(86, 86)
 	_avatar.expand_mode = TextureRect.EXPAND_IGNORE_SIZE     # ⚠ 先设 expand 再设 size
 	_avatar.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	_avatar.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -366,7 +355,7 @@ void fragment(){
 	av_mat.shader = av_sh
 	_avatar.material = av_mat
 	_panel.add_child(_avatar)
-	_avatar.visible = true      # 参考图：顶栏常驻圆头像
+	_avatar.visible = false     # v212：圆头像让位给左边的立绘卡（缺图时 _refresh 会再放出来）
 
 	# v212：**立绘卡 154×196**——用户设计图里最大的一块，先做到"一眼看见人"
 	var pcard := Panel.new()
@@ -394,18 +383,18 @@ void fragment(){
 	_portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	pcard.add_child(_portrait)
 
-	_name_lb = _label("", 26, Color(0.96, 0.90, 0.74))
-	_name_lb.position = Vector2(156, 12)
-	_name_lb.size = Vector2(260, 34)
+	_name_lb = _label("", 34, INK)
+	_name_lb.position = Vector2(192, 88)
+	_name_lb.size = Vector2(300, 44)
 	if Ui.SKIN == 1:
 		_name_lb.add_theme_color_override("font_color", Color(0.16, 0.13, 0.10))
 		var nf := Ui.brush_font()
 		if nf != null:
 			_name_lb.add_theme_font_override("font", nf)
 	_panel.add_child(_name_lb)
-	_sub_lb = _label("", 13, Color(0.90, 0.84, 0.70, 0.80))
-	_sub_lb.position = Vector2(158, 46)
-	_sub_lb.size = Vector2(330, 18)
+	_sub_lb = _label("", 14, Color(INK.r, INK.g, INK.b, 0.60))
+	_sub_lb.position = Vector2(192, 136)
+	_sub_lb.size = Vector2(330, 20)
 	_sub_lb.mouse_filter = Control.MOUSE_FILTER_STOP
 	_sub_lb.gui_input.connect(_press_gui.bind(_sub_lb, "profile", -1))
 	_panel.add_child(_sub_lb)
@@ -466,34 +455,14 @@ void fragment(){
 	_exp_lb.add_theme_constant_override("outline_size", 3)
 	_panel.add_child(_exp_lb)
 
-	# 方案 1/2/3（参考图“方案”那一排的壳，先只切高亮）
-	_plan_chips = []
-	for i in 3:
-		var pb := Button.new()
-		pb.text = str(i + 1)
-		pb.position = Vector2(34.0 + float(i) * 42.0, 156.0)
-		pb.size = Vector2(38, 48)
-		pb.add_theme_font_size_override("font_size", 17)
-		pb.focus_mode = Control.FOCUS_NONE
-		pb.pressed.connect(_on_plan.bind(i))
-		_panel.add_child(pb)
-		_plan_chips.append(pb)
 	_up1_btn = Button.new()
-	_up1_btn.text = "升 级"
-	_up1_btn.position = Vector2(500, 150)
-	_up1_btn.size = Vector2(176, 60)
-	_up1_btn.add_theme_font_size_override("font_size", 20)
+	_up1_btn.text = "升级"
+	_up1_btn.position = Vector2(554, 156)
+	_up1_btn.size = Vector2(122, 48)
+	_up1_btn.add_theme_font_size_override("font_size", 16)
 	_up1_btn.focus_mode = Control.FOCUS_NONE
 	_up1_btn.pressed.connect(_on_level_up.bind(1))
-	var upsb := StyleBoxFlat.new()
-	upsb.bg_color = Color(0.82, 0.52, 0.14, 0.97)
-	upsb.set_corner_radius_all(4)
-	upsb.border_color = Color(0.98, 0.82, 0.42, 0.9)
-	upsb.set_border_width_all(2)
-	_up1_btn.add_theme_stylebox_override("normal", upsb)
-	_up1_btn.add_theme_stylebox_override("hover", upsb)
-	_up1_btn.add_theme_stylebox_override("pressed", upsb)
-	_up1_btn.add_theme_color_override("font_color", Color(0.16, 0.10, 0.04))
+	_apply_ink_button(_up1_btn)
 	_panel.add_child(_up1_btn)
 	# ---- 属性（合计值）：6 格速览 ----
 	_panel.add_child(_head("属性（基础 ＋ 额外）", Vector2(34, 840)))
@@ -968,14 +937,6 @@ func _make_cell(head_text: String, pos: Vector2, sz: Vector2, reserve_right: boo
 		val.size = Vector2(sz.x - 32.0, 34)
 	cell.add_child(val)
 	cell.set_meta("value_label", val)
-	var dot := ColorRect.new()
-	dot.position = Vector2(sz.x - 18.0, 10.0)
-	dot.size = Vector2(9.0, 9.0)
-	dot.color = Color(0.78, 0.16, 0.12, 0.95)
-	dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	dot.visible = false
-	cell.add_child(dot)
-	cell.set_meta("dot", dot)
 	return cell
 
 func _wire_cell(cell: Control, kind: String, idx: int) -> void:
@@ -1112,8 +1073,7 @@ func _weapon_text(role: Dictionary) -> String:
 		#   出征屏/游历/仓库/装配窗全是 item_name，这里对齐。
 		nm = Cards.item_name(wid)
 	# v35：星记在件上——面板这里不再问"谁拿着"
-	return nm + GameState.star_marks(wid) + "（" + _elem_cn(_elem_key(role)) + "）" + "
-" + Cards.quality_of(wid)
+	return nm + GameState.star_marks(wid) + "（" + _elem_cn(_elem_key(role)) + "）"
 
 func _slot_text(role: Dictionary, slot: String) -> String:
 	if slot == "weapon":
@@ -1121,15 +1081,14 @@ func _slot_text(role: Dictionary, slot: String) -> String:
 	var sid := _slot_sid(role, slot)
 	if sid == "":
 		if slot == "helm":
-			return "可镶嵌
+			return "—
 暴击3 爆伤10"
 		if slot == "cloak":
-			return "可镶嵌
+			return "—
 速度+2"
-		return "可镶嵌"
+		return "—"
 	# 三件套的套名与成品名现在一致（皮甲/青玉佩/旧披风…），仍统一走 item_name：与仓库同口径
-	return Cards.item_name(sid) + "
-" + Cards.quality_of(sid)
+	return Cards.item_name(sid) + GameState.star_marks(sid)
 
 
 var _stat_tweens := {}
@@ -1267,17 +1226,6 @@ func _talent_text(role: Dictionary) -> String:
 # ---- 刷新 ----
 
 func _refresh() -> void:
-	if not _plan_chips.is_empty():
-		for k2 in _plan_chips.size():
-			var b2: Button = _plan_chips[k2]
-			var on2 := k2 == _plan_idx
-			var sb2 := StyleBoxFlat.new()
-			sb2.bg_color = Color(0.24, 0.21, 0.18, 0.95) if on2 else Color(0.90, 0.88, 0.82, 0.95)
-			sb2.set_corner_radius_all(3)
-			sb2.border_color = Color(0.72, 0.58, 0.25, 0.9) if on2 else Color(0.80, 0.75, 0.64, 0.9)
-			sb2.set_border_width_all(1)
-			b2.add_theme_stylebox_override("normal", sb2)
-			b2.add_theme_color_override("font_color", Color(0.96, 0.90, 0.74) if on2 else Color(0.24, 0.21, 0.18))
 	var role := _role(_sel)
 	var rid := str(ROLE_IDS[_sel])
 	var lv := int(role.get("lv", 1))
@@ -1285,8 +1233,6 @@ func _refresh() -> void:
 	var exp := int(role.get("exp", 0))
 	var avail := GameState.levels_available(rid)
 	_name_lb.text = str(role.get("name", "?")) + _star_suffix(rid)
-	if _money_lb != null:
-		_money_lb.text = "银两 " + str(GameState.coin("silver")) + "　　元宝 " + str(GameState.coin("gold"))
 	# v93：换人就把圆形头像一起换（胸像优先，没有就退回 Q版）
 	if _avatar != null and _avatar_rid != rid:
 		_avatar_rid = rid
@@ -1305,7 +1251,7 @@ func _refresh() -> void:
 		if ftex != null:
 			_portrait.texture = ftex
 			_portrait.visible = true
-			_avatar.visible = true
+			_avatar.visible = false
 		else:
 			_portrait.visible = false
 			_avatar.visible = true
@@ -1410,11 +1356,7 @@ func _refresh() -> void:
 		var slot := str(SLOTS[j]["slot"])
 		var ev: Label = _equip_vals[j]
 		ev.text = _slot_text(role, slot)
-		if j < _equip_cells.size():
-			var dcell: Control = _equip_cells[j]
-			if dcell.has_meta("dot"):
-				var d: ColorRect = dcell.get_meta("dot")
-				d.visible = _slot_sid(role, slot) == ""
+		pass
 	var sk: Array = role.get("skills", [])
 	var ult: Dictionary = role.get("ult", {})
 	var passive: Dictionary = role.get("passive", {})
@@ -1477,21 +1419,6 @@ func _set_msg(s: String) -> void:
 		_hint_lb.text = s
 
 # ---- 手动升级 / 服药 ----
-
-func _on_plan(i: int) -> void:
-	_plan_idx = i
-	for k in _plan_chips.size():
-		var b: Button = _plan_chips[k]
-		var on := k == _plan_idx
-		var sb := StyleBoxFlat.new()
-		sb.bg_color = Color(0.24, 0.21, 0.18, 0.95) if on else Color(0.90, 0.88, 0.82, 0.95)
-		sb.set_corner_radius_all(3)
-		sb.border_color = Color(0.72, 0.58, 0.25, 0.9) if on else Color(0.80, 0.75, 0.64, 0.9)
-		sb.set_border_width_all(1)
-		b.add_theme_stylebox_override("normal", sb)
-		b.add_theme_color_override("font_color", Color(0.96, 0.90, 0.74) if on else Color(0.24, 0.21, 0.18))
-	_set_msg("方案 " + str(i + 1) + " 已选中（预设切换先占位，后续接装备预设）")
-
 
 func _on_level_up(n: int) -> void:
 	var rid := str(ROLE_IDS[_sel])
