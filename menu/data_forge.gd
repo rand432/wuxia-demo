@@ -17,7 +17,7 @@ extends RefCounted
 #     做铁匠教学与装备系统时，按上面四类 × 五档胚子 + 绝品升阶收口。
 # ============================================================
 
-const QUALITY_CN := ["凡品", "良品", "上品", "极品", "绝品"]
+const QUALITY_CN := ["普通", "凡品", "中品", "上品", "极品"]
 
 # 品质基础（成品 = 基础 × (1 + 强化 × 2%)）
 const Q_BASE := [
@@ -32,22 +32,71 @@ const Q_BASE := [
 const BLANKS := [
 	{"id": "common", "name": "普通胚子", "weapon": "待定", "kind": "generic", "pool": "weapon",
 		"quality": 0, "cap": 2, "atk": 0, "dmg": 0, "open": 0, "need": "common", "blank_class": "generic",
+		"probs": [5, 32, 35, 22, 6], "trait": "普通", "legacy": true},
+	# 教学：普通武器胚（固定成剑，不再随机成甲/冠）
+	{"id": "tut_weapon", "name": "普通武器胚", "weapon": "铁剑", "kind": "sword", "pool": "weapon",
+		"quality": 0, "cap": 2, "atk": 15, "dmg": 2, "open": 0, "need": "common", "blank_class": "weapon",
+		"probs": [5, 32, 35, 22, 6], "trait": "普通", "legacy": true},
+	{"id": "wpn_0", "name": "武器胚·普通", "weapon": "铁剑", "kind": "sword", "pool": "weapon",
+		"quality": 0, "cap": 2, "atk": 15, "dmg": 2, "open": 0, "need": "wpn_0", "blank_class": "weapon",
 		"probs": [5, 32, 35, 22, 6], "trait": "普通"},
-	{"id": "gen_fan", "name": "凡品胚子", "weapon": "待定", "kind": "generic", "pool": "weapon",
-		"quality": 0, "cap": 2, "atk": 0, "dmg": 0, "open": 0, "blank_class": "generic",
+	{"id": "wpn_1", "name": "武器胚·凡品", "weapon": "铁剑", "kind": "sword", "pool": "weapon",
+		"quality": 1, "cap": 2, "atk": 24, "dmg": 3, "open": 0, "need": "wpn_1", "blank_class": "weapon",
 		"probs": [8, 39, 28, 19, 6], "trait": "凡品"},
-	{"id": "gen_zhong", "name": "中品胚子", "weapon": "待定", "kind": "generic", "pool": "weapon",
-		"quality": 1, "cap": 3, "atk": 0, "dmg": 0, "open": 0, "blank_class": "generic",
+	{"id": "wpn_2", "name": "武器胚·中品", "weapon": "铁剑", "kind": "sword", "pool": "weapon",
+		"quality": 2, "cap": 3, "atk": 34, "dmg": 4, "open": 0, "need": "wpn_2", "blank_class": "weapon",
 		"probs": [10, 37, 26, 20, 7], "trait": "中品"},
-	{"id": "gen_shang", "name": "上品胚子", "weapon": "待定", "kind": "generic", "pool": "weapon",
-		"quality": 2, "cap": 4, "atk": 0, "dmg": 0, "open": 0, "blank_class": "generic",
+	{"id": "wpn_3", "name": "武器胚·上品", "weapon": "铁剑", "kind": "sword", "pool": "weapon",
+		"quality": 3, "cap": 4, "atk": 48, "dmg": 6, "open": 0, "need": "wpn_3", "blank_class": "weapon",
 		"probs": [10, 39, 24, 20, 7], "trait": "上品"},
-	{"id": "gen_ji", "name": "极品胚子", "weapon": "待定", "kind": "generic", "pool": "weapon",
-		"quality": 3, "cap": 4, "atk": 0, "dmg": 0, "open": 0, "blank_class": "generic",
+	{"id": "wpn_4", "name": "武器胚·极品", "weapon": "铁剑", "kind": "sword", "pool": "weapon",
+		"quality": 4, "cap": 4, "atk": 68, "dmg": 8, "open": 0, "need": "wpn_4", "blank_class": "weapon",
 		"probs": [12, 39, 22, 20, 7], "trait": "极品"},
-	{"id": "gen_jue", "name": "绝品胚子", "weapon": "待定", "kind": "generic", "pool": "weapon",
-		"quality": 4, "cap": 4, "atk": 0, "dmg": 0, "open": 0, "blank_class": "generic",
-		"probs": [14, 39, 20, 20, 7], "trait": "绝品"},
+	{"id": "eqp_0", "name": "装备胚·普通", "weapon": "布甲", "kind": "armor", "pool": "armor",
+		"quality": 0, "cap": 2, "atk": 0, "dmg": 0, "def": 4, "hp": 30, "open": 0, "need": "eqp_0", "blank_class": "armor",
+		"probs": [5, 32, 35, 22, 6], "trait": "普通"},
+	{"id": "eqp_1", "name": "装备胚·凡品", "weapon": "布甲", "kind": "armor", "pool": "armor",
+		"quality": 1, "cap": 2, "atk": 0, "dmg": 0, "def": 6, "hp": 45, "open": 0, "need": "eqp_1", "blank_class": "armor",
+		"probs": [8, 39, 28, 19, 6], "trait": "凡品"},
+	{"id": "eqp_2", "name": "装备胚·中品", "weapon": "布甲", "kind": "armor", "pool": "armor",
+		"quality": 2, "cap": 3, "atk": 0, "dmg": 0, "def": 9, "hp": 65, "open": 0, "need": "eqp_2", "blank_class": "armor",
+		"probs": [10, 37, 26, 20, 7], "trait": "中品"},
+	{"id": "eqp_3", "name": "装备胚·上品", "weapon": "布甲", "kind": "armor", "pool": "armor",
+		"quality": 3, "cap": 4, "atk": 0, "dmg": 0, "def": 12, "hp": 90, "open": 0, "need": "eqp_3", "blank_class": "armor",
+		"probs": [10, 39, 24, 20, 7], "trait": "上品"},
+	{"id": "eqp_4", "name": "装备胚·极品", "weapon": "布甲", "kind": "armor", "pool": "armor",
+		"quality": 4, "cap": 4, "atk": 0, "dmg": 0, "def": 16, "hp": 120, "open": 0, "need": "eqp_4", "blank_class": "armor",
+		"probs": [12, 39, 22, 20, 7], "trait": "极品"},
+	{"id": "jade_0", "name": "玉佩胚·普通", "weapon": "玉佩", "kind": "jade", "pool": "jade",
+		"quality": 0, "cap": 2, "atk": 0, "dmg": 0, "hp": 10, "dodge": 1, "open": 0, "need": "jade_0", "blank_class": "jade",
+		"probs": [5, 32, 35, 22, 6], "trait": "普通"},
+	{"id": "jade_1", "name": "玉佩胚·凡品", "weapon": "玉佩", "kind": "jade", "pool": "jade",
+		"quality": 1, "cap": 2, "atk": 0, "dmg": 0, "hp": 16, "dodge": 2, "open": 0, "need": "jade_1", "blank_class": "jade",
+		"probs": [8, 39, 28, 19, 6], "trait": "凡品"},
+	{"id": "jade_2", "name": "玉佩胚·中品", "weapon": "玉佩", "kind": "jade", "pool": "jade",
+		"quality": 2, "cap": 3, "atk": 0, "dmg": 0, "hp": 24, "dodge": 3, "open": 0, "need": "jade_2", "blank_class": "jade",
+		"probs": [10, 37, 26, 20, 7], "trait": "中品"},
+	{"id": "jade_3", "name": "玉佩胚·上品", "weapon": "玉佩", "kind": "jade", "pool": "jade",
+		"quality": 3, "cap": 4, "atk": 0, "dmg": 0, "hp": 34, "dodge": 4, "open": 0, "need": "jade_3", "blank_class": "jade",
+		"probs": [10, 39, 24, 20, 7], "trait": "上品"},
+	{"id": "jade_4", "name": "玉佩胚·极品", "weapon": "玉佩", "kind": "jade", "pool": "jade",
+		"quality": 4, "cap": 4, "atk": 0, "dmg": 0, "hp": 46, "dodge": 5, "open": 0, "need": "jade_4", "blank_class": "jade",
+		"probs": [12, 39, 22, 20, 7], "trait": "极品"},
+	{"id": "shoe_0", "name": "鞋子胚·普通", "weapon": "布鞋", "kind": "shoe", "pool": "shoe",
+		"quality": 0, "cap": 2, "atk": 0, "dmg": 0, "hp": 8, "dodge": 2, "open": 0, "need": "shoe_0", "blank_class": "shoe",
+		"probs": [5, 32, 35, 22, 6], "trait": "普通"},
+	{"id": "shoe_1", "name": "鞋子胚·凡品", "weapon": "布鞋", "kind": "shoe", "pool": "shoe",
+		"quality": 1, "cap": 2, "atk": 0, "dmg": 0, "hp": 12, "dodge": 3, "open": 0, "need": "shoe_1", "blank_class": "shoe",
+		"probs": [8, 39, 28, 19, 6], "trait": "凡品"},
+	{"id": "shoe_2", "name": "鞋子胚·中品", "weapon": "布鞋", "kind": "shoe", "pool": "shoe",
+		"quality": 2, "cap": 3, "atk": 0, "dmg": 0, "hp": 18, "dodge": 4, "open": 0, "need": "shoe_2", "blank_class": "shoe",
+		"probs": [10, 37, 26, 20, 7], "trait": "中品"},
+	{"id": "shoe_3", "name": "鞋子胚·上品", "weapon": "布鞋", "kind": "shoe", "pool": "shoe",
+		"quality": 3, "cap": 4, "atk": 0, "dmg": 0, "hp": 26, "dodge": 5, "open": 0, "need": "shoe_3", "blank_class": "shoe",
+		"probs": [10, 39, 24, 20, 7], "trait": "上品"},
+	{"id": "shoe_4", "name": "鞋子胚·极品", "weapon": "布鞋", "kind": "shoe", "pool": "shoe",
+		"quality": 4, "cap": 4, "atk": 0, "dmg": 0, "hp": 36, "dodge": 7, "open": 0, "need": "shoe_4", "blank_class": "shoe",
+		"probs": [12, 39, 22, 20, 7], "trait": "极品"},
 ]
 
 static func blank(id: String) -> Dictionary:
@@ -106,6 +155,29 @@ static func outcome_name(i: int) -> String:
 static func outcome_col(i: int) -> Color:
 	return (OUTCOMES[clampi(i, 0, 4)] as Dictionary)["col"]
 
+# 结果之后推动下一锤概率（keys: great/success/maintain/damage/break）
+static func apply_prob_shift(it: Dictionary, outcome: int) -> void:
+	var mod: Dictionary = it.get("prob_mod", {})
+	for k in ["great", "success", "maintain", "damage", "break"]:
+		if not mod.has(k):
+			mod[k] = 0.0
+	match outcome:
+		1:   # 成功 → 下次成功降，挪去维持
+			mod["success"] = float(mod["success"]) - 4.0
+			mod["maintain"] = float(mod["maintain"]) + 4.0
+		2:   # 维持 → 下次成功/大成功升，从维持挪
+			mod["maintain"] = float(mod["maintain"]) - 6.0
+			mod["success"] = float(mod["success"]) + 4.0
+			mod["great"] = float(mod["great"]) + 2.0
+		0:   # 大成功 → 下次损伤升，从成功挪
+			mod["success"] = float(mod["success"]) - 5.0
+			mod["damage"] = float(mod["damage"]) + 5.0
+		3:   # 损伤 → 下次破坏升，从维持挪
+			mod["maintain"] = float(mod["maintain"]) - 5.0
+			mod["break"] = float(mod["break"]) + 5.0
+	it["prob_mod"] = mod
+
+
 # 显示顺序：破坏 / 损伤 / 维持 / 成功 / 大成功
 static func roll_percents(it: Dictionary) -> Array:
 	var b := blank(str(it.get("blank", "")))
@@ -114,6 +186,12 @@ static func roll_percents(it: Dictionary) -> Array:
 		p = []
 		for v in (b.get("probs", [8, 45, 25, 17, 5]) as Array):
 			p.append(float(v))
+	var pm: Dictionary = it.get("prob_mod", {})
+	p[0] = float(p[0]) + float(pm.get("great", 0.0))
+	p[1] = float(p[1]) + float(pm.get("success", 0.0))
+	p[2] = float(p[2]) + float(pm.get("maintain", 0.0))
+	p[3] = float(p[3]) + float(pm.get("damage", 0.0))
+	p[4] = float(p[4]) + float(pm.get("break", 0.0))
 	var lucky := int(it.get("lucky_success", 0)) + int(it.get("lucky_great", 0)) * 2
 	if lucky > 0:
 		p[1] = maxf(1.0, p[1] - float(lucky) * 5.0)

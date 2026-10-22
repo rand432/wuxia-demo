@@ -266,6 +266,17 @@ var _chief_done := Callable()
 var _chief_portrait: Control = null
 var _chief_face: TextureRect = null
 var _forge_story_done := false
+var _forge_tut := false
+var _forge_tut_done := false
+var _forge_box: Control = null
+var _forge_box_name: Label = null
+var _forge_box_text: Label = null
+var _forge_guide: Control = null
+var _forge_guide_rc := Rect2()
+var _forge_pending_sword: Dictionary = {}
+var _forge_wait := 0.0
+var _forge_wait_kind := ""
+var _forge_blank_step := false
 var _craft_guide: Control = null
 var _craft_guide_rect := Rect2()
 var _craft_guide_text := ""
@@ -2274,6 +2285,27 @@ func _unhandled_input(ev: InputEvent) -> void:
 
 func _process(delta: float) -> void:
 	_t += delta * Conf.TIME_SCALE
+	if _forge_wait > 0.0:
+		_forge_wait -= delta
+		if _forge_wait <= 0.0:
+			var wk := _forge_wait_kind
+			_forge_wait_kind = ""
+			match wk:
+				"free":
+					_forge_say("铁匠", "剩下的，你自己来。手稳心定，别贪。")
+				"speech":
+					_forge_panel.tutorial_pause(false)
+					_forge_say("铁匠", "抓紧！")
+					_forge_guide_to(_forge_panel.inspire_bar_rect())
+				"stop":
+					_forge_say("铁匠", "此剑静待冷却。一会儿我给壮士送来。")
+					_forge_guide_to(_forge_panel.anvil_rect())
+				"end":
+					_forge_tut_end()
+	if _forge_blank_step and _forge_panel != null and _forge_panel._blank_panel.visible:
+		_forge_guide_to(_forge_panel.blank_card_rect("wpn_0"))
+	if _forge_guide != null and _forge_guide.visible:
+		_forge_guide.queue_redraw()
 	if _craft_guide != null:
 		_craft_guide.queue_redraw()
 	if _toast_t > 0.0:
@@ -2674,7 +2706,239 @@ func _show_forge_story() -> void:
 		{"who": "铁匠", "text": "不过，上好的胚子，要与主人人器合一。得由主人亲手锻造，才发挥得出最完美的威力。"},
 		{"who": "少侠", "text": "我不会，怎么办？"},
 		{"who": "铁匠", "text": "这个简单。我指导你就行。"},
-	], Callable())
+	], _start_forge_tut)
+
+
+
+# ============================================================
+# 铁匠教学：20 锻造石 + 50 两 → 四锤 → 自由锤 → 入神 → 停炉 → 卸下
+# ============================================================
+func _start_forge_tut() -> void:
+	if _forge_tut_done or _forge_panel == null or GameState.forge_tut_done:
+		return
+	_forge_tut_done = true
+	_show_dialogue([
+		{"who": "铁匠", "text": "锻造石我这儿还有些，先拿二十块去用。"},
+		{"who": "少侠", "text": "这怎么好意思。您教我手艺，还倒贴材料……"},
+		{"who": "少侠", "text": "这些银两，您收下。"},
+		{"who": "铁匠", "text": "使不得。"},
+		{"who": "少侠", "text": "您不收，我这锤落不下去。"},
+		{"who": "铁匠", "text": "……也罢。"},
+	], _forge_tut_begin)
+
+
+func _forge_tut_begin() -> void:
+	GameState.add_material("forge_stone", 20)
+	GameState.add_coin("silver", -50)
+	GameState.add_material("wpn_0", 1)
+	GameState.save_game()
+	if _money_hud != null:
+		_money_hud.silver = GameState.coin("silver")
+		_money_hud.yuanbao = GameState.coin("yuanbao")
+	Audio.sfx("coin", -8.0)
+	_forge_panel.refresh()
+	_forge_tut = true
+	_forge_panel.tutorial_mode = true
+	_forge_panel.tutorial_pause(false)
+	_forge_panel.tutorial_set_no_break(false)
+	if not _forge_panel.blank_picker_opened.is_connected(_forge_on_picker):
+		_forge_panel.blank_picker_opened.connect(_forge_on_picker)
+		_forge_panel.blank_picked.connect(_forge_on_blank)
+		_forge_panel.tutorial_hammered.connect(_forge_on_hammer)
+		_forge_panel.tutorial_inspire_start.connect(_forge_on_inspire)
+		_forge_panel.tutorial_inspire_end.connect(_forge_on_inspire_end)
+		_forge_panel.tutorial_unloaded.connect(_forge_on_unload)
+	_forge_box_build()
+	_forge_guide_build()
+	_forge_guide_to(_forge_panel.anvil_rect())
+	_forge_say("铁匠", "先挑一块胚子。点砧子，把家伙摆上来。")
+
+
+func _forge_box_build() -> void:
+	if _forge_box != null:
+		return
+	var root := Control.new()
+	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.z_index = 56
+	add_child(root)
+	_forge_box = root
+	var dim := ColorRect.new()
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dim.color = Color(0.04, 0.03, 0.02, 0.10)
+	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(dim)
+	var box := Panel.new()
+	box.position = Vector2(30, 830)
+	box.size = Vector2(660, 290)
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.955, 0.937, 0.886, 0.98)
+	sb.set_corner_radius_all(4)
+	sb.border_color = Color(0.72, 0.58, 0.25, 0.75)
+	sb.set_border_width_all(2)
+	box.add_theme_stylebox_override("panel", sb)
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(box)
+	_forge_box_name = Label.new()
+	_forge_box_name.position = Vector2(40, 24)
+	_forge_box_name.size = Vector2(560, 36)
+	_forge_box_name.add_theme_font_override("font", _font)
+	_forge_box_name.add_theme_font_size_override("font_size", 24)
+	_forge_box_name.add_theme_color_override("font_color", Color(0.68, 0.15, 0.12))
+	_forge_box_name.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(_forge_box_name)
+	_forge_box_text = Label.new()
+	_forge_box_text.position = Vector2(40, 72)
+	_forge_box_text.size = Vector2(580, 150)
+	_forge_box_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_forge_box_text.add_theme_font_override("font", _font)
+	_forge_box_text.add_theme_font_size_override("font_size", 22)
+	_forge_box_text.add_theme_color_override("font_color", Color(0.14, 0.13, 0.15))
+	_forge_box_text.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(_forge_box_text)
+	_forge_box.visible = false
+
+
+func _forge_guide_build() -> void:
+	if _forge_guide != null:
+		return
+	var g := Control.new()
+	g.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	g.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	g.z_index = 54
+	g.draw.connect(_draw_forge_guide)
+	add_child(g)
+	_forge_guide = g
+
+
+func _forge_say(who: String, text: String) -> void:
+	if _forge_box == null:
+		return
+	_forge_box.visible = true
+	_forge_box_name.text = who
+	_forge_box_text.text = text
+
+
+func _forge_guide_to(rc: Rect2) -> void:
+	_forge_guide_rc = rc
+	if _forge_guide != null:
+		_forge_guide.visible = rc.size.x > 0.0
+
+
+func _forge_guide_off() -> void:
+	_forge_guide_rc = Rect2()
+	if _forge_guide != null:
+		_forge_guide.visible = false
+
+
+func _draw_forge_guide() -> void:
+	if _forge_guide == null or _forge_guide_rc.size.x <= 0.0:
+		return
+	var a := 0.55 + 0.35 * absf(sin(_t * 3.2))
+	var gold := Color(0.86, 0.68, 0.26, a)
+	var rc := _forge_guide_rc.grow(6.0)
+	_forge_guide.draw_rect(rc, gold, false, 2.5)
+	var c := 16.0
+	_forge_guide.draw_line(rc.position, rc.position + Vector2(c, 0), gold, 4.0)
+	_forge_guide.draw_line(rc.position, rc.position + Vector2(0, c), gold, 4.0)
+	_forge_guide.draw_line(Vector2(rc.end.x, rc.position.y), Vector2(rc.end.x - c, rc.position.y), gold, 4.0)
+	_forge_guide.draw_line(Vector2(rc.end.x, rc.position.y), Vector2(rc.end.x, rc.position.y + c), gold, 4.0)
+	_forge_guide.draw_line(Vector2(rc.position.x, rc.end.y), Vector2(rc.position.x + c, rc.end.y), gold, 4.0)
+	_forge_guide.draw_line(Vector2(rc.position.x, rc.end.y), Vector2(rc.position.x, rc.end.y - c), gold, 4.0)
+	_forge_guide.draw_line(rc.end, rc.end - Vector2(c, 0), gold, 4.0)
+	_forge_guide.draw_line(rc.end, rc.end - Vector2(0, c), gold, 4.0)
+	var from := Vector2(360, 812)
+	var to := _forge_guide_rc.get_center()
+	if to.y > 810.0:
+		to.y = _forge_guide_rc.position.y
+	_forge_guide.draw_line(from, to, gold, 3.0)
+	var dir := (to - from).normalized()
+	var n := Vector2(-dir.y, dir.x)
+	_forge_guide.draw_colored_polygon(PackedVector2Array([to, to - dir * 14.0 + n * 8.0, to - dir * 14.0 - n * 8.0]), gold)
+
+
+func _forge_on_picker() -> void:
+	if not _forge_tut:
+		return
+	_forge_blank_step = true
+	_forge_say("铁匠", "你手上那块普通武器胚，底子干净，先拿它练手。")
+	_forge_guide_to(_forge_panel.blank_card_rect("wpn_0"))
+
+
+func _forge_on_blank(_bid: String) -> void:
+	if not _forge_tut:
+		return
+	_forge_blank_step = false
+	_forge_panel.tutorial_force(1)
+	_forge_say("铁匠", "放上砧。第一锤，轻些。听个响就够。")
+	_forge_guide_to(_forge_panel.hammer_rect())
+
+
+func _forge_on_hammer(result: int) -> void:
+	if not _forge_tut:
+		return
+	match result:
+		1:
+			_forge_panel.tutorial_force(2)
+			_forge_say("铁匠", "好！第一锤见响了。不过记住——成功出得越多，下一锤再想成，就难一分。")
+			_forge_guide_to(_forge_panel.hammer_rect())
+		2:
+			_forge_panel.tutorial_force(0)
+			_forge_say("铁匠", "别灰心。维持不长进，可它把下一锤的成功、大成功往上垫。")
+			_forge_guide_to(_forge_panel.hammer_rect())
+		0:
+			_forge_panel.tutorial_force(3)
+			_forge_say("铁匠", "漂亮！大成功，锋口更利。可别飘——大成功之后，最容易吃损伤。")
+			_forge_guide_to(_forge_panel.hammer_rect())
+		3:
+			_forge_panel.tutorial_set_no_break(true)
+			_forge_guide_off()
+			_forge_say("铁匠", "糟了。损伤会抬高破坏，锋口也要钝。再坏一次，胚子就废了。稳稳心态。")
+			_forge_wait = 3.2
+			_forge_wait_kind = "free"
+
+
+func _forge_on_inspire() -> void:
+	if not _forge_tut:
+		return
+	_forge_panel.tutorial_pause(true)
+	_forge_say("铁匠", "这……入神！心神合一，锤下不损。可它撑不了多久——抓紧！")
+	_forge_guide_to(_forge_panel.inspire_bar_rect())
+	_forge_wait = 3.0
+	_forge_wait_kind = "speech"
+
+
+func _forge_on_inspire_end() -> void:
+	if not _forge_tut:
+		return
+	_forge_panel.tutorial_stop()
+	_forge_guide_off()
+	_forge_say("铁匠", "这个装备已经很完美了，不能贪心。")
+	_forge_wait = 2.8
+	_forge_wait_kind = "stop"
+
+
+func _forge_on_unload() -> void:
+	if not _forge_tut:
+		return
+	_forge_pending_sword = _forge_panel.tutorial_taken_item()
+	_forge_guide_off()
+	_forge_say("铁匠", "一会儿我给壮士送来。")
+	_forge_wait = 2.8
+	_forge_wait_kind = "end"
+
+
+func _forge_tut_end() -> void:
+	_forge_tut = false
+	_forge_panel.tutorial_mode = false
+	_forge_panel.tutorial_pause(false)
+	_forge_panel.tutorial_set_no_break(false)
+	if _forge_box != null:
+		_forge_box.visible = false
+	_forge_guide_off()
+	GameState.forge_tut_done = true
+	GameState.save_game()
+	_show_toast("剑留在铁匠铺冷却——铁匠随后送来", 3.0)
 
 
 func _show_dialogue(lines: Array, on_done: Callable) -> void:

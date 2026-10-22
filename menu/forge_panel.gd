@@ -138,9 +138,11 @@ func _process(d: float) -> void:
 	elif not ins_it.is_empty() and float(ins_it.get("inspired_left", 0.0)) > 0.0:
 		if tutorial_paused:
 			if _inspire_bar != null:
-				_inspire_bar.visible = false
+				_inspire_bar.visible = true
+				_inspire_bar.value = float(ins_it.get("inspired_left", 0.0))
 			if _inspire_lb != null:
-				_inspire_lb.visible = false
+				_inspire_lb.visible = true
+				_inspire_lb.text = "入 神 · 限定时间内不会损坏"
 		else:
 			ins_it["inspired_left"] = maxf(0.0, float(ins_it.get("inspired_left", 0.0)) - d)
 			if float(ins_it.get("inspired_left", 0.0)) <= 0.0:
@@ -279,8 +281,7 @@ func _build() -> void:
 
 	_hammer_btn = UiKit.make_button(_panel, Vector2(160, 470), Vector2(280, 64), "锤 一 下", 26)
 	_hammer_btn.pressed.connect(_hammer)
-	_take_btn = UiKit.make_button(_panel, Vector2(450, 470), Vector2(160, 64), "卸 下", 23)
-	_take_btn.pressed.connect(_detach)
+	# v244（用户："卸下按钮可以去掉了"）——点铁砧即可卸下，不再单独放按钮
 	_swing_fx = Control.new()
 	_swing_fx.position = Vector2(290, 235)
 	_swing_fx.size = Vector2(260, 220)
@@ -653,15 +654,17 @@ func _show_pick(mode: String) -> void:
 		tpb.tooltip_text = "带特性胚子：" + str(tb_td.get("desc", ""))
 	for b_v in ForgeData.BLANKS:
 		var b: Dictionary = b_v
-		if str(b.get("pool", "weapon")) != "weapon":
+		if bool(b.get("legacy", false)):
 			continue
 		var bid := str(b.get("id", ""))
+		var need := str(b.get("need", bid))
 		var nm2 := str(b.get("name", bid))
 		var qn := ForgeData.quality_name(int(b.get("quality", 0)))
-		var own := GameState.material_count(bid) > 0
+		var own := GameState.material_count(need) > 0
 		var can := own and not busy
-		var txt2 := nm2 + (" ×" + str(GameState.material_count(bid)) if own else "") + "\n" + qn
-		var pb2 := _pick_card(ItemIcons.for_pool("weapon", str(b.get("kind", "sword")), bid), txt2, can, _pick_blank.bind(bid))
+		var cnt := " ×" + str(GameState.material_count(need)) if own else ""
+		var txt2 := nm2 + cnt + "\n" + qn
+		var pb2 := _pick_card(ItemIcons.for_pool(str(b.get("pool", "weapon")), str(b.get("kind", "sword")), bid), txt2, can, _pick_blank.bind(bid))
 		pb2.tooltip_text = ("点击开炉" if own else "去材料合成")
 		_blank_cards[bid] = pb2
 
@@ -761,7 +764,7 @@ func _on_anvil_click(ev: InputEvent) -> void:
 	if (GameState.forge_item as Dictionary).is_empty():
 		_open_blank_picker()
 	else:
-		_unload_anvil()
+		_detach()
 
 
 func _unload_anvil() -> void:
@@ -800,11 +803,24 @@ func tutorial_force(outcome: int) -> void:
 func tutorial_pause(v: bool) -> void:
 	tutorial_paused = v
 	var it: Dictionary = GameState.forge_item
-	var on := not v and float(it.get("inspired_left", 0.0)) > 0.0
+	var on := float(it.get("inspired_left", 0.0)) > 0.0
 	if _inspire_bar != null:
 		_inspire_bar.visible = on
+		if on:
+			_inspire_bar.value = float(it.get("inspired_left", 0.0))
 	if _inspire_lb != null:
 		_inspire_lb.visible = on
+		if on:
+			_inspire_lb.text = "入 神 · 限定时间内不会损坏"
+
+
+func tutorial_stop() -> void:
+	if _hammer_btn != null:
+		_hammer_btn.disabled = true
+
+
+func tutorial_taken_item() -> Dictionary:
+	return _tut_taken.duplicate(true)
 
 
 func tutorial_set_no_break(v: bool) -> void:
@@ -1072,6 +1088,7 @@ func _hammer() -> void:
 	# 第一锤不碎：保证能定型。
 	if first and outcome == 4:
 		outcome = 2
+	ForgeData.apply_prob_shift(it, outcome)
 	if outcome == 4 and bool(it.get("guard_break", false)):
 		outcome = 2
 		it.erase("guard_break")
@@ -1244,6 +1261,12 @@ func _roll(it: Dictionary) -> int:
 	var p: Array = []
 	for v in (b.get("probs", [8, 45, 25, 17, 5]) as Array):
 		p.append(float(v))
+	var pm: Dictionary = it.get("prob_mod", {})
+	p[0] = float(p[0]) + float(pm.get("great", 0.0))
+	p[1] = float(p[1]) + float(pm.get("success", 0.0))
+	p[2] = float(p[2]) + float(pm.get("maintain", 0.0))
+	p[3] = float(p[3]) + float(pm.get("damage", 0.0))
+	p[4] = float(p[4]) + float(pm.get("break", 0.0))
 	if bool(it.get("boost_next", false)):
 		p[0] = float(p[0]) + 15.0
 		p[1] = float(p[1]) + 15.0
@@ -2083,11 +2106,17 @@ func _detach() -> void:
 	if it.is_empty():
 		return
 	var nm := ForgeData.item_name(it)
+	if tutorial_mode:
+		_tut_taken = it.duplicate(true)
 	_register_anvil(it)
 	GameState.forge_item = {}
 	_queued_hammer = false
 	_set_hit_busy(false)
-	_push_log("卸下：" + nm + "（在仓库里，可装备）")
+	if tutorial_mode:
+		_push_log("此剑静待冷却。")
+		tutorial_unloaded.emit()
+	else:
+		_push_log("卸下：" + nm + "（在仓库里，可装备）")
 	GameState.save_game()
 	refresh()
 
@@ -2144,7 +2173,12 @@ func _push_log(s: String) -> void:
 func refresh() -> void:
 	if _panel == null:
 		return
-	_res_lb.text = "锻造石 " + str(GameState.material_count("forge_stone")) + " · 银两 " + str(GameState.coin("silver")) + " · 胚子 " + str(GameState.material_count("common"))
+	var blank_n := 0
+	for b in ForgeData.BLANKS:
+		if bool((b as Dictionary).get("legacy", false)):
+			continue
+		blank_n += GameState.material_count(str((b as Dictionary).get("need", (b as Dictionary).get("id", ""))))
+	_res_lb.text = "锻造石 " + str(GameState.material_count("forge_stone")) + " · 银两 " + str(GameState.coin("silver")) + " · 胚子 " + str(blank_n)
 	var it: Dictionary = GameState.forge_item
 	var gw := ForgeData.roll_percents(it)
 	for i in _grade_lbs.size():
