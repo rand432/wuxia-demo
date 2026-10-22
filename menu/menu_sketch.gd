@@ -111,7 +111,7 @@ const MAP_STAGE := GameState.STORY_MAP_STAGE       # 藏宝图（得「藏宝阁
 const NVXIA_STAGE := GameState.STORY_NVXIA_STAGE   # 苏青鸾入阵（第三人齐）
 const HERB_STAGE := GameState.STORY_HERB_STAGE     # 灵草三种（炼丹阁开工）
 const JIANBAO_STAGE := GameState.STORY_JIANBAO_STAGE   # v39：打捞上来的货仓（鉴宝行开张）
-const BOOT_INTO_INTRO := false  # 重做期：引子先去掉（F9 仍可重播）；改回 true ＝ 新档开机直接进引子
+const BOOT_INTO_INTRO := true   # 新档开机直接进新引子（menu/prologue.tscn）
 const TUTORIAL_DEMO := true      # 临时：底排「出村」直接开教学关（v0），不走出村面板
 
 const SEASON_DAYS := 3        # 每几天换一季（想两天改 2、一天改 1）
@@ -1058,12 +1058,16 @@ func _ready() -> void:
 	#   只认"首趟未走通"；首趟走过一次后这条路自动关闭（first_journey_done=true）。
 	#   半途退出的档：游历场自带续行，会接在断点，不重答五问。
 	if BOOT_INTO_INTRO and not GameState.first_journey_done:
-		print("[主界面] 新档开机——直接进引子（首趟未走通）→ ", Conf.JOURNEY_SCENE)
+		print("[主界面] 新档开机——直接进引子（首趟未走通）→ menu/prologue.tscn")
 		_boot_journey.call_deferred()
 		return
+	# 引子回来：第二段（铁匠）开始前先问「是否跳过引导剧情？」
+	if GameState.first_journey_done and not GameState.forge_tut_done:
+		_seg2_loot = 50
+		_ask_skip_segment.call_deferred(2, _seg2_play, _seg2_skip)
 
 func _boot_journey() -> void:
-	var err := get_tree().change_scene_to_file(Conf.JOURNEY_SCENE)
+	var err := get_tree().change_scene_to_file("res://menu/prologue.tscn")
 	if err != OK:
 		print("[主界面] 进引子失败，错误码=", err, "；检查路径：", Conf.JOURNEY_SCENE)
 
@@ -1301,8 +1305,8 @@ func _exit_tree() -> void:
 # v4.2：5 格 → 6 格（新增「宝箱」）。宽度得跟着收：720 - 2×10 边距 = 700，
 #   主键 146 + 5×96 + 5×11 缝 = 681，居中后左右各留 ~19。
 func _tag_unlocked(i: int) -> bool:
-	# 剧情解锁：出村 → 行囊/角色
-	return i == 0 or (i == 1 and _role_unlocked) or (i == 2 and _bag_unlocked)
+	# 出村牌子隐藏（引子改走开场场景）；角色/行囊按剧情解锁
+	return (i == 1 and _role_unlocked) or (i == 2 and _bag_unlocked)
 
 
 func _layout_tags() -> void:
@@ -1322,7 +1326,7 @@ func _layout_tags() -> void:
 	if unlocked <= 1:
 		for i in n:
 			rects[i] = Rect2(0.0, 0.0, 0.0, 0.0)
-		rects[0] = Rect2(240.0, Conf.TAG_Y, 240.0, Conf.TAG_H)
+		rects[1] = Rect2(240.0, Conf.TAG_Y, 240.0, Conf.TAG_H)
 	_tag_rects = rects
 
 # ---- 场景标语 ----
