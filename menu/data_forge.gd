@@ -17,7 +17,7 @@ extends RefCounted
 #     做铁匠教学与装备系统时，按上面四类 × 五档胚子 + 绝品升阶收口。
 # ============================================================
 
-const QUALITY_CN := ["普通", "凡品", "中品", "上品", "极品"]
+const QUALITY_CN := ["普通", "凡品", "中品", "上品", "极品", "绝品"]
 
 # 品质基础（成品 = 基础 × (1 + 强化 × 2%)）
 const Q_BASE := [
@@ -26,6 +26,7 @@ const Q_BASE := [
 	{"atk": 34, "dmg": 4},
 	{"atk": 48, "dmg": 6},
 	{"atk": 68, "dmg": 8},
+	{"atk": 102, "dmg": 12},   # 绝品：只能由极品升阶，基础 = 极品 ×1.5
 ]
 
 # 胚子：probs = [大成功, 成功, 维持, 损伤, 破坏]
@@ -50,7 +51,7 @@ const BLANKS := [
 		"quality": 3, "cap": 4, "atk": 48, "dmg": 6, "open": 0, "need": "wpn_3", "blank_class": "weapon",
 		"probs": [10, 39, 24, 20, 7], "trait": "上品"},
 	{"id": "wpn_4", "name": "武器胚·极品", "weapon": "铁剑", "kind": "sword", "pool": "weapon",
-		"quality": 4, "cap": 4, "atk": 68, "dmg": 8, "open": 0, "need": "wpn_4", "blank_class": "weapon",
+		"quality": 4, "cap": 5, "atk": 68, "dmg": 8, "open": 0, "need": "wpn_4", "blank_class": "weapon",
 		"probs": [12, 39, 22, 20, 7], "trait": "极品"},
 	{"id": "eqp_0", "name": "装备胚·普通", "weapon": "布甲", "kind": "armor", "pool": "armor",
 		"quality": 0, "cap": 2, "atk": 0, "dmg": 0, "def": 4, "hp": 30, "open": 0, "need": "eqp_0", "blank_class": "armor",
@@ -65,7 +66,7 @@ const BLANKS := [
 		"quality": 3, "cap": 4, "atk": 0, "dmg": 0, "def": 12, "hp": 90, "open": 0, "need": "eqp_3", "blank_class": "armor",
 		"probs": [10, 39, 24, 20, 7], "trait": "上品"},
 	{"id": "eqp_4", "name": "装备胚·极品", "weapon": "布甲", "kind": "armor", "pool": "armor",
-		"quality": 4, "cap": 4, "atk": 0, "dmg": 0, "def": 16, "hp": 120, "open": 0, "need": "eqp_4", "blank_class": "armor",
+		"quality": 4, "cap": 5, "atk": 0, "dmg": 0, "def": 16, "hp": 120, "open": 0, "need": "eqp_4", "blank_class": "armor",
 		"probs": [12, 39, 22, 20, 7], "trait": "极品"},
 	{"id": "jade_0", "name": "玉佩胚·普通", "weapon": "玉佩", "kind": "jade", "pool": "jade",
 		"quality": 0, "cap": 2, "atk": 0, "dmg": 0, "hp": 10, "dodge": 1, "open": 0, "need": "jade_0", "blank_class": "jade",
@@ -80,7 +81,7 @@ const BLANKS := [
 		"quality": 3, "cap": 4, "atk": 0, "dmg": 0, "hp": 34, "dodge": 4, "open": 0, "need": "jade_3", "blank_class": "jade",
 		"probs": [10, 39, 24, 20, 7], "trait": "上品"},
 	{"id": "jade_4", "name": "玉佩胚·极品", "weapon": "玉佩", "kind": "jade", "pool": "jade",
-		"quality": 4, "cap": 4, "atk": 0, "dmg": 0, "hp": 46, "dodge": 5, "open": 0, "need": "jade_4", "blank_class": "jade",
+		"quality": 4, "cap": 5, "atk": 0, "dmg": 0, "hp": 46, "dodge": 5, "open": 0, "need": "jade_4", "blank_class": "jade",
 		"probs": [12, 39, 22, 20, 7], "trait": "极品"},
 	{"id": "shoe_0", "name": "鞋子胚·普通", "weapon": "布鞋", "kind": "shoe", "pool": "shoe",
 		"quality": 0, "cap": 2, "atk": 0, "dmg": 0, "hp": 8, "dodge": 2, "open": 0, "need": "shoe_0", "blank_class": "shoe",
@@ -95,7 +96,7 @@ const BLANKS := [
 		"quality": 3, "cap": 4, "atk": 0, "dmg": 0, "hp": 26, "dodge": 5, "open": 0, "need": "shoe_3", "blank_class": "shoe",
 		"probs": [10, 39, 24, 20, 7], "trait": "上品"},
 	{"id": "shoe_4", "name": "鞋子胚·极品", "weapon": "布鞋", "kind": "shoe", "pool": "shoe",
-		"quality": 4, "cap": 4, "atk": 0, "dmg": 0, "hp": 36, "dodge": 7, "open": 0, "need": "shoe_4", "blank_class": "shoe",
+		"quality": 4, "cap": 5, "atk": 0, "dmg": 0, "hp": 36, "dodge": 7, "open": 0, "need": "shoe_4", "blank_class": "shoe",
 		"probs": [12, 39, 22, 20, 7], "trait": "极品"},
 ]
 

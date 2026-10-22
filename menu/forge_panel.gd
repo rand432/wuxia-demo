@@ -282,6 +282,9 @@ func _build() -> void:
 	_hammer_btn = UiKit.make_button(_panel, Vector2(160, 470), Vector2(280, 64), "锤 一 下", 26)
 	_hammer_btn.pressed.connect(_hammer)
 	# v244（用户："卸下按钮可以去掉了"）——点铁砧即可卸下，不再单独放按钮
+	_ascend_btn = UiKit.make_button(_panel, Vector2(450, 470), Vector2(160, 64), "升 阶", 23)
+	_ascend_btn.pressed.connect(_ascend)
+	_ascend_btn.visible = false
 	_swing_fx = Control.new()
 	_swing_fx.position = Vector2(290, 235)
 	_swing_fx.size = Vector2(260, 220)
@@ -2197,6 +2200,8 @@ func refresh() -> void:
 		_hammer_btn.text = "先 选 胚 子"
 		if _take_btn != null:
 			_take_btn.visible = false
+		if _ascend_btn != null:
+			_ascend_btn.visible = false
 		if _inspire_bar != null:
 			_inspire_bar.visible = false
 		if _inspire_lb != null:
@@ -2245,6 +2250,14 @@ func refresh() -> void:
 		if _take_btn != null:
 			_take_btn.visible = true
 			_take_btn.disabled = _hit_busy
+		if _ascend_btn != null:
+			var qa := clampi(int(it.get("quality", 0)), 0, 5)
+			var can_asc := int(it.get("enhance", 0)) >= 20 and qa < int(it.get("cap", 5))
+			_ascend_btn.visible = can_asc
+			if can_asc:
+				var ac: Dictionary = ForgeData.ascend_cost(qa)
+				_ascend_btn.disabled = _hit_busy or GameState.coin("silver") < int(ac["silver"]) or GameState.material_count("star_iron") < int(ac.get("star_iron", 1))
+				_ascend_btn.tooltip_text = "银两 " + str(int(ac["silver"])) + " · 星铁 " + str(int(ac.get("star_iron", 1)))
 		var ins := float(it.get("inspired_left", 0.0))
 		var intro := _inspire_intro_t > 0.0
 		if _inspire_bar != null:
