@@ -13,6 +13,7 @@ var _stats: VBoxContainer
 var _desc: Label
 var _sell: Button
 var _equip: Button
+var _unequip: Button
 var _confirm: Panel
 var _confirm_lb: Label
 var _price := 0
@@ -67,11 +68,14 @@ func _ready() -> void:
 	_desc.size = Vector2(572, 250)
 	_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_box.add_child(_desc)
-	_sell = UiKit.make_button(_box, Vector2(60, 720), Vector2(220, 62), "卖 出", 22)
+	_sell = UiKit.make_button(_box, Vector2(60, 720), Vector2(180, 62), "卖 出", 21)
 	_sell.pressed.connect(_ask_sell)
-	_equip = UiKit.make_button(_box, Vector2(320, 720), Vector2(220, 62), "装 备", 22)
+	_equip = UiKit.make_button(_box, Vector2(250, 720), Vector2(180, 62), "装 备", 21)
 	_equip.pressed.connect(_do_equip)
 	_equip.visible = false
+	_unequip = UiKit.make_button(_box, Vector2(440, 720), Vector2(180, 62), "卸 下", 21)
+	_unequip.pressed.connect(_do_unequip)
+	_unequip.visible = false
 	_confirm = Panel.new()
 	_confirm.position = Vector2(80, 360)
 	_confirm.size = Vector2(460, 240)
@@ -138,6 +142,7 @@ func show_item(d: Dictionary) -> void:
 	_desc.text = str(d.get("desc", ""))
 	_sell.visible = d.get("on_sell") != null and _price > 0
 	_equip.visible = d.get("on_equip") != null
+	_unequip.visible = d.get("on_unequip") != null
 	_confirm.visible = false
 	visible = true
 func _ask_sell() -> void:
@@ -150,6 +155,11 @@ func _do_sell() -> void:
 	close()
 func _do_equip() -> void:
 	var cb = _data.get("on_equip")
+	if cb != null and cb is Callable and (cb as Callable).is_valid():
+		(cb as Callable).call()
+	close()
+func _do_unequip() -> void:
+	var cb = _data.get("on_unequip")
 	if cb != null and cb is Callable and (cb as Callable).is_valid():
 		(cb as Callable).call()
 	close()
