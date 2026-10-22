@@ -39,6 +39,9 @@ const Realm := preload("res://shared/data_realm.gd")        # v122：进阶（�
 var _adv_veil: ColorRect = null                             # v122：进阶页的幕布
 # 两个开关：村景层开着、纸偶演员关掉（用户 2026-10-08："三个移动小人就不要了"）
 const USE_INK_SCENE := true
+# 角色五档（天 > 地 > 玄 > 黄 > 宇）；主角倒数第二档 = 黄
+const CHAR_GRADES := ["天", "地", "玄", "黄", "宇"]
+const PLAYER_GRADE_IDX := 3
 const USE_PAPER_ACTORS := false
 # v97（用户："让村景层铺满全屏" / 交接 §12.7 第 1 条「收旧画心」）：
 #   水墨村景层当底之后，旧的**「少年游」画心长卷**（menu_scroll）与**程序画的村景**
@@ -68,6 +71,7 @@ const MistLayer := preload("res://menu/menu_mist.gd")   # v72：设置面板用�
 const CharArt := preload("res://shared/char_art.gd")   # v92：村里的同伴/看火人用 Q版立绘（原来画火柴人）
 const CharacterPanel := preload("res://menu/character_panel.gd")
 const WarehousePanel := preload("res://menu/warehouse_panel.gd")
+const ForgeData := preload("res://menu/data_forge.gd")
 const TwitchRecorder := preload("res://shared/twitch_recorder.gd")   # v63k：抽搐取证器（B 键用）
 const OutPanel := preload("res://menu/out_panel.gd")
 const TutorialStage := preload("res://kushou/tutorial_stage.gd")   # 重做期：教学关 v0（村口 · 5 波）
@@ -251,6 +255,14 @@ var _hud = null
 var _settings_ov = null       # v72：设置面板（音乐/音效音量 + 主界面曲目）
 var _char_panel = null
 var _warehouse = null
+# 引导段落状态（行囊/角色 到剧情才解锁；段落可单独跳过）
+var _bag_unlocked := false
+var _role_unlocked := false
+var _seg2_loot := 50
+var _seg2_playing := false
+var _seg3_seen := false
+var _seg4_seen := false
+var _seg4_ended := false
 # ㊿z12（抽搐取证）：测试键 B 开的抽帧记录器（见文件末尾 TwitchRecorder）
 var _twitch_rec: Node = null
 var _out_panel = null
@@ -919,8 +931,10 @@ func _ready() -> void:
 	_add_mark("craft", 1880.0, 794.0, "百工坊", "")
 	_char_panel = CharacterPanel.new()
 	add_child(_char_panel)
+	_char_panel.closed.connect(_on_char_closed)
 	_warehouse = WarehousePanel.new()
 	add_child(_warehouse)
+	_warehouse.closed.connect(_on_warehouse_closed)
 	_char_panel.bind_warehouse(_warehouse)
 	_char_panel.forge_pressed.connect(_open_star_page)
 	_out_panel = OutPanel.new()
@@ -960,6 +974,7 @@ func _ready() -> void:
 	add_child(_alchemy_panel)
 	_forge_panel = ForgePanel.new()
 	add_child(_forge_panel)
+	_forge_panel.closed.connect(_on_forge_closed)
 	_star_panel = StarPanel.new()
 	add_child(_star_panel)
 	_star_panel.closed.connect(_on_star_closed)
@@ -1101,7 +1116,7 @@ func _build_plaques() -> void:
 	# ===== v211 顶栏（0~96 一条贯通墨带）=====
 	#   头像 64 · 名号（左对齐 + 下面一块境界牌）· 进阶小牌 · 银两/元宝（MoneyHud）· 设置小牌
 	_plaques.add_disc("avatar", 0.086, 0.0375, "", _open_char_panel, "", {"w": 64.0})
-	_plaques.add_txt("name", 0.239, 0.0383, pn, _open_char_panel, GameState.advance_name(), {"w": 140.0, "h": 76.0})
+	_plaques.add_txt("name", 0.239, 0.0383, pn, _open_char_panel, _grade_label(), {"w": 140.0, "h": 76.0})
 	_plaques.add_chip("advance", 0.403, 0.0383, "进阶", _open_advance, _advance_hint(), {"w": 80.0, "h": 34.0})
 	_plaques.add_chip("settings", 0.9264, 0.0375, "设置", _open_settings, "", {"w": 58.0, "h": 34.0})
 	# 挂机：还是从横梁上吊下来（这块是"画上的题字"，保留竖排毛笔）
@@ -1126,6 +1141,10 @@ func _build_plaques() -> void:
 	_plaques.add_hang("cave_scene", 0.660, 0.560, "山洞", _click_cave, "", "", {"page": "village", "white": true, "w": 80.0})
 	_plaques.add_hang("treasure_map", 0.660, 0.660, "藏宝图", _click_treasure, "", "", {"page": "village", "white": true, "w": 96.0})
 	print("[主界面] 牌子层：", _plaques.items.size(), " 块（v211：顶栏 + 右栏 5 格 + 历练大碑）")
+
+func _grade_label() -> String:
+	return GameState.role_grade_cn("player")
+
 
 func _player_tag() -> String:
 	var n := str(GameState.player_name)
@@ -1281,8 +1300,8 @@ func _exit_tree() -> void:
 # v4.2：5 格 → 6 格（新增「宝箱」）。宽度得跟着收：720 - 2×10 边距 = 700，
 #   主键 146 + 5×96 + 5×11 缝 = 681，居中后左右各留 ~19。
 func _tag_unlocked(i: int) -> bool:
-	# 剧情解锁：只开「出村」；往后随剧情一格格补
-	return i == 0
+	# 剧情解锁：出村 → 行囊/角色
+	return i == 0 or (i == 1 and _role_unlocked) or (i == 2 and _bag_unlocked)
 
 
 func _layout_tags() -> void:
@@ -1295,7 +1314,11 @@ func _layout_tags() -> void:
 	for i in n:
 		rects.append(Rect2(x, Conf.TAG_Y, w, Conf.TAG_H))
 		x += w + gap
-	if _tag_unlocked(0) and not _tag_unlocked(1):
+	var unlocked := 0
+	for i in n:
+		if _tag_unlocked(i):
+			unlocked += 1
+	if unlocked <= 1:
 		for i in n:
 			rects[i] = Rect2(0.0, 0.0, 0.0, 0.0)
 		rects[0] = Rect2(240.0, Conf.TAG_Y, 240.0, Conf.TAG_H)
@@ -2580,8 +2603,214 @@ func _on_tutorial_closed() -> void:
 		_tutorial.queue_free()
 		_tutorial = null
 	Audio.play_bgm(Audio.menu_track(), 1.0)
-	if loot > 0:
-		_show_loot_popup(loot)
+	_seg2_loot = loot if loot > 0 else 50
+	_ask_skip_segment(2, _seg2_play, _seg2_skip)
+
+
+# ============================================================
+# 引导段落：段前问「是否跳过引导剧情？」；跳过只落该段完成态
+# ============================================================
+func _ask_skip_segment(_n: int, on_play: Callable, on_skip: Callable) -> void:
+	var root := Control.new()
+	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	root.z_index = 72
+	root.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(root)
+	var dim := ColorRect.new()
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dim.color = Color(0.04, 0.03, 0.02, 0.55)
+	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(dim)
+	var box := Panel.new()
+	box.position = Vector2(90.0, 455.0)
+	box.size = Vector2(540.0, 300.0)
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.955, 0.937, 0.886, 0.99)
+	sb.set_corner_radius_all(4)
+	sb.border_color = Color(0.72, 0.58, 0.25, 0.8)
+	sb.set_border_width_all(2)
+	box.add_theme_stylebox_override("panel", sb)
+	box.mouse_filter = Control.MOUSE_FILTER_STOP
+	root.add_child(box)
+	var t := Label.new()
+	t.text = "是否跳过引导剧情？"
+	t.position = Vector2(0, 44)
+	t.size = Vector2(540, 46)
+	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	t.add_theme_font_override("font", _font)
+	t.add_theme_font_size_override("font_size", 27)
+	t.add_theme_color_override("font_color", Color(0.14, 0.13, 0.15))
+	box.add_child(t)
+	var sub := Label.new()
+	sub.text = "跳过只跳这一段"
+	sub.position = Vector2(0, 100)
+	sub.size = Vector2(540, 28)
+	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	sub.add_theme_font_override("font", _font)
+	sub.add_theme_font_size_override("font_size", 15)
+	sub.add_theme_color_override("font_color", Color(0.30, 0.26, 0.20, 0.55))
+	box.add_child(sub)
+	var b_skip := UiKit.make_button(box, Vector2(60, 180), Vector2(190, 70), "跳 过", 24)
+	var b_play := UiKit.make_button(box, Vector2(290, 180), Vector2(190, 70), "继 续 看", 24)
+	b_skip.pressed.connect(func() -> void:
+		root.queue_free()
+		on_skip.call()
+	)
+	b_play.pressed.connect(func() -> void:
+		root.queue_free()
+		on_play.call()
+	)
+
+
+func _seg1_skip() -> void:
+	GameState.first_journey_done = true
+	GameState.save_game()
+	_seg2_loot = 50
+	_ask_skip_segment(2, _seg2_play, _seg2_skip)
+
+
+func _seg2_play() -> void:
+	_seg2_playing = true
+	_show_loot_popup(_seg2_loot)
+
+
+func _seg2_skip() -> void:
+	GameState.add_coin("silver", _seg2_loot)
+	if _money_hud != null:
+		_money_hud.silver = GameState.coin("silver")
+	GameState.first_journey_done = true
+	GameState.cave_opened = true
+	GameState.winery_built = true
+	_grant_forge_sword()
+	GameState.forge_tut_done = true
+	GameState.save_game()
+	_refresh_plaques()
+	_seg3_prompt()
+
+
+func _seg3_prompt() -> void:
+	_ask_skip_segment(3, _seg3_play, _seg3_skip)
+
+
+func _seg3_play() -> void:
+	_show_dialogue([
+		{"who": "旁白", "text": "不多时，铁匠送来武器。"},
+		{"who": "铁匠", "text": "壮士，剑冷好了。壮士可以看看这把武器。"},
+		{"who": "旁白", "text": "你接过长剑，开始观摩。"},
+	], _seg3_unlock)
+
+
+func _seg3_unlock() -> void:
+	_bag_unlocked = true
+	_seg3_seen = true
+	_layout_tags()
+	_refresh_plaques()
+	_show_tag_guide(2, "行囊")
+	_show_toast("点下面「行囊」，看看这把剑", 3.0)
+
+
+func _seg3_skip() -> void:
+	_bag_unlocked = true
+	_seg3_seen = false
+	_layout_tags()
+	_refresh_plaques()
+	_seg4_prompt()
+
+
+
+func _seg4_intro() -> void:
+	_show_dialogue([
+		{"who": "旁白", "text": "这里是装备武器装备的地方，一共四个装备类型。"},
+		{"who": "旁白", "text": "武器管攻击与伤害，护甲管气血，玉佩管暴击与爆伤，鞋子管速度。"},
+		{"who": "旁白", "text": "少侠的出手是「物理」——四栏的加成，最后都落在这一下上。"},
+		{"who": "旁白", "text": "功法固定在每个人身上，不能换；家传绝学，则是所有人共用的一格。"},
+	], Callable())
+
+func _seg4_prompt() -> void:
+	if _seg4_ended:
+		return
+	_ask_skip_segment(4, _seg4_play, _seg4_skip)
+
+
+func _seg4_play() -> void:
+	_role_unlocked = true
+	_seg4_seen = true
+	_layout_tags()
+	_refresh_plaques()
+	_show_tag_guide(1, "角色")
+	_show_toast("点下面「角色」，看看四栏装备", 3.0)
+
+
+func _seg4_skip() -> void:
+	_role_unlocked = true
+	_layout_tags()
+	_refresh_plaques()
+	_seg4_end()
+
+
+func _seg4_end() -> void:
+	if _seg4_ended:
+		return
+	_seg4_ended = true
+	_seg4_seen = false
+	_show_toast("引导完成——百工坊、行囊、角色都开了", 3.0)
+
+
+func _on_forge_closed() -> void:
+	if not _seg2_playing:
+		return
+	_seg2_playing = false
+	_grant_forge_sword()
+	GameState.forge_tut_done = true
+	GameState.save_game()
+	_seg3_prompt()
+
+
+func _on_warehouse_closed() -> void:
+	if not _seg3_seen:
+		return
+	_seg3_seen = false
+	_seg4_prompt()
+
+
+func _on_char_closed() -> void:
+	if not _seg4_seen:
+		return
+	_seg4_seen = false
+	_seg4_end()
+
+
+func _grant_forge_sword() -> void:
+	for b_v in GameState.forge_bag:
+		var b: Dictionary = b_v
+		if str(b.get("blank", "")) == "wpn_0":
+			return
+	var it: Dictionary = ForgeData.make_item("wpn_0")
+	if it.is_empty():
+		return
+	it["craft_grade"] = 2
+	it["finished"] = true
+	var sid: String = GameState.forge_next_sid()
+	var set: Dictionary = ForgeData.card_set(it, sid)
+	GameState.forge_add(sid, set)
+	it["sid"] = sid
+	GameState.forge_bag.append(it.duplicate(true))
+
+
+func _show_tag_guide(i: int, text: String) -> void:
+	if i < 0 or i >= _tag_rects.size():
+		return
+	_end_craft_guide()
+	_craft_guide_rect = _tag_rects[i]
+	_craft_guide_text = text
+	_craft_guide_step = "tag"
+	var g := Control.new()
+	g.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	g.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	g.z_index = 48
+	g.draw.connect(_draw_craft_guide)
+	add_child(g)
+	_craft_guide = g
 
 
 func _show_loot_popup(amount: int) -> void:
@@ -3521,19 +3750,23 @@ func _tag_fire(i: int) -> void:
 	Audio.ui_click()      # v98：底排页签原来一声都没有（用户："点击需要有一点反馈的音效"）
 	match i:
 		0:
-			if TUTORIAL_DEMO:
-				_open_tutorial()
-			else:
-				_open_out()
+			_ask_skip_segment(1, _open_tutorial, _seg1_skip)
 			return
 		1:
-			if not _disciple_ready():
-				_show_toast("还没有弟子——先去历练，山下会有人等你")
+			if not _role_unlocked:
+				_show_toast("角色还没开——先过完前面的引导")
 				return
+			_end_craft_guide()
 			_tag_notice = -1
-			print("[主界面] 「弟子」→ 角色面板")
+			print("[主界面] 「角色」→ 角色面板")
 			_char_panel.open()
+			if _seg4_seen:
+				call_deferred("_seg4_intro")
 		2:
+			if not _bag_unlocked:
+				_show_toast("行囊还没开——先过完前面的引导")
+				return
+			_end_craft_guide()
 			_open_warehouse()
 		3:
 			# 底排第 4 格＝宠物（menu_hud v7 直接画的字：宠物 / 宠物·幼狐…）

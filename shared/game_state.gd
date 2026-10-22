@@ -793,7 +793,21 @@ static var auto_bg := false
 const COIN_CN := {"wen": "文钱", "silver": "银两", "yuanbao": "元宝"}
 
 const STAT_DEFAULTS := {"def": 5, "dodge": 5, "crit_dmg": 50}
-const SLOT_CN := {"weapon": "兵器", "armor": "护甲", "helm": "玉佩", "cloak": "披风", "arts": "武学"}
+const SLOT_CN := {"weapon": "武器", "armor": "护甲", "helm": "玉佩", "cloak": "鞋子", "arts": "武学"}
+# 角色五档：天 > 地 > 玄 > 黄 > 宇；主角（player）倒数第二档 = 黄
+const CHAR_GRADE_NAMES := ["天", "地", "玄", "黄", "宇"]
+static func role_grade_idx(rid: String) -> int:
+	match rid:
+		"player":
+			return 3
+		"chen_shi":
+			return 4
+		"qingluan":
+			return 2
+		_:
+			return 3
+static func role_grade_cn(rid: String) -> String:
+	return str(CHAR_GRADE_NAMES[clampi(role_grade_idx(rid), 0, CHAR_GRADE_NAMES.size() - 1)]) + "品"
 
 static var village_stage := 0
 static var first_journey_done := false
@@ -4029,7 +4043,13 @@ static func equip_gear(role_id: String, slot: String, sid: String) -> String:
 		return "没有这个人"
 	if slot != "armor" and slot != "helm" and slot != "cloak":
 		return "没有这个槽位"
-	if str(Cards.by_id(sid).get("pool", "")) != slot:
+	var pool0 := str(Cards.by_id(sid).get("pool", ""))
+	var pool_slot := pool0
+	if pool0 == "jade":
+		pool_slot = "helm"
+	elif pool0 == "shoe":
+		pool_slot = "cloak"
+	if pool_slot != slot:
 		return "这件不是" + str(SLOT_CN.get(slot, slot))
 	if vault_item_count(sid) <= 0:
 		return "仓库里没有「" + Cards.item_name(sid) + "」"

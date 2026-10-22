@@ -69,34 +69,34 @@ const BLANKS := [
 		"quality": 4, "cap": 5, "atk": 0, "dmg": 0, "def": 16, "hp": 120, "open": 0, "need": "eqp_4", "blank_class": "armor",
 		"probs": [12, 39, 22, 20, 7], "trait": "极品"},
 	{"id": "jade_0", "name": "玉佩胚·普通", "weapon": "玉佩", "kind": "jade", "pool": "jade",
-		"quality": 0, "cap": 2, "atk": 0, "dmg": 0, "hp": 10, "dodge": 1, "open": 0, "need": "jade_0", "blank_class": "jade",
+		"quality": 0, "cap": 2, "atk": 0, "dmg": 0, "crit": 3, "crit_dmg": 10, "open": 0, "need": "jade_0", "blank_class": "jade",
 		"probs": [5, 32, 35, 22, 6], "trait": "普通"},
 	{"id": "jade_1", "name": "玉佩胚·凡品", "weapon": "玉佩", "kind": "jade", "pool": "jade",
-		"quality": 1, "cap": 2, "atk": 0, "dmg": 0, "hp": 16, "dodge": 2, "open": 0, "need": "jade_1", "blank_class": "jade",
+		"quality": 1, "cap": 2, "atk": 0, "dmg": 0, "crit": 5, "crit_dmg": 15, "open": 0, "need": "jade_1", "blank_class": "jade",
 		"probs": [8, 39, 28, 19, 6], "trait": "凡品"},
 	{"id": "jade_2", "name": "玉佩胚·中品", "weapon": "玉佩", "kind": "jade", "pool": "jade",
-		"quality": 2, "cap": 3, "atk": 0, "dmg": 0, "hp": 24, "dodge": 3, "open": 0, "need": "jade_2", "blank_class": "jade",
+		"quality": 2, "cap": 3, "atk": 0, "dmg": 0, "crit": 7, "crit_dmg": 20, "open": 0, "need": "jade_2", "blank_class": "jade",
 		"probs": [10, 37, 26, 20, 7], "trait": "中品"},
 	{"id": "jade_3", "name": "玉佩胚·上品", "weapon": "玉佩", "kind": "jade", "pool": "jade",
-		"quality": 3, "cap": 4, "atk": 0, "dmg": 0, "hp": 34, "dodge": 4, "open": 0, "need": "jade_3", "blank_class": "jade",
+		"quality": 3, "cap": 4, "atk": 0, "dmg": 0, "crit": 10, "crit_dmg": 25, "open": 0, "need": "jade_3", "blank_class": "jade",
 		"probs": [10, 39, 24, 20, 7], "trait": "上品"},
 	{"id": "jade_4", "name": "玉佩胚·极品", "weapon": "玉佩", "kind": "jade", "pool": "jade",
-		"quality": 4, "cap": 5, "atk": 0, "dmg": 0, "hp": 46, "dodge": 5, "open": 0, "need": "jade_4", "blank_class": "jade",
+		"quality": 4, "cap": 5, "atk": 0, "dmg": 0, "crit": 13, "crit_dmg": 30, "open": 0, "need": "jade_4", "blank_class": "jade",
 		"probs": [12, 39, 22, 20, 7], "trait": "极品"},
 	{"id": "shoe_0", "name": "鞋子胚·普通", "weapon": "布鞋", "kind": "shoe", "pool": "shoe",
-		"quality": 0, "cap": 2, "atk": 0, "dmg": 0, "hp": 8, "dodge": 2, "open": 0, "need": "shoe_0", "blank_class": "shoe",
+		"quality": 0, "cap": 2, "atk": 0, "dmg": 0, "spd": 2, "open": 0, "need": "shoe_0", "blank_class": "shoe",
 		"probs": [5, 32, 35, 22, 6], "trait": "普通"},
 	{"id": "shoe_1", "name": "鞋子胚·凡品", "weapon": "布鞋", "kind": "shoe", "pool": "shoe",
-		"quality": 1, "cap": 2, "atk": 0, "dmg": 0, "hp": 12, "dodge": 3, "open": 0, "need": "shoe_1", "blank_class": "shoe",
+		"quality": 1, "cap": 2, "atk": 0, "dmg": 0, "spd": 3, "open": 0, "need": "shoe_1", "blank_class": "shoe",
 		"probs": [8, 39, 28, 19, 6], "trait": "凡品"},
 	{"id": "shoe_2", "name": "鞋子胚·中品", "weapon": "布鞋", "kind": "shoe", "pool": "shoe",
-		"quality": 2, "cap": 3, "atk": 0, "dmg": 0, "hp": 18, "dodge": 4, "open": 0, "need": "shoe_2", "blank_class": "shoe",
+		"quality": 2, "cap": 3, "atk": 0, "dmg": 0, "spd": 4, "open": 0, "need": "shoe_2", "blank_class": "shoe",
 		"probs": [10, 37, 26, 20, 7], "trait": "中品"},
 	{"id": "shoe_3", "name": "鞋子胚·上品", "weapon": "布鞋", "kind": "shoe", "pool": "shoe",
-		"quality": 3, "cap": 4, "atk": 0, "dmg": 0, "hp": 26, "dodge": 5, "open": 0, "need": "shoe_3", "blank_class": "shoe",
+		"quality": 3, "cap": 4, "atk": 0, "dmg": 0, "spd": 5, "open": 0, "need": "shoe_3", "blank_class": "shoe",
 		"probs": [10, 39, 24, 20, 7], "trait": "上品"},
 	{"id": "shoe_4", "name": "鞋子胚·极品", "weapon": "布鞋", "kind": "shoe", "pool": "shoe",
-		"quality": 4, "cap": 5, "atk": 0, "dmg": 0, "hp": 36, "dodge": 7, "open": 0, "need": "shoe_4", "blank_class": "shoe",
+		"quality": 4, "cap": 5, "atk": 0, "dmg": 0, "spd": 7, "open": 0, "need": "shoe_4", "blank_class": "shoe",
 		"probs": [12, 39, 22, 20, 7], "trait": "极品"},
 ]
 
@@ -266,6 +266,9 @@ static func make_item(blank_id: String) -> Dictionary:
 		"base_def": float(b.get("def", 0)),
 		"base_hp": float(b.get("hp", 0)),
 		"base_dodge": float(b.get("dodge", 0)),
+		"base_crit": float(b.get("crit", 0)),
+		"base_crit_dmg": float(b.get("crit_dmg", 0)),
+		"base_spd": float(b.get("spd", 0)),
 		"inspired_left": 0,
 		"round_inspired": false,
 		"awaiting": false,
@@ -354,6 +357,12 @@ static func item_stats(it: Dictionary) -> Dictionary:
 		out["hp"] = int(round(float(it.get("base_hp", 0.0)) * mul))
 	if float(it.get("base_dodge", 0.0)) > 0.0:
 		out["dodge"] = int(round(float(it.get("base_dodge", 0.0)) * mul))
+	if float(it.get("base_crit", 0.0)) > 0.0:
+		out["crit"] = int(round(float(it.get("base_crit", 0.0)) * mul))
+	if float(it.get("base_crit_dmg", 0.0)) > 0.0:
+		out["crit_dmg"] = int(round(float(it.get("base_crit_dmg", 0.0)) * mul))
+	if float(it.get("base_spd", 0.0)) > 0.0:
+		out["spd"] = int(round(float(it.get("base_spd", 0.0)) * mul))
 	var extra: Dictionary = it.get("base_extra", {})
 	for ek in extra.keys():
 		if typeof(extra[ek]) == TYPE_INT or typeof(extra[ek]) == TYPE_FLOAT:

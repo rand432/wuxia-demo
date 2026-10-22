@@ -18,6 +18,8 @@ const UiKit := preload("res://shared/ui_kit.gd")   # v61b：tap_in_scroll（格�
 const Ui := preload("res://menu/menu_theme.gd")    # v205：影之刃皮肤
 const SceneArt := preload("res://shared/scene_art.gd")   # v77：内景垫图
 const GameData := preload("res://shared/game_data.gd")   # v142：招式说明走 move_desc（负面/控制那行）
+const ForgeData := preload("res://menu/data_forge.gd")
+const InspectPopup := preload("res://menu/inspect_popup.gd")
 
 signal closed
 signal picked(sid: String)
@@ -107,6 +109,7 @@ var _drawer_btn1: Button
 var _drawer_btn2: Button
 var _drawer_idx := -1
 var _drawer_tween: Tween = null
+var _inspect = null
 
 # v217：长按 0.4s → 批量选择
 var _multi := false
@@ -127,6 +130,8 @@ func _ready() -> void:
 	_build()
 	refresh()
 	visible = get_parent() == get_tree().root
+	_inspect = InspectPopup.new()
+	add_child(_inspect)
 
 func _build() -> void:
 	var vp := get_viewport_rect().size
@@ -1150,6 +1155,76 @@ func _draw_drawer_bg(c: Control) -> void:
 		Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.18), 1.0, true)
 
 # 点格子 → 填内容 + 从下滑出（0.18s，TRANS_BACK）
+
+func _open_inspect(k: int) -> void:
+	if _inspect == null or k < 0 or k >= _stacks_now.size():
+		return
+	var st: Dictionary = _stacks_now[k]
+	var sid := str(st.get("sid", ""))
+	var title := str(st.get("title", st.get("set_name", "")))
+	var it: Dictionary = {}
+	for b_v in GameState.forge_bag:
+		var b: Dictionary = b_v
+		if str(b.get("sid", "")) == sid:
+			it = b
+			break
+	var quality := GameState.grade_of(sid)
+	var stats: Dictionary = {}
+	if not it.is_empty():
+		stats = ForgeData.item_stats(it)
+		quality = ForgeData.quality_name(int(it.get("quality", 0)))
+	else:
+		stats = GameState.starred_stats(sid)
+	var rows: Array = []
+	for key in ["atk", "dmg", "def", "hp", "crit", "crit_dmg", "spd", "speed", "dodge"]:
+		if stats.has(key) and int(stats[key]) != 0:
+			rows.append({"key": key, "label": str(InspectPopup.STAT_CN.get(key, key)), "value": int(stats[key])})
+	var art: Texture2D = null
+	if str(st.get("weapon", "")) == "铁剑" or title.find("铁剑") >= 0:
+		art = load("res://assets/art/items/iron_sword.jpg")
+	else:
+		art = ItemIcons.for_pool(str(st.get("pool", "")), str(st.get("weapon", "")), sid)
+	var price := ForgeData.sell_price(it) if not it.is_empty() else 0
+	var desc := "强化 +" + str(int(it.get("enhance", 0))) + " · 成品在仓库，可去角色面板装备" if not it.is_empty() else "仓库成品"
+	var picking := str(_pick_cat) != ""
+	var pool := str(st.get("pool", ""))
+	var pool_slot := pool
+	if pool == "jade":
+		pool_slot = "helm"
+	elif pool == "shoe":
+		pool_slot = "cloak"
+	var on_equip = null
+	if picking and (pool == str(_pick_cat) or pool_slot == str(_pick_cat)):
+		desc = "点［装备］把这一件装到" + str(GEAR_CN.get(_pick_cat, _pick_cat)) + "槽；换下来的会回仓库。"
+		on_equip = func() -> void: _equip_from_inspect(sid)
+	_inspect.show_item({
+		"title": title,
+		"quality": quality,
+		"art": art,
+		"stats": rows,
+		"desc": desc,
+		"price": price,
+		"on_equip": on_equip,
+		"on_sell": null if picking else func() -> void: _sell_inspect(st, it, price),
+	})
+
+
+func _equip_from_inspect(sid: String) -> void:
+	equip_requested.emit(sid)
+
+
+func _sell_inspect(st: Dictionary, it: Dictionary, price: int) -> void:
+	var sid := str(st.get("sid", ""))
+	if price > 0:
+		GameState.add_coin("silver", price)
+	if not it.is_empty():
+		GameState.forge_bag.erase(it)
+		GameState.forge_remove(sid)
+	GameState.save_game()
+	refresh()
+	if _msg_lb != null:
+		_msg_lb.text = "卖出：" + str(st.get("title", "")) + "（+" + str(price) + " 两）"
+
 func _open_drawer(k: int) -> void:
 	if k < 0 or k >= _stacks_now.size():
 		return
@@ -1159,6 +1234,9 @@ func _open_drawer(k: int) -> void:
 	var sid := str(st.get("sid", ""))
 	var count := int(st.get("count", 1))
 	var title := str(st.get("title", st.get("set_name", "")))
+	if kd == "item":
+		_open_inspect(k)
+		return
 	if kd == "mat":
 		_drawer_icon.texture = ItemIcons.for_mat(sid)
 	elif kd == "pill":

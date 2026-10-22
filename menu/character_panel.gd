@@ -28,6 +28,7 @@ const PillPopup := preload("res://menu/pill_popup.gd")
 const Voice := preload("res://shared/voice.gd")
 const Ui := preload("res://menu/menu_theme.gd")   # v201：影之刃皮肤
 const DataIcons := preload("res://shared/data_icons.gd")   # v93l：武学/命数图标（素材图集切出来的）   # v93：开面板/换页签念一句（用户："语音包点击没听到"）
+const InspectPopup := preload("res://menu/inspect_popup.gd")
 
 const PANEL_W := 640.0
 # ㊿：面板加高 1212 → 1250，把省下来的高度全给"天赋"框（见下面那段说明）
@@ -58,12 +59,12 @@ const ELEM := {
 }
 
 const SLOTS := [
-	{"slot": "weapon", "label": "兵器"},
+	{"slot": "weapon", "label": "武器"},
 	{"slot": "armor", "label": "护甲"},
 	{"slot": "helm", "label": "玉佩"},
-	{"slot": "cloak", "label": "披风"},
+	{"slot": "cloak", "label": "鞋子"},
 ]
-const SLOT_CN := {"weapon": "兵器", "armor": "护甲", "helm": "玉佩", "cloak": "披风"}
+const SLOT_CN := {"weapon": "武器", "armor": "护甲", "helm": "玉佩", "cloak": "鞋子"}
 const ROLE_IDS := ["chen_shi", "player", "qingluan"]
 const WEAPON_CN := {"sword": "长剑", "dual": "双刀", "dagger": "匕首", "spear": "长枪", "anqi": "暗器", "fist": "拳法"}
 const CharArt := preload("res://shared/char_art.gd")   # v90：页签头像
@@ -176,6 +177,7 @@ var _tip_title: Label
 var _tip_body: Label
 var _press_ms := 0
 var _warehouse: Control = null
+var _inspect = null
 var _pick_kind := ""
 var _pick_role := ""
 var _pill_popup = null
@@ -191,6 +193,8 @@ func _ready() -> void:
 	_pill_popup = PillPopup.new()
 	add_child(_pill_popup)
 	_pill_popup.fed.connect(_on_pill_fed)
+	_inspect = InspectPopup.new()
+	add_child(_inspect)
 	_refresh()
 	visible = get_parent() == get_tree().root
 
@@ -263,7 +267,7 @@ func _build() -> void:
 	#   ［上阵］和第一个页签**压了 12 像素**，页签之间也只隔 8。现在整行重排成一条尺：
 	#   标题 90 ｜隔 6｜［上阵］168 ｜隔 8｜ 页签 104×3（彼此隔 8）｜右边留 12
 	#   ＝ 28..628，一格不压一格。
-	var title := _label("弟子", 28, INK)
+	var title := _label("角色", 28, INK)
 	title.position = Vector2(28, 20)
 	title.size = Vector2(90, 44)
 	if Ui.SKIN == 1:
@@ -502,9 +506,20 @@ void fragment(){
 		var r := i % 4
 		var x := 28.0 + float(col) * 308.0
 		var y := 396.0 + float(r) * 30.0
+		var ick := str(row.get("k", ""))
+		var icon_map := {"atk": "atk", "hp": "hp", "spd": "speed", "crit": "crit", "dmg": "dmg", "def": "def", "dodge": "speed", "crit_dmg": "crit_dmg"}
+		var icon_rect := TextureRect.new()
+		icon_rect.position = Vector2(x - 2.0, y + 1.0)
+		icon_rect.size = Vector2(22, 22)
+		icon_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		icon_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		icon_rect.texture = load("res://assets/ui/stats/" + str(icon_map.get(ick, "quality")) + ".png")
+		icon_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_panel.add_child(icon_rect)
 		var lb := _label(str(row.get("label", "")), 15, Color(INK.r, INK.g, INK.b, 0.55))
-		lb.position = Vector2(x, y)
-		lb.size = Vector2(96, 26)
+		lb.position = Vector2(x + 24.0, y)
+		lb.size = Vector2(72, 26)
+		lb.clip_text = true
 		_panel.add_child(lb)
 		# ㊺：数值格收窄到只放总数，右边空出来给"拆账"小字
 		#   （攻击那一行会写成 基础10＋兵器4；其它行留空）
@@ -1172,7 +1187,7 @@ func _refresh() -> void:
 		_fill_growth()   # 开着就跟着刷新——刚喂完洗髓丹那笔补课立刻能看见
 	# v121（用户："去掉原先角色的境界标识"）：这一格改成显示**进阶境界**（全队共享那条新轴）；
 	#   每人一个的"突破次数境界"不再露面（等级上限照旧按它走，只是不显示）。
-	_eval_chip.text = "进阶 " + GameState.advance_name() + " · 全体 +" + str(int(GameState.advance_pct() * 100.0)) + "%"
+	_eval_chip.text = "品级 " + GameState.role_grade_cn(rid) + " · 进阶 " + GameState.advance_name() + " +" + str(int(GameState.advance_pct() * 100.0)) + "%"
 	_eval_chip.add_theme_stylebox_override("normal", _eval_sb(GameState.eval_of(gengu)))
 	_eval_chip.add_theme_color_override("font_color", Color(0.97, 0.95, 0.90))
 	# ［突破］：到顶才亮（要一颗对应品级的突破丹）
@@ -1729,23 +1744,88 @@ func _break_gain_text(rid: String) -> String:
 
 # ---- 点击动作 ----
 
+
+# 功法/绝学共用查看面板：立绘 + 效果；功法无品阶，绝学五档；底部按钮全隐藏
+func _show_skill_inspect(k: int) -> void:
+	if _inspect == null:
+		return
+	var rid := str(ROLE_IDS[_sel])
+	var role := _role(_sel)
+	var is_ult := k >= 3
+	var nm := ""
+	var desc := ""
+	var quality := ""
+	var art: Texture2D = null
+	if is_ult:
+		var ult: Dictionary = role.get("ult", {})
+		nm = str(ult.get("name", "绝学"))
+		desc = str(ult.get("desc", ""))
+		if rid == "player":
+			nm = "落日剑诀"
+			quality = "绝品"
+			desc = "怒气满时释放：四柄长剑自天而降，对最多 4 名敌人各造成 200% 伤害。"
+			art = load("res://assets/art/skills/sun_sword_ult.jpg")
+		else:
+			quality = str(GameState.grade_of(str(ult.get("id", ""))))
+			if k < _art_icons.size() and _art_icons[k] != null:
+				art = _art_icons[k].texture
+	else:
+		var sk: Array = role.get("skills", [])
+		var sid := ""
+		if k < sk.size():
+			sid = str(sk[k])
+		if sid == "":
+			_set_msg("这一格还空着")
+			return
+		var card: Dictionary = Cards.by_id(sid)
+		nm = str(card.get("name", sid))
+		var ad: Dictionary = card.get("art", {})
+		desc = _skill_effect_text(ad)
+		if desc == "":
+			desc = str(GameData.move_desc(card))
+		if rid == "player":
+			nm = "落日剑法"
+			desc = "对单个目标造成 150% 伤害；冷却 20 秒。"
+			art = load("res://assets/art/skills/sun_sword_art.jpg")
+		elif k < _art_icons.size() and _art_icons[k] != null:
+			art = _art_icons[k].texture
+	_inspect.show_item({
+		"title": nm,
+		"quality": quality,
+		"art": art,
+		"stats": [],
+		"desc": desc,
+	})
+
+
+func _skill_effect_text(ad: Dictionary) -> String:
+	if ad.is_empty():
+		return ""
+	var parts: Array = []
+	var mult := float(ad.get("mult", 0.0))
+	var msingle := float(ad.get("mult_single", 0.0))
+	if mult > 0.0:
+		parts.append("伤害 ×" + str(mult))
+	if msingle > 0.0:
+		parts.append("单体 ×" + str(msingle))
+	if ad.has("hits"):
+		parts.append("段数 " + str(ad.get("hits")))
+	if ad.has("cd"):
+		parts.append("冷却 " + str(ad.get("cd")) + " 秒")
+	var target := str(ad.get("target", ""))
+	if target != "":
+		parts.append("目标 " + target)
+	if parts.is_empty():
+		return ""
+	return "　·　".join(PackedStringArray(parts))
+
 func _cell_click(kind: String, idx: int) -> void:
 	_hide_growth()   # v44：点了别处就收掉根骨页
 	_hide_stat_detail()   # v60b：详细属性页同理
 	if kind == "weapon" or kind == "armor" or kind == "helm" or kind == "cloak":
 		_open_pick(kind)
-	elif kind == "art":
-		if idx >= FREE_SLOTS:
-			_set_msg("后两格是大招与自带技——不能换")
-			return
-		var role := _role(_sel)
-		var sk: Array = role.get("skills", [])
-		if idx < sk.size():
-			_set_msg("这格已经装了——要换先按格里的［卸下］")
-		else:
-			_open_pick("arts")
-	elif kind == "ult":
-		_set_msg("大招会在怒气满时自动放——战斗里看它露面")
+	elif kind == "art" or kind == "ult":
+		_show_skill_inspect(idx)
 	elif kind == "tech":
 		_set_msg("这是专属被动——不用出手，随行自动生效")
 	elif kind == "exp":
@@ -1769,10 +1849,15 @@ func _open_pick(cat: String) -> void:
 		_set_msg("仓库没接上（面板要挂在主界面里才有）")
 		return
 	_tip_hide()
-	_pick_kind = cat
+	var pick := cat
+	if cat == "helm":
+		pick = "jade"
+	elif cat == "cloak":
+		pick = "shoe"
+	_pick_kind = pick
 	_pick_role = str(ROLE_IDS[_sel])
-	print("[弟子面板] 从仓库取用：", cat)
-	_warehouse.begin_pick(cat)
+	print("[弟子面板] 从仓库取用：", pick)
+	_warehouse.begin_pick(pick)
 
 func _on_picked(sid: String) -> void:
 	var msg := ""
@@ -1781,7 +1866,12 @@ func _on_picked(sid: String) -> void:
 	elif _pick_kind == "arts":
 		msg = GameState.equip_art(_pick_role, sid)
 	else:
-		msg = GameState.equip_gear(_pick_role, _pick_kind, sid)
+		var slot1 := _pick_kind
+		if slot1 == "jade":
+			slot1 = "helm"
+		elif slot1 == "shoe":
+			slot1 = "cloak"
+		msg = GameState.equip_gear(_pick_role, slot1, sid)
 	_set_msg(msg)
 	_refresh()
 
@@ -1801,8 +1891,13 @@ func equip_from_warehouse(sid: String) -> void:
 		msg = GameState.equip_weapon(rid, sid)
 	elif pool == "arts":
 		msg = GameState.equip_art(rid, sid)
-	elif pool == "armor" or pool == "helm" or pool == "cloak":
-		msg = GameState.equip_gear(rid, pool, sid)
+	elif pool == "armor" or pool == "helm" or pool == "cloak" or pool == "jade" or pool == "shoe":
+		var slot0 := pool
+		if pool == "jade":
+			slot0 = "helm"
+		elif pool == "shoe":
+			slot0 = "cloak"
+		msg = GameState.equip_gear(rid, slot0, sid)
 	else:
 		msg = "这件不是能装的东西（" + pool + "）"
 	_set_msg(msg)
