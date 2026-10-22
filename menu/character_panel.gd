@@ -199,6 +199,7 @@ var _stat_body: Label = null
 func _ready() -> void:
 	size = get_viewport_rect().size
 	mouse_filter = Control.MOUSE_FILTER_STOP
+	z_index = 60   # 全屏：压过主界面顶栏，纸面才能从 0 铺到 1280
 	_build()
 	_pill_popup = PillPopup.new()
 	add_child(_pill_popup)
@@ -464,7 +465,7 @@ void fragment(){
 	_apply_ink_button(_up1_btn)
 	_panel.add_child(_up1_btn)
 	# ---- 属性（合计值）：6 格速览 ----
-	_panel.add_child(_head("属性（基础 ＋ 额外）", Vector2(34, 822)))
+	_panel.add_child(_head("属性（基础 ＋ 额外）", Vector2(34, 840)))
 	# v60（用户："弟子属性栏那一块，元素加伤和抗性重叠了……可以做个额外按钮详细属性"）：
 	#   正面这一块**只摆最开始那 8 条**（2 列 × 4 行，正好一格不叠一格）；
 	#   v58 新加的五行那一组（物理/五行增伤 ＋ 五行抗性，共 11 条）塞不进这块地方，
@@ -475,7 +476,7 @@ void fragment(){
 	var sdb := Button.new()
 	sdb.text = "详细属性 ▸"
 	# v61（手游）：36 → 44 高、上沿提到 236（下面 282 起是属性行）
-	sdb.position = Vector2(544, 814)
+	sdb.position = Vector2(544, 832)
 	sdb.size = Vector2(142, 40)
 	sdb.add_theme_font_size_override("font_size", 15)
 	sdb.focus_mode = Control.FOCUS_NONE
@@ -490,7 +491,7 @@ void fragment(){
 		var col := i % 3
 		var r := i / 3
 		var x := 34.0 + float(col) * 218.0
-		var y := 862.0 + float(r) * 50.0
+		var y := 880.0 + float(r) * 50.0
 		var chip := Panel.new()
 		chip.position = Vector2(x, y)
 		chip.size = Vector2(206, 42)
@@ -572,7 +573,7 @@ void fragment(){
 	# ---- 纸娃娃：四栏围着全身立绘 ----
 	var doll := Panel.new()
 	doll.position = Vector2(30, 252)
-	doll.size = Vector2(660, 562)
+	doll.size = Vector2(660, 578)
 	doll.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var dsb := StyleBoxFlat.new()
 	dsb.bg_color = Color(0.945, 0.925, 0.875, 0.96)
@@ -582,7 +583,7 @@ void fragment(){
 	doll.add_theme_stylebox_override("panel", dsb)
 	_panel.add_child(doll)
 	_paper_art = TextureRect.new()
-	_paper_art.position = Vector2(230, 262)
+	_paper_art.position = Vector2(260, 262)
 	_paper_art.size = Vector2(200, 548)
 	_paper_art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_paper_art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
@@ -625,9 +626,9 @@ void fragment(){
 
 	# ---- 武学（3 可装 + 大招；被动在天赋框） ----
 	# v61：整段下移 32（装备格加高让位）——776 起
-	_panel.add_child(_head("武学", Vector2(34, 962)))
+	_panel.add_child(_head("武学", Vector2(34, 980)))
 	var _whint := _label("功法固定 · 绝学共用", 13, Color(INK.r, INK.g, INK.b, 0.5))
-	_whint.position = Vector2(102, 968)
+	_whint.position = Vector2(102, 986)
 	_whint.size = Vector2(240, 22)
 	_panel.add_child(_whint)
 	_art_cells = []
@@ -637,7 +638,7 @@ void fragment(){
 	for k in 2:
 		var head_txt := "功法" if k == 0 else "绝学"
 		var kind := "art" if k == 0 else "ult"
-		var cell2 := _make_cell(head_txt, Vector2(34.0 + float(k) * 316.0, 998.0), Vector2(308, 92), true)
+		var cell2 := _make_cell(head_txt, Vector2(34.0 + float(k) * 316.0, 1016.0), Vector2(308, 92), true)
 		_panel.add_child(cell2)
 		_art_cells.append(cell2)
 		_skill_vals.append(cell2.get_meta("value_label"))
@@ -684,13 +685,13 @@ void fragment(){
 	#   ⚠ 滚动区是 STOP（要吃拖动）；所以"长按看说明"挪到**标题**上（点"天赋"两个字）。
 	# v61：整段下移 32（装备格加高让位）；框本身收 32（222 → 190）把空间还回去——
 	#   天赋区本来就是滚动列表，少 32 只少半行，比"装备名被切掉"划算。
-	var th := _head("天赋", Vector2(34, 1104))
+	var th := _head("天赋", Vector2(34, 1122))
 	# ㊿：滚动区吃掉拖动（要能滑），所以"长按看说明"改绑在**标题**上
 	th.mouse_filter = Control.MOUSE_FILTER_STOP
 	th.gui_input.connect(_press_gui.bind(th, "talents", -1))
 	_panel.add_child(th)
 	var bar := Panel.new()
-	bar.position = Vector2(34, 1136)
+	bar.position = Vector2(34, 1154)
 	bar.size = Vector2(340.0, 76.0)
 	bar.mouse_filter = Control.MOUSE_FILTER_STOP
 	bar.add_theme_stylebox_override("panel", _soft_sb())
@@ -724,14 +725,14 @@ void fragment(){
 	#   现在挪进服药弹窗里那两个新选项：【当前服用状态查明】/【当前丹药查明】。
 	#   空出来的地方留给［服药］按钮本身（52 → 64 高，字 18 → 20）。
 	var phead := _label("服药 · 包裹", 20, Color(INK.r, INK.g, INK.b, 0.70))
-	phead.position = Vector2(436, 1104)
+	phead.position = Vector2(436, 1122)
 	phead.size = Vector2(250, 26)
 	phead.mouse_filter = Control.MOUSE_FILTER_STOP
 	phead.gui_input.connect(_press_gui.bind(phead, "pills", -1))
 	_panel.add_child(phead)
 	_pill_btn = Button.new()
 	_pill_btn.text = "服药"
-	_pill_btn.position = Vector2(436, 1130)
+	_pill_btn.position = Vector2(436, 1148)
 	_pill_btn.size = Vector2(250, 44)
 	_pill_btn.add_theme_font_size_override("font_size", 20)
 	_pill_btn.focus_mode = Control.FOCUS_NONE
@@ -749,7 +750,7 @@ void fragment(){
 	#   ⚠ 这个 Label 保留着——它是"银两不够 / 这格装不了"那些**瞬时提示**的落脚点
 	#   （_set_msg 会写它），只是默认不再摆 DEFAULT_HINT 那串常驻文字。
 	_hint_lb = _label("", 13, Color(INK.r, INK.g, INK.b, 0.55))
-	_hint_lb.position = Vector2(34, 1190)
+	_hint_lb.position = Vector2(34, 1208)
 	_hint_lb.size = Vector2(390, 18)
 	_hint_lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_panel.add_child(_hint_lb)
@@ -758,7 +759,7 @@ void fragment(){
 	#   原来是跟提示行并排，两颗都在底下挤。
 	var close_btn := Button.new()
 	close_btn.text = "退　出"
-	close_btn.position = Vector2(436, 1182)
+	close_btn.position = Vector2(436, 1200)
 	close_btn.size = Vector2(250, 44)
 	close_btn.add_theme_font_size_override("font_size", 20)
 	close_btn.focus_mode = Control.FOCUS_NONE
@@ -2109,6 +2110,150 @@ func _fill_grade() -> void:
 
 
 # 装备格点开：查看当前这件（带卸下/更换）
+
+# ============================================================
+# 角色页交互引导（S4）：金框依次圈四栏/武器/玉佩鞋子/功法绝学，可跳过
+# ============================================================
+signal guide_finished
+var _guide: Control
+var _guide_step := 0
+var _guide_frames: Array = []
+var _guide_text: Label
+var _guide_title: Label
+var _guide_wait_weapon := false
+
+const GUIDE_STEPS := [
+	{"title": "四个装备类型", "body": "武器管攻击与伤害，护甲管气血，玉佩管暴击与爆伤，鞋子管速度。"},
+	{"title": "点武器格看看", "body": "点武器格 → 查看面板 → 装 备。装上后看上面的攻击有没有变。"},
+	{"title": "玉佩 / 鞋子", "body": "空栏也写着效果：玉佩暴击+3%·爆伤+10%，鞋子速度+2。"},
+	{"title": "功法 / 绝学", "body": "功法固定在每个人身上（落日剑法）；绝学是所有人共用的一格（落日剑诀）。"},
+]
+
+func start_guide() -> void:
+	if _guide == null:
+		_build_guide()
+	_guide_step = 0
+	_guide_wait_weapon = false
+	_guide.visible = true
+	_guide_show(0)
+
+func _build_guide() -> void:
+	_guide = Control.new()
+	_guide.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_guide.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_guide.z_index = 70
+	_guide.visible = false
+	add_child(_guide)
+	for i in 4:
+		var f := Panel.new()
+		f.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var fsb := StyleBoxFlat.new()
+		fsb.bg_color = Color(0, 0, 0, 0)
+		fsb.border_color = Color(0.86, 0.66, 0.24, 0.95)
+		fsb.set_border_width_all(3)
+		fsb.set_corner_radius_all(4)
+		f.add_theme_stylebox_override("panel", fsb)
+		f.visible = false
+		_guide.add_child(f)
+		_guide_frames.append(f)
+	# 说明卡 + 按钮
+	var card := Panel.new()
+	card.position = Vector2(40, 1116)
+	card.size = Vector2(640, 130)
+	card.mouse_filter = Control.MOUSE_FILTER_STOP
+	var csb := StyleBoxFlat.new()
+	csb.bg_color = Color(0.98, 0.965, 0.925, 0.98)
+	csb.border_color = Color(0.72, 0.58, 0.25, 0.9)
+	csb.set_border_width_all(2)
+	csb.set_corner_radius_all(4)
+	card.add_theme_stylebox_override("panel", csb)
+	_guide.add_child(card)
+	_guide_title = _label("", 17, SEAL)
+	_guide_title.position = Vector2(16, 8)
+	_guide_title.size = Vector2(400, 24)
+	card.add_child(_guide_title)
+	_guide_text = _label("", 14, INK)
+	_guide_text.position = Vector2(16, 36)
+	_guide_text.size = Vector2(608, 56)
+	_guide_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	card.add_child(_guide_text)
+	var skip := Button.new()
+	skip.text = "跳 过"
+	skip.position = Vector2(16, 84)
+	skip.size = Vector2(120, 38)
+	skip.add_theme_font_size_override("font_size", 15)
+	skip.focus_mode = Control.FOCUS_NONE
+	skip.pressed.connect(_guide_skip)
+	_apply_ink_button(skip)
+	card.add_child(skip)
+	var nxt := Button.new()
+	nxt.text = "下一步"
+	nxt.position = Vector2(490, 84)
+	nxt.size = Vector2(134, 38)
+	nxt.add_theme_font_size_override("font_size", 15)
+	nxt.focus_mode = Control.FOCUS_NONE
+	nxt.pressed.connect(_guide_next)
+	_apply_ink_button(nxt)
+	card.add_child(nxt)
+
+func _guide_show(step: int) -> void:
+	if _guide == null:
+		return
+	for f in _guide_frames:
+		f.visible = false
+	if step >= GUIDE_STEPS.size():
+		_guide_finish()
+		return
+	var data: Dictionary = GUIDE_STEPS[step]
+	_guide_title.text = str(data["title"])
+	_guide_text.text = str(data["body"])
+	_guide_wait_weapon = false
+	if step == 0:
+		for k in mini(_equip_cells.size(), 4):
+			var r: Rect2 = _equip_cells[k].get_global_rect()
+			_guide_frames[k].position = r.position
+			_guide_frames[k].size = r.size
+			_guide_frames[k].visible = true
+	elif step == 1:
+		_guide_wait_weapon = true
+		if _equip_cells.size() > 0:
+			var r2: Rect2 = _equip_cells[0].get_global_rect()
+			_guide_frames[0].position = r2.position
+			_guide_frames[0].size = r2.size
+			_guide_frames[0].visible = true
+	elif step == 2:
+		for k in [2, 3]:
+			if k < _equip_cells.size():
+				var r3: Rect2 = _equip_cells[k].get_global_rect()
+				_guide_frames[k].position = r3.position
+				_guide_frames[k].size = r3.size
+				_guide_frames[k].visible = true
+	elif step == 3:
+		for k in mini(_art_cells.size(), 2):
+			var r4: Rect2 = _art_cells[k].get_global_rect()
+			_guide_frames[k].position = r4.position
+			_guide_frames[k].size = r4.size
+			_guide_frames[k].visible = true
+
+func _guide_next() -> void:
+	_guide_step += 1
+	_guide_show(_guide_step)
+
+func _guide_skip() -> void:
+	_guide_finish()
+
+func _guide_finish() -> void:
+	if _guide != null:
+		_guide.visible = false
+	guide_finished.emit()
+
+func _guide_on_weapon_equipped() -> void:
+	if _guide == null or not _guide.visible:
+		return
+	if _guide_wait_weapon and _guide_step == 1:
+		_guide_wait_weapon = false
+		_guide_next()
+
 func _open_slot_inspect(slot: String) -> void:
 	var role := _role(_sel)
 	var sid := _slot_sid(role, slot)
@@ -2133,6 +2278,7 @@ func _open_slot_inspect(slot: String) -> void:
 			GameState.unequip_gear(rid, slot)
 			_refresh(),
 		"on_equip": func() -> void: _open_pick(slot),
+		"_guide_advance": _guide_on_weapon_equipped,
 	})
 
 
@@ -2166,6 +2312,8 @@ func _on_picked(sid: String) -> void:
 		msg = GameState.equip_gear(_pick_role, slot1, sid)
 	_set_msg(msg)
 	_refresh()
+	if _pick_kind == "weapon" and _guide != null and _guide.visible:
+		_guide_on_weapon_equipped()
 
 # ============================================================
 # v58（用户："装备在仓库也可以装备吧 点击装备跳转到弟子页面就好了"）：

@@ -932,6 +932,7 @@ func _ready() -> void:
 	_char_panel = CharacterPanel.new()
 	add_child(_char_panel)
 	_char_panel.closed.connect(_on_char_closed)
+	_char_panel.guide_finished.connect(_seg4_guide_done)
 	_warehouse = WarehousePanel.new()
 	add_child(_warehouse)
 	_warehouse.closed.connect(_on_warehouse_closed)
@@ -2724,7 +2725,19 @@ func _seg4_intro() -> void:
 		{"who": "旁白", "text": "武器管攻击与伤害，护甲管气血，玉佩管暴击与爆伤，鞋子管速度。"},
 		{"who": "旁白", "text": "少侠的出手是「物理」——四栏的加成，最后都落在这一下上。"},
 		{"who": "旁白", "text": "功法固定在每个人身上，不能换；家传绝学，则是所有人共用的一格。"},
-	], Callable())
+	], _seg4_guide_start)
+
+func _seg4_guide_start() -> void:
+	if _char_panel != null:
+		_char_panel.start_guide()
+
+
+func _seg4_guide_done() -> void:
+	if not _seg4_seen:
+		return
+	_seg4_seen = false
+	_seg4_end()
+
 
 func _seg4_prompt() -> void:
 	if _seg4_ended:
