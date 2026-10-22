@@ -29,23 +29,16 @@ var _idx := 0
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	var ink := TextureRect.new()
-	ink.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	ink.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	ink.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-	if ResourceLoader.exists("res://assets/art/bg/bg_village.jpg"):
-		ink.texture = load("res://assets/art/bg/bg_village.jpg")
-	add_child(ink)
-	var veil := ColorRect.new()
-	veil.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	veil.color = Color(0.93, 0.90, 0.83, 0.30)
-	veil.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(veil)
+	# 背景与战斗关同一套：纸背 + 远山 + 地面
+	_bg = Control.new()
+	_bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_bg.draw.connect(_draw_bg)
+	add_child(_bg)
 	_actors = Node2D.new()
 	_actors.z_index = 2
 	add_child(_actors)
-	var hero = _token("player", 200.0, 700.0, 232.0, GOLD)
-	var chief = _token("mob_chief", 410.0, 620.0, 150.0, Color(0.36, 0.30, 0.24), "res://assets/char/village_chief_q_cut.png")
+	# 场上不再摆圆牌：只留水墨场景 + 对话框圆牌头像
 	_dlg = Panel.new()
 	_dlg.position = Vector2(30, 950)
 	_dlg.size = Vector2(660, 280)
