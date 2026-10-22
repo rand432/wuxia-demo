@@ -35,6 +35,19 @@ var _res_lb: Label
 var _log_lb: Label
 var _bag_lb: Label
 var _hammer_btn: Button
+# 教学接口
+signal tutorial_hammered(result: int)
+signal tutorial_inspire_start
+signal tutorial_inspire_end
+signal tutorial_unloaded
+signal blank_picked(bid: String)
+signal blank_picker_opened
+var tutorial_mode := false
+var tutorial_paused := false
+var tutorial_no_break := false
+var _tut_force: Array = []
+var _tut_taken: Dictionary = {}
+var _blank_cards: Dictionary = {}
 var _ascend_btn: Button
 var _take_btn: Button
 var _swing_fx: Control
@@ -123,17 +136,23 @@ func _process(d: float) -> void:
 		if _inspire_intro_t <= 0.0:
 			refresh()
 	elif not ins_it.is_empty() and float(ins_it.get("inspired_left", 0.0)) > 0.0:
-		ins_it["inspired_left"] = maxf(0.0, float(ins_it.get("inspired_left", 0.0)) - d)
-		if float(ins_it.get("inspired_left", 0.0)) <= 0.0:
-			_end_inspire(ins_it)
-			GameState.save_game()
-			refresh()
-		elif _inspire_bar != null:
-			_inspire_bar.visible = true
-			_inspire_bar.value = float(ins_it.get("inspired_left", 0.0))
+		if tutorial_paused:
+			if _inspire_bar != null:
+				_inspire_bar.visible = false
 			if _inspire_lb != null:
-				_inspire_lb.visible = true
-				_inspire_lb.text = "入 神 · 限定时间内不会损坏"
+				_inspire_lb.visible = false
+		else:
+			ins_it["inspired_left"] = maxf(0.0, float(ins_it.get("inspired_left", 0.0)) - d)
+			if float(ins_it.get("inspired_left", 0.0)) <= 0.0:
+				_end_inspire(ins_it)
+				GameState.save_game()
+				refresh()
+			elif _inspire_bar != null:
+				_inspire_bar.visible = true
+				_inspire_bar.value = float(ins_it.get("inspired_left", 0.0))
+				if _inspire_lb != null:
+					_inspire_lb.visible = true
+					_inspire_lb.text = "入 神 · 限定时间内不会损坏"
 	if _swing_t > 0.0:
 		_swing_t = maxf(0.0, _swing_t - d)
 		if _swing_fx != null:
@@ -212,7 +231,7 @@ func _build() -> void:
 	title.size = Vector2(220, 46)
 	_panel.add_child(title)
 
-	var sub := _label("选胚 · 一锤成器 · 成品库领奖", 16, Color(INK.r, INK.g, INK.b, 0.62))
+	var sub := _label("选胚 · 一锤成器", 16, Color(INK.r, INK.g, INK.b, 0.62))
 	sub.position = Vector2(30, 58)
 	sub.size = Vector2(380, 22)
 	_panel.add_child(sub)
@@ -253,7 +272,8 @@ func _build() -> void:
 	_anvil = Control.new()
 	_anvil.position = Vector2(28, 160)
 	_anvil.size = Vector2(584, 300)
-	_anvil.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_anvil.mouse_filter = Control.MOUSE_FILTER_STOP
+	_anvil.gui_input.connect(_on_anvil_click)
 	_anvil.draw.connect(_draw_anvil)
 	_panel.add_child(_anvil)
 
@@ -336,18 +356,15 @@ func _build() -> void:
 	_bag_lb = _label("", 15, Color(INK.r, INK.g, INK.b, 0.58))
 	_bag_lb.position = Vector2(30, 832)
 	_bag_lb.size = Vector2(580, 22)
+	_bag_lb.visible = false
 	_panel.add_child(_bag_lb)
 
-	var tab_names := ["武 器 / 装 备", "淬 火", "材料合成", "道 具", "关 闭"]
+	var tab_names := ["退 出"]
 	_tab_btns = []
 	for ti in tab_names.size():
-		var tb := UiKit.make_button(_panel, Vector2(8 + ti * 124, 850), Vector2(118, 70), str(tab_names[ti]), 16)
+		var tb := UiKit.make_button(_panel, Vector2(300, 850), Vector2(120, 70), str(tab_names[ti]), 18)
 		_tab_btns.append(tb)
-	_tab_btns[0].pressed.connect(_open_blank_picker)
-	_tab_btns[1].pressed.connect(_open_quench)
-	_tab_btns[2].pressed.connect(func() -> void: _comp_open("synthesis"))
-	_tab_btns[3].pressed.connect(_open_tools)
-	_tab_btns[4].pressed.connect(close)
+	_tab_btns[0].pressed.connect(close)
 	_build_compendium()
 	_build_bag()
 	_build_blank_picker()
@@ -468,7 +485,7 @@ func _build_blank_picker() -> void:
 	sb.set_border_width_all(2)
 	_blank_panel.add_theme_stylebox_override("panel", sb)
 	_panel.add_child(_blank_panel)
-	var t := _label("武 器 / 装 备", 26, INK)
+	var t := _label("仓 库", 26, INK)
 	t.position = Vector2(22, 14)
 	t.size = Vector2(300, 34)
 	_blank_panel.add_child(t)
@@ -477,14 +494,13 @@ func _build_blank_picker() -> void:
 	tip.size = Vector2(520, 24)
 	_blank_panel.add_child(tip)
 	_pick_tabs = []
-	var pick_names := ["武 器", "装 备", "胚 子", "成品库"]
+	var pick_names := ["武 器", "装 备", "胚 子"]
 	for pi in pick_names.size():
-		var pb := UiKit.make_button(_blank_panel, Vector2(20 + pi * 136, 48), Vector2(128, 38), str(pick_names[pi]), 17)
+		var pb := UiKit.make_button(_blank_panel, Vector2(30 + pi * 180, 48), Vector2(160, 38), str(pick_names[pi]), 17)
 		_pick_tabs.append(pb)
 	_pick_tabs[0].pressed.connect(_show_pick.bind("weapon"))
 	_pick_tabs[1].pressed.connect(_show_pick.bind("gear"))
 	_pick_tabs[2].pressed.connect(_show_pick.bind("blank"))
-	_pick_tabs[3].pressed.connect(_bag_pick_open)
 	_blank_scroll = ScrollContainer.new()
 	_blank_scroll.position = Vector2(12, 124)
 	_blank_scroll.size = Vector2(546, 480)
@@ -508,7 +524,8 @@ func _open_blank_picker() -> void:
 	if _bag_panel != null:
 		_bag_panel.visible = false
 	_blank_panel.visible = true
-	_show_pick("weapon")
+	_show_pick("blank")
+	blank_picker_opened.emit()
 
 func _pick_card(tex: Texture2D, text: String, enabled: bool, cb: Callable) -> Button:
 	var btn := Button.new()
@@ -552,6 +569,7 @@ func _all_equip_sets() -> Array:
 
 func _show_pick(mode: String) -> void:
 	_pick_mode = mode
+	_blank_cards.clear()
 	for c in _blank_grid.get_children():
 		c.queue_free()
 	var busy := not (GameState.forge_item as Dictionary).is_empty()
@@ -645,6 +663,7 @@ func _show_pick(mode: String) -> void:
 		var txt2 := nm2 + (" ×" + str(GameState.material_count(bid)) if own else "") + "\n" + qn
 		var pb2 := _pick_card(ItemIcons.for_pool("weapon", str(b.get("kind", "sword")), bid), txt2, can, _pick_blank.bind(bid))
 		pb2.tooltip_text = ("点击开炉" if own else "去材料合成")
+		_blank_cards[bid] = pb2
 
 func _retrieve_vault(sid: String) -> void:
 	if not (GameState.forge_item as Dictionary).is_empty():
@@ -733,9 +752,84 @@ func _retrieve_weapon(sid: String) -> void:
 	GameState.save_game()
 	refresh()
 
+func _on_anvil_click(ev: InputEvent) -> void:
+	if not (ev is InputEventMouseButton):
+		return
+	var mb := ev as InputEventMouseButton
+	if not (mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT):
+		return
+	if (GameState.forge_item as Dictionary).is_empty():
+		_open_blank_picker()
+	else:
+		_unload_anvil()
+
+
+func _unload_anvil() -> void:
+	var it: Dictionary = GameState.forge_item
+	if it.is_empty():
+		_open_blank_picker()
+		return
+	if tutorial_mode:
+		_tut_taken = it.duplicate(true)
+		tutorial_unloaded.emit()
+	elif int(it.get("craft_grade", -1)) < 0:
+		var b: Dictionary = ForgeData.blank(str(it.get("blank", "")))
+		var need := str(b.get("need", ""))
+		if need != "":
+			GameState.add_material(need, 1)
+	GameState.forge_item = {}
+	_queued_hammer = false
+	_set_hit_busy(false)
+	if _blank_panel != null:
+		_blank_panel.visible = false
+	GameState.save_game()
+	refresh()
+	_push_log("卸下了。")
+
+
 func _pick_blank(bid: String) -> void:
 	_blank_panel.visible = false
+	blank_picked.emit(bid)
 	_open_blank(bid)
+
+
+func tutorial_force(outcome: int) -> void:
+	_tut_force.append(outcome)
+
+
+func tutorial_pause(v: bool) -> void:
+	tutorial_paused = v
+	var it: Dictionary = GameState.forge_item
+	var on := not v and float(it.get("inspired_left", 0.0)) > 0.0
+	if _inspire_bar != null:
+		_inspire_bar.visible = on
+	if _inspire_lb != null:
+		_inspire_lb.visible = on
+
+
+func tutorial_set_no_break(v: bool) -> void:
+	tutorial_no_break = v
+
+
+func anvil_rect() -> Rect2:
+	return _anvil.get_global_rect()
+
+
+func hammer_rect() -> Rect2:
+	return _hammer_btn.get_global_rect()
+
+
+func inspire_bar_rect() -> Rect2:
+	if _inspire_bar == null or not _inspire_bar.visible:
+		return Rect2()
+	return Rect2(_inspire_bar.global_position, _inspire_bar.size)
+
+
+func blank_card_rect(bid: String) -> Rect2:
+	var c = _blank_cards.get(bid)
+	if c != null and is_instance_valid(c):
+		return (c as Control).get_global_rect()
+	return Rect2()
 
 func _label(text: String, fs: int, col: Color) -> Label:
 	var lb := Label.new()
@@ -968,6 +1062,10 @@ func _hammer() -> void:
 	if first:
 		it["craft_grade"] = 2
 	var outcome := _roll(it)
+	if tutorial_mode and not _tut_force.is_empty():
+		outcome = int(_tut_force.pop_front())
+	if tutorial_mode and tutorial_no_break and outcome == 4:
+		outcome = 3
 	it.erase("trait_next_success")
 	it.erase("trait_next_guard")
 	it.erase("trait_next_great")
@@ -1100,6 +1198,8 @@ func _hammer() -> void:
 			text += "｜定神：强化 +1"
 		_start_inspire_celebration()
 		text += "｜入神——限定时间内不会损坏"
+		if tutorial_mode:
+			tutorial_inspire_start.emit()
 	if outcome == 0:
 		var affs: Array = it.get("affixes", [])
 		if affs.size() < 2 and randf() < 0.30:
@@ -1121,6 +1221,8 @@ func _hammer() -> void:
 	var new_st := ForgeData.item_stats(it)
 	_play_hit_fx(4 - outcome, old_st, new_st)
 	_push_log(text)
+	if tutorial_mode:
+		tutorial_hammered.emit(outcome)
 	GameState.save_game()
 	await get_tree().create_timer(1.02).timeout
 	_finish_hit_anim()
@@ -1130,6 +1232,8 @@ func _end_inspire(it: Dictionary) -> void:
 	it["inspired_hits"] = 0
 	it["round_inspired"] = false
 	it["inspire_need"] = int(it.get("enhance", 0)) + 10
+	if tutorial_mode:
+		tutorial_inspire_end.emit()
 
 func _roll(it: Dictionary) -> int:
 	var b: Dictionary = ForgeData.blank(str(it.get("blank", "")))
@@ -2053,8 +2157,8 @@ func refresh() -> void:
 	if _tool_panel != null and _tool_panel.visible:
 		_tool_refresh()
 	if it.is_empty():
-		_item_lb.text = "砧上无物——点下方［武器/装备］选一块"
-		_stat_lb.text = "选定胚子后锤第一下成器；成器直接进成品库"
+		_item_lb.text = "砧上无物——点铁砧选一块"
+		_stat_lb.text = "点铁砧选胚；有胚子时点铁砧卸下"
 		_hammer_btn.disabled = true
 		_hammer_btn.text = "先 选 胚 子"
 		if _take_btn != null:
