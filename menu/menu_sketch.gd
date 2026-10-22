@@ -1157,7 +1157,7 @@ func _refresh_plaques() -> void:
 	_plaques.set_vis("cave", false)
 	_plaques.set_vis("treasure_map", false)
 	_plaques.set_vis("cave_scene", false)
-	_plaques.set_vis("craft", rail_on and (GameState.cave_opened or GameState.first_journey_done))
+	_plaques.set_vis("craft", rail_on and GameState.winery_built)
 	_plaques.set_vis("stele", false)
 	_plaques.set_vis("advance", false)
 	_plaques.set_vis("idle", false)
