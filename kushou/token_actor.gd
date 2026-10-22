@@ -12,6 +12,7 @@ extends Node2D
 # ============================================================
 
 const CharArt := preload("res://shared/char_art.gd")
+const UI_FONT := preload("res://fonts/ink.ttf")
 
 var role := "player"
 var art_tex: Texture2D = null
@@ -21,6 +22,11 @@ var crop_top := false
 var weapon_type := "sword"
 var fit_height := 160.0
 var is_q_art := true
+var show_bar := false
+var hp_ratio := 1.0
+var unit_name := ""
+var bar_w := 72.0
+var name_col := Color(0.18, 0.15, 0.12, 0.85)
 
 var _sprite: Sprite2D
 var _base_scale := 1.0
@@ -109,9 +115,9 @@ func _process(delta: float) -> void:
 	if _flash > 0.0:
 		_flash = maxf(0.0, _flash - delta * 4.0)
 	if is_instance_valid(_sprite):
-		var bump := 1.0 + 0.07 * sin(_pulse * PI)
+		var bump := 1.0 + 0.035 * sin(_pulse * PI)
 		_sprite.scale = Vector2(_base_scale, _base_scale) * bump
-		_sprite.position.x = sin(_pulse * PI) * 7.0 * _dir
+		_sprite.position.x = 0.0
 		var col := Color(1.0, 1.0, 1.0, 1.0)
 		if _flash > 0.0:
 			col = Color(1.0, 0.58, 0.52, 1.0)
@@ -162,3 +168,26 @@ func _draw() -> void:
 	draw_circle(c, radius, Color(0.93, 0.90, 0.83, 1.0))
 	draw_arc(c, radius, 0.0, TAU, 64, Color(0.42, 0.35, 0.25, 0.55), 2.0, true)
 	draw_arc(c, radius - 4.0, 0.0, TAU, 64, Color(ring_col.r, ring_col.g, ring_col.b, 0.85), 2.0, true)
+	# 头顶血条（照困兽那只怪：厚一点、带深色描边、绿→黄→红）
+	if show_bar:
+		var bw := bar_w
+		var bh := 10.0
+		var bx := -bw * 0.5
+		var by := -radius * 2.0 - 18.0 + _sink
+		draw_rect(Rect2(bx, by, bw, bh), Color(0.20, 0.18, 0.20))
+		draw_rect(Rect2(bx, by, bw, bh), Color(0.06, 0.05, 0.06), false, 1.5)
+		var rr := clampf(hp_ratio, 0.0, 1.0)
+		draw_rect(Rect2(bx + 1.5, by + 1.5, (bw - 3.0) * rr, bh - 3.0), _hp_color(rr))
+		if unit_name != "":
+			var fs := 16
+			var tw := UI_FONT.get_string_size(unit_name, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+			draw_string(UI_FONT, Vector2(-tw * 0.5, by - 6.0), unit_name, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, name_col)
+
+
+func _hp_color(r: float) -> Color:
+	var green := Color(0.32, 0.60, 0.26)
+	var yellow := Color(0.82, 0.66, 0.18)
+	var red := Color(0.68, 0.14, 0.10)
+	if r > 0.5:
+		return yellow.lerp(green, (r - 0.5) * 2.0)
+	return red.lerp(yellow, r * 2.0)

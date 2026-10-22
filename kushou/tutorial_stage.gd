@@ -31,6 +31,12 @@ const INK := Color(0.14, 0.13, 0.15)
 const PAPER := Color(0.93, 0.90, 0.83)
 const SEAL := Color(0.68, 0.15, 0.12)
 const GOLD := Color(0.86, 0.68, 0.26)
+# 伤害类型：物理 / 元素 / 反伤 / 恢复 / 暴击（金属配色）
+const DMG_PHYS := Color(0.40, 0.44, 0.50)     # 物理：钢
+const DMG_ELEM := Color(0.80, 0.56, 0.12)     # 元素：金
+const DMG_CRIT := Color(0.78, 0.22, 0.10)     # 暴击：铜红
+const DMG_REFLECT := Color(0.62, 0.30, 0.14)  # 反伤：古铜
+const DMG_HEAL := Color(0.28, 0.55, 0.26)     # 恢复：松绿
 const HERO_HOME := Vector2(360.0, 980.0)
 const FIELD_MIN := Vector2(70.0, 680.0)
 const FIELD_MAX := Vector2(650.0, 1060.0)
@@ -41,6 +47,7 @@ const HERO_ATK_CD := 0.72
 const SKILL_CD := 20.0
 const SKILL_MULT := 1.5
 const ULT_MULT := 2.0
+const ULT_DAMAGE := 9999.0
 const HERO_HP_MAX := 320.0
 
 # ---- 层 ----
@@ -70,6 +77,7 @@ var _dlg_cb := Callable()
 var _hero: Node2D
 var _hero_pos := HERO_HOME
 var _hero_target := HERO_HOME
+var _manual_move := false
 var _hero_hp := HERO_HP_MAX
 var _hero_rage := 0.0
 var _hero_atk_t := 0.4
@@ -78,6 +86,16 @@ var _hero_flash := 0.0
 var _hero_dir := 1.0
 var _flash_t := 0.0
 var _shake_t := 0.0
+var _shake_off := Vector2.ZERO
+var _zoom := 1.0
+var _pivot := Vector2.ZERO
+var _ult_cine := -1.0
+var _break_cine := -1.0
+var _break_burst := false
+var _ult_foes: Array = []
+var _ult_lb: Label
+var _log_lb: Label
+var _ult_banner := false
 
 # ---- 敌人 / 特效 ----
 var _enemies: Array = []
@@ -96,8 +114,12 @@ var _wave_wait := -1.0
 var _started := false
 var _dodge_taught := false
 var _counter_guided := false
+var _mage_banner_done := false
 var _guide_enemy = null
 var _hp_guide_done := false
+var _wave5_fight := false
+var _wave5_crisis_done := false
+var _wave5_t := 0.0
 
 # ---- 引导 ----
 var _guide_on := false
@@ -165,6 +187,19 @@ func _build_hud() -> void:
 	_hud.z_index = 6
 	_hud.draw.connect(_draw_hud)
 	add_child(_hud)
+
+	# 大招红字「起！」
+	_ult_lb = UiKit.make_label(self, Vector2(0.0, 350.0), Vector2(720.0, 220.0), 110, SEAL)
+	_ult_lb.text = "起！"
+	_ult_lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_ult_lb.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_ult_lb.add_theme_font_override("font", UI_FONT)
+	_ult_lb.add_theme_constant_override("outline_size", 12)
+	_ult_lb.add_theme_color_override("font_outline_color", Color(0.16, 0.04, 0.03, 0.88))
+	_ult_lb.z_index = 12
+	_ult_lb.visible = false
+	_ult_lb.pivot_offset = Vector2(360.0, 110.0)
+
 
 
 func _build_guide() -> void:
@@ -379,7 +414,7 @@ func _build_end() -> void:
 	_end_title.text = "清 场"
 	_end_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	var sub := UiKit.make_label(box, Vector2(0.0, 142.0), Vector2(540.0, 40.0), 20, Color(INK.r, INK.g, INK.b, 0.7))
-	sub.text = "风停了。剑上的血，一滴一滴落进土里。"
+	sub.text = "风停了。断剑斜插在土里。"
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_end_return = UiKit.make_button(box, Vector2(60.0, 250.0), Vector2(200.0, 58.0), "回 村", 22)
 	_end_return.focus_mode = Control.FOCUS_NONE
@@ -408,7 +443,11 @@ func _restart_stage() -> void:
 	_wave_wait = -1.0
 	_dodge_taught = false
 	_counter_guided = false
+	_mage_banner_done = false
 	_guide_enemy = null
+	_wave5_fight = false
+	_wave5_crisis_done = false
+	_wave5_t = 0.0
 	_hp_guide_done = false
 	_hero_hp = HERO_HP_MAX
 	_hero_rage = 0.0
@@ -417,10 +456,27 @@ func _restart_stage() -> void:
 	_hero_flash = 0.0
 	_flash_t = 0.0
 	_shake_t = 0.0
+	_shake_off = Vector2.ZERO
+	_zoom = 1.0
+	_pivot = Vector2.ZERO
+	_ult_cine = -1.0
+	_break_cine = -1.0
+	_break_burst = false
+	_ult_banner = false
+	_ult_foes.clear()
+	if _log_lb != null:
+		_log_lb.text = ""
+	if _ult_lb != null:
+		_ult_lb.visible = false
+		_ult_lb.scale = Vector2.ONE
+	_actors.scale = Vector2.ONE
 	_actors.position = Vector2.ZERO
+	_fx.scale = Vector2.ONE
+	_fx.pivot_offset = Vector2.ZERO
 	_fx.position = Vector2.ZERO
 	_hero_pos = HERO_HOME
 	_hero_target = HERO_HOME
+	_manual_move = false
 	_telegraphs.clear()
 	_floats.clear()
 	_fx_list.clear()
@@ -507,22 +563,29 @@ func _start_wave(n: int) -> void:
 			_guide("「落日，断流。」", _skill_btn.get_global_rect(), "skill")
 		)
 	elif n == 5:
-		_spawn_enemy("boss", Vector2(360.0, 660.0), 60.0, 18.0, 95.0)
-		_spawn_enemy("minion", Vector2(250.0, 760.0), 30.0, 8.0, 115.0)
-		_spawn_enemy("minion", Vector2(470.0, 760.0), 30.0, 8.0, 115.0)
-		_spawn_enemy("minion", Vector2(360.0, 820.0), 30.0, 8.0, 115.0)
-		_hero_hp = maxf(1.0, HERO_HP_MAX * 0.2)
-		_hero_rage = 100.0
+		# 血厚到打不死：先让玩家砍一会儿，再进绝境
+		# 血够厚：正常打到残血触发剧情时，谁也碰不到 1 点锁血线
+		_spawn_enemy("boss", Vector2(360.0, 660.0), 1600.0, 24.0, 95.0)
+		_spawn_enemy("minion", Vector2(250.0, 760.0), 800.0, 10.0, 115.0)
+		_spawn_enemy("minion", Vector2(470.0, 760.0), 800.0, 10.0, 115.0)
+		_spawn_enemy("minion", Vector2(360.0, 820.0), 800.0, 10.0, 115.0)
+		for e in _enemies:
+			e["no_kill"] = true
+		_hero_hp = HERO_HP_MAX
+		_hero_rage = 0.0
+		_wave5_fight = false
+		_wave5_crisis_done = false
+		_wave5_t = 0.0
 		_dialogue([
 			{"who": "旁白", "text": "独臂刀客倒下的时候，巷子深处才传来脚步声。"},
 			{"who": "旁白", "text": "不快。一步一步，像踩在你心口上。"},
 			{"who": "匪首", "text": "小子，手底下倒有几分本事。"},
 			{"who": "旁白", "text": "他身后，又慢慢走出三个人。"},
 			{"who": "匪首", "text": "可惜，到此为止了。"},
-			{"who": "旁白", "text": "你没有答话。你握紧了剑。"},
-			{"who": "旁白", "text": "胸口那口气，烧得发烫。"},
+			{"who": "旁白", "text": "你没有答话。你握紧了剑，迎了上去。"},
 		], func() -> void:
-			_guide("到时候了。", _ult_btn.get_global_rect(), "ult")
+			_wave5_fight = true
+			_wave5_t = 0.0
 		)
 
 
@@ -541,13 +604,31 @@ func _spawn_enemy(kind: String, pos: Vector2, hp: float, atk: float, speed: floa
 	elif kind == "boss":
 		role = "mob_chief"
 		height = 176.0
+	var nm := "匪徒"
+	match kind:
+		"mage":
+			nm = "村匪"
+		"grunt":
+			nm = "村匪"
+		"brute":
+			nm = "壮汉"
+		"elite":
+			nm = "独臂刀客"
+		"boss":
+			nm = "匪首"
 	var ring := Color(0.78, 0.20, 0.14) if kind == "boss" else Color(0.58, 0.26, 0.18)
 	var a = _make_token(role, false, height, ring, 1.0)
 	a.position = pos
+	a.show_bar = true
+	a.unit_name = nm
+	a.bar_w = maxf(70.0, a.radius * 1.35)
+	a.hp_ratio = 1.0
+	a.name_col = Color(0.86, 0.70, 0.30) if kind == "boss" else Color(0.18, 0.15, 0.12, 0.85)
 	_actors.add_child(a)
 	var e := {
 		"node": a, "pos": pos, "hp": hp, "max": hp, "atk": atk,
-		"speed": speed, "kind": kind, "atk_t": 0.9, "cast_t": 1.6, "dead": false,
+		"speed": speed, "kind": kind, "name": nm,
+		"atk_t": 0.9, "cast_t": 1.6, "dead": false,
 	}
 	_enemies.append(e)
 	return e
@@ -577,7 +658,7 @@ func _enemy_rect(e: Dictionary) -> Rect2:
 
 
 func _check_clear() -> void:
-	if _finished or _wave_wait >= 0.0:
+	if _finished or _wave_wait >= 0.0 or _break_cine >= 0.0:
 		return
 	if not _enemies.is_empty():
 		return
@@ -608,19 +689,20 @@ func _process(delta: float) -> void:
 	_update_fx(delta)
 	_update_floats(delta)
 	_flash_t = maxf(0.0, _flash_t - delta)
+	_shake_off = Vector2.ZERO
 	if _shake_t > 0.0:
 		_shake_t = maxf(0.0, _shake_t - delta)
 		var amp := 10.0 * (_shake_t / 0.45)
-		var off := Vector2(randf_range(-amp, amp), randf_range(-amp, amp))
-		_actors.position = off
-		_fx.position = off
-	else:
-		_actors.position = Vector2.ZERO
-		_fx.position = Vector2.ZERO
+		_shake_off = Vector2(randf_range(-amp, amp), randf_range(-amp, amp))
 	_bg.queue_redraw()
 	_hud.queue_redraw()
 	_fx.queue_redraw()
 	_guide_layer.queue_redraw()
+	if _ult_cine >= 0.0:
+		_update_ult_cine(delta)
+	if _break_cine >= 0.0:
+		_update_break_cine(delta)
+	_apply_field_transform()
 	if _paused or _finished:
 		return
 	_hero_flash = maxf(0.0, _hero_flash - delta)
@@ -628,20 +710,29 @@ func _process(delta: float) -> void:
 	_update_enemies(delta)
 	_update_telegraphs(delta)
 	_update_wave(delta)
+	if _wave == 5 and _wave5_fight and not _wave5_crisis_done:
+		_wave5_t += delta
+		# 残血才触发；14 秒只是防玩家一直绕圈的兜底
+		if _hero_hp <= HERO_HP_MAX * 0.18 or _wave5_t >= 14.0:
+			_wave5_crisis()
 
 
 func _update_hero(delta: float) -> void:
 	_hero_skill_cd = maxf(0.0, _hero_skill_cd - delta)
 	_hero_atk_t = maxf(0.0, _hero_atk_t - delta)
 
-	if _hero_target.distance_to(_hero_pos) > 6.0:
-		var d := _hero_target - _hero_pos
-		_hero_pos += d.normalized() * HERO_SPEED * delta
-		_hero_pos.x = clampf(_hero_pos.x, FIELD_MIN.x, FIELD_MAX.x)
-		_hero_pos.y = clampf(_hero_pos.y, FIELD_MIN.y, FIELD_MAX.y)
-		_hero.position = _hero_pos
-		_face_dir(d.x)
-		return
+	# 玩家点了地面：先走到点，到了再自动打（躲闪用）
+	if _manual_move:
+		if _hero_target.distance_to(_hero_pos) > 8.0:
+			var d := _hero_target - _hero_pos
+			_hero_pos += d.normalized() * HERO_SPEED * delta
+			_hero_pos.x = clampf(_hero_pos.x, FIELD_MIN.x, FIELD_MAX.x)
+			_hero_pos.y = clampf(_hero_pos.y, FIELD_MIN.y, FIELD_MAX.y)
+			_hero.position = _hero_pos
+			_face_dir(d.x)
+			return
+		_manual_move = false
+		_hero_target = _hero_pos
 
 	var target := _nearest_enemy()
 	if target.is_empty():
@@ -649,21 +740,36 @@ func _update_hero(delta: float) -> void:
 	var tp: Vector2 = target["pos"]
 	var dx := tp.x - _hero_pos.x
 	var dist := _hero_pos.distance_to(tp)
+	# 已经在出手距离内：站定自动打，不再追着走
+	if dist <= HERO_RANGE:
+		_hero_target = _hero_pos
+		_face_dir(dx)
+		if _hero_atk_t <= 0.0:
+			_hero_atk_t = HERO_ATK_CD
+			_hero.play_move("chop", 1.5)
+			var hdmg := HERO_ATK * randf_range(0.9, 1.1)
+			var hkind := "phys"
+			if randf() < 0.15:
+				hdmg *= 1.8
+				hkind = "crit"
+			_damage_enemy(target, hdmg, hkind)
+			if is_instance_valid(target["node"]):
+				target["node"].play_hit()
+			_fx_list.append({"kind": "hit", "pos": tp + Vector2(0.0, -60.0), "t": 0.0, "total": 0.2})
+			_shake_t = maxf(_shake_t, 0.08)
+			Audio.sfx("hit_slash", -13.0)
+			_hero_rage = minf(100.0, _hero_rage + 7.0)
+		return
+	# 不在距离内：自动靠近
 	_face_dir(dx)
-	if dist > HERO_RANGE:
-		_hero_pos += (tp - _hero_pos).normalized() * HERO_SPEED * delta
-		_hero_pos.x = clampf(_hero_pos.x, FIELD_MIN.x, FIELD_MAX.x)
-		_hero_pos.y = clampf(_hero_pos.y, FIELD_MIN.y, FIELD_MAX.y)
-		_hero.position = _hero_pos
-	elif _hero_atk_t <= 0.0:
-		_hero_atk_t = HERO_ATK_CD
-		_hero.play_move("chop", 1.5)
-		_damage_enemy(target, HERO_ATK * randf_range(0.9, 1.1), Color(0.93, 0.86, 0.66))
-		_hero_rage = minf(100.0, _hero_rage + 7.0)
+	_hero_pos += (tp - _hero_pos).normalized() * HERO_SPEED * delta
+	_hero_pos.x = clampf(_hero_pos.x, FIELD_MIN.x, FIELD_MAX.x)
+	_hero_pos.y = clampf(_hero_pos.y, FIELD_MIN.y, FIELD_MAX.y)
+	_hero.position = _hero_pos
 
 
 func _face_dir(dx: float) -> void:
-	if absf(dx) < 6.0:
+	if absf(dx) < 12.0:
 		return
 	var d := 1 if dx >= 0.0 else -1
 	if d != _hero_dir:
@@ -697,7 +803,19 @@ func _update_enemies(delta: float) -> void:
 					e["atk_t"] = 1.15
 					if is_instance_valid(e["node"]):
 						e["node"].play_move("chop", 1.4)
-					_damage_hero(float(e["atk"]))
+					if not bool(e.get("banner_done", false)):
+						e["banner_done"] = true
+						match str(e["kind"]):
+							"brute":
+								_move_banner("『力劈华山』", Color(0.58, 0.22, 0.16))
+							"elite":
+								_move_banner("『独臂刀』", Color(0.55, 0.20, 0.14))
+							"boss":
+								_move_banner("『黑风刀』", Color(0.50, 0.16, 0.12))
+					var hk := "phys"
+					if str(e["kind"]) == "brute" or str(e["kind"]) == "boss":
+						hk = "heavy"
+					_damage_hero(float(e["atk"]), hk, e)
 		pos.x = clampf(pos.x, 80.0, 640.0)
 		pos.y = clampf(pos.y, 620.0, 900.0)
 		e["pos"] = pos
@@ -709,11 +827,14 @@ func _update_enemies(delta: float) -> void:
 
 
 func _mage_cast(e: Dictionary) -> void:
+	if not _mage_banner_done:
+		_mage_banner_done = true
+		_move_banner("『飞蝗石』", Color(0.58, 0.22, 0.16))
 	var center: Vector2 = _hero_pos
 	var from_pos: Vector2 = e["pos"]
 	_telegraphs.append({
 		"pos": center, "r": 96.0, "t": 0.0, "total": 1.15,
-		"dmg": 24.0, "from": from_pos,
+		"dmg": 24.0, "from": from_pos, "src": e,
 	})
 
 
@@ -723,7 +844,7 @@ func _update_telegraphs(delta: float) -> void:
 		if float(t["t"]) >= float(t["total"]):
 			var p: Vector2 = t["pos"]
 			if _hero_pos.distance_to(p) <= float(t["r"]):
-				_damage_hero(float(t["dmg"]))
+				_damage_hero(float(t["dmg"]), "phys", t.get("src"))
 			_fx_list.append({"kind": "burst", "pos": p, "t": 0.0, "total": 0.45})
 			Audio.sfx("hit_heavy", -7.0, 0.9)
 			_telegraphs.erase(t)
@@ -770,13 +891,40 @@ func _update_floats(delta: float) -> void:
 			_floats.erase(f)
 
 
-func _damage_hero(dmg: float) -> void:
+func _damage_hero(dmg: float, kind: String = "phys", src = null) -> void:
 	if _finished:
 		return
 	_hero_hp = maxf(1.0, _hero_hp - dmg)
 	_hero_flash = 0.25
+	if is_instance_valid(_hero):
+		_hero.play_hit()
+	_fx_list.append({"kind": "hit", "pos": _hero_pos + Vector2(0.0, -70.0), "t": 0.0, "total": 0.2})
+	_shake_t = maxf(_shake_t, 0.10)
+	Audio.sfx("hit_heavy", -11.0)
 	_hero_rage = minf(100.0, _hero_rage + 4.0)
-	_floats.append({"pos": _hero_pos + Vector2(0.0, -150.0), "text": "-" + str(int(dmg)), "t": 0.0, "total": 0.9, "col": SEAL})
+	var dcol := DMG_PHYS
+	var dsize := 30
+	var tag := "物理 "
+	match kind:
+		"heavy":
+			dsize = 36
+			tag = "物理 "
+		"elem":
+			dcol = DMG_ELEM
+			dsize = 34
+			tag = "元素 "
+		"crit":
+			dcol = DMG_CRIT
+			dsize = 40
+			tag = "暴击 "
+		_:
+			dcol = DMG_PHYS
+			dsize = 30
+			tag = "物理 "
+	_floats.append({"pos": _hero_pos + Vector2(0.0, -150.0), "text": tag + "-" + str(int(dmg)), "t": 0.0, "total": 0.9, "col": dcol, "size": dsize})
+	# 护体反震：谁打的，回敬 2 点反伤
+	if src != null and is_instance_valid(src.get("node")) and not bool(src.get("dead", false)):
+		_damage_enemy(src, 2.0, "reflect")
 	if _wave == 3:
 		_fx_list.append({"kind": "slash", "pos": _hero_pos + Vector2(0.0, -90.0), "t": 0.0, "total": 0.35})
 		if not _hp_guide_done:
@@ -789,21 +937,68 @@ func _damage_hero(dmg: float) -> void:
 				{"who": "旁白", "text": "一刀劈下，你躲闪不及，只来得及微微侧身。"},
 				{"who": "旁白", "text": "手臂上多了一道深深的血痕。"},
 			], func() -> void:
-				_guide("血，顺着手臂滴下来。", Rect2(18.0, 70.0, 330.0, 40.0), "tap", Callable(), "hp")
+				_guide("血，顺着手臂滴下来。", Rect2(18.0, 68.0, 352.0, 50.0), "tap", Callable(), "hp")
 			)
 
 
-func _damage_enemy(e: Dictionary, dmg: float, col: Color) -> void:
+func _damage_enemy(e: Dictionary, dmg: float, kind: String = "phys") -> void:
 	if bool(e["dead"]):
 		return
 	e["hp"] = float(e["hp"]) - dmg
+	# 剧情怪：血可以掉到见底，但这一场不许死
+	if bool(e.get("no_kill", false)) and float(e["hp"]) <= 0.0:
+		e["hp"] = 1.0
+	if is_instance_valid(e["node"]):
+		e["node"].hp_ratio = clampf(float(e["hp"]) / maxf(1.0, float(e["max"])), 0.0, 1.0)
+		e["node"].queue_redraw()
 	var p: Vector2 = e["pos"]
-	_floats.append({"pos": p + Vector2(0.0, -110.0), "text": str(int(dmg)), "t": 0.0, "total": 0.8, "col": col})
+	var tr := 50.0
+	if is_instance_valid(e["node"]):
+		tr = float(e["node"].radius)
+	var dcol := DMG_PHYS
+	var dsize := 30
+	var tag := "物理 "
+	match kind:
+		"phys_big":
+			dcol = DMG_PHYS
+			dsize = 34
+			tag = "物理 "
+		"phys_huge":
+			dcol = DMG_PHYS
+			dsize = 40
+			tag = "物理 "
+		"elem":
+			dcol = DMG_ELEM
+			dsize = 34
+			tag = "元素 "
+		"elem_big":
+			dcol = DMG_ELEM
+			dsize = 40
+			tag = "元素 "
+		"crit":
+			dcol = DMG_CRIT
+			dsize = 40
+			tag = "暴击 "
+		"reflect":
+			dcol = DMG_REFLECT
+			dsize = 30
+			tag = "反伤 "
+		_:
+			dcol = DMG_PHYS
+			dsize = 30
+			tag = "物理 "
+	_floats.append({"pos": p + Vector2(0.0, -tr * 2.0 - 34.0), "text": tag + str(int(dmg)), "t": 0.0, "total": 0.8, "col": dcol, "size": dsize})
 	_fx_list.append({"kind": "hit", "pos": p + Vector2(0.0, -60.0), "t": 0.0, "total": 0.25})
 	if float(e["hp"]) <= 0.0:
 		e["dead"] = true
 		if is_instance_valid(e["node"]):
 			e["node"].play_down()
+		# 击杀回气：恢复 4 点气血
+		var before := _hero_hp
+		_hero_hp = minf(HERO_HP_MAX, _hero_hp + 4.0)
+		var got := _hero_hp - before
+		if got > 0.5:
+			_floats.append({"pos": _hero_pos + Vector2(0.0, -160.0), "text": "恢复 +" + str(int(got)), "t": 0.0, "total": 0.9, "col": DMG_HEAL, "size": 32})
 		Audio.sfx("fall_down", -10.0)
 		var node: Node = e["node"]
 		await get_tree().create_timer(1.15).timeout
@@ -835,7 +1030,10 @@ func _cast_skill() -> void:
 	_shake_t = 0.18
 	if is_instance_valid(target["node"]):
 		target["node"].play_hit()
-	_damage_enemy(target, HERO_ATK * SKILL_MULT, Color(0.95, 0.78, 0.30))
+	var sdmg := HERO_ATK * SKILL_MULT
+	_damage_enemy(target, sdmg, "phys_big")
+	_log_action("少侠 落日·断流 → " + _enemy_name(target) + " −" + str(int(sdmg)))
+	_move_banner("『落日·断流』", SEAL)
 	if _guide_on and _guide_mode == "skill":
 		_end_guide()
 
@@ -853,23 +1051,179 @@ func _cast_ult() -> void:
 	if is_instance_valid(_hero):
 		_hero.play_move("sweep", 1.2)
 	Audio.sfx("skill", -5.0)
-	_fx_list.append({"kind": "sun", "pos": _hero_pos + Vector2(0.0, -80.0), "t": 0.0, "total": 0.9})
-	_fx_list.append({"kind": "ring", "pos": _hero_pos, "t": 0.0, "total": 0.6})
-	_flash_t = 0.5
-	_shake_t = 0.45
-	for e in _enemies.duplicate():
-		var to: Vector2 = (e["pos"] as Vector2) + Vector2(0.0, -50.0)
-		_fx_list.append({"kind": "sword_light", "from": _hero_pos + Vector2(0.0, -70.0), "to": to, "t": 0.0, "total": 0.42})
-		if is_instance_valid(e["node"]):
-			e["node"].play_hit()
-		_damage_enemy(e, HERO_ATK * ULT_MULT, Color(0.95, 0.72, 0.24))
 	if _guide_on and _guide_mode == "ult":
 		_end_guide()
+	_start_ult_cine()
+
+
+func _wave5_crisis() -> void:
+	_wave5_crisis_done = true
+	_wave5_fight = false
+	_hero_rage = 100.0
+	_hero_hp = maxf(1.0, HERO_HP_MAX * 0.08)
+	# 把四个人摆到主角四周：围住，但不叠在一起
+	_hero_pos = Vector2(360.0, 950.0)
+	_hero_target = _hero_pos
+	_manual_move = false
+	if is_instance_valid(_hero):
+		_hero.position = _hero_pos
+	var spots := [
+		Vector2(360.0, 720.0), Vector2(180.0, 870.0),
+		Vector2(540.0, 870.0), Vector2(470.0, 1050.0),
+	]
+	for i in _enemies.size():
+		var e: Dictionary = _enemies[i]
+		if i < spots.size():
+			e["pos"] = spots[i]
+			if is_instance_valid(e["node"]):
+				e["node"].position = spots[i]
+		# 血条压到三成多——明显挨过打，但一个都不许死
+		e["hp"] = minf(float(e["hp"]), float(e["max"]) * 0.38)
+		if is_instance_valid(e["node"]):
+			e["node"].hp_ratio = clampf(float(e["hp"]) / maxf(1.0, float(e["max"])), 0.0, 1.0)
+			e["node"].queue_redraw()
+	_dialogue([
+		{"who": "匪首", "text": "小子，今天就是你的死期。"},
+		{"who": "旁白", "text": "刀光压下来。你心头一震，满是不甘。"},
+		{"who": "主角", "text": "……我还没走完这条路。", "art": "player"},
+		{"who": "旁白", "text": "不甘心。就这么死在巷子里，你不甘心。"},
+		{"who": "旁白", "text": "胸口那口气，忽然烧了起来。"},
+	], func() -> void:
+		_guide("到时候了。", _ult_btn.get_global_rect(), "ult")
+	)
+
+
+func _start_ult_cine() -> void:
+	# 演出开始，解除"不许死"——这一剑才收得掉四条命
+	for e in _enemies:
+		e["no_kill"] = false
+	_ult_cine = 0.0
+	_ult_banner = false
+	_ult_foes = _enemies.duplicate()
+	_paused = true
+	_log_action("少侠 落日剑诀 → 四人 −" + str(int(HERO_ATK * ULT_MULT)))
+	_ult_lb.visible = true
+	_ult_lb.modulate = Color(1, 1, 1, 0)
+	_ult_lb.scale = Vector2(0.72, 0.72)
+
+
+func _update_ult_cine(delta: float) -> void:
+	_ult_cine += delta
+	var t := _ult_cine
+	var pivot := _hero_pos + Vector2(0.0, -70.0)
+	var z := 1.0
+	if t < 0.35:
+		z = lerpf(1.0, 1.55, t / 0.35)
+	elif t < 0.75:
+		z = 1.55
+	elif t < 1.0:
+		z = lerpf(1.55, 1.0, (t - 0.75) / 0.25)
+	_zoom = z
+	_pivot = pivot
+	var ta := 0.0
+	if t > 0.12 and t < 0.72:
+		ta = clampf((t - 0.12) / 0.15, 0.0, 1.0) * (1.0 - clampf((t - 0.55) / 0.17, 0.0, 1.0))
+	_ult_lb.visible = ta > 0.01
+	_ult_lb.modulate = Color(1, 1, 1, ta)
+	var ts := 0.72 + 0.42 * clampf((t - 0.12) / 0.35, 0.0, 1.0)
+	_ult_lb.scale = Vector2(ts, ts)
+	if t >= 1.0:
+		if not _ult_banner:
+			_ult_banner = true
+			_move_banner("『落日剑诀』", SEAL)
+		for i in _ult_foes.size():
+			var e: Dictionary = _ult_foes[i]
+			if e == null or not is_instance_valid(e.get("node")):
+				continue
+			var delay := 0.07 * float(i)
+			var kk := clampf((t - 1.0 - delay) / 0.38, 0.0, 1.0)
+			if kk >= 1.0 and not bool(e.get("ult_hit", false)):
+				e["ult_hit"] = true
+				if is_instance_valid(e["node"]):
+					e["node"].play_hit()
+				_damage_enemy(e, ULT_DAMAGE, "phys_huge")
+				_fx_list.append({"kind": "burst", "pos": (e["pos"] as Vector2) + Vector2(0.0, -60.0), "t": 0.0, "total": 0.5})
+				_flash_t = maxf(_flash_t, 0.3)
+				_shake_t = maxf(_shake_t, 0.4)
+				Audio.sfx("hit_heavy", -8.0)
+	if t >= 1.95:
+		_ult_cine = -1.0
+		_ult_lb.visible = false
+		_zoom = 1.0
+		_pivot = Vector2.ZERO
+		_apply_field_transform()
+		_start_break_cine()
+
+
+func _start_break_cine() -> void:
+	_break_cine = 0.0
+	_break_burst = false
+	_paused = true
+
+
+func _update_break_cine(delta: float) -> void:
+	_break_cine += delta
+	var t := _break_cine
+	if not _break_burst and t >= 1.55:
+		_break_burst = true
+		_flash_t = maxf(_flash_t, 0.40)
+		_shake_t = maxf(_shake_t, 0.55)
+		Audio.sfx("hit_heavy", -6.0, 0.62)
+	if t >= 3.3:
+		_break_cine = -1.0
+		_paused = false
+		_finish(true)
+
+
+func _apply_field_transform() -> void:
+	if _zoom > 1.0001:
+		_actors.scale = Vector2(_zoom, _zoom)
+		_actors.position = _pivot - _pivot * _zoom + _shake_off
+		_fx.scale = Vector2(_zoom, _zoom)
+		_fx.pivot_offset = _pivot
+		_fx.position = _shake_off
+	else:
+		_actors.scale = Vector2.ONE
+		_actors.position = _shake_off
+		_fx.scale = Vector2.ONE
+		_fx.pivot_offset = Vector2.ZERO
+		_fx.position = _shake_off
 
 
 # ============================================================
 # 引导
 # ============================================================
+
+func _move_banner(txt: String, col: Color) -> void:
+	if txt == "":
+		return
+	var lb := UiKit.make_label(self, Vector2(60.0, 452.0), Vector2(600.0, 64.0), 36, col)
+	lb.text = txt
+	lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lb.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	lb.add_theme_font_override("font", UI_FONT)
+	lb.add_theme_constant_override("outline_size", 7)
+	lb.add_theme_color_override("font_outline_color", Color(0.16, 0.05, 0.03, 0.78))
+	lb.z_index = 11
+	lb.modulate.a = 0.0
+	lb.scale = Vector2(1.08, 1.08)
+	lb.pivot_offset = Vector2(300.0, 32.0)
+	var tw := create_tween()
+	tw.tween_property(lb, "modulate:a", 1.0, 0.10)
+	tw.parallel().tween_property(lb, "scale", Vector2.ONE, 0.12)
+	tw.tween_interval(0.75)
+	tw.tween_property(lb, "modulate:a", 0.0, 0.28)
+	tw.finished.connect(lb.queue_free)
+
+
+func _log_action(txt: String) -> void:
+	if _log_lb != null:
+		_log_lb.text = txt
+
+
+func _enemy_name(e: Dictionary) -> String:
+	return str(e.get("name", "匪徒"))
+
 
 func _guide_target_enemy() -> void:
 	if _enemies.is_empty():
@@ -960,12 +1314,14 @@ func _gui_input(event: InputEvent) -> void:
 			_end_guide()
 		elif _guide_mode == "dodge":
 			_hero_target = _clamp_pos(pos)
+			_manual_move = true
 			_fx_list.append({"kind": "click", "pos": _hero_target, "t": 0.0, "total": 0.35})
 			_end_guide()
 		elif _guide_mode == "target":
 			var e = _guide_enemy
 			if e != null and not bool(e.get("dead", false)) and _enemy_rect(e).has_point(pos):
 				_hero_target = e["pos"] as Vector2
+				_manual_move = false
 				_fx_list.append({"kind": "click", "pos": _hero_target, "t": 0.0, "total": 0.35})
 				_guide_enemy = null
 				_end_guide()
@@ -973,6 +1329,7 @@ func _gui_input(event: InputEvent) -> void:
 	if _paused:
 		return
 	_hero_target = _clamp_pos(pos)
+	_manual_move = true
 	_fx_list.append({"kind": "click", "pos": _hero_target, "t": 0.0, "total": 0.35})
 
 
@@ -1050,7 +1407,7 @@ func _draw_fx() -> void:
 		_fx.draw_circle(orb, 14.0, Color(0.96, 0.96, 0.90, 0.18))
 	for f in _fx_list:
 		var k := clampf(float(f["t"]) / float(f["total"]), 0.0, 1.0)
-		var p: Vector2 = f["pos"]
+		var p: Vector2 = f.get("pos", Vector2.ZERO)
 		match str(f["kind"]):
 			"hit":
 				_fx.draw_arc(p, 26.0 + 18.0 * k, 0.0, TAU, 20, Color(0.95, 0.85, 0.55, 1.0 - k), 3.0)
@@ -1086,6 +1443,23 @@ func _draw_fx() -> void:
 					var inner := sp + Vector2(cos(ang), sin(ang)) * rr * 0.5
 					var outer2 := sp + Vector2(cos(ang), sin(ang)) * rr * 0.95
 					_fx.draw_line(inner, outer2, Color(1.0, 0.70, 0.24, 0.42 * (1.0 - k)), 3.0, true)
+	if _ult_cine >= 1.0:
+		for i in _ult_foes.size():
+			var e: Dictionary = _ult_foes[i]
+			if e == null or not is_instance_valid(e.get("node")):
+				continue
+			var delay := 0.07 * float(i)
+			var kk := clampf((_ult_cine - 1.0 - delay) / 0.38, 0.0, 1.0)
+			if kk <= 0.0:
+				continue
+			var target := (e["pos"] as Vector2) + Vector2(0.0, -60.0)
+			var sword_pos := Vector2(target.x, lerpf(-260.0, target.y, kk * kk))
+			if kk >= 1.0:
+				sword_pos = target
+			var fade := 1.0
+			if _ult_cine > 1.78:
+				fade = clampf(1.0 - (_ult_cine - 1.78) / 0.2, 0.0, 1.0)
+			_draw_sword(sword_pos, fade)
 	if _flash_t > 0.0:
 		var fa := clampf(_flash_t / 0.5, 0.0, 1.0) * 0.38
 		_fx.draw_rect(Rect2(0.0, 0.0, W, H), Color(1.0, 0.92, 0.72, fa))
@@ -1094,7 +1468,11 @@ func _draw_fx() -> void:
 		var col: Color = fl["col"]
 		col.a = a
 		var fp: Vector2 = fl["pos"]
-		_fx.draw_string(UI_FONT, fp, str(fl["text"]), HORIZONTAL_ALIGNMENT_LEFT, -1, 22, col)
+		var fs := int(fl.get("size", 24))
+		var ftxt := str(fl["text"])
+		_fx.draw_string(UI_FONT, fp + Vector2(1.6, 1.8), ftxt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(0.10, 0.08, 0.06, 0.50 * a))
+		_fx.draw_string(UI_FONT, fp + Vector2(-1.0, -1.2), ftxt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(1.0, 0.98, 0.90, 0.55 * a))
+		_fx.draw_string(UI_FONT, fp, ftxt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, col)
 
 
 func _draw_hud() -> void:
@@ -1107,18 +1485,33 @@ func _draw_hud() -> void:
 			_hud.draw_string(UI_FONT, Vector2(22.0, 46.0) + off, wave_txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 28, Color(1.0, 0.78, 0.28, 0.16 + 0.26 * wk))
 	_hud.draw_string(UI_FONT, Vector2(22.0, 46.0), wave_txt, HORIZONTAL_ALIGNMENT_LEFT, -1, 28, wave_col)
 	# 气血
-	var hr := Rect2(22.0, 74.0, 320.0, 18.0)
-	_hud.draw_rect(hr, Color(0.25, 0.22, 0.18, 0.25))
+	var hr := Rect2(22.0, 74.0, 340.0, 34.0)
+	_hud.draw_rect(hr, Color(0.25, 0.22, 0.18, 0.30))
 	var ratio := clampf(_hero_hp / HERO_HP_MAX, 0.0, 1.0)
 	_hud.draw_rect(Rect2(hr.position, Vector2(hr.size.x * ratio, hr.size.y)), Color(0.62, 0.16, 0.12))
-	_hud.draw_rect(hr, Color(0.28, 0.22, 0.16, 0.55), false, 1.0)
-	_hud.draw_string(UI_FONT, Vector2(28.0, 88.0), str(int(_hero_hp)) + "/" + str(int(HERO_HP_MAX)), HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(0.97, 0.94, 0.86))
+	_hud.draw_rect(Rect2(hr.position, Vector2(hr.size.x * ratio, 4.0)), Color(1.0, 0.72, 0.55, 0.22))
+	_hud.draw_rect(hr, Color(0.28, 0.22, 0.16, 0.78), false, 2.0)
+	_hud.draw_string(UI_FONT, Vector2(30.0, 98.0), str(int(_hero_hp)) + " / " + str(int(HERO_HP_MAX)), HORIZONTAL_ALIGNMENT_LEFT, -1, 17, Color(0.97, 0.94, 0.86))
 	# 怒气
-	var rr := Rect2(22.0, 100.0, 320.0, 10.0)
+	var rr := Rect2(22.0, 114.0, 340.0, 12.0)
 	_hud.draw_rect(rr, Color(0.25, 0.22, 0.18, 0.25))
 	var rr2 := clampf(_hero_rage / 100.0, 0.0, 1.0)
 	_hud.draw_rect(Rect2(rr.position, Vector2(rr.size.x * rr2, rr.size.y)), GOLD)
 	_hud.draw_rect(rr, Color(0.28, 0.22, 0.16, 0.55), false, 1.0)
+
+
+func _draw_sword(pos: Vector2, alpha: float) -> void:
+	if alpha <= 0.0:
+		return
+	var gold := Color(1.0, 0.80, 0.30, alpha)
+	var blade := Color(0.97, 0.96, 0.90, alpha)
+	var dark := Color(0.55, 0.12, 0.08, alpha)
+	_fx.draw_line(pos + Vector2(0.0, -170.0), pos, Color(1.0, 0.85, 0.45, 0.16 * alpha), 22.0, true)
+	_fx.draw_colored_polygon(PackedVector2Array([pos, pos + Vector2(-9.0, -150.0), pos + Vector2(9.0, -150.0)]), blade)
+	_fx.draw_line(pos + Vector2(-32.0, -150.0), pos + Vector2(32.0, -150.0), gold, 7.0, true)
+	_fx.draw_line(pos + Vector2(0.0, -190.0), pos + Vector2(0.0, -152.0), dark, 8.0, true)
+	_fx.draw_circle(pos, 12.0, Color(1.0, 0.95, 0.80, 0.55 * alpha))
+	_fx.draw_arc(pos, 34.0, 0.0, TAU, 24, Color(1.0, 0.78, 0.30, 0.5 * alpha), 2.0, true)
 
 
 func _draw_guide() -> void:
