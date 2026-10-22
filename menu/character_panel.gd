@@ -1090,6 +1090,76 @@ func _slot_text(role: Dictionary, slot: String) -> String:
 	# 三件套的套名与成品名现在一致（皮甲/青玉佩/旧披风…），仍统一走 item_name：与仓库同口径
 	return Cards.item_name(sid) + GameState.star_marks(sid)
 
+
+var _stat_tweens := {}
+
+# 属性数字跳动：旧值滚到新值 + 金字 + 轻微放大回弹
+
+var _flash: ColorRect
+var _flash_lb: Label
+var _flash_tw: Tween
+
+# 升级/品级变化：整块面板金色闪一下 + 居中大字
+func _level_flash(text: String) -> void:
+	if _flash == null:
+		_flash = ColorRect.new()
+		_flash.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		_flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_flash.z_index = 68
+		add_child(_flash)
+		_flash_lb = _label("", 40, Color(0.98, 0.92, 0.76))
+		_flash_lb.position = Vector2(0, 560)
+		_flash_lb.size = Vector2(720, 70)
+		_flash_lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_flash_lb.add_theme_color_override("font_outline_color", Color(0.25, 0.16, 0.06, 0.9))
+		_flash_lb.add_theme_constant_override("outline_size", 8)
+		_flash_lb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_flash_lb.z_index = 69
+		add_child(_flash_lb)
+	if _flash_tw != null and _flash_tw.is_valid():
+		_flash_tw.kill()
+	_flash.color = Color(0.96, 0.80, 0.36, 0.30)
+	_flash.visible = true
+	_flash_lb.visible = true
+	_flash_lb.text = text
+	_flash_lb.modulate = Color(1, 1, 1, 1)
+	_flash_lb.scale = Vector2(1.35, 1.35)
+	_flash_lb.pivot_offset = _flash_lb.size * 0.5
+	_flash_tw = create_tween()
+	_flash_tw.set_parallel(true)
+	_flash_tw.tween_property(_flash, "color:a", 0.0, 0.55).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	_flash_tw.tween_property(_flash_lb, "scale", Vector2.ONE, 0.45).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_flash_tw.tween_property(_flash_lb, "modulate:a", 0.0, 0.55).set_delay(0.35)
+	_flash_tw.chain().tween_callback(func() -> void:
+		_flash.visible = false
+		_flash_lb.visible = false)
+
+func _stat_roll(vl: Label, old_s: String, new_s: String) -> void:
+	if old_s == "" or old_s == new_s:
+		vl.text = new_s
+		return
+	var old_n := old_s.replace("%", "").to_float()
+	var new_n := new_s.replace("%", "").to_float()
+	if old_n == new_n:
+		vl.text = new_s
+		return
+	if _stat_tweens.has(vl):
+		var t0 = _stat_tweens[vl]
+		if t0 != null and t0.is_valid():
+			t0.kill()
+	var tw := create_tween()
+	_stat_tweens[vl] = tw
+	vl.pivot_offset = vl.size * 0.5
+	vl.scale = Vector2(1.22, 1.22)
+	vl.add_theme_color_override("font_color", Color(0.80, 0.58, 0.14))
+	var pct := new_s.contains("%")
+	tw.tween_method(func(v: float) -> void:
+		vl.text = str(int(round(v))) + ("%" if pct else ""), old_n, new_n, 0.5).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.parallel().tween_property(vl, "scale", Vector2.ONE, 0.38).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_callback(func() -> void:
+		vl.text = new_s
+		vl.add_theme_color_override("font_color", INK))
+
 func _stat_text(stats: Dictionary, row: Dictionary) -> String:
 	var k := str(row.get("k", ""))
 	var val := 0
@@ -1237,12 +1307,13 @@ func _refresh() -> void:
 	#   ⚠ 攻击这一行**不折 dmg%**：伤害加成是单独一行，战斗里才乘上去——
 	#     折进去会让"拆账加起来≠总数"，那正是这块面板最忌讳的账。
 	var ap: Dictionary = GameState.atk_parts(rid, true)
+	var stat_pick := [0, 1, 2, 3, 7, 5]
 	for i in _stat_val_lbs.size():
 		var vl: Label = _stat_val_lbs[i]
 		# ⚠ 取下标要先落到显式类型上：STAT_ROWS[i] 是 Variant，
 		#   直接 .get() 会吃 UNSAFE_METHOD_ACCESS（这里一律走 Dictionary 局部变量）
-		var row0: Dictionary = STAT_ROWS[i]
-		vl.text = _stat_text(eff, row0)
+		var row0: Dictionary = STAT_ROWS[int(stat_pick[i])]
+		_stat_roll(vl, vl.text, _stat_text(eff, row0))
 		# 只在"攻击"这一行的右边写拆账；其它行清空
 		if i < _stat_sub_lbs.size():
 			var sl: Label = _stat_sub_lbs[i]
@@ -1351,6 +1422,7 @@ func _set_msg(s: String) -> void:
 
 func _on_level_up(n: int) -> void:
 	var rid := str(ROLE_IDS[_sel])
+	var before := int(_role(_sel).get("lv", 1))
 	var times := n
 	if n < 0:
 		times = GameState.levels_available(rid)
@@ -1359,6 +1431,9 @@ func _on_level_up(n: int) -> void:
 	var r: Dictionary = GameState.level_up(rid, times)
 	_set_msg(str(r.get("msg", "")))
 	_refresh()
+	var after := int(_role(_sel).get("lv", 1))
+	if after > before:
+		_level_flash("升级！Lv." + str(after))
 
 # v36：突破——到境界上限时服一颗对应品级的突破丹（境界 +1、上限 +25 级、基础属性涨一截）
 func _on_break() -> void:
