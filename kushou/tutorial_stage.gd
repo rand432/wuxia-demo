@@ -21,6 +21,7 @@ extends Control
 
 signal closed
 
+const GameState := preload("res://shared/game_state.gd")
 const UiKit := preload("res://shared/ui_kit.gd")
 const Audio := preload("res://shared/audio.gd")
 const TokenActor := preload("res://kushou/token_actor.gd")
@@ -98,6 +99,9 @@ var _ult_foes: Array = []
 var _ult_lb: Label
 var _log_lb: Label
 var _ult_banner := false
+var _ult_ov: Control = null
+var _ult_dim: ColorRect = null
+var _ult_art: TextureRect = null
 var _action_which := ""
 var _action_down_ms := 0
 var _tip_which := ""
@@ -112,7 +116,7 @@ var _fx_list: Array = []
 
 # ---- 流程 ----
 var _wave := 0
-var _wave_max := 5
+var _wave_max := 3
 var _paused := false
 var _finished := false
 var _victory := false
@@ -556,38 +560,46 @@ func _start_wave(n: int) -> void:
 			d.queue_free()
 	_decor.clear()
 	if n == 1:
-		var m := _spawn_enemy("mage", Vector2(520.0, 580.0), 90.0, 10.0, 90.0)
-		m["cast_t"] = 8.0
+		# 第一波·剧情：村长与主角相遇（不刷怪）
+		var chief = _make_token("mob_chief", false, 150.0, Color(0.36, 0.30, 0.24), 1.0)
+		chief.position = Vector2(500.0, 600.0)
+		_decor.append(chief)
+		_actors.add_child(chief)
 		_dialogue([
-			{"who": "旁白", "text": "风从村口卷过，带着土腥气。"},
-			{"who": "村匪", "text": "小子，这条路，你也敢走？"},
-			{"who": "主角", "text": "这就是村匪？", "art": "player"},
-			{"who": "村匪", "text": "识相的，退回去。爷今日不想见血。"},
-			{"who": "旁白", "text": "你没有动。"},
-			{"who": "旁白", "text": "他眼里闪过一丝戾气，手腕一翻——"},
-			{"who": "引导", "text": "小心！这是暗器——点地面躲开。"},
+			{"who": "村长", "text": "孩子，山路不太平，你当真要走？"},
+			{"who": "主角", "text": "嗯。总不能一辈子守在村口。", "art": "player"},
+			{"who": "村长", "text": "去吧。记住——遇事别慌，剑在手里。"},
 		], func() -> void:
-			_mage_cast(m)
-			_dodge_taught = true
-			_guide("闪开。", Rect2(_hero_pos - Vector2(96.0, 96.0), Vector2(192.0, 192.0)), "dodge")
+			_start_wave(2)
 		)
 	elif n == 2:
-		# 巷口后头灰压压的一片人影（只做背景，不参战）
-		for i in 4:
-			_spawn_decor(Vector2(170.0 + float(i) * 120.0, 516.0 + float(i % 2) * 16.0), 104.0, 0.52)
-		var m2 := _spawn_enemy("mage", Vector2(400.0, 600.0), 70.0, 10.0, 110.0)
-		m2["cast_t"] = 5.0
+		# 第二波·怪物偷袭（无延迟技能，只靠近+普攻）
+		var m := _spawn_enemy("mage", Vector2(520.0, 580.0), 90.0, 10.0, 90.0)
+		m["cast_t"] = -1.0
+		_skill_btn.visible = false
+		_hero_skill_cd = 0.0
 		_dialogue([
-			{"who": "旁白", "text": "你刚收剑，巷口后头又涌出一片灰影。"},
-			{"who": "旁白", "text": "当先一个身法极快——和方才那人，是一路货色。"},
-			{"who": "旁白", "text": "前头那具尸首，并没让他们生出半点惧色。"},
-			{"who": "旁白", "text": "后头还跟着几条人影。你心里清楚：得快。"},
+			{"who": "旁白", "text": "一步踏出村口，风里忽然多了一股腥气。"},
+			{"who": "引导", "text": "小心——有东西扑上来了。"},
 		], func() -> void:
-			_guide("一波未平，一波又起。", Rect2(18.0, 14.0, 240.0, 52.0), "tap", Callable(), "wave")
+			_guide("当心。", Rect2(18.0, 14.0, 240.0, 52.0), "tap", Callable(), "wave")
 		)
 	elif n == 3:
+		# 第三波·回血怪：打得动但回得比掉血快 → 解锁绝学
 		var g := _spawn_enemy("brute", Vector2(360.0, 580.0), 180.0, 16.0, 100.0)
 		g["atk_t"] = 0.2
+		g["regen"] = 0.12
+		_skill_btn.visible = false
+		_hero_skill_cd = 0.0
+		_dialogue([
+			{"who": "旁白", "text": "这一只不一样——伤口才裂开，转眼又合上了。"},
+			{"who": "引导", "text": "寻常招式伤不了它——用绝学！"},
+		], func() -> void:
+			_hero_rage = 100.0
+			_ult_btn.visible = true
+			_guide("落日剑诀。", _ult_btn.get_global_rect(), "ult")
+		)
+
 	elif n == 4:
 		_spawn_enemy("elite", Vector2(360.0, 580.0), 200.0, 16.0, 100.0)
 		_hero_skill_cd = 0.0
@@ -762,6 +774,9 @@ func _process(delta: float) -> void:
 		# 残血才触发；14 秒只是防玩家一直绕圈的兜底
 		if _hero_hp <= HERO_HP_MAX * 0.18 or _wave5_t >= 14.0:
 			_wave5_crisis()
+	# 功法·落日剑法：自动释放（冷却好、场上有怪就放；绝学仍是点击）
+	if _hero_skill_cd <= 0.0 and not _nearest_enemy().is_empty():
+		_cast_skill()
 
 
 func _update_hero(delta: float) -> void:
@@ -1080,7 +1095,7 @@ func _cast_skill() -> void:
 	var sdmg := HERO_ATK * SKILL_MULT
 	_damage_enemy(target, sdmg, "phys_big")
 	_log_action("少侠 落日·断流 → " + _enemy_name(target) + " −" + str(int(sdmg)))
-	_move_banner("『落日·断流』", SEAL)
+	_move_banner("『落日剑法』", SEAL)
 	if _guide_on and _guide_mode == "skill":
 		_end_guide()
 
@@ -1150,6 +1165,27 @@ func _start_ult_cine() -> void:
 	_ult_banner = false
 	_ult_foes = _enemies.duplicate()
 	_paused = true
+	var ov := Control.new()
+	ov.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	ov.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ov.z_index = 20
+	add_child(ov)
+	_ult_ov = ov
+	var dim := ColorRect.new()
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dim.color = Color(0.02, 0.02, 0.03, 0.0)
+	ov.add_child(dim)
+	_ult_dim = dim
+	var art := TextureRect.new()
+	art.position = Vector2(90.0, 300.0)
+	art.size = Vector2(540.0, 460.0)
+	art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	if ResourceLoader.exists("res://assets/art/skills/sun_sword_ult.jpg"):
+		art.texture = load("res://assets/art/skills/sun_sword_ult.jpg")
+	art.modulate = Color(1, 1, 1, 0)
+	ov.add_child(art)
+	_ult_art = art
 	_log_action("少侠 落日剑诀 → 四人 −" + str(int(HERO_ATK * ULT_MULT)))
 	_ult_lb.visible = true
 	_ult_lb.modulate = Color(1, 1, 1, 0)
@@ -1176,6 +1212,10 @@ func _update_ult_cine(delta: float) -> void:
 	_ult_lb.modulate = Color(1, 1, 1, ta)
 	var ts := 0.72 + 0.42 * clampf((t - 0.12) / 0.35, 0.0, 1.0)
 	_ult_lb.scale = Vector2(ts, ts)
+	if _ult_dim != null:
+		_ult_dim.color.a = clampf((t - 0.10) / 0.25, 0.0, 0.55)
+	if _ult_art != null:
+		_ult_art.modulate.a = clampf((t - 0.18) / 0.30, 0.0, 1.0) * (1.0 - clampf((t - 1.55) / 0.25, 0.0, 1.0))
 	if t >= 1.0:
 		if not _ult_banner:
 			_ult_banner = true
@@ -1198,6 +1238,11 @@ func _update_ult_cine(delta: float) -> void:
 	if t >= 1.95:
 		_ult_cine = -1.0
 		_ult_lb.visible = false
+		if _ult_ov != null:
+			_ult_ov.queue_free()
+			_ult_ov = null
+			_ult_dim = null
+			_ult_art = null
 		_zoom = 1.0
 		_pivot = Vector2.ZERO
 		_apply_field_transform()
@@ -1420,6 +1465,10 @@ func _finish(win: bool) -> void:
 	_paused = true
 	loot_silver = 50 if win else 0
 	_end_title.text = "清 场" if win else "败"
+	# 引子通关：记首趟完成（回主界面后接第二段铁匠）
+	if win:
+		GameState.first_journey_done = true
+		GameState.save_game()
 	_end_ov.visible = true
 	Audio.sfx("win" if win else "lose", -8.0)
 
