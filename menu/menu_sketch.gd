@@ -67,6 +67,7 @@ const CharacterPanel := preload("res://menu/character_panel.gd")
 const WarehousePanel := preload("res://menu/warehouse_panel.gd")
 const TwitchRecorder := preload("res://shared/twitch_recorder.gd")   # v63k：抽搐取证器（B 键用）
 const OutPanel := preload("res://menu/out_panel.gd")
+const TutorialStage := preload("res://kushou/tutorial_stage.gd")   # 重做期：教学关 v0（村口 · 5 波）
 const ChestPanel := preload("res://menu/chest_panel.gd")   # v36：宝箱
 const AppraisePanel := preload("res://menu/appraise_panel.gd")   # v39：鉴宝行
 const CraftPanel := preload("res://menu/craft_panel.gd")   # v50：百工坊（品酒/炼丹/鉴宝 三合一的门厅）
@@ -103,7 +104,8 @@ const MAP_STAGE := GameState.STORY_MAP_STAGE       # 藏宝图（得「藏宝阁
 const NVXIA_STAGE := GameState.STORY_NVXIA_STAGE   # 苏青鸾入阵（第三人齐）
 const HERB_STAGE := GameState.STORY_HERB_STAGE     # 灵草三种（炼丹阁开工）
 const JIANBAO_STAGE := GameState.STORY_JIANBAO_STAGE   # v39：打捞上来的货仓（鉴宝行开张）
-const BOOT_INTO_INTRO := true   # ㊿p（B 案）：新档开机直接进引子；改回 false ＝ 恢复"开机进村"
+const BOOT_INTO_INTRO := false  # 重做期：引子先去掉（F9 仍可重播）；改回 true ＝ 新档开机直接进引子
+const TUTORIAL_DEMO := true      # 临时：底排「出村」直接开教学关（v0），不走出村面板
 
 const SEASON_DAYS := 3        # 每几天换一季（想两天改 2、一天改 1）
 const SEASON_CFG := "user://season.cfg"
@@ -249,6 +251,7 @@ var _warehouse = null
 # ㊿z12（抽搐取证）：测试键 B 开的抽帧记录器（见文件末尾 TwitchRecorder）
 var _twitch_rec: Node = null
 var _out_panel = null
+var _tutorial = null
 var _chest_panel = null   # v36：宝箱面板
 var _formation = null
 var _kushou = null          # v63：困兽 v1 试玩面板（现在按 Shift+E）
@@ -1050,7 +1053,8 @@ func _refresh_plaques() -> void:
 	# v200/v211：封面页只留顶栏（头像/名号/进阶/银两）与挂机；右栏与大碑全部收起
 	var rail_on := not _cover_mode
 	_plaques.set_vis("shop", rail_on)
-	_plaques.set_vis("kushou_test", rail_on)
+	# 重做期：困兽入口移到「出村」，右栏这块牌先藏（代码与位置都留着，随时能开回来）
+	_plaques.set_vis("kushou_test", false)
 	# v237：后山把两只宠物都收完就没东西了——牌子直接消失，不再留个"白狐的老家"占位
 	var hill_done := GameState.pet_has("fox") and GameState.pet_has("qing_sun")
 	_plaques.set_vis("hill", rail_on and not hill_done)
@@ -2425,6 +2429,23 @@ func _open_out() -> void:
 	_clear_toast()
 	_out_panel.open()
 
+# 重做期：教学关 v0——底排「出村」直接进（暂时绕过出村面板）
+func _open_tutorial() -> void:
+	_clear_toast()
+	if _tutorial == null:
+		_tutorial = TutorialStage.new()
+		_tutorial.closed.connect(_on_tutorial_closed)
+		add_child(_tutorial)
+	_tutorial.open()
+	_tutorial.move_to_front()
+	_show_toast("教学关（临时入口）：村口 · 5 波", 2.4)
+
+func _on_tutorial_closed() -> void:
+	if _tutorial != null:
+		_tutorial.queue_free()
+		_tutorial = null
+	Audio.play_bgm(Audio.menu_track(), 1.0)
+
 func _open_star_page(which := "") -> void:
 	print("[主界面] 升星页", which)
 	if _star_panel != null:
@@ -2799,7 +2820,10 @@ func _tag_fire(i: int) -> void:
 	Audio.ui_click()      # v98：底排页签原来一声都没有（用户："点击需要有一点反馈的音效"）
 	match i:
 		0:
-			_open_out()
+			if TUTORIAL_DEMO:
+				_open_tutorial()
+			else:
+				_open_out()
 			return
 		1:
 			if not _disciple_ready():
