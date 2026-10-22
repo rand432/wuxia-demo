@@ -799,11 +799,11 @@ const CHAR_GRADE_NAMES := ["天", "地", "玄", "黄", "宇"]
 static func role_grade_idx(rid: String) -> int:
 	match rid:
 		"player":
-			return 3
+			return 2
 		"chen_shi":
 			return 4
 		"qingluan":
-			return 2
+			return 3
 		_:
 			return 3
 static func role_grade_cn(rid: String) -> String:
@@ -2818,7 +2818,7 @@ const PLAYER_DEFAULT := {
 	# ㊺：再改一层——横扫只在"对手不止一个"时发生。
 	#   只剩一个敌人时它转回单体重击，倍率用 mult_single（＝原来那个 2.8），
 	#   不然对着一个杂兵放横扫，等于自己把大招打了个六折。
-	"ult": {"name": "长风破浪", "target": "sweep", "kind": "hit", "mult": 1.7, "mult_single": 2.8, "desc": "怒气满时自动放出：对手不止一人时横扫全场（各 ×1.7）；只剩一人时转为单体重击（×2.8）"},
+	"ult": {"name": "落日剑诀", "target": "sweep", "kind": "hit", "mult": 2.0, "mult_single": 2.0, "desc": "怒气满时自动放出：四柄长剑自天而降，对最多 4 名敌人各造成 200% 伤害"},
 	"tech": {"name": "调息归元", "desc": "每 4 次行动：回复 15% 气血（暂定）"},
 	"passive": {"kind": "rage_up", "v": 0.3, "name": "引气归元", "desc": "专属被动：怒气获取 +30%——大招来得更快（出村战斗与游历决斗都已接入）"},
 }

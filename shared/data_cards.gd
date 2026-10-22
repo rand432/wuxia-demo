@@ -86,11 +86,11 @@ const SETS := [
 	{"id": "armor_long", "name": "龙鳞宝甲", "pool": "armor", "weapon": "any", "parts": ["片", "衬", "扣", "环", "纹", "鳞"], "item": "龙鳞宝甲", "quality": "绝品", "item_stats": {"hp": 780, "def": 19, "dodge": 9, "earth_res": 12, "metal_res": 10, "water_res": 7}},
 	{"id": "helm_hunyuan", "name": "混元玉璧", "pool": "helm", "weapon": "any", "parts": ["身", "结", "穗", "铭", "纹", "魂"], "item": "混元玉璧", "quality": "绝品", "item_stats": {"crit": 9, "hp": 380, "def": 15, "crit_dmg": 8, "wood_res": 12, "fire_res": 10, "water_res": 7}},
 	{"id": "cloak_yun", "name": "流云飞氅", "pool": "cloak", "weapon": "any", "parts": ["领", "面", "扣", "里", "纹", "羽"], "item": "流云飞氅", "quality": "绝品", "item_stats": {"spd": 17, "dodge": 17, "hp": 300, "water_res": 12, "earth_res": 10, "metal_res": 7}},
-	{"id": "art_wind", "name": "疾风剑法", "pool": "arts", "weapon": "sword", "parts": ["卷上", "卷中", "卷下"], "item": "疾风剑法",
+	{"id": "art_wind", "name": "落日剑法", "pool": "arts", "weapon": "sword", "parts": ["卷上", "卷中", "卷下"], "item": "落日剑法",
 		# ㊿z2：补上 off_mult——它是**唯一一门"指定了兵器却没写打折"的武学**（别的 sword/dual
 		#   武学都写了 off_mult），空着就等于"拿枪也使出全套剑法"，跟别的武学口径不一致。
 		#   顺手也让角色星「武学宗师」有活干（那一条正是取消这个打折）。
-		"art": {"kind": "damage", "mult": 1.8, "off_mult": 1.4, "cd": 3, "move": "风卷残云", "target": "mid", "desc": "剑走轻灵：×1.8（非剑 ×1.4 · 冷却 3 手）"}},
+		"art": {"kind": "damage", "mult": 1.5, "off_mult": 1.4, "cd": 20, "move": "落日剑法", "target": "mid", "desc": "落日剑法：×1.5 单体（非剑 ×1.4 · 冷却 20 手）"}},
 	{"id": "art_cleave", "name": "断岳刀法", "pool": "arts", "weapon": "dual", "parts": ["卷上", "卷中", "卷下"], "item": "断岳刀法", "quality": "良品",
 		"art": {"kind": "damage", "mult": 2.4, "off_mult": 1.3, "cd": 4, "move": "断岳开山", "target": "sweep", "desc": "刀势沉猛：×2.4（非刀 ×1.3 · 冷却 4 手）"}},
 	{"id": "art_shadow", "name": "影步", "pool": "arts", "weapon": "any", "parts": ["卷上", "卷中", "卷下"], "item": "影步", "quality": "良品",
