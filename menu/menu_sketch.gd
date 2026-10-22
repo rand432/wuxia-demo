@@ -45,6 +45,9 @@ const USE_PAPER_ACTORS := false
 #   （menu_village）就是压在它上面的两层"旧画"——整条画卷还占着屏幕中央，村景只在
 #   下面露一条。开关打开＝这两层连同远山层、旧特效层一起收起（**只隐藏、不删**，改 false 就回退）。
 const INK_ONLY := true
+# v243（用户："少年游这个画卷目前很碍事了 去掉吧 就主界面就行"）：
+#   画卷收起——开屏直接是村景主界面，不展卷、不拖卷、不显示封面。
+const SCROLL_OFF := true
 # v99（用户："用这个吧 把豆包ai p掉"）：主场景改用豆包出的那支 **10 秒动态画**（720×1124，
 #   水墨村落：云在飘、鸟在飞、水在动、船在划）。水印已用 tools/spine-bake/wm_clean.mjs 逐帧补掉，
 #   成品在 assets/video/village_loop.ogv（Godot 的 VideoStreamPlayer 只吃 Ogg Theora，所以转成 ogv）。
@@ -252,6 +255,21 @@ var _warehouse = null
 var _twitch_rec: Node = null
 var _out_panel = null
 var _tutorial = null
+var _loot_pop: Control = null
+var _loot_fx: Control = null
+var _chief_dlg: Control = null
+var _chief_lines: Array = []
+var _chief_i := 0
+var _chief_name: Label = null
+var _chief_text: Label = null
+var _chief_done := Callable()
+var _chief_portrait: Control = null
+var _chief_face: TextureRect = null
+var _forge_story_done := false
+var _craft_guide: Control = null
+var _craft_guide_rect := Rect2()
+var _craft_guide_text := ""
+var _craft_guide_step := ""
 var _chest_panel = null   # v36：宝箱面板
 var _formation = null
 var _kushou = null          # v63：困兽 v1 试玩面板（现在按 Shift+E）
@@ -363,6 +381,11 @@ class MoneyHud extends Node2D:
 		draw_string(font, Vector2(532.0, 57.0), str(int(round(_disp_yuanbao))), HORIZONTAL_ALIGNMENT_RIGHT, 82.0, 20.0,
 			Color(0.960, 0.925, 0.820, 0.96).lerp(Ui.GOLD_HI, _bump_y * 0.85))
 
+	func silver_anchor() -> Vector2:
+		if Ui.SKIN == 1:
+			return Vector2(364.0, 49.0)
+		return Vector2(358.0, 25.0)
+
 	func _draw() -> void:
 		if font == null:
 			return
@@ -390,6 +413,60 @@ class MoneyHud extends Node2D:
 		draw_style_box(_sb2, r2)
 		_ingot(Vector2(504, 26))
 		draw_string(font, Vector2(526, 31), str(yuanbao), HORIZONTAL_ALIGNMENT_LEFT, 78, 17, Color(0.14, 0.13, 0.15, 0.92))
+
+# ---- 教学关回村：银两飞向顶栏 ----
+class LootFx extends Control:
+	signal all_landed
+	var coins: Array = []
+	var on_land := Callable()
+	var _announced := false
+
+	func start(count: int, from: Vector2, to: Vector2) -> void:
+		for i in count:
+			var p0 := from + Vector2(randf_range(-26.0, 26.0), randf_range(-16.0, 16.0))
+			var p2 := to + Vector2(randf_range(-4.0, 4.0), randf_range(-4.0, 4.0))
+			var p1 := Vector2((p0.x + p2.x) * 0.5 + randf_range(-90.0, 90.0),
+				minf(p0.y, p2.y) - 100.0 - randf_range(0.0, 80.0))
+			coins.append({"p0": p0, "p1": p1, "p2": p2, "t": -0.045 * float(i),
+				"dur": 0.52 + randf_range(0.0, 0.12), "landed": false})
+		queue_redraw()
+
+	func _process(delta: float) -> void:
+		if coins.is_empty():
+			return
+		var all := true
+		for c in coins:
+			c["t"] = float(c["t"]) + delta
+			if float(c["t"]) >= 1.0 and not bool(c["landed"]):
+				c["landed"] = true
+				if on_land.is_valid():
+					on_land.call()
+			if not bool(c["landed"]) or float(c["t"]) < 1.05:
+				all = false
+		queue_redraw()
+		if all and not _announced:
+			_announced = true
+			all_landed.emit()
+
+	func _bez(p0: Vector2, p1: Vector2, p2: Vector2, t: float) -> Vector2:
+		var q0 := p0.lerp(p1, t)
+		var q1 := p1.lerp(p2, t)
+		return q0.lerp(q1, t)
+
+	func _draw() -> void:
+		for c in coins:
+			if float(c["t"]) < 0.0:
+				continue
+			var tt := clampf(float(c["t"]), 0.0, 1.0)
+			var pos := _bez(c["p0"], c["p1"], c["p2"], tt)
+			var prev := _bez(c["p0"], c["p1"], c["p2"], maxf(0.0, tt - 0.10))
+			var a := 1.0 - clampf((float(c["t"]) - 0.86) / 0.16, 0.0, 1.0)
+			draw_line(prev, pos, Color(0.95, 0.90, 0.70, 0.25 * a), 3.0, true)
+			draw_circle(pos, 9.0, Color(0.93, 0.92, 0.94, a))
+			draw_arc(pos, 9.0, 0.0, TAU, 20, Color(0.45, 0.44, 0.52, a), 1.5, true)
+			draw_rect(Rect2(pos + Vector2(-3.0, -3.0), Vector2(6.0, 6.0)), Color(0.45, 0.44, 0.52, a), false, 1.5)
+			draw_circle(pos + Vector2(-3.0, -3.0), 2.5, Color(1.0, 1.0, 1.0, 0.45 * a))
+
 
 # ---- 挂机木牌：吊绳 + 尖尾（自绘按钮） ----
 class IdlePlaque extends Button:
@@ -628,7 +705,7 @@ class TopVeil extends Node2D:
 				var hsx: float = vh.x - float(host._cam)
 				if vh.x > 0.0 and hsx > -60.0 and hsx < 780.0:
 					draw_string(font, Vector2(hsx - 40.0, host._sy(vh.y) - 100.0), "少侠", HORIZONTAL_ALIGNMENT_CENTER, 80.0, 13, Color(ink2.r, ink2.g, ink2.b, 0.60))
-		if not host._disciple_ready() and not panel_open and story < 0:
+		if not host._disciple_ready() and not panel_open and story < 0 and host._tag_unlocked(1) and (host._tag_rects[1] as Rect2).size.x > 0.0:
 			var rc: Rect2 = host._tag_rects[1]
 			draw_rect(rc, Color(0.09, 0.07, 0.06, 0.40))
 		if story < 0:
@@ -676,6 +753,11 @@ func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_font = Draw.pick_font(get_theme_default_font())
 	_layout_tags()
+	if SCROLL_OFF:
+		_sc = 0.0
+		_demo_done = true
+		_cam = Conf.OPEN_CAM
+		_hint_used = true
 	_scroll = ScrollLayer.new()
 	_village = VillageLayer.new()
 	_mount = MountLayer.new()
@@ -735,6 +817,8 @@ func _ready() -> void:
 			cbg.size = Vector2(Conf.DW, Conf.BAND_H)
 			cbg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			_cover_win.add_child(cbg)
+			if SCROLL_OFF:
+				_cover_win.visible = false
 		else:
 			_ink = InkScene.new()
 			add_child(_ink)
@@ -760,6 +844,8 @@ func _ready() -> void:
 		_mount.weiba_x = Conf.OPEN_CAM + 60.0               # 2340
 		_mount.weiba_w = Conf.YINSHOU_X0 - 30.0 - _mount.weiba_x   # 到隔水为止（2670-2340=330）
 		add_child(_mount)
+		if SCROLL_OFF:
+			_mount.visible = false
 	else:
 		add_child(_mount)
 	# v231：画心雾气/金尘——夹在画心（z -100）与装裱（z -40）之间，不吃鼠标
@@ -1052,19 +1138,18 @@ func _refresh_plaques() -> void:
 		return
 	# v200/v211：封面页只留顶栏（头像/名号/进阶/银两）与挂机；右栏与大碑全部收起
 	var rail_on := not _cover_mode
-	_plaques.set_vis("shop", rail_on)
-	# 重做期：困兽入口移到「出村」，右栏这块牌先藏（代码与位置都留着，随时能开回来）
+	# 剧情解锁：目前只开「百工坊（铁匠铺）」与「出村」
+	_plaques.set_vis("shop", false)
 	_plaques.set_vis("kushou_test", false)
-	# v237：后山把两只宠物都收完就没东西了——牌子直接消失，不再留个"白狐的老家"占位
-	var hill_done := GameState.pet_has("fox") and GameState.pet_has("qing_sun")
-	_plaques.set_vis("hill", rail_on and not hill_done)
-	# 右栏的 cave/treasure 退休：改由画里的 cave_scene/treasure_map 提示，用掉就消失
+	_plaques.set_vis("hill", false)
 	_plaques.set_vis("treasure", false)
 	_plaques.set_vis("cave", false)
-	_plaques.set_vis("treasure_map", rail_on and GameState.map_found and not GameState.b2_built)
-	_plaques.set_vis("cave_scene", rail_on and GameState.b2_built and not GameState.cave_opened)
+	_plaques.set_vis("treasure_map", false)
+	_plaques.set_vis("cave_scene", false)
 	_plaques.set_vis("craft", rail_on and (GameState.cave_opened or GameState.first_journey_done))
-	_plaques.set_vis("stele", rail_on)
+	_plaques.set_vis("stele", false)
+	_plaques.set_vis("advance", false)
+	_plaques.set_vis("idle", false)
 	# v211：右栏按"当前可见的格子"重排（隐藏一格，下面的平滑往上顶）
 	_plaques.layout_rail(PlaqueLayer.RAIL_IDS, PlaqueLayer.RAIL_TOP, PlaqueLayer.RAIL_H, PlaqueLayer.RAIL_GAP)
 	# v98：商店**固定**（用户点名）——不再按剧情显隐，也不随风摆
@@ -1184,6 +1269,11 @@ func _exit_tree() -> void:
 
 # v4.2：5 格 → 6 格（新增「宝箱」）。宽度得跟着收：720 - 2×10 边距 = 700，
 #   主键 146 + 5×96 + 5×11 缝 = 681，居中后左右各留 ~19。
+func _tag_unlocked(i: int) -> bool:
+	# 剧情解锁：只开「出村」；往后随剧情一格格补
+	return i == 0
+
+
 func _layout_tags() -> void:
 	# v211：6 格**等宽**（底栏抬到 100 高）——主格不再独大，整排像一条真正的功能带
 	var gap := 8.0
@@ -1194,6 +1284,10 @@ func _layout_tags() -> void:
 	for i in n:
 		rects.append(Rect2(x, Conf.TAG_Y, w, Conf.TAG_H))
 		x += w + gap
+	if _tag_unlocked(0) and not _tag_unlocked(1):
+		for i in n:
+			rects[i] = Rect2(0.0, 0.0, 0.0, 0.0)
+		rects[0] = Rect2(240.0, Conf.TAG_Y, 240.0, Conf.TAG_H)
 	_tag_rects = rects
 
 # ---- 场景标语 ----
@@ -1723,9 +1817,13 @@ func _click_craft() -> void:
 		return
 	_craft_panel.open()
 	_craft_panel.move_to_front()
+	if _craft_guide != null and _craft_guide_step == "craft":
+		_start_forge_guide()
 
 # 门厅里点了哪一间：能开就开；炼丹阁还带"起炉"那一步（与原来 _click_dange 同一笔账）
 func _on_craft_room(room: String) -> void:
+	if _craft_guide != null:
+		_end_craft_guide()
 	# 进作坊前先把门厅收掉；否则门厅那张纸会压在新面板上面（用户："原百工坊窗口覆盖了品酒坊"）。
 	if _craft_panel != null:
 		_craft_panel.visible = false
@@ -1758,6 +1856,7 @@ func _on_craft_room(room: String) -> void:
 			_clear_toast()
 			_forge_panel.open()
 			_forge_panel.move_to_front()
+			_show_forge_story()
 
 func _click_winery() -> void:
 	_click_craft()
@@ -2175,6 +2274,8 @@ func _unhandled_input(ev: InputEvent) -> void:
 
 func _process(delta: float) -> void:
 	_t += delta * Conf.TIME_SCALE
+	if _craft_guide != null:
+		_craft_guide.queue_redraw()
 	if _toast_t > 0.0:
 		_toast_t -= delta
 		if _toast_t <= 0.0:
@@ -2441,10 +2542,344 @@ func _open_tutorial() -> void:
 	_show_toast("教学关（临时入口）：村口 · 5 波", 2.4)
 
 func _on_tutorial_closed() -> void:
+	var loot := 0
 	if _tutorial != null:
+		loot = int(_tutorial.loot_silver)
 		_tutorial.queue_free()
 		_tutorial = null
 	Audio.play_bgm(Audio.menu_track(), 1.0)
+	if loot > 0:
+		_show_loot_popup(loot)
+
+
+func _show_loot_popup(amount: int) -> void:
+	if _loot_pop != null:
+		return
+	var pop := Control.new()
+	pop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	pop.z_index = 50
+	pop.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(pop)
+	_loot_pop = pop
+	var dim := ColorRect.new()
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dim.color = Color(0.05, 0.04, 0.03, 0.58)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	pop.add_child(dim)
+	var box := Panel.new()
+	box.position = Vector2(120.0, 410.0)
+	box.size = Vector2(480.0, 300.0)
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.955, 0.937, 0.886, 0.98)
+	sb.set_corner_radius_all(4)
+	sb.border_color = Color(0.72, 0.58, 0.25, 0.75)
+	sb.set_border_width_all(2)
+	box.add_theme_stylebox_override("panel", sb)
+	pop.add_child(box)
+	var title := Label.new()
+	title.position = Vector2(0.0, 28.0)
+	title.size = Vector2(480.0, 40.0)
+	title.text = "匪首身上"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_override("font", _font)
+	title.add_theme_font_size_override("font_size", 30)
+	title.add_theme_color_override("font_color", Color(0.68, 0.15, 0.12))
+	box.add_child(title)
+	var line := Label.new()
+	line.position = Vector2(40.0, 92.0)
+	line.size = Vector2(400.0, 80.0)
+	line.text = "你从匪首那里摸到了些许银两。"
+	line.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	line.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	line.add_theme_font_override("font", _font)
+	line.add_theme_font_size_override("font_size", 22)
+	line.add_theme_color_override("font_color", Color(0.14, 0.13, 0.15))
+	box.add_child(line)
+	var amt := Label.new()
+	amt.position = Vector2(0.0, 168.0)
+	amt.size = Vector2(480.0, 34.0)
+	amt.text = "银两 +" + str(amount)
+	amt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	amt.add_theme_font_override("font", _font)
+	amt.add_theme_font_size_override("font_size", 20)
+	amt.add_theme_color_override("font_color", Color(0.72, 0.58, 0.22))
+	box.add_child(amt)
+	var btn := UiKit.make_button(box, Vector2(150.0, 220.0), Vector2(180.0, 52.0), "收下", 22)
+	btn.pressed.connect(func() -> void:
+		Audio.sfx("ui_click", -10.0)
+		pop.queue_free()
+		_loot_pop = null
+		_start_loot_coins(amount)
+	)
+
+
+func _start_loot_coins(amount: int) -> void:
+	var anchor := Vector2(364.0, 49.0)
+	if _money_hud != null:
+		anchor = _money_hud.position + _money_hud.silver_anchor() * _money_hud.scale
+	var fx := LootFx.new()
+	fx.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	fx.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	fx.z_index = 60
+	add_child(fx)
+	_loot_fx = fx
+	var pack := {"left": amount}
+	fx.on_land = func() -> void:
+		var add := mini(5, int(pack["left"]))
+		if add <= 0:
+			return
+		pack["left"] = int(pack["left"]) - add
+		GameState.add_coin("silver", add)
+		if _money_hud != null:
+			_money_hud.silver = GameState.coin("silver")
+		Audio.sfx("coin", -8.0, randf_range(0.92, 1.08))
+		if int(pack["left"]) <= 0:
+			GameState.save_game()
+			Audio.sfx("coin", -3.0, 0.8)
+			_show_loot_float(anchor, amount)
+	fx.all_landed.connect(func() -> void:
+		if is_instance_valid(fx):
+			fx.queue_free()
+		if _loot_fx == fx:
+			_loot_fx = null
+		_show_chief_story()
+	)
+	fx.start(10, Vector2(360.0, 520.0), anchor)
+
+
+func _show_chief_story() -> void:
+	_show_dialogue([
+		{"who": "旁白", "text": "村长拄着拐杖，从巷口匆匆赶来。"},
+		{"who": "村长", "text": "壮士！壮士出手相救，老朽替全村上下，谢过壮士。"},
+		{"who": "村长", "text": "只是……匪人吃了这么大的亏，怕不会善罢甘休。"},
+		{"who": "村长", "text": "壮士若不嫌弃，今晚就留在村里。村里，还需壮士助一臂之力。"},
+		{"who": "少侠", "text": "……有心无力。剑断了，剑法使不出来。如今的我，只剩几成实力。"},
+		{"who": "村长", "text": "剑断了？村里正好有间铁匠铺。老朽带壮士去看看。"},
+		{"who": "旁白", "text": "不多时，村长带着主角走到了百工坊旁。"},
+		{"who": "村长", "text": "到了，就是这里。"},
+	], _start_craft_guide)
+
+
+func _show_forge_story() -> void:
+	if _forge_story_done:
+		return
+	_forge_story_done = true
+	_show_dialogue([
+		{"who": "旁白", "text": "炉火正旺。你看见一个赤膊汉子站在砧前，一锤接一锤，火星四溅。"},
+		{"who": "旁白", "text": "村长喊了一声。那人放下锤，转过身来。"},
+		{"who": "旁白", "text": "村长把村口的事，从头到尾说了一遍。"},
+		{"who": "旁白", "text": "铁匠沉吟片刻。"},
+		{"who": "铁匠", "text": "我这里倒是有少侠需要的胚子。"},
+		{"who": "铁匠", "text": "不过，上好的胚子，要与主人人器合一。得由主人亲手锻造，才发挥得出最完美的威力。"},
+		{"who": "少侠", "text": "我不会，怎么办？"},
+		{"who": "铁匠", "text": "这个简单。我指导你就行。"},
+	], Callable())
+
+
+func _show_dialogue(lines: Array, on_done: Callable) -> void:
+	if _chief_dlg != null:
+		return
+	_chief_lines = lines
+	_chief_i = 0
+	_chief_done = on_done
+	var dlg := Control.new()
+	dlg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dlg.z_index = 55
+	dlg.mouse_filter = Control.MOUSE_FILTER_STOP
+	dlg.gui_input.connect(func(ev: InputEvent) -> void:
+		var clicked: bool = (ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT) or (ev is InputEventScreenTouch and ev.pressed)
+		if clicked:
+			_chief_advance()
+	)
+	add_child(dlg)
+	_chief_dlg = dlg
+	var dim := ColorRect.new()
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dim.color = Color(0.04, 0.03, 0.02, 0.46)
+	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	dlg.add_child(dim)
+	var box := Panel.new()
+	box.position = Vector2(30.0, 830.0)
+	box.size = Vector2(660.0, 290.0)
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.955, 0.937, 0.886, 0.98)
+	sb.set_corner_radius_all(4)
+	sb.border_color = Color(0.72, 0.58, 0.25, 0.75)
+	sb.set_border_width_all(2)
+	box.add_theme_stylebox_override("panel", sb)
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	dlg.add_child(box)
+	# 少侠说话时的圆牌立绘（纸底 + 金边 + 圆内头像）
+	_chief_portrait = Control.new()
+	_chief_portrait.position = Vector2(30.0, 54.0)
+	_chief_portrait.size = Vector2(130.0, 130.0)
+	_chief_portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_chief_portrait.visible = false
+	box.add_child(_chief_portrait)
+	_chief_portrait.draw.connect(func() -> void:
+		_chief_portrait.draw_circle(Vector2(65.0, 65.0), 63.0, Color(0.94, 0.91, 0.85))
+		_chief_portrait.draw_arc(Vector2(65.0, 65.0), 63.0, 0.0, TAU, 48, Color(0.72, 0.58, 0.25, 0.90), 2.5)
+	)
+	_chief_face = TextureRect.new()
+	_chief_face.position = Vector2(6.0, 6.0)
+	_chief_face.size = Vector2(118.0, 118.0)
+	_chief_face.texture = CharArt.face("player")
+	_chief_face.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_chief_face.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	_chief_face.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var mask_sh := Shader.new()
+	mask_sh.code = "shader_type canvas_item;
+void fragment(){ vec2 uv = UV - vec2(0.5); if (dot(uv, uv) > 0.25) { discard; } COLOR = texture(TEXTURE, UV); }"
+	var mask_mat := ShaderMaterial.new()
+	mask_mat.shader = mask_sh
+	_chief_face.material = mask_mat
+	_chief_portrait.add_child(_chief_face)
+	_chief_name = Label.new()
+	_chief_name.position = Vector2(40.0, 24.0)
+	_chief_name.size = Vector2(560.0, 36.0)
+	_chief_name.add_theme_font_override("font", _font)
+	_chief_name.add_theme_font_size_override("font_size", 24)
+	_chief_name.add_theme_color_override("font_color", Color(0.68, 0.15, 0.12))
+	_chief_name.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(_chief_name)
+	_chief_text = Label.new()
+	_chief_text.position = Vector2(40.0, 72.0)
+	_chief_text.size = Vector2(580.0, 150.0)
+	_chief_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_chief_text.add_theme_font_override("font", _font)
+	_chief_text.add_theme_font_size_override("font_size", 22)
+	_chief_text.add_theme_color_override("font_color", Color(0.14, 0.13, 0.15))
+	_chief_text.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(_chief_text)
+	var hint := Label.new()
+	hint.text = "轻点继续"
+	hint.position = Vector2(500.0, 238.0)
+	hint.size = Vector2(130.0, 30.0)
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	hint.add_theme_font_override("font", _font)
+	hint.add_theme_font_size_override("font_size", 15)
+	hint.add_theme_color_override("font_color", Color(0.30, 0.26, 0.20, 0.55))
+	hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(hint)
+	_chief_update()
+
+
+func _chief_update() -> void:
+	if _chief_i < 0 or _chief_i >= _chief_lines.size():
+		return
+	var ln: Dictionary = _chief_lines[_chief_i]
+	var who := str(ln.get("who", ""))
+	var hero := who == "少侠" or who == "主角" or who == str(GameState.player_name)
+	_chief_name.text = who
+	_chief_text.text = str(ln.get("text", ""))
+	if _chief_portrait != null:
+		_chief_portrait.visible = hero
+	_chief_name.position.x = 172.0 if hero else 40.0
+	_chief_name.size.x = 448.0 if hero else 560.0
+	_chief_text.position.x = 172.0 if hero else 40.0
+	_chief_text.size.x = 448.0 if hero else 580.0
+
+
+func _chief_advance() -> void:
+	if _chief_dlg == null:
+		return
+	_chief_i += 1
+	if _chief_i >= _chief_lines.size():
+		_chief_close()
+	else:
+		_chief_update()
+
+
+func _chief_close() -> void:
+	if _chief_dlg != null:
+		_chief_dlg.queue_free()
+		_chief_dlg = null
+	var cb := _chief_done
+	_chief_done = Callable()
+	if cb.is_valid():
+		cb.call()
+
+
+func _start_craft_guide() -> void:
+	if _craft_guide != null:
+		return
+	GameState.cave_opened = true
+	GameState.winery_built = true
+	GameState.save_game()
+	_refresh_plaques()
+	if _plaques != null:
+		_plaques.set_vis("craft", true)
+		_plaques.layout_rail(PlaqueLayer.RAIL_IDS, PlaqueLayer.RAIL_TOP, PlaqueLayer.RAIL_H, PlaqueLayer.RAIL_GAP)
+		_craft_guide_rect = _plaques.item_rect("craft")
+	_craft_guide_text = "百工坊"
+	_craft_guide_step = "craft"
+	var g := Control.new()
+	g.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	g.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	g.z_index = 48
+	g.draw.connect(_draw_craft_guide)
+	add_child(g)
+	_craft_guide = g
+
+
+func _start_forge_guide() -> void:
+	if _craft_guide == null:
+		return
+	_craft_guide_step = "forge"
+	_craft_guide_text = "铁匠铺"
+	if _craft_panel != null:
+		_craft_guide_rect = _craft_panel.forge_card_rect()
+
+
+func _end_craft_guide() -> void:
+	if _craft_guide != null:
+		_craft_guide.queue_free()
+		_craft_guide = null
+	_craft_guide_step = ""
+	_craft_guide_text = ""
+
+
+func _draw_craft_guide() -> void:
+	if _craft_guide == null:
+		return
+	var r := _craft_guide_rect
+	if r.size.x <= 0.0:
+		return
+	var k := 0.5 + 0.5 * sin(_t * 5.2)
+	var ring := r.grow(8.0 + 4.0 * k)
+	_craft_guide.draw_rect(ring.grow(12.0), Color(1.0, 0.78, 0.28, 0.10 + 0.10 * k), false, 10.0)
+	_craft_guide.draw_rect(ring, Color(1.0, 0.84, 0.36, 0.95), false, 3.0)
+	var tx := Rect2(130.0, 128.0, 530.0, 64.0)
+	_craft_guide.draw_rect(tx, Color(0.96, 0.94, 0.89, 0.97))
+	_craft_guide.draw_rect(tx, Color(0.86, 0.68, 0.26, 0.90), false, 2.0)
+	_craft_guide.draw_string(_font, Vector2(152.0, 169.0), _craft_guide_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 24, Color(0.14, 0.13, 0.15))
+	var start := Vector2(360.0, 196.0)
+	var c := r.get_center()
+	var dir := (c - start).normalized()
+	var side := Vector2(-dir.y, dir.x)
+	_craft_guide.draw_line(start, c - dir * 10.0, Color(0.55, 0.12, 0.10, 0.55), 5.0, true)
+	_craft_guide.draw_line(start, c - dir * 10.0, Color(1.0, 0.84, 0.36, 0.95), 2.5, true)
+	var tip := c
+	var a1 := tip - dir * 18.0 + side * 9.0
+	var a2 := tip - dir * 18.0 - side * 9.0
+	_craft_guide.draw_colored_polygon(PackedVector2Array([tip, a1, a2]), Color(1.0, 0.84, 0.36, 0.95))
+
+
+func _show_loot_float(anchor: Vector2, amount: int) -> void:
+	var lb := Label.new()
+	lb.text = "+" + str(amount)
+	lb.position = anchor + Vector2(-10.0, 8.0)
+	lb.size = Vector2(120.0, 30.0)
+	lb.add_theme_font_override("font", _font)
+	lb.add_theme_font_size_override("font_size", 22)
+	lb.add_theme_color_override("font_color", Color(0.86, 0.68, 0.26))
+	lb.z_index = 61
+	add_child(lb)
+	var tw := create_tween()
+	tw.tween_property(lb, "position:y", lb.position.y + 44.0, 0.9)
+	tw.parallel().tween_property(lb, "modulate:a", 0.0, 0.9)
+	tw.finished.connect(lb.queue_free)
 
 func _open_star_page(which := "") -> void:
 	print("[主界面] 升星页", which)
@@ -2678,7 +3113,7 @@ func _gui_input(ev: InputEvent) -> void:
 			_moved = 0.0
 			_mode = ""
 			_pressed_tag = -1
-			if p.y > Conf.BAND_TOP - 60.0 and p.y < Conf.TAG_Y - 8.0:
+			if not SCROLL_OFF and p.y > Conf.BAND_TOP - 60.0 and p.y < Conf.TAG_Y - 8.0:
 				_mode = "scroll"
 				_dragging = true
 				if _sc_tween != null and _sc_tween.is_valid():
@@ -2687,6 +3122,8 @@ func _gui_input(ev: InputEvent) -> void:
 					Audio.sfx("paper", -20.0, randf_range(0.96, 1.04))   # v98：展卷一声纸响（很轻）
 			else:
 				for i in _tag_rects.size():
+					if not _tag_unlocked(i):
+						continue
 					if (_tag_rects[i] as Rect2).has_point(p):
 						_mode = "tag"
 						_pressed_tag = i

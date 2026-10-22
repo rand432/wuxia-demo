@@ -130,6 +130,8 @@ func _draw_tags() -> void:
 	for i in host._tag_rects.size():
 		if i >= Conf.TAGN.size():
 			continue
+		if not host._tag_unlocked(i):
+			continue
 		var txt := str(Conf.TAGN[i])
 		if i == 3:
 			txt = _pet_label()   # v7：原「设置」格——现在直画宠物字样（设置以后并进「石桌」）

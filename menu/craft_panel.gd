@@ -37,6 +37,8 @@ const PANEL_H := 980.0
 const CARD_Y0 := 190.0
 const CARD_STEP := 158.0
 const CARD_H := 144.0
+# 剧情解锁：目前百工坊里只开铁砧台
+const FORGE_ONLY := true
 
 var _panel: Panel
 var _cards: Array = []
@@ -104,7 +106,7 @@ func _build() -> void:
 			title.add_theme_font_override("font", bf)
 	_panel.add_child(title)
 
-	var sub := _label("一间屋子，四个作坊：酿酒、炼丹、鉴宝、锻造。", 14,
+	var sub := _label("百工坊里，如今只亮着铁砧台这一炉火。" if FORGE_ONLY else "一间屋子，四个作坊：酿酒、炼丹、鉴宝、锻造。", 14,
 		Color(Ui.TXT_DIM.r, Ui.TXT_DIM.g, Ui.TXT_DIM.b, 0.85) if Ui.SKIN == 1 else Color(INK.r, INK.g, INK.b, 0.62))
 	sub.position = Vector2(30, 72) if Ui.SKIN == 1 else Vector2(30, 62)
 	sub.size = Vector2(PANEL_W - 60.0, 22)
@@ -235,6 +237,9 @@ func refresh() -> void:
 		var e: Dictionary = e_v
 		var rid := str(e["id"])
 		var card_c: Control = e.get("card")
+		if FORGE_ONLY and rid != "forge":
+			card_c.visible = false
+			continue
 		if rid == "jianbao":
 			card_c.visible = GameState.jianbao_ok()
 			if not card_c.visible:
@@ -285,6 +290,16 @@ func refresh() -> void:
 			(e["name"] as Label).add_theme_color_override("font_color", INK if on else Color(INK.r, INK.g, INK.b, 0.45))
 		card_c.position.y = CARD_Y0 + float(vis_i) * CARD_STEP
 		vis_i += 1
+
+func forge_card_rect() -> Rect2:
+	for e_v in _cards:
+		var e: Dictionary = e_v
+		if str(e.get("id", "")) == "forge":
+			var card_c: Control = e.get("card")
+			if card_c != null:
+				return Rect2(_panel.position + card_c.position, card_c.size)
+	return Rect2(_panel.position + Vector2(28.0, CARD_Y0 + 2.0 * CARD_STEP), Vector2(PANEL_W - 56.0, CARD_H))
+
 
 func _on_card(ev: InputEvent, room: String) -> void:
 	if not (ev is InputEventMouseButton):

@@ -37,11 +37,11 @@ const DMG_ELEM := Color(0.80, 0.56, 0.12)     # 元素：金
 const DMG_CRIT := Color(0.78, 0.22, 0.10)     # 暴击：铜红
 const DMG_REFLECT := Color(0.62, 0.30, 0.14)  # 反伤：古铜
 const DMG_HEAL := Color(0.28, 0.55, 0.26)     # 恢复：松绿
-const HERO_HOME := Vector2(360.0, 980.0)
-const FIELD_MIN := Vector2(70.0, 680.0)
-const FIELD_MAX := Vector2(650.0, 1060.0)
+const HERO_HOME := Vector2(360.0, 800.0)
+const FIELD_MIN := Vector2(70.0, 380.0)
+const FIELD_MAX := Vector2(650.0, 940.0)
 const HERO_SPEED := 250.0
-const HERO_RANGE := 78.0
+const HERO_RANGE := 120.0
 const HERO_ATK := 30.0
 const HERO_ATK_CD := 0.72
 const SKILL_CD := 20.0
@@ -96,6 +96,10 @@ var _ult_foes: Array = []
 var _ult_lb: Label
 var _log_lb: Label
 var _ult_banner := false
+var _action_which := ""
+var _action_down_ms := 0
+var _tip_which := ""
+var _tip_until_ms := 0
 
 # ---- 敌人 / 特效 ----
 var _enemies: Array = []
@@ -120,6 +124,7 @@ var _hp_guide_done := false
 var _wave5_fight := false
 var _wave5_crisis_done := false
 var _wave5_t := 0.0
+var loot_silver := 0
 
 # ---- 引导 ----
 var _guide_on := false
@@ -346,15 +351,32 @@ func _build_buttons() -> void:
 	_exit_btn.focus_mode = Control.FOCUS_NONE
 	_exit_btn.pressed.connect(_exit_stage)
 
-	_skill_btn = UiKit.make_button(self, Vector2(48.0, 1108.0), Vector2(300.0, 96.0), "落日剑法", 26)
-	_skill_btn.z_index = 10
+	# 下方只留两个圆形招式键：透明 Button 做点击区，图标画在 HUD 上
+	_skill_btn = Button.new()
+	_skill_btn.position = Vector2(236.0, 1106.0)
+	_skill_btn.size = Vector2(88.0, 88.0)
+	_skill_btn.flat = true
+	_skill_btn.text = ""
 	_skill_btn.focus_mode = Control.FOCUS_NONE
-	_skill_btn.pressed.connect(_cast_skill)
+	_skill_btn.modulate = Color(1, 1, 1, 0)
+	_skill_btn.z_index = 10
+	_skill_btn.button_down.connect(func() -> void: _on_action_down("skill"))
+	_skill_btn.button_up.connect(func() -> void: _on_action_up("skill"))
+	add_child(_skill_btn)
 
-	_ult_btn = UiKit.make_button(self, Vector2(372.0, 1108.0), Vector2(300.0, 96.0), "落日剑诀", 26)
-	_ult_btn.z_index = 10
+	_ult_btn = Button.new()
+	_ult_btn.position = Vector2(370.0, 1100.0)
+	_ult_btn.size = Vector2(100.0, 100.0)
+	_ult_btn.flat = true
+	_ult_btn.text = ""
 	_ult_btn.focus_mode = Control.FOCUS_NONE
-	_ult_btn.pressed.connect(_cast_ult)
+	_ult_btn.modulate = Color(1, 1, 1, 0)
+	_ult_btn.z_index = 10
+	_ult_btn.button_down.connect(func() -> void: _on_action_down("ult"))
+	_ult_btn.button_up.connect(func() -> void: _on_action_up("ult"))
+	add_child(_ult_btn)
+	_skill_btn.visible = false
+	_ult_btn.visible = false
 
 
 func _build_pause() -> void:
@@ -413,13 +435,19 @@ func _build_end() -> void:
 	_end_title = UiKit.make_label(box, Vector2(0.0, 44.0), Vector2(540.0, 90.0), 54, SEAL)
 	_end_title.text = "清 场"
 	_end_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	var sub := UiKit.make_label(box, Vector2(0.0, 142.0), Vector2(540.0, 40.0), 20, Color(INK.r, INK.g, INK.b, 0.7))
+	var sub := UiKit.make_label(box, Vector2(0.0, 138.0), Vector2(540.0, 38.0), 20, Color(INK.r, INK.g, INK.b, 0.7))
 	sub.text = "风停了。断剑斜插在土里。"
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_end_return = UiKit.make_button(box, Vector2(60.0, 250.0), Vector2(200.0, 58.0), "回 村", 22)
+	var story := UiKit.make_label(box, Vector2(20.0, 182.0), Vector2(500.0, 28.0), 17, Color(INK.r, INK.g, INK.b, 0.74))
+	story.text = "剩下的匪徒早已胆寒，跟着头目连滚带爬地退去。"
+	story.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var shout := UiKit.make_label(box, Vector2(20.0, 214.0), Vector2(500.0, 30.0), 18, SEAL)
+	shout.text = "远远传来一声狠话：「你等着！我这就去请我们老大来！」"
+	shout.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_end_return = UiKit.make_button(box, Vector2(60.0, 292.0), Vector2(200.0, 58.0), "回 村", 22)
 	_end_return.focus_mode = Control.FOCUS_NONE
 	_end_return.pressed.connect(_exit_stage)
-	_end_again = UiKit.make_button(box, Vector2(280.0, 250.0), Vector2(200.0, 58.0), "再来一局", 22)
+	_end_again = UiKit.make_button(box, Vector2(280.0, 292.0), Vector2(200.0, 58.0), "再来一局", 22)
 	_end_again.focus_mode = Control.FOCUS_NONE
 	_end_again.pressed.connect(_restart_stage)
 
@@ -438,6 +466,10 @@ func _restart_stage() -> void:
 	_end_ov.visible = false
 	_pause_ov.visible = false
 	_finished = false
+	if _skill_btn != null:
+		_skill_btn.visible = false
+	if _ult_btn != null:
+		_ult_btn.visible = false
 	_paused = false
 	_wave = 0
 	_wave_wait = -1.0
@@ -448,6 +480,7 @@ func _restart_stage() -> void:
 	_wave5_fight = false
 	_wave5_crisis_done = false
 	_wave5_t = 0.0
+	loot_silver = 0
 	_hp_guide_done = false
 	_hero_hp = HERO_HP_MAX
 	_hero_rage = 0.0
@@ -460,6 +493,9 @@ func _restart_stage() -> void:
 	_zoom = 1.0
 	_pivot = Vector2.ZERO
 	_ult_cine = -1.0
+	_action_which = ""
+	_tip_which = ""
+	_tip_until_ms = 0
 	_break_cine = -1.0
 	_break_burst = false
 	_ult_banner = false
@@ -518,7 +554,7 @@ func _start_wave(n: int) -> void:
 			d.queue_free()
 	_decor.clear()
 	if n == 1:
-		var m := _spawn_enemy("mage", Vector2(520.0, 700.0), 90.0, 10.0, 90.0)
+		var m := _spawn_enemy("mage", Vector2(520.0, 580.0), 90.0, 10.0, 90.0)
 		m["cast_t"] = 8.0
 		_dialogue([
 			{"who": "旁白", "text": "风从村口卷过，带着土腥气。"},
@@ -536,8 +572,8 @@ func _start_wave(n: int) -> void:
 	elif n == 2:
 		# 巷口后头灰压压的一片人影（只做背景，不参战）
 		for i in 4:
-			_spawn_decor(Vector2(170.0 + float(i) * 120.0, 636.0 + float(i % 2) * 18.0), 104.0, 0.52)
-		var m2 := _spawn_enemy("mage", Vector2(400.0, 720.0), 70.0, 10.0, 110.0)
+			_spawn_decor(Vector2(170.0 + float(i) * 120.0, 516.0 + float(i % 2) * 16.0), 104.0, 0.52)
+		var m2 := _spawn_enemy("mage", Vector2(400.0, 600.0), 70.0, 10.0, 110.0)
 		m2["cast_t"] = 5.0
 		_dialogue([
 			{"who": "旁白", "text": "你刚收剑，巷口后头又涌出一片灰影。"},
@@ -548,11 +584,13 @@ func _start_wave(n: int) -> void:
 			_guide("一波未平，一波又起。", Rect2(18.0, 14.0, 240.0, 52.0), "tap", Callable(), "wave")
 		)
 	elif n == 3:
-		var g := _spawn_enemy("brute", Vector2(360.0, 720.0), 180.0, 16.0, 100.0)
+		var g := _spawn_enemy("brute", Vector2(360.0, 580.0), 180.0, 16.0, 100.0)
 		g["atk_t"] = 0.2
 	elif n == 4:
-		_spawn_enemy("elite", Vector2(360.0, 700.0), 200.0, 16.0, 100.0)
+		_spawn_enemy("elite", Vector2(360.0, 580.0), 200.0, 16.0, 100.0)
 		_hero_skill_cd = 0.0
+		_skill_btn.visible = true
+		_ult_btn.visible = false
 		_dialogue([
 			{"who": "旁白", "text": "血还在滴。你退了一步，脚下踩到半截断刀。"},
 			{"who": "旁白", "text": "独臂刀客却不急。他横刀而立，像在看一件死物。"},
@@ -565,14 +603,16 @@ func _start_wave(n: int) -> void:
 	elif n == 5:
 		# 血厚到打不死：先让玩家砍一会儿，再进绝境
 		# 血够厚：正常打到残血触发剧情时，谁也碰不到 1 点锁血线
-		_spawn_enemy("boss", Vector2(360.0, 660.0), 1600.0, 24.0, 95.0)
-		_spawn_enemy("minion", Vector2(250.0, 760.0), 800.0, 10.0, 115.0)
-		_spawn_enemy("minion", Vector2(470.0, 760.0), 800.0, 10.0, 115.0)
-		_spawn_enemy("minion", Vector2(360.0, 820.0), 800.0, 10.0, 115.0)
+		_spawn_enemy("boss", Vector2(360.0, 540.0), 1600.0, 24.0, 95.0)
+		_spawn_enemy("minion", Vector2(250.0, 640.0), 800.0, 10.0, 115.0)
+		_spawn_enemy("minion", Vector2(470.0, 640.0), 800.0, 10.0, 115.0)
+		_spawn_enemy("minion", Vector2(360.0, 680.0), 800.0, 10.0, 115.0)
 		for e in _enemies:
 			e["no_kill"] = true
 		_hero_hp = HERO_HP_MAX
 		_hero_rage = 0.0
+		_skill_btn.visible = true
+		_ult_btn.visible = false
 		_wave5_fight = false
 		_wave5_crisis_done = false
 		_wave5_t = 0.0
@@ -684,6 +724,11 @@ func _update_wave(delta: float) -> void:
 func _process(delta: float) -> void:
 	_t += delta
 	_guide_t += delta
+	var now_ms := Time.get_ticks_msec()
+	if _action_which != "" and _tip_which != _action_which and now_ms - _action_down_ms >= 360:
+		_tip_which = _action_which
+	if _tip_which != "" and _action_which == "" and now_ms > _tip_until_ms:
+		_tip_which = ""
 	_update_buttons()
 	_update_glow()
 	_update_fx(delta)
@@ -795,7 +840,7 @@ func _update_enemies(delta: float) -> void:
 				e["cast_t"] = 4.2
 				_mage_cast(e)
 		else:
-			if dist > 84.0:
+			if dist > 118.0:
 				pos += to_hero.normalized() * float(e["speed"]) * delta
 			else:
 				e["atk_t"] = float(e["atk_t"]) - delta
@@ -1061,15 +1106,17 @@ func _wave5_crisis() -> void:
 	_wave5_fight = false
 	_hero_rage = 100.0
 	_hero_hp = maxf(1.0, HERO_HP_MAX * 0.08)
+	_skill_btn.visible = true
+	_ult_btn.visible = true
 	# 把四个人摆到主角四周：围住，但不叠在一起
-	_hero_pos = Vector2(360.0, 950.0)
+	_hero_pos = Vector2(360.0, 780.0)
 	_hero_target = _hero_pos
 	_manual_move = false
 	if is_instance_valid(_hero):
 		_hero.position = _hero_pos
 	var spots := [
-		Vector2(360.0, 720.0), Vector2(180.0, 870.0),
-		Vector2(540.0, 870.0), Vector2(470.0, 1050.0),
+		Vector2(360.0, 520.0), Vector2(180.0, 660.0),
+		Vector2(540.0, 660.0), Vector2(500.0, 860.0),
 	]
 	for i in _enemies.size():
 		var e: Dictionary = _enemies[i]
@@ -1159,6 +1206,15 @@ func _start_break_cine() -> void:
 	_break_cine = 0.0
 	_break_burst = false
 	_paused = true
+	# 断剑是独角戏：把还没收完的尸体和战斗按钮都收掉
+	for e in _enemies.duplicate():
+		if is_instance_valid(e["node"]):
+			e["node"].queue_free()
+	_enemies.clear()
+	if _skill_btn != null:
+		_skill_btn.visible = false
+	if _ult_btn != null:
+		_ult_btn.visible = false
 
 
 func _update_break_cine(delta: float) -> void:
@@ -1258,31 +1314,13 @@ func _end_guide() -> void:
 
 
 func _update_glow() -> void:
-	var k := 0.5 + 0.5 * sin(_t * 5.2)
-	var warm := Color(1.0 + 0.28 * k, 1.0 + 0.20 * k, 1.0 - 0.04 * k)
-	if _guide_on and _guide_mode == "skill":
-		_skill_btn.modulate = warm
-	else:
-		_skill_btn.modulate = Color(1, 1, 1)
-	if _guide_on and _guide_mode == "ult":
-		_ult_btn.modulate = warm
-	else:
-		_ult_btn.modulate = Color(1, 1, 1)
+	# 圆形图标用自己的金边呼吸，不再调按钮本身
+	pass
 
 
 func _update_buttons() -> void:
-	if _hero_skill_cd > 0.0:
-		_skill_btn.text = "落日剑法 · " + str(int(ceil(_hero_skill_cd))) + "s"
-		_skill_btn.disabled = true
-	else:
-		_skill_btn.text = "落日剑法 · 就绪"
-		_skill_btn.disabled = false
-	if _hero_rage >= 100.0:
-		_ult_btn.text = "落日剑诀 · 就绪"
-		_ult_btn.disabled = false
-	else:
-		_ult_btn.text = "落日剑诀 · " + str(int(_hero_rage))
-		_ult_btn.disabled = true
+	# 冷却/怒气由圆形图标自己画
+	pass
 
 
 # ============================================================
@@ -1337,8 +1375,31 @@ func _clamp_pos(p: Vector2) -> Vector2:
 	return Vector2(clampf(p.x, FIELD_MIN.x, FIELD_MAX.x), clampf(p.y, FIELD_MIN.y, FIELD_MAX.y))
 
 
+func _on_action_down(which: String) -> void:
+	if _finished:
+		return
+	_action_which = which
+	_action_down_ms = Time.get_ticks_msec()
+
+
+func _on_action_up(which: String) -> void:
+	if _action_which != which:
+		return
+	var held := Time.get_ticks_msec() - _action_down_ms
+	var was_tip := _tip_which == which
+	_action_which = ""
+	if was_tip or held >= 360:
+		_tip_which = which
+		_tip_until_ms = Time.get_ticks_msec() + 700
+		return
+	if which == "skill":
+		_cast_skill()
+	else:
+		_cast_ult()
+
+
 func _on_pause() -> void:
-	if _guide_on or _dlg_on or _finished:
+	if _guide_on or _dlg_on or _finished or _break_cine >= 0.0 or _ult_cine >= 0.0:
 		return
 	_paused = true
 	_pause_ov.visible = true
@@ -1355,6 +1416,7 @@ func _finish(win: bool) -> void:
 	_finished = true
 	_victory = win
 	_paused = true
+	loot_silver = 50 if win else 0
 	_end_title.text = "清 场" if win else "败"
 	_end_ov.visible = true
 	Audio.sfx("win" if win else "lose", -8.0)
@@ -1366,30 +1428,27 @@ func _finish(win: bool) -> void:
 
 func _draw_bg() -> void:
 	_bg.draw_rect(Rect2(Vector2.ZERO, Vector2(W, H)), PAPER)
-	# 远山
+	# 远山拉高做大——战斗就在山前
 	_bg.draw_colored_polygon(PackedVector2Array([
-		Vector2(0.0, 560.0), Vector2(150.0, 380.0), Vector2(300.0, 560.0),
-	]), Color(0.72, 0.73, 0.66, 0.55))
+		Vector2(-40.0, 650.0), Vector2(160.0, 300.0), Vector2(340.0, 650.0),
+	]), Color(0.75, 0.76, 0.69, 0.62))
 	_bg.draw_colored_polygon(PackedVector2Array([
-		Vector2(240.0, 560.0), Vector2(430.0, 330.0), Vector2(640.0, 560.0),
-	]), Color(0.66, 0.67, 0.60, 0.45))
+		Vector2(200.0, 650.0), Vector2(430.0, 220.0), Vector2(680.0, 650.0),
+	]), Color(0.67, 0.68, 0.61, 0.52))
 	_bg.draw_colored_polygon(PackedVector2Array([
-		Vector2(480.0, 560.0), Vector2(640.0, 410.0), Vector2(760.0, 560.0),
-	]), Color(0.70, 0.70, 0.63, 0.40))
-	# 村口矮墙（地平线）
-	_bg.draw_rect(Rect2(0.0, 560.0, W, 44.0), Color(0.79, 0.75, 0.66))
-	_bg.draw_rect(Rect2(0.0, 560.0, W, 3.0), Color(0.42, 0.35, 0.25, 0.45))
-	_bg.draw_rect(Rect2(300.0, 548.0, 120.0, 56.0), Color(0.67, 0.63, 0.55))
-	_bg.draw_rect(Rect2(300.0, 548.0, 120.0, 3.0), Color(0.42, 0.35, 0.25, 0.45))
-	# 院子地面
-	_bg.draw_rect(Rect2(0.0, 604.0, W, 676.0), Color(0.86, 0.82, 0.72))
-	_bg.draw_line(Vector2(0.0, 604.0), Vector2(W, 604.0), Color(0.45, 0.38, 0.28, 0.45), 2.0)
+		Vector2(480.0, 650.0), Vector2(660.0, 350.0), Vector2(800.0, 650.0),
+	]), Color(0.71, 0.71, 0.64, 0.46))
+	# 山脚薄雾
+	_bg.draw_rect(Rect2(0.0, 600.0, W, 48.0), Color(0.90, 0.86, 0.76, 0.34))
+	# 地面从山脚开始，整块抬上来
+	_bg.draw_rect(Rect2(0.0, 640.0, W, 640.0), Color(0.86, 0.82, 0.72))
+	_bg.draw_line(Vector2(0.0, 640.0), Vector2(W, 640.0), Color(0.45, 0.38, 0.28, 0.38), 2.0)
 	for i in 7:
-		var y := 666.0 + float(i) * 88.0
+		var y := 700.0 + float(i) * 88.0
 		_bg.draw_line(Vector2(16.0, y), Vector2(704.0, y), Color(0.55, 0.48, 0.36, 0.10), 2.0)
 	for i in 6:
 		var x := 80.0 + float(i) * 120.0
-		_bg.draw_line(Vector2(x, 604.0), Vector2(x, 1280.0), Color(0.55, 0.48, 0.36, 0.06), 2.0)
+		_bg.draw_line(Vector2(x, 640.0), Vector2(x, 1280.0), Color(0.55, 0.48, 0.36, 0.06), 2.0)
 
 
 func _draw_fx() -> void:
@@ -1473,6 +1532,8 @@ func _draw_fx() -> void:
 		_fx.draw_string(UI_FONT, fp + Vector2(1.6, 1.8), ftxt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(0.10, 0.08, 0.06, 0.50 * a))
 		_fx.draw_string(UI_FONT, fp + Vector2(-1.0, -1.2), ftxt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(1.0, 0.98, 0.90, 0.55 * a))
 		_fx.draw_string(UI_FONT, fp, ftxt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, col)
+	if _break_cine >= 0.0:
+		_draw_break(_break_cine)
 
 
 func _draw_hud() -> void:
@@ -1498,6 +1559,179 @@ func _draw_hud() -> void:
 	var rr2 := clampf(_hero_rage / 100.0, 0.0, 1.0)
 	_hud.draw_rect(Rect2(rr.position, Vector2(rr.size.x * rr2, rr.size.y)), GOLD)
 	_hud.draw_rect(rr, Color(0.28, 0.22, 0.16, 0.55), false, 1.0)
+	# 底部圆形招式键
+	if _skill_btn != null and _skill_btn.visible and not _finished:
+		_draw_action_icon(Vector2(280.0, 1150.0), 44.0, "skill")
+	if _ult_btn != null and _ult_btn.visible and not _finished:
+		_draw_action_icon(Vector2(420.0, 1150.0), 50.0, "ult")
+	if _tip_which != "" and ((_tip_which == "skill" and _skill_btn != null and _skill_btn.visible) or (_tip_which == "ult" and _ult_btn != null and _ult_btn.visible)):
+		_draw_action_tip()
+
+
+func _draw_action_icon(c: Vector2, r: float, which: String) -> void:
+	var is_skill := which == "skill"
+	var ready := (_hero_skill_cd <= 0.0) if is_skill else (_hero_rage >= 100.0)
+	var glow := _guide_on and ((_guide_mode == "skill" and is_skill) or (_guide_mode == "ult" and not is_skill))
+	var k := 0.5 + 0.5 * sin(_t * 5.2)
+	_hud.draw_circle(c + Vector2(0.0, 3.0), r + 2.0, Color(0.10, 0.08, 0.06, 0.18))
+	_hud.draw_circle(c, r, Color(0.94, 0.91, 0.85))
+	_hud.draw_arc(c, r, 0.0, TAU, 48, Color(0.45, 0.38, 0.28, 0.60), 2.0)
+	var ring_col := GOLD if ready else Color(0.52, 0.46, 0.38)
+	_hud.draw_arc(c, r - 3.0, 0.0, TAU, 48, ring_col, 2.5)
+	if glow:
+		_hud.draw_arc(c, r + 5.0, 0.0, TAU, 48, Color(1.0, 0.86, 0.40, 0.45 + 0.45 * k), 4.0)
+	if is_skill:
+		var d := Vector2(0.72, 0.69).normalized()
+		var side := Vector2(-d.y, d.x)
+		var base := c - d * r * 0.46
+		var tip := c + d * r * 0.52
+		var blade := PackedVector2Array([tip, base + side * r * 0.10, base - side * r * 0.10])
+		_hud.draw_colored_polygon(blade, Color(0.95, 0.94, 0.88))
+		_hud.draw_line(base + side * r * 0.11, tip, Color(0.62, 0.59, 0.52), 1.2)
+		_hud.draw_line(base + side * r * 0.24, base - side * r * 0.24, Color(0.84, 0.66, 0.26), 4.0)
+		var hilt_end := base - d * r * 0.30
+		_hud.draw_line(base - d * r * 0.02, hilt_end, Color(0.55, 0.14, 0.10), 5.0)
+		_hud.draw_circle(hilt_end, r * 0.06, Color(0.84, 0.66, 0.26))
+	else:
+		_hud.draw_circle(c, r * 0.30, Color(0.82, 0.34, 0.10))
+		_hud.draw_arc(c, r * 0.46, 0.0, TAU, 32, Color(0.90, 0.62, 0.18), 2.0)
+		for i in 10:
+			var a := float(i) * TAU / 10.0 + _t * 0.15
+			_hud.draw_line(c + Vector2(cos(a), sin(a)) * r * 0.52, c + Vector2(cos(a), sin(a)) * r * 0.70, Color(0.88, 0.60, 0.18), 2.0)
+	if is_skill and _hero_skill_cd > 0.0:
+		var ratio := clampf(_hero_skill_cd / SKILL_CD, 0.0, 1.0)
+		_draw_dark_wedge(c, r, ratio)
+		var hand := -PI * 0.5 + TAU * ratio
+		_hud.draw_line(c, c + Vector2(cos(hand), sin(hand)) * (r - 5.0), Color(0.95, 0.84, 0.52, 0.90), 2.5, true)
+		_hud.draw_circle(c, 3.0, Color(0.95, 0.84, 0.52, 0.90))
+		var sec := str(int(ceil(_hero_skill_cd)))
+		var spos := c + Vector2(-r * 0.26, 8.0)
+		_hud.draw_string(UI_FONT, spos + Vector2(1.2, 1.2), sec, HORIZONTAL_ALIGNMENT_LEFT, -1, 23, Color(0.10, 0.08, 0.06, 0.78))
+		_hud.draw_string(UI_FONT, spos, sec, HORIZONTAL_ALIGNMENT_LEFT, -1, 23, Color(0.98, 0.90, 0.62))
+	elif not is_skill and _hero_rage < 100.0:
+		var missing := 1.0 - clampf(_hero_rage / 100.0, 0.0, 1.0)
+		_draw_dark_wedge(c, r, missing)
+		var hand2 := -PI * 0.5 + TAU * missing
+		_hud.draw_line(c, c + Vector2(cos(hand2), sin(hand2)) * (r - 5.0), Color(0.95, 0.84, 0.52, 0.90), 2.5, true)
+		_hud.draw_circle(c, 3.0, Color(0.95, 0.84, 0.52, 0.90))
+		var rage_r := clampf(_hero_rage / 100.0, 0.0, 1.0)
+		_hud.draw_arc(c, r + 3.0, -PI * 0.5, -PI * 0.5 + TAU * rage_r, 40, Color(0.88, 0.62, 0.20), 4.0)
+		var rtxt := str(int(_hero_rage))
+		var rpos := c + Vector2(-r * 0.24, 8.0)
+		_hud.draw_string(UI_FONT, rpos + Vector2(1.2, 1.2), rtxt, HORIZONTAL_ALIGNMENT_LEFT, -1, 21, Color(0.10, 0.08, 0.06, 0.78))
+		_hud.draw_string(UI_FONT, rpos, rtxt, HORIZONTAL_ALIGNMENT_LEFT, -1, 21, Color(0.98, 0.90, 0.62))
+	var label := "落日剑法" if is_skill else "落日剑诀"
+	_hud.draw_string(UI_FONT, Vector2(c.x - r, c.y + r + 28.0), label, HORIZONTAL_ALIGNMENT_CENTER, r * 2.0, 14, Color(0.28, 0.24, 0.19, 0.80))
+
+
+func _draw_dark_wedge(c: Vector2, r: float, ratio: float) -> void:
+	if ratio <= 0.001:
+		return
+	var pts := PackedVector2Array([c])
+	var steps := 25
+	for i in steps:
+		var a := -PI * 0.5 + TAU * ratio * float(i) / float(steps - 1)
+		pts.append(c + Vector2(cos(a), sin(a)) * (r - 2.0))
+	_hud.draw_colored_polygon(pts, Color(0.10, 0.08, 0.07, 0.58))
+
+
+func _draw_action_tip() -> void:
+	var is_skill := _tip_which == "skill"
+	var title := "落日剑法" if is_skill else "落日剑诀"
+	var desc := "单体 · 150% 物理伤害 · 冷却 20 秒" if is_skill else "群体 · 9999 物理伤害 · 需要满怒气"
+	var panel := Rect2(100.0, 998.0, 520.0, 84.0)
+	_hud.draw_rect(panel, Color(0.12, 0.10, 0.08, 0.92))
+	_hud.draw_rect(panel, Color(GOLD.r, GOLD.g, GOLD.b, 0.85), false, 1.5)
+	_hud.draw_string(UI_FONT, Vector2(124.0, 1032.0), title, HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color(0.96, 0.90, 0.72))
+	_hud.draw_string(UI_FONT, Vector2(124.0, 1062.0), desc, HORIZONTAL_ALIGNMENT_LEFT, -1, 15, Color(0.90, 0.87, 0.80))
+
+
+func _rot_points(pts: PackedVector2Array, pivot: Vector2, ang: float, off: Vector2) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	for p in pts:
+		out.append(pivot + (p - pivot).rotated(ang) + off)
+	return out
+
+
+func _draw_break(t: float) -> void:
+	var dim := clampf(t / 0.5, 0.0, 1.0) * 0.42
+	_fx.draw_rect(Rect2(0.0, 0.0, W, H), Color(0.08, 0.06, 0.05, dim))
+	var appear := clampf(t / 0.35, 0.0, 1.0)
+	var bx := 360.0
+	var tip_y := 300.0 - 18.0 * (1.0 - appear)
+	var break_y := 560.0
+	var guard_y := 640.0
+	var blade_col := Color(0.96, 0.95, 0.90, appear)
+	var white := Color(1.0, 1.0, 0.97, 0.40 * appear)
+	var gold := Color(0.84, 0.66, 0.26, appear)
+	var hilt_col := Color(0.55, 0.12, 0.10, appear)
+	var upper := PackedVector2Array([Vector2(bx, tip_y), Vector2(bx + 18.0, break_y), Vector2(bx - 18.0, break_y)])
+	var lower := PackedVector2Array([Vector2(bx - 18.0, break_y), Vector2(bx + 18.0, break_y), Vector2(bx + 22.0, guard_y - 8.0), Vector2(bx - 22.0, guard_y - 8.0)])
+	var guard_a := Vector2(bx - 42.0, guard_y)
+	var guard_b := Vector2(bx + 42.0, guard_y)
+	var hilt_a := Vector2(bx, guard_y + 8.0)
+	var hilt_b := Vector2(bx, guard_y + 66.0)
+	var pommel := Vector2(bx, guard_y + 76.0)
+	var trem := Vector2(sin(t * 55.0) * 1.4, 0.0) if t > 0.9 and t < 1.55 else Vector2.ZERO
+	if t < 1.55:
+		var u2 := PackedVector2Array()
+		for p in upper:
+			u2.append(p + trem)
+		var l2 := PackedVector2Array()
+		for p in lower:
+			l2.append(p + trem)
+		_fx.draw_colored_polygon(u2, blade_col)
+		_fx.draw_colored_polygon(l2, blade_col)
+		_fx.draw_line(Vector2(bx, tip_y) + trem, Vector2(bx, guard_y - 8.0) + trem, white, 2.0)
+		_fx.draw_line(guard_a + trem, guard_b + trem, gold, 10.0)
+		_fx.draw_line(hilt_a + trem, hilt_b + trem, hilt_col, 12.0)
+		_fx.draw_circle(pommel + trem, 10.0, gold)
+		if t > 1.0:
+			var ck := clampf((t - 1.0) / 0.35, 0.0, 1.0)
+			var crack := PackedVector2Array([
+				Vector2(bx - 22.0, break_y), Vector2(bx - 8.0, break_y - 7.0),
+				Vector2(bx + 1.0, break_y + 4.0), Vector2(bx + 11.0, break_y - 8.0),
+				Vector2(bx + 22.0, break_y),
+			])
+			_fx.draw_polyline(crack, Color(0.18, 0.14, 0.12, 0.9 * ck), 3.0)
+			_fx.draw_polyline(crack, Color(1.0, 0.92, 0.62, 0.85 * ck), 1.5)
+	else:
+		var k := clampf((t - 1.55) / 0.5, 0.0, 1.0)
+		var pivot := Vector2(bx, break_y)
+		var up2 := _rot_points(upper, pivot, -0.65 * k, Vector2(-82.0, -42.0) * k)
+		_fx.draw_colored_polygon(up2, blade_col)
+		var low2 := _rot_points(lower, pivot, 0.55 * k, Vector2(30.0, 130.0) * k)
+		_fx.draw_colored_polygon(low2, blade_col)
+		var g2 := _rot_points(PackedVector2Array([guard_a, guard_b]), pivot, 0.55 * k, Vector2(30.0, 130.0) * k)
+		_fx.draw_line(g2[0], g2[1], gold, 10.0)
+		var h2 := _rot_points(PackedVector2Array([hilt_a, hilt_b]), pivot, 0.55 * k, Vector2(30.0, 130.0) * k)
+		_fx.draw_line(h2[0], h2[1], hilt_col, 12.0)
+		var p2 := _rot_points(PackedVector2Array([pommel]), pivot, 0.55 * k, Vector2(30.0, 130.0) * k)
+		_fx.draw_circle(p2[0], 10.0, gold)
+		for i in 7:
+			var ang := float(i) * TAU / 7.0 + 0.3
+			var sp := pivot + Vector2(cos(ang), sin(ang)) * (26.0 + 70.0 * k)
+			var a2 := 0.85 * (1.0 - k)
+			_fx.draw_colored_polygon(PackedVector2Array([sp, sp + Vector2(6.0, -11.0), sp + Vector2(12.0, 3.0)]), Color(1.0, 0.95, 0.80, a2))
+		var bf := clampf(1.0 - absf(t - 1.58) / 0.16, 0.0, 1.0)
+		if bf > 0.0:
+			_fx.draw_rect(Rect2(0.0, 0.0, W, H), Color(1.0, 0.95, 0.80, 0.55 * bf))
+	var line := ""
+	if t < 0.9:
+		line = "最后一剑落下。"
+	elif t < 1.6:
+		line = "剑身发出一声轻响。"
+	elif t < 2.3:
+		line = "「咔。」"
+	else:
+		line = "……断了。"
+	var boxa := clampf(t / 0.3, 0.0, 1.0)
+	if t > 2.9:
+		boxa *= clampf((3.3 - t) / 0.4, 0.0, 1.0)
+	_fx.draw_rect(Rect2(70.0, 900.0, 580.0, 62.0), Color(0.10, 0.08, 0.07, 0.78 * boxa))
+	_fx.draw_rect(Rect2(70.0, 900.0, 580.0, 62.0), Color(0.86, 0.68, 0.26, 0.70 * boxa), false, 1.5)
+	var tw := UI_FONT.get_string_size(line, HORIZONTAL_ALIGNMENT_LEFT, -1, 27).x
+	_fx.draw_string(UI_FONT, Vector2(360.0 - tw * 0.5, 941.0), line, HORIZONTAL_ALIGNMENT_LEFT, -1, 27, Color(0.96, 0.93, 0.86, boxa))
 
 
 func _draw_sword(pos: Vector2, alpha: float) -> void:
