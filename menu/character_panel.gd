@@ -32,7 +32,7 @@ const InspectPopup := preload("res://menu/inspect_popup.gd")
 
 const PANEL_W := 720.0
 # ㊿：面板加高 1212 → 1250，把省下来的高度全给"天赋"框（见下面那段说明）
-const PANEL_H := 1280.0
+const PANEL_H := 1180.0
 const FREE_SLOTS := 3
 
 const INK := Color(0.14, 0.13, 0.15)
@@ -233,12 +233,12 @@ func _build() -> void:
 	var vp := get_viewport_rect().size
 	var dim := ColorRect.new()
 	dim.color = Color(0, 0, 0, 0.45)
-	dim.size = vp
+	dim.size = Vector2(vp.x, PANEL_H)
 	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(dim)
 
 	_panel = Panel.new()
-	_panel.position = Vector2((vp.x - PANEL_W) * 0.5, (vp.y - PANEL_H) * 0.5)
+	_panel.position = Vector2((vp.x - PANEL_W) * 0.5, 0.0)
 	_panel.size = Vector2(PANEL_W, PANEL_H)
 	_panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	var psb := StyleBoxFlat.new()
@@ -274,6 +274,9 @@ func _build() -> void:
 				Ui.card(chrome, r))
 		_panel.add_child(chrome)
 		_panel.move_child(chrome, 0)
+	_build_nav4()
+	_build_bag()
+	_hide_old_sections()
 
 	# v61（用户："弟子界面的按钮是不是太拥挤了 是不是重新分布一下"）：
 	#   顶上这一行原来是 标题(28..178) ＋［上阵］(178..336) ＋ 三个页签(324..628)——
@@ -304,6 +307,7 @@ func _build() -> void:
 	_panel.add_child(title)
 
 	_deploy_btn = Button.new()
+	_deploy_btn.visible = false
 	_deploy_btn.position = Vector2(198, 18)
 	_deploy_btn.size = Vector2(168, 48)
 	_deploy_btn.add_theme_font_size_override("font_size", 16)
@@ -317,6 +321,7 @@ func _build() -> void:
 	_switch_btn.size = Vector2(246, 44)
 	_switch_btn.add_theme_font_size_override("font_size", 17)
 	_switch_btn.focus_mode = Control.FOCUS_NONE
+	_switch_btn.visible = false
 	_switch_btn.pressed.connect(_on_switch_open)
 	_apply_ink_button(_switch_btn)
 	_panel.add_child(_switch_btn)
@@ -374,6 +379,7 @@ void fragment(){
 		pc_sb.border_color = Color(0.32, 0.27, 0.22, 0.55)
 		pc_sb.set_border_width_all(2)
 	pcard.add_theme_stylebox_override("panel", pc_sb)
+	pcard.visible = false
 	_panel.add_child(pcard)
 	_portrait = TextureRect.new()
 	_portrait.position = Vector2(5, 5)
@@ -383,18 +389,20 @@ void fragment(){
 	_portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	pcard.add_child(_portrait)
 
-	_name_lb = _label("", 34, INK)
-	_name_lb.position = Vector2(192, 88)
-	_name_lb.size = Vector2(300, 44)
+	_name_lb = _label("", 40, INK)
+	_name_lb.position = Vector2(160, 14)
+	_name_lb.size = Vector2(400, 54)
+	_name_lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	if Ui.SKIN == 1:
 		_name_lb.add_theme_color_override("font_color", Color(0.16, 0.13, 0.10))
 		var nf := Ui.brush_font()
 		if nf != null:
 			_name_lb.add_theme_font_override("font", nf)
 	_panel.add_child(_name_lb)
-	_sub_lb = _label("", 14, Color(INK.r, INK.g, INK.b, 0.60))
-	_sub_lb.position = Vector2(192, 136)
-	_sub_lb.size = Vector2(330, 20)
+	_sub_lb = _label("", 16, Color(INK.r, INK.g, INK.b, 0.60))
+	_sub_lb.position = Vector2(160, 68)
+	_sub_lb.size = Vector2(400, 22)
+	_sub_lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_sub_lb.mouse_filter = Control.MOUSE_FILTER_STOP
 	_sub_lb.gui_input.connect(_press_gui.bind(_sub_lb, "profile", -1))
 	_panel.add_child(_sub_lb)
@@ -411,6 +419,7 @@ void fragment(){
 	_gengu_chip.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_gengu_chip.add_theme_font_size_override("font_size", 16)
 	_gengu_chip.mouse_filter = Control.MOUSE_FILTER_STOP
+	_gengu_chip.visible = false
 	_gengu_chip.gui_input.connect(_chip_gui)
 	_panel.add_child(_gengu_chip)
 
@@ -424,6 +433,7 @@ void fragment(){
 	_eval_chip.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_eval_chip.add_theme_font_size_override("font_size", 15)
 	_eval_chip.mouse_filter = Control.MOUSE_FILTER_STOP
+	_eval_chip.visible = false
 	_eval_chip.gui_input.connect(_press_gui.bind(_eval_chip, "grade", -1))
 	_panel.add_child(_eval_chip)
 
@@ -437,6 +447,7 @@ void fragment(){
 	_exp_bg.size = Vector2(484, 22)
 	_exp_bg.color = Color(0.10, 0.09, 0.10, 0.18)
 	_exp_bg.mouse_filter = Control.MOUSE_FILTER_STOP
+	_exp_bg.visible = false
 	_exp_bg.gui_input.connect(_press_gui.bind(_exp_bg, "exp", -1))
 	_panel.add_child(_exp_bg)
 	_exp_fill = ColorRect.new()
@@ -454,6 +465,8 @@ void fragment(){
 	_exp_lb.add_theme_color_override("font_outline_color", Color(0.10, 0.09, 0.10, 0.85))
 	_exp_lb.add_theme_constant_override("outline_size", 3)
 	_panel.add_child(_exp_lb)
+	_exp_fill.visible = false
+	_exp_lb.visible = false
 
 	_up1_btn = Button.new()
 	_up1_btn.text = "升级"
@@ -461,6 +474,7 @@ void fragment(){
 	_up1_btn.size = Vector2(122, 48)
 	_up1_btn.add_theme_font_size_override("font_size", 16)
 	_up1_btn.focus_mode = Control.FOCUS_NONE
+	_up1_btn.visible = false
 	_up1_btn.pressed.connect(_on_level_up.bind(1))
 	_apply_ink_button(_up1_btn)
 	_panel.add_child(_up1_btn)
@@ -493,6 +507,7 @@ void fragment(){
 		var x := 34.0 + float(col) * 218.0
 		var y := 880.0 + float(r) * 50.0
 		var chip := Panel.new()
+		chip.visible = false
 		chip.position = Vector2(x, y)
 		chip.size = Vector2(206, 42)
 		var csb2 := StyleBoxFlat.new()
@@ -544,6 +559,7 @@ void fragment(){
 
 	_elem_big = Label.new()
 	_elem_big.text = "—"
+	_elem_big.visible = false
 	_elem_big.position = Vector2(40, 264)
 	_elem_big.size = Vector2(136, 36)
 	_elem_big.z_index = 3
@@ -574,6 +590,7 @@ void fragment(){
 	var doll := Panel.new()
 	doll.position = Vector2(30, 252)
 	doll.size = Vector2(660, 578)
+	doll.visible = false
 	doll.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var dsb := StyleBoxFlat.new()
 	dsb.bg_color = Color(0.945, 0.925, 0.875, 0.96)
@@ -583,8 +600,8 @@ void fragment(){
 	doll.add_theme_stylebox_override("panel", dsb)
 	_panel.add_child(doll)
 	_paper_art = TextureRect.new()
-	_paper_art.position = Vector2(260, 262)
-	_paper_art.size = Vector2(200, 548)
+	_paper_art.position = Vector2(210, 92)
+	_paper_art.size = Vector2(300, 440)
 	_paper_art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	_paper_art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	_paper_art.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -597,6 +614,7 @@ void fragment(){
 	#   碎片的"还差几片"、功法的"差几本"都在那一页的行上和明细里。
 	_star_btn = Button.new()
 	# v61（手游）：34 → 44 高、字 16 → 18（并把上沿提到 512，别压到 560 起的装备格）
+	_star_btn.visible = false
 	_star_btn.position = Vector2(522, 262)
 	_star_btn.size = Vector2(158, 36)
 	_star_btn.add_theme_font_size_override("font_size", 14)
@@ -617,16 +635,17 @@ void fragment(){
 		#   而"青锋剑★★（火）"这类要 170~180 宽 → 自动换行折成两行，
 		#   但那个 Label 只有 **26 高（一行）**，第二行被切掉——看着就是"字超出框"。
 		#   现在格高 84 → **100**、文字框 26 → **56（两行）**，两行都看得见。
-		var cell := _make_cell(str(SLOTS[k]["label"]), Vector2(38.0 + float(col2) * 442.0, 308.0 + float(row2) * 394.0), Vector2(202, 118), true, str(SLOTS[k]["label"]).substr(0, 1))
+		var cell := _make_slot_cell(k, slot)
 		_panel.add_child(cell)
 		_equip_cells.append(cell)
-		_equip_vals.append(cell.get_meta("value_label"))
+		_equip_vals.append(cell.get_meta("name"))
 		_wire_cell(cell, slot, k)
 		_equip_un_btns.append(null)   # 卸下挪进查看面板，格子上不再放按钮
 
 	# ---- 武学（3 可装 + 大招；被动在天赋框） ----
 	# v61：整段下移 32（装备格加高让位）——776 起
-	_panel.add_child(_head("武学", Vector2(34, 980)))
+	var wh := _head("武学", Vector2(34, 980))
+	wh.visible = false
 	var _whint := _label("功法固定 · 绝学共用", 13, Color(INK.r, INK.g, INK.b, 0.5))
 	_whint.position = Vector2(102, 986)
 	_whint.size = Vector2(240, 22)
@@ -686,6 +705,7 @@ void fragment(){
 	# v61：整段下移 32（装备格加高让位）；框本身收 32（222 → 190）把空间还回去——
 	#   天赋区本来就是滚动列表，少 32 只少半行，比"装备名被切掉"划算。
 	var th := _head("天赋", Vector2(34, 1122))
+	th.visible = false
 	# ㊿：滚动区吃掉拖动（要能滑），所以"长按看说明"改绑在**标题**上
 	th.mouse_filter = Control.MOUSE_FILTER_STOP
 	th.gui_input.connect(_press_gui.bind(th, "talents", -1))
@@ -1225,6 +1245,288 @@ func _talent_text(role: Dictionary) -> String:
 
 # ---- 刷新 ----
 
+
+var _nav_lbs: Array = []
+var _nav_idx := 1   # 0 开始游戏 / 1 装备 / 2 伙伴 / 3 设置
+var _stat4_lbs: Array = []
+var _new_keep: Array = []
+
+func _build_nav4() -> void:
+	var bar := Panel.new()
+	bar.position = Vector2(0, PANEL_H)
+	bar.size = Vector2(PANEL_W, 100.0)
+	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var bsb := StyleBoxFlat.new()
+	bsb.bg_color = Color(0.14, 0.12, 0.11, 0.98)
+	bsb.border_color = Color(Ui.GOLD.r, Ui.GOLD.g, Ui.GOLD.b, 0.55)
+	bsb.set_border_width_all(2)
+	bar.add_theme_stylebox_override("panel", bsb)
+	add_child(bar)
+	var icons := ["▶", "⚔", "👥", "⚙"]
+	for i in 4:
+		var b := Button.new()
+		b.text = str(icons[i])
+		b.position = Vector2(28.0 + float(i) * 174.0, PANEL_H + 12.0)
+		b.size = Vector2(132, 76)
+		b.add_theme_font_size_override("font_size", 30)
+		b.focus_mode = Control.FOCUS_NONE
+		var on := i == _nav_idx
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.55, 0.20, 0.12, 0.95) if on else Color(0.22, 0.20, 0.19, 0.95)
+		sb.set_corner_radius_all(4)
+		sb.border_color = Color(0.95, 0.82, 0.50, 0.9) if on else Color(0.55, 0.50, 0.44, 0.6)
+		sb.set_border_width_all(2)
+		b.add_theme_stylebox_override("normal", sb)
+		b.add_theme_stylebox_override("hover", sb)
+		b.add_theme_stylebox_override("pressed", sb)
+		b.add_theme_color_override("font_color", Color(0.98, 0.92, 0.76) if on else Color(0.80, 0.76, 0.68))
+		b.pressed.connect(_on_nav4.bind(i))
+		add_child(b)
+		_nav_lbs.append(b)
+
+func _on_nav4(i: int) -> void:
+	_nav_idx = i
+	for k in _nav_lbs.size():
+		var b: Button = _nav_lbs[k]
+		var on := k == i
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.55, 0.20, 0.12, 0.95) if on else Color(0.22, 0.20, 0.19, 0.95)
+		sb.set_corner_radius_all(4)
+		sb.border_color = Color(0.95, 0.82, 0.50, 0.9) if on else Color(0.55, 0.50, 0.44, 0.6)
+		sb.set_border_width_all(2)
+		b.add_theme_stylebox_override("normal", sb)
+		b.add_theme_color_override("font_color", Color(0.98, 0.92, 0.76) if on else Color(0.80, 0.76, 0.68))
+	if i == 0:
+		_set_msg("开始游戏（占位）")
+	elif i == 2:
+		_set_msg("伙伴页（待接入）")
+	elif i == 3:
+		_set_msg("设置（待接入）")
+
+
+const GRADE_COL := {
+	"天": Color(0.80, 0.56, 0.12),
+	"地": Color(0.52, 0.32, 0.62),
+	"玄": Color(0.16, 0.48, 0.40),
+	"黄": Color(0.62, 0.52, 0.18),
+	"宇": Color(0.42, 0.46, 0.52),
+}
+
+func _grade_col(rid: String) -> Color:
+	var g := GameState.role_grade_cn(rid)
+	return GRADE_COL.get(g.substr(0, 1), INK)
+
+
+const QCOL := {
+	"凡品": Color(0.60, 0.58, 0.54),
+	"良品": Color(0.28, 0.54, 0.36),
+	"上品": Color(0.20, 0.42, 0.68),
+	"极品": Color(0.52, 0.30, 0.64),
+	"绝品": Color(0.80, 0.58, 0.16),
+}
+
+func _make_slot_cell(k: int, slot: String) -> Panel:
+	var cell := Panel.new()
+	cell.position = Vector2(30.0 if k % 2 == 0 else 520.0, 110.0 if k < 2 else 430.0)
+	cell.size = Vector2(170, 104)
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.99, 0.97, 0.93, 0.95)
+	sb.set_corner_radius_all(6)
+	sb.border_color = Color(0.70, 0.66, 0.60, 0.9)
+	sb.set_border_width_all(2)
+	cell.add_theme_stylebox_override("panel", sb)
+	cell.set_meta("sb", sb)
+	var icon := TextureRect.new()
+	icon.position = Vector2(58, 10)
+	icon.size = Vector2(54, 84)
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cell.add_child(icon)
+	cell.set_meta("icon", icon)
+	var nm := _label(str(SLOTS[k]["label"]), 26, Color(0.55, 0.52, 0.46))
+	nm.position = Vector2(0, 34)
+	nm.size = Vector2(170, 36)
+	nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	cell.add_child(nm)
+	cell.set_meta("name", nm)
+	return cell
+
+func _fill_slot_cell(k: int, role: Dictionary) -> void:
+	if k >= _equip_cells.size():
+		return
+	var cell: Control = _equip_cells[k]
+	var slot := str(SLOTS[k]["slot"])
+	var sid := _slot_sid(role, slot)
+	var sb: StyleBoxFlat = cell.get_meta("sb")
+	var icon: TextureRect = cell.get_meta("icon")
+	var nm: Label = cell.get_meta("name")
+	if sid == "":
+		nm.visible = true
+		icon.texture = null
+		icon.visible = false
+		sb.border_color = Color(0.70, 0.66, 0.60, 0.9)
+		sb.set_border_width_all(2)
+	else:
+		nm.visible = false
+		icon.visible = true
+		var q := Cards.quality_of(sid)
+		sb.border_color = QCOL.get(q, Color(0.60, 0.58, 0.54))
+		sb.set_border_width_all(4)
+		icon.texture = null
+		# 用品质色块占位（暂无物品小图时）
+		icon.modulate = QCOL.get(q, Color(0.60, 0.58, 0.54))
+
+
+var _bag_cat := 0
+var _bag_tabs: Array = []
+var _bag_cells: Array = []
+
+func _build_bag() -> void:
+	var t := _label("背包", 22, Color(0.36, 0.33, 0.28))
+	t.position = Vector2(36, 604)
+	t.size = Vector2(120, 30)
+	_panel.add_child(t)
+	_new_keep.append(t)
+	for i in 5:
+		var b := Button.new()
+		b.text = ["⚔", "🛡", "◉", "👢", "▤"][i]
+		b.position = Vector2(36.0 + float(i) * 132.0, 640.0)
+		b.size = Vector2(120, 52)
+		b.add_theme_font_size_override("font_size", 24)
+		b.focus_mode = Control.FOCUS_NONE
+		b.pressed.connect(_on_bag_cat.bind(i))
+		_panel.add_child(b)
+		_bag_tabs.append(b)
+	for r in 2:
+		for c in 5:
+			var cell := Panel.new()
+			cell.position = Vector2(36.0 + float(c) * 132.0, 706.0 + float(r) * 120.0)
+			cell.size = Vector2(120, 108)
+			var csb := StyleBoxFlat.new()
+			csb.bg_color = Color(0.99, 0.97, 0.93, 0.95)
+			csb.set_corner_radius_all(6)
+			csb.border_color = Color(0.74, 0.70, 0.64, 0.9)
+			csb.set_border_width_all(2)
+			cell.add_theme_stylebox_override("panel", csb)
+			cell.mouse_filter = Control.MOUSE_FILTER_STOP
+			cell.gui_input.connect(_on_bag_cell.bind(r * 5 + c))
+			_panel.add_child(cell)
+			_bag_cells.append(cell)
+	# 属性四行
+	var ah := _label("属性", 20, Color(0.36, 0.33, 0.28))
+	ah.position = Vector2(36, 960)
+	ah.size = Vector2(80, 26)
+	_panel.add_child(ah)
+	_new_keep.append(ah)
+	var rows := [["攻击", 0], ["气血", 1], ["防御", 5], ["速度", 2]]
+	for i in 4:
+		var k := str(rows[i][0])
+		var idx := int(rows[i][1])
+		var x := 36.0 + float(i % 2) * 330.0
+		var y := 994.0 + float(i / 2) * 38.0
+		var kl := _label(k, 20, Color(0.36, 0.33, 0.28))
+		kl.position = Vector2(x, y)
+		kl.size = Vector2(120, 26)
+		_panel.add_child(kl)
+		_new_keep.append(kl)
+		var vl := _label("0", 22, INK)
+		vl.position = Vector2(x + 120.0, y)
+		vl.size = Vector2(140, 26)
+		_panel.add_child(vl)
+		_stat4_lbs.append(vl)
+	# 升级 / 锻造
+	var up := Button.new()
+	up.text = "升 级"
+	up.position = Vector2(36, 1076)
+	up.size = Vector2(300, 64)
+	up.add_theme_font_size_override("font_size", 26)
+	up.focus_mode = Control.FOCUS_NONE
+	up.pressed.connect(_on_level_up.bind(1))
+	_apply_ink_button(up)
+	_panel.add_child(up)
+	_new_keep.append(up)
+	var fg := Button.new()
+	fg.text = "锻 造"
+	fg.position = Vector2(384, 1076)
+	fg.size = Vector2(300, 64)
+	fg.add_theme_font_size_override("font_size", 26)
+	fg.focus_mode = Control.FOCUS_NONE
+	fg.pressed.connect(_on_forge)
+	var fsb := StyleBoxFlat.new()
+	fsb.bg_color = Color(0.78, 0.47, 0.12, 0.97)
+	fsb.set_corner_radius_all(4)
+	fsb.border_color = Color(0.98, 0.82, 0.42, 0.9)
+	fsb.set_border_width_all(2)
+	fg.add_theme_stylebox_override("normal", fsb)
+	fg.add_theme_stylebox_override("hover", fsb)
+	fg.add_theme_stylebox_override("pressed", fsb)
+	fg.add_theme_color_override("font_color", Color(0.16, 0.10, 0.04))
+	_panel.add_child(fg)
+	_new_keep.append(fg)
+	_on_bag_cat(0)
+
+func _on_bag_cat(i: int) -> void:
+	_bag_cat = i
+	for k in _bag_tabs.size():
+		var b: Button = _bag_tabs[k]
+		var on := k == i
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.55, 0.20, 0.12, 0.95) if on else Color(0.91, 0.88, 0.82, 0.95)
+		sb.set_corner_radius_all(4)
+		sb.border_color = Color(0.95, 0.82, 0.50, 0.9) if on else Color(0.78, 0.73, 0.64, 0.9)
+		sb.set_border_width_all(2)
+		b.add_theme_stylebox_override("normal", sb)
+		b.add_theme_color_override("font_color", Color(0.98, 0.92, 0.76) if on else Color(0.36, 0.33, 0.28))
+	_set_msg("背包分类 " + str(i + 1))
+
+func _on_bag_cell(_ev: InputEvent, _idx: int) -> void:
+	if _ev is InputEventMouseButton:
+		var mb := _ev as InputEventMouseButton
+		if mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
+			_set_msg("物品格（待接数据）")
+
+
+
+func _keep_whitelist() -> Array:
+	var keep: Array = []
+	if _paper_art != null:
+		keep.append(_paper_art)
+	if _name_lb != null:
+		keep.append(_name_lb)
+	if _sub_lb != null:
+		keep.append(_sub_lb)
+	keep.append_array(_equip_cells)
+	keep.append_array(_bag_tabs)
+	keep.append_array(_bag_cells)
+	keep.append_array(_stat4_lbs)
+	keep.append_array(_new_keep)
+	return keep
+
+
+func _hide_old_sections() -> void:
+	var keep := _keep_whitelist()
+	for c in _panel.get_children():
+		if c in keep:
+			continue
+		if not (c is Control):
+			continue
+		# 要保留的新块（背包页签/物品格/属性行/升级锻造/底栏）都在 y<590 或已进白名单；
+		# 这里只处理 590 以下、非白名单、非底栏的旧块
+		if c.position.y < 590.0:
+			continue
+		if c.position.y >= PANEL_H:
+			continue
+		c.visible = false
+	if _star_btn != null:
+		_star_btn.visible = false
+	if _bond_lb != null:
+		_bond_lb.visible = false
+	if _pill_btn != null:
+		_pill_btn.visible = false
+
+
+
 func _refresh() -> void:
 	var role := _role(_sel)
 	var rid := str(ROLE_IDS[_sel])
@@ -1233,6 +1535,14 @@ func _refresh() -> void:
 	var exp := int(role.get("exp", 0))
 	var avail := GameState.levels_available(rid)
 	_name_lb.text = str(role.get("name", "?")) + _star_suffix(rid)
+	_name_lb.add_theme_color_override("font_color", _grade_col(rid))
+	_sub_lb.add_theme_color_override("font_color", _grade_col(rid))
+	if not _stat4_lbs.is_empty():
+		var st: Dictionary = GameState.squad_stats(rid)
+		var pick := ["atk", "hp", "def", "spd"]
+		for i in mini(pick.size(), _stat4_lbs.size()):
+			var lb: Label = _stat4_lbs[i]
+			lb.text = str(int(st.get(pick[i], 0)))
 	# v93：换人就把圆形头像一起换（胸像优先，没有就退回 Q版）
 	if _avatar != null and _avatar_rid != rid:
 		_avatar_rid = rid
@@ -1352,11 +1662,8 @@ func _refresh() -> void:
 		else:
 			_bond_lb.add_theme_color_override("font_color", GOLD)
 		_bond_lb.text = btxt
-	for j in _equip_vals.size():
-		var slot := str(SLOTS[j]["slot"])
-		var ev: Label = _equip_vals[j]
-		ev.text = _slot_text(role, slot)
-		pass
+	for j in mini(_equip_cells.size(), 4):
+		_fill_slot_cell(j, role)
 	var sk: Array = role.get("skills", [])
 	var ult: Dictionary = role.get("ult", {})
 	var passive: Dictionary = role.get("passive", {})
@@ -2458,7 +2765,11 @@ func open() -> void:
 	_sel = 0
 	if _sel == 0 and not GameState.disciple_joined:
 		_sel = 1
+	for c in _new_keep:
+		if c != null and is_instance_valid(c):
+			c.visible = true
 	_refresh()
+	_hide_old_sections()
 	_voice_say()
 	_set_msg("")   # v62x：底部的常驻提示去掉——开屏不再摆 DEFAULT_HINT（要提示看长按）
 	visible = true
