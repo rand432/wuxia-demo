@@ -21,9 +21,10 @@ var _next_btn: Button
 var _skip_panel: Control
 var _portrait: Node2D
 var _lines: Array = [
-	{"who": "村长", "text": "孩子，山路不太平，你当真要走？"},
-	{"who": "少侠", "text": "嗯。总不能一辈子守在村口。"},
-	{"who": "村长", "text": "去吧。记住——遇事别慌，剑在手里。"},
+	{"who": "村长", "text": "孩子，你是屠龙一脉的传人。"},
+	{"who": "村长", "text": "可这世上，已三百年没有龙了。你家的屠龙术，早成了废纸。"},
+	{"who": "少侠", "text": "我知道。可我还是想出去看看。"},
+	{"who": "村长", "text": "昨夜山里起了雾，雾里有东西在叫——像龙。"},
 ]
 var _idx := 0
 

@@ -24,6 +24,21 @@ func _ready() -> void:
 	_label("银两 0", 18, Color(0.93, 0.89, 0.80), Vector2(24, 26))
 	_label("元宝 0", 18, Color(0.93, 0.89, 0.80), Vector2(190, 26))
 	_label("设置", 15, Color(0.78, 0.74, 0.66), Vector2(600, 28))
+	# 页面标题：请神
+	var ban := Panel.new()
+	ban.position = Vector2(24, 100)
+	ban.size = Vector2(160, 52)
+	var bsb := StyleBoxFlat.new()
+	bsb.bg_color = Color(0.72, 0.36, 0.14, 0.95)
+	bsb.set_corner_radius_all(6)
+	ban.add_theme_stylebox_override("panel", bsb)
+	add_child(ban)
+	var banlb := Label.new()
+	banlb.text = "请 神"
+	banlb.add_theme_font_size_override("font_size", 24)
+	banlb.add_theme_color_override("font_color", Color(0.98, 0.94, 0.84))
+	banlb.position = Vector2(34, 10)
+	ban.add_child(banlb)
 	# 人物卡牌（胸像）
 	var art := TextureRect.new()
 	art.position = Vector2(150, 92)

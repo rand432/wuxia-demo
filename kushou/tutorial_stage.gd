@@ -566,9 +566,10 @@ func _start_wave(n: int) -> void:
 		_decor.append(chief)
 		_actors.add_child(chief)
 		_dialogue([
-			{"who": "村长", "text": "孩子，山路不太平，你当真要走？"},
-			{"who": "主角", "text": "嗯。总不能一辈子守在村口。", "art": "player"},
-			{"who": "村长", "text": "去吧。记住——遇事别慌，剑在手里。"},
+			{"who": "村长", "text": "孩子，出了这道村口，就别回头。"},
+			{"who": "村长", "text": "你家的屠龙术，如今没人再提了。"},
+			{"who": "主角", "text": "没人提，我也练。", "art": "player"},
+			{"who": "村长", "text": "若真遇上带龙血的东西……你的剑，会亮。"},
 		], func() -> void:
 			_start_wave(2)
 		)
@@ -580,7 +581,9 @@ func _start_wave(n: int) -> void:
 		_hero_skill_cd = 0.0
 		_dialogue([
 			{"who": "旁白", "text": "一步踏出村口，风里忽然多了一股腥气。"},
-			{"who": "引导", "text": "小心——有东西扑上来了。"},
+			{"who": "引导", "text": "那不是野兽的味道——是龙血。"},
+			{"who": "旁白", "text": "你腰间的旧剑suddenly烫了一下。"},
+			{"who": "引导", "text": "屠龙术，在响。"},
 		], func() -> void:
 			_guide("当心。", Rect2(18.0, 14.0, 240.0, 52.0), "tap", Callable(), "wave")
 		)
@@ -593,11 +596,12 @@ func _start_wave(n: int) -> void:
 		_hero_skill_cd = 0.0
 		_dialogue([
 			{"who": "旁白", "text": "这一只不一样——伤口才裂开，转眼又合上了。"},
-			{"who": "引导", "text": "寻常招式伤不了它——用绝学！"},
+			{"who": "引导", "text": "它身上有一丝龙血。寻常招式伤不了它。"},
+			{"who": "引导", "text": "请神——请历代先祖降临己身！"},
 		], func() -> void:
 			_hero_rage = 100.0
 			_ult_btn.visible = true
-			_guide("落日剑诀。", _ult_btn.get_global_rect(), "ult")
+			_guide("请神·落日剑诀。", _ult_btn.get_global_rect(), "ult")
 		)
 
 	elif n == 4:

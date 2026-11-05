@@ -640,6 +640,11 @@ void fragment(){
 		_equip_cells.append(cell)
 		_equip_vals.append(cell.get_meta("name"))
 		_wire_cell(cell, slot, k)
+		cell.gui_input.connect(func(ev: InputEvent) -> void:
+			if ev is InputEventMouseButton:
+				var mb := ev as InputEventMouseButton
+				if mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
+					_show_equip_popup(k))
 		_equip_un_btns.append(null)   # 卸下挪进查看面板，格子上不再放按钮
 
 	# ---- 武学（3 可装 + 大招；被动在天赋框） ----
@@ -1250,6 +1255,119 @@ var _nav_lbs: Array = []
 var _nav_idx := 1   # 0 开始游戏 / 1 装备 / 2 伙伴 / 3 设置
 var _stat4_lbs: Array = []
 var _new_keep: Array = []
+
+
+var _eq_pop: Control = null
+
+func _show_equip_popup(k: int) -> void:
+	var slot := str(SLOTS[k]["slot"])
+	var sid := _slot_sid(_role(_sel), slot)
+	if sid == "":
+		_set_msg("这个位置还没有装备")
+		return
+	if _eq_pop != null:
+		_eq_pop.queue_free()
+		_eq_pop = null
+	_eq_pop = Control.new()
+	_eq_pop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_eq_pop.mouse_filter = Control.MOUSE_FILTER_STOP
+	_eq_pop.z_index = 90
+	add_child(_eq_pop)
+	var dim := ColorRect.new()
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dim.color = Color(0.05, 0.04, 0.03, 0.62)
+	_eq_pop.add_child(dim)
+	var box := Panel.new()
+	box.position = Vector2(90, 220)
+	box.size = Vector2(540, 640)
+	var bsb := StyleBoxFlat.new()
+	bsb.bg_color = Color(0.98, 0.95, 0.88, 0.99)
+	bsb.set_corner_radius_all(4)
+	bsb.border_color = GOLD
+	bsb.set_border_width_all(2)
+	box.add_theme_stylebox_override("panel", bsb)
+	_eq_pop.add_child(box)
+	# 标题：品阶·槽位
+	var q := Cards.quality_of(sid)
+	_label_in(box, q + " · " + slot, 26, Color(0.20, 0.17, 0.14), Vector2(24, 20))
+	# 图标 + 阶/等级
+	var icon := Panel.new()
+	icon.position = Vector2(24, 70)
+	icon.size = Vector2(110, 110)
+	var isb := StyleBoxFlat.new()
+	isb.bg_color = QCOL.get(q, Color(0.60, 0.58, 0.54)).darkened(0.25)
+	isb.set_corner_radius_all(4)
+	isb.border_color = QCOL.get(q, Color(0.60, 0.58, 0.54))
+	isb.set_border_width_all(3)
+	icon.add_theme_stylebox_override("panel", isb)
+	box.add_child(icon)
+	_label_in(icon, "1阶", 15, Color(0.98, 0.94, 0.84), Vector2(6, 4))
+	_label_in(box, "品阶：1 阶", 18, Color(0.34, 0.31, 0.26), Vector2(160, 78))
+	_label_in(box, "等级：0", 18, Color(0.34, 0.31, 0.26), Vector2(160, 112))
+	# 页签：宝石属性 / 装备属性
+	var tab1 := Panel.new()
+	tab1.position = Vector2(24, 200)
+	tab1.size = Vector2(246, 48)
+	var t1sb := StyleBoxFlat.new()
+	t1sb.bg_color = Color(0.90, 0.87, 0.80)
+	tab1.add_theme_stylebox_override("panel", t1sb)
+	box.add_child(tab1)
+	_label_in(tab1, "宝石属性", 19, Color(0.34, 0.31, 0.26), Vector2(72, 10))
+	var tab2 := Panel.new()
+	tab2.position = Vector2(270, 200)
+	tab2.size = Vector2(246, 48)
+	var t2sb := StyleBoxFlat.new()
+	t2sb.bg_color = Color(0.84, 0.52, 0.10)
+	tab2.add_theme_stylebox_override("panel", t2sb)
+	box.add_child(tab2)
+	_label_in(tab2, "装备属性", 19, Color(0.16, 0.10, 0.04), Vector2(72, 10))
+	# 基础属性
+	_label_in(box, "基础属性", 17, Color(0.55, 0.36, 0.14), Vector2(24, 268))
+	var rows := [["攻击", "+10"], ["气血", "+20"], ["防御", "+2"]]
+	var y := 310.0
+	for r in rows:
+		_label_in(box, str(r[0]), 18, Color(0.30, 0.27, 0.22), Vector2(40, y))
+		_label_in(box, str(r[1]), 19, Color(0.16, 0.14, 0.12), Vector2(420, y))
+		y += 42.0
+	# 装备锻造
+	var fg := Button.new()
+	fg.text = "装备锻造"
+	fg.position = Vector2(150, 548)
+	fg.size = Vector2(240, 64)
+	fg.add_theme_font_size_override("font_size", 24)
+	fg.focus_mode = Control.FOCUS_NONE
+	var fsb := StyleBoxFlat.new()
+	fsb.bg_color = Color(0.84, 0.52, 0.10, 0.98)
+	fsb.set_corner_radius_all(4)
+	fsb.border_color = Color(0.98, 0.84, 0.48, 0.95)
+	fsb.set_border_width_all(2)
+	fg.add_theme_stylebox_override("normal", fsb)
+	fg.add_theme_stylebox_override("hover", fsb)
+	fg.add_theme_stylebox_override("pressed", fsb)
+	fg.add_theme_color_override("font_color", Color(0.16, 0.10, 0.04))
+	fg.pressed.connect(_on_forge)
+	box.add_child(fg)
+	var close := Button.new()
+	close.text = "×"
+	close.position = Vector2(486, 8)
+	close.size = Vector2(44, 44)
+	close.add_theme_font_size_override("font_size", 24)
+	close.focus_mode = Control.FOCUS_NONE
+	close.pressed.connect(func() -> void:
+		if _eq_pop != null:
+			_eq_pop.queue_free()
+			_eq_pop = null)
+	box.add_child(close)
+
+func _label_in(parent: Control, t: String, fs: int, col: Color, pos: Vector2, w := 300.0) -> void:
+	var l := Label.new()
+	l.text = t
+	l.add_theme_font_size_override("font_size", fs)
+	l.add_theme_color_override("font_color", col)
+	l.position = pos
+	l.size = Vector2(w, fs + 12)
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(l)
 
 func _build_nav4() -> void:
 	var bar := Panel.new()

@@ -64,20 +64,7 @@ func _ready() -> void:
 		add_child(arrow)
 	# 提升等级
 	_label("提升等级(0/3)", 18, Color(0.58, 0.50, 0.36), Vector2(440, 866))
-	# 三档宝箱
-	for i in 3:
-		var x := 70.0 + float(i) * 200.0
-		var box := Panel.new()
-		box.position = Vector2(x, 906)
-		box.size = Vector2(140, 76)
-		var sb := StyleBoxFlat.new()
-		sb.bg_color = Color(0.47, 0.36, 0.21, 0.95)
-		sb.set_corner_radius_all(4)
-		sb.border_color = GOLD
-		sb.set_border_width_all(2)
-		box.add_theme_stylebox_override("panel", sb)
-		add_child(box)
-		_label(["成功通关", "50%血量通关", "完美通关"][i], 16, Color(0.42, 0.38, 0.32), Vector2(x + 10.0, 992))
+	# （三档宝箱已按用户要求去掉）
 	# 开始游戏
 	var go := Button.new()
 	go.text = "开始游戏"
