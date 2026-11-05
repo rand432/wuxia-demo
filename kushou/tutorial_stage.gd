@@ -544,7 +544,10 @@ func _exit_stage() -> void:
 	visible = false
 	set_process(false)
 	Audio.play_bgm(Audio.menu_track(), 1.0)
-	closed.emit()
+	if get_tree().current_scene == self:
+		get_tree().change_scene_to_file("res://menu/main_home.tscn")
+	else:
+		closed.emit()
 
 
 # ============================================================
@@ -582,7 +585,7 @@ func _start_wave(n: int) -> void:
 		_dialogue([
 			{"who": "旁白", "text": "一步踏出村口，风里忽然多了一股腥气。"},
 			{"who": "引导", "text": "那不是野兽的味道——是龙血。"},
-			{"who": "旁白", "text": "你腰间的旧剑suddenly烫了一下。"},
+			{"who": "旁白", "text": "你腰间的旧剑忽然烫了一下。"},
 			{"who": "引导", "text": "屠龙术，在响。"},
 		], func() -> void:
 			_guide("当心。", Rect2(18.0, 14.0, 240.0, 52.0), "tap", Callable(), "wave")

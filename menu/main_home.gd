@@ -144,4 +144,4 @@ func _on_stage_arrow(i: int) -> void:
 
 
 func _on_start() -> void:
-	get_tree().change_scene_to_file("res://kushou/tutorial_stage.tscn")
+	get_tree().change_scene_to_file("res://kushou/battle_ui.tscn")

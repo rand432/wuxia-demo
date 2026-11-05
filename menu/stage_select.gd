@@ -52,7 +52,7 @@ func _ready() -> void:
 	go.size = Vector2(96, 40)
 	go.add_theme_font_size_override("font_size", 17)
 	go.focus_mode = Control.FOCUS_NONE
-	go.pressed.connect(func() -> void: print("[关卡选择] 前往"))
+	go.pressed.connect(func() -> void: get_tree().change_scene_to_file("res://kushou/battle_ui.tscn"))
 	add_child(go)
 	# 上一个未完美通关
 	_label_in(self, "上一个未完美通关关卡：1.城市大街", 16, Color(0.86, 0.82, 0.74), Vector2(24, 1168))
