@@ -207,14 +207,7 @@ class TopIcon extends Control:
 
 # ---------------- 页面入口 ----------------
 func _open_char() -> void:
-	if _char_panel == null:
-		_char_panel = CharacterPanel.new()
-		add_child(_char_panel)
-		_char_panel.closed.connect(func() -> void:
-			if _char_panel != null:
-				_char_panel.visible = false)
-	_char_panel.open()
-	_char_panel.move_to_front()
+	get_tree().change_scene_to_file("res://menu/character_home.tscn")
 
 func _on_nav(i: int) -> void:
 	match i:

@@ -1,7 +1,6 @@
 extends Control
 # 伙伴页 v3：核心布局 + 只显示武学 + 底栏4图标
 const CharArt := preload("res://shared/char_art.gd")
-const OriginalTopBar := preload("res://menu/original_top_bar.gd")
 const W := 720.0
 const H := 1280.0
 const INK := Color(0.14, 0.13, 0.15)
@@ -13,31 +12,33 @@ var _plan_btns: Array = []
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	var bg := ColorRect.new()
+	var bg := TextureRect.new()
+	bg.texture = load("res://assets/art/ui/partner_bg.png")
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	bg.color = PAPER
+	bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	bg.stretch_mode = TextureRect.STRETCH_SCALE
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(bg)
-	var tb := OriginalTopBar.new()
-	add_child(tb)
-	tb.settings_pressed.connect(func() -> void: print("[伙伴] 设置"))
 	# 页面标题：请神
 	var ban := Panel.new()
-	ban.position = Vector2(24, 100)
+	ban.position = Vector2(24, 112)
 	ban.size = Vector2(160, 52)
 	var bsb := StyleBoxFlat.new()
-	bsb.bg_color = Color(0.72, 0.36, 0.14, 0.95)
-	bsb.set_corner_radius_all(6)
+	bsb.bg_color = Color(0.92, 0.85, 0.72, 0.98)
+	bsb.set_corner_radius_all(5)
+	bsb.border_color = Color(0.65, 0.46, 0.20, 0.9)
+	bsb.set_border_width_all(2)
 	ban.add_theme_stylebox_override("panel", bsb)
 	add_child(ban)
 	var banlb := Label.new()
 	banlb.text = "请 神"
 	banlb.add_theme_font_size_override("font_size", 24)
-	banlb.add_theme_color_override("font_color", Color(0.98, 0.94, 0.84))
+	banlb.add_theme_color_override("font_color", Color(0.36, 0.20, 0.09))
 	banlb.position = Vector2(34, 10)
 	ban.add_child(banlb)
 	# 人物卡牌（胸像）
 	var art := TextureRect.new()
-	art.position = Vector2(150, 92)
+	art.position = Vector2(150, 104)
 	art.size = Vector2(420, 400)
 	art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
@@ -71,14 +72,14 @@ func _ready() -> void:
 	edit.add_theme_font_size_override("font_size", 22)
 	edit.focus_mode = Control.FOCUS_NONE
 	var esb := StyleBoxFlat.new()
-	esb.bg_color = Color(0.82, 0.50, 0.12, 0.97)
+	esb.bg_color = Color(0.94, 0.89, 0.79, 0.98)
 	esb.set_corner_radius_all(4)
-	esb.border_color = Color(0.98, 0.84, 0.48, 0.95)
+	esb.border_color = Color(0.65, 0.46, 0.20, 0.9)
 	esb.set_border_width_all(2)
 	edit.add_theme_stylebox_override("normal", esb)
 	edit.add_theme_stylebox_override("hover", esb)
 	edit.add_theme_stylebox_override("pressed", esb)
-	edit.add_theme_color_override("font_color", Color(0.16, 0.10, 0.04))
+	edit.add_theme_color_override("font_color", Color(0.36, 0.20, 0.09))
 	edit.pressed.connect(func() -> void: _set_msg("编辑模式（占位）"))
 	add_child(edit)
 	# 武学 7 格：4 + 3
@@ -117,30 +118,12 @@ func _ready() -> void:
 					var mb := ev as InputEventMouseButton
 					if mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
 						_show_skill_popup(i))
-	# 底栏 4 图标（伙伴高亮）
-	var bar := ColorRect.new()
-	bar.position = Vector2(0, 1180)
-	bar.size = Vector2(W, 100)
-	bar.color = Color(0.15, 0.13, 0.12)
-	add_child(bar)
-	var icons := ["▶", "⚔", "👥", "⚙"]
+	# 整图底栏的透明热区
+	_hot(Rect2(10, 6, 240, 76), func() -> void: get_tree().change_scene_to_file("res://menu/main_home.tscn"))
+	_hot(Rect2(630, 20, 82, 50), func() -> void: print("[伙伴] 设置"))
 	for i in 4:
-		var b := Button.new()
-		b.text = str(icons[i])
-		b.position = Vector2(28.0 + float(i) * 174.0, 1192)
-		b.size = Vector2(132, 76)
-		b.add_theme_font_size_override("font_size", 30)
-		b.focus_mode = Control.FOCUS_NONE
-		var on := i == 2
-		var sb := StyleBoxFlat.new()
-		sb.bg_color = Color(0.55, 0.20, 0.12, 0.95) if on else Color(0.22, 0.20, 0.19, 0.95)
-		sb.set_corner_radius_all(4)
-		sb.border_color = Color(0.95, 0.82, 0.50, 0.9) if on else Color(0.55, 0.50, 0.44, 0.6)
-		sb.set_border_width_all(2)
-		b.add_theme_stylebox_override("normal", sb)
-		b.add_theme_color_override("font_color", Color(0.98, 0.92, 0.76) if on else Color(0.80, 0.76, 0.68))
-		b.pressed.connect(_on_nav.bind(i))
-		add_child(b)
+		_hot(Rect2(float(i) * 180.0, 1180, 180, 100), _on_nav.bind(i))
+
 
 
 var _pop: Control = null
@@ -311,3 +294,23 @@ func _on_nav(i: int) -> void:
 			get_tree().change_scene_to_file("res://kushou/battle_ui.tscn")
 		_:
 			pass
+
+	match i:
+		0:
+			get_tree().change_scene_to_file("res://menu/main_home.tscn")
+		1:
+			get_tree().change_scene_to_file("res://menu/character_home.tscn")
+		_:
+			pass
+
+func _hot(rect: Rect2, cb: Callable) -> void:
+	var b := Button.new()
+	b.position = rect.position
+	b.size = rect.size
+	b.flat = true
+	b.focus_mode = Control.FOCUS_NONE
+	b.add_theme_stylebox_override("normal", StyleBoxEmpty.new())
+	b.add_theme_stylebox_override("hover", StyleBoxEmpty.new())
+	b.add_theme_stylebox_override("pressed", StyleBoxEmpty.new())
+	b.pressed.connect(cb)
+	add_child(b)
