@@ -4,6 +4,7 @@ const GameState := preload("res://shared/game_state.gd")
 const Ui := preload("res://menu/menu_theme.gd")
 const CharacterPanel := preload("res://menu/character_panel.gd")
 const Audio := preload("res://shared/audio.gd")
+const USE_IMAGE_HOME := true
 const OriginalTopBar := preload("res://menu/original_top_bar.gd")
 const W := 720.0
 const H := 1280.0
@@ -14,9 +15,18 @@ const GOLD := Color(0.78, 0.58, 0.22)
 var _diff := 0
 var _char_panel: Control = null
 var _settings_ov: Control = null
+var _wen_lb: Label = null
+var _yuan_lb: Label = null
+var _last_wen := -1
+var _last_yuan := -1
+var _diff_hl: Panel = null
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	if USE_IMAGE_HOME:
+		_build_image_home()
+		set_process(true)
+		return
 	var bg := ColorRect.new()
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	bg.color = PAPER
@@ -152,6 +162,8 @@ func _style_diff() -> void:
 func _on_diff(i: int) -> void:
 	_diff = i
 	_style_diff()
+	if _diff_hl != null:
+		_diff_hl.position = Vector2(80.0 if i == 0 else 368.0, 209.0)
 
 func _on_stage_arrow(i: int) -> void:
 	print("[主界面] 切换关卡 dir=", i)
@@ -307,3 +319,73 @@ func _close_settings() -> void:
 	if _settings_ov != null and is_instance_valid(_settings_ov):
 		_settings_ov.queue_free()
 		_settings_ov = null
+
+func _process(_delta: float) -> void:
+	if not USE_IMAGE_HOME:
+		return
+	var w := GameState.coin("wen")
+	var y := GameState.coin("yuanbao")
+	if w != _last_wen and _wen_lb != null:
+		_last_wen = w
+		_wen_lb.text = str(w)
+	if y != _last_yuan and _yuan_lb != null:
+		_last_yuan = y
+		_yuan_lb.text = str(y)
+
+func _build_image_home() -> void:
+	var bg := TextureRect.new()
+	bg.texture = load("res://assets/art/ui/main_home_ref.png")
+	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	bg.stretch_mode = TextureRect.STRETCH_SCALE
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(bg)
+	# 顶栏动态数字：盖住图上的 0，写 GameState 的值
+	_wen_lb = _money_label(Vector2(396, 30), Vector2(64, 36), 22)
+	_yuan_lb = _money_label(Vector2(548, 30), Vector2(64, 36), 22)
+	_wen_lb.text = str(GameState.coin("wen"))
+	_yuan_lb.text = str(GameState.coin("yuanbao"))
+	# 热区
+	_hot(Rect2(10, 6, 235, 78), _open_char)
+	_hot(Rect2(630, 20, 82, 50), _open_settings)
+	_hot(Rect2(80, 209, 278, 54), func() -> void: _on_diff(0))
+	_hot(Rect2(368, 209, 278, 54), func() -> void: _on_diff(1))
+	_hot(Rect2(26, 430, 80, 190), func() -> void: _on_stage_arrow(0))
+	_hot(Rect2(614, 430, 80, 190), func() -> void: _on_stage_arrow(1))
+	_hot(Rect2(88, 1050, 544, 96), _on_start)
+	_hot(Rect2(16, 1180, 172, 90), func() -> void: pass)
+	_hot(Rect2(188, 1180, 172, 90), _open_char)
+	_hot(Rect2(360, 1180, 172, 90), func() -> void: get_tree().change_scene_to_file("res://menu/partner_home.tscn"))
+	_hot(Rect2(532, 1180, 180, 90), _open_settings)
+func _cover_digit(x: float, y: float, w: float, h: float) -> void:
+	var r := ColorRect.new()
+	r.position = Vector2(x, y)
+	r.size = Vector2(w, h)
+	r.color = Color(0.165, 0.145, 0.13, 1.0)
+	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(r)
+
+func _money_label(pos: Vector2, sz: Vector2, fs: int) -> Label:
+	var l := Label.new()
+	l.position = pos
+	l.size = sz
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	l.add_theme_font_override("font", load("res://fonts/ink.ttf"))
+	l.add_theme_font_size_override("font_size", fs)
+	l.add_theme_color_override("font_color", Color(0.93, 0.88, 0.78))
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(l)
+	return l
+
+func _hot(rect: Rect2, cb: Callable) -> void:
+	var b := Button.new()
+	b.position = rect.position
+	b.size = rect.size
+	b.flat = true
+	b.focus_mode = Control.FOCUS_NONE
+	b.add_theme_stylebox_override("normal", StyleBoxEmpty.new())
+	b.add_theme_stylebox_override("hover", StyleBoxEmpty.new())
+	b.add_theme_stylebox_override("pressed", StyleBoxEmpty.new())
+	b.pressed.connect(cb)
+	add_child(b)
