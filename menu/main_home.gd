@@ -2,7 +2,6 @@ extends Control
 # 主界面 v1（草稿落地）：顶栏货币 / 关卡 / 普通·精英 / 场景 / 提升等级 / 三档宝箱 / 开始游戏 / 底栏4图标
 const GameState := preload("res://shared/game_state.gd")
 const Ui := preload("res://menu/menu_theme.gd")
-const CharacterPanel := preload("res://menu/character_panel.gd")
 const Audio := preload("res://shared/audio.gd")
 const USE_IMAGE_HOME := true
 const OriginalTopBar := preload("res://menu/original_top_bar.gd")
@@ -13,7 +12,6 @@ const PAPER := Color(0.96, 0.94, 0.90)
 const SEAL := Color(0.55, 0.20, 0.12)
 const GOLD := Color(0.78, 0.58, 0.22)
 var _diff := 0
-var _char_panel: Control = null
 var _settings_ov: Control = null
 var _wen_lb: Label = null
 var _yuan_lb: Label = null

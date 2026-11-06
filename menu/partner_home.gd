@@ -288,20 +288,14 @@ func _set_msg(t: String) -> void:
 
 func _on_nav(i: int) -> void:
 	match i:
-		0, 3:
-			get_tree().change_scene_to_file("res://menu/main_home.tscn")
-		1:
-			get_tree().change_scene_to_file("res://kushou/battle_ui.tscn")
-		_:
-			pass
-
-	match i:
 		0:
 			get_tree().change_scene_to_file("res://menu/main_home.tscn")
 		1:
 			get_tree().change_scene_to_file("res://menu/character_home.tscn")
-		_:
+		2:
 			pass
+		3:
+			_set_msg("设置")
 
 func _hot(rect: Rect2, cb: Callable) -> void:
 	var b := Button.new()
