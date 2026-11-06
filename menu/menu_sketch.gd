@@ -112,7 +112,7 @@ const NVXIA_STAGE := GameState.STORY_NVXIA_STAGE   # 苏青鸾入阵（第三人
 const HERB_STAGE := GameState.STORY_HERB_STAGE     # 灵草三种（炼丹阁开工）
 const JIANBAO_STAGE := GameState.STORY_JIANBAO_STAGE   # v39：打捞上来的货仓（鉴宝行开张）
 const BOOT_INTO_INTRO := true   # 新档开机直接进新引子（menu/prologue.tscn）
-const TUTORIAL_DEMO := true      # 临时：底排「出村」直接开教学关（v0），不走出村面板
+const TUTORIAL_DEMO := false     # 暂时不要教学关：底排「出村」走原来的出村面板
 
 const SEASON_DAYS := 3        # 每几天换一季（想两天改 2、一天改 1）
 const SEASON_CFG := "user://season.cfg"
@@ -3767,7 +3767,10 @@ func _tag_fire(i: int) -> void:
 	Audio.ui_click()      # v98：底排页签原来一声都没有（用户："点击需要有一点反馈的音效"）
 	match i:
 		0:
-			_ask_skip_segment(1, _open_tutorial, _seg1_skip)
+			if TUTORIAL_DEMO:
+				_ask_skip_segment(1, _open_tutorial, _seg1_skip)
+			else:
+				_ask_skip_segment(1, _open_out, _seg1_skip)
 			return
 		1:
 			if not _role_unlocked:

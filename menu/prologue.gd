@@ -196,4 +196,4 @@ func _do_skip() -> void:
 	get_tree().change_scene_to_file("res://menu_sketch.tscn")
 
 func _do_continue() -> void:
-	get_tree().change_scene_to_file("res://kushou/tutorial_stage.tscn")
+	get_tree().change_scene_to_file("res://menu/main_home.tscn")

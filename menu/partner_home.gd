@@ -1,6 +1,7 @@
 extends Control
 # 伙伴页 v3：核心布局 + 只显示武学 + 底栏4图标
 const CharArt := preload("res://shared/char_art.gd")
+const OriginalTopBar := preload("res://menu/original_top_bar.gd")
 const W := 720.0
 const H := 1280.0
 const INK := Color(0.14, 0.13, 0.15)
@@ -16,14 +17,9 @@ func _ready() -> void:
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	bg.color = PAPER
 	add_child(bg)
-	var top := ColorRect.new()
-	top.position = Vector2.ZERO
-	top.size = Vector2(W, 78)
-	top.color = Color(0.16, 0.14, 0.12)
-	add_child(top)
-	_label("银两 0", 18, Color(0.93, 0.89, 0.80), Vector2(24, 26))
-	_label("元宝 0", 18, Color(0.93, 0.89, 0.80), Vector2(190, 26))
-	_label("设置", 15, Color(0.78, 0.74, 0.66), Vector2(600, 28))
+	var tb := OriginalTopBar.new()
+	add_child(tb)
+	tb.settings_pressed.connect(func() -> void: print("[伙伴] 设置"))
 	# 页面标题：请神
 	var ban := Panel.new()
 	ban.position = Vector2(24, 100)
@@ -143,6 +139,7 @@ func _ready() -> void:
 		sb.set_border_width_all(2)
 		b.add_theme_stylebox_override("normal", sb)
 		b.add_theme_color_override("font_color", Color(0.98, 0.92, 0.76) if on else Color(0.80, 0.76, 0.68))
+		b.pressed.connect(_on_nav.bind(i))
 		add_child(b)
 
 
@@ -305,3 +302,12 @@ func _on_plan(i: int) -> void:
 
 func _set_msg(t: String) -> void:
 	print("[伙伴页] ", t)
+
+func _on_nav(i: int) -> void:
+	match i:
+		0, 3:
+			get_tree().change_scene_to_file("res://menu/main_home.tscn")
+		1:
+			get_tree().change_scene_to_file("res://kushou/battle_ui.tscn")
+		_:
+			pass
