@@ -114,6 +114,8 @@ signal coin_drop(amount: int, pos: Vector2)
 signal kill(n: int)
 signal hero_down()
 signal boss_arrived(tier: int)
+signal hero_attack()
+signal hero_hit()
 # v2n（用户："灵晶 宝物同理"）：掉落统一带上"死在哪儿"，好让外层演"掉地→飞向计数位"
 signal special(kind: String, n: int, pos: Vector2)
 
@@ -889,6 +891,7 @@ func _process(delta: float) -> void:
 			if float(hero.get("mech_comboaspd", 0.0)) > 0.0:
 				combo_aspd = minf(0.50, float(_combo) / 10.0 * float(hero["mech_comboaspd"]))
 			_hero_cd = 1.0 / maxf(0.2, float(hero["aspd"]) * aspd_mul() * (1.0 + combo_aspd))
+			hero_attack.emit()
 			_hero_strike(tgt)
 	# 怪：往下走 / 贴上来打
 	# 连杀计时：1.4 秒内没有新击杀就归零
@@ -1092,6 +1095,7 @@ func _process(delta: float) -> void:
 					# v4o：先扣护盾（法度·怒目金刚），盾破了才动血
 					d2 = _absorb_by_shield(d2)
 					hero["hp"] = float(hero["hp"]) - d2
+					hero_hit.emit()
 					_hero_hit_flash = 0.18
 					_shake = maxf(_shake, 3.5)
 					# v14r：boss 词缀"嗜血"（打中回血）与二技能"剧毒"（打中带毒）接上进行为

@@ -12,6 +12,7 @@ const FONT := preload("res://fonts/ink.ttf")
 const PLAYER_TEX := preload("res://assets/char/player_q.png")
 const BattleCore := preload("res://kushou/kushou_battle.gd")
 const TokenActor := preload("res://kushou/token_actor.gd")
+const CardData := preload("res://kushou/card_data.gd")
 
 const INK := Color(0.13, 0.12, 0.11)
 const PAPER := Color(0.93, 0.90, 0.82)
@@ -21,15 +22,6 @@ const SEAL := Color(0.66, 0.22, 0.15)
 const DIM := Color(0.42, 0.38, 0.32)
 const LIGHT := Color(0.91, 0.87, 0.78)
 const QUALITY_COLORS := [Color(0.54,0.48,0.38), Color(0.31,0.48,0.29), Color(0.18,0.42,0.45), Color(0.42,0.29,0.48), Color(0.72,0.53,0.16)]
-const CARD_DATA := [
-	{"name": "青锋", "quality": 3, "art": "res://assets/art/cards/sword.png", "effect": "攻击 +6", "combo": "成长 1/3", "progress": 1, "combo_text": "成长：杀敌提升 1 点攻击"},
-	{"name": "疾风", "quality": 4, "art": "res://assets/art/cards/wind.png", "effect": "速度 +1", "combo": "疾行 2/3", "progress": 2, "combo_text": "疾行：首次闪避后前冲"},
-	{"name": "破罡", "quality": 2, "art": "res://assets/art/cards/wolf.png", "effect": "破甲 12%", "combo": "破军 0/3", "progress": 0, "combo_text": "破军：攻击无视 10% 防御"},
-	{"name": "凝神", "quality": 5, "art": "res://assets/art/cards/sword.png", "effect": "暴击 +5%", "combo": "凝神 1/3", "progress": 1, "combo_text": "凝神：暴击时回 2 点内力"},
-	{"name": "铁布衫", "quality": 1, "art": "res://assets/art/cards/wolf.png", "effect": "防御 +3", "combo": "铁壁 3/3", "progress": 3, "combo_text": "铁壁：受击减伤 5%"},
-	{"name": "影步", "quality": 3, "art": "res://assets/art/cards/wind.png", "effect": "闪避 +3%", "combo": "影袭 0/3", "progress": 0, "combo_text": "影袭：闪避后下一次攻击必中"},
-	{"name": "回风", "quality": 4, "art": "res://assets/art/cards/sword.png", "effect": "回气 8%", "combo": "回风 2/3", "progress": 2, "combo_text": "回风：击杀后回复内力"},
-]
 
 var _page := 0
 var _draw_open := false
@@ -50,9 +42,26 @@ var _detail_pips: Array = []
 var _deck_count_lb: Label
 var _attr_layer: Control
 var _exit_layer: Control
-var _toast_lb: Label
+var _toast_lb: RichTextLabel
 var _toast_seq := 0
-var _cards := [0, 1, 2, 3, 4, 5, 6]
+var _cards: Array = []
+var _card_db := {}
+var _set_cards := {}
+var _pool: Array = []
+var _acquired := {}
+var _combined: Array = []
+var _stats := {"atk": 0.0, "def": 0.0, "hp": 0.0}
+var _gold_pct := 0.0
+var _crystal_pct := 0.0
+var _last_wave := 1
+var _attack_count := 0
+var _hit_count := 0
+var _combo_t := 0.0
+var _combined_layer: Control
+var _combined_icons: Control
+var _combined_detail: Control
+var _toast_queue: Array = []
+var _toast_busy := false
 var _page_lb: Label
 var _slots: Array = []
 var _draw_cards: Array = []
@@ -67,6 +76,7 @@ var _kills := 0
 var _crystal := 100
 var _crystal_lb: Label
 var _draw_paid := false
+var _draw_anim := false
 var _hero_token = null
 var _foe_tokens := {}
 var _foe_seq := 0
@@ -77,6 +87,7 @@ func _ready() -> void:
 	th.default_font = FONT
 	th.default_font_size = 17
 	theme = th
+	_init_cards()
 	_build_bg()
 	_build_hud()
 	_build_field()
@@ -86,6 +97,7 @@ func _ready() -> void:
 	_build_attr()
 	_build_exit()
 	_build_toast()
+	_build_combined()
 	_refresh_deck()
 	set_process(true)
 
@@ -145,21 +157,32 @@ func _btn(t: String, rect: Rect2, fs: int, bg: Color, fg: Color, cb: Callable, p
 	return b
 
 func _toast(t: String) -> void:
-	if _toast_lb == null:
+	_toast_queue.append(t)
+	if not _toast_busy:
+		_toast_next()
+
+func _toast_next() -> void:
+	if _toast_queue.is_empty():
+		_toast_busy = false
 		return
-	_toast_seq += 1
-	var seq := _toast_seq
-	_toast_lb.text = t
+	_toast_busy = true
+	var t: String = str(_toast_queue.pop_front())
+	if _toast_lb == null:
+		_toast_queue.clear()
+		_toast_busy = false
+		return
+	_toast_lb.text = "[center]" + t + "[/center]"
 	_toast_lb.visible = true
 	_toast_lb.modulate.a = 1.0
 	var tw := create_tween()
-	tw.tween_interval(1.3)
-	tw.tween_property(_toast_lb, "modulate:a", 0.0, 0.25)
+	tw.tween_interval(1.1)
+	tw.tween_property(_toast_lb, "modulate:a", 0.0, 0.28)
 	tw.tween_callback(func() -> void:
-		if seq == _toast_seq and _toast_lb != null:
-			_toast_lb.visible = false)
+		if _toast_lb != null:
+			_toast_lb.visible = false
+		_toast_busy = false
+		_toast_next())
 
-# ---------------- 背景 ----------------
 class BgArt extends Control:
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -249,6 +272,7 @@ class AvatarArt extends Control:
 			draw_texture_rect(tex, Rect2(c - Vector2(s * 0.5, s * 0.5), Vector2(s, s)), false)
 		draw_arc(c, size.x * 0.50, 0, TAU, 48, Color(0.85, 0.66, 0.23, 0.9), 3.0)
 
+
 class CardSlot extends Control:
 	const F := preload("res://fonts/ink.ttf")
 	const QC := [Color(0.54,0.48,0.38), Color(0.31,0.48,0.29), Color(0.18,0.42,0.45), Color(0.42,0.29,0.48), Color(0.72,0.53,0.16)]
@@ -256,7 +280,7 @@ class CardSlot extends Control:
 	var empty := false
 	var quality := 3
 	var art: Texture2D = null
-	var idx := 0
+	var idx = 0
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_STOP
 	func _draw() -> void:
@@ -279,13 +303,22 @@ class CardSlot extends Control:
 	func _gui_input(ev: InputEvent) -> void:
 		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
 			pressed.emit()
+
 class DrawCard extends Control:
 	const F := preload("res://fonts/ink.ttf")
 	const QC := [Color(0.54,0.48,0.38), Color(0.31,0.48,0.29), Color(0.18,0.42,0.45), Color(0.42,0.29,0.48), Color(0.72,0.53,0.16)]
 	signal picked
 	var data: Dictionary = {}
+	var _art_rect: TextureRect
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_STOP
+		_art_rect = TextureRect.new()
+		_art_rect.position = Vector2(40, 52)
+		_art_rect.size = Vector2(120, 120)
+		_art_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		_art_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		_art_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(_art_rect)
 	func _draw() -> void:
 		if data.is_empty():
 			return
@@ -298,20 +331,17 @@ class DrawCard extends Control:
 		draw_style_box(sb, Rect2(Vector2.ZERO, size))
 		draw_string(F, Vector2(0, 34), str(data.get("name", "")), HORIZONTAL_ALIGNMENT_CENTER, size.x, 24, Color(0.14,0.11,0.08))
 		var tex := load(str(data.get("art", "")))
-		if tex != null:
-			draw_texture_rect(tex, Rect2(20, 52, size.x - 40, 120), false)
-		draw_string(F, Vector2(20, 204), str(data.get("effect", "")), HORIZONTAL_ALIGNMENT_LEFT, size.x - 40, 21, Color(0.14,0.11,0.08))
+		if _art_rect != null:
+			_art_rect.texture = tex
+		draw_string(F, Vector2(20, 204), str(data.get("own_text", "")), HORIZONTAL_ALIGNMENT_LEFT, size.x - 40, 21, Color(0.14,0.11,0.08))
 		draw_line(Vector2(20, 220), Vector2(size.x - 20, 220), Color(0.5,0.4,0.25,0.35), 1.5)
-		draw_string(F, Vector2(20, 246), str(data.get("combo", "")), HORIZONTAL_ALIGNMENT_LEFT, 100, 18, Color(0.42,0.30,0.12))
-		var prog := int(data.get("progress", 0))
-		for i in 3:
-			draw_rect(Rect2(size.x - 56 + i * 17, 234, 12, 12), Color(0.72,0.53,0.16) if i < prog else Color(0.42,0.36,0.28,0.25))
-		draw_string(F, Vector2(20, 280), str(data.get("combo_text", "")), HORIZONTAL_ALIGNMENT_LEFT, size.x - 36, 17, Color(0.2,0.16,0.12))
+		draw_string(F, Vector2(20, 246), str(data.get("combo_name", "")) + " 0/" + str(data.get("set_size", 0)), HORIZONTAL_ALIGNMENT_LEFT, 140, 18, Color(0.42,0.30,0.12))
+		draw_string(F, Vector2(20, 280), str(data.get("trigger", "")) + "：" + str(data.get("combo_text", "")), HORIZONTAL_ALIGNMENT_LEFT, size.x - 36, 17, Color(0.2,0.16,0.12))
 	func _gui_input(ev: InputEvent) -> void:
 		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
 			picked.emit()
 
-# ---------------- 顶部 ----------------
+
 func _build_bg() -> void:
 	var bg := BgArt.new()
 	bg.size = Vector2(W, H)
@@ -366,6 +396,8 @@ func _build_field() -> void:
 	_core.set_wave(1)
 	_core.coin.connect(_on_core_coin)
 	_core.kill.connect(_on_core_kill)
+	_core.hero_attack.connect(_on_hero_attack)
+	_core.hero_hit.connect(_on_hero_hit)
 	_core.hero_down.connect(func() -> void: _toast("倒下了"))
 	_core.boss_arrived.connect(func(_t: int) -> void: _toast("首领来了"))
 	_core.start_run()
@@ -478,12 +510,12 @@ func _build_card_detail() -> void:
 	_lbl("效 果", Vector2(230, 650), Vector2(120, 26), 18, DIM, _detail_layer)
 	_detail_effect = _lbl("攻击 +6", Vector2(230, 678), Vector2(260, 36), 26, INK, _detail_layer)
 	_lbl("组 合", Vector2(230, 728), Vector2(120, 26), 18, DIM, _detail_layer)
-	_detail_combo = _lbl("成长 1/3", Vector2(302, 728), Vector2(150, 28), 22, Color(0.54, 0.35, 0.12), _detail_layer)
-	for i in 3:
+	_detail_combo = _lbl("成长 1/3", Vector2(300, 728), Vector2(120, 28), 22, Color(0.54, 0.35, 0.12), _detail_layer)
+	for i in 6:
 		var pip := ColorRect.new()
-		pip.position = Vector2(454 + i * 20, 732)
-		pip.size = Vector2(13, 13)
-		pip.color = Color(0.78, 0.58, 0.22) if i == 0 else Color(0.42, 0.36, 0.28, 0.3)
+		pip.position = Vector2(424 + i * 14, 734)
+		pip.size = Vector2(11, 11)
+		pip.color = Color(0.42, 0.36, 0.28, 0.3)
 		pip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_detail_layer.add_child(pip)
 		_detail_pips.append(pip)
@@ -492,7 +524,7 @@ func _build_card_detail() -> void:
 
 # ---------------- 卡组 ----------------
 func _build_deck() -> void:
-	_deck_count_lb = _lbl("卡组 7/10", Vector2(22, 840), Vector2(160, 30), 20, INK)
+	_deck_count_lb = _lbl("卡组 0/10", Vector2(22, 840), Vector2(160, 30), 20, INK)
 	_page_lb = _lbl("1/2", Vector2(330, 840), Vector2(60, 30), 17, DIM, self, HORIZONTAL_ALIGNMENT_CENTER)
 	_btn("<", Rect2(8, 890, 56, 60), 28, Color(0.09, 0.08, 0.07, 0.98), GOLD, func(): _flip(-1))
 	_btn(">", Rect2(656, 890, 56, 60), 28, Color(0.09, 0.08, 0.07, 0.98), GOLD, func(): _flip(1))
@@ -500,8 +532,8 @@ func _build_deck() -> void:
 		var s := CardSlot.new()
 		s.position = Vector2(46 + i * 132, 870)
 		s.size = Vector2(100, 100)
-		s.idx = i
-		s.pressed.connect(func(): _pick_card(s.idx))
+		s.idx = ""
+		s.pressed.connect(func(): _pick_card(str(s.idx)))
 		add_child(s)
 		_slots.append(s)
 
@@ -516,38 +548,41 @@ func _refresh_deck() -> void:
 		_deck_count_lb.text = "卡组 " + str(_cards.size()) + "/10"
 	for i in _slots.size():
 		var s: CardSlot = _slots[i]
-		var idx := _page * 5 + i
-		if idx < _cards.size():
-			var d: Dictionary = CARD_DATA[idx % CARD_DATA.size()]
+		var at := _page * 5 + i
+		if at < _cards.size():
+			var id := str(_cards[at])
+			var c: Dictionary = _card_db[id]
 			s.empty = false
-			s.idx = idx
-			s.quality = int(d["quality"])
-			s.art = load(str(d["art"]))
+			s.idx = id
+			s.quality = int(c["quality"])
+			s.art = load(str(c["art"]))
 			s.queue_redraw()
 		else:
 			s.empty = true
-			s.idx = idx
+			s.idx = ""
 			s.queue_redraw()
 
-func _pick_card(idx: int) -> void:
-	if idx >= _cards.size():
-		return
-	var d: Dictionary = CARD_DATA[idx % CARD_DATA.size()]
-	_detail_name.text = str(d["name"])
-	_detail_art.texture = load(str(d["art"]))
-	_detail_effect.text = str(d["effect"])
-	_detail_combo.text = str(d["combo"])
-	_detail_combo_text.text = str(d["combo_text"])
-	var q := clampi(int(d["quality"]) - 1, 0, 4)
+func _pick_card(id: String) -> void:
+	if id == "" or not _card_db.has(id): return
+	var c: Dictionary = _card_db[id]
+	_detail_name.text = str(c["name"])
+	_detail_art.texture = load(str(c["art"]))
+	_detail_effect.text = str(c["own_text"])
+	var prog := _set_progress(str(c["set_id"]))
+	_detail_combo.text = str(c["combo_name"]) + " " + str(prog) + "/" + str(c["set_size"])
+	_detail_combo_text.text = str(c["trigger"]) + "：" + str(c["combo_text"])
+	var q := clampi(int(c["quality"]) - 1, 0, 4)
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(0.96, 0.93, 0.86, 0.99)
 	sb.set_corner_radius_all(9)
 	sb.border_color = QUALITY_COLORS[q]
 	sb.set_border_width_all(7)
 	_detail_card.add_theme_stylebox_override("panel", sb)
-	var prog := int(d.get("progress", 0))
+	var set_n := int(c["set_size"])
 	for i in _detail_pips.size():
-		(_detail_pips[i] as ColorRect).color = Color(0.78, 0.58, 0.22) if i < prog else Color(0.42, 0.36, 0.28, 0.3)
+		var pip := _detail_pips[i] as ColorRect
+		pip.visible = i < set_n
+		pip.color = Color(0.78, 0.58, 0.22) if i < prog else Color(0.42, 0.36, 0.28, 0.3)
 	_detail_layer.visible = true
 	_detail_layer.move_to_front()
 
@@ -651,19 +686,25 @@ func _build_draw() -> void:
 	for i in 3:
 		var d := DrawCard.new()
 		d.position = Vector2(30 + i * 220, 220)
+		d.set_meta("base", d.position)
+		d.pivot_offset = Vector2(100, 150)
 		d.size = Vector2(200, 300)
-		d.picked.connect(func() -> void: _on_draw_pick(d.data))
+		d.picked.connect(func() -> void: _on_draw_pick(d))
 		_draw_layer.add_child(d)
 		_draw_cards.append(d)
 	_btn("刷新 · 5 灵晶", Rect2(250, 540, 220, 56), 20, Color(0.09, 0.08, 0.07, 0.98), GOLD, func(): _on_refresh(), _draw_layer)
 
 func _roll_draw() -> void:
-	for d in _draw_cards:
-		var dc: DrawCard = d
-		var idx := randi() % CARD_DATA.size()
-		var data: Dictionary = (CARD_DATA[idx] as Dictionary).duplicate()
-		data["_idx"] = idx
-		dc.data = data
+	var cands := _pool.duplicate()
+	cands.shuffle()
+	for i in _draw_cards.size():
+		var dc: DrawCard = _draw_cards[i]
+		if i < cands.size():
+			var c: Dictionary = (_card_db[str(cands[i])] as Dictionary).duplicate()
+			c["_id"] = str(cands[i])
+			dc.data = c
+		else:
+			dc.data = {}
 		dc.queue_redraw()
 
 func _update_crystal() -> void:
@@ -673,6 +714,9 @@ func _update_crystal() -> void:
 func _show_draw(v: bool) -> void:
 	if v:
 		if not _draw_paid:
+			if _pool.is_empty():
+				_toast("本局卡池已空")
+				return
 			if _crystal < 20:
 				_toast("灵晶不够：抽卡要 20")
 				return
@@ -682,31 +726,72 @@ func _show_draw(v: bool) -> void:
 			_draw_paid = true
 		_draw_layer.visible = true
 		_draw_layer.move_to_front()
+		_pop_draw_cards()
 	else:
 		_draw_layer.visible = false
 		_draw_open = false
 
-func _on_draw_pick(data: Dictionary) -> void:
-	if data.is_empty():
-		return
+func _on_draw_pick(card: DrawCard) -> void:
+	if _draw_anim or card == null or card.data.is_empty(): return
+	var id := str(card.data.get("_id", ""))
+	if id == "": return
 	if _cards.size() >= 10:
 		_toast("卡组已满（10 格）")
 		return
-	_cards.append(int(data.get("_idx", 0)))
-	_page = 1
-	_refresh_deck()
-	_toast("拿到：" + str(data.get("name", "")) + "，已进卡组")
-	_draw_paid = false
-	_show_draw(false)
+	_draw_anim = true
+	var target := Vector2(46 + float(_cards.size() % 5) * 132.0, 870)
+	for other in _draw_cards:
+		if other != card:
+			other.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			var tw0 := create_tween()
+			tw0.tween_property(other, "modulate:a", 0.28, 0.18)
+	card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	card.z_index = 3
+	var tw := create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(card, "position", target, 0.34).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
+	tw.tween_property(card, "scale", Vector2(0.36, 0.36), 0.34)
+	tw.tween_property(card, "modulate:a", 0.42, 0.34)
+	tw.chain().tween_callback(func() -> void:
+		_draw_anim = false
+		_add_card(id))
 
 func _on_refresh() -> void:
+	if _draw_anim: return
+	if _pool.is_empty():
+		_toast("卡池已空，没法刷新")
+		return
 	if _crystal < 5:
 		_toast("灵晶不够：刷新要 5")
 		return
 	_crystal -= 5
 	_update_crystal()
+	_draw_anim = true
+	for card in _draw_cards:
+		var tw := create_tween()
+		tw.set_parallel(true)
+		tw.tween_property(card, "scale", Vector2(0.72, 0.72), 0.16)
+		tw.tween_property(card, "modulate:a", 0.0, 0.16)
+	await get_tree().create_timer(0.2).timeout
 	_roll_draw()
+	_draw_anim = false
+	_pop_draw_cards()
 	_toast("刷新：5 灵晶")
+
+func _pop_draw_cards() -> void:
+	for i in _draw_cards.size():
+		var card: DrawCard = _draw_cards[i]
+		var base: Vector2 = card.get_meta("base", Vector2(30 + i * 220, 220))
+		card.visible = true
+		card.position = base + Vector2(0, 70)
+		card.scale = Vector2(0.82, 0.82)
+		card.modulate.a = 0.0
+		card.mouse_filter = Control.MOUSE_FILTER_STOP
+		var tw := create_tween()
+		tw.set_parallel(true)
+		tw.tween_property(card, "position", base, 0.24).set_delay(i * 0.055).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+		tw.tween_property(card, "scale", Vector2.ONE, 0.24).set_delay(i * 0.055)
+		tw.tween_property(card, "modulate:a", 1.0, 0.18).set_delay(i * 0.055)
 
 # ---------------- 属性 ----------------
 func _build_attr() -> void:
@@ -784,16 +869,23 @@ func _quit() -> void:
 
 # ---------------- 提示/动画 ----------------
 func _build_toast() -> void:
-	_toast_lb = Label.new()
-	_toast_lb.position = Vector2(120, 1100)
-	_toast_lb.size = Vector2(480, 36)
-	_toast_lb.add_theme_font_size_override("font_size", 18)
-	_toast_lb.add_theme_color_override("font_color", Color(0.96, 0.91, 0.80))
-	_toast_lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_toast_lb.add_theme_stylebox_override("normal", StyleBoxFlat.new())
+	_toast_lb = RichTextLabel.new()
+	_toast_lb.bbcode_enabled = true
+	_toast_lb.fit_content = false
+	_toast_lb.scroll_active = false
+	_toast_lb.position = Vector2(0, 620)
+	_toast_lb.size = Vector2(720, 48)
+	_toast_lb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_toast_lb.add_theme_font_override("normal_font", FONT)
+	_toast_lb.add_theme_font_size_override("normal_font_size", 26)
+	_toast_lb.add_theme_color_override("default_color", INK)
 	_toast_lb.visible = false
 	_toast_lb.z_index = 40
 	add_child(_toast_lb)
+
+func _toast_card(name: String, quality: int, tail: String) -> void:
+	var col: String = QUALITY_COLORS[clampi(quality - 1, 0, 4)].to_html(false)
+	_toast("[color=#" + col + "]" + name + "[/color]　" + tail)
 
 func _process(_delta: float) -> void:
 	var t := Time.get_ticks_msec() / 1000.0
@@ -801,6 +893,13 @@ func _process(_delta: float) -> void:
 		var e: Control = _enemies[i]
 		e.position.y = float(e.get_meta("base_y", e.position.y)) + sin(t * 1.6 + i) * 2.0
 	if _core != null:
+		if int(_core.wave) != _last_wave:
+			_last_wave = int(_core.wave)
+			_trigger_combos("每波")
+		_combo_t += _delta
+		if _combo_t >= 6.0:
+			_combo_t -= 6.0
+			_trigger_combos("每 6 秒")
 		if _wave_lb != null:
 			_wave_lb.text = "波 %d/5" % int(_core.wave)
 		if _hp_lb != null:
@@ -831,15 +930,11 @@ func _process(_delta: float) -> void:
 					tk.play_down()
 				_foe_tokens.erase(tid)
 
-func _on_core_coin(n: int) -> void:
-	_wen += n
-	if _coin_lb != null:
-		_coin_lb.text = str(_wen)
-
 func _on_core_kill(n: int) -> void:
 	_kills += n
 	if _kill_lb != null:
 		_kill_lb.text = str(_kills)
+	_trigger_combos("每次击杀")
 
 func _make_foe_token(f: Dictionary):
 	var kind := str(f.get("kind", "normal"))
@@ -872,3 +967,283 @@ func _make_foe_token(f: Dictionary):
 	mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	tk.add_child(mark)
 	return tk
+
+# ---------------- 卡池 / 组合 ----------------
+func _init_cards() -> void:
+	var d: Dictionary = CardData.build()
+	_card_db = d["cards"]
+	_set_cards = d["sets"]
+	_pool = (d["entries"] as Array).duplicate()
+	_cards.clear()
+	_acquired.clear()
+	_combined.clear()
+
+func _set_progress(set_id: String) -> int:
+	if not _set_cards.has(set_id):
+		return 0
+	var n := 0
+	for id in _set_cards[set_id]:
+		if _cards.has(id):
+			n += 1
+	return n
+
+func _on_core_coin(n: int) -> void:
+	var gain := int(round(float(n) * (1.0 + _gold_pct / 100.0)))
+	_wen += gain
+	if _coin_lb != null:
+		_coin_lb.text = str(_wen)
+
+func _trigger_combos(trigger: String) -> void:
+	for rec in _combined:
+		if str(rec.get("trigger", "")) == trigger:
+			_apply_combo(rec)
+	if _combined_layer != null and _combined_layer.visible:
+		_refresh_combined()
+
+func _apply_combo(rec: Dictionary) -> void:
+	rec["stacks"] = int(rec.get("stacks", 0)) + 1
+	var key := str(rec.get("combo_key", ""))
+	var val := float(rec.get("combo_val", 0))
+	match key:
+		"atk":
+			_stats["atk"] = float(_stats["atk"]) + val
+			if _core != null: _core.hero["atk"] = float(_core.hero.get("atk", 0.0)) + val
+		"def":
+			_stats["def"] = float(_stats["def"]) + val
+			if _core != null: _core.hero["def"] = float(_core.hero.get("def", 0.0)) + val
+		"hp":
+			_stats["hp"] = float(_stats["hp"]) + val
+			if _core != null:
+				_core.hero["hp_max"] = float(_core.hero.get("hp_max", 1.0)) + val
+				_core.hero["hp"] = float(_core.hero.get("hp", 0.0)) + val
+		"heal":
+			if _core != null: _core.hero["hp"] = minf(float(_core.hero.get("hp_max", 1.0)), float(_core.hero.get("hp", 0.0)) + val)
+		"gold_pct":
+			_gold_pct += val
+		"gold_flat":
+			_wen += int(val)
+			if _coin_lb != null: _coin_lb.text = str(_wen)
+		"crystal_flat":
+			_crystal += int(val)
+			_update_crystal()
+
+func _check_sets() -> void:
+	var changed := true
+	while changed:
+		changed = false
+		for sid_v in _set_cards.keys():
+			var sid := str(sid_v)
+			var ids: Array = _set_cards[sid]
+			var all_in := true
+			for cid in ids:
+				if not _cards.has(str(cid)):
+					all_in = false
+					break
+			if all_in:
+				_activate_set(sid)
+				changed = true
+				break
+
+func _activate_set(sid: String) -> void:
+	var ids: Array = _set_cards[sid]
+	if ids.is_empty(): return
+	var first: Dictionary = _card_db[str(ids[0])]
+	var own_sum := {"atk": 0.0, "def": 0.0, "hp": 0.0, "gold_pct": 0.0, "crystal_pct": 0.0}
+	var srcs: Array = []
+	for cid_v in ids:
+		var cid := str(cid_v)
+		var c: Dictionary = _card_db[cid]
+		srcs.append(str(c["name"]))
+		var k := str(c["own_key"])
+		if own_sum.has(k):
+			own_sum[k] = float(own_sum[k]) + float(c["own_val"])
+		_cards.erase(cid)
+	var rec := {"set_id": sid, "series": str(first["series"]), "tier": int(first["tier"]),
+		"name": str(first["combo_name"]), "size": int(first["set_size"]),
+		"quality": int(first["quality"]), "art": str(first["art"]),
+		"own_text": _own_text(own_sum), "combo_text": str(first["combo_text"]),
+		"trigger": str(first["trigger"]), "combo_key": str(first["combo_key"]),
+		"combo_val": int(first["combo_val"]), "stacks": 0, "sources": srcs}
+	_combined.append(rec)
+	_apply_own(own_sum)
+	_toast_card(str(rec["name"]), int(rec["quality"]), "组合激活，" + str(rec["size"]) + " 张已清空")
+	var parts := sid.split("_")
+	if parts.size() == 2:
+		var tier := int(parts[1])
+		if tier < 3:
+			var nid := str(parts[0]) + "_" + str(tier + 1)
+			if _set_cards.has(nid):
+				var entry := str((_set_cards[nid] as Array)[0])
+				if not _acquired.has(entry) and not _pool.has(entry):
+					_pool.append(entry)
+					var ec: Dictionary = _card_db[entry]
+					_toast_card(str(ec["name"]), int(ec["quality"]), "已加入卡池")
+	_refresh_deck()
+	if _combined_layer != null and _combined_layer.visible:
+		_refresh_combined()
+
+func _own_text(s: Dictionary) -> String:
+	var arr: Array = []
+	if float(s["atk"]) > 0: arr.append("攻击 +" + str(int(s["atk"])))
+	if float(s["def"]) > 0: arr.append("防御 +" + str(int(s["def"])))
+	if float(s["hp"]) > 0: arr.append("气血 +" + str(int(s["hp"])))
+	if float(s["gold_pct"]) > 0: arr.append("金币 +" + str(int(s["gold_pct"])) + "%")
+	if float(s["crystal_pct"]) > 0: arr.append("灵晶 +" + str(int(s["crystal_pct"])) + "%")
+	return " · ".join(PackedStringArray(arr))
+
+func _apply_own(s: Dictionary) -> void:
+	_stats["atk"] = float(_stats["atk"]) + float(s["atk"])
+	_stats["def"] = float(_stats["def"]) + float(s["def"])
+	_stats["hp"] = float(_stats["hp"]) + float(s["hp"])
+	_gold_pct += float(s["gold_pct"])
+	_crystal_pct += float(s["crystal_pct"])
+	if _core != null:
+		_core.hero["atk"] = float(_core.hero.get("atk", 0.0)) + float(s["atk"])
+		_core.hero["def"] = float(_core.hero.get("def", 0.0)) + float(s["def"])
+		var hp_add := float(s["hp"])
+		_core.hero["hp_max"] = float(_core.hero.get("hp_max", 1.0)) + hp_add
+		_core.hero["hp"] = float(_core.hero.get("hp", 0.0)) + hp_add
+
+func _add_card(id: String) -> void:
+	if not _card_db.has(id): return
+	if _cards.size() >= 10:
+		_toast("卡组已满（10 格）")
+		return
+	var c: Dictionary = _card_db[id]
+	_pool.erase(id)
+	_cards.append(id)
+	_acquired[id] = true
+	if bool(c.get("entry", false)):
+		for uid in c.get("unlock_ids", []):
+			var us := str(uid)
+			if not _acquired.has(us) and not _pool.has(us):
+				_pool.append(us)
+				var uc: Dictionary = _card_db[us]
+				_toast_card(str(uc["name"]), int(uc["quality"]), "已加入卡池")
+	_check_sets()
+	_page = 0
+	_refresh_deck()
+	_toast_card(str(c["name"]), int(c["quality"]), "已入卡组")
+	_draw_paid = false
+	_show_draw(false)
+
+func _build_combined() -> void:
+	_combined_layer = Control.new()
+	_combined_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_combined_layer.mouse_filter = Control.MOUSE_FILTER_STOP
+	_combined_layer.visible = false
+	_combined_layer.z_index = 32
+	add_child(_combined_layer)
+	var dim := ColorRect.new()
+	dim.color = Color(0.03, 0.02, 0.02, 0.58)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	dim.gui_input.connect(func(ev: InputEvent) -> void:
+		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
+			_show_combined(false))
+	_combined_layer.add_child(dim)
+	var panel := Panel.new()
+	panel.position = Vector2(32, 150)
+	panel.size = Vector2(656, 900)
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.95, 0.91, 0.83, 0.99)
+	sb.set_corner_radius_all(10)
+	sb.border_color = Color(0.70, 0.52, 0.22, 0.7)
+	sb.set_border_width_all(2)
+	panel.add_theme_stylebox_override("panel", sb)
+	panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	_combined_layer.add_child(panel)
+	_lbl("总 计", Vector2(60, 168), Vector2(260, 46), 34, INK, _combined_layer)
+	_lbl("已激活组合 · 本局有效", Vector2(60, 216), Vector2(360, 28), 18, DIM, _combined_layer)
+	_btn("×", Rect2(624, 170, 44, 36), 22, Color(0.95, 0.91, 0.83), DIM, func(): _show_combined(false), _combined_layer)
+	_combined_icons = Control.new()
+	_combined_icons.position = Vector2(50, 260)
+	_combined_icons.size = Vector2(620, 640)
+	_combined_icons.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_combined_layer.add_child(_combined_icons)
+	_combined_detail = Control.new()
+	_combined_detail.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_combined_detail.visible = false
+	_combined_layer.add_child(_combined_detail)
+
+func _show_combined(v: bool) -> void:
+	_combined_layer.visible = v
+	if v:
+		_refresh_combined()
+		_combined_layer.move_to_front()
+
+func _refresh_combined() -> void:
+	for ch in _combined_icons.get_children(): ch.queue_free()
+	_combined_detail.visible = false
+	if _combined.is_empty():
+		_lbl("还没有已激活组合", Vector2(20, 20), Vector2(580, 40), 22, DIM, _combined_icons)
+		return
+	for i in _combined.size():
+		var rec: Dictionary = _combined[i]
+		var ic := CombinedIcon.new()
+		ic.position = Vector2(float(i % 5) * 120.0, float(i / 5) * 130.0)
+		ic.size = Vector2(100, 100)
+		ic.quality = int(rec["quality"])
+		ic.art = load(str(rec["art"]))
+		ic.size_n = int(rec["size"])
+		ic.pressed.connect(func() -> void: _show_combined_detail(rec))
+		_combined_icons.add_child(ic)
+
+func _show_combined_detail(rec: Dictionary) -> void:
+	for ch in _combined_detail.get_children(): ch.queue_free()
+	_combined_detail.visible = true
+	var p := Panel.new()
+	p.position = Vector2(140, 300)
+	p.size = Vector2(440, 420)
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.97, 0.93, 0.85, 0.99)
+	sb.set_corner_radius_all(9)
+	sb.border_color = QUALITY_COLORS[clampi(int(rec["quality"]) - 1, 0, 4)]
+	sb.set_border_width_all(7)
+	p.add_theme_stylebox_override("panel", sb)
+	_combined_detail.add_child(p)
+	_lbl(str(rec["name"]), Vector2(170, 326), Vector2(360, 40), 30, INK, _combined_detail, HORIZONTAL_ALIGNMENT_CENTER)
+	var sz_cn: Array = ["", "三", "四", "五", "六"]
+	_lbl(str(sz_cn[clampi(int(rec["size"]), 1, 6)]) + "合一", Vector2(420, 330), Vector2(100, 28), 18, Color(0.64,0.22,0.15), _combined_detail)
+	_lbl("卡面合计：" + str(rec["own_text"]), Vector2(170, 390), Vector2(380, 32), 20, INK, _combined_detail)
+	_lbl("组合：" + str(rec["combo_text"]), Vector2(170, 430), Vector2(380, 32), 20, INK, _combined_detail)
+	_lbl("触发：" + str(rec["trigger"]) + "　已叠 " + str(int(rec["stacks"])), Vector2(170, 470), Vector2(380, 30), 18, DIM, _combined_detail)
+	_lbl("源：" + " · ".join(PackedStringArray(rec["sources"])), Vector2(170, 510), Vector2(380, 60), 17, Color(0.38,0.30,0.20), _combined_detail)
+	_btn("×", Rect2(592, 302, 34, 30), 20, Color(0.97,0.93,0.85), DIM, func(): _combined_detail.visible = false, _combined_detail)
+
+class CombinedIcon extends Control:
+	const F := preload("res://fonts/ink.ttf")
+	const QC := [Color(0.54,0.48,0.38), Color(0.31,0.48,0.29), Color(0.18,0.42,0.45), Color(0.42,0.29,0.48), Color(0.72,0.53,0.16)]
+	signal pressed
+	var quality := 3
+	var art: Texture2D = null
+	var size_n := 3
+	func _ready() -> void:
+		mouse_filter = Control.MOUSE_FILTER_STOP
+	func _draw() -> void:
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.96,0.93,0.86,0.98)
+		sb.set_corner_radius_all(8)
+		sb.border_color = QC[clampi(quality-1,0,4)]
+		sb.set_border_width_all(5)
+		draw_style_box(sb, Rect2(Vector2.ZERO, size))
+		if art != null:
+			draw_texture_rect(art, Rect2(8,8,size.x-16,size.y-16), false)
+		draw_rect(Rect2(size.x-32,6,26,22), Color(0.64,0.22,0.15))
+		draw_string(F, Vector2(size.x-30,23), "合", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(0.98,0.92,0.78))
+		draw_string(F, Vector2(size.x-34,size.y-8), str(size_n), HORIZONTAL_ALIGNMENT_RIGHT, 26, 16, Color(0.38,0.30,0.20))
+	func _gui_input(ev: InputEvent) -> void:
+		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
+			pressed.emit()
+
+func _on_hero_attack() -> void:
+	_attack_count += 1
+	_trigger_combos("每次攻击")
+	if _attack_count % 5 == 0:
+		_trigger_combos("每 5 次攻击")
+	if _attack_count % 10 == 0:
+		_trigger_combos("每 10 次攻击")
+
+func _on_hero_hit() -> void:
+	_hit_count += 1
+	_trigger_combos("每次受击")
