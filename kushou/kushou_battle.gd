@@ -244,6 +244,7 @@ func _boss_pick(tier: int) -> Dictionary:
 	return BOSS_TIER[clampi(idx, 0, BOSS_TIER.size() - 1)]
 const FOE_NAMES := ["狱狼", "疯牛", "毒蝎", "牢鼠"]
 
+var hide_units := true
 var hero := {"atk": 12.0, "hp": 200.0, "hp_max": 200.0, "mp": 100.0, "mp_max": 100.0,
 	"aspd": 1.0, "crit": 0.05, "dodge": 0.05, "cut": 0.0, "dmg_pct": 0.0}
 var foes: Array = []
@@ -5200,6 +5201,8 @@ func _draw() -> void:
 				var off := Vector2(randf_range(-12.0, 12.0), randf_range(-10.0, 10.0))
 				draw_line(pp2 + off, pp2 + off + Vector2(randf_range(-8.0, 8.0), randf_range(-8.0, 8.0)),
 					Color(0.92, 0.96, 1.0, 0.85), 2.0)
+		if hide_units:
+			continue
 		var fc := Color(0.66, 0.62, 0.60)
 		if flash > 0.0:
 			fc = Color(1.0, 0.97, 0.90)                    # 挨打闪白
@@ -5265,9 +5268,10 @@ func _draw() -> void:
 	# 出手那一下往上一冲（突刺），平时轻轻起伏
 	var hy2 := hy + sin(_t * 4.0) * 3.0 - _hero_lunge * 16.0
 	# v16l：主角专属装饰（披风在小人后面 → 小人 → 光环/发带/剑意在前面）
-	_hero_mark_back(Vector2(hx, hy2), 1.35)
-	_stick(Vector2(hx, hy2), 1.35, hero_col, true)
-	_hero_mark_front(Vector2(hx, hy2), 1.35, hero_col)
+	if not hide_units:
+		_hero_mark_back(Vector2(hx, hy2), 1.35)
+		_stick(Vector2(hx, hy2), 1.35, hero_col, true)
+		_hero_mark_front(Vector2(hx, hy2), 1.35, hero_col)
 	# v14s：出战那位放技能时，头顶冒一行"你的技能"
 	if hero_skill_t > 0.0 and hero_mate != "":
 		draw_string(ThemeDB.fallback_font, Vector2(hx - 90.0, hy2 - 108.0),
@@ -5277,7 +5281,8 @@ func _draw() -> void:
 	if _hero_lunge > 0.35:
 		draw_line(Vector2(hx + 26.0, hy2 - 10.0), Vector2(hx + 40.0, hy2 - 66.0),
 			Color(1.0, 0.96, 0.86, _hero_lunge * 0.9), 5.0)
-	_pet(pet_pos, shk)
+	if not hide_units:
+		_pet(pet_pos, shk)
 	# 刀光（打中那一下的一撇）
 	for sl_v in _slashes:
 		var sl: Dictionary = sl_v
@@ -5320,7 +5325,8 @@ func _draw() -> void:
 	_draw_partner_fx(shk)
 	_draw_bolts(shk)
 	_draw_fire_lines(shk)
-	_draw_minions(shk)
+	if not hide_units:
+		_draw_minions(shk)
 	_draw_shield(shk)
 	# 命中炸开（溅射/剑气）：一圈冲击环 ＋ 八根放射线
 	for bu_v in _bursts:
@@ -5364,7 +5370,7 @@ func _draw() -> void:
 	#   boss 活着的时候，**战场最上面**挂一条专属血条（名字 ＋ 阶 ＋ 大红条），
 	#   头顶那条小血条照旧留着（看得清它在哪）。入场横幅往下让开 62，不跟血条叠。
 	var bo := _boss_foe()
-	if not bo.is_empty():
+	if not hide_units and not bo.is_empty():
 		var bw3 := minf(620.0, w - 60.0)
 		var bx3 := (w - bw3) * 0.5
 		draw_rect(Rect2(bx3, 8.0, bw3, 30.0), Color(0.12, 0.10, 0.10, 0.92))

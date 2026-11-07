@@ -20,6 +20,16 @@ const GOLD := Color(0.85, 0.66, 0.23)
 const SEAL := Color(0.66, 0.22, 0.15)
 const DIM := Color(0.42, 0.38, 0.32)
 const LIGHT := Color(0.91, 0.87, 0.78)
+const QUALITY_COLORS := [Color(0.54,0.48,0.38), Color(0.31,0.48,0.29), Color(0.18,0.42,0.45), Color(0.42,0.29,0.48), Color(0.72,0.53,0.16)]
+const CARD_DATA := [
+	{"name": "青锋", "quality": 3, "art": "res://assets/art/cards/sword.png", "effect": "攻击 +6", "combo": "成长 1/3", "progress": 1, "combo_text": "成长：杀敌提升 1 点攻击"},
+	{"name": "疾风", "quality": 4, "art": "res://assets/art/cards/wind.png", "effect": "速度 +1", "combo": "疾行 2/3", "progress": 2, "combo_text": "疾行：首次闪避后前冲"},
+	{"name": "破罡", "quality": 2, "art": "res://assets/art/cards/wolf.png", "effect": "破甲 12%", "combo": "破军 0/3", "progress": 0, "combo_text": "破军：攻击无视 10% 防御"},
+	{"name": "凝神", "quality": 5, "art": "res://assets/art/cards/sword.png", "effect": "暴击 +5%", "combo": "凝神 1/3", "progress": 1, "combo_text": "凝神：暴击时回 2 点内力"},
+	{"name": "铁布衫", "quality": 1, "art": "res://assets/art/cards/wolf.png", "effect": "防御 +3", "combo": "铁壁 3/3", "progress": 3, "combo_text": "铁壁：受击减伤 5%"},
+	{"name": "影步", "quality": 3, "art": "res://assets/art/cards/wind.png", "effect": "闪避 +3%", "combo": "影袭 0/3", "progress": 0, "combo_text": "影袭：闪避后下一次攻击必中"},
+	{"name": "回风", "quality": 4, "art": "res://assets/art/cards/sword.png", "effect": "回气 8%", "combo": "回风 2/3", "progress": 2, "combo_text": "回风：击杀后回复内力"},
+]
 
 var _page := 0
 var _draw_open := false
@@ -31,6 +41,13 @@ var _detail_layer: Control
 var _detail_name: Label
 var _detail_sub: Label
 var _detail_line: Label
+var _detail_card: Panel
+var _detail_art: TextureRect
+var _detail_effect: Label
+var _detail_combo: Label
+var _detail_combo_text: Label
+var _detail_pips: Array = []
+var _deck_count_lb: Label
 var _attr_layer: Control
 var _exit_layer: Control
 var _toast_lb: Label
@@ -231,33 +248,34 @@ class AvatarArt extends Control:
 
 class CardSlot extends Control:
 	const F := preload("res://fonts/ink.ttf")
-	const G := preload("res://shared/glyph_draw.gd")
+	const QC := [Color(0.54,0.48,0.38), Color(0.31,0.48,0.29), Color(0.18,0.42,0.45), Color(0.42,0.29,0.48), Color(0.72,0.53,0.16)]
 	signal pressed
 	var empty := false
+	var quality := 3
+	var art: Texture2D = null
 	var idx := 0
-	var label := ""
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_STOP
 	func _draw() -> void:
-		var sb := StyleBoxFlat.new()
-		sb.bg_color = Color(0.94, 0.90, 0.82) if not empty else Color(0.94, 0.90, 0.82, 0.25)
-		sb.set_corner_radius_all(8)
-		sb.border_color = Color(0.85, 0.66, 0.23, 0.8) if not empty else Color(0.42, 0.36, 0.28, 0.45)
-		sb.set_border_width_all(2)
-		draw_style_box(sb, Rect2(Vector2.ZERO, size))
 		if empty:
-			var c := size * 0.5
-			draw_arc(c, minf(size.x, size.y) * 0.26, 0, TAU, 32, Color(0.42, 0.36, 0.28, 0.45), 2.0)
-			draw_string(F, c + Vector2(-12, 7), "空", HORIZONTAL_ALIGNMENT_LEFT, -1, 17, Color(0.42, 0.36, 0.28, 0.6))
-		else:
-			var c := size * 0.5
-			draw_circle(c, 36.0, Color(0.11, 0.10, 0.09, 0.92))
-			draw_arc(c, 36.0, 0, TAU, 40, Color(0.85, 0.66, 0.23, 0.0), 1.0)
-			G.draw(self, c, 30.0, ["sword", "spear", "dagger"][idx % 3], Color(0.91, 0.78, 0.42))
+			var c := Color(0.42, 0.36, 0.28, 0.45)
+			draw_dashed_line(Vector2(2,2), Vector2(size.x-2,2), c, 2.0, 6.0)
+			draw_dashed_line(Vector2(size.x-2,2), Vector2(size.x-2,size.y-2), c, 2.0, 6.0)
+			draw_dashed_line(Vector2(size.x-2,size.y-2), Vector2(2,size.y-2), c, 2.0, 6.0)
+			draw_dashed_line(Vector2(2,size.y-2), Vector2(2,2), c, 2.0, 6.0)
+			draw_string(F, size * 0.5 + Vector2(-10, 7), "空", HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color(0.42,0.36,0.28,0.55))
+			return
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.96, 0.93, 0.86, 0.98)
+		sb.set_corner_radius_all(8)
+		sb.border_color = QC[clampi(quality-1,0,4)]
+		sb.set_border_width_all(5)
+		draw_style_box(sb, Rect2(Vector2.ZERO, size))
+		if art != null:
+			draw_texture_rect(art, Rect2(8, 8, size.x - 16, size.y - 16), false)
 	func _gui_input(ev: InputEvent) -> void:
 		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
 			pressed.emit()
-
 class DrawCard extends Control:
 	const F := preload("res://fonts/ink.ttf")
 	const G := preload("res://shared/glyph_draw.gd")
@@ -431,25 +449,55 @@ func _build_challenge() -> void:
 func _build_card_detail() -> void:
 	_detail_layer = Control.new()
 	_detail_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_detail_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_detail_layer.mouse_filter = Control.MOUSE_FILTER_STOP
 	_detail_layer.visible = false
-	_detail_layer.z_index = 18
+	_detail_layer.z_index = 30
 	add_child(_detail_layer)
-	_panel(Rect2(120, 430, 480, 260), Color(0.95, 0.91, 0.83, 0.99), 8, Color(0.85, 0.66, 0.23, 0.7), 2, _detail_layer)
-	_detail_name = _lbl("青锋", Vector2(150, 455), Vector2(300, 36), 26, INK, _detail_layer)
-	_detail_sub = _lbl("上品 · 剑心", Vector2(150, 495), Vector2(300, 28), 17, DIM, _detail_layer)
-	_detail_line = _lbl("攻 +6 · 连击 15%", Vector2(150, 540), Vector2(380, 60), 18, INK, _detail_layer)
-	_btn("×", Rect2(540, 438, 44, 36), 22, Color(0.95, 0.91, 0.83), DIM, func(): _detail_layer.visible = false, _detail_layer)
+	var dim := ColorRect.new()
+	dim.color = Color(0.04, 0.03, 0.02, 0.55)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	dim.gui_input.connect(func(ev: InputEvent) -> void:
+		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
+			_detail_layer.visible = false)
+	_detail_layer.add_child(dim)
+	_detail_card = Panel.new()
+	_detail_card.position = Vector2(210, 420)
+	_detail_card.size = Vector2(300, 420)
+	_detail_card.mouse_filter = Control.MOUSE_FILTER_STOP
+	_detail_layer.add_child(_detail_card)
+	_detail_name = _lbl("青锋", Vector2(230, 438), Vector2(260, 40), 30, INK, _detail_layer, HORIZONTAL_ALIGNMENT_CENTER)
+	_detail_art = TextureRect.new()
+	_detail_art.position = Vector2(230, 486)
+	_detail_art.size = Vector2(260, 150)
+	_detail_art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_detail_art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	_detail_art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_detail_layer.add_child(_detail_art)
+	_lbl("效 果", Vector2(230, 650), Vector2(120, 26), 18, DIM, _detail_layer)
+	_detail_effect = _lbl("攻击 +6", Vector2(230, 678), Vector2(260, 36), 26, INK, _detail_layer)
+	_lbl("组 合", Vector2(230, 728), Vector2(120, 26), 18, DIM, _detail_layer)
+	_detail_combo = _lbl("成长 1/3", Vector2(302, 728), Vector2(150, 28), 22, Color(0.54, 0.35, 0.12), _detail_layer)
+	for i in 3:
+		var pip := ColorRect.new()
+		pip.position = Vector2(454 + i * 20, 732)
+		pip.size = Vector2(13, 13)
+		pip.color = Color(0.78, 0.58, 0.22) if i == 0 else Color(0.42, 0.36, 0.28, 0.3)
+		pip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_detail_layer.add_child(pip)
+		_detail_pips.append(pip)
+	_detail_combo_text = _lbl("成长：杀敌提升 1 点攻击", Vector2(230, 768), Vector2(260, 44), 17, INK, _detail_layer)
+	_btn("×", Rect2(574, 430, 40, 34), 22, Color(0.95, 0.91, 0.83), DIM, func(): _detail_layer.visible = false, _detail_layer)
 
 # ---------------- 卡组 ----------------
 func _build_deck() -> void:
-	_lbl("卡组 7/10", Vector2(22, 840), Vector2(160, 30), 20, INK)
+	_deck_count_lb = _lbl("卡组 7/10", Vector2(22, 840), Vector2(160, 30), 20, INK)
 	_page_lb = _lbl("1/2", Vector2(330, 840), Vector2(60, 30), 17, DIM, self, HORIZONTAL_ALIGNMENT_CENTER)
-	_btn("‹", Rect2(8, 890, 56, 60), 26, Color(0.09, 0.08, 0.07, 0.98), GOLD, func(): _flip(-1))
-	_btn("›", Rect2(656, 890, 56, 60), 26, Color(0.09, 0.08, 0.07, 0.98), GOLD, func(): _flip(1))
+	_btn("<", Rect2(8, 890, 56, 60), 28, Color(0.09, 0.08, 0.07, 0.98), GOLD, func(): _flip(-1))
+	_btn(">", Rect2(656, 890, 56, 60), 28, Color(0.09, 0.08, 0.07, 0.98), GOLD, func(): _flip(1))
 	for i in 5:
 		var s := CardSlot.new()
-		s.position = Vector2(84 + i * 110, 870)
+		s.position = Vector2(46 + i * 132, 870)
 		s.size = Vector2(100, 100)
 		s.idx = i
 		s.pressed.connect(func(): _pick_card(s.idx))
@@ -463,12 +511,17 @@ func _flip(d: int) -> void:
 func _refresh_deck() -> void:
 	if _page_lb:
 		_page_lb.text = str(_page + 1) + "/2"
+	if _deck_count_lb:
+		_deck_count_lb.text = "卡组 " + str(_cards.size()) + "/10"
 	for i in _slots.size():
 		var s: CardSlot = _slots[i]
 		var idx := _page * 5 + i
 		if idx < _cards.size():
+			var d: Dictionary = CARD_DATA[idx % CARD_DATA.size()]
 			s.empty = false
 			s.idx = idx
+			s.quality = int(d["quality"])
+			s.art = load(str(d["art"]))
 			s.queue_redraw()
 		else:
 			s.empty = true
@@ -478,10 +531,22 @@ func _refresh_deck() -> void:
 func _pick_card(idx: int) -> void:
 	if idx >= _cards.size():
 		return
-	var names := ["青锋", "疾风", "破罡", "凝神", "铁布衫", "影步", "回风"]
-	_detail_name.text = names[idx]
-	_detail_sub.text = ["上品 · 剑心", "上品 · 剑心", "上品 · 剑心", "中品 · 剑心", "中品 · 剑心", "上品 · 剑心", "中品 · 剑心"][idx]
-	_detail_line.text = ["攻 +6 · 连击 15%", "攻 +5 · 速度 +1", "伤 +2 · 破甲 12%", "攻 +4 · 暴击 +5%", "防御 +3 · 气血 +80", "速度 +3 · 闪避 +3%", "攻 +4 · 回气 8%"][idx]
+	var d: Dictionary = CARD_DATA[idx % CARD_DATA.size()]
+	_detail_name.text = str(d["name"])
+	_detail_art.texture = load(str(d["art"]))
+	_detail_effect.text = str(d["effect"])
+	_detail_combo.text = str(d["combo"])
+	_detail_combo_text.text = str(d["combo_text"])
+	var q := clampi(int(d["quality"]) - 1, 0, 4)
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.96, 0.93, 0.86, 0.99)
+	sb.set_corner_radius_all(9)
+	sb.border_color = QUALITY_COLORS[q]
+	sb.set_border_width_all(7)
+	_detail_card.add_theme_stylebox_override("panel", sb)
+	var prog := int(d.get("progress", 0))
+	for i in _detail_pips.size():
+		(_detail_pips[i] as ColorRect).color = Color(0.78, 0.58, 0.22) if i < prog else Color(0.42, 0.36, 0.28, 0.3)
 	_detail_layer.visible = true
 	_detail_layer.move_to_front()
 
