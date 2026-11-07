@@ -321,7 +321,11 @@ class DrawCard extends Control:
 		add_child(_art_rect)
 	func _draw() -> void:
 		if data.is_empty():
+			if _art_rect != null:
+				_art_rect.visible = false
 			return
+		if _art_rect != null:
+			_art_rect.visible = true
 		var q := clampi(int(data.get("quality", 3)) - 1, 0, 4)
 		var sb := StyleBoxFlat.new()
 		sb.bg_color = Color(0.96, 0.93, 0.86, 0.99)
@@ -426,19 +430,16 @@ func _build_field() -> void:
 	_build_challenge()
 	_build_card_detail()
 	# 功法面板
-	_panel(Rect2(480, 240, 230, 190), Color(0.95, 0.91, 0.83, 0.92), 6, Color(0.85, 0.66, 0.23, 0.45), 2)
-	_lbl("功法 12（可滑）", Vector2(492, 250), Vector2(200, 24), 17, DIM)
-	var k := 0
-	for row in 3:
-		for col in 4:
-			var s := SkillIcon.new()
-			s.position = Vector2(506 + col * 50, 280 + row * 48)
-			s.size = Vector2(40, 40)
-			s.cd = 0 if k % 3 != 1 else (k % 5 + 4)
-			s.kind = ["sword", "spear", "dagger"][k % 3]
-			s.pressed.connect(func(): _toast("功法"))
-			add_child(s)
-			k += 1
+	_panel(Rect2(480, 690, 230, 120), Color(0.95, 0.91, 0.83, 0.92), 6, Color(0.85, 0.66, 0.23, 0.45), 2)
+	_lbl("功法", Vector2(492, 700), Vector2(120, 24), 17, DIM)
+	for col in 3:
+		var s := SkillIcon.new()
+		s.position = Vector2(506 + col * 58, 728)
+		s.size = Vector2(42, 42)
+		s.cd = 0 if col != 1 else 4
+		s.kind = ["sword", "spear", "dagger"][col]
+		s.pressed.connect(func(): _toast("功法"))
+		add_child(s)
 
 class SkillIcon extends Control:
 	const F := preload("res://fonts/ink.ttf")
