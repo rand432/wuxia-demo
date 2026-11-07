@@ -10,6 +10,8 @@ const W := 720.0
 const H := 1280.0
 const FONT := preload("res://fonts/ink.ttf")
 const PLAYER_TEX := preload("res://assets/char/player_q.png")
+const BattleCore := preload("res://kushou/kushou_battle.gd")
+const TokenActor := preload("res://kushou/token_actor.gd")
 
 const INK := Color(0.13, 0.12, 0.11)
 const PAPER := Color(0.93, 0.90, 0.82)
@@ -38,6 +40,16 @@ var _page_lb: Label
 var _slots: Array = []
 var _draw_cards: Array = []
 var _enemies: Array = []
+var _core = null
+var _coin_lb: Label
+var _kill_lb: Label
+var _wave_lb: Label
+var _hp_lb: Label
+var _wen := 0
+var _kills := 0
+var _hero_token = null
+var _foe_tokens := {}
+var _foe_seq := 0
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -286,21 +298,22 @@ func _build_bg() -> void:
 	bg.size = Vector2(W, H)
 	add_child(bg)
 
-func _chip(x: float, kind: String, value: String, cap: String) -> void:
+func _chip(x: float, kind: String, value: String, cap: String) -> Label:
 	_panel(Rect2(x, 8, 216, 64), Color(0.075, 0.068, 0.060, 0.98), 8, Color(0.85, 0.66, 0.23, 0.45), 1)
 	var ic := Ico.new()
 	ic.kind = kind
 	ic.position = Vector2(x + 12, 21)
 	ic.size = Vector2(38, 38)
 	add_child(ic)
-	_lbl(value, Vector2(x + 58, 4), Vector2(146, 36), 28, Color(0.95, 0.91, 0.83), self, HORIZONTAL_ALIGNMENT_RIGHT)
+	var vl := _lbl(value, Vector2(x + 58, 4), Vector2(146, 36), 28, Color(0.95, 0.91, 0.83), self, HORIZONTAL_ALIGNMENT_RIGHT)
 	_lbl(cap, Vector2(x + 58, 40), Vector2(146, 20), 17, Color(0.80, 0.75, 0.65), self, HORIZONTAL_ALIGNMENT_RIGHT)
+	return vl
 
 func _build_hud() -> void:
-	_chip(24, "coin", "1,234", "文钱")
-	_chip(252, "crystal", "1,800", "灵晶")
-	_chip(480, "kill", "287", "杀敌")
-	_lbl("波 1/5", Vector2(22, 92), Vector2(100, 48), 26, INK)
+	_coin_lb = _chip(24, "coin", "0", "文钱")
+	_chip(252, "crystal", "0", "灵晶")
+	_kill_lb = _chip(480, "kill", "0", "杀敌")
+	_wave_lb = _lbl("波 1/5", Vector2(22, 92), Vector2(100, 48), 26, INK)
 	for i in 5:
 		var d := Color(0.85, 0.66, 0.23) if i == 0 else Color(0.38, 0.33, 0.26, 0.55)
 		var c := Control.new()
@@ -315,7 +328,7 @@ func _build_hud() -> void:
 		add_child(c)
 	_panel(Rect2(200, 92, 235, 20), Color(0.10, 0.09, 0.08, 0.35), 3)
 	_panel(Rect2(200, 92, 235 * 0.70, 20), Color(0.61, 0.16, 0.13), 3)
-	_lbl("224/320", Vector2(208, 88), Vector2(120, 28), 17, Color(0.98, 0.95, 0.88))
+	_hp_lb = _lbl("200/200", Vector2(208, 88), Vector2(120, 28), 17, Color(0.98, 0.95, 0.88))
 	_panel(Rect2(200, 118, 235, 9), Color(0.10, 0.09, 0.08, 0.22), 4)
 	_panel(Rect2(200, 118, 235 * 0.35, 9), Color(0.85, 0.66, 0.23), 4)
 	_lbl("首领 00:37", Vector2(450, 96), Vector2(120, 30), 17, SEAL)
@@ -324,12 +337,31 @@ func _build_hud() -> void:
 
 # ---------------- 战场 ----------------
 func _build_field() -> void:
-	var av := AvatarArt.new()
-	av.position = Vector2(312, 722)
-	av.size = Vector2(96, 96)
-	add_child(av)
+	_core = BattleCore.new()
+	_core.position = Vector2(8, 150)
+	_core.size = Vector2(704, 650)
+	_core.mouse_filter = Control.MOUSE_FILTER_STOP
+	_core.modulate = Color(1, 1, 1, 0.25)
+	add_child(_core)
+	_core.setup({"atk": 12.0, "hp_max": 200.0, "mp_max": 100.0})
+	_core.set_wave(1)
+	_core.coin.connect(_on_core_coin)
+	_core.kill.connect(_on_core_kill)
+	_core.hero_down.connect(func() -> void: _toast("倒下了"))
+	_core.boss_arrived.connect(func(_t: int) -> void: _toast("首领来了"))
+	_core.start_run()
+	_hero_token = TokenActor.new()
+	_hero_token.setup(PLAYER_TEX, 44.0, Color(0.85, 0.66, 0.23), true)
+	_hero_token.set_role("player")
+	_hero_token.set_weapon("sword")
+	_hero_token.show_bar = true
+	_hero_token.bar_w = 84.0
+	_hero_token.unit_name = "少侠"
+	_hero_token.position = Vector2(360, 758)
+	_hero_token.z_index = 6
+	add_child(_hero_token)
 	var hit := Button.new()
-	hit.position = Vector2(312, 722)
+	hit.position = Vector2(312, 710)
 	hit.size = Vector2(96, 96)
 	hit.flat = true
 	hit.focus_mode = Control.FOCUS_NONE
@@ -338,14 +370,6 @@ func _build_field() -> void:
 	hit.add_theme_stylebox_override("pressed", StyleBoxEmpty.new())
 	hit.pressed.connect(func(): _show_attr(true))
 	add_child(hit)
-	for p in [Vector2(250, 480), Vector2(420, 450), Vector2(560, 550), Vector2(320, 620)]:
-		var e := EnemyArt.new()
-		e.position = p - Vector2(30, 30)
-		e.size = Vector2(60, 60)
-		e.r = 30
-		add_child(e)
-		e.set_meta("base_y", e.position.y)
-		_enemies.append(e)
 	# 挑战方形
 	_btn("挑战", Rect2(0, 680, 96, 96), 20, Color(0.075, 0.068, 0.060, 0.98), Color(0.91, 0.78, 0.42), func(): _toggle_challenge())
 	_build_challenge()
@@ -686,3 +710,75 @@ func _process(_delta: float) -> void:
 	for i in _enemies.size():
 		var e: Control = _enemies[i]
 		e.position.y = float(e.get_meta("base_y", e.position.y)) + sin(t * 1.6 + i) * 2.0
+	if _core != null:
+		if _wave_lb != null:
+			_wave_lb.text = "波 %d/5" % int(_core.wave)
+		if _hp_lb != null:
+			_hp_lb.text = "%d/%d" % [int(float(_core.hero.get("hp", 0))), int(float(_core.hero.get("hp_max", 1)))]
+		if _hero_token != null:
+			_hero_token.position = _core.position + _core.hero_pos
+			_hero_token.hp_ratio = float(_core.hero.get("hp", 0.0)) / maxf(1.0, float(_core.hero.get("hp_max", 1.0)))
+			_hero_token.queue_redraw()
+		var active := {}
+		for f in _core.foes:
+			if not f.has("_tid"):
+				_foe_seq += 1
+				f["_tid"] = _foe_seq
+				_foe_tokens[_foe_seq] = _make_foe_token(f)
+			var tid: int = int(f["_tid"])
+			active[tid] = true
+			var tk = _foe_tokens.get(tid)
+			if tk != null:
+				tk.position = _core.position + Vector2(float(f["x"]), float(f["y"]))
+				tk.hp_ratio = float(f["hp"]) / maxf(1.0, float(f["hp_max"]))
+				tk.unit_name = str(f.get("name", ""))
+				tk.visible = float(f.get("y", 0.0)) >= 90.0
+				tk.queue_redraw()
+		for tid in _foe_tokens.keys():
+			if not active.has(tid):
+				var tk = _foe_tokens[tid]
+				if tk != null:
+					tk.play_down()
+				_foe_tokens.erase(tid)
+
+func _on_core_coin(n: int) -> void:
+	_wen += n
+	if _coin_lb != null:
+		_coin_lb.text = str(_wen)
+
+func _on_core_kill(n: int) -> void:
+	_kills += n
+	if _kill_lb != null:
+		_kill_lb.text = str(_kills)
+
+func _make_foe_token(f: Dictionary):
+	var kind := str(f.get("kind", "normal"))
+	var boss := bool(f.get("boss", false))
+	var rad := 36.0 if boss else 26.0
+	var ring := Color(0.42, 0.36, 0.28)
+	if kind == "coin":
+		ring = Color(0.85, 0.66, 0.23)
+	elif kind == "crystal":
+		ring = Color(0.35, 0.55, 0.75)
+	elif boss:
+		ring = Color(0.68, 0.18, 0.14)
+	var tk = TokenActor.new()
+	tk.setup(null, rad, ring, false)
+	tk.show_bar = true
+	tk.bar_w = 84.0 if boss else 54.0
+	tk.unit_name = str(f.get("name", ""))
+	tk.z_index = 5
+	tk.position = _core.position + Vector2(float(f["x"]), float(f["y"]))
+	add_child(tk)
+	var mark := Label.new()
+	mark.text = "王" if boss else ("钱" if kind == "coin" else ("晶" if kind == "crystal" else "怪"))
+	mark.position = Vector2(-rad, -rad * 2.0 + 6.0)
+	mark.size = Vector2(rad * 2.0, rad * 1.5)
+	mark.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	mark.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	mark.add_theme_font_override("font", FONT)
+	mark.add_theme_font_size_override("font_size", 22 if not boss else 28)
+	mark.add_theme_color_override("font_color", Color(0.30, 0.24, 0.16))
+	mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tk.add_child(mark)
+	return tk
