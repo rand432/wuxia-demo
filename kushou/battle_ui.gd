@@ -64,6 +64,9 @@ var _wave_lb: Label
 var _hp_lb: Label
 var _wen := 0
 var _kills := 0
+var _crystal := 100
+var _crystal_lb: Label
+var _draw_paid := false
 var _hero_token = null
 var _foe_tokens := {}
 var _foe_seq := 0
@@ -278,34 +281,32 @@ class CardSlot extends Control:
 			pressed.emit()
 class DrawCard extends Control:
 	const F := preload("res://fonts/ink.ttf")
-	const G := preload("res://shared/glyph_draw.gd")
+	const QC := [Color(0.54,0.48,0.38), Color(0.31,0.48,0.29), Color(0.18,0.42,0.45), Color(0.42,0.29,0.48), Color(0.72,0.53,0.16)]
 	signal picked
-	var title := ""
-	var kind := "sword"
-	var quality := ""
-	var stat1 := ""
-	var stat2 := ""
-	var is_new := false
+	var data: Dictionary = {}
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_STOP
 	func _draw() -> void:
+		if data.is_empty():
+			return
+		var q := clampi(int(data.get("quality", 3)) - 1, 0, 4)
 		var sb := StyleBoxFlat.new()
-		sb.bg_color = Color(0.95, 0.92, 0.85)
-		sb.set_corner_radius_all(8)
-		sb.border_color = Color(0.85, 0.66, 0.23, 0.85)
-		sb.set_border_width_all(2)
+		sb.bg_color = Color(0.96, 0.93, 0.86, 0.99)
+		sb.set_corner_radius_all(9)
+		sb.border_color = QC[q]
+		sb.set_border_width_all(6)
 		draw_style_box(sb, Rect2(Vector2.ZERO, size))
-		draw_rect(Rect2(0, 0, size.x, 42), Color(0.48, 0.33, 0.12))
-		draw_string(F, Vector2(0, 29), title, HORIZONTAL_ALIGNMENT_CENTER, size.x, 22, Color(0.96, 0.90, 0.76))
-		if is_new:
-			draw_rect(Rect2(8, 8, 30, 26), Color(0.66, 0.22, 0.15))
-			draw_string(F, Vector2(8, 27), "新", HORIZONTAL_ALIGNMENT_CENTER, 30, 17, Color(0.96, 0.90, 0.76))
-		var c := Vector2(size.x * 0.5, 140)
-		draw_circle(c, 46, Color(0.93, 0.90, 0.82))
-		draw_arc(c, 46, 0, TAU, 40, Color(0.85, 0.66, 0.23, 0.8), 2.0)
-		G.draw(self, c, 38.0, kind, Color(0.13, 0.12, 0.11))
-		draw_string(F, Vector2(0, 225), stat1, HORIZONTAL_ALIGNMENT_CENTER, size.x, 18, Color(0.13, 0.12, 0.11))
-		draw_string(F, Vector2(0, 255), stat2, HORIZONTAL_ALIGNMENT_CENTER, size.x, 17, Color(0.32, 0.28, 0.23))
+		draw_string(F, Vector2(0, 34), str(data.get("name", "")), HORIZONTAL_ALIGNMENT_CENTER, size.x, 24, Color(0.14,0.11,0.08))
+		var tex := load(str(data.get("art", "")))
+		if tex != null:
+			draw_texture_rect(tex, Rect2(20, 52, size.x - 40, 120), false)
+		draw_string(F, Vector2(20, 204), str(data.get("effect", "")), HORIZONTAL_ALIGNMENT_LEFT, size.x - 40, 21, Color(0.14,0.11,0.08))
+		draw_line(Vector2(20, 220), Vector2(size.x - 20, 220), Color(0.5,0.4,0.25,0.35), 1.5)
+		draw_string(F, Vector2(20, 246), str(data.get("combo", "")), HORIZONTAL_ALIGNMENT_LEFT, 100, 18, Color(0.42,0.30,0.12))
+		var prog := int(data.get("progress", 0))
+		for i in 3:
+			draw_rect(Rect2(size.x - 56 + i * 17, 234, 12, 12), Color(0.72,0.53,0.16) if i < prog else Color(0.42,0.36,0.28,0.25))
+		draw_string(F, Vector2(20, 280), str(data.get("combo_text", "")), HORIZONTAL_ALIGNMENT_LEFT, size.x - 36, 17, Color(0.2,0.16,0.12))
 	func _gui_input(ev: InputEvent) -> void:
 		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
 			picked.emit()
@@ -329,7 +330,7 @@ func _chip(x: float, kind: String, value: String, cap: String) -> Label:
 
 func _build_hud() -> void:
 	_coin_lb = _chip(24, "coin", "0", "文钱")
-	_chip(252, "crystal", "0", "灵晶")
+	_crystal_lb = _chip(252, "crystal", "100", "灵晶")
 	_kill_lb = _chip(480, "kill", "0", "杀敌")
 	_wave_lb = _lbl("波 1/5", Vector2(22, 92), Vector2(100, 48), 26, INK)
 	for i in 5:
@@ -647,40 +648,64 @@ func _build_draw() -> void:
 	_draw_layer.add_child(banner)
 	_lbl("抽卡 · 20 灵晶", Vector2(0, 0), Vector2(260, 42), 20, Color(0.97, 0.90, 0.74), banner, HORIZONTAL_ALIGNMENT_CENTER)
 	_btn("隐藏", Rect2(620, 162, 72, 32), 17, Color(0.09, 0.08, 0.07, 0.98), GOLD, func(): _show_draw(false), _draw_layer)
-	var names := ["青锋", "破罡", "回风"]
 	for i in 3:
 		var d := DrawCard.new()
 		d.position = Vector2(30 + i * 220, 220)
 		d.size = Vector2(200, 300)
-		d.title = names[i]
-		d.kind = ["sword", "spear", "dagger"][i]
-		d.quality = "上品 · 剑心"
-		d.stat1 = ["攻 +6", "伤 +2", "暴击 +8%"][i]
-		d.stat2 = ["连击 15%", "破甲 12%", "回气 8%"][i]
-		d.is_new = i == 0
-		d.picked.connect(func(): _on_draw_pick(names[i]))
+		d.picked.connect(func() -> void: _on_draw_pick(d.data))
 		_draw_layer.add_child(d)
 		_draw_cards.append(d)
 	_btn("刷新 · 5 灵晶", Rect2(250, 540, 220, 56), 20, Color(0.09, 0.08, 0.07, 0.98), GOLD, func(): _on_refresh(), _draw_layer)
 
-func _show_draw(v: bool) -> void:
-	_draw_open = v
-	_draw_layer.visible = v
-	if v:
-		_draw_layer.move_to_front()
+func _roll_draw() -> void:
+	for d in _draw_cards:
+		var dc: DrawCard = d
+		var idx := randi() % CARD_DATA.size()
+		var data: Dictionary = (CARD_DATA[idx] as Dictionary).duplicate()
+		data["_idx"] = idx
+		dc.data = data
+		dc.queue_redraw()
 
-func _on_draw_pick(n: String) -> void:
+func _update_crystal() -> void:
+	if _crystal_lb != null:
+		_crystal_lb.text = str(_crystal)
+
+func _show_draw(v: bool) -> void:
+	if v:
+		if not _draw_paid:
+			if _crystal < 20:
+				_toast("灵晶不够：抽卡要 20")
+				return
+			_crystal -= 20
+			_update_crystal()
+			_roll_draw()
+			_draw_paid = true
+		_draw_layer.visible = true
+		_draw_layer.move_to_front()
+	else:
+		_draw_layer.visible = false
+		_draw_open = false
+
+func _on_draw_pick(data: Dictionary) -> void:
+	if data.is_empty():
+		return
 	if _cards.size() >= 10:
 		_toast("卡组已满（10 格）")
-		_show_draw(false)
 		return
-	_cards.append(_cards.size())
+	_cards.append(int(data.get("_idx", 0)))
 	_page = 1
 	_refresh_deck()
-	_toast("拿到：" + n + "，已进卡组")
+	_toast("拿到：" + str(data.get("name", "")) + "，已进卡组")
+	_draw_paid = false
 	_show_draw(false)
 
 func _on_refresh() -> void:
+	if _crystal < 5:
+		_toast("灵晶不够：刷新要 5")
+		return
+	_crystal -= 5
+	_update_crystal()
+	_roll_draw()
 	_toast("刷新：5 灵晶")
 
 # ---------------- 属性 ----------------
