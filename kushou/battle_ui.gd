@@ -931,7 +931,8 @@ func _on_draw_pick(card: DrawCard) -> void:
 	tw.tween_property(card, "modulate:a", 0.42, 0.34)
 	tw.chain().tween_callback(func() -> void:
 		_draw_anim = false
-		_add_card(id))
+		_add_card(id)
+		_zhongli_try(id))
 
 func _on_refresh() -> void:
 	if _draw_anim: return
@@ -1085,6 +1086,7 @@ func _process(_delta: float) -> void:
 			if cleared_wave < MAX_WAVE:
 				_core.set_wave(cleared_wave + 1)
 				_core.wave_reset_quota()
+				_spawn_typed_foes()
 				_on_wave_clear(cleared_wave)
 			else:
 				_run_cleared = true
@@ -1102,6 +1104,7 @@ func _process(_delta: float) -> void:
 		_tick_aura(_delta)
 		_tick_stone(_delta)
 		_tick_paper(_delta)
+		_tick_rtype()
 		_tick_shards(_delta)
 		_tick_knock(_delta)
 		if _hero_token != null:
@@ -1504,6 +1507,17 @@ func _init_cards() -> void:
 	var shinies: Dictionary = AncestorData.shiny_cards()
 	for sh_v in shinies.keys():
 		_card_db[sh_v] = shinies[sh_v]
+	_card_db["shiny_zhongli"] = {
+		"id": "shiny_zhongli", "shiny": true, "ancestor": "", "ancestor_name": "",
+		"series": "zhongli", "label": "重利", "tier": -1, "idx": 0,
+		"name": "重利", "quality": 5, "art": "res://assets/items/loot_silver.png",
+		"own_key": "", "own_val": 0, "own_text": "抽卡时 10% 复制选中卡",
+		"set_id": "", "set_size": 0, "combo_name": "", "combo_text": "",
+		"trigger": "", "combo_key": "", "combo_val": 0,
+		"entry": false, "unlock_ids": [],
+		"shiny_self": "抽卡时 10% 复制选中卡",
+		"shiny_devour": "复制体当场吞噬 · 效果与进度保留",
+		"shiny_per": "复制体再独立掷 · 链式"}
 	_card_db["shiny_backwash"] = {
 		"id": "shiny_backwash", "shiny": true, "ancestor": "", "ancestor_name": "",
 		"series": "backwash", "label": "回潮", "tier": -1, "idx": 0,
@@ -1688,8 +1702,18 @@ func _activate_set(sid: String) -> void:
 		"combo_extra_val": int(first.get("combo_extra_val", 0))}
 	_combined.append(rec)
 	_apply_own(own_sum)
+	# v13：群/险 是常驻型 —— 组合完成的瞬间就生效一次（不等"每波"）
+	if str(first["combo_key"]) in ["count_flat", "coin_count", "crystal_count", "treasure_pct", "boss_pct"]:
+		_apply_combo(rec)
 	_toast_card(str(rec["name"]), int(rec["quality"]), "组合激活，" + str(rec["size"]) + " 张已清空")
 	# v8 成长系彩蛋：合成 攻击/防御/气血/内力 时 5% 掷「回潮」（一局一次）
+	# v13 重利：合成经济系（文钱/灵晶）时 3% 入池
+	if str(first["series"]) in ["gold", "crystal"] and not _zhongli_rolled and randf() < 0.03:
+		_zhongli_rolled = true
+		if not _pool.has("shiny_zhongli"):
+			_pool.append("shiny_zhongli")
+			_toast("彩蛋！「重利」入池")
+			Aud.sfx("ult_ready", -4.0)
 	var ser := str(first["series"])
 	if ser in ["atk", "def", "hp", "mp"] and not _backwash_done and randf() < 0.05:
 		_backwash_done = true
@@ -1756,7 +1780,9 @@ func _apply_own(s: Dictionary) -> void:
 
 func _add_card(id: String) -> void:
 	if not _card_db.has(id): return
-	if str(id) == "shiny_chenshi2":
+	if str(id) == "shiny_zhongli":
+		_enable_zhongli()
+	elif str(id) == "shiny_chenshi2":
 		_enable_shiyun()
 	elif str(id) == "shiny_zhiyuan":
 		_enable_qianzhi()
@@ -2608,6 +2634,7 @@ func _shiny_present(kind: String) -> void:
 		"undying": music = "menu_hejian"
 		"qianzhi": music = "menu_youzhou"
 		"shiyun": music = "menu_shaolin"
+		"zhongli": music = "menu_jiangnan"
 	if music != "":
 		Aud.play_bgm(music, 0.25)
 		_stop_stinger(1.8)
@@ -2647,6 +2674,9 @@ func _shiny_present(kind: String) -> void:
 		"shiyun":
 			Aud.sfx("wood_down", -4.0, 0.7)
 			Aud.sfx("hit_heavy", -8.0, 0.8)
+		"zhongli":
+			Aud.sfx("coin", -4.0, 1.15)
+			Aud.sfx("chest", -8.0, 1.0)
 	# ---- 动画 ----
 	match kind:
 		"devour":
@@ -2683,6 +2713,9 @@ func _shiny_present(kind: String) -> void:
 		"shiyun":
 			_flash(Color(0.62, 0.58, 0.50), 0.65, 0.10, 0.40)
 			_ring_out()
+		"zhongli":
+			_flash(Color(1.0, 0.92, 0.52), 0.62, 0.08, 0.36)
+			_sword_rain()
 	if _core != null:
 		_core.Shake_add(6.0 if kind != "devour" else 9.0)
 
@@ -3502,4 +3535,106 @@ func _push_run_mods() -> void:
 	_core.extra_diff_mul = 1.0 + _diff_pct / 100.0
 	if _core.has_method("wave_reset_quota"):
 		_core.wave_reset_quota()
-	_toast("每波 +%d 只 · 难度 +%d%%" % [_wave_extra, int(_diff_pct)])
+	pass
+
+# ============================================================
+# 险系：怪物类型（文钱怪 / 灵晶怪）+ 宝物·首领奖励加成
+#   额外刷出来的怪打 rtype 标签；死了按类型给奖励（用 _tid 消失来判定）
+# ============================================================
+var _rtype_seen: Dictionary = {}
+
+func _spawn_typed_foes() -> void:
+	if _core == null:
+		return
+	for i in _coin_count_extra:
+		_core._spawn_foe("normal")
+		_tag_last("coin")
+	for i in _crystal_count_extra:
+		_core._spawn_foe("normal")
+		_tag_last("crystal")
+
+func _tag_last(rt: String) -> void:
+	if _core.foes.is_empty():
+		return
+	var f: Dictionary = _core.foes[_core.foes.size() - 1]
+	f["rtype"] = rt
+
+func _tick_rtype() -> void:
+	if _core == null:
+		return
+	var alive := {}
+	for f_v in _core.foes:
+		var f: Dictionary = f_v
+		var rt := str(f.get("rtype", ""))
+		if rt == "":
+			continue
+		var tid := int(f.get("_tid", 0))
+		alive[tid] = rt
+		if not _rtype_seen.has(tid):
+			_rtype_seen[tid] = rt
+	for tid in _rtype_seen.keys():
+		if not alive.has(tid):
+			_grant_rtype(str(_rtype_seen[tid]))
+			_rtype_seen.erase(tid)
+
+func _grant_rtype(rt: String) -> void:
+	match rt:
+		"coin":
+			_add_wen(int(20.0 * (1.0 + _treasure_pct / 100.0)))
+		"crystal":
+			_crystal += int(round(2.0 * (1.0 + _treasure_pct / 100.0)))
+			_update_crystal()
+		"boss":
+			_add_wen(int(200.0 * (1.0 + _boss_pct / 100.0)))
+			_crystal += int(round(20.0 * (1.0 + _boss_pct / 100.0)))
+			_update_crystal()
+
+# ============================================================
+# 重利（经济系炫卡）：合成经济系 3% 出
+#   抽卡选中一张 → 每张重利掷 10% → 中了复制一张（当场吞噬、保留效果）
+#   复制体再独立掷 → 链式
+# ============================================================
+var _zhongli_count := 0
+var _zhongli_rolled := false
+
+func _enable_zhongli() -> void:
+	_zhongli_count += 1
+	_toast("重利入卡组 · 抽卡选中时有 %d 次 10%% 复制机会" % _zhongli_count)
+	_shiny_present("zhongli")
+
+func _zhongli_try(id: String) -> void:
+	if _zhongli_count <= 0:
+		return
+	var queue: Array = []
+	for i in _zhongli_count:
+		queue.append(id)
+	var guard := 0
+	var hits := 0
+	while not queue.is_empty() and guard < 12:
+		guard += 1
+		var cid := str(queue.pop_front())
+		if randf() < 0.10:
+			hits += 1
+			_grant_copy(cid)
+			queue.append(cid)          # 复制体再独立掷
+	if hits > 0:
+		_toast("重利 · 复制了 %d 张（全部吞噬，效果保留）" % hits)
+
+# 复制体：不进卡组格，当场吞噬，但效果/进度保留
+func _grant_copy(id: String) -> void:
+	var c: Dictionary = _card_db.get(id, {})
+	if c.is_empty():
+		return
+	if c.has("ancestor"):
+		_cards.append(id)
+		_check_sets()
+		_cards.erase(id)
+		_refresh_deck()
+	else:
+		var own := {"atk": 0.0, "def": 0.0, "hp": 0.0, "mp": 0.0, "gold_pct": 0.0, "crystal_pct": 0.0,
+			"count": 0.0, "coin_count": 0.0, "crystal_count": 0.0, "treasure_pct": 0.0, "boss_pct": 0.0}
+		var k := str(c.get("own_key", ""))
+		if own.has(k):
+			own[k] = float(c.get("own_val", 0))
+			_apply_own(own)
+	_core._push_float(_core.hero_pos.x, _core.hero_pos.y - 80.0, "复制 · " + str(c.get("name", "")), Color(0.96, 0.88, 0.55), true)
