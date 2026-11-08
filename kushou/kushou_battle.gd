@@ -3287,6 +3287,8 @@ func _minion_atk(m: Dictionary) -> float:
 			return float(hero["mp_max"]) * 0.13
 		"agi":                             # 身法系（快攻型：单下低但频率高）
 			return float(hero["atk"]) * 0.30
+		"paper":                           # 纸鸢的纸人：能增殖，所以只吃 15%
+			return float(hero["atk"]) * 0.15
 		"":                               # 空 = 蛟龙（绝品：全属性 25%）
 			return float(hero["atk"]) * cn_inherit() * 0.5
 		_:                                # 默认臂力系

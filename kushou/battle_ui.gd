@@ -111,6 +111,10 @@ var _ft_kills := 0
 var _backwash_done := false
 # 主角被动：多目标 / 追击 / 剑气
 var _hero_passive := {}
+# v11 万刃（苏青鸾炫卡）：穿透无上限 · 每点穿透 +1 刀 · 每 3 次回程 +1 穿透
+var _wanren := false
+var _wanren_pierce := 0
+var _wanren_volleys := 0
 # v9 剑魄（主角炫卡）：连击同一目标涨攻速（换目标重置）+ 剑气进化万剑归宗
 var _hero_jianpo := false
 var _jpo_tid := -1
@@ -1086,6 +1090,9 @@ func _process(_delta: float) -> void:
 		_tick_skills(_delta)
 		_tick_minions(_delta)
 		_tick_burn(_delta)
+		_tick_poison(_delta)
+		_tick_vuln(_delta)
+		_tick_aura(_delta)
 		_tick_knock(_delta)
 		if _hero_token != null:
 			_hero_token.position = _core.position + _core.hero_pos
@@ -1129,6 +1136,11 @@ func _on_core_kill(n: int) -> void:
 		_kill_lb.text = str(_kills)
 	_add_exp(20 * n)                       # v2：杀 1 只 +20 经验
 	_add_wen(WEN_KILL_BASE + WEN_KILL_WAVE * int(_core.wave))   # v6：杀怪给文钱
+	if _undying_lamp:
+		_lamp_kills += n
+		while _lamp_kills >= 5:
+			_lamp_kills -= 5
+			_aura_extra_radius += 10.0
 	if _fentian:
 		_ft_kills += n
 		while _ft_kills >= 15:
@@ -1500,6 +1512,8 @@ func _init_cards() -> void:
 
 # 请到一位祖宗：把它的「初级入口卡」放进抽卡池
 func _grant_ancestor(aid: String) -> void:
+	if aid == "mingzhu":
+		_mingzhu = true
 	if not AncestorData.ANCESTORS.has(aid):
 		return
 	_ancestors[aid] = 0
@@ -1687,7 +1701,13 @@ func _apply_own(s: Dictionary) -> void:
 
 func _add_card(id: String) -> void:
 	if not _card_db.has(id): return
-	if str(id) == "shiny_gundilong":
+	if str(id) == "shiny_mingzhu":
+		_enable_undying_lamp()
+	elif str(id) == "shiny_liuqingqing2":
+		_enable_baicao()
+	elif str(id) == "shiny_qingluan":
+		_enable_wanren()
+	elif str(id) == "shiny_gundilong":
 		_enable_gunshan()
 	elif str(id) == "shiny_zhujue":
 		_enable_jianpo()
@@ -1897,6 +1917,10 @@ const SKILL_DEFS := {
 		"targets": 1, "col": Color(0.90, 0.84, 0.66)},
 	"gundilong": {"name": "肉蛋冲撞", "dtype": "物理", "mul": 1.5, "cd": 6.0, "mp": 80.0,
 		"targets": 1, "col": Color(0.78, 0.68, 0.42)},
+	"qingluan": {"name": "青鸾飞刃", "dtype": "物理", "mul": 1.2, "cd": 8.0, "mp": 90.0,
+		"targets": 1, "col": Color(0.55, 0.82, 0.90)},
+	"liuqingqing2": {"name": "回春", "dtype": "木系", "mul": 1.0, "cd": 12.0, "mp": 80.0,
+		"targets": 1, "col": Color(0.45, 0.78, 0.42)},
 }
 
 var _skills: Array = []
@@ -1953,6 +1977,26 @@ func _cast_skill(i: int) -> void:
 	var md0: Dictionary = _anc_mod.get(aid0, {})
 	var cost0 := maxf(0.0, float(sk["mp"]) - float(md0.get("mp_flat", 0.0)))
 	if _mp < cost0:
+		return
+	# 治疗流：回血 + 环毒 + 易伤
+	if aid0 == "liuqingqing2":
+		_mp -= cost0
+		sk["cd_t"] = maxf(0.5, float(sk["cd"]) * (1.0 - clampf(float(md0.get("cd_pct", 0.0)), 0.0, 80.0) / 100.0))
+		var times := 1
+		if _baicao:
+			times = _baicao_times()
+		for _i in times:
+			_cast_heal(float(sk["mul"]))
+		if times > 1:
+			_toast("百草 · 连放 %d 次（只扣一次内力）" % times)
+		return
+	# 穿透流：直线穿透 + 回程
+	if aid0 == "qingluan":
+		if _live_foes().is_empty():
+			return
+		_mp -= cost0
+		sk["cd_t"] = maxf(0.5, float(sk["cd"]) * (1.0 - clampf(float(md0.get("cd_pct", 0.0)), 0.0, 80.0) / 100.0))
+		_cast_feiren(float(sk["mul"]))
 		return
 	# 撞击流：按气血上限算伤害，并把目标撞飞
 	if aid0 == "gundilong":
@@ -2025,7 +2069,9 @@ func _add_ancestor_effects(aid: String, eff: Dictionary) -> void:
 			"ignite_add": 0.0, "burn_add": 0.0}
 	var m: Dictionary = _anc_mod[aid]
 	for k in ["dmg_pct", "cd_pct", "mp_flat", "para_s", "para_amp", "life_flat", "cap_add", "wave_evo", "tgt_add",
-			"ignite_add", "burn_add", "chain_dmg", "radius_add", "stun_s", "impact"]:
+			"ignite_add", "burn_add", "chain_dmg", "radius_add", "stun_s", "impact",
+			"pierce", "knife", "volley", "volley_pct", "heal_pct", "aura", "poison_dur", "vuln",
+			"heal_aura", "pull"]:
 		if eff.has(k):
 			m[k] = float(m.get(k, 0.0)) + float(eff[k])
 	if eff.has("elem_pct"):
@@ -2485,6 +2531,9 @@ func _shiny_present(kind: String) -> void:
 		"backwash": music = "menu_wudao"
 		"jianpo": music = "menu_shushan"
 		"gunshan": music = "menu_shaolin"
+		"wanren": music = "menu_jiangnan"
+		"baicao": music = "menu_shushan"
+		"undying": music = "menu_hejian"
 	if music != "":
 		Aud.play_bgm(music, 0.25)
 		_stop_stinger(1.8)
@@ -2509,6 +2558,15 @@ func _shiny_present(kind: String) -> void:
 		"gunshan":
 			Aud.sfx("wood_down", -4.0, 0.8)
 			Aud.sfx("melee", -8.0, 0.9)
+		"wanren":
+			Aud.sfx("sword_draw", -4.0, 1.25)
+			Aud.sfx("slash_light", -8.0, 1.2)
+		"baicao":
+			Aud.sfx("enlighten", -4.0, 1.0)
+			Aud.sfx("pet_chirp1", -12.0, 1.1)
+		"undying":
+			Aud.sfx("bell", -4.0, 1.1)
+			Aud.sfx("wind", -10.0, 0.9)
 	# ---- 动画 ----
 	match kind:
 		"devour":
@@ -2530,6 +2588,15 @@ func _shiny_present(kind: String) -> void:
 		"gunshan":
 			_flash(Color(0.82, 0.68, 0.40), 0.60, 0.10, 0.40)
 			_rise_tide()
+		"wanren":
+			_flash(Color(0.62, 0.88, 0.95), 0.55, 0.08, 0.34)
+			_sweep_bar(Color(0.75, 0.95, 1.0, 0.55), 0.0)
+		"baicao":
+			_flash(Color(0.55, 0.88, 0.50), 0.55, 0.08, 0.34)
+			_ring_out()
+		"undying":
+			_flash(Color(1.0, 0.92, 0.62), 0.60, 0.10, 0.40)
+			_ring_out()
 	if _core != null:
 		_core.Shake_add(6.0 if kind != "devour" else 9.0)
 
@@ -2873,3 +2940,268 @@ func _enable_gunshan() -> void:
 func _gunshan_grow() -> void:
 	_core.hero["hp_max"] = float(_core.hero["hp_max"]) + GUNSHAN_HP
 	_core.hero["hp"] = float(_core.hero["hp"]) + GUNSHAN_HP
+
+# ============================================================
+# 苏青鸾 · 青鸾飞刃（直线穿透 + 回程）
+#   穿透 = 一条线上能打到几个人；飞刀 = 同时几条线
+#   5★ 回旋：到终点后原路再穿一遍（伤害 ×回程倍率）
+# ============================================================
+const FEIREN_HALF_W := 26.0       # 飞刃判定半宽
+const FEIREN_LEN := 780.0         # 飞刃长度
+
+func _cast_feiren(mul: float) -> void:
+	var m: Dictionary = _anc_mod.get("qingluan", {})
+	var foes := _live_foes()
+	if foes.is_empty():
+		return
+	var dmg_pct := float(m.get("dmg_pct", 0.0)) + float(_elem_mod.get("物理", 0.0))
+	var pierce := 1 + int(m.get("pierce", 0.0))
+	if _wanren:
+		pierce += 2 + _wanren_pierce            # 炫卡：起步 +2，回程成长无上限
+	var knives := 1 + int(m.get("knife", 0.0))
+	if _wanren:
+		knives += pierce                        # 炫卡：每 1 点穿透 +1 把飞刀
+	var volley := float(m.get("volley", 0.0)) > 0.0
+	var vmul := 1.0 + float(m.get("volley_pct", 0.0)) / 100.0
+	var base := float(_core.hero.get("atk", 12.0)) * mul * (1.0 + dmg_pct / 100.0)
+	var hp0 := Vector2(_core.hero_pos)
+	var dir := (Vector2(float(foes[0]["x"]), float(foes[0]["y"])) - hp0)
+	if dir.length() < 1.0:
+		dir = Vector2(0, -1)
+	dir = dir.normalized()
+	for k in knives:
+		var ang := dir.angle() + (float(k) - float(knives - 1) * 0.5) * 0.16
+		_feiren_line(hp0, Vector2(cos(ang), sin(ang)), base, pierce, volley, vmul)
+	Aud.sfx("slash_light", -8.0)
+
+func _feiren_line(origin: Vector2, d: Vector2, base: float, pierce: int, volley: bool, vmul: float) -> void:
+	var hits: Array = []
+	for f_v in _core.foes:
+		var f: Dictionary = f_v
+		if float(f.get("hp", 0.0)) <= 0.0 or float(f.get("dying", 0.0)) > 0.0:
+			continue
+		var rel := Vector2(float(f["x"]), float(f["y"])) - origin
+		var t := rel.dot(d)
+		if t < 0.0 or t > FEIREN_LEN:
+			continue
+		if absf(rel.cross(d)) > FEIREN_HALF_W:
+			continue
+		hits.append({"f": f, "t": t})
+	hits.sort_custom(func(a, b) -> bool: return float(a["t"]) < float(b["t"]))
+	var n := mini(pierce, hits.size())
+	for i in n:
+		var f: Dictionary = (hits[i] as Dictionary)["f"]
+		_core._apply_dmg(f, base, "物理")
+		_core._push_float(float(f["x"]), float(f["y"]) - 42.0, "飞刃", Color(0.55, 0.82, 0.90), i == 0)
+	if volley and n > 0:
+		if _wanren:
+			_wanren_volleys += 1
+			if _wanren_volleys % 3 == 0:
+				_wanren_pierce += 1
+				_toast("万刃 · 穿透 +1（累计 %d）" % (2 + _wanren_pierce))
+		for i in range(n - 1, -1, -1):
+			var f2: Dictionary = (hits[i] as Dictionary)["f"]
+			if float(f2.get("hp", 0.0)) <= 0.0:
+				continue
+			_core._apply_dmg(f2, base * vmul, "物理")
+			_core._push_float(float(f2["x"]), float(f2["y"]) - 62.0, "回程", Color(0.75, 0.95, 1.0), true)
+	var a: Vector2 = _core.position + origin
+	var r := ColorRect.new()
+	r.color = Color(0.70, 0.92, 1.0, 0.7)
+	r.size = Vector2(FEIREN_LEN, 4)
+	r.position = Vector2(a.x, a.y - 2.0)
+	r.pivot_offset = Vector2(0, 2)
+	r.rotation = d.angle()
+	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	r.z_index = 9
+	add_child(r)
+	var tw := create_tween()
+	tw.tween_property(r, "modulate:a", 0.0, 0.25)
+	tw.tween_callback(func() -> void: r.queue_free())
+
+# ---------------- 万刃（苏青鸾炫卡） ----------------
+func _enable_wanren() -> void:
+	_wanren = true
+	_wanren_pierce = 0
+	_wanren_volleys = 0
+	_toast("万刃入卡组 · 穿透无上限，每点穿透 +1 把飞刀，每 3 次回程穿透 +1")
+	_shiny_present("wanren")
+
+# ============================================================
+# 柳卿卿 · 回春（治疗 + 环毒 + 易伤）
+#   治疗 = 攻击 × 200% × (1 + 治疗% + 木系%)      —— 伤害刻意低，她是辅助
+#   环毒 = 圈内敌人每秒 攻击 × 30% × 层数 × (1 + 木系%)
+#   5★ 长春：毒更久，且中招者受伤 +10%（唯一一层，只刷新）
+# ============================================================
+const HEAL_RATIO := 2.0
+const POISON_RATE := 0.30
+const AURA_BASE_R := 110.0
+
+func _wood_pct() -> float:
+	return float(_elem_mod.get("木系", 0.0))
+
+func _cast_heal(mul: float) -> void:
+	var m: Dictionary = _anc_mod.get("liuqingqing2", {})
+	var wood := _wood_pct()
+	var heal := float(_core.hero.get("atk", 12.0)) * HEAL_RATIO * (1.0 + (float(m.get("heal_pct", 0.0)) + wood) / 100.0)
+	var h: Dictionary = _core.hero
+	h["hp"] = minf(float(h["hp_max"]), float(h["hp"]) + heal)
+	_core._push_float(_core.hero_pos.x, _core.hero_pos.y - 60.0, "+%d" % int(heal), Color(0.42, 0.85, 0.40), true)
+	var rad := AURA_BASE_R + float(m.get("radius_add", 0.0))
+	var dur := 4.0 + float(m.get("poison_dur", 0.0))
+	var vuln := float(m.get("vuln", 0.0))
+	var hp0 := Vector2(_core.hero_pos)
+	for f_v in _core.foes:
+		var f: Dictionary = f_v
+		if float(f.get("hp", 0.0)) <= 0.0 or float(f.get("dying", 0.0)) > 0.0:
+			continue
+		if (Vector2(float(f["x"]), float(f["y"])) - hp0).length() > rad:
+			continue
+		f["poison"] = float(f.get("poison", 0.0)) + 1.0
+		f["poison_t"] = maxf(float(f.get("poison_t", 0.0)), dur)
+		if vuln > 0.0:
+			f["vuln_t"] = maxf(float(f.get("vuln_t", 0.0)), dur)   # 只刷新，不叠层
+			f["vuln_pct"] = vuln
+	# 绿色环波
+	_heal_ring(rad)
+	Aud.sfx("enlighten", -10.0)
+
+func _heal_ring(rad: float) -> void:
+	var r := ColorRect.new()
+	r.color = Color(0.45, 0.85, 0.42, 0.35)
+	r.size = Vector2(60, 60)
+	r.position = _core.position + Vector2(_core.hero_pos.x - 30.0, _core.hero_pos.y - 30.0)
+	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	r.z_index = 8
+	add_child(r)
+	var target := rad * 2.0
+	var tw := create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(r, "size", Vector2(target, target), 0.45)
+	tw.tween_property(r, "position", _core.position + Vector2(_core.hero_pos.x - target * 0.5, _core.hero_pos.y - target * 0.5), 0.45)
+	tw.tween_property(r, "modulate:a", 0.0, 0.45)
+	tw.chain().tween_callback(func() -> void: r.queue_free())
+
+func _tick_poison(dt: float) -> void:
+	if _core == null:
+		return
+	var wood := _wood_pct()
+	for f_v in _core.foes:
+		var f: Dictionary = f_v
+		var st := float(f.get("poison", 0.0))
+		if st <= 0.0:
+			continue
+		if float(f.get("hp", 0.0)) <= 0.0:
+			f["poison"] = 0.0
+			continue
+		f["poison_acc"] = float(f.get("poison_acc", 0.0)) + dt
+		while float(f["poison_acc"]) >= 1.0:
+			f["poison_acc"] = float(f["poison_acc"]) - 1.0
+			var dmg := float(_core.hero.get("atk", 12.0)) * POISON_RATE * (1.0 + wood / 100.0) * st
+			_core._apply_dmg(f, dmg * _vuln_mul(f), "木系")
+			_core._push_float(float(f["x"]), float(f["y"]) - 34.0, "毒", Color(0.45, 0.80, 0.40))
+		f["poison_t"] = float(f.get("poison_t", 0.0)) - dt
+		if float(f["poison_t"]) <= 0.0:
+			f["poison"] = maxf(0.0, st - 1.0)
+			f["poison_t"] = 4.0
+			if float(f["poison"]) <= 0.0:
+				f.erase("poison")
+
+# 易伤倍率（柳卿卿 5★）：只刷新不叠加
+func _vuln_mul(f: Dictionary) -> float:
+	if float(f.get("vuln_t", 0.0)) > 0.0:
+		return 1.0 + float(f.get("vuln_pct", 0.0)) / 100.0
+	return 1.0
+
+func _tick_vuln(dt: float) -> void:
+	if _core == null:
+		return
+	for f_v in _core.foes:
+		var f: Dictionary = f_v
+		if float(f.get("vuln_t", 0.0)) > 0.0:
+			f["vuln_t"] = float(f["vuln_t"]) - dt
+
+# ---------------- 百草（柳卿卿炫卡） ----------------
+var _baicao := false
+# v12 明烛光环（纯被动）
+var _mingzhu := false
+var _aura_pull_acc := 0.0
+var _undying_lamp := false
+var _lamp_kills := 0
+var _aura_extra_radius := 0.0
+
+func _enable_baicao() -> void:
+	_baicao = true
+	_toast("百草入卡组 · 毒素可叠加，施放有几率连放（只扣一次内力）")
+	_shiny_present("baicao")
+
+# 返回本次实际施放次数（只判一种）
+func _baicao_times() -> int:
+	var r := randf()
+	if r < 0.10:
+		return 5
+	if r < 0.35:
+		return 3
+	if r < 0.85:
+		return 2
+	return 1
+
+# ============================================================
+# 明烛 · 灯照光环（纯被动，不进技能栏）
+#   圈内敌人：减速 · 易伤（5★ 聚灯：每秒 20% 概率被吸向中心 + 木系磨血）
+#   2★ 长明：圈内主角回血回内
+#   聚灯伤害随半径成长：攻击 × 15% × (半径 / 180)
+# ============================================================
+const AURA_R_BASE := 180.0
+const AURA_PULL_STEP := 120.0
+
+func _aura_radius() -> float:
+	var m: Dictionary = _anc_mod.get("mingzhu", {})
+	var r := AURA_R_BASE + float(m.get("radius_add", 0.0)) + _aura_extra_radius
+	if _undying_lamp:
+		r += 40.0
+	return r
+
+func _tick_aura(dt: float) -> void:
+	if not _mingzhu or _core == null:
+		return
+	var m: Dictionary = _anc_mod.get("mingzhu", {})
+	var rad := _aura_radius()
+	var vuln := float(m.get("vuln", 0.0))
+	var pull := float(m.get("pull", 0.0)) > 0.0
+	var heal_aura := float(m.get("heal_aura", 0.0)) > 0.0
+	var hp0 := Vector2(_core.hero_pos)
+	if heal_aura:
+		var h: Dictionary = _core.hero
+		h["hp"] = minf(float(h["hp_max"]), float(h["hp"]) + float(h["hp_max"]) * 0.008 * dt)
+		_mp = minf(_mp_max, _mp + 6.0 * dt)
+	_aura_pull_acc += dt
+	var do_pull := _aura_pull_acc >= 1.0
+	if do_pull:
+		_aura_pull_acc -= 1.0
+	var wood := float(_elem_mod.get("木系", 0.0))
+	for f_v in _core.foes:
+		var f: Dictionary = f_v
+		if float(f.get("hp", 0.0)) <= 0.0 or float(f.get("dying", 0.0)) > 0.0:
+			continue
+		var d := Vector2(float(f["x"]), float(f["y"])) - hp0
+		if d.length() > rad:
+			continue
+		f["slow_t"] = maxf(float(f.get("slow_t", 0.0)), 0.3)      # 持续减速
+		if vuln > 0.0:
+			f["vuln_t"] = maxf(float(f.get("vuln_t", 0.0)), 0.3)
+			f["vuln_pct"] = vuln
+		if pull and do_pull and randf() < 0.20:
+			var dir := (-d).normalized()
+			f["x"] = float(f["x"]) + dir.x * AURA_PULL_STEP
+			f["y"] = float(f["y"]) + dir.y * AURA_PULL_STEP
+			var dmg := float(_core.hero.get("atk", 12.0)) * 0.15 * (rad / AURA_R_BASE) * (1.0 + wood / 100.0)
+			_core._apply_dmg(f, dmg * _vuln_mul(f), "木系")
+			_core._push_float(float(f["x"]), float(f["y"]) - 30.0, "聚", Color(0.95, 0.85, 0.55))
+
+# ---------------- 不灭之灯（明烛炫卡） ----------------
+func _enable_undying_lamp() -> void:
+	_undying_lamp = true
+	_lamp_kills = 0
+	_toast("不灭之灯入卡组 · 半径 +40，每击杀 5 只再 +10（无上限）")
+	_shiny_present("undying")
