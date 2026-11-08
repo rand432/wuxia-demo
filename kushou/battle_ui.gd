@@ -13,6 +13,7 @@ const PLAYER_TEX := preload("res://assets/char/player_q.png")
 const BattleCore := preload("res://kushou/kushou_battle.gd")
 const TokenActor := preload("res://kushou/token_actor.gd")
 const CardData := preload("res://kushou/card_data.gd")
+const AncestorData := preload("res://kushou/ancestor_data.gd")
 
 const INK := Color(0.13, 0.12, 0.11)
 const PAPER := Color(0.93, 0.90, 0.82)
@@ -49,6 +50,26 @@ var _card_db := {}
 var _set_cards := {}
 var _pool: Array = []
 var _acquired := {}
+# v2 波次 / 经验 / 升级（波次推进 + 升级点亮请神）
+const MAX_WAVE := 5
+var _lv := 1
+var _exp := 0
+var _exp_need := 100
+var _draw_charge := 0          # 累积的请神次数（升级 +1）
+var _run_cleared := false
+var _lv_lb: Label = null
+var _exp_lb: Label = null
+var _exp_bar: Panel = null
+var _mate_tile = null
+# v1 请神·家传卡：已请到的祖宗（aid -> 当前可收集档）／已激活的家传组合
+var _ancestors := {}
+var _ancestor_combos: Array = []
+# v4 组合加成落地：aid -> {dmg_pct, cd_pct, mp_flat, para_s, para_amp}；元素共享单独记
+var _anc_mod := {}
+var _elem_mod := {}
+# v4 炫卡：掷中（进池）／已吞（一局一次）
+var _shiny_rolled := {}
+var _shiny_used := {}
 var _combined: Array = []
 var _stats := {"atk": 0.0, "def": 0.0, "hp": 0.0}
 var _gold_pct := 0.0
@@ -98,6 +119,7 @@ func _ready() -> void:
 	_build_exit()
 	_build_toast()
 	_build_combined()
+	_build_god_pick()
 	_refresh_deck()
 	set_process(true)
 
@@ -279,6 +301,7 @@ class CardSlot extends Control:
 	signal pressed
 	var empty := false
 	var quality := 3
+	var shiny := false
 	var art: Texture2D = null
 	var idx = 0
 	func _ready() -> void:
@@ -300,6 +323,17 @@ class CardSlot extends Control:
 		draw_style_box(sb, Rect2(Vector2.ZERO, size))
 		if art != null:
 			draw_texture_rect(art, Rect2(8, 8, size.x - 16, size.y - 16), false)
+		if shiny:
+			var cols := [Color(0.85,0.28,0.30), Color(0.93,0.58,0.22), Color(0.90,0.80,0.28),
+				Color(0.38,0.70,0.42), Color(0.32,0.62,0.85), Color(0.62,0.42,0.82)]
+			for i in 6:
+				var sb2 := StyleBoxFlat.new()
+				sb2.bg_color = Color(0, 0, 0, 0)
+				sb2.set_corner_radius_all(10)
+				sb2.border_color = cols[i]
+				sb2.set_border_width_all(2)
+				draw_style_box(sb2, Rect2(Vector2(-2.0 - float(i) * 2.0, -2.0 - float(i) * 2.0),
+					size + Vector2(4.0 + float(i) * 4.0, 4.0 + float(i) * 4.0)))
 	func _gui_input(ev: InputEvent) -> void:
 		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
 			pressed.emit()
@@ -333,14 +367,32 @@ class DrawCard extends Control:
 		sb.border_color = QC[q]
 		sb.set_border_width_all(6)
 		draw_style_box(sb, Rect2(Vector2.ZERO, size))
+		if bool(data.get("shiny", false)):
+			# 炫卡：七彩描边由外向内
+			var cols := [Color(0.85,0.28,0.30), Color(0.93,0.58,0.22), Color(0.90,0.80,0.28),
+				Color(0.38,0.70,0.42), Color(0.32,0.62,0.85), Color(0.62,0.42,0.82)]
+			for i in 6:
+				var sp := StyleBoxFlat.new()
+				sp.bg_color = Color(0, 0, 0, 0)
+				sp.set_corner_radius_all(10)
+				sp.border_color = cols[i]
+				sp.set_border_width_all(2)
+				draw_style_box(sp, Rect2(Vector2(-2.0 - float(i) * 2.0, -2.0 - float(i) * 2.0),
+					size + Vector2(4.0 + float(i) * 4.0, 4.0 + float(i) * 4.0)))
 		draw_string(F, Vector2(0, 34), str(data.get("name", "")), HORIZONTAL_ALIGNMENT_CENTER, size.x, 24, Color(0.14,0.11,0.08))
 		var tex := load(str(data.get("art", "")))
 		if _art_rect != null:
 			_art_rect.texture = tex
 		draw_string(F, Vector2(20, 204), str(data.get("own_text", "")), HORIZONTAL_ALIGNMENT_LEFT, size.x - 40, 21, Color(0.14,0.11,0.08))
 		draw_line(Vector2(20, 220), Vector2(size.x - 20, 220), Color(0.5,0.4,0.25,0.35), 1.5)
-		draw_string(F, Vector2(20, 246), str(data.get("combo_name", "")) + " 0/" + str(data.get("set_size", 0)), HORIZONTAL_ALIGNMENT_LEFT, 140, 18, Color(0.42,0.30,0.12))
-		draw_string(F, Vector2(20, 280), str(data.get("trigger", "")) + "：" + str(data.get("combo_text", "")), HORIZONTAL_ALIGNMENT_LEFT, size.x - 36, 17, Color(0.2,0.16,0.12))
+		if bool(data.get("shiny", false)):
+			# 炫卡：不显示组合进度，改成吞噬说明
+			draw_string(F, Vector2(20, 240), "进卡组即吞尽全部家传卡", HORIZONTAL_ALIGNMENT_LEFT, size.x - 36, 16, Color(0.42,0.30,0.12))
+			draw_string(F, Vector2(20, 264), "每吞一张：灵晶+20 · 文钱+150", HORIZONTAL_ALIGNMENT_LEFT, size.x - 36, 14, Color(0.2,0.16,0.12))
+			draw_string(F, Vector2(20, 284), "　　　　　技能伤害 +10%", HORIZONTAL_ALIGNMENT_LEFT, size.x - 36, 14, Color(0.2,0.16,0.12))
+		else:
+			draw_string(F, Vector2(20, 246), str(data.get("combo_name", "")) + " 0/" + str(data.get("set_size", 0)), HORIZONTAL_ALIGNMENT_LEFT, 140, 18, Color(0.42,0.30,0.12))
+			draw_string(F, Vector2(20, 280), str(data.get("trigger", "")) + "：" + str(data.get("combo_text", "")), HORIZONTAL_ALIGNMENT_LEFT, size.x - 36, 17, Color(0.2,0.16,0.12))
 	func _gui_input(ev: InputEvent) -> void:
 		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
 			picked.emit()
@@ -383,7 +435,7 @@ func _build_hud() -> void:
 	_panel(Rect2(200, 92, 235 * 0.70, 20), Color(0.61, 0.16, 0.13), 3)
 	_hp_lb = _lbl("200/200", Vector2(208, 88), Vector2(120, 28), 17, Color(0.98, 0.95, 0.88))
 	_panel(Rect2(200, 118, 235, 9), Color(0.10, 0.09, 0.08, 0.22), 4)
-	_panel(Rect2(200, 118, 235 * 0.35, 9), Color(0.85, 0.66, 0.23), 4)
+	_mp_bar = _panel(Rect2(200, 118, 235 * 0.35, 9), Color(0.30, 0.52, 0.72), 4)
 	_lbl("首领 00:37", Vector2(450, 96), Vector2(120, 30), 17, SEAL)
 	_btn("总计", Rect2(570, 88, 68, 42), 17, Color(0.10, 0.09, 0.08, 0.98), LIGHT, func(): _toast("总计：卡组 7/10 · 宝物 3/3"))
 	_btn("退出", Rect2(646, 88, 60, 42), 17, Color(0.10, 0.09, 0.08, 0.98), LIGHT, func(): _show_exit(true))
@@ -429,17 +481,8 @@ func _build_field() -> void:
 	_btn("挑战", Rect2(0, 680, 96, 96), 20, Color(0.075, 0.068, 0.060, 0.98), Color(0.91, 0.78, 0.42), func(): _toggle_challenge())
 	_build_challenge()
 	_build_card_detail()
-	# 功法面板
-	_panel(Rect2(480, 690, 230, 120), Color(0.95, 0.91, 0.83, 0.92), 6, Color(0.85, 0.66, 0.23, 0.45), 2)
-	_lbl("功法", Vector2(492, 700), Vector2(120, 24), 17, DIM)
-	for col in 3:
-		var s := SkillIcon.new()
-		s.position = Vector2(506 + col * 58, 728)
-		s.size = Vector2(42, 42)
-		s.cd = 0 if col != 1 else 4
-		s.kind = ["sword", "spear", "dagger"][col]
-		s.pressed.connect(func(): _toast("功法"))
-		add_child(s)
+	# v3 技能栏（右缘竖排，6 格可视）
+	_build_skill_bar()
 
 class SkillIcon extends Control:
 	const F := preload("res://fonts/ink.ttf")
@@ -556,6 +599,7 @@ func _refresh_deck() -> void:
 			s.empty = false
 			s.idx = id
 			s.quality = int(c["quality"])
+			s.shiny = bool(c.get("shiny", false))
 			s.art = load(str(c["art"]))
 			s.queue_redraw()
 		else:
@@ -590,17 +634,18 @@ func _pick_card(id: String) -> void:
 # ---------------- 底栏 ----------------
 func _build_bottom() -> void:
 	_panel(Rect2(8, 980, 704, 240), Color(0.075, 0.068, 0.060, 0.98), 10, Color(0.85, 0.66, 0.23, 0.45), 2)
-	_lbl("Lv 7", Vector2(22, 992), Vector2(60, 28), 18, GOLD)
-	_panel(Rect2(86, 992, 540, 12), Color(0.93, 0.90, 0.82, 0.16), 6)
-	_panel(Rect2(86, 992, 540 * 0.62, 12), Color(0.85, 0.66, 0.23), 6)
-	_lbl("620/1000", Vector2(626, 986), Vector2(80, 24), 17, Color(0.80, 0.75, 0.65), self, HORIZONTAL_ALIGNMENT_RIGHT)
+	_lv_lb = _lbl("Lv 1", Vector2(22, 992), Vector2(70, 28), 18, GOLD)
+	_panel(Rect2(96, 992, 520, 12), Color(0.93, 0.90, 0.82, 0.16), 6)
+	_exp_bar = _panel(Rect2(96, 992, 4, 12), Color(0.85, 0.66, 0.23), 6)
+	_exp_lb = _lbl("0/100", Vector2(616, 986), Vector2(90, 24), 16, Color(0.80, 0.75, 0.65), self, HORIZONTAL_ALIGNMENT_RIGHT)
 	_tile(24, 1020, 124, "market", "黑市", false)
 	_tile(158, 1020, 124, "treasure", "宝物", false)
-	_tile(292, 1020, 124, "mate", "伙伴", false)
+	_mate_tile = _tile(292, 1020, 124, "mate", "请神", false)
 	_tile(426, 1020, 124, "skill", "强化", true)
 	_tile(560, 1008, 136, "draw", "抽卡", true)
+	_refresh_level_ui()
 
-func _tile(x: float, y: float, s: float, kind: String, label: String, hot: bool) -> void:
+func _tile(x: float, y: float, s: float, kind: String, label: String, hot: bool):
 	var t := Tile.new()
 	t.position = Vector2(x, y)
 	t.size = Vector2(s, s)
@@ -612,11 +657,12 @@ func _tile(x: float, y: float, s: float, kind: String, label: String, hot: bool)
 			"draw": _show_draw(true)
 			"market": _toast("黑市")
 			"treasure": _toast("宝物")
-			"mate": _toast("伙伴")
+			"mate": _on_mate_tile()
 			"skill": _toast("强化")
 			_: _toast(label)
 	t.pressed.connect(hit)
 	add_child(t)
+	return t
 
 class Tile extends Control:
 	const F := preload("res://fonts/ink.ttf")
@@ -624,6 +670,7 @@ class Tile extends Control:
 	var kind := "market"
 	var label := ""
 	var hot := false
+	var badge := 1
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_STOP
 	func _draw() -> void:
@@ -658,8 +705,8 @@ class Tile extends Control:
 			draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 		draw_string(F, Vector2(0, size.y - 14), label, HORIZONTAL_ALIGNMENT_CENTER, size.x, 20 if size.x < 130 else 22, ink)
 		if hot:
-			draw_circle(Vector2(size.x - 14, 14), 10, Color(0.88, 0.69, 0.29))
-			draw_string(F, Vector2(size.x - 20, 20), "1", HORIZONTAL_ALIGNMENT_LEFT, 20, 17, Color(0.18, 0.10, 0.05))
+			draw_circle(Vector2(size.x - 15, 15), 11, Color(0.88, 0.69, 0.29))
+			draw_string(F, Vector2(size.x - 23, 21), str(badge), HORIZONTAL_ALIGNMENT_CENTER, 18, 17, Color(0.18, 0.10, 0.05))
 	func _gui_input(ev: InputEvent) -> void:
 		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
 			pressed.emit()
@@ -698,6 +745,16 @@ func _build_draw() -> void:
 func _roll_draw() -> void:
 	var cands := _pool.duplicate()
 	cands.shuffle()
+	# v4 炫卡高权重：池里有炫卡时 80% 直接排到第一张
+	var shiny_id := ""
+	for pid_v in _pool:
+		var pid := str(pid_v)
+		if pid.begins_with("shiny_"):
+			shiny_id = pid
+			break
+	if shiny_id != "" and randf() < 0.80:
+		cands.erase(shiny_id)
+		cands.push_front(shiny_id)
 	for i in _draw_cards.size():
 		var dc: DrawCard = _draw_cards[i]
 		if i < cands.size():
@@ -707,6 +764,25 @@ func _roll_draw() -> void:
 		else:
 			dc.data = {}
 		dc.queue_redraw()
+	# v4 彩蛋：这三张里有某位祖宗的家传卡 → 4% 掷他的炫卡
+	_roll_shiny_check(cands.slice(0, _draw_cards.size()))
+
+# 彩蛋判定：只在「抽到该祖宗的家传卡」时掷，一局每位一次
+func _roll_shiny_check(cards: Array) -> void:
+	for cid_v in cards:
+		var c: Dictionary = _card_db.get(str(cid_v), {})
+		if not c.has("ancestor") or bool(c.get("shiny", false)):
+			continue
+		var aid := str(c["ancestor"])
+		if _shiny_used.has(aid) or _shiny_rolled.has(aid):
+			continue
+		if randf() < 0.04:
+			_shiny_rolled[aid] = true
+			var sid := "shiny_" + aid
+			if _card_db.has(sid) and not _pool.has(sid):
+				_pool.append(sid)
+				_toast("彩蛋！「%s」入池 —— 刷新就能看到" % str((_card_db[sid] as Dictionary)["name"]))
+				Aud.sfx("ult_ready", -4.0)
 
 func _update_crystal() -> void:
 	if _crystal_lb != null:
@@ -902,9 +978,20 @@ func _process(_delta: float) -> void:
 			_combo_t -= 6.0
 			_trigger_combos("每 6 秒")
 		if _wave_lb != null:
-			_wave_lb.text = "波 %d/5" % int(_core.wave)
+			_wave_lb.text = "波 %d/%d" % [int(_core.wave), MAX_WAVE]
+		# v2 波次推进：本波定额刷完 + 场上清空 → 进下一波；满 MAX_WAVE 收工
+		if not _run_cleared and _core.wave_cleared():
+			var cleared_wave := int(_core.wave)
+			if cleared_wave < MAX_WAVE:
+				_core.set_wave(cleared_wave + 1)
+				_core.wave_reset_quota()
+				_on_wave_clear(cleared_wave)
+			else:
+				_run_cleared = true
+				_toast("第 %d 波清空 · 本局收工" % MAX_WAVE)
 		if _hp_lb != null:
 			_hp_lb.text = "%d/%d" % [int(float(_core.hero.get("hp", 0))), int(float(_core.hero.get("hp_max", 1)))]
+		_tick_skills(_delta)
 		if _hero_token != null:
 			_hero_token.position = _core.position + _core.hero_pos
 			_hero_token.hp_ratio = float(_core.hero.get("hp", 0.0)) / maxf(1.0, float(_core.hero.get("hp_max", 1.0)))
@@ -935,7 +1022,51 @@ func _on_core_kill(n: int) -> void:
 	_kills += n
 	if _kill_lb != null:
 		_kill_lb.text = str(_kills)
+	_add_exp(20 * n)                       # v2：杀 1 只 +20 经验
 	_trigger_combos("每次击杀")
+
+# ---------------- 经验 / 等级 / 请神次数 ----------------
+#   杀 1 只 +20 · 清一波 +50 · 升级需求 100 + 50×(级-1)
+#   每升 1 级 → 请神次数 +1 → 底栏「请神」钮亮起
+func _add_exp(v: int) -> void:
+	if v <= 0:
+		return
+	_exp += v
+	var up := 0
+	while _exp >= _exp_need:
+		_exp -= _exp_need
+		_lv += 1
+		_exp_need += 50
+		_draw_charge += 1
+		up += 1
+	_refresh_level_ui()
+	if up > 0:
+		_toast("升到 Lv %d · 请神 +%d" % [_lv, up])
+
+func _refresh_level_ui() -> void:
+	if _lv_lb != null:
+		_lv_lb.text = "Lv " + str(_lv)
+	if _exp_lb != null:
+		_exp_lb.text = "%d/%d" % [_exp, _exp_need]
+	if _exp_bar != null:
+		var r := clampf(float(_exp) / maxf(1.0, float(_exp_need)), 0.0, 1.0)
+		_exp_bar.size = Vector2(maxf(4.0, 520.0 * r), 12.0)
+	if _mate_tile != null:
+		var lit := _draw_charge > 0
+		if _mate_tile.hot != lit:
+			_mate_tile.hot = lit
+			_mate_tile.queue_redraw()
+		_mate_tile.badge = _draw_charge
+
+func _on_wave_clear(cleared_wave: int) -> void:
+	_add_exp(50)                            # v2：清一波 +50 经验
+	_toast("第 %d 波清空" % cleared_wave)
+
+func _on_mate_tile() -> void:
+	if _draw_charge <= 0:
+		_toast("升级后可请神")
+		return
+	_show_god_pick()
 
 func _make_foe_token(f: Dictionary):
 	var kind := str(f.get("kind", "normal"))
@@ -978,6 +1109,57 @@ func _init_cards() -> void:
 	_cards.clear()
 	_acquired.clear()
 	_combined.clear()
+	_ancestors.clear()
+	_ancestor_combos.clear()
+	# 家传卡：并进同一套卡表（形状与 5 系一致，所以直接合并）
+	var a: Dictionary = AncestorData.build()
+	var acards: Dictionary = a["cards"]
+	for cid_v in acards.keys():
+		_card_db[cid_v] = acards[cid_v]
+	var asets: Dictionary = a["sets"]
+	for sid_v in asets.keys():
+		_set_cards[sid_v] = asets[sid_v]
+	# 炫卡（独立卡，不进套）
+	var shinies: Dictionary = AncestorData.shiny_cards()
+	for sh_v in shinies.keys():
+		_card_db[sh_v] = shinies[sh_v]
+	_anc_mod.clear()
+	_elem_mod.clear()
+	_shiny_rolled.clear()
+	_shiny_used.clear()
+	# 家传卡由「请神」发放（_pick_god → _grant_ancestor），不再硬发
+
+# 请到一位祖宗：把它的「初级入口卡」放进抽卡池
+func _grant_ancestor(aid: String) -> void:
+	if not AncestorData.ANCESTORS.has(aid):
+		return
+	_ancestors[aid] = 0
+	var eid := "%s_t0_0" % aid
+	if _card_db.has(eid) and not _pool.has(eid) and not _acquired.has(eid):
+		_pool.append(eid)
+
+# 家传组合激活：不做 5 系那套属性结算，只登记 + 解锁下一档入口
+func _activate_ancestor_set(sid: String, first: Dictionary, ids: Array) -> void:
+	var srcs: Array = []
+	for cid_v in ids:
+		var cid := str(cid_v)
+		srcs.append(str((_card_db[cid] as Dictionary)["name"]))
+		_cards.erase(cid)
+	var ai := str(first["ancestor"])
+	var t := int(first["tier"])
+	_ancestor_combos.append({"ancestor": ai, "tier": t, "sources": srcs,
+		"name": str(first["combo_name"]), "text": str(first["combo_text"])})
+	_add_ancestor_effects(ai, first.get("effects", {}))
+	_toast_card(str(first["combo_name"]), int(first["quality"]),
+		"%s · %s（%d 张已清空）" % [str(first["ancestor_name"]), str(first["combo_text"]), ids.size()])
+	var nid := "%s_t%d_0" % [ai, t + 1]
+	if _card_db.has(nid) and not _pool.has(nid) and not _acquired.has(nid):
+		_pool.append(nid)
+		_toast_card(str((_card_db[nid] as Dictionary)["name"]), int(first["quality"]), "下一档入口已入池")
+	_page = 0
+	_refresh_deck()
+	if _combined_layer != null and _combined_layer.visible:
+		_refresh_combined()
 
 func _set_progress(set_id: String) -> int:
 	if not _set_cards.has(set_id):
@@ -1049,6 +1231,10 @@ func _activate_set(sid: String) -> void:
 	var ids: Array = _set_cards[sid]
 	if ids.is_empty(): return
 	var first: Dictionary = _card_db[str(ids[0])]
+	# 家传卡走另一套结算
+	if first.has("ancestor"):
+		_activate_ancestor_set(sid, first, ids)
+		return
 	var own_sum := {"atk": 0.0, "def": 0.0, "hp": 0.0, "gold_pct": 0.0, "crystal_pct": 0.0}
 	var srcs: Array = []
 	for cid_v in ids:
@@ -1107,6 +1293,9 @@ func _apply_own(s: Dictionary) -> void:
 
 func _add_card(id: String) -> void:
 	if not _card_db.has(id): return
+	if str(id).begins_with("shiny_"):
+		_do_devour(id)
+		return
 	if _cards.size() >= 10:
 		_toast("卡组已满（10 格）")
 		return
@@ -1248,3 +1437,343 @@ func _on_hero_attack() -> void:
 func _on_hero_hit() -> void:
 	_hit_count += 1
 	_trigger_combos("每次受击")
+
+# ============================================================
+# v3 请神 + 技能栏（祖宗技能：各自 CD + 内力）
+# ============================================================
+const Aud := preload("res://shared/audio.gd")
+
+const SKILL_DEFS := {
+	"zl": {"name": "天雷道术", "dtype": "金系", "mul": 1.6, "cd": 10.0, "mp": 300.0,
+		"targets": 3, "col": Color(0.86, 0.78, 0.34)},
+	"cuisanniang": {"name": "雾海龙王", "dtype": "水系", "mul": 2.5, "cd": 60.0, "mp": 500.0,
+		"targets": 1, "col": Color(0.38, 0.62, 0.82)},
+	"jicanghai": {"name": "怒火焚身", "dtype": "火系", "mul": 1.3, "cd": 9.0, "mp": 0.0,
+		"targets": 3, "col": Color(0.88, 0.42, 0.22)},
+}
+
+var _skills: Array = []
+var _mp := 300.0
+var _mp_max := 300.0
+var _mp_bar: Panel = null
+var _skill_slots: Array = []
+var _god_layer: Control = null
+var _god_root: Control = null
+
+# ---------------- 技能栏 ----------------
+func _build_skill_bar() -> void:
+	for i in 6:
+		var s := SkillSlot.new()
+		s.position = Vector2(636, 242 + i * 62)
+		s.size = Vector2(54, 54)
+		s.visible = false
+		s.z_index = 8
+		add_child(s)
+		_skill_slots.append(s)
+
+func _tick_skills(dt: float) -> void:
+	var lv_mul := float(_lv - 1)
+	_mp_max = 300.0 + 25.0 * lv_mul
+	_mp = minf(_mp_max, _mp + (20.0 + 2.0 * lv_mul) * dt)
+	if _mp_bar != null:
+		_mp_bar.size = Vector2(maxf(4.0, 235.0 * clampf(_mp / _mp_max, 0.0, 1.0)), 9.0)
+	for i in _skills.size():
+		var sk: Dictionary = _skills[i]
+		if float(sk["cd_t"]) > 0.0:
+			sk["cd_t"] = maxf(0.0, float(sk["cd_t"]) - dt)
+		if float(sk["cd_t"]) <= 0.0 and _mp >= float(sk["mp"]):
+			_cast_skill(i)
+	for i in _skill_slots.size():
+		var s = _skill_slots[i]
+		if i < _skills.size():
+			var sk2: Dictionary = _skills[i]
+			s.visible = true
+			s.skill_name = str(sk2["name"])
+			s.quality = int(sk2.get("quality", 4))
+			s.cd_left = float(sk2["cd_t"])
+			s.cd_max = maxf(0.01, float(sk2["cd"]))
+			s.mp_cost = int(sk2["mp"])
+			s.queue_redraw()
+		else:
+			s.visible = false
+
+func _cast_skill(i: int) -> void:
+	var sk: Dictionary = _skills[i]
+	var foes: Array = []
+	for f_v in _core.foes:
+		var f: Dictionary = f_v
+		if float(f.get("hp", 0.0)) <= 0.0 or float(f.get("dying", 0.0)) > 0.0:
+			continue
+		foes.append(f)
+	if foes.is_empty():
+		return
+	# v4：组合加成在这里生效（家传卡抽了才有意义）
+	var aid := str(sk["aid"])
+	var dtype := str(sk["dtype"])
+	var m: Dictionary = _anc_mod.get(aid, {})
+	var dmg_pct := float(m.get("dmg_pct", 0.0)) + float(_elem_mod.get(dtype, 0.0))
+	var cd_pct := float(m.get("cd_pct", 0.0))
+	var mp_flat := float(m.get("mp_flat", 0.0))
+	var para_s := float(m.get("para_s", 0.0))
+	var para_amp := float(m.get("para_amp", 0.0))
+	var cost := maxf(0.0, float(sk["mp"]) - mp_flat)
+	if _mp < cost:
+		return
+	_mp -= cost
+	sk["cd_t"] = maxf(0.5, float(sk["cd"]) * (1.0 - clampf(cd_pct, 0.0, 80.0) / 100.0))
+	var hp0 := Vector2(_core.hero_pos)
+	foes.sort_custom(func(a, b) -> bool:
+		var da := (Vector2(float(a["x"]), float(a["y"])) - hp0).length()
+		var db := (Vector2(float(b["x"]), float(b["y"])) - hp0).length()
+		return da < db)
+	var base := float(_core.hero.get("atk", 12.0)) * float(sk["mul"]) * (1.0 + dmg_pct / 100.0)
+	var n := mini(int(sk["targets"]), foes.size())
+	for k in n:
+		var f: Dictionary = foes[k]
+		var extra := 1.0
+		if para_amp > 0.0 and float(f.get("para", 0.0)) > 0.0:
+			extra = 1.0 + para_amp / 100.0        # 麻痹期间吃额外伤害
+		_core._apply_dmg(f, base * extra, dtype)
+		if para_s > 0.0:
+			f["para"] = maxf(float(f.get("para", 0.0)), para_s)
+		_core._push_float(float(f["x"]), float(f["y"]) - 46.0, str(sk["name"]), sk["col"], true)
+	Aud.sfx("skill", -10.0)
+
+func _add_ancestor_effects(aid: String, eff: Dictionary) -> void:
+	if eff.is_empty():
+		return
+	if not _anc_mod.has(aid):
+		_anc_mod[aid] = {"dmg_pct": 0.0, "cd_pct": 0.0, "mp_flat": 0.0, "para_s": 0.0, "para_amp": 0.0}
+	var m: Dictionary = _anc_mod[aid]
+	for k in ["dmg_pct", "cd_pct", "mp_flat", "para_s", "para_amp"]:
+		if eff.has(k):
+			m[k] = float(m.get(k, 0.0)) + float(eff[k])
+	if eff.has("elem_pct"):
+		var ep: Dictionary = eff["elem_pct"]
+		for e in ep.keys():
+			_elem_mod[e] = float(_elem_mod.get(e, 0.0)) + float(ep[e])
+
+# 炫卡吞噬：吞掉该祖宗全部家传卡（进度与效果保留）→ 返还资源 + 永久加伤 → 自身离场
+func _do_devour(shiny_id: String) -> void:
+	var c: Dictionary = _card_db.get(shiny_id, {})
+	var aid := str(c.get("ancestor", ""))
+	var nm := str(c.get("name", "炫卡"))
+	_shiny_used[aid] = true
+	_pool.erase(shiny_id)
+	var n := 0
+	for cid in _cards.duplicate():
+		var cc: Dictionary = _card_db.get(str(cid), {})
+		if str(cc.get("ancestor", "")) == aid:
+			_cards.erase(cid)
+			n += 1
+	_cards.erase(shiny_id)
+	var wen := 150 * n
+	var crystal := 20 * n
+	_wen += wen
+	_crystal += crystal
+	if _coin_lb != null:
+		_coin_lb.text = str(_wen)
+	_update_crystal()
+	if not _anc_mod.has(aid):
+		_anc_mod[aid] = {"dmg_pct": 0.0, "cd_pct": 0.0, "mp_flat": 0.0, "para_s": 0.0, "para_amp": 0.0}
+	_anc_mod[aid]["dmg_pct"] = float(_anc_mod[aid].get("dmg_pct", 0.0)) + 10.0 * n
+	_page = 0
+	_refresh_deck()
+	# ---- 表现：白闪 + 震屏 + 音效 ----
+	var flash := ColorRect.new()
+	flash.color = Color(1.0, 0.98, 0.90, 0.0)
+	flash.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	flash.z_index = 60
+	add_child(flash)
+	var tw := create_tween()
+	tw.tween_property(flash, "color:a", 0.85, 0.06)
+	tw.tween_property(flash, "color:a", 0.0, 0.30)
+	tw.tween_callback(func() -> void: flash.queue_free())
+	if _core != null:
+		_core.Shake_add(9.0)
+	Aud.sfx("coin", -6.0)
+	Aud.sfx("hit_heavy", -12.0)
+	await get_tree().create_timer(0.12).timeout
+	Aud.sfx("drum", -5.0)
+	_toast("%s 吞了 %d 张家传 · 灵晶 +%d · 文钱 +%d · %s +%d%%" % [nm, n, crystal, wen, str(_label_skill(aid)), 10 * n])
+
+func _label_skill(aid: String) -> String:
+	var d: Dictionary = SKILL_DEFS.get(aid, {})
+	return str(d.get("name", "技能"))
+
+# ---------------- 请神三选一 ----------------
+func _build_god_pick() -> void:
+	_god_layer = Control.new()
+	_god_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_god_layer.mouse_filter = Control.MOUSE_FILTER_STOP
+	_god_layer.visible = false
+	_god_layer.z_index = 40
+	add_child(_god_layer)
+	var dim := ColorRect.new()
+	dim.color = Color(0.04, 0.03, 0.02, 0.66)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	dim.gui_input.connect(func(ev: InputEvent) -> void:
+		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
+			_hide_god_pick())
+	_god_layer.add_child(dim)
+	var ban := Panel.new()
+	ban.position = Vector2(230, 168)
+	ban.size = Vector2(260, 48)
+	var bsb := StyleBoxFlat.new()
+	bsb.bg_color = Color(0.48, 0.14, 0.10, 0.97)
+	bsb.set_corner_radius_all(5)
+	bsb.border_color = Color(0.95, 0.76, 0.36, 0.9)
+	bsb.set_border_width_all(2)
+	ban.add_theme_stylebox_override("panel", bsb)
+	_god_layer.add_child(ban)
+	_lbl("请  神", Vector2(0, 0), Vector2(260, 48), 24, Color(0.97, 0.90, 0.74), ban, HORIZONTAL_ALIGNMENT_CENTER)
+	_god_root = Control.new()
+	_god_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_god_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_god_layer.add_child(_god_root)
+
+func _show_god_pick() -> void:
+	if _god_layer == null:
+		return
+	if _draw_charge <= 0:
+		_toast("升级后可请神")
+		return
+	for c in _god_root.get_children():
+		c.queue_free()
+	var cands: Array = []
+	for aid_v in AncestorData.ANCESTORS.keys():
+		var aid := str(aid_v)
+		if not _ancestors.has(aid):
+			cands.append(aid)
+	if cands.is_empty():
+		_toast("本局已无可请的祖宗")
+		return
+	cands.shuffle()
+	var n := mini(3, cands.size())
+	var total_w := float(n) * 200.0 + float(n - 1) * 20.0
+	var x0 := (720.0 - total_w) * 0.5
+	for i in n:
+		var gc := GodCard.new()
+		var aid := str(cands[i])
+		var a: Dictionary = AncestorData.ANCESTORS[aid]
+		gc.aid = aid
+		gc.god_name = str(a["name"])
+		gc.skill_name = str(a["skill"])
+		gc.element = str(a["element"])
+		gc.quality = int(a["quality"])
+		gc.icon = load(str(a["art"]))
+		gc.position = Vector2(x0 + float(i) * 220.0, 250)
+		gc.size = Vector2(200, 300)
+		gc.picked.connect(func() -> void: _pick_god(aid))
+		_god_root.add_child(gc)
+	_lbl("择一祖宗上身 · 剩余 %d 次" % _draw_charge, Vector2(0, 224), Vector2(720, 24), 17,
+		Color(0.92, 0.88, 0.78), _god_root, HORIZONTAL_ALIGNMENT_CENTER)
+	_god_layer.visible = true
+	_god_layer.move_to_front()
+
+func _hide_god_pick() -> void:
+	if _god_layer != null:
+		_god_layer.visible = false
+
+func _pick_god(aid: String) -> void:
+	if _draw_charge <= 0:
+		return
+	_draw_charge -= 1
+	_grant_ancestor(aid)
+	var def: Dictionary = SKILL_DEFS.get(aid, {})
+	if not def.is_empty() and not _has_skill(aid):
+		var sk: Dictionary = def.duplicate()
+		sk["aid"] = aid
+		sk["cd_t"] = 0.0
+		sk["quality"] = int((AncestorData.ANCESTORS[aid] as Dictionary)["quality"])
+		_skills.append(sk)
+	_hide_god_pick()
+	_refresh_level_ui()
+	_toast("请到 %s · 技能进栏，家传入口卡进池" % str((AncestorData.ANCESTORS[aid] as Dictionary)["name"]))
+	Aud.sfx("levelup", -6.0)
+
+func _has_skill(aid: String) -> bool:
+	for sk in _skills:
+		if str(sk["aid"]) == aid:
+			return true
+	return false
+
+# ---------------- 技能格 ----------------
+class SkillSlot extends Control:
+	const F := preload("res://fonts/ink.ttf")
+	const QC := [Color(0.54,0.48,0.38), Color(0.31,0.48,0.29), Color(0.18,0.42,0.45), Color(0.42,0.29,0.48), Color(0.72,0.53,0.16)]
+	var skill_name := ""
+	var quality := 4
+	var cd_left := 0.0
+	var cd_max := 1.0
+	var mp_cost := 0
+	func _ready() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+	func _draw() -> void:
+		var qc: Color = QC[clampi(quality - 1, 0, 4)]
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.96, 0.93, 0.86, 0.98)
+		sb.set_corner_radius_all(9)
+		sb.border_color = qc
+		sb.set_border_width_all(3)
+		draw_style_box(sb, Rect2(Vector2.ZERO, size))
+		var c := size * 0.5
+		var ch := "技"
+		if skill_name.length() > 0:
+			ch = skill_name.substr(1 if skill_name.length() > 1 else 0, 1)
+		draw_string(F, Vector2(0, c.y + 8), ch, HORIZONTAL_ALIGNMENT_CENTER, size.x, 22, Color(0.20, 0.16, 0.11))
+		if cd_left > 0.0:
+			draw_circle(c, size.x * 0.5 - 2.0, Color(0.05, 0.04, 0.03, 0.58))
+			draw_string(F, Vector2(0, c.y + 8), str(int(ceil(cd_left))),
+				HORIZONTAL_ALIGNMENT_CENTER, size.x, 20, Color(0.97, 0.92, 0.80))
+		if mp_cost > 0:
+			var sb2 := StyleBoxFlat.new()
+			sb2.bg_color = Color(0.28, 0.48, 0.68, 0.92)
+			sb2.set_corner_radius_all(3)
+			draw_style_box(sb2, Rect2(Vector2(size.x - 24, 1), Vector2(23, 14)))
+			draw_string(F, Vector2(size.x - 24, 12), str(mp_cost),
+				HORIZONTAL_ALIGNMENT_CENTER, 23, 10, Color(0.95, 0.98, 1.0))
+
+# ---------------- 请神卡 ----------------
+class GodCard extends Control:
+	const F := preload("res://fonts/ink.ttf")
+	const QC := [Color(0.54,0.48,0.38), Color(0.31,0.48,0.29), Color(0.18,0.42,0.45), Color(0.42,0.29,0.48), Color(0.72,0.53,0.16)]
+	signal picked
+	var aid := ""
+	var god_name := ""
+	var skill_name := ""
+	var element := ""
+	var quality := 5
+	var icon: Texture2D = null
+	func _ready() -> void:
+		mouse_filter = Control.MOUSE_FILTER_STOP
+	func _draw() -> void:
+		var qc: Color = QC[clampi(quality - 1, 0, 4)]
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.965, 0.945, 0.90, 1.0)
+		sb.set_corner_radius_all(9)
+		sb.border_color = qc
+		sb.set_border_width_all(6)
+		draw_style_box(sb, Rect2(Vector2.ZERO, size))
+		draw_string(F, Vector2(0, 36), god_name, HORIZONTAL_ALIGNMENT_CENTER, size.x, 26, Color(0.14, 0.11, 0.08))
+		var pr := Rect2(Vector2(40, 52), Vector2(120, 120))
+		draw_rect(pr, Color(0.88, 0.85, 0.78))
+		if icon != null:
+			var ts := icon.get_size()
+			var asp: float = pr.size.x / pr.size.y
+			var w: float = ts.x
+			var h: float = w / asp
+			if h > ts.y:
+				h = ts.y
+				w = h * asp
+			draw_texture_rect_region(icon, pr, Rect2((ts.x - w) * 0.5, (ts.y - h) * 0.5, w, h))
+		draw_rect(pr, Color(0.35, 0.30, 0.24, 0.30), false, 1.5)
+		draw_string(F, Vector2(0, 204), skill_name, HORIZONTAL_ALIGNMENT_CENTER, size.x, 21, Color(0.20, 0.15, 0.10))
+		draw_line(Vector2(18, 220), Vector2(size.x - 18, 220), Color(0.5, 0.4, 0.25, 0.35), 1.5)
+		draw_string(F, Vector2(0, 246), element, HORIZONTAL_ALIGNMENT_CENTER, size.x, 17, Color(0.42, 0.30, 0.12))
+		draw_string(F, Vector2(0, 280), "点 击 请 神", HORIZONTAL_ALIGNMENT_CENTER, size.x, 16, Color(0.66, 0.22, 0.15))
+	func _gui_input(ev: InputEvent) -> void:
+		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
+			picked.emit()
