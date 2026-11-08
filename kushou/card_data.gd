@@ -7,6 +7,7 @@ const SELFS := [
 	{"key": "def", "label": "防御", "names": [["铁壁","坚甲","护心"],["龟息","绵息","守拙","静水"],["血守","死守","护主","铁誓","不退"],["不摧","金刚","不动","山岳","磐石","不朽"]], "own": [1,1,2,2], "own_suffix": "", "set": ["铁壁","龟息","血守","不摧"], "trigger": ["每波","每 6 秒","每次击杀","每次受击"], "combo": ["防御 +1","防御 +1","防御 +1","防御 +1"], "combo_key": ["def","def","def","def"], "combo_val": [1,1,1,1]},
 	{"key": "hp", "label": "气血", "names": [["生机","养元","生息"],["回春","春雨","润脉","复苏"],["不屈","硬骨","续命","血勇","残生"],["长生","驻颜","龟寿","不朽","长存","不灭"]], "own": [15,25,35,50], "own_suffix": "", "set": ["生机","回春","不屈","长生"], "trigger": ["每波","每 6 秒","每次击杀","每次攻击"], "combo": ["气血 +10","气血 +10","气血 +10","回复 2 气血"], "combo_key": ["hp","hp","hp","heal"], "combo_val": [10,10,10,2]},
 	{"key": "gold", "label": "金币", "names": [["聚财","拾金","积少"],["生息","钱生","日进","斗金"],["掠夺","豪夺","搜刮","横财","抢掠"],["财源","金海","滚滚","无尽","富贵","通宝"]], "own": [5,8,12,16], "own_suffix": "%", "set": ["聚财","生息","掠夺","财源"], "trigger": ["每波","每 6 秒","每次击杀","每 5 次攻击"], "combo": ["金币 +5%","金币 +2%","金币 +1","金币 +1"], "combo_key": ["gold_pct","gold_pct","gold_flat","gold_flat"], "combo_val": [5,2,1,1]},
+	{"key": "mp", "label": "内力", "names": [["凝息","养息","静息"],["聚气","纳气","回元","筑基"],["通脉","周天","督脉","气海","凝丹"],["化虚","返照","无息","大周天","抱元","归真"]], "own": [15,25,35,50], "own_suffix": "", "set": ["凝息","聚气","通脉","化虚"], "trigger": ["每波","每 6 秒","每次击杀","每 10 次攻击"], "combo": ["回复 5 内力","回复 2 内力","回复 3 内力","回复 8 内力"], "combo_key": ["mp_flat","mp_flat","mp_flat","mp_flat"], "combo_val": [5,2,3,8], "arts": ["res://assets/items/chest_jade.png", "res://assets/items/art_spring.png", "res://assets/ui/shop_pill.png", "res://assets/items/art_stone.png", "res://assets/items/chest_jade.png", "res://assets/items/art_spring.png"]},
 	{"key": "crystal", "label": "灵晶", "names": [["灵涌","聚灵","引灵"],["凝晶","结晶","晶脉","灵泉"],["猎晶","夺晶","碎晶","搜灵","晶猎"],["晶河","晶海","灵潮","无尽晶","通灵","不竭"]], "own": [5,8,12,16], "own_suffix": "%", "set": ["灵涌","凝晶","猎晶","晶河"], "trigger": ["每波","每 6 秒","每次击杀","每 10 次攻击"], "combo": ["灵晶 +1","灵晶 +1","灵晶 +1","灵晶 +1"], "combo_key": ["crystal_flat","crystal_flat","crystal_flat","crystal_flat"], "combo_val": [1,1,1,1]},
 ]
 
@@ -28,6 +29,8 @@ static func build() -> Dictionary:
 					own_text = "防御 +" + str(own_val)
 				elif str(s["key"]) == "hp":
 					own_text = "气血 +" + str(own_val)
+				elif str(s["key"]) == "mp":
+					own_text = "内力 +" + str(own_val)
 				elif str(s["key"]) == "gold":
 					own_text = "金币 +" + str(own_val) + "%"
 				else:
@@ -35,8 +38,8 @@ static func build() -> Dictionary:
 				var card := {
 					"id": id, "series": str(s["key"]), "label": str(s["label"]),
 					"tier": tier, "idx": idx, "name": str(nm_list[idx]),
-					"quality": QUALITY_OF_TIER[tier], "art": "res://assets/art/cards/gen/" + id + ".png",
-					"own_key": str(s["key"]) if str(s["key"]) in ["atk","def","hp"] else str(s["key"]) + "_pct",
+					"quality": QUALITY_OF_TIER[tier], "art": _art_of(id, s, idx),
+					"own_key": str(s["key"]) if str(s["key"]) in ["atk","def","hp","mp"] else str(s["key"]) + "_pct",
 					"own_val": own_val, "own_text": own_text,
 					"set_id": "%s_%d" % [str(s["key"]), tier], "set_size": nm_list.size(),
 					"combo_name": str(s["set"][tier]), "trigger": str(s["trigger"][tier]),
@@ -57,3 +60,13 @@ static func build() -> Dictionary:
 				entries.append(ids[0])
 	return {"cards": cards, "sets": sets, "entries": entries}
 
+
+# 卡图：优先生成图（assets/art/cards/gen/<id>.png）；没有就退回该系的物品图
+static func _art_of(id: String, s: Dictionary, idx: int) -> String:
+	var gen := "res://assets/art/cards/gen/" + id + ".png"
+	if ResourceLoader.exists(gen):
+		return gen
+	var arr: Array = s["arts"]
+	if arr.is_empty():
+		return "res://assets/items/it_sword.png"
+	return str(arr[idx % arr.size()])

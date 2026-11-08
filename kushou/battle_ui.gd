@@ -70,6 +70,17 @@ var _elem_mod := {}
 # v4 炫卡：掷中（进池）／已吞（一局一次）
 var _shiny_rolled := {}
 var _shiny_used := {}
+# v5 召唤物
+var _minions: Array = []
+# v6 吞海（崔三娘炫卡）：蛟龙永久 + 每秒/击杀 叠属性
+var _swallow_sea := false
+var _ss_pct := 0.0
+var _ss_kills := 0
+# v7 灼烧 / 引燃 / 焚天
+var _burn_unlimited := false     # 焚天：灼烧层数不衰减
+var _ignite_bonus := 0           # 引燃目标加成（三档 / 焚天吞噬）
+var _fentian := false
+var _ft_kills := 0
 var _combined: Array = []
 var _stats := {"atk": 0.0, "def": 0.0, "hp": 0.0}
 var _gold_pct := 0.0
@@ -992,6 +1003,8 @@ func _process(_delta: float) -> void:
 		if _hp_lb != null:
 			_hp_lb.text = "%d/%d" % [int(float(_core.hero.get("hp", 0))), int(float(_core.hero.get("hp_max", 1)))]
 		_tick_skills(_delta)
+		_tick_minions(_delta)
+		_tick_burn(_delta)
 		if _hero_token != null:
 			_hero_token.position = _core.position + _core.hero_pos
 			_hero_token.hp_ratio = float(_core.hero.get("hp", 0.0)) / maxf(1.0, float(_core.hero.get("hp_max", 1.0)))
@@ -1023,6 +1036,17 @@ func _on_core_kill(n: int) -> void:
 	if _kill_lb != null:
 		_kill_lb.text = str(_kills)
 	_add_exp(20 * n)                       # v2：杀 1 只 +20 经验
+	if _fentian:
+		_ft_kills += n
+		while _ft_kills >= 15:
+			_ft_kills -= 15
+			_devour_random()
+	if _swallow_sea:
+		_ss_kills += n
+		while _ss_kills >= 10:
+			_ss_kills -= 10
+			_ss_pct += 4.0
+			_toast("吞海 · 蛟龙属性 +4%%（累计 %d%%）" % int(_ss_pct))
 	_trigger_combos("每次击杀")
 
 # ---------------- 经验 / 等级 / 请神次数 ----------------
@@ -1209,6 +1233,8 @@ func _apply_combo(rec: Dictionary) -> void:
 		"crystal_flat":
 			_crystal += int(val)
 			_update_crystal()
+		"mp_flat":
+			_mp = minf(_mp_max, _mp + val)     # v5：内力系组合 → 回内力
 
 func _check_sets() -> void:
 	var changed := true
@@ -1235,7 +1261,7 @@ func _activate_set(sid: String) -> void:
 	if first.has("ancestor"):
 		_activate_ancestor_set(sid, first, ids)
 		return
-	var own_sum := {"atk": 0.0, "def": 0.0, "hp": 0.0, "gold_pct": 0.0, "crystal_pct": 0.0}
+	var own_sum := {"atk": 0.0, "def": 0.0, "hp": 0.0, "mp": 0.0, "gold_pct": 0.0, "crystal_pct": 0.0}
 	var srcs: Array = []
 	for cid_v in ids:
 		var cid := str(cid_v)
@@ -1274,6 +1300,7 @@ func _own_text(s: Dictionary) -> String:
 	if float(s["atk"]) > 0: arr.append("攻击 +" + str(int(s["atk"])))
 	if float(s["def"]) > 0: arr.append("防御 +" + str(int(s["def"])))
 	if float(s["hp"]) > 0: arr.append("气血 +" + str(int(s["hp"])))
+	if float(s.get("mp", 0.0)) > 0: arr.append("内力 +" + str(int(s["mp"])))
 	if float(s["gold_pct"]) > 0: arr.append("金币 +" + str(int(s["gold_pct"])) + "%")
 	if float(s["crystal_pct"]) > 0: arr.append("灵晶 +" + str(int(s["crystal_pct"])) + "%")
 	return " · ".join(PackedStringArray(arr))
@@ -1282,6 +1309,8 @@ func _apply_own(s: Dictionary) -> void:
 	_stats["atk"] = float(_stats["atk"]) + float(s["atk"])
 	_stats["def"] = float(_stats["def"]) + float(s["def"])
 	_stats["hp"] = float(_stats["hp"]) + float(s["hp"])
+	if float(s.get("mp", 0.0)) > 0.0:
+		_mp_bonus += float(s["mp"])          # v5：内力系卡 → 内力上限
 	_gold_pct += float(s["gold_pct"])
 	_crystal_pct += float(s["crystal_pct"])
 	if _core != null:
@@ -1293,7 +1322,11 @@ func _apply_own(s: Dictionary) -> void:
 
 func _add_card(id: String) -> void:
 	if not _card_db.has(id): return
-	if str(id).begins_with("shiny_"):
+	if str(id) == "shiny_cuisanniang":
+		_enable_swallow_sea()
+	elif str(id) == "shiny_jicanghai":
+		_enable_fentian()
+	elif str(id).begins_with("shiny_"):
 		_do_devour(id)
 		return
 	if _cards.size() >= 10:
@@ -1444,17 +1477,20 @@ func _on_hero_hit() -> void:
 const Aud := preload("res://shared/audio.gd")
 
 const SKILL_DEFS := {
-	"zl": {"name": "天雷道术", "dtype": "金系", "mul": 1.6, "cd": 10.0, "mp": 300.0,
+	"zl": {"name": "天雷道术", "dtype": "金系", "mul": 1.6, "cd": 10.0, "mp": 260.0,
 		"targets": 3, "col": Color(0.86, 0.78, 0.34)},
-	"cuisanniang": {"name": "雾海龙王", "dtype": "水系", "mul": 2.5, "cd": 60.0, "mp": 500.0,
+	"cuisanniang": {"name": "雾海龙王", "dtype": "召唤", "mul": 2.5, "cd": 60.0, "mp": 300.0,
 		"targets": 1, "col": Color(0.38, 0.62, 0.82)},
 	"jicanghai": {"name": "怒火焚身", "dtype": "火系", "mul": 1.3, "cd": 9.0, "mp": 0.0,
 		"targets": 3, "col": Color(0.88, 0.42, 0.22)},
+	"zhujue": {"name": "基础剑法", "dtype": "物理", "mul": 1.0, "cd": 3.0, "mp": 0.0,
+		"targets": 1, "col": Color(0.92, 0.86, 0.70)},
 }
 
 var _skills: Array = []
 var _mp := 300.0
 var _mp_max := 300.0
+var _mp_bonus := 0.0        # 内力系卡牌给的内力上限加成
 var _mp_bar: Panel = null
 var _skill_slots: Array = []
 var _god_layer: Control = null
@@ -1473,7 +1509,7 @@ func _build_skill_bar() -> void:
 
 func _tick_skills(dt: float) -> void:
 	var lv_mul := float(_lv - 1)
-	_mp_max = 300.0 + 25.0 * lv_mul
+	_mp_max = 300.0 + 25.0 * lv_mul + _mp_bonus
 	_mp = minf(_mp_max, _mp + (20.0 + 2.0 * lv_mul) * dt)
 	if _mp_bar != null:
 		_mp_bar.size = Vector2(maxf(4.0, 235.0 * clampf(_mp / _mp_max, 0.0, 1.0)), 9.0)
@@ -1499,6 +1535,25 @@ func _tick_skills(dt: float) -> void:
 
 func _cast_skill(i: int) -> void:
 	var sk: Dictionary = _skills[i]
+	var aid0 := str(sk["aid"])
+	var md0: Dictionary = _anc_mod.get(aid0, {})
+	var cost0 := maxf(0.0, float(sk["mp"]) - float(md0.get("mp_flat", 0.0)))
+	if _mp < cost0:
+		return
+	# 火系：直伤 + 灼烧（引燃多名）
+	if aid0 == "jicanghai":
+		if _live_foes().is_empty():
+			return                                  # 空场不空放，CD 与内力都不扣
+		_mp -= cost0
+		sk["cd_t"] = maxf(0.5, float(sk["cd"]) * (1.0 - clampf(float(md0.get("cd_pct", 0.0)), 0.0, 80.0) / 100.0))
+		_cast_fire()
+		return
+	# 召唤系：不直接出伤，召一条蛟龙顶上去
+	if aid0 == "cuisanniang":
+		_mp -= cost0
+		sk["cd_t"] = maxf(0.5, float(sk["cd"]) * (1.0 - clampf(float(md0.get("cd_pct", 0.0)), 0.0, 80.0) / 100.0))
+		_summon_dragon(float(md0.get("dmg_pct", 0.0)) + float(_elem_mod.get("召唤", 0.0)))
+		return
 	var foes: Array = []
 	for f_v in _core.foes:
 		var f: Dictionary = f_v
@@ -1527,7 +1582,7 @@ func _cast_skill(i: int) -> void:
 		var db := (Vector2(float(b["x"]), float(b["y"])) - hp0).length()
 		return da < db)
 	var base := float(_core.hero.get("atk", 12.0)) * float(sk["mul"]) * (1.0 + dmg_pct / 100.0)
-	var n := mini(int(sk["targets"]), foes.size())
+	var n := mini(int(sk["targets"]) + int(m.get("tgt_add", 0.0)), foes.size())
 	for k in n:
 		var f: Dictionary = foes[k]
 		var extra := 1.0
@@ -1543,9 +1598,12 @@ func _add_ancestor_effects(aid: String, eff: Dictionary) -> void:
 	if eff.is_empty():
 		return
 	if not _anc_mod.has(aid):
-		_anc_mod[aid] = {"dmg_pct": 0.0, "cd_pct": 0.0, "mp_flat": 0.0, "para_s": 0.0, "para_amp": 0.0}
+		_anc_mod[aid] = {"dmg_pct": 0.0, "cd_pct": 0.0, "mp_flat": 0.0, "para_s": 0.0, "para_amp": 0.0,
+			"life_flat": 0.0, "cap_add": 0.0, "wave_evo": 0.0, "tgt_add": 0.0,
+			"ignite_add": 0.0, "burn_add": 0.0}
 	var m: Dictionary = _anc_mod[aid]
-	for k in ["dmg_pct", "cd_pct", "mp_flat", "para_s", "para_amp"]:
+	for k in ["dmg_pct", "cd_pct", "mp_flat", "para_s", "para_amp", "life_flat", "cap_add", "wave_evo", "tgt_add",
+			"ignite_add", "burn_add"]:
 		if eff.has(k):
 			m[k] = float(m.get(k, 0.0)) + float(eff[k])
 	if eff.has("elem_pct"):
@@ -1575,7 +1633,9 @@ func _do_devour(shiny_id: String) -> void:
 		_coin_lb.text = str(_wen)
 	_update_crystal()
 	if not _anc_mod.has(aid):
-		_anc_mod[aid] = {"dmg_pct": 0.0, "cd_pct": 0.0, "mp_flat": 0.0, "para_s": 0.0, "para_amp": 0.0}
+		_anc_mod[aid] = {"dmg_pct": 0.0, "cd_pct": 0.0, "mp_flat": 0.0, "para_s": 0.0, "para_amp": 0.0,
+			"life_flat": 0.0, "cap_add": 0.0, "wave_evo": 0.0, "tgt_add": 0.0,
+			"ignite_add": 0.0, "burn_add": 0.0}
 	_anc_mod[aid]["dmg_pct"] = float(_anc_mod[aid].get("dmg_pct", 0.0)) + 10.0 * n
 	_page = 0
 	_refresh_deck()
@@ -1661,7 +1721,7 @@ func _show_god_pick() -> void:
 		gc.aid = aid
 		gc.god_name = str(a["name"])
 		gc.skill_name = str(a["skill"])
-		gc.element = str(a["element"])
+		gc.element = str(a.get("dtype", ""))
 		gc.quality = int(a["quality"])
 		gc.icon = load(str(a["art"]))
 		gc.position = Vector2(x0 + float(i) * 220.0, 250)
@@ -1777,3 +1837,194 @@ class GodCard extends Control:
 	func _gui_input(ev: InputEvent) -> void:
 		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
 			picked.emit()
+
+# ---------------- 召唤物：蛟龙 ----------------
+func _summon_dragon(bonus_pct: float) -> void:
+	var m: Dictionary = _anc_mod.get("cuisanniang", {})
+	var cap := 1 + int(m.get("cap_add", 0.0))
+	if _minions.size() >= cap:
+		return
+	var hero_atk := float(_core.hero.get("atk", 12.0))
+	var life := 30.0 + float(m.get("life_flat", 0.0))
+	var idx := _minions.size()
+	var pos := Vector2(360.0 - 80.0 + float(idx) * 160.0, 726.0)
+	var tk = TokenActor.new()
+	tk.setup(null, 20.0, Color(0.30, 0.62, 0.80), false)
+	tk.show_bar = true
+	tk.bar_w = 44.0
+	tk.unit_name = "蛟龙"
+	tk.z_index = 5
+	tk.position = _core.position + pos
+	add_child(tk)
+	var mul := 1.0 + bonus_pct / 100.0
+	if _swallow_sea:
+		life = 999999.0
+	var ss := 1.0 + _ss_pct / 100.0
+	var bd := hero_atk * 0.8 * mul
+	_minions.append({"pos": pos, "life": life, "max_life": life,
+		"atk_cd": 0.6, "wave_cd": 20.0,
+		"base_dmg": bd, "base_wave": hero_atk * 2.5 * mul,
+		"dmg": bd * ss, "wave_dmg": hero_atk * 2.5 * mul * ss, "tk": tk})
+	_toast("蛟龙现世 · 存在 %d 秒" % int(life))
+	Aud.sfx("warcry", -8.0)
+
+func _tick_minions(dt: float) -> void:
+	if _core == null:
+		return
+	if _swallow_sea:
+		_ss_pct += 0.4 * dt                    # 每秒 +0.4% 蛟龙属性
+	if _minions.is_empty():
+		return
+	for m_v in _minions.duplicate():
+		var m: Dictionary = m_v
+		m["life"] = float(m["life"]) - dt
+		var tk = m["tk"]
+		if _swallow_sea and m.has("base_dmg"):
+			m["life"] = float(m["max_life"])
+			var ss2 := 1.0 + _ss_pct / 100.0
+			m["dmg"] = float(m["base_dmg"]) * ss2
+			m["wave_dmg"] = float(m["base_wave"]) * ss2
+		if float(m["life"]) <= 0.0:
+			if tk != null and is_instance_valid(tk):
+				tk.play_down()
+			_minions.erase(m)
+			continue
+		var mp0: Vector2 = m["pos"]
+		var best: Dictionary = {}
+		var bd := 1e9
+		for f_v in _core.foes:
+			var f: Dictionary = f_v
+			if float(f.get("hp", 0.0)) <= 0.0 or float(f.get("dying", 0.0)) > 0.0:
+				continue
+			var d := (Vector2(float(f["x"]), float(f["y"])) - mp0).length()
+			if d < bd:
+				bd = d
+				best = f
+		if not best.is_empty():
+			var tgt := Vector2(float(best["x"]), float(best["y"]))
+			var dv := tgt - mp0
+			if dv.length() > 48.0:
+				m["pos"] = mp0 + dv.normalized() * 150.0 * dt
+			else:
+				m["atk_cd"] = float(m["atk_cd"]) - dt
+				if float(m["atk_cd"]) <= 0.0:
+					m["atk_cd"] = 1.1
+					_core._apply_dmg(best, float(m["dmg"]), "召唤")
+			m["wave_cd"] = float(m["wave_cd"]) - dt
+			if float(m["wave_cd"]) <= 0.0:
+				m["wave_cd"] = 20.0
+				_dragon_wave(m, best)
+		if tk != null and is_instance_valid(tk):
+			tk.position = _core.position + Vector2(m["pos"])
+			tk.hp_ratio = float(m["life"]) / maxf(1.0, float(m["max_life"]))
+			tk.queue_redraw()
+
+# 大浪拍击：单体；六档「怒涛」进化成一圈 + 减速
+func _dragon_wave(m: Dictionary, target: Dictionary) -> void:
+	var wm: Dictionary = _anc_mod.get("cuisanniang", {})
+	var evo := float(wm.get("wave_evo", 0.0)) > 0.0
+	var at := Vector2(float(target["x"]), float(target["y"]))
+	for f_v in _core.foes.duplicate():
+		var f: Dictionary = f_v
+		if float(f.get("hp", 0.0)) <= 0.0 or float(f.get("dying", 0.0)) > 0.0:
+			continue
+		var d := (Vector2(float(f["x"]), float(f["y"])) - at).length()
+		if f != target and not (evo and d <= 130.0):
+			continue
+		_core._apply_dmg(f, float(m["wave_dmg"]), "召唤")
+		if evo:
+			f["slow_t"] = 2.0
+		_core._push_float(float(f["x"]), float(f["y"]) - 40.0, "大浪", Color(0.38, 0.62, 0.82), true)
+	Aud.sfx("hit_heavy", -10.0)
+
+# ---------------- 吞海（崔三娘炫卡） ----------------
+func _enable_swallow_sea() -> void:
+	_swallow_sea = true
+	_ss_pct = 10.0          # 单卡数值：蛟龙属性 +10%
+	_ss_kills = 0
+	for m_v in _minions:
+		var m: Dictionary = m_v
+		m["max_life"] = 999999.0
+		m["life"] = 999999.0
+	_toast("吞海入卡组 · 蛟龙永久存在，每秒 +0.4%、每 10 杀 +4% 属性")
+	Aud.sfx("ult_ready", -4.0)
+
+# ---------------- 灼烧 / 引燃 / 焚天 ----------------
+func _live_foes() -> Array:
+	var out: Array = []
+	for f_v in _core.foes:
+		var f: Dictionary = f_v
+		if float(f.get("hp", 0.0)) <= 0.0 or float(f.get("dying", 0.0)) > 0.0:
+			continue
+		out.append(f)
+	var hp0 := Vector2(_core.hero_pos)
+	out.sort_custom(func(a, b) -> bool:
+		var da := (Vector2(float(a["x"]), float(a["y"])) - hp0).length()
+		var db := (Vector2(float(b["x"]), float(b["y"])) - hp0).length()
+		return da < db)
+	return out
+
+func _apply_burn(f: Dictionary, stacks: float, dur: float) -> void:
+	f["burn"] = float(f.get("burn", 0.0)) + stacks
+	f["burn_t"] = maxf(float(f.get("burn_t", 0.0)), dur)
+
+func _burn_dps() -> float:
+	return float(_core.hero.get("atk", 12.0)) * 0.12
+
+func _tick_burn(dt: float) -> void:
+	if _core == null:
+		return
+	for f_v in _core.foes:
+		var f: Dictionary = f_v
+		var st := float(f.get("burn", 0.0))
+		if st <= 0.0:
+			continue
+		if float(f.get("hp", 0.0)) <= 0.0:
+			continue
+		f["burn_acc"] = float(f.get("burn_acc", 0.0)) + dt
+		while float(f["burn_acc"]) >= 1.0:
+			f["burn_acc"] = float(f["burn_acc"]) - 1.0
+			_core._apply_dmg(f, _burn_dps() * st, "火系")
+			_core._push_float(float(f["x"]), float(f["y"]) - 30.0, "烧", Color(0.88, 0.45, 0.20))
+		f["burn_t"] = float(f.get("burn_t", 0.0)) - dt
+		if float(f["burn_t"]) <= 0.0 and not _burn_unlimited:
+			f["burn"] = maxf(0.0, st - 1.0)
+			f["burn_t"] = 4.0
+			if float(f["burn"]) <= 0.0:
+				f.erase("burn")
+
+func _cast_fire() -> void:
+	var m: Dictionary = _anc_mod.get("jicanghai", {})
+	var dmg_pct := float(m.get("dmg_pct", 0.0)) + float(_elem_mod.get("火系", 0.0))
+	var ign := 1 + int(m.get("ignite_add", 0.0)) + _ignite_bonus
+	var stacks := 1.0 + float(m.get("burn_add", 0.0))
+	var foes := _live_foes()
+	if foes.is_empty():
+		return
+	var n := mini(ign, foes.size())
+	for k in n:
+		var f: Dictionary = foes[k]
+		_core._apply_dmg(f, float(_core.hero.get("atk", 12.0)) * 0.6 * (1.0 + dmg_pct / 100.0), "火系")
+		_apply_burn(f, stacks, 4.0)
+		_core._push_float(float(f["x"]), float(f["y"]) - 46.0, "引燃", Color(0.88, 0.45, 0.20), true)
+	Aud.sfx("skill", -10.0)
+
+# 焚天（季沧海炫卡）：灼烧不衰减 + 每 15 杀吞一张卡 + 每吞一张引燃 +1
+func _enable_fentian() -> void:
+	_fentian = true
+	_burn_unlimited = true
+	_ft_kills = 0
+	_toast("焚天入卡组 · 灼烧无上限，每 15 杀吞一张卡、引燃 +1")
+	Aud.sfx("ult_ready", -4.0)
+
+func _devour_random() -> void:
+	if _cards.is_empty():
+		return
+	var pick := str(_cards[randi() % _cards.size()])
+	_cards.erase(pick)
+	_ignite_bonus += 1
+	_refresh_deck()
+	var nm := str((_card_db.get(pick, {}) as Dictionary).get("name", "一张卡"))
+	_toast("焚天吞噬「%s」· 引燃目标 +1（共 %d）" % [nm, 1 + _ignite_bonus])
+	Aud.sfx("coin", -8.0)
+	Aud.sfx("hit_heavy", -14.0)

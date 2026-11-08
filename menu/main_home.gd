@@ -1,197 +1,195 @@
 extends Control
-# 主界面：整屏贴图 assets/art/ui/main_home_ref.png ＋ 一层透明热区；
-#   顶栏两个数字由 GameState 覆盖到图上；难度/关卡箭头/开始/底栏都靠 _hot() 接。
+# ============================================================
+# menu/main_home.gd —— 主界面（半图半控件 · 画卷从上至下铺开）
+#   骨架 shared/ui_kit.gd：顶栏 0–90 / 页头 90–152 / 内容 152–1176 / 底栏 1176–1280
+# ============================================================
+const UI := preload("res://shared/ui_kit.gd")
+const P := preload("res://shared/ui_pal.gd")
 const GameState := preload("res://shared/game_state.gd")
 const Audio := preload("res://shared/audio.gd")
-const INK := Color(0.14, 0.13, 0.15)
+const STAGE_1 := preload("res://assets/art/ui/stage_1.png")
+
+const ART_RECT := Rect2(80, 282, 560, 600)
+const STAGES := [
+	{"name": "第 1 关    村口小道", "art": STAGE_1, "power": "—", "reward": "—"},
+]
+
+var _stage := 0
 var _diff := 0
-var _settings_ov: Control = null
-var _wen_lb: Label = null
-var _yuan_lb: Label = null
-var _last_wen := -1
-var _last_yuan := -1
+var _coin_lb: Label = null
+var _crystal_lb: Label = null
+var _title_lb: Label = null
+var _art_rect: TextureRect = null
+var _art_clip: Control = null
+var _arrow_l: Control = null
+var _arrow_r: Control = null
+var _tabs: Array = []
+var _settings: Control = null
+var _last_coin := -1
+var _last_crystal := -1
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_build_image_home()
+	theme = UI.theme()
+	UI.bg(self)
+	var bars := UI.app_bar(self, GameState.player_name, "玄品", _open_settings)
+	_coin_lb = bars["coin"]
+	_crystal_lb = bars["crystal"]
+	_build_head()
+	_build_tabs()
+	_build_stage_art()
+	_build_info()
+	UI.dock(self, "", _on_dock)
+	_refresh()
 	set_process(true)
+	_unroll(0.0)
 
-func _on_diff(i: int) -> void:
-	_diff = i
+# ---------------- 页头：只剩关名 ----------------
+func _build_head() -> void:
+	_title_lb = UI.label(self, "", Vector2(72, 98), Vector2(576, 48), 30, P.INK, HORIZONTAL_ALIGNMENT_CENTER)
 
-func _on_stage_arrow(i: int) -> void:
-	print("[主界面] 切换关卡 dir=", i)
+func _change_stage(d: int) -> void:
+	_stage = wrapi(_stage + d, 0, STAGES.size())
+	Audio.sfx("ui_click", -8.0)
+	_refresh()
+	_unroll(0.0)
 
+# ---------------- 难度 ----------------
+func _build_tabs() -> void:
+	for i in 2:
+		var b := Button.new()
+		b.text = "普 通" if i == 0 else "精 英"
+		b.position = Vector2(150.0 if i == 0 else 370.0, 168)
+		b.size = Vector2(200, 52)
+		b.focus_mode = Control.FOCUS_NONE
+		b.add_theme_font_size_override("font_size", 24)
+		b.pressed.connect(func() -> void:
+			_diff = i
+			Audio.sfx("ui_click", -8.0)
+			_style_tabs())
+		add_child(b)
+		_tabs.append(b)
+	_style_tabs()
 
-func _on_start() -> void:
-	get_tree().change_scene_to_file("res://kushou/battle_ui.tscn")
+func _style_tabs() -> void:
+	for i in _tabs.size():
+		var b: Button = _tabs[i]
+		var on := i == _diff
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = P.SEAL if on else P.PAPER_HI
+		sb.set_corner_radius_all(10)
+		sb.border_color = Color(P.GOLD.r, P.GOLD.g, P.GOLD.b, 0.9) if on else P.LINE
+		sb.set_border_width_all(2)
+		b.add_theme_stylebox_override("normal", sb)
+		b.add_theme_stylebox_override("hover", sb)
+		b.add_theme_stylebox_override("pressed", sb)
+		b.add_theme_color_override("font_color", Color(0.980, 0.929, 0.839) if on else P.DIM)
+		b.add_theme_color_override("font_hover_color", Color(0.980, 0.929, 0.839) if on else P.DIM)
 
-# ---------------- 页面入口 ----------------
-func _open_char() -> void:
-	get_tree().change_scene_to_file("res://menu/character_home.tscn")
+# ---------------- 画（可卷起 / 铺开） ----------------
+func _build_stage_art() -> void:
+	_art_clip = Control.new()
+	_art_clip.position = ART_RECT.position
+	_art_clip.size = Vector2(ART_RECT.size.x, 0)
+	_art_clip.clip_contents = true
+	_art_clip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_art_clip)
+	var card := Panel.new()
+	card.position = Vector2.ZERO
+	card.size = ART_RECT.size
+	var csb := StyleBoxFlat.new()
+	csb.bg_color = P.PAPER_HI
+	csb.set_corner_radius_all(2)
+	card.add_theme_stylebox_override("panel", csb)
+	card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_art_clip.add_child(card)
+	_art_rect = TextureRect.new()
+	_art_rect.position = Vector2(4, 4)
+	_art_rect.size = ART_RECT.size - Vector2(8, 8)
+	_art_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_art_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	_art_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_art_clip.add_child(_art_rect)
+	var frame := Panel.new()
+	frame.position = Vector2(1, 1)
+	frame.size = ART_RECT.size - Vector2(2, 2)
+	var fsb := StyleBoxFlat.new()
+	fsb.bg_color = Color(0, 0, 0, 0)
+	fsb.border_color = Color(0.769, 0.659, 0.431)
+	fsb.set_border_width_all(3)
+	frame.add_theme_stylebox_override("panel", fsb)
+	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_art_clip.add_child(frame)
+	# 两侧大箭头
+	_arrow_l = UI.chevron(-1, Rect2(0, ART_RECT.position.y + ART_RECT.size.y * 0.5 - 80, 72, 160),
+		func() -> void: _change_stage(-1))
+	_arrow_r = UI.chevron(1, Rect2(648, ART_RECT.position.y + ART_RECT.size.y * 0.5 - 80, 72, 160),
+		func() -> void: _change_stage(1))
+	add_child(_arrow_l)
+	add_child(_arrow_r)
 
-func _on_nav(i: int) -> void:
-	match i:
-		0:
-			pass
-		1:
-			_open_char()
-		2:
-			get_tree().change_scene_to_file("res://menu/partner_home.tscn")
-		3:
-			_open_settings()
-
-func _open_settings() -> void:
-	if _settings_ov != null and is_instance_valid(_settings_ov):
+func _unroll(delay: float) -> void:
+	if _art_clip == null:
 		return
-	var ov := Control.new()
-	ov.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	ov.z_index = 70
-	add_child(ov)
-	_settings_ov = ov
-	var dim := ColorRect.new()
-	dim.color = Color(0.02, 0.02, 0.02, 0.55)
-	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	ov.add_child(dim)
-	var p := Panel.new()
-	p.position = Vector2(90, 400)
-	p.size = Vector2(540, 360)
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.95, 0.92, 0.85)
-	sb.set_corner_radius_all(8)
-	sb.border_color = Color(0.85, 0.66, 0.23, 0.75)
-	sb.set_border_width_all(2)
-	p.add_theme_stylebox_override("panel", sb)
-	ov.add_child(p)
-	var tl := Label.new()
-	tl.text = "设 置"
-	tl.position = Vector2(30, 22)
-	tl.size = Vector2(480, 40)
-	tl.add_theme_font_size_override("font_size", 28)
-	tl.add_theme_color_override("font_color", INK)
-	p.add_child(tl)
-	var bgm := Label.new()
-	bgm.position = Vector2(40, 100)
-	bgm.size = Vector2(180, 36)
-	bgm.add_theme_font_size_override("font_size", 20)
-	bgm.add_theme_color_override("font_color", INK)
-	bgm.text = "背景音乐"
-	p.add_child(bgm)
-	var bv := Label.new()
-	bv.position = Vector2(260, 100)
-	bv.size = Vector2(80, 36)
-	bv.add_theme_font_size_override("font_size", 20)
-	bv.add_theme_color_override("font_color", INK)
-	bv.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	bv.text = str(int(Audio.bgm_volume() * 100)) + "%"
-	p.add_child(bv)
-	var sfx := Label.new()
-	sfx.position = Vector2(40, 170)
-	sfx.size = Vector2(180, 36)
-	sfx.add_theme_font_size_override("font_size", 20)
-	sfx.add_theme_color_override("font_color", INK)
-	sfx.text = "音效"
-	p.add_child(sfx)
-	var sv := Label.new()
-	sv.position = Vector2(260, 170)
-	sv.size = Vector2(80, 36)
-	sv.add_theme_font_size_override("font_size", 20)
-	sv.add_theme_color_override("font_color", INK)
-	sv.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	sv.text = str(int(Audio.sfx_volume() * 100)) + "%"
-	p.add_child(sv)
-	var bm := Button.new(); bm.text = "－"; bm.position = Vector2(360, 96); bm.size = Vector2(56, 44); bm.focus_mode = Control.FOCUS_NONE
-	bm.add_theme_font_size_override("font_size", 22)
-	bm.pressed.connect(func() -> void:
-		Audio.set_bgm_volume(clampf(Audio.bgm_volume() - 0.1, 0.0, 1.0))
-		bv.text = str(int(Audio.bgm_volume() * 100)) + "%")
-	p.add_child(bm)
-	var bp := Button.new(); bp.text = "＋"; bp.position = Vector2(426, 96); bp.size = Vector2(56, 44); bp.focus_mode = Control.FOCUS_NONE
-	bp.add_theme_font_size_override("font_size", 22)
-	bp.pressed.connect(func() -> void:
-		Audio.set_bgm_volume(clampf(Audio.bgm_volume() + 0.1, 0.0, 1.0))
-		bv.text = str(int(Audio.bgm_volume() * 100)) + "%")
-	p.add_child(bp)
-	var sm := Button.new(); sm.text = "－"; sm.position = Vector2(360, 166); sm.size = Vector2(56, 44); sm.focus_mode = Control.FOCUS_NONE
-	sm.add_theme_font_size_override("font_size", 22)
-	sm.pressed.connect(func() -> void:
-		Audio.set_sfx_volume(clampf(Audio.sfx_volume() - 0.1, 0.0, 1.0))
-		sv.text = str(int(Audio.sfx_volume() * 100)) + "%")
-	p.add_child(sm)
-	var sp := Button.new(); sp.text = "＋"; sp.position = Vector2(426, 166); sp.size = Vector2(56, 44); sp.focus_mode = Control.FOCUS_NONE
-	sp.add_theme_font_size_override("font_size", 22)
-	sp.pressed.connect(func() -> void:
-		Audio.set_sfx_volume(clampf(Audio.sfx_volume() + 0.1, 0.0, 1.0))
-		sv.text = str(int(Audio.sfx_volume() * 100)) + "%")
-	p.add_child(sp)
-	var cb := Button.new(); cb.text = "关 闭"; cb.position = Vector2(180, 280); cb.size = Vector2(180, 52); cb.focus_mode = Control.FOCUS_NONE
-	cb.add_theme_font_size_override("font_size", 20)
-	cb.pressed.connect(_close_settings)
-	p.add_child(cb)
+	_art_clip.size = Vector2(ART_RECT.size.x, 0)
+	if _arrow_l != null:
+		_arrow_l.modulate.a = 0.0
+	if _arrow_r != null:
+		_arrow_r.modulate.a = 0.0
+	var tw := create_tween()
+	if delay > 0.0:
+		tw.tween_interval(delay)
+	tw.tween_property(_art_clip, "size:y", ART_RECT.size.y, 0.85).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tw.tween_callback(func() -> void:
+		var tw2 := create_tween().set_parallel(true)
+		tw2.tween_property(_arrow_l, "modulate:a", 1.0, 0.25)
+		tw2.tween_property(_arrow_r, "modulate:a", 1.0, 0.25))
 
-func _close_settings() -> void:
-	if _settings_ov != null and is_instance_valid(_settings_ov):
-		_settings_ov.queue_free()
-		_settings_ov = null
+# ---------------- 关卡信息 ----------------
+var _info_vals: Array = []
 
-func _process(_delta: float) -> void:
+func _build_info() -> void:
+	for i in 2:
+		var y := 942.0 + float(i) * 68.0
+		UI.panel(self, Rect2(24, y, 672, 56), Color(0.969, 0.949, 0.910), 10, Color(0.804, 0.745, 0.647), 1)
+		UI.label(self, "推 荐 战 力" if i == 0 else "首 通 奖 励", Vector2(44, y), Vector2(160, 56), 20, P.DIM)
+		_info_vals.append(UI.label(self, "—", Vector2(240, y), Vector2(420, 56), 20, Color(0.675, 0.635, 0.576)))
+
+# ---------------- 底栏 ----------------
+func _on_dock(key: String) -> void:
+	Audio.sfx("ui_click", -6.0)
+	match key:
+		"role":
+			get_tree().change_scene_to_file("res://menu/character_home.tscn")
+		"god":
+			get_tree().change_scene_to_file("res://menu/partner_home.tscn")
+		"start":
+			get_tree().change_scene_to_file("res://kushou/battle_ui.tscn")
+
+# ---------------- 刷新 ----------------
+func _refresh() -> void:
+	var st: Dictionary = STAGES[_stage]
+	if _title_lb != null:
+		_title_lb.text = str(st["name"])
+	if _art_rect != null:
+		_art_rect.texture = st["art"]
+	if _info_vals.size() == 2:
+		(_info_vals[0] as Label).text = str(st["power"])
+		(_info_vals[1] as Label).text = str(st["reward"])
+	_last_coin = -1
+	_last_crystal = -1
+
+func _process(_d: float) -> void:
 	var w := GameState.coin("wen")
 	var y := GameState.coin("yuanbao")
-	if w != _last_wen and _wen_lb != null:
-		_last_wen = w
-		_wen_lb.text = str(w)
-	if y != _last_yuan and _yuan_lb != null:
-		_last_yuan = y
-		_yuan_lb.text = str(y)
+	if w != _last_coin and _coin_lb != null:
+		_last_coin = w
+		_coin_lb.text = str(w)
+	if y != _last_crystal and _crystal_lb != null:
+		_last_crystal = y
+		_crystal_lb.text = str(y)
 
-func _build_image_home() -> void:
-	var bg := TextureRect.new()
-	bg.texture = load("res://assets/art/ui/main_home_ref.png")
-	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	bg.stretch_mode = TextureRect.STRETCH_SCALE
-	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(bg)
-	# 顶栏动态数字：盖住图上的 0，写 GameState 的值
-	_wen_lb = _money_label(Vector2(396, 30), Vector2(64, 36), 22)
-	_yuan_lb = _money_label(Vector2(548, 30), Vector2(64, 36), 22)
-	_wen_lb.text = str(GameState.coin("wen"))
-	_yuan_lb.text = str(GameState.coin("yuanbao"))
-	# 热区
-	_hot(Rect2(10, 6, 235, 78), _open_char)
-	_hot(Rect2(630, 20, 82, 50), _open_settings)
-	_hot(Rect2(80, 209, 278, 54), func() -> void: _on_diff(0))
-	_hot(Rect2(368, 209, 278, 54), func() -> void: _on_diff(1))
-	_hot(Rect2(26, 430, 80, 190), func() -> void: _on_stage_arrow(0))
-	_hot(Rect2(614, 430, 80, 190), func() -> void: _on_stage_arrow(1))
-	_hot(Rect2(88, 1050, 544, 96), _on_start)
-	_hot(Rect2(16, 1180, 172, 90), func() -> void: pass)
-	_hot(Rect2(188, 1180, 172, 90), _open_char)
-	_hot(Rect2(360, 1180, 172, 90), func() -> void: get_tree().change_scene_to_file("res://menu/partner_home.tscn"))
-	_hot(Rect2(532, 1180, 180, 90), _open_settings)
-
-
-func _money_label(pos: Vector2, sz: Vector2, fs: int) -> Label:
-	var l := Label.new()
-	l.position = pos
-	l.size = sz
-	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	l.add_theme_font_override("font", load("res://fonts/ink.ttf"))
-	l.add_theme_font_size_override("font_size", fs)
-	l.add_theme_color_override("font_color", Color(0.93, 0.88, 0.78))
-	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(l)
-	return l
-
-func _hot(rect: Rect2, cb: Callable) -> void:
-	var b := Button.new()
-	b.position = rect.position
-	b.size = rect.size
-	b.flat = true
-	b.focus_mode = Control.FOCUS_NONE
-	b.add_theme_stylebox_override("normal", StyleBoxEmpty.new())
-	b.add_theme_stylebox_override("hover", StyleBoxEmpty.new())
-	b.add_theme_stylebox_override("pressed", StyleBoxEmpty.new())
-	b.pressed.connect(cb)
-	add_child(b)
+# ---------------- 设置 ----------------
+func _open_settings() -> void:
+	Audio.sfx("ui_open", -8.0)
+	UI.open_settings(self)
