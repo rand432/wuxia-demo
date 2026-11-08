@@ -128,6 +128,13 @@ var _combined: Array = []
 var _stats := {"atk": 0.0, "def": 0.0, "hp": 0.0}
 var _gold_pct := 0.0
 var _crystal_pct := 0.0
+# v13 群/险 两系：每波定额加成 · 全局难度 · 怪物类型收益
+var _wave_extra := 0
+var _diff_pct := 0.0
+var _coin_count_extra := 0
+var _crystal_count_extra := 0
+var _treasure_pct := 0.0
+var _boss_pct := 0.0
 var _last_wave := 1
 var _attack_count := 0
 var _hit_count := 0
@@ -1617,6 +1624,23 @@ func _apply_combo(rec: Dictionary) -> void:
 			_update_crystal()
 		"mp_flat":
 			_mp = minf(_mp_max, _mp + val)     # v5：内力系组合 → 回内力
+		# ---- v13 群 / 险 ----
+		"count_flat":
+			_wave_extra += int(val)
+		"coin_count":
+			_coin_count_extra += int(val)
+		"crystal_count":
+			_crystal_count_extra += int(val)
+		"treasure_pct":
+			_treasure_pct += val
+		"boss_pct":
+			_boss_pct += val
+	# v13：组合还带一条「全局难度」
+	var ek := str(rec.get("combo_extra_key", ""))
+	if ek == "diff_pct":
+		_diff_pct += float(rec.get("combo_extra_val", 0))
+	if key in ["count_flat", "coin_count", "crystal_count", "treasure_pct", "boss_pct"] or ek == "diff_pct":
+		_push_run_mods()
 
 func _check_sets() -> void:
 	var changed := true
@@ -1643,7 +1667,8 @@ func _activate_set(sid: String) -> void:
 	if first.has("ancestor"):
 		_activate_ancestor_set(sid, first, ids)
 		return
-	var own_sum := {"atk": 0.0, "def": 0.0, "hp": 0.0, "mp": 0.0, "gold_pct": 0.0, "crystal_pct": 0.0}
+	var own_sum := {"atk": 0.0, "def": 0.0, "hp": 0.0, "mp": 0.0, "gold_pct": 0.0, "crystal_pct": 0.0,
+		"count": 0.0, "coin_count": 0.0, "crystal_count": 0.0, "treasure_pct": 0.0, "boss_pct": 0.0}
 	var srcs: Array = []
 	for cid_v in ids:
 		var cid := str(cid_v)
@@ -1658,7 +1683,9 @@ func _activate_set(sid: String) -> void:
 		"quality": int(first["quality"]), "art": str(first["art"]),
 		"own_text": _own_text(own_sum), "combo_text": str(first["combo_text"]),
 		"trigger": str(first["trigger"]), "combo_key": str(first["combo_key"]),
-		"combo_val": int(first["combo_val"]), "stacks": 0, "sources": srcs}
+		"combo_val": int(first["combo_val"]), "stacks": 0, "sources": srcs,
+		"combo_extra_key": str(first.get("combo_extra_key", "")),
+		"combo_extra_val": int(first.get("combo_extra_val", 0))}
 	_combined.append(rec)
 	_apply_own(own_sum)
 	_toast_card(str(rec["name"]), int(rec["quality"]), "组合激活，" + str(rec["size"]) + " 张已清空")
@@ -1693,6 +1720,11 @@ func _own_text(s: Dictionary) -> String:
 	if float(s.get("mp", 0.0)) > 0: arr.append("内力 +" + str(int(s["mp"])))
 	if float(s["gold_pct"]) > 0: arr.append("金币 +" + str(int(s["gold_pct"])) + "%")
 	if float(s["crystal_pct"]) > 0: arr.append("灵晶 +" + str(int(s["crystal_pct"])) + "%")
+	if float(s.get("count", 0.0)) > 0: arr.append("每波 +" + str(int(s["count"])) + " 只")
+	if float(s.get("coin_count", 0.0)) > 0: arr.append("文钱怪 +" + str(int(s["coin_count"])))
+	if float(s.get("crystal_count", 0.0)) > 0: arr.append("灵晶怪 +" + str(int(s["crystal_count"])))
+	if float(s.get("treasure_pct", 0.0)) > 0: arr.append("宝物 +" + str(int(s["treasure_pct"])) + "%")
+	if float(s.get("boss_pct", 0.0)) > 0: arr.append("首领 +" + str(int(s["boss_pct"])) + "%")
 	return " · ".join(PackedStringArray(arr))
 
 func _apply_own(s: Dictionary) -> void:
@@ -1703,6 +1735,18 @@ func _apply_own(s: Dictionary) -> void:
 		_mp_bonus += float(s["mp"])          # v5：内力系卡 → 内力上限
 	_gold_pct += float(s["gold_pct"])
 	_crystal_pct += float(s["crystal_pct"])
+	# v13 群/险
+	if float(s.get("count", 0.0)) > 0.0:
+		_wave_extra += int(s["count"])
+	if float(s.get("coin_count", 0.0)) > 0.0:
+		_coin_count_extra += int(s["coin_count"])
+	if float(s.get("crystal_count", 0.0)) > 0.0:
+		_crystal_count_extra += int(s["crystal_count"])
+	if float(s.get("treasure_pct", 0.0)) > 0.0:
+		_treasure_pct += float(s["treasure_pct"])
+	if float(s.get("boss_pct", 0.0)) > 0.0:
+		_boss_pct += float(s["boss_pct"])
+	_push_run_mods()
 	if _core != null:
 		_core.hero["atk"] = float(_core.hero.get("atk", 0.0)) + float(s["atk"])
 		_core.hero["def"] = float(_core.hero.get("def", 0.0)) + float(s["def"])
@@ -3447,3 +3491,15 @@ func _tick_shards(dt: float) -> void:
 	for i in range(_shards.size() - 1, -1, -1):
 		if float((_shards[i] as Dictionary)["t"]) <= 0.0:
 			_shards.remove_at(i)
+
+# ============================================================
+# 群 / 险 两系：把卡牌加成推给核心（每波定额 + 全局难度）
+# ============================================================
+func _push_run_mods() -> void:
+	if _core == null:
+		return
+	_core.wave_extra = _wave_extra
+	_core.extra_diff_mul = 1.0 + _diff_pct / 100.0
+	if _core.has_method("wave_reset_quota"):
+		_core.wave_reset_quota()
+	_toast("每波 +%d 只 · 难度 +%d%%" % [_wave_extra, int(_diff_pct)])

@@ -131,6 +131,8 @@ const MAX_FOES := 24
 #     波1-3:8 · 4-6:10 · 7-10:12 · 11-15:14 · 16-20:16 · 21-25:18 · 26+:20
 #   帧率：同屏上限仍是 MAX_FOES(24)，20 只 + 24 上限 = 留足余量（实测 77 只才掉帧）。
 # ============================================================
+var wave_extra := 0                 # v13：群系卡给每波定额的加成
+var extra_diff_mul := 1.0           # v13：险系卡带的全局难度倍率（乘血量与攻击）
 var _wave_quota := 8                # 这一波要刷几只普通怪
 var _wave_spawned := 0              # 已经刷了几只
 var _last_quota_wave := 1           # v17x：上一次结算定额时的波数（用来检测换波）
@@ -425,8 +427,9 @@ func _spawn_foe(kind := "normal", hp_mul := 1.0, atk_mul := 1.0, big := false, t
 	var x := 150.0 + randf() * maxf(60.0, size.x - 320.0)
 	var f := {
 		"x": x, "y": -40.0,
-		"hp": _foe_hp() * hp_mul, "hp_max": _foe_hp() * hp_mul,
-		"atk": _foe_atk() * atk_mul, "t": 0.0,
+		# v13：险系卡带的全局难度 —— 血量与攻击同时乘（所有怪物，含 boss）
+		"hp": _foe_hp() * hp_mul * extra_diff_mul, "hp_max": _foe_hp() * hp_mul * extra_diff_mul,
+		"atk": _foe_atk() * atk_mul * extra_diff_mul, "t": 0.0,
 		"kind": kind, "boss": big, "tier": tier,
 		"name": (nm if nm != "" else (str(FOE_NAMES[randi() % FOE_NAMES.size()]) if not big else "boss")),
 		"scale": (1.9 if big else 0.86),
@@ -5056,7 +5059,7 @@ func wave_cleared() -> bool:
 
 # 换波时调用：重置定额与计数（新一波从头刷）
 func wave_reset_quota() -> void:
-	_wave_quota = _wave_quota_for(wave)
+	_wave_quota = _wave_quota_for(wave) + int(wave_extra)
 	_wave_spawned = 0
 	_spawn_t = 0.6
 
