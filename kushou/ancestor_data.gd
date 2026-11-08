@@ -253,7 +253,7 @@ const ANCESTORS := {
 	},
 	"zhiyuan": {
 		"name": "纸鸢", "skill": "剪纸成兵", "quality": 2, "dtype": "召唤",
-		"art": "res://assets/items/paper.png",
+		"art": "res://assets/items/mat_zhi.png",
 		"tiers": [
 			{"combo_name": "剪影", "combo_text": "纸人伤害 +20%", "effects": {"minion_pct": 20},
 			 "cards": [["剪影", "纸人 +8%"], ["折纸", "纸人 +8%"], ["描红", "纸人 +5%"]]},
@@ -272,7 +272,29 @@ const ANCESTORS := {
 			"devour_text": "击杀增殖 · 爆散分裂",
 			"per_card": "大纸人分裂最多 2 个小纸人"},
 	},
+	"chenshi2": {
+		"name": "陈石", "skill": "石皮", "quality": 2, "dtype": "真实",
+		"art": "res://assets/char/chen_shi_face_cut.png",
+		"tiers": [
+			{"combo_name": "石皮", "combo_text": "每 3 秒 +1 层石皮", "effects": {"stone_rate": 3},
+			 "cards": [["聚石", "石皮间隔 −0.3s"], ["凝皮", "石皮间隔 −0.3s"], ["厚积", "每层防御 +0.5"]]},
+			{"combo_name": "急促", "combo_text": "间隔 2 秒 · 每次 +2 层", "effects": {"stone_rate": 2, "stone_add": 2},
+			 "cards": [["急促", "石皮间隔 −0.4s"], ["急凝", "石皮间隔 −0.4s"], ["连叠", "每次 +1 层"]]},
+			{"combo_name": "坚硬", "combo_text": "每层防御 +3", "effects": {"stone_def": 3},
+			 "cards": [["坚硬", "每层防御 +1"], ["铁石", "每层防御 +1"], ["磐石", "每层防御 +1"]]},
+			{"combo_name": "透骨", "combo_text": "真实伤害 +15%（众）", "effects": {"elem_pct": {"真实": 15}},
+			 "cards": [["透骨", "真实 +6%（众）"], ["入髓", "真实 +6%（众）"], ["销魂", "真实技冷却 −6%"]]},
+			{"combo_name": "碎石", "combo_text": "碎裂时掉落石皮在地上", "effects": {"shard_drop": 1},
+			 "cards": [["碎石", "掉落 +1 块"], ["崩石", "掉落 +1 块"], ["散砾", "掉落范围 +30"]]},
+			{"combo_name": "碎裂", "combo_text": "累计脱 10 层 → 范围真实伤害", "effects": {"stone_burst": 10},
+			 "cards": [["碎裂", "碎裂 +20%"], ["山崩", "碎裂 +20%"], ["地裂", "碎裂范围 +30"]]},
+		],
+		"shiny": {"name": "石殒", "self_text": "石皮范围 +50",
+			"devour_text": "石皮在身 25% 减伤 · 挨打涨层",
+			"per_card": "地面石皮变伤害区"},
+	},
 }
+
 
 
 

@@ -5111,7 +5111,12 @@ func hero_in_dmg(amount: float, dtype: String) -> float:
 	if float(hero.get("dr_t", 0.0)) > 0.0:
 		dr = float(hero.get("dr", 0.0))
 		cut += dr
-	var taken := maxf(0.0, amount * (1.0 - minf(0.90, cut)))
+	# v18（用户："全局改 但是是数值减伤 比如攻击-防御"）：
+	#   护甲从"百分比"改成**数值减伤**：先减防御，再乘其它减伤率。
+	#   防御系卡（hero["def"]）之前一直是死数值（没人读），现在才开始生效。
+	cut += float(hero.get("cut_extra", 0.0))          # 陈石石皮这类"临时额外减伤"
+	var after_flat := maxf(1.0, amount - float(hero.get("def", 0.0)))
+	var taken := maxf(0.0, after_flat * (1.0 - minf(0.90, cut)))
 	if dr > 0.0 and taken > 0.0:
 		hero["hp"] = minf(float(hero["hp_max"]), float(hero["hp"]) + amount * dr * 0.5)
 	return taken

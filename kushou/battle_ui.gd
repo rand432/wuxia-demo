@@ -1093,6 +1093,9 @@ func _process(_delta: float) -> void:
 		_tick_poison(_delta)
 		_tick_vuln(_delta)
 		_tick_aura(_delta)
+		_tick_stone(_delta)
+		_tick_paper(_delta)
+		_tick_shards(_delta)
 		_tick_knock(_delta)
 		if _hero_token != null:
 			_hero_token.position = _core.position + _core.hero_pos
@@ -1136,6 +1139,9 @@ func _on_core_kill(n: int) -> void:
 		_kill_lb.text = str(_kills)
 	_add_exp(20 * n)                       # v2：杀 1 只 +20 经验
 	_add_wen(WEN_KILL_BASE + WEN_KILL_WAVE * int(_core.wave))   # v6：杀怪给文钱
+	if _qianzhi:
+		for i in n:
+			_core.summon_minion("纸人", Color(0.95, 0.93, 0.86), 0.72, 0.5, 8.0 / 30.0, 1.0, 0.0, 99, "", "paper")
 	if _undying_lamp:
 		_lamp_kills += n
 		while _lamp_kills >= 5:
@@ -1514,6 +1520,11 @@ func _init_cards() -> void:
 func _grant_ancestor(aid: String) -> void:
 	if aid == "mingzhu":
 		_mingzhu = true
+	if aid == "zhiyuan":
+		_enable_zhiyuan()
+	if aid == "chenshi2":
+		_shixi = true
+		_stone_def = float(_core.hero.get("def", 0.0)) if _core != null else 0.0
 	if not AncestorData.ANCESTORS.has(aid):
 		return
 	_ancestors[aid] = 0
@@ -1701,7 +1712,11 @@ func _apply_own(s: Dictionary) -> void:
 
 func _add_card(id: String) -> void:
 	if not _card_db.has(id): return
-	if str(id) == "shiny_mingzhu":
+	if str(id) == "shiny_chenshi2":
+		_enable_shiyun()
+	elif str(id) == "shiny_zhiyuan":
+		_enable_qianzhi()
+	elif str(id) == "shiny_mingzhu":
 		_enable_undying_lamp()
 	elif str(id) == "shiny_liuqingqing2":
 		_enable_baicao()
@@ -1887,6 +1902,7 @@ func _on_hero_hit() -> void:
 	_play_attack_fx(false)
 	_hit_count += 1
 	_trigger_combos("每次受击")
+	_stone_on_hit()
 
 func _on_hero_foe_hit(tgt: Dictionary, dmg: float, crit: bool, heavy: bool) -> void:
 	if _fx_front == null:
@@ -1921,6 +1937,8 @@ const SKILL_DEFS := {
 		"targets": 1, "col": Color(0.55, 0.82, 0.90)},
 	"liuqingqing2": {"name": "回春", "dtype": "木系", "mul": 1.0, "cd": 12.0, "mp": 80.0,
 		"targets": 1, "col": Color(0.45, 0.78, 0.42)},
+	"zhiyuan": {"name": "剪纸成兵", "dtype": "召唤", "mul": 1.0, "cd": 10.0, "mp": 90.0,
+		"targets": 1, "col": Color(0.94, 0.92, 0.84)},
 }
 
 var _skills: Array = []
@@ -1977,6 +1995,15 @@ func _cast_skill(i: int) -> void:
 	var md0: Dictionary = _anc_mod.get(aid0, {})
 	var cost0 := maxf(0.0, float(sk["mp"]) - float(md0.get("mp_flat", 0.0)))
 	if _mp < cost0:
+		return
+	# 石皮流：纯被动（不进技能栏），这里只为兜底
+	if aid0 == "chenshi2":
+		return
+	# 召唤流：剪纸成兵
+	if aid0 == "zhiyuan":
+		_mp -= cost0
+		sk["cd_t"] = maxf(0.5, float(sk["cd"]) * (1.0 - clampf(float(md0.get("cd_pct", 0.0)), 0.0, 80.0) / 100.0))
+		_cast_paper()
 		return
 	# 治疗流：回血 + 环毒 + 易伤
 	if aid0 == "liuqingqing2":
@@ -2071,7 +2098,8 @@ func _add_ancestor_effects(aid: String, eff: Dictionary) -> void:
 	for k in ["dmg_pct", "cd_pct", "mp_flat", "para_s", "para_amp", "life_flat", "cap_add", "wave_evo", "tgt_add",
 			"ignite_add", "burn_add", "chain_dmg", "radius_add", "stun_s", "impact",
 			"pierce", "knife", "volley", "volley_pct", "heal_pct", "aura", "poison_dur", "vuln",
-			"heal_aura", "pull"]:
+			"heal_aura", "pull", "minion_pct", "paper_add", "burst", "paper_life",
+			"stone_rate", "stone_add", "stone_def", "stone_burst", "stone_cap", "shard_drop"]:
 		if eff.has(k):
 			m[k] = float(m.get(k, 0.0)) + float(eff[k])
 	if eff.has("elem_pct"):
@@ -2534,6 +2562,8 @@ func _shiny_present(kind: String) -> void:
 		"wanren": music = "menu_jiangnan"
 		"baicao": music = "menu_shushan"
 		"undying": music = "menu_hejian"
+		"qianzhi": music = "menu_youzhou"
+		"shiyun": music = "menu_shaolin"
 	if music != "":
 		Aud.play_bgm(music, 0.25)
 		_stop_stinger(1.8)
@@ -2567,6 +2597,12 @@ func _shiny_present(kind: String) -> void:
 		"undying":
 			Aud.sfx("bell", -4.0, 1.1)
 			Aud.sfx("wind", -10.0, 0.9)
+		"qianzhi":
+			Aud.sfx("paper", -4.0, 1.0)
+			Aud.sfx("bell", -8.0, 1.3)
+		"shiyun":
+			Aud.sfx("wood_down", -4.0, 0.7)
+			Aud.sfx("hit_heavy", -8.0, 0.8)
 	# ---- 动画 ----
 	match kind:
 		"devour":
@@ -2596,6 +2632,12 @@ func _shiny_present(kind: String) -> void:
 			_ring_out()
 		"undying":
 			_flash(Color(1.0, 0.92, 0.62), 0.60, 0.10, 0.40)
+			_ring_out()
+		"qianzhi":
+			_flash(Color(0.96, 0.94, 0.88), 0.60, 0.08, 0.36)
+			_sword_rain()
+		"shiyun":
+			_flash(Color(0.62, 0.58, 0.50), 0.65, 0.10, 0.40)
 			_ring_out()
 	if _core != null:
 		_core.Shake_add(6.0 if kind != "devour" else 9.0)
@@ -3205,3 +3247,203 @@ func _enable_undying_lamp() -> void:
 	_lamp_kills = 0
 	_toast("不灭之灯入卡组 · 半径 +40，每击杀 5 只再 +10（无上限）")
 	_shiny_present("undying")
+
+# ============================================================
+# 纸鸢 · 剪纸成兵（召唤系，复用核心的召唤物系统）
+#   纸人：继承主角攻击 15%（核心 "paper" 分支）· 会挨打 · 会增殖
+# ============================================================
+var _qianzhi := false
+
+func _cast_paper() -> void:
+	var m: Dictionary = _anc_mod.get("zhiyuan", {})
+	var n := 2 + int(m.get("paper_add", 0.0))
+	if _qianzhi:
+		n += 0
+	var secs := 8.0 + float(m.get("life_flat", 0.0))
+	var life_m := secs / 30.0          # cn_life() 基准 30 秒
+	for i in n:
+		_core.summon_minion("纸人", Color(0.95, 0.93, 0.86), 0.72, 0.5, life_m, 1.0, 0.0, 99, "", "paper")
+	_toast("剪纸成兵 · 召 %d 张纸人（存在 %d 秒）" % [n, int(secs)])
+	Aud.sfx("paper", -8.0)
+
+func _enable_qianzhi() -> void:
+	_qianzhi = true
+	_toast("千纸入卡组 · 纸人击杀会增殖，消失时分裂 2 个小纸人")
+	_shiny_present("qianzhi")
+
+# ============================================================
+# 陈石 · 石皮（纯被动，不进技能栏）
+#   每 X 秒 +N 层（无上限）· 每层防御 +2/+3 · 挨打掉 1 层并反手真实伤害（防御×0.5）
+#   5★ 累计脱 10 层 → 碎裂（范围真实伤害）
+#   炫卡石殒：有皮时 25% 固定减伤 · 挨打 30% 再涨一层
+# ============================================================
+var _shixi := false
+var _stone_layers := 0
+var _stone_acc := 0.0
+var _stone_def := 0.0
+var _stone_burst := 0
+var _shiyun := false
+
+func _stone_per_def() -> float:
+	var m: Dictionary = _anc_mod.get("chenshi2", {})
+	return 3.0 if float(m.get("stone_def", 0.0)) > 0.0 else 2.0
+
+func _apply_stone_def() -> void:
+	if _core == null:
+		return
+	_core.hero["def"] = _stone_def + float(_stone_layers) * _stone_per_def()
+	_core.hero["cut_extra"] = 0.25 if (_shiyun and _stone_layers > 0) else 0.0
+
+func _tick_stone(dt: float) -> void:
+	if not _shixi or _core == null:
+		return
+	var m: Dictionary = _anc_mod.get("chenshi2", {})
+	var interval := float(m.get("stone_rate", 3.0))
+	if interval <= 0.0:
+		interval = 3.0
+	var add := int(m.get("stone_add", 1.0))
+	if add < 1:
+		add = 1
+	_stone_acc += dt
+	while _stone_acc >= interval:
+		_stone_acc -= interval
+		_stone_layers += add
+	_apply_stone_def()
+
+func _stone_on_hit() -> void:
+	if not _shixi or _core == null:
+		return
+	if _stone_layers > 0:
+		_stone_layers -= 1
+		_stone_burst += 1
+		_apply_stone_def()
+		var dmg := float(_core.hero.get("def", 0.0)) * 0.5
+		var foes := _live_foes()
+		if not foes.is_empty() and dmg > 0.0:
+			_core._apply_dmg(foes[0], dmg, "真实")
+			_core._push_float(float(foes[0]["x"]), float(foes[0]["y"]) - 40.0, "石屑", Color(0.80, 0.78, 0.72))
+		var need := int((_anc_mod.get("chenshi2", {}) as Dictionary).get("stone_burst", 0.0))
+		if need > 0 and _stone_burst >= need:
+			_stone_burst = 0
+			_stone_shatter()
+			_stone_drop_shards()
+	if _shiyun and randf() < 0.30:
+		_stone_layers += 1
+		_apply_stone_def()
+
+# 5★ 碎裂：一圈真实伤害
+func _stone_shatter() -> void:
+	var dmg := float(_core.hero.get("def", 0.0)) * 1.5
+	var hp0 := Vector2(_core.hero_pos)
+	var hit := 0
+	for f_v in _live_foes():
+		var f: Dictionary = f_v
+		if (Vector2(float(f["x"]), float(f["y"])) - hp0).length() <= 140.0:
+			_core._apply_dmg(f, dmg * _vuln_mul(f), "真实")
+			_core._push_float(float(f["x"]), float(f["y"]) - 50.0, "碎裂", Color(0.86, 0.84, 0.76), true)
+			hit += 1
+	if hit > 0:
+		_core.Shake_add(6.0)
+	_toast("碎裂！一圈真实伤害（防御 %d）" % int(float(_core.hero.get("def", 0.0))))
+
+# ---------------- 石殒（陈石炫卡） ----------------
+func _enable_shiyun() -> void:
+	_shiyun = true
+	_apply_stone_def()
+	_toast("石殒入卡组 · 石皮在身 25% 减伤，挨打 30% 再涨一层")
+	_shiny_present("shiyun")
+
+# ============================================================
+# 收尾：纸人爆散 / 千纸分裂 / 地面石皮
+# ============================================================
+var _zhiyuan := false
+var _shards: Array = []          # {pos, t, r} 地上的石皮
+var _shard_acc := 0.0
+
+func _enable_zhiyuan() -> void:
+	_zhiyuan = true
+
+# 每帧扫描核心的召唤物：纸人进入 dying 就爆一次（不改核心）
+func _tick_paper(dt: float) -> void:
+	if not _zhiyuan or _core == null:
+		return
+	var m: Dictionary = _anc_mod.get("zhiyuan", {})
+	var burst := float(m.get("burst", 0.0)) > 0.0
+	for m_v in _core._minions:
+		var mm: Dictionary = m_v
+		if str(mm.get("kind", "")) != "纸人":
+			continue
+		if float(mm.get("dying", 0.0)) <= 0.0 or bool(mm.get("_burst_done", false)):
+			continue
+		mm["_burst_done"] = true
+		var at: Vector2 = mm["pos"]
+		if burst:
+			var dmg := float(_core.hero.get("atk", 12.0)) * 1.5
+			for f_v in _live_foes():
+				var f: Dictionary = f_v
+				if (Vector2(float(f["x"]), float(f["y"])) - at).length() <= 110.0:
+					_core._apply_dmg(f, dmg * _vuln_mul(f), "召唤")
+					_core._push_float(float(f["x"]), float(f["y"]) - 36.0, "爆散", Color(0.94, 0.92, 0.86))
+			_paper_puff(at)
+			Aud.sfx("paper", -10.0)
+		if _qianzhi:
+			for k in 2:
+				_core.summon_minion("小纸人", Color(0.98, 0.96, 0.90), 0.5, 0.3, 5.0 / 30.0, 0.9, 0.0, 99, "", "paper")
+			_paper_puff(at)
+			Aud.sfx("paper", -12.0)
+
+func _paper_puff(at: Vector2) -> void:
+	var r := ColorRect.new()
+	r.color = Color(0.96, 0.94, 0.88, 0.55)
+	r.size = Vector2(30, 30)
+	r.position = _core.position + at - Vector2(15, 15)
+	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	r.z_index = 8
+	add_child(r)
+	var tw := create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(r, "size", Vector2(150, 150), 0.35)
+	tw.tween_property(r, "position", _core.position + at - Vector2(75, 75), 0.35)
+	tw.tween_property(r, "modulate:a", 0.0, 0.35)
+	tw.chain().tween_callback(func() -> void: r.queue_free())
+
+func _stone_drop_shards() -> void:
+	var m: Dictionary = _anc_mod.get("chenshi2", {})
+	if float(m.get("shard_drop", 0.0)) <= 0.0:
+		return
+	var hp0 := Vector2(_core.hero_pos)
+	for i in 3:
+		var ang := randf() * TAU
+		var rad := randf_range(30.0, 120.0)
+		_shards.append({"pos": hp0 + Vector2(cos(ang), sin(ang)) * rad, "t": 8.0, "r": 30.0})
+
+func _tick_shards(dt: float) -> void:
+	if _core == null:
+		return
+	var extra_r := 50.0 if _shiyun else 0.0
+	_shard_acc += dt
+	var tick := _shard_acc >= 1.0
+	if tick:
+		_shard_acc -= 1.0
+	var hp0 := Vector2(_core.hero_pos)
+	for s_v in _shards:
+		var s: Dictionary = s_v
+		s["t"] = float(s["t"]) - dt
+		var sp: Vector2 = s["pos"]
+		if _shixi and hp0.distance_to(sp) <= 40.0:
+			s["t"] = 0.0
+			_stone_layers += 1
+			_apply_stone_def()
+			_core._push_float(sp.x, sp.y - 30.0, "石皮 +1", Color(0.84, 0.82, 0.74))
+			continue
+		if _shiyun and tick:
+			for f_v in _live_foes():
+				var f: Dictionary = f_v
+				if (Vector2(float(f["x"]), float(f["y"])) - sp).length() <= float(s["r"]) + extra_r:
+					var dmg := float(_core.hero.get("def", 0.0)) * 0.2
+					if dmg > 0.0:
+						_core._apply_dmg(f, dmg, "真实")
+						_core._push_float(float(f["x"]), float(f["y"]) - 26.0, "砾", Color(0.80, 0.78, 0.70))
+	for i in range(_shards.size() - 1, -1, -1):
+		if float((_shards[i] as Dictionary)["t"]) <= 0.0:
+			_shards.remove_at(i)
