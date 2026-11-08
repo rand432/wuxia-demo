@@ -134,6 +134,15 @@ Windows 计划任务 **`wuxia-autocommit`** 每 30 分钟执行一次
 （脚本 `tools/autocommit.ps1`，任务定义 `tools/autocommit-task.xml`，日志 `.git/autocommit.log`）：
 **有改动才提交，没改动不产生空提交**，然后把提交推到全部远端。
 
+**推送失败会吵你**（v2，2026-11-09 加）：任意远端推失败 → 弹 Windows 气泡提示
+（第一次立刻提示，之后每小时一次），状态写到 `.git/autocommit-status.txt`；
+恢复时也会提示一次。没改动的那几轮如果上次是失败状态，会顺手 `ls-remote` 探一下恢复没有。
+
+> 加这个是因为：远端历史被重写后它连续失败了一个月，只在日志里写一行、没人看，
+> 等发现时异地备份已经停摆 30 天。
+> ⚠ 改这个脚本时**必须存成 UTF-8 带 BOM**（或 UTF-16）：计划任务跑的是
+> powershell.exe 5.1，读不带 BOM 的文件会按 ANSI 解，中文变乱码、整个脚本编译失败。
+
 | 远端 | 位置 | 作用 |
 |---|---|---|
 | `origin` | Gitee 私有仓库 `sishenmoyi/wuxia-demo` | 异地备份 |
