@@ -136,14 +136,37 @@ Windows 计划任务 **`wuxia-autocommit`** 每 30 分钟执行一次
 
 | 远端 | 位置 | 作用 |
 |---|---|---|
-| `origin` | Gitee 私有仓库 | 异地备份 |
-| `backup` | `E:\wuxia-backup.git` | 本机第二副本（裸仓库） |
+| `origin` | Gitee 私有仓库 `sishenmoyi/wuxia-demo` | 异地备份 |
+| `backup` | `E:\wuxia-backup.git` | 本机第二副本（裸仓库，另有 `pre-rewrite-backup` 分支留着改写前的旧史） |
 
 手动存档一次：
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File D:\1\wuxia-demo\tools\autocommit.ps1
 ```
+
+### ⚠ 2026-11-08：历史重写 + 两个远端已重新对齐
+
+本地历史曾经被重写过（filter-repo 式剔除 `素材/`、`qiuyuan-study/`、`tools/*/node_modules`、
+`assets/gen/**` 这些大文件），但**从来没有 force-push 成功**，于是远端还停在旧历史上，
+两边 hash 完全不同 → autocommit 从 10-23 起一直报 `non-fast-forward`，备份停摆近一个月。
+
+现在已处理：
+
+- 两个远端都 **force-push 到同一份本地历史**（`2ffbd46`）
+- 旧历史在 `E:\wuxia-backup.git` 的 `pre-rewrite-backup` 分支里完整留着
+- 核实过：本地历史 `3885b9e`（10-12 17:57）那 1266 个文件，与旧远端**逐字节相同**，
+  改写只删路径、没改内容，**没有丢任何东西**
+
+### Gitee 配额（会再犯，记一下）
+
+Gitee 单仓库配额 **1GB**，而这个库把历史算进去约 **660MB**（`.git` 打包 658MB）。
+超过配额后 Gitee 只留 3 次推送机会，之后推拉服务会被锁。
+
+- 查当前用量：仓库页 → 设置 → 仓库信息；报错里也会写 `Repo size: xxxMB, exceeds quota 1024MB`
+- **瘦身靠 GC**：仓库设置 → `https://gitee.com/sishenmoyi/wuxia-demo/settings#git-gc` 点「仓库 GC」，
+  会回收不可达对象（强推后一定要点一次，否则旧历史的 2.1GB 会一直算在配额里）
+- 再往上就需要再改写一次历史、或升级套餐
 
 ---
 
