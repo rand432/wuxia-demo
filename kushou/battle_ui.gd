@@ -1086,6 +1086,7 @@ func _process(_delta: float) -> void:
 		_tick_skills(_delta)
 		_tick_minions(_delta)
 		_tick_burn(_delta)
+		_tick_knock(_delta)
 		if _hero_token != null:
 			_hero_token.position = _core.position + _core.hero_pos
 			_hero_token.hp_ratio = float(_core.hero.get("hp", 0.0)) / maxf(1.0, float(_core.hero.get("hp_max", 1.0)))
@@ -1686,7 +1687,9 @@ func _apply_own(s: Dictionary) -> void:
 
 func _add_card(id: String) -> void:
 	if not _card_db.has(id): return
-	if str(id) == "shiny_zhujue":
+	if str(id) == "shiny_gundilong":
+		_enable_gunshan()
+	elif str(id) == "shiny_zhujue":
 		_enable_jianpo()
 	elif str(id) == "shiny_backwash":
 		_apply_own({"atk": 4.0, "def": 4.0, "hp": 40.0, "mp": 40.0, "gold_pct": 0.0, "crystal_pct": 0.0})
@@ -1951,6 +1954,14 @@ func _cast_skill(i: int) -> void:
 	var cost0 := maxf(0.0, float(sk["mp"]) - float(md0.get("mp_flat", 0.0)))
 	if _mp < cost0:
 		return
+	# 撞击流：按气血上限算伤害，并把目标撞飞
+	if aid0 == "gundilong":
+		if _live_foes().is_empty():
+			return
+		_mp -= cost0
+		sk["cd_t"] = maxf(0.5, float(sk["cd"]) * (1.0 - clampf(float(md0.get("cd_pct", 0.0)), 0.0, 80.0) / 100.0))
+		_charge_ram()
+		return
 	# 火系：直伤 + 灼烧（引燃多名）
 	if aid0 == "jicanghai":
 		if _live_foes().is_empty():
@@ -2014,7 +2025,7 @@ func _add_ancestor_effects(aid: String, eff: Dictionary) -> void:
 			"ignite_add": 0.0, "burn_add": 0.0}
 	var m: Dictionary = _anc_mod[aid]
 	for k in ["dmg_pct", "cd_pct", "mp_flat", "para_s", "para_amp", "life_flat", "cap_add", "wave_evo", "tgt_add",
-			"ignite_add", "burn_add", "chain_dmg", "radius_add", "stun_s"]:
+			"ignite_add", "burn_add", "chain_dmg", "radius_add", "stun_s", "impact"]:
 		if eff.has(k):
 			m[k] = float(m.get(k, 0.0)) + float(eff[k])
 	if eff.has("elem_pct"):
@@ -2473,6 +2484,7 @@ func _shiny_present(kind: String) -> void:
 		"fentian": music = "menu_youzhou"
 		"backwash": music = "menu_wudao"
 		"jianpo": music = "menu_shushan"
+		"gunshan": music = "menu_shaolin"
 	if music != "":
 		Aud.play_bgm(music, 0.25)
 		_stop_stinger(1.8)
@@ -2494,6 +2506,9 @@ func _shiny_present(kind: String) -> void:
 		"jianpo":
 			Aud.sfx("sword_draw", -4.0, 1.1)
 			Aud.sfx("slash_light2", -8.0, 0.95)
+		"gunshan":
+			Aud.sfx("wood_down", -4.0, 0.8)
+			Aud.sfx("melee", -8.0, 0.9)
 	# ---- 动画 ----
 	match kind:
 		"devour":
@@ -2512,6 +2527,9 @@ func _shiny_present(kind: String) -> void:
 		"jianpo":
 			_flash(Color(0.98, 0.95, 0.80), 0.55, 0.08, 0.34)
 			_sword_rain()
+		"gunshan":
+			_flash(Color(0.82, 0.68, 0.40), 0.60, 0.10, 0.40)
+			_rise_tide()
 	if _core != null:
 		_core.Shake_add(6.0 if kind != "devour" else 9.0)
 
@@ -2700,3 +2718,158 @@ func _sword_rain() -> void:
 		tw.tween_property(r, "position:y", 1280.0, 0.34)
 		tw.tween_property(r, "modulate:a", 0.0, 0.14)
 		tw.tween_callback(func() -> void: r.queue_free())
+
+# ============================================================
+# 滚地龙 · 撞击流（生命值百分比伤害 + 台球反弹）
+#   撞击伤害 = 气血上限 × 6%（物理），每跳全额、不递减
+#   反弹预算：无炫卡 全场 1 次；有「滚山」每个敌人各一次 → 无限连锁
+# ============================================================
+const RAM_HP_PCT := 6.0          # 撞击伤害 = 气血上限 × 6%
+const RAM_KNOCK := 1800.0        # 击退初速 px/s（要压过核心的寻路移动）
+const RAM_HIT_R := 34.0          # 碰撞判定半径（3★ 会加）
+const WALL_X0 := 24.0
+const WALL_X1 := 696.0
+const WALL_Y0 := 150.0
+const WALL_Y1 := 700.0
+
+var _ram_budget := 0             # 本次撞击还剩几次反弹
+var _ram_shiny := false          # 滚山：每个敌人各弹一次
+var _ram_dmg := 0.0              # 本次撞击的单跳伤害
+
+func _ram_mods() -> Dictionary:
+	return _anc_mod.get("gundilong", {})
+
+func _ram_damage() -> float:
+	var m := _ram_mods()
+	var pct := RAM_HP_PCT * (1.0 + (float(m.get("dmg_pct", 0.0)) + float(_elem_mod.get("物理", 0.0))) / 100.0)
+	return float(_core.hero.get("hp_max", 200.0)) * pct / 100.0
+
+# 化身肉蛋：把最近的一只撞飞
+func _charge_ram() -> void:
+	var foes := _live_foes()
+	if foes.is_empty():
+		return
+	var f0: Dictionary = foes[0]
+	var hp0 := Vector2(_core.hero_pos)
+	var dir := (Vector2(float(f0["x"]), float(f0["y"])) - hp0)
+	if dir.length() < 1.0:
+		dir = Vector2(0, -1)
+	dir = dir.normalized()
+	_ram_dmg = _ram_damage()
+	_ram_budget = 999 if _ram_shiny else 1
+	# 冲撞演出：一道土黄streak
+	_ram_streak(hp0, Vector2(float(f0["x"]), float(f0["y"])))
+	_core._apply_dmg(f0, _ram_dmg, "物理")
+	_core._push_float(float(f0["x"]), float(f0["y"]) - 46.0, "肉蛋冲击", Color(0.92, 0.80, 0.42), true)
+	var pm := 1.0 + float(_ram_mods().get("impact", 0.0)) * 0.15   # 冲击力：每点 +15% 击退距离
+	f0["_kx"] = dir.x * RAM_KNOCK * pm
+	f0["_ky"] = dir.y * RAM_KNOCK * pm
+	f0["_seg_a"] = Vector2(float(f0["x"]), float(f0["y"]))   # 扫掠起点
+	f0["_bounce_hit"] = true
+	_core.Shake_add(7.0)
+	Aud.sfx("hit_heavy", -6.0)
+
+func _ram_streak(a: Vector2, b: Vector2) -> void:
+	var r := ColorRect.new()
+	r.color = Color(0.92, 0.80, 0.42, 0.55)
+	r.size = Vector2(maxf(6.0, (b - a).length()), 10)
+	r.position = _core.position + a
+	r.pivot_offset = Vector2(0, 5)
+	r.rotation = (b - a).angle()
+	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	r.z_index = 9
+	add_child(r)
+	var tw := create_tween()
+	tw.tween_property(r, "modulate:a", 0.0, 0.30)
+	tw.tween_callback(func() -> void: r.queue_free())
+
+func _tick_knock(dt: float) -> void:
+	if _core == null:
+		return
+	for f_v in _core.foes:
+		var f: Dictionary = f_v
+		var kx := float(f.get("_kx", 0.0))
+		var ky := float(f.get("_ky", 0.0))
+		if kx == 0.0 and ky == 0.0:
+			continue
+		if float(f.get("hp", 0.0)) <= 0.0:
+			f["_kx"] = 0.0
+			f["_ky"] = 0.0
+			continue
+		var px := float(f["x"]) + kx * dt
+		var py := float(f["y"]) + ky * dt
+		# 撞墙 → 反弹一次后停（撞墙不算消耗预算）
+		if px < WALL_X0 or px > WALL_X1:
+			kx = -kx * 0.6
+			px = clampf(px, WALL_X0, WALL_X1)
+		if py < WALL_Y0 or py > WALL_Y1:
+			ky = -ky * 0.6
+			py = clampf(py, WALL_Y0, WALL_Y1)
+		f["x"] = px
+		f["y"] = py
+		# 衰减
+		kx *= 0.955
+		ky *= 0.955
+		if absf(kx) < 6.0 and absf(ky) < 6.0:
+			kx = 0.0
+			ky = 0.0
+		f["_kx"] = kx
+		f["_ky"] = ky
+		# 撞到别的怪 → 连锁
+		if _ram_budget <= 0:
+			continue
+		var seg_a: Vector2 = f.get("_seg_a", Vector2(float(f["x"]), float(f["y"])))
+		var seg_b := Vector2(px, py)
+		f["_seg_a"] = seg_b
+		var reach := RAM_HIT_R + _ram_radius_bonus()
+		for o_v in _core.foes:
+			var o: Dictionary = o_v
+			if o == f or float(o.get("hp", 0.0)) <= 0.0 or bool(o.get("_bounce_hit", false)):
+				continue
+			if _dist_point_seg(Vector2(float(o["x"]), float(o["y"])), seg_a, seg_b) > reach:
+				continue
+			_ram_budget -= 1
+			o["_bounce_hit"] = true
+			_core._apply_dmg(o, _ram_dmg, "物理")
+			_core._push_float(float(o["x"]), float(o["y"]) - 40.0, "反弹", Color(0.92, 0.80, 0.42))
+			var d := (Vector2(float(o["x"]), float(o["y"])) - Vector2(px, py))
+			if d.length() < 1.0:
+				d = Vector2(0, -1)
+			d = d.normalized()
+			var sp := float(_ram_mods().get("stun_s", 0.0))
+			o["para"] = maxf(float(o.get("para", 0.0)), sp if sp > 0.0 else 0.0)
+			if _ram_shiny or _ram_mods().get("stun_s", 0.0) != 0.0:
+				var pm2 := 1.0 + float(_ram_mods().get("impact", 0.0)) * 0.15
+				o["_kx"] = d.x * RAM_KNOCK * pm2
+				o["_ky"] = d.y * RAM_KNOCK * pm2
+			# 滚山：每次反弹 → 气血上限固定 +8（占位，炫卡实装后打开）
+			if _ram_shiny:
+				_core.hero["hp_max"] = float(_core.hero["hp_max"]) + 8.0
+				_core.hero["hp"] = float(_core.hero["hp"]) + 8.0
+			break
+
+func _ram_radius_bonus() -> float:
+	return float(_ram_mods().get("radius_add", 0.0))
+
+# 点到线段的距离（用于"撞飞路径扫过谁"）
+func _dist_point_seg(p: Vector2, a: Vector2, b: Vector2) -> float:
+	var ab := b - a
+	var l2 := ab.length_squared()
+	if l2 < 0.0001:
+		return p.distance_to(a)
+	var t := clampf((p - a).dot(ab) / l2, 0.0, 1.0)
+	return p.distance_to(a + ab * t)
+
+# ---------------- 滚山（滚地龙炫卡） ----------------
+#   每个被撞的敌人都能各弹一次 → 理论上无限连锁
+#   每次触发反弹 → 气血上限固定 +8
+const GUNSHAN_HP := 8.0
+
+func _enable_gunshan() -> void:
+	_ram_shiny = true
+	_toast("滚山入卡组 · 每个被撞的敌人都能反弹一次，每次反弹气血上限 +8")
+	_shiny_present("gunshan")
+
+func _gunshan_grow() -> void:
+	_core.hero["hp_max"] = float(_core.hero["hp_max"]) + GUNSHAN_HP
+	_core.hero["hp"] = float(_core.hero["hp"]) + GUNSHAN_HP

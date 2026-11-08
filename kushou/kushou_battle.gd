@@ -1598,7 +1598,8 @@ func _nearest() -> Dictionary:
 # ============================================================
 var _order_pos := Vector2.ZERO        # 走位目标点（战场局部坐标）
 var _order_has_pos := false
-var _order_foe: Dictionary = {}       # 集火目标（到死为止）
+var _order_foe: Dictionary = {}       # 手动集火目标（到死为止）
+var _auto_foe: Dictionary = {}        # 自动索敌锁：盯到死才换，不左右乱打
 var _order_t := 0.0                   # 当前指令活了多久
 var _order_fx: Array = []             # 点地的扩散圈：{x, y, t}
 var _tap_t := 0.0                     # 上一次点击时间（双击判定）
@@ -1680,10 +1681,19 @@ func clear_order() -> void:
 # 取目标：**集火优先**（到死为止）；死了/没了自动回自动索敌
 func _order_target() -> Dictionary:
 	if not _order_foe.is_empty():
-		if foes.has(_order_foe) and float(_order_foe.get("dying", 0.0)) <= 0.0:
+		if foes.has(_order_foe) and float(_order_foe.get("dying", 0.0)) <= 0.0 				and float(_order_foe.get("hp", 0.0)) > 0.0:
 			return _order_foe
 		_order_foe = {}
-	return _nearest()
+	if not _auto_foe.is_empty():
+		if not foes.has(_auto_foe) 				or float(_auto_foe.get("dying", 0.0)) > 0.0 				or float(_auto_foe.get("hp", 0.0)) <= 0.0:
+			_auto_foe = {}
+		elif not zone.is_empty() and bool(zone.get("on", false)):
+			var zc := Vector2(float(zone["x"]), float(zone["y"]))
+			if Vector2(float(_auto_foe["x"]), float(_auto_foe["y"])).distance_to(zc) > float(zone["r"]):
+				_auto_foe = {}
+	if _auto_foe.is_empty():
+		_auto_foe = _nearest()
+	return _auto_foe
 
 # 点战场下指令（弹窗开着时点击被弹窗吃掉，这里收不到）
 func _gui_input(e: InputEvent) -> void:
