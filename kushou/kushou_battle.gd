@@ -116,6 +116,8 @@ signal hero_down()
 signal boss_arrived(tier: int)
 signal hero_attack()
 signal hero_hit()
+# 主角的剑真正打中某只怪（伤害/暴击/重击）；表现层只认这个信号出数字
+signal hero_foe_hit(tgt: Dictionary, dmg: float, crit: bool, heavy: bool)
 # v2n（用户："灵晶 宝物同理"）：掉落统一带上"死在哪儿"，好让外层演"掉地→飞向计数位"
 signal special(kind: String, n: int, pos: Vector2)
 
@@ -258,6 +260,11 @@ var boss_alive := false
 
 var _spawn_t := 0.6
 var _hero_cd := 0.0
+# 主角出手：先起手（表现层同步挥剑），到兵器接触点才结算伤害
+const HERO_ATTACK_TIME := 1.4
+const HERO_WINDUP := 0.18
+var _hero_pending: Dictionary = {}
+var _hero_pending_t := -1.0
 var _t := 0.0
 var _floats: Array = []
 var _hero_hit_flash := 0.0
@@ -750,6 +757,15 @@ func _process(delta: float) -> void:
 			_spawn_foe()
 			_wave_spawned += 1
 	_hero_cd -= delta
+	if _hero_pending_t > 0.0:
+		_hero_pending_t -= delta
+		if _hero_pending_t <= 0.0:
+			var ptgt: Dictionary = _hero_pending
+			_hero_pending = {}
+			if (not ptgt.is_empty() and foes.has(ptgt)
+					and float(ptgt.get("hp", 0.0)) > 0.0
+					and float(ptgt.get("dying", 0.0)) <= 0.0):
+				_hero_strike(ptgt)
 	# v13b P1：点击指令计时（走位指令到点/超时自动撤销 → 回自动战斗）
 	_order_t += delta
 	var target := _order_target()
@@ -882,7 +898,7 @@ func _process(delta: float) -> void:
 		if float(target["hp"]) <= 0.0:
 			_kill_foe(target)
 	# 出手：只在**够得着**的时候打（不再隔着半屏砍）；开场等待期间也不出手
-	if intro_wait <= 0.0 and _hero_cd <= 0.0 and not target.is_empty() and hero_pos.distance_to(tpos) <= HERO_REACH + 16.0:
+	if intro_wait <= 0.0 and _hero_cd <= 0.0 and not target.is_empty() and hero_pos.distance_to(tpos) <= HERO_REACH + 10.0:
 		var tgt := target
 		if true:
 			# 出手间隔吃"攻速提升"（技能）
@@ -890,9 +906,10 @@ func _process(delta: float) -> void:
 			var combo_aspd := 0.0
 			if float(hero.get("mech_comboaspd", 0.0)) > 0.0:
 				combo_aspd = minf(0.50, float(_combo) / 10.0 * float(hero["mech_comboaspd"]))
-			_hero_cd = 1.0 / maxf(0.2, float(hero["aspd"]) * aspd_mul() * (1.0 + combo_aspd))
+			_hero_cd = HERO_ATTACK_TIME / maxf(0.2, float(hero["aspd"]) * aspd_mul() * (1.0 + combo_aspd))
+			_hero_pending = tgt
+			_hero_pending_t = HERO_WINDUP
 			hero_attack.emit()
-			_hero_strike(tgt)
 	# 怪：往下走 / 贴上来打
 	# 连杀计时：1.4 秒内没有新击杀就归零
 	if _combo_t > 0.0:
@@ -1262,7 +1279,39 @@ func _process(delta: float) -> void:
 		fl["y"] = float(fl["y"]) - 34.0 * delta
 		if float(fl["t"]) > 0.75:
 			_floats.remove_at(j)
+	_separate_foes()
 	queue_redraw()
+
+# 怪和怪不重合：按战斗牌半径把叠在一起的推开（每帧一次，轻推）
+func _separate_foes() -> void:
+	var n := foes.size()
+	for i in range(n):
+		var a: Dictionary = foes[i]
+		if float(a.get("dying", 0.0)) > 0.0:
+			continue
+		var ra := 36.0 if bool(a.get("boss", false)) else 26.0
+		for j in range(i + 1, n):
+			var b: Dictionary = foes[j]
+			if float(b.get("dying", 0.0)) > 0.0:
+				continue
+			var rb := 36.0 if bool(b.get("boss", false)) else 26.0
+			var dx := float(b["x"]) - float(a["x"])
+			var dy := float(b["y"]) - float(a["y"])
+			var d := sqrt(dx * dx + dy * dy)
+			var min_d := ra + rb + 4.0
+			if d >= min_d:
+				continue
+			if d < 0.001:
+				dx = randf_range(-1.0, 1.0)
+				dy = randf_range(-1.0, 1.0)
+				d = maxf(0.001, sqrt(dx * dx + dy * dy))
+			var push := (min_d - d) * 0.5
+			var ux := dx / d
+			var uy := dy / d
+			a["x"] = clampf(float(a["x"]) - ux * push, 30.0, size.x - 30.0)
+			a["y"] = clampf(float(a["y"]) - uy * push, 20.0, size.y - 20.0)
+			b["x"] = clampf(float(b["x"]) + ux * push, 30.0, size.x - 30.0)
+			b["y"] = clampf(float(b["y"]) + uy * push, 20.0, size.y - 20.0)
 
 # ============================================================
 # v16a（用户："技能和大招可以做成那种延迟形 比如群攻的火雨 先是地上会出现逐渐变红的红圈
@@ -1457,6 +1506,7 @@ func _hero_strike(tgt: Dictionary) -> void:
 		var is_extra := h != tgt
 		var dmg := base * (splash_mul() if is_extra else 1.0)
 		dmg = _apply_dmg(h, dmg, DMG_PHYS)          # 基础剑法＝**物理伤害**
+		hero_foe_hit.emit(h, dmg, crit, heavy)
 		h["hp"] = float(h["hp"])                     # 减伤已在 _apply_dmg 里算过
 		h["flash"] = (0.30 if wide else (0.22 if heavy else 0.16))
 		h["kb"] = (14.0 if not crit else 24.0) * (1.6 if heavy else 1.0) * (1.5 if is_extra else 1.0)

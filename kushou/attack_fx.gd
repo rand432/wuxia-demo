@@ -21,12 +21,12 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	set_process(true)
 
-func spawn_swing(attacker: Vector2, target: Vector2, radius: float, hero: bool, heavy := false) -> void:
+func spawn_swing(attacker: Vector2, target: Vector2, radius: float, hero: bool, heavy := false, contact := false) -> void:
 	var d := target - attacker
 	var base := rad_to_deg(atan2(d.x, -d.y))
 	swings.append({
 		"a": attacker, "b": target, "r": radius, "base": base,
-		"t": 0.0, "dur": 0.34, "hero": hero, "heavy": heavy,
+		"t": 0.0, "dur": 0.34, "hero": hero, "heavy": heavy, "contact": contact,
 	})
 	queue_redraw()
 
@@ -109,24 +109,34 @@ func _draw_num(n: Dictionary) -> void:
 			Color(col.r, col.g, col.b, a))
 
 func _draw_swing(s: Dictionary) -> void:
-	var t := float(s["t"])
+	var t := float(s["t"]) + (0.18 if bool(s.get("contact", false)) else 0.0)
 	var appear := clampf(t / 0.06, 0.0, 1.0)
 	var fade := 1.0 - clampf((t - 0.20) / 0.14, 0.0, 1.0)
 	var alpha := appear * fade
 	if alpha <= 0.0:
 		return
 	var base := float(s["base"])
-	var p := clampf((t - 0.04) / 0.14, 0.0, 1.0)
-	var e := p * p * (3.0 - 2.0 * p)
-	var ang := base - 40.0 + 80.0 * e
+	var ang: float
+	var arc_end := base - 90.0
+	if t < 0.18:
+		# 起手 → 接触：到 0.18 时剑尖正对目标
+		var p := clampf((t - 0.04) / 0.14, 0.0, 1.0)
+		var e := p * p * (3.0 - 2.0 * p)
+		ang = base - 40.0 + 40.0 * e
+	else:
+		# 接触后的随势：剑再往前带 30°，弧也收一下
+		var q := clampf((t - 0.18) / 0.10, 0.0, 1.0)
+		var e2 := q * q * (3.0 - 2.0 * q)
+		ang = base + 30.0 * e2
+		arc_end = base - 90.0 + 30.0 * e2
 	var a: Vector2 = s["a"]
 	var r := float(s["r"])
 	var hilt := a + Vector2(sin(deg_to_rad(ang)), -cos(deg_to_rad(ang))) * (r + 14.0)
 	_draw_sword(hilt, ang, 58.0, alpha, bool(s["hero"]))
-	# 弧只走牌外圈：单目标 80°，半径 72
+	# 弧只走牌外圈：起手 40°，接触时剑尖对目标，随势再带到 70°
 	var ar := 72.0
 	var a0 := deg_to_rad(base - 90.0 - 40.0)
-	var a1 := deg_to_rad(base - 90.0 + 40.0)
+	var a1 := deg_to_rad(arc_end)
 	draw_arc(a, ar, a0, a1, 24, Color(GOLD.r, GOLD.g, GOLD.b, alpha * 0.80), 9.0, true)
 	draw_arc(a, ar - 4.0, a0, a1, 24, Color(INK.r, INK.g, INK.b, alpha * 0.35), 3.0, true)
 

@@ -62,6 +62,31 @@ var _lv_lb: Label = null
 var _exp_lb: Label = null
 var _exp_bar: Panel = null
 var _mate_tile = null
+
+# ============================================================
+# ---------------- 强化（v6）----------------
+#   用户："强化很简单 消耗文钱 对自身进行强化 每强化十级 卡牌三选一 获得进阶的数值奖励"
+#   · 点一次［强化］：扣文钱 → 自身 ＋攻击 / ＋气血上限 / ＋护甲
+#     ⚠ 气血按**比例**跟涨（老坑：强化一下就满血 → 见 kushou_battle.setup 的注释）
+#   · 第 10 / 20 / 30… 级：弹三选一（品阶随轮次升：良→玄→地→天），选一张，永久数值进阶
+#   · 关了没选不要紧：再点［强化］会把那一手重新打开（不重复扣钱）
+# ============================================================
+const STR_COST_BASE := 30          # 第一次强化的价钱
+const STR_COST_STEP := 12          # 每升一级贵 12（十级合计 840 文钱 ≈ 三分钟）
+const STR_PER_ATK := 1.0           # 每级：攻击 +1
+const STR_PER_HP := 10.0           # 每级：气血上限 +10
+const STR_PER_CUT := 0.003         # 每级：护甲 +0.3%
+const STR_EVERY := 10              # 每 10 级给一次三选一
+# 文钱来路：杀怪底薪 + 每波加成 + 清波奖励（不走 core 的 coin_drop 也能攒钱）
+const WEN_KILL_BASE := 12
+const WEN_KILL_WAVE := 3
+const WEN_WAVE_CLEAR := 60
+var _str_lv := 0
+var _str_round := 0
+var _str_pending := false
+var _str_layer: Control = null
+var _str_root: Control = null
+var _str_tile = null
 # v1 请神·家传卡：已请到的祖宗（aid -> 当前可收集档）／已激活的家传组合
 var _ancestors := {}
 var _ancestor_combos: Array = []
@@ -93,6 +118,8 @@ var _jpo_stacks := 0
 var _jpo_base_aspd := 1.0
 # 攻速硬上限：只防卡（1/aspd 秒一下）；数值上「剑魄」本身不封顶
 const MAX_ASPD := 5.0
+# v10 抽取功能未做 → 天品祖宗暂时封印（不进三选一）
+const SEALED := ["zl", "cuisanniang", "jicanghai"]
 var _combined: Array = []
 var _stats := {"atk": 0.0, "def": 0.0, "hp": 0.0}
 var _gold_pct := 0.0
@@ -128,7 +155,6 @@ var _foe_seq := 0
 const FIELD_POS := Vector2(8, 150)
 var _fx_back: Control = null
 var _fx_front: Control = null
-var _prev_hp := {}
 var _prev_hero_hp := -1.0
 var _hp_fill: Panel = null
 var _hero_hit_btn: Button = null
@@ -152,6 +178,7 @@ func _ready() -> void:
 	_build_toast()
 	_build_combined()
 	_build_god_pick()
+	_build_str()
 	_refresh_deck()
 	set_process(true)
 
@@ -483,12 +510,17 @@ func _build_field() -> void:
 	_core.setup({"atk": 12.0, "hp_max": 200.0, "mp_max": 100.0})
 	_core.set_wave(1)
 	_core.coin.connect(_on_core_coin)
+	_core.coin_drop.connect(_on_coin_drop)   # v6：钱怪/匪首掉的真钱
 	_core.kill.connect(_on_core_kill)
 	_core.hero_attack.connect(_on_hero_attack)
 	_core.hero_hit.connect(_on_hero_hit)
+	_core.hero_foe_hit.connect(_on_hero_foe_hit)
 	_core.hero_down.connect(func() -> void: _toast("倒下了"))
 	_core.boss_arrived.connect(func(_t: int) -> void: _toast("首领来了"))
 	_core.start_run()
+	# 旧内核的隐形宠物会偷偷咬怪（怪还没到就掉血）；这个模式先关掉宠物伤害
+	_core.set_pet_cfg({"cd": 99999.0, "dmg": 0.0})
+	_core._pet_cd = 99999.0
 	_hero_token = TokenActor.new()
 	_hero_token.setup(PLAYER_TEX, 44.0, Color(0.85, 0.66, 0.23), true)
 	_hero_token.set_role("player")
@@ -693,9 +725,10 @@ func _build_bottom() -> void:
 	_tile(24, 1020, 124, "market", "黑市", false)
 	_tile(158, 1020, 124, "treasure", "宝物", false)
 	_mate_tile = _tile(292, 1020, 124, "mate", "请神", false)
-	_tile(426, 1020, 124, "skill", "强化", true)
+	_str_tile = _tile(426, 1020, 124, "skill", "强化", false)
 	_tile(560, 1008, 136, "draw", "抽卡", true)
 	_refresh_level_ui()
+	_refresh_str_tile()
 
 func _tile(x: float, y: float, s: float, kind: String, label: String, hot: bool):
 	var t := Tile.new()
@@ -710,7 +743,7 @@ func _tile(x: float, y: float, s: float, kind: String, label: String, hot: bool)
 			"market": _toast("黑市")
 			"treasure": _toast("宝物")
 			"mate": _on_mate_tile()
-			"skill": _toast("强化")
+			"skill": _on_str_tile()
 			_: _toast(label)
 	t.pressed.connect(hit)
 	add_child(t)
@@ -723,6 +756,7 @@ class Tile extends Control:
 	var label := ""
 	var hot := false
 	var badge := 1
+	var sub := ""          # 小字（强化：Lv · 价钱）
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_STOP
 	func _draw() -> void:
@@ -755,6 +789,9 @@ class Tile extends Control:
 			draw_rect(Rect2(-16, -20, 22, 32), Color(0.93, 0.88, 0.76))
 			draw_rect(Rect2(-2, -16, 22, 32), Color(0.88, 0.69, 0.29))
 			draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		if sub != "":
+			draw_string(F, Vector2(0, size.y - 40), sub, HORIZONTAL_ALIGNMENT_CENTER, size.x, 15,
+				Color(0.86, 0.70, 0.34) if hot else Color(0.66, 0.59, 0.48))
 		draw_string(F, Vector2(0, size.y - 14), label, HORIZONTAL_ALIGNMENT_CENTER, size.x, 20 if size.x < 130 else 22, ink)
 		if hot:
 			draw_circle(Vector2(size.x - 15, 15), 11, Color(0.88, 0.69, 0.29))
@@ -1078,28 +1115,19 @@ func _process(_delta: float) -> void:
 				tk.unit_name = str(f.get("name", ""))
 				tk.visible = float(f.get("y", 0.0)) >= 90.0
 				tk.queue_redraw()
-				var fhp := float(f.get("hp", 0.0))
-				if _prev_hp.has(tid):
-					var prev_hp := float(_prev_hp[tid])
-					if fhp < prev_hp - 0.05:
-						var dmg := int(round(prev_hp - fhp))
-						_spawn_hit_fx(tk.position, tk.radius, dmg, false,
-							bool(_core._last_crit), int(_core._heavy) % 3 == 0)
-						tk.play_hit()
-				_prev_hp[tid] = fhp
 		for tid in _foe_tokens.keys():
 			if not active.has(tid):
 				var tk = _foe_tokens[tid]
 				if tk != null:
 					tk.play_down()
 				_foe_tokens.erase(tid)
-				_prev_hp.erase(tid)
 
 func _on_core_kill(n: int) -> void:
 	_kills += n
 	if _kill_lb != null:
 		_kill_lb.text = str(_kills)
 	_add_exp(20 * n)                       # v2：杀 1 只 +20 经验
+	_add_wen(WEN_KILL_BASE + WEN_KILL_WAVE * int(_core.wave))   # v6：杀怪给文钱
 	if _fentian:
 		_ft_kills += n
 		while _ft_kills >= 15:
@@ -1148,6 +1176,7 @@ func _refresh_level_ui() -> void:
 
 func _on_wave_clear(cleared_wave: int) -> void:
 	_add_exp(50)                            # v2：清一波 +50 经验
+	_add_wen(WEN_WAVE_CLEAR * cleared_wave)  # v6：清一波给一笔文钱
 	_toast("第 %d 波清空" % cleared_wave)
 
 func _on_mate_tile() -> void:
@@ -1155,6 +1184,244 @@ func _on_mate_tile() -> void:
 		_toast("升级后可请神")
 		return
 	_show_god_pick()
+
+# ============================================================
+# ---------------- 强化（v6）----------------
+# ============================================================
+func _str_cost() -> int:
+	return STR_COST_BASE + STR_COST_STEP * _str_lv
+
+func _refresh_str_tile() -> void:
+	if _str_tile == null:
+		return
+	var cost := _str_cost()
+	var s := "待选进阶" if _str_pending else "Lv %d · %d文" % [_str_lv, cost]
+	var hot := _str_pending or _wen >= cost
+	if _str_tile.sub != s or _str_tile.hot != hot:
+		_str_tile.sub = s
+		_str_tile.hot = hot
+		_str_tile.queue_redraw()
+
+# 点［强化］：扣文钱升一级；正好到 10 的倍数就开三选一
+func _on_str_tile() -> void:
+	if _str_pending:
+		_open_aug_pick()                     # 上一手还没选 → 重新打开（不重复扣钱）
+		return
+	var cost := _str_cost()
+	if _wen < cost:
+		_toast("文钱不足：强化一次要 %d" % cost)
+		return
+	_wen -= cost
+	if _coin_lb != null:
+		_coin_lb.text = str(_wen)
+	_str_lv += 1
+	_apply_str_levels(1)
+	Aud.sfx("ui_click", -6.0)
+	_str_pop("强化 +1")
+	if _str_lv % STR_EVERY == 0:
+		_str_pending = true
+		_open_aug_pick()
+	_refresh_str_tile()
+
+# 点一下的即时反馈：［强化］钮上方冒一行字，往上飘走（不用 toast，免得连点排队）
+func _str_pop(txt: String) -> void:
+	var l := Label.new()
+	l.text = txt
+	l.position = Vector2(426, 998)
+	l.size = Vector2(124, 26)
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.add_theme_font_override("font", FONT)
+	l.add_theme_font_size_override("font_size", 20)
+	l.add_theme_color_override("font_color", Color(0.95, 0.82, 0.42))
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	l.z_index = 30
+	add_child(l)
+	var tw := create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(l, "position:y", l.position.y - 40.0, 0.62).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tw.tween_property(l, "modulate:a", 0.0, 0.62).set_delay(0.18)
+	tw.chain().tween_callback(func() -> void:
+		if is_instance_valid(l):
+			l.queue_free())
+
+# 每级的基础强化：直接写进 core.hero（血按比例涨，不白送满血）
+func _apply_str_levels(n: int) -> void:
+	if _core == null:
+		return
+	var h: Dictionary = _core.hero
+	var ratio := 1.0
+	if float(h["hp_max"]) > 0.0:
+		ratio = clampf(float(h["hp"]) / float(h["hp_max"]), 0.0, 1.0)
+	var add_atk := STR_PER_ATK * float(n)
+	var add_hp := STR_PER_HP * float(n)
+	h["atk"] = float(h["atk"]) + add_atk
+	h["cut"] = float(h.get("cut", 0.0)) + STR_PER_CUT * float(n)
+	h["hp_max"] = float(h["hp_max"]) + add_hp
+	h["hp"] = float(h["hp_max"]) * ratio
+	_stats["atk"] = float(_stats["atk"]) + add_atk
+	_stats["hp"] = float(_stats["hp"]) + add_hp
+
+# ---- 进阶三选一 ----
+#   品阶随轮次涨：第 1 轮良 · 第 2 轮玄 · 第 3 轮地 · 第 4 轮起天；数值按 1 + 0.4×(轮-1) 放大
+const AUG_POOL := [
+	{"key": "atk_pct", "name": "破军", "glyph": "攻", "v": 15, "text": "攻击 +%d%%", "desc": "刀锋更利，出手见血"},
+	{"key": "hp_pct", "name": "铁骨", "glyph": "骨", "v": 20, "text": "气血上限 +%d%%", "desc": "皮糙肉厚，扛得住"},
+	{"key": "aspd_pct", "name": "疾风", "glyph": "疾", "v": 12, "text": "攻速 +%d%%", "desc": "抢在半招之前"},
+	{"key": "crit_add", "name": "会心", "glyph": "会", "v": 8, "text": "暴击 +%d%%", "desc": "专挑要害招呼"},
+	{"key": "critdmg_add", "name": "锐意", "glyph": "锐", "v": 25, "text": "暴击伤害 +%d%%", "desc": "暴击时更疼"},
+	{"key": "cut_add", "name": "玄甲", "glyph": "甲", "v": 8, "text": "护甲 +%d%%", "desc": "只挡刀剑，不挡法术"},
+	{"key": "cutall_add", "name": "金刚", "glyph": "刚", "v": 6, "text": "全伤害减免 +%d%%", "desc": "金木水火土一概硬扛"},
+	{"key": "dodge_add", "name": "身法", "glyph": "身", "v": 6, "text": "闪避 +%d%%", "desc": "闪得开才有下一招"},
+	{"key": "dmgall_add", "name": "剑意", "glyph": "意", "v": 10, "text": "全部伤害 +%d%%", "desc": "刀、术、火、召唤一起涨"},
+	{"key": "mp_add", "name": "藏气", "glyph": "气", "v": 60, "text": "内力上限 +%d", "desc": "功法放得更勤"},
+	{"key": "gold_pct", "name": "聚财", "glyph": "财", "v": 20, "text": "文钱 +%d%%", "desc": "杀得越多，来得越多"},
+	{"key": "killheal", "name": "血战", "glyph": "血", "v": 3, "text": "击杀回血 +%d%%", "desc": "越杀越精神"},
+]
+
+func _build_str() -> void:
+	_str_layer = Control.new()
+	_str_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_str_layer.mouse_filter = Control.MOUSE_FILTER_STOP
+	_str_layer.visible = false
+	_str_layer.z_index = 42
+	add_child(_str_layer)
+	var dim := ColorRect.new()
+	dim.color = Color(0.04, 0.03, 0.02, 0.66)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	dim.gui_input.connect(func(ev: InputEvent) -> void:
+		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
+			_hide_aug_pick())
+	_str_layer.add_child(dim)
+	var ban := Panel.new()
+	ban.position = Vector2(230, 168)
+	ban.size = Vector2(260, 48)
+	var bsb := StyleBoxFlat.new()
+	bsb.bg_color = Color(0.48, 0.14, 0.10, 0.97)
+	bsb.set_corner_radius_all(5)
+	bsb.border_color = Color(0.95, 0.76, 0.36, 0.9)
+	bsb.set_border_width_all(2)
+	ban.add_theme_stylebox_override("panel", bsb)
+	_str_layer.add_child(ban)
+	_lbl("强  化", Vector2(0, 0), Vector2(260, 48), 24, Color(0.97, 0.90, 0.74), ban, HORIZONTAL_ALIGNMENT_CENTER)
+	_str_root = Control.new()
+	_str_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_str_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_str_layer.add_child(_str_root)
+
+func _open_aug_pick() -> void:
+	if _str_layer == null:
+		return
+	_str_round = maxi(1, _str_lv / STR_EVERY)
+	var mult := 1.0 + 0.4 * float(_str_round - 1)
+	var quality := clampi(1 + _str_round, 2, 5)
+	for c in _str_root.get_children():
+		c.queue_free()
+	var pool: Array = AUG_POOL.duplicate()
+	pool.shuffle()
+	var n := mini(3, pool.size())
+	var x0 := (720.0 - (float(n) * 200.0 + float(n - 1) * 20.0)) * 0.5
+	for i in n:
+		var o: Dictionary = (pool[i] as Dictionary).duplicate()
+		var val := int(round(float(o["v"]) * mult))
+		var ac := AugCard.new()
+		ac.title = str(o["name"])
+		ac.glyph = str(o["glyph"])
+		ac.effect = str(o["text"]) % val
+		ac.desc = str(o["desc"])
+		ac.quality = quality
+		ac.position = Vector2(x0 + float(i) * 220.0, 250)
+		ac.size = Vector2(200, 300)
+		ac.picked.connect(func() -> void: _pick_aug(o, val))
+		_str_root.add_child(ac)
+	var qn: String = ["良品", "玄品", "地品", "天品"][clampi(quality - 2, 0, 3)]
+	_lbl("第 %d 级 · 择一进阶（%s）" % [_str_lv, qn], Vector2(0, 224), Vector2(720, 24), 17,
+		Color(0.92, 0.88, 0.78), _str_root, HORIZONTAL_ALIGNMENT_CENTER)
+	_lbl("选一张 · 永久生效", Vector2(0, 566), Vector2(720, 24), 15,
+		Color(0.80, 0.74, 0.62), _str_root, HORIZONTAL_ALIGNMENT_CENTER)
+	_str_layer.visible = true
+	_str_layer.move_to_front()
+	Aud.sfx("ui_open", -8.0)
+
+func _hide_aug_pick() -> void:
+	if _str_layer != null:
+		_str_layer.visible = false
+
+func _pick_aug(o: Dictionary, val: int) -> void:
+	_apply_aug(str(o["key"]), float(val))
+	_str_pending = false
+	_hide_aug_pick()
+	_toast("进阶 · %s（%s）" % [str(o["name"]), str(o["text"]) % val])
+	Aud.sfx("levelup", -6.0)
+	_refresh_str_tile()
+
+func _apply_aug(key: String, val: float) -> void:
+	if _core == null:
+		return
+	var h: Dictionary = _core.hero
+	match key:
+		"atk_pct":
+			h["atk"] = float(h["atk"]) * (1.0 + val / 100.0)
+		"hp_pct":
+			var ratio := 1.0
+			if float(h["hp_max"]) > 0.0:
+				ratio = clampf(float(h["hp"]) / float(h["hp_max"]), 0.0, 1.0)
+			h["hp_max"] = float(h["hp_max"]) * (1.0 + val / 100.0)
+			h["hp"] = float(h["hp_max"]) * ratio
+		"aspd_pct":
+			h["aspd"] = minf(MAX_ASPD, float(h.get("aspd", 1.0)) * (1.0 + val / 100.0))
+		"crit_add":
+			h["crit"] = minf(1.0, float(h.get("crit", 0.05)) + val / 100.0)
+		"critdmg_add":
+			h["crit_dmg"] = float(h.get("crit_dmg", 2.0)) + val / 100.0
+		"cut_add":
+			h["cut"] = float(h.get("cut", 0.0)) + val / 100.0
+		"cutall_add":
+			h["cut_all"] = float(h.get("cut_all", 0.0)) + val / 100.0
+		"dodge_add":
+			h["dodge"] = minf(0.75, float(h.get("dodge", 0.05)) + val / 100.0)
+		"dmgall_add":
+			h["dmg_all"] = float(h.get("dmg_all", 0.0)) + val / 100.0
+		"mp_add":
+			_mp_bonus += val
+		"gold_pct":
+			_gold_pct += val
+		"killheal":
+			_core.kill_heal = float(_core.kill_heal) + val / 100.0
+
+# 进阶卡：三选一的卡面（200×300）
+class AugCard extends Control:
+	const F := preload("res://fonts/ink.ttf")
+	const QC := [Color(0.54,0.48,0.38), Color(0.31,0.48,0.29), Color(0.18,0.42,0.45), Color(0.42,0.29,0.48), Color(0.72,0.53,0.16)]
+	const QN := ["良品", "玄品", "地品", "天品"]
+	signal picked
+	var title := ""
+	var glyph := "攻"
+	var effect := ""
+	var desc := ""
+	var quality := 2
+	func _ready() -> void:
+		mouse_filter = Control.MOUSE_FILTER_STOP
+	func _draw() -> void:
+		var q := clampi(quality - 1, 0, 4)
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.96, 0.93, 0.86, 0.99)
+		sb.set_corner_radius_all(9)
+		sb.border_color = QC[q]
+		sb.set_border_width_all(6)
+		draw_style_box(sb, Rect2(Vector2.ZERO, size))
+		draw_string(F, Vector2(0, 32), QN[clampi(quality - 2, 0, 3)], HORIZONTAL_ALIGNMENT_CENTER, size.x, 15, QC[q])
+		draw_string(F, Vector2(0, 76), title, HORIZONTAL_ALIGNMENT_CENTER, size.x, 30, Color(0.14, 0.11, 0.08))
+		var c := Vector2(size.x * 0.5, 148.0)
+		draw_circle(c, 52, Color(0.93, 0.90, 0.82))
+		draw_arc(c, 52.0, 0.0, TAU, 48, QC[q], 2.0)
+		draw_string(F, c + Vector2(-16, 17), glyph, HORIZONTAL_ALIGNMENT_LEFT, -1, 46, Color(0.13, 0.12, 0.11))
+		draw_string(F, Vector2(0, 228), effect, HORIZONTAL_ALIGNMENT_CENTER, size.x, 22, Color(0.46, 0.20, 0.10))
+		draw_string(F, Vector2(10, 262), desc, HORIZONTAL_ALIGNMENT_CENTER, size.x - 20, 14, Color(0.38, 0.33, 0.26))
+		draw_string(F, Vector2(0, 288), "点击选取", HORIZONTAL_ALIGNMENT_CENTER, size.x, 14, Color(0.58, 0.50, 0.36))
+	func _gui_input(ev: InputEvent) -> void:
+		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
+			picked.emit()
 
 func _make_foe_token(f: Dictionary):
 	var kind := str(f.get("kind", "normal"))
@@ -1273,10 +1540,20 @@ func _set_progress(set_id: String) -> int:
 	return n
 
 func _on_core_coin(n: int) -> void:
-	var gain := int(round(float(n) * (1.0 + _gold_pct / 100.0)))
-	_wen += gain
+	_add_wen(n)
+
+# v6：一切文钱收入都走这里（好让［强化］的价钱灯跟着亮/灭）
+func _add_wen(raw: int) -> void:
+	if raw <= 0:
+		return
+	_wen += int(round(float(raw) * (1.0 + _gold_pct / 100.0)))
 	if _coin_lb != null:
 		_coin_lb.text = str(_wen)
+	_refresh_str_tile()
+
+# core 的 coin_drop：钱怪 / 匪首 / boss 掉的真钱（带落点，先只记账）
+func _on_coin_drop(amount: int, _pos: Vector2) -> void:
+	_add_wen(amount)
 
 func _trigger_combos(trigger: String) -> void:
 	for rec in _combined:
@@ -1553,7 +1830,9 @@ class CombinedIcon extends Control:
 func _play_attack_fx(hero_attacks: bool) -> void:
 	if _core == null or _fx_back == null or _hero_token == null:
 		return
-	var tgt: Dictionary = _core._nearest()
+	var tgt: Dictionary = _core._hero_pending
+	if not hero_attacks or tgt.is_empty():
+		tgt = _core._nearest()
 	if tgt.is_empty():
 		return
 	if hero_attacks:
@@ -1563,7 +1842,7 @@ func _play_attack_fx(hero_attacks: bool) -> void:
 		var tk = _foe_tokens.get(int(tgt.get("_tid", 0)))
 		if tk == null:
 			return
-		_fx_back.spawn_swing(tk.position - FIELD_POS, _hero_token.position - FIELD_POS, tk.radius, false)
+		_fx_back.spawn_swing(tk.position - FIELD_POS, _hero_token.position - FIELD_POS, tk.radius, false, false, true)
 
 func _spawn_hit_fx(global_pos: Vector2, radius: float, dmg: int, hero_hit: bool, crit: bool, heavy: bool) -> void:
 	if _fx_front == null:
@@ -1585,6 +1864,15 @@ func _on_hero_hit() -> void:
 	_hit_count += 1
 	_trigger_combos("每次受击")
 
+func _on_hero_foe_hit(tgt: Dictionary, dmg: float, crit: bool, heavy: bool) -> void:
+	if _fx_front == null:
+		return
+	var tk = _foe_tokens.get(int(tgt.get("_tid", 0)))
+	if tk == null:
+		return
+	_spawn_hit_fx(tk.position, tk.radius, int(round(dmg)), false, crit, heavy)
+	tk.play_hit()
+
 # ============================================================
 # v3 请神 + 技能栏（祖宗技能：各自 CD + 内力）
 # ============================================================
@@ -1597,6 +1885,12 @@ const SKILL_DEFS := {
 		"targets": 1, "col": Color(0.38, 0.62, 0.82)},
 	"jicanghai": {"name": "怒火焚身", "dtype": "火系", "mul": 1.3, "cd": 9.0, "mp": 0.0,
 		"targets": 3, "col": Color(0.88, 0.42, 0.22)},
+	"chenshi": {"name": "刺骨", "dtype": "真实", "mul": 1.4, "cd": 8.0, "mp": 90.0,
+		"targets": 1, "col": Color(0.86, 0.55, 0.62)},
+	"liuqingqing": {"name": "回春", "dtype": "木系", "mul": 1.2, "cd": 12.0, "mp": 110.0,
+		"targets": 3, "col": Color(0.42, 0.72, 0.42)},
+	"xiaoqier": {"name": "顺手", "dtype": "物理", "mul": 0.9, "cd": 5.0, "mp": 60.0,
+		"targets": 1, "col": Color(0.90, 0.84, 0.66)},
 }
 
 var _skills: Array = []
@@ -1817,10 +2111,12 @@ func _show_god_pick() -> void:
 	var cands: Array = []
 	for aid_v in AncestorData.ANCESTORS.keys():
 		var aid := str(aid_v)
+		if SEALED.has(aid):
+			continue
 		if not _ancestors.has(aid):
 			cands.append(aid)
 	if cands.is_empty():
-		_toast("本局已无可请的祖宗")
+		_toast("可请的祖宗都已上身（高品祖宗需抽取，暂未开放）")
 		return
 	cands.shuffle()
 	var n := mini(3, cands.size())
