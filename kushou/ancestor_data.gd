@@ -167,7 +167,29 @@ const ANCESTORS := {
 			"devour_text": "进卡组即吞尽全部家传卡",
 			"per_card": "灵晶 +20 · 文钱 +150 · 物理伤害 +10%"},
 	},
+	"gundilong": {
+		"name": "滚地龙", "skill": "肉蛋冲撞", "quality": 2, "dtype": "物理",
+		"art": "res://assets/items/it_armor.png",
+		"tiers": [
+			{"combo_name": "冲撞", "combo_text": "撞击伤害 +20%", "effects": {"dmg_pct": 20},
+			 "cards": [["起势", "撞击伤害 +8%"], ["蓄力", "撞击伤害 +8%"], ["顶牛", "撞击伤害 +5%"]]},
+			{"combo_name": "击退连锁", "combo_text": "撞飞的目标撞到别人再吃一次", "effects": {"chain_dmg": 30},
+			 "cards": [["撞飞", "击退 +30%"], ["抛飞", "连锁伤害 +15%"], ["压顶", "连锁伤害 +10%"]]},
+			{"combo_name": "滚稳", "combo_text": "冷却 −12% · 内力 −20", "effects": {"cd_pct": 12, "mp_flat": 20},
+			 "cards": [["滚稳", "冷却 −6%"], ["收势", "内力 −12"], ["稳住", "冷却 −6%"]]},
+			{"combo_name": "体型膨胀", "combo_text": "撞击半径 +30", "effects": {"radius_add": 30},
+			 "cards": [["涨身", "撞击半径 +15"], ["鼓胀", "撞击半径 +15"], ["巨团", "撞击半径 +20"]]},
+			{"combo_name": "铁肉", "combo_text": "物理伤害 +15%（众）", "effects": {"elem_pct": {"物理": 15}},
+			 "cards": [["铁肉", "物理伤害 +6%（众）"], ["硬撞", "物理伤害 +6%（众）"], ["蛮力", "物理技冷却 −6%"]]},
+			{"combo_name": "全垒打", "combo_text": "撞飞者弹墙弹人，撞到即眩晕", "effects": {"stun_s": 1.0},
+			 "cards": [["全垒打", "眩晕 +0.5s"], ["连撞", "眩晕 +0.5s"], ["一路平推", "连锁伤害 +20%"]]},
+		],
+		"shiny": {"name": "滚山", "self_text": "撞击伤害 +10%",
+			"devour_text": "进卡组即吞尽全部家传卡",
+			"per_card": "灵晶 +20 · 文钱 +150 · 撞击伤害 +10%"},
+	},
 }
+
 
 
 

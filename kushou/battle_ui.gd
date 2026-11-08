@@ -119,7 +119,7 @@ var _jpo_base_aspd := 1.0
 # 攻速硬上限：只防卡（1/aspd 秒一下）；数值上「剑魄」本身不封顶
 const MAX_ASPD := 5.0
 # v10 抽取功能未做 → 天品祖宗暂时封印（不进三选一）
-const SEALED := ["zl", "cuisanniang", "jicanghai"]
+const SEALED := ["zl", "cuisanniang", "jicanghai", "chenshi"]
 var _combined: Array = []
 var _stats := {"atk": 0.0, "def": 0.0, "hp": 0.0}
 var _gold_pct := 0.0
@@ -1494,7 +1494,8 @@ func _init_cards() -> void:
 	_elem_mod.clear()
 	_shiny_rolled.clear()
 	_shiny_used.clear()
-	# 家传卡由「请神」发放（_pick_god → _grant_ancestor），不再硬发
+	# 主角默认解锁：开局就把他的家传入口卡放进池（他走被动，不需要请）
+	_grant_ancestor("zhujue")
 
 # 请到一位祖宗：把它的「初级入口卡」放进抽卡池
 func _grant_ancestor(aid: String) -> void:
@@ -1891,6 +1892,8 @@ const SKILL_DEFS := {
 		"targets": 3, "col": Color(0.42, 0.72, 0.42)},
 	"xiaoqier": {"name": "顺手", "dtype": "物理", "mul": 0.9, "cd": 5.0, "mp": 60.0,
 		"targets": 1, "col": Color(0.90, 0.84, 0.66)},
+	"gundilong": {"name": "肉蛋冲撞", "dtype": "物理", "mul": 1.5, "cd": 6.0, "mp": 80.0,
+		"targets": 1, "col": Color(0.78, 0.68, 0.42)},
 }
 
 var _skills: Array = []
@@ -2011,7 +2014,7 @@ func _add_ancestor_effects(aid: String, eff: Dictionary) -> void:
 			"ignite_add": 0.0, "burn_add": 0.0}
 	var m: Dictionary = _anc_mod[aid]
 	for k in ["dmg_pct", "cd_pct", "mp_flat", "para_s", "para_amp", "life_flat", "cap_add", "wave_evo", "tgt_add",
-			"ignite_add", "burn_add"]:
+			"ignite_add", "burn_add", "chain_dmg", "radius_add", "stun_s"]:
 		if eff.has(k):
 			m[k] = float(m.get(k, 0.0)) + float(eff[k])
 	if eff.has("elem_pct"):
