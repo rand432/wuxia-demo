@@ -50,7 +50,8 @@ func _build() -> void:
 		Vector2(316, 372), Vector2(340, 44), 30, P.INK)
 	UI.label(_root, FD.qname(q) + " · 第 " + str(FD.grade_of(int(it.get("plus", 0)))) + " 阶",
 		Vector2(316, 418), Vector2(340, 28), 17, P.DIM)
-	var stat_name := {"weapon": "攻 击", "armor": "防 御", "jade": "气 血", "cloak": "速 度"}.get(slot_key, "攻 击")
+	var stat_map := {"weapon": "攻 击", "armor": "防 御", "jade": "气 血", "cloak": "速 度"}
+	var stat_name: String = str(stat_map.get(slot_key, "攻 击"))
 	UI.label(_root, str(stat_name), Vector2(316, 458), Vector2(160, 32), 20, P.INK)
 	UI.label(_root, "+" + str(int(FD.stat_of(it))), Vector2(560, 458), Vector2(88, 32), 21, P.RED, HORIZONTAL_ALIGNMENT_RIGHT)
 	UI.label(_root, "特 性", Vector2(316, 500), Vector2(160, 32), 20, P.INK)

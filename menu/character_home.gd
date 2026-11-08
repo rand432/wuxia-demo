@@ -25,7 +25,12 @@ var _cat := 0
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_build_all()
+
+func _build_all() -> void:
 	theme = UI.theme()
+	_bag_roots.clear()
+	_cats.clear()
 	UI.bg(self)
 	UI.app_bar(self, GameState.player_name, "玄品", func() -> void: UI.open_settings(self))
 	UI.page_head(self, "角 色", func() -> void:
@@ -34,7 +39,13 @@ func _ready() -> void:
 	_build_attr()
 	_build_bag()
 	UI.dock(self, "role", _on_dock)
-	_refresh()
+
+func _rebuild() -> void:
+	await get_tree().process_frame
+	for c in get_children():
+		remove_child(c)
+		c.queue_free()
+	_build_all()
 
 # ---------------- 立绘 + 四槽 ----------------
 func _build_figure() -> void:
@@ -128,7 +139,18 @@ func _on_slot(key: String) -> void:
 	if it.is_empty():
 		_show_toast("该部位还没有装备")
 		return
-	_show_toast(str(it["name"]) + " +" + str(int(it["plus"])) + " · 详情（下一步接）")
+	var dlg: Control = (load("res://menu/equip_detail.tscn") as PackedScene).instantiate()
+	add_child(dlg)
+	dlg.forge_requested.connect(_open_forge)
+	dlg.closed.connect(_rebuild)
+	dlg.open(key)
+
+func _open_forge(key: String) -> Node:
+	var fs: Control = (load("res://menu/forge_sheet.tscn") as PackedScene).instantiate()
+	add_child(fs)
+	fs.closed.connect(_rebuild)
+	fs.open(key)
+	return fs
 
 # ---------------- 属性 ----------------
 func _build_attr() -> void:
@@ -263,6 +285,3 @@ func _show_toast(t: String) -> void:
 	if seq == _toast_seq and lb != null and is_instance_valid(lb):
 		lb.queue_free()
 		_toast = null
-
-func _refresh() -> void:
-	pass

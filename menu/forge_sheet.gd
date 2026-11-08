@@ -1,0 +1,403 @@
+extends Control
+# 锻造面板：装备行 / 铁砧 / 入神槽 / 五结果 / 道具 / 花费 / 锤与收
+signal closed
+
+const UI := preload("res://shared/ui_kit.gd")
+const P := preload("res://shared/ui_pal.gd")
+const FD := preload("res://shared/forge_data.gd")
+const Audio := preload("res://shared/audio.gd")
+
+var slot_key := "weapon"
+var _panel: Control = null
+var _name_lb: Label = null
+var _crack_lb: Label = null
+var _gauge: GaugeArt = null
+var _gauge_lb: Label = null
+var _odds: OddsArt = null
+var _anvil: AnvilArt = null
+var _hammer_btn: Button = null
+var _ores_lb: Label = null
+var _item_lbs: Array = []
+var _item_roots: Array = []
+var _chip: Control = null
+var _toast: Label = null
+var _toast_seq := 0
+var _snapshot: Dictionary = {}
+var _done := false
+
+func open(key: String) -> void:
+	slot_key = key
+	theme = UI.theme()
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var dim := ColorRect.new()
+	dim.color = Color(0.078, 0.067, 0.055, 0.50)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(dim)
+	_panel = Control.new()
+	_panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(_panel)
+	_build()
+	_refresh()
+
+func _it() -> Dictionary:
+	return FD.equipped.get(slot_key, {})
+
+func _build() -> void:
+	UI.panel(_panel, Rect2(16, 96, 688, 1144), Color(0.965, 0.941, 0.894), 10, P.LINE, 2)
+	UI.label(_panel, "锻 造", Vector2(56, 126), Vector2(200, 52), 36, P.INK)
+	UI.button(_panel, "×", Rect2(628, 128, 48, 48), 26, Color(0, 0, 0, 0), P.DIM,
+		func() -> void: _close(), P.LINE, 1, 8)
+	# 装备行
+	var it0 := _it()
+	var q0 := int(it0.get("quality", 1))
+	UI.panel(_panel, Rect2(56, 214, 96, 96), Color(0.988, 0.976, 0.949), 10, P.quality(q0), 3)
+	var art0: String = str(FD.SLOT_ART.get(slot_key, "res://assets/items/it_sword.png"))
+	if ResourceLoader.exists(art0):
+		var tr0 := TextureRect.new()
+		tr0.texture = load(art0)
+		tr0.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		tr0.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		tr0.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_panel.add_child(tr0)
+		tr0.position = Vector2(66, 222)
+		tr0.size = Vector2(76, 80)
+	_anvil = AnvilArt.new()
+	_anvil.position = Vector2(40, 330)
+	_anvil.size = Vector2(640, 320)
+	_anvil.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_panel.add_child(_anvil)
+	_name_lb = UI.label(_panel, "", Vector2(176, 224), Vector2(420, 44), 34, P.INK)
+	_crack_lb = UI.label(_panel, "", Vector2(176, 274), Vector2(420, 30), 20, P.DIM)
+	# 入神槽
+	UI.label(_panel, "入 神", Vector2(56, 664), Vector2(120, 34), 22, P.DIM)
+	_gauge_lb = UI.label(_panel, "", Vector2(520, 664), Vector2(140, 34), 22, P.INK, HORIZONTAL_ALIGNMENT_RIGHT)
+	_gauge = GaugeArt.new()
+	_gauge.position = Vector2(56, 706)
+	_gauge.size = Vector2(608, 44)
+	_gauge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_panel.add_child(_gauge)
+	# 五结果
+	_odds = OddsArt.new()
+	_odds.position = Vector2(56, 786)
+	_odds.size = Vector2(608, 72)
+	_odds.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_panel.add_child(_odds)
+	# 道具
+	UI.label(_panel, "锻 炉 道 具", Vector2(56, 886), Vector2(220, 34), 22, P.DIM)
+	for i in FD.ITEM_KEYS.size():
+		var nm := str(FD.ITEM_KEYS[i])
+		var x := 56.0 + float(i) * 150.0
+		UI.panel(_panel, Rect2(x, 930, 132, 128), Color(0.957, 0.933, 0.886), 10, Color(0.804, 0.753, 0.675), 1)
+		var art: String = str(FD.ITEM_ICON.get(nm, ""))
+		if art != "" and ResourceLoader.exists(art):
+			var tr := TextureRect.new()
+			tr.texture = load(art)
+			tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			_panel.add_child(tr)
+			tr.position = Vector2(x + 32, 940)
+			tr.size = Vector2(68, 72)
+		var cnt := UI.label(_panel, "×0", Vector2(x, 1016), Vector2(132, 30), 18, P.DIM, HORIZONTAL_ALIGNMENT_CENTER)
+		_item_lbs.append(cnt)
+		var hit := Button.new()
+		hit.flat = true
+		hit.focus_mode = Control.FOCUS_NONE
+		hit.position = Vector2(x, 930)
+		hit.size = Vector2(132, 128)
+		for st in ["normal", "hover", "pressed"]:
+			hit.add_theme_stylebox_override(st, StyleBoxEmpty.new())
+		hit.pressed.connect(func() -> void: _open_item(nm))
+		_panel.add_child(hit)
+		_item_roots.append(hit)
+	# 花费 + 按钮
+	_ores_lb = UI.label(_panel, "", Vector2(56, 1086), Vector2(360, 34), 22, P.INK)
+	UI.label(_panel, "", Vector2(430, 1086), Vector2(230, 34), 17, P.DIM, HORIZONTAL_ALIGNMENT_RIGHT)
+	UI.button(_panel, "锤 一 下", Rect2(56, 1130, 414, 78), 32, P.SEAL, Color(0.988, 0.941, 0.839),
+		func() -> void: _hammer(), P.GOLD, 3, 12)
+	_hammer_btn = _panel.get_child(_panel.get_child_count() - 1) as Button
+	UI.button(_panel, "收 下", Rect2(494, 1130, 170, 74), 26, Color(0.22, 0.18, 0.14), Color(0.94, 0.91, 0.85),
+		func() -> void: _close(), Color(0.47, 0.40, 0.31), 1, 12)
+
+func _refresh() -> void:
+	var it := _it()
+	if it.is_empty():
+		_close()
+		return
+	var st := FD.st_of(slot_key)
+	var q := int(it.get("quality", 1))
+	_name_lb.text = str(it.get("name", "装备")) + " +" + str(int(it.get("plus", 0)))
+	_crack_lb.text = "裂纹 " + str(int(st.get("crack", 0))) + "　·　" + FD.qname(q)
+	_gauge.crack = int(st.get("crack", 0))
+	_gauge.count = int(st.get("gauge", 0))
+	_gauge.trance = int(st.get("trance", 0))
+	_gauge.queue_redraw()
+	_gauge_lb.text = (str(int(st.get("trance", 0))) + " 锤") if int(st.get("trance", 0)) > 0 else (str(int(st.get("gauge", 0))) + " / 10")
+	_odds.w = FD.odds(st, str(it.get("trait", "")))
+	_odds.queue_redraw()
+	_anvil.trance = int(st.get("trance", 0)) > 0
+	_anvil.queue_redraw()
+	_ores_lb.text = "锻造石 ×" + str(FD.COST_ORE) + "　　银两 " + str(FD.COST_SILVER)
+	for i in _item_lbs.size():
+		var nm := str(FD.ITEM_KEYS[i])
+		var n := int(FD.items.get(nm, 0))
+		(_item_lbs[i] as Label).text = "×" + str(n)
+		(_item_lbs[i] as Label).add_theme_color_override("font_color", P.DIM if n > 0 else Color(0.72, 0.69, 0.65))
+	var capped := int(it.get("plus", 0)) >= FD.cap(q)
+	_hammer_btn.text = "已 满" if capped else "锤 一 下"
+	_hammer_btn.disabled = capped
+	_hammer_btn.modulate = Color(0.82, 0.80, 0.76) if capped else Color(1, 1, 1)
+	_chip_refresh(st)
+
+func _chip_refresh(st: Dictionary) -> void:
+	if _chip != null and is_instance_valid(_chip):
+		_chip.queue_free()
+		_chip = null
+	var n := int(st.get("protect", 0))
+	if n <= 0:
+		return
+	var c := UI.panel(_panel, Rect2(470, 218, 194, 40), Color(0.941, 0.886, 0.769), 20, P.GOLD, 1)
+	UI.label(c, "龙鳞 · 保护 " + str(n) + " 锤", Vector2(0, 0), Vector2(194, 40), 17, Color(0.376, 0.290, 0.157), HORIZONTAL_ALIGNMENT_CENTER)
+	_chip = c
+
+# ---------------- 锤 ----------------
+func _hammer() -> void:
+	var it := _it()
+	if it.is_empty():
+		return
+	if int(it.get("plus", 0)) >= FD.cap(int(it.get("quality", 1))):
+		return
+	if FD.ores < FD.COST_ORE or FD.silver < FD.COST_SILVER:
+		_show_toast("材料不够")
+		return
+	_snapshot = {"plus": int(it.get("plus", 0)), "st": FD.st_of(slot_key).duplicate()}
+	FD.ores -= FD.COST_ORE
+	FD.silver -= FD.COST_SILVER
+	var st := FD.st_of(slot_key)
+	var was_gauge := int(st.get("gauge", 0))
+	var res := FD.roll(it)
+	var out := FD.apply(it, res)
+	Audio.sfx("hit_heavy", -8.0)
+	match res:
+		"大":
+			_show_toast("大 成 功 ！  +2")
+			Audio.sfx("ult_ready", -10.0)
+		"成":
+			_show_toast("成 功  +1")
+		"维":
+			_show_toast("维 持")
+		"损":
+			_show_toast("损 伤  −1　裂纹 +1")
+			Audio.sfx("wood_down", -12.0)
+		"破":
+			if bool(out["blocked"]):
+				_show_toast("龙鳞挡下 —— 剑没碎")
+				Audio.sfx("arrow_block", -8.0)
+			else:
+				_on_broken()
+				return
+	if bool(out["trance"]):
+		Audio.sfx("enlighten", -4.0)
+		_show_toast("入 神")
+	_refresh()
+
+func _on_broken() -> void:
+	Audio.sfx("sword_in_ground", -6.0)
+	Audio.sfx("fall_down", -10.0)
+	FD.equipped[slot_key] = {}
+	FD.state.erase(slot_key)
+	_done = true
+	for c in _panel.get_children():
+		c.queue_free()
+	_anvil = null
+	UI.panel(_panel, Rect2(16, 96, 688, 1144), Color(0.965, 0.941, 0.894), 10, P.LINE, 2)
+	UI.label(_panel, "锻 造", Vector2(56, 126), Vector2(200, 52), 36, P.INK)
+	var anvil := AnvilArt.new()
+	anvil.position = Vector2(40, 380)
+	anvil.size = Vector2(640, 320)
+	anvil.empty = true
+	anvil.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_panel.add_child(anvil)
+	UI.label(_panel, "砧 上 无 物", Vector2(0, 330), Vector2(720, 40), 26, Color(0.588, 0.541, 0.471), HORIZONTAL_ALIGNMENT_CENTER)
+	UI.button(_panel, "关 闭", Rect2(240, 1100, 240, 78), 26, Color(0.22, 0.18, 0.14), Color(0.94, 0.91, 0.85),
+		func() -> void: _close(), Color(0.47, 0.40, 0.31), 1, 12)
+
+func _show_toast(t: String) -> void:
+	_toast_seq += 1
+	var seq := _toast_seq
+	if _toast != null and is_instance_valid(_toast):
+		_toast.queue_free()
+	var lb := UI.label(self, t, Vector2(0, 620), Vector2(720, 52), 26, P.SEAL, HORIZONTAL_ALIGNMENT_CENTER)
+	lb.z_index = 60
+	_toast = lb
+	await get_tree().create_timer(1.1).timeout
+	if seq == _toast_seq and lb != null and is_instance_valid(lb):
+		lb.queue_free()
+		_toast = null
+
+# ---------------- 道具 ----------------
+func _open_item(nm: String) -> void:
+	if _done:
+		return
+	Audio.sfx("ui_click", -8.0)
+	var n := int(FD.items.get(nm, 0))
+	var ov := Control.new()
+	ov.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	ov.z_index = 80
+	add_child(ov)
+	var dim := ColorRect.new()
+	dim.color = Color(0.06, 0.05, 0.04, 0.35)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	ov.add_child(dim)
+	UI.panel(ov, Rect2(100, 330, 520, 570), Color(0.965, 0.941, 0.894), 10, P.LINE, 2)
+	var art: String = str(FD.ITEM_ICON.get(nm, ""))
+	if art != "" and ResourceLoader.exists(art):
+		var tr := TextureRect.new()
+		tr.texture = load(art)
+		tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		ov.add_child(tr)
+		tr.position = Vector2(275, 350)
+		tr.size = Vector2(170, 170)
+	UI.label(ov, nm, Vector2(0, 540), Vector2(720, 44), 34, P.INK, HORIZONTAL_ALIGNMENT_CENTER)
+	UI.label(ov, "持 有 ×" + str(n), Vector2(0, 584), Vector2(720, 30), 18, P.DIM, HORIZONTAL_ALIGNMENT_CENTER)
+	UI.label(ov, str(FD.ITEM_DESC.get(nm, "")), Vector2(0, 632), Vector2(720, 36), 20, P.INK, HORIZONTAL_ALIGNMENT_CENTER)
+	UI.button(ov, "关 闭", Rect2(130, 790, 200, 62), 24, Color(0.22, 0.18, 0.14), Color(0.94, 0.91, 0.85),
+		func() -> void: ov.queue_free(), Color(0.47, 0.40, 0.31), 1, 10)
+	if n > 0:
+		UI.button(ov, "使 用", Rect2(390, 790, 200, 62), 24, Color(0.902, 0.698, 0.259), Color(0.188, 0.125, 0.047),
+			func() -> void: _confirm_use(nm, n, ov), Color(0.588, 0.412, 0.102), 2, 10)
+
+func _confirm_use(nm: String, n: int, parent_ov: Control) -> void:
+	var cf := Control.new()
+	cf.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	cf.z_index = 90
+	parent_ov.add_child(cf)
+	var dim := ColorRect.new()
+	dim.color = Color(0.06, 0.05, 0.04, 0.45)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	cf.add_child(dim)
+	UI.panel(cf, Rect2(140, 540, 440, 220), Color(0.965, 0.941, 0.894), 10, P.LINE, 2)
+	UI.label(cf, "使用 " + nm + " ×1 ？", Vector2(0, 576), Vector2(720, 40), 28, P.INK, HORIZONTAL_ALIGNMENT_CENTER)
+	UI.label(cf, "用掉后剩 " + str(n - 1) + " 个", Vector2(0, 618), Vector2(720, 28), 17, P.DIM, HORIZONTAL_ALIGNMENT_CENTER)
+	UI.button(cf, "取 消", Rect2(168, 668, 176, 60), 23, Color(0.22, 0.18, 0.14), Color(0.94, 0.91, 0.85),
+		func() -> void: cf.queue_free(), Color(0.47, 0.40, 0.31), 1, 10)
+	UI.button(cf, "确 定", Rect2(376, 668, 176, 60), 24, P.SEAL, Color(0.988, 0.941, 0.839),
+		func() -> void:
+			cf.queue_free()
+			parent_ov.queue_free()
+			_use_item(nm), P.GOLD, 2, 10)
+
+func _use_item(nm: String) -> void:
+	if int(FD.items.get(nm, 0)) <= 0:
+		return
+	FD.items[nm] = int(FD.items.get(nm, 0)) - 1
+	var st := FD.st_of(slot_key)
+	var it := _it()
+	match str(FD.ITEM_USE.get(nm, "")):
+		"protect":
+			st["protect"] = int(st.get("protect", 0)) + 1
+		"star":
+			var g := int(st.get("gauge", 0)) + 3
+			if g >= FD.GAUGE_MAX:
+				st["gauge"] = 0
+				st["trance"] = FD.TRANCE_HAMMERS
+				Audio.sfx("enlighten", -6.0)
+			else:
+				st["gauge"] = g
+		"oil":
+			st["oil"] = 1
+		"undo":
+			if int(it.get("plus", 0)) > 0:
+				it["plus"] = maxi(0, int(it.get("plus", 0)) - 1)
+			if st.get("last", "") != "":
+				st["last"] = ""
+	if nm == "龙鳞":
+		Audio.sfx("equip", -10.0)
+	_refresh()
+
+func _close() -> void:
+	closed.emit()
+	queue_free()
+
+# ============================================================
+class AnvilArt extends Control:
+	const P := preload("res://shared/ui_pal.gd")
+	var trance := false
+	var empty := false
+	func _draw() -> void:
+		var ox := 0.0
+		var oy := 0.0
+		if trance and not empty:
+			for i in 4:
+				draw_circle(Vector2(320 + ox, 150 + oy), 260.0 - float(i) * 42.0,
+					Color(1.0, 0.84, 0.46, 0.035 + 0.012 * float(i)))
+		var body := Color(0.204, 0.176, 0.149)
+		draw_rect(Rect2(100 + ox, 96 + oy, 384, 32), body)
+		draw_colored_polygon(PackedVector2Array([
+			Vector2(484 + ox, 96 + oy), Vector2(538 + ox, 112 + oy), Vector2(484 + ox, 128 + oy)
+		]), body)
+		draw_colored_polygon(PackedVector2Array([
+			Vector2(190 + ox, 128 + oy), Vector2(394 + ox, 128 + oy), Vector2(362 + ox, 218 + oy), Vector2(222 + ox, 218 + oy)
+		]), Color(0.180, 0.157, 0.133))
+		if empty:
+			return
+		var blade := Color(0.796, 0.675, 0.439) if not trance else Color(0.804, 0.706, 0.478)
+		draw_rect(Rect2(150 + ox, 72 + oy, 218, 20), blade)
+		draw_colored_polygon(PackedVector2Array([
+			Vector2(150 + ox, 72 + oy), Vector2(150 + ox, 92 + oy), Vector2(120 + ox, 82 + oy)
+		]), blade)
+		draw_rect(Rect2(368 + ox, 60 + oy, 12, 44), Color(0.588, 0.471, 0.235))
+		draw_rect(Rect2(380 + ox, 68 + oy, 50, 28), Color(0.361, 0.275, 0.188))
+		draw_circle(Vector2(434 + ox, 82 + oy), 10.0, Color(0.878, 0.678, 0.294))
+		if trance:
+			for i in 6:
+				var a: float = 0.35 + 0.5 * absf(sin(float(i) * 1.7))
+				draw_circle(Vector2(180.0 + float(i) * 48.0, 52.0 + float(i % 3) * 22.0), 3.0,
+					Color(1.0, 0.94, 0.72, a))
+
+class GaugeArt extends Control:
+	const P := preload("res://shared/ui_pal.gd")
+	var count := 0
+	var trance := 0
+	var crack := 0
+	func _draw() -> void:
+		var w := size.x
+		var gap := 7.0
+		var cw := (w - gap * 9.0) / 10.0
+		for i in 10:
+			var x := float(i) * (cw + gap)
+			var sb := StyleBoxFlat.new()
+			var on := i < count or trance > 0
+			sb.bg_color = Color(0.788, 0.604, 0.220) if on else Color(0.902, 0.867, 0.804)
+			sb.set_corner_radius_all(7)
+			sb.border_color = Color(0.690, 0.533, 0.227) if on else Color(0.816, 0.769, 0.690)
+			sb.set_border_width_all(2 if trance > 0 else 1)
+			draw_style_box(sb, Rect2(x, 0, cw, size.y))
+
+class OddsArt extends Control:
+	const P := preload("res://shared/ui_pal.gd")
+	var w := {"破": 0.0, "损": 0.0, "维": 0.0, "成": 0.0, "大": 0.0}
+	const NAME := {"破": "破坏", "损": "损伤", "维": "维持", "成": "成功", "大": "大成功"}
+	const COL := {
+		"破": Color(0.753, 0.224, 0.169), "损": Color(0.788, 0.541, 0.227),
+		"维": Color(0.604, 0.561, 0.502), "成": Color(0.310, 0.478, 0.290), "大": Color(0.780, 0.580, 0.220),
+	}
+	func _draw() -> void:
+		var tot := 0.0
+		for k in w:
+			tot += float(w[k])
+		if tot <= 0.0:
+			return
+		var x := 0.0
+		for k in ["破", "损", "维", "成", "大"]:
+			var seg: float = size.x * float(w[k]) / tot
+			draw_rect(Rect2(x, 0, seg, 34), COL[k])
+			x += seg
+		var lx := 0.0
+		for k in ["破", "损", "维", "成", "大"]:
+			draw_rect(Rect2(lx, 46, 12, 12), COL[k])
+			var t: String = str(NAME[k]) + " " + str(snappedf(float(w[k]), 0.1)) + "%"
+			draw_string(P.FONT, Vector2(lx + 18, 57), t, HORIZONTAL_ALIGNMENT_LEFT, -1, 17, Color(0.133, 0.129, 0.149))
+			lx += size.x / 5.0

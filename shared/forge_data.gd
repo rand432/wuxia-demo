@@ -97,7 +97,7 @@ const ITEM_KEYS := ["龙鳞", "悔恨法条", "淬火油", "星砂"]
 const ITEM_ICON := {
 	"龙鳞": "res://assets/items/it_armor.png",
 	"悔恨法条": "res://assets/items/art_spring.png",
-	"淬火油": "res://assets/items/shop_pill.png",
+	"淬火油": "res://assets/items/chest_gold.png",
 	"星砂": "res://assets/items/art_stone.png",
 }
 const ITEM_DESC := {
@@ -118,7 +118,7 @@ static func st_of(key: String) -> Dictionary:
 		state[key] = {"crack": 0, "gauge": 0, "trance": 0, "protect": 0, "last": ""}
 	return state[key]
 
-static func weights(st: Dictionary, trait: String) -> Dictionary:
+static func weights(st: Dictionary, trait_name: String) -> Dictionary:
 	var w := BASE_W.duplicate()
 	var tr := int(st.get("trance", 0))
 	w["破"] = 0.0 if tr > 0 else BREAK_PER_CRACK * float(st.get("crack", 0))
@@ -126,7 +126,7 @@ static func weights(st: Dictionary, trait: String) -> Dictionary:
 	if MODS.has(last):
 		for kk in MODS[last]:
 			w[kk] = float(w[kk]) * float(MODS[last][kk])
-	match trait:
+	match trait_name:
 		"不折":
 			w["破"] = float(w["破"]) * 0.6
 		"锋锐":
@@ -138,8 +138,8 @@ static func weights(st: Dictionary, trait: String) -> Dictionary:
 				w["大"] = float(w["大"]) * 1.3
 	return w
 
-static func odds(st: Dictionary, trait: String) -> Dictionary:
-	var w := weights(st, trait)
+static func odds(st: Dictionary, trait_name: String) -> Dictionary:
+	var w := weights(st, trait_name)
 	var tot := 0.0
 	for k in w:
 		tot += float(w[k])

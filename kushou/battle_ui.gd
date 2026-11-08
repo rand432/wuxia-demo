@@ -81,6 +81,17 @@ var _burn_unlimited := false     # 焚天：灼烧层数不衰减
 var _ignite_bonus := 0           # 引燃目标加成（三档 / 焚天吞噬）
 var _fentian := false
 var _ft_kills := 0
+# v8 回潮（成长系彩蛋）：一局一次，波数回退 5
+var _backwash_done := false
+# 主角被动：多目标 / 追击 / 剑气
+var _hero_passive := {}
+# v9 剑魄（主角炫卡）：连击同一目标涨攻速（换目标重置）+ 剑气进化万剑归宗
+var _hero_jianpo := false
+var _jpo_tid := -1
+var _jpo_stacks := 0
+var _jpo_base_aspd := 1.0
+# 攻速硬上限：只防卡（1/aspd 秒一下）；数值上「剑魄」本身不封顶
+const MAX_ASPD := 5.0
 var _combined: Array = []
 var _stats := {"atk": 0.0, "def": 0.0, "hp": 0.0}
 var _gold_pct := 0.0
@@ -1147,6 +1158,18 @@ func _init_cards() -> void:
 	var shinies: Dictionary = AncestorData.shiny_cards()
 	for sh_v in shinies.keys():
 		_card_db[sh_v] = shinies[sh_v]
+	_card_db["shiny_backwash"] = {
+		"id": "shiny_backwash", "shiny": true, "ancestor": "", "ancestor_name": "",
+		"series": "backwash", "label": "回潮", "tier": -1, "idx": 0,
+		"name": "回潮", "quality": 4, "art": "res://assets/items/chest_jade.png",
+		"own_key": "", "own_val": 0, "own_text": "攻 +4 · 防 +4 · 血 +40 · 内 +40",
+		"set_id": "", "set_size": 0, "combo_name": "", "combo_text": "",
+		"trigger": "", "combo_key": "", "combo_val": 0,
+		"entry": false, "unlock_ids": [],
+		"shiny_self": "攻 +4 · 防 +4 · 血 +40 · 内 +40",
+		"shiny_devour": "进卡组即触发：波数回退 5 波",
+		"shiny_per": ""}
+	_backwash_done = false
 	_anc_mod.clear()
 	_elem_mod.clear()
 	_shiny_rolled.clear()
@@ -1174,6 +1197,8 @@ func _activate_ancestor_set(sid: String, first: Dictionary, ids: Array) -> void:
 	_ancestor_combos.append({"ancestor": ai, "tier": t, "sources": srcs,
 		"name": str(first["combo_name"]), "text": str(first["combo_text"])})
 	_add_ancestor_effects(ai, first.get("effects", {}))
+	if ai == "zhujue":
+		_apply_hero_passive(first.get("effects", {}))
 	_toast_card(str(first["combo_name"]), int(first["quality"]),
 		"%s · %s（%d 张已清空）" % [str(first["ancestor_name"]), str(first["combo_text"]), ids.size()])
 	var nid := "%s_t%d_0" % [ai, t + 1]
@@ -1280,6 +1305,14 @@ func _activate_set(sid: String) -> void:
 	_combined.append(rec)
 	_apply_own(own_sum)
 	_toast_card(str(rec["name"]), int(rec["quality"]), "组合激活，" + str(rec["size"]) + " 张已清空")
+	# v8 成长系彩蛋：合成 攻击/防御/气血/内力 时 5% 掷「回潮」（一局一次）
+	var ser := str(first["series"])
+	if ser in ["atk", "def", "hp", "mp"] and not _backwash_done and randf() < 0.05:
+		_backwash_done = true
+		if not _pool.has("shiny_backwash") and not _acquired.has("shiny_backwash"):
+			_pool.append("shiny_backwash")
+			_toast("彩蛋！「回潮」入池 —— 刷新就能看到")
+			Aud.sfx("ult_ready", -4.0)
 	var parts := sid.split("_")
 	if parts.size() == 2:
 		var tier := int(parts[1])
@@ -1322,7 +1355,12 @@ func _apply_own(s: Dictionary) -> void:
 
 func _add_card(id: String) -> void:
 	if not _card_db.has(id): return
-	if str(id) == "shiny_cuisanniang":
+	if str(id) == "shiny_zhujue":
+		_enable_jianpo()
+	elif str(id) == "shiny_backwash":
+		_apply_own({"atk": 4.0, "def": 4.0, "hp": 40.0, "mp": 40.0, "gold_pct": 0.0, "crystal_pct": 0.0})
+		_backwash()
+	elif str(id) == "shiny_cuisanniang":
 		_enable_swallow_sea()
 	elif str(id) == "shiny_jicanghai":
 		_enable_fentian()
@@ -1461,6 +1499,7 @@ class CombinedIcon extends Control:
 
 func _on_hero_attack() -> void:
 	_attack_count += 1
+	_hero_extra_hits()                       # 主角被动：多目标 / 追击 / 剑气
 	_trigger_combos("每次攻击")
 	if _attack_count % 5 == 0:
 		_trigger_combos("每 5 次攻击")
@@ -1483,8 +1522,6 @@ const SKILL_DEFS := {
 		"targets": 1, "col": Color(0.38, 0.62, 0.82)},
 	"jicanghai": {"name": "怒火焚身", "dtype": "火系", "mul": 1.3, "cd": 9.0, "mp": 0.0,
 		"targets": 3, "col": Color(0.88, 0.42, 0.22)},
-	"zhujue": {"name": "基础剑法", "dtype": "物理", "mul": 1.0, "cd": 3.0, "mp": 0.0,
-		"targets": 1, "col": Color(0.92, 0.86, 0.70)},
 }
 
 var _skills: Array = []
@@ -1508,6 +1545,8 @@ func _build_skill_bar() -> void:
 		_skill_slots.append(s)
 
 func _tick_skills(dt: float) -> void:
+	if _core != null and float(_core.hero.get("aspd", 1.0)) > MAX_ASPD:
+		_core.hero["aspd"] = MAX_ASPD          # 硬顶：防攻速叠太高卡帧
 	var lv_mul := float(_lv - 1)
 	_mp_max = 300.0 + 25.0 * lv_mul + _mp_bonus
 	_mp = minf(_mp_max, _mp + (20.0 + 2.0 * lv_mul) * dt)
@@ -1652,10 +1691,8 @@ func _do_devour(shiny_id: String) -> void:
 	tw.tween_callback(func() -> void: flash.queue_free())
 	if _core != null:
 		_core.Shake_add(9.0)
-	Aud.sfx("coin", -6.0)
-	Aud.sfx("hit_heavy", -12.0)
+	_shiny_present("devour")
 	await get_tree().create_timer(0.12).timeout
-	Aud.sfx("drum", -5.0)
 	_toast("%s 吞了 %d 张家传 · 灵晶 +%d · 文钱 +%d · %s +%d%%" % [nm, n, crystal, wen, str(_label_skill(aid)), 10 * n])
 
 func _label_skill(aid: String) -> String:
@@ -1947,7 +1984,7 @@ func _enable_swallow_sea() -> void:
 		m["max_life"] = 999999.0
 		m["life"] = 999999.0
 	_toast("吞海入卡组 · 蛟龙永久存在，每秒 +0.4%、每 10 杀 +4% 属性")
-	Aud.sfx("ult_ready", -4.0)
+	_shiny_present("swallow_sea")
 
 # ---------------- 灼烧 / 引燃 / 焚天 ----------------
 func _live_foes() -> Array:
@@ -2015,7 +2052,7 @@ func _enable_fentian() -> void:
 	_burn_unlimited = true
 	_ft_kills = 0
 	_toast("焚天入卡组 · 灼烧无上限，每 15 杀吞一张卡、引燃 +1")
-	Aud.sfx("ult_ready", -4.0)
+	_shiny_present("fentian")
 
 func _devour_random() -> void:
 	if _cards.is_empty():
@@ -2028,3 +2065,264 @@ func _devour_random() -> void:
 	_toast("焚天吞噬「%s」· 引燃目标 +1（共 %d）" % [nm, 1 + _ignite_bonus])
 	Aud.sfx("coin", -8.0)
 	Aud.sfx("hit_heavy", -14.0)
+
+# ---------------- 回潮（成长系彩蛋） ----------------
+#   合成 攻击/防御/气血/内力 任意一套时 5% 掷；一局一次
+#   进卡组：四维立刻 +4/+4/+40/+40，波数回退 5 波（当前波清空重刷）
+func _backwash() -> void:
+	if _core == null:
+		return
+	var w := int(_core.wave)
+	var nw := maxi(1, w - 5)
+	_core.set_wave(nw)
+	_core.wave_reset_quota()
+	_last_wave = nw
+	_run_cleared = false
+	if _wave_lb != null:
+		_wave_lb.text = "波 %d/%d" % [nw, MAX_WAVE]
+	_toast("回潮 · 波数 %d → %d，重头再刷" % [w, nw])
+	_shiny_present("backwash")
+
+# ============================================================
+# 炫彩卡出场演出：四张各一套（动画 / 音效 / 音乐都不同）
+#   devour       噬雷 · 吞噬收割 —— 白闪 + 竖条冲击 + drum
+#   swallow_sea  吞海 · 养龙 —— 蓝潮从底升起 + warcry
+#   fentian      焚天 · 火 —— 橙色四边向内烧 + tension
+#   backwash     回潮 · 倒流 —— 白圆从中心扩散 + 低音钟
+# ============================================================
+func _shiny_present(kind: String) -> void:
+	# ---- 音乐（短促 stinger，1.8 秒后收掉）----
+	var music := ""
+	match kind:
+		"devour": music = "bgm_tower"
+		"swallow_sea": music = "menu_jiangnan"
+		"fentian": music = "menu_youzhou"
+		"backwash": music = "menu_wudao"
+		"jianpo": music = "menu_shushan"
+	if music != "":
+		Aud.play_bgm(music, 0.25)
+		_stop_stinger(1.8)
+	# ---- 音效 ----
+	match kind:
+		"devour":
+			Aud.sfx("coin", -6.0, 1.0)
+			Aud.sfx("hit_heavy", -10.0, 1.0)
+			Aud.sfx("drum", -4.0, 1.0)
+		"swallow_sea":
+			Aud.sfx("warcry", -6.0, 0.9)
+			Aud.sfx("rain", -14.0, 0.8)
+		"fentian":
+			Aud.sfx("tension", -6.0, 1.2)
+			Aud.sfx("hit_slash2", -10.0, 0.9)
+		"backwash":
+			Aud.sfx("bell", -6.0, 0.6)          # 低音钟
+			Aud.sfx("ink_drop", -10.0, 0.7)
+		"jianpo":
+			Aud.sfx("sword_draw", -4.0, 1.1)
+			Aud.sfx("slash_light2", -8.0, 0.95)
+	# ---- 动画 ----
+	match kind:
+		"devour":
+			_flash(Color(1.0, 0.98, 0.90), 0.85, 0.06, 0.30)
+			for i in 3:
+				_sweep_bar(Color(1.0, 0.97, 0.86, 0.55), 0.08 * float(i))
+		"swallow_sea":
+			_flash(Color(0.55, 0.78, 1.0), 0.60, 0.12, 0.45)
+			_rise_tide()
+		"fentian":
+			_flash(Color(1.0, 0.66, 0.30), 0.70, 0.10, 0.40)
+			_burn_edges()
+		"backwash":
+			_flash(Color(0.80, 0.88, 1.0), 0.50, 0.10, 0.40)
+			_ring_out()
+		"jianpo":
+			_flash(Color(0.98, 0.95, 0.80), 0.55, 0.08, 0.34)
+			_sword_rain()
+	if _core != null:
+		_core.Shake_add(6.0 if kind != "devour" else 9.0)
+
+func _stop_stinger(delay: float) -> void:
+	await get_tree().create_timer(delay).timeout
+	Aud.stop_bgm(0.6)
+
+func _flash(col: Color, a: float, t_in: float, t_out: float) -> void:
+	var r := ColorRect.new()
+	r.color = Color(col.r, col.g, col.b, 0.0)
+	r.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	r.z_index = 60
+	add_child(r)
+	var tw := create_tween()
+	tw.tween_property(r, "color:a", a, t_in)
+	tw.tween_property(r, "color:a", 0.0, t_out)
+	tw.tween_callback(func() -> void: r.queue_free())
+
+func _sweep_bar(col: Color, delay: float) -> void:
+	var r := ColorRect.new()
+	r.color = col
+	r.size = Vector2(18, 1280)
+	r.position = Vector2(-30, 0)
+	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	r.z_index = 61
+	add_child(r)
+	var tw := create_tween()
+	tw.tween_interval(delay)
+	tw.tween_property(r, "position:x", 740.0, 0.22)
+	tw.tween_property(r, "modulate:a", 0.0, 0.18)
+	tw.tween_callback(func() -> void: r.queue_free())
+
+func _rise_tide() -> void:
+	var r := ColorRect.new()
+	r.color = Color(0.45, 0.72, 0.95, 0.45)
+	r.size = Vector2(720, 0)
+	r.position = Vector2(0, 1280)
+	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	r.z_index = 61
+	add_child(r)
+	var tw := create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(r, "size:y", 1280.0, 0.40)
+	tw.tween_property(r, "position:y", 0.0, 0.40)
+	tw.chain().tween_property(r, "modulate:a", 0.0, 0.32)
+	tw.chain().tween_callback(func() -> void: r.queue_free())
+
+func _burn_edges() -> void:
+	for i in 4:
+		var r := ColorRect.new()
+		r.color = Color(0.95, 0.45, 0.18, 0.40)
+		r.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		r.z_index = 61
+		if i == 0:
+			r.size = Vector2(720, 40); r.position = Vector2(0, -40)
+		elif i == 1:
+			r.size = Vector2(720, 40); r.position = Vector2(0, 1280)
+		elif i == 2:
+			r.size = Vector2(40, 1280); r.position = Vector2(-40, 0)
+		else:
+			r.size = Vector2(40, 1280); r.position = Vector2(720, 0)
+		add_child(r)
+		var tw := create_tween()
+		tw.set_parallel(true)
+		if i == 0: tw.tween_property(r, "position:y", 560.0, 0.35)
+		elif i == 1: tw.tween_property(r, "position:y", 740.0, 0.35)
+		elif i == 2: tw.tween_property(r, "position:x", 300.0, 0.35)
+		else: tw.tween_property(r, "position:x", 380.0, 0.35)
+		tw.chain().tween_property(r, "modulate:a", 0.0, 0.30)
+		tw.chain().tween_callback(func() -> void: r.queue_free())
+
+func _ring_out() -> void:
+	var c := Control.new()
+	c.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	c.z_index = 61
+	add_child(c)
+	var r := ColorRect.new()
+	r.color = Color(0.85, 0.92, 1.0, 0.42)
+	r.size = Vector2(80, 80)
+	r.position = Vector2(320, 600)
+	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	c.add_child(r)
+	var tw := create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(r, "size", Vector2(1600, 1600), 0.45)
+	tw.tween_property(r, "position", Vector2(-440, -160), 0.45)
+	tw.tween_property(r, "modulate:a", 0.0, 0.45)
+	tw.chain().tween_callback(func() -> void: c.queue_free())
+
+# ---------------- 主角：基础剑法（被动） ----------------
+#   主角不进技能栏，他的六档全部折成普攻加成，组合一激活就直接加在英雄身上。
+#   能落地的：伤害类（dmg_pct）、物理共享（elem_pct.物理）
+#   还没接的：攻速（二档）、多打一名（三档）—— 需要改核心的普攻逻辑
+func _apply_hero_passive(eff: Dictionary) -> void:
+	if eff.is_empty() or _core == null:
+		return
+	var pct := float(eff.get("dmg_pct", 0.0))
+	var ep: Dictionary = eff.get("elem_pct", {})
+	pct += float(ep.get("物理", 0.0))
+	if pct != 0.0:
+		_core.hero["atk"] = float(_core.hero["atk"]) * (1.0 + pct / 100.0)
+	# 攻速：直接抬 hero.aspd（核心的普攻间隔就是 1/aspd）
+	if eff.has("aspd_pct"):
+		_core.hero["aspd"] = minf(MAX_ASPD, float(_core.hero.get("aspd", 1.0)) * (1.0 + float(eff["aspd_pct"]) / 100.0))
+	# 多目标 / 追击 / 剑气：记下来，普攻时结算
+	for k in ["tgt_add", "chase", "qijian"]:
+		if eff.has(k):
+			_hero_passive[k] = float(_hero_passive.get(k, 0.0)) + float(eff[k])
+	var parts: Array = []
+	if pct != 0.0: parts.append("物理 +%d%%" % int(pct))
+	if eff.has("aspd_pct"): parts.append("攻速 +%d%%" % int(eff["aspd_pct"]))
+	if eff.has("tgt_add"): parts.append("目标 +%d" % int(eff["tgt_add"]))
+	if eff.has("chase"): parts.append("追击 %d%%" % int(eff["chase"]))
+	if eff.has("qijian"): parts.append("剑气 %d%%" % int(eff["qijian"]))
+	if not parts.is_empty():
+		_toast("基础剑法 · " + " · ".join(PackedStringArray(parts)))
+	Aud.sfx("skill", -14.0)
+
+# 主角普攻的额外结算（多目标 / 追击 / 剑气）
+func _hero_extra_hits() -> void:
+	if _core == null:
+		return
+	var foes := _live_foes()
+	if foes.is_empty():
+		return
+	# v9 剑魄：连续打同一目标 → 攻速叠层；换目标立刻重置
+	if _hero_jianpo:
+		var tid := int(foes[0].get("_tid", -1))
+		if tid != _jpo_tid:
+			_jpo_tid = tid
+			_jpo_stacks = 0
+		else:
+			_jpo_stacks += 1                      # 不设上限：只靠"换目标"重置
+		_core.hero["aspd"] = minf(MAX_ASPD, _jpo_base_aspd * (1.0 + 0.06 * float(_jpo_stacks)))
+	if _hero_passive.is_empty():
+		return
+	var base := float(_core.hero.get("atk", 12.0)) * 0.8
+	var extra := int(_hero_passive.get("tgt_add", 0.0))
+	for i in mini(extra, foes.size()):
+		# 跳过最近那只（核心已经打过它），多打的从第二只开始
+		if i + 1 >= foes.size():
+			break
+		_core._apply_dmg(foes[i + 1], base * 0.7, "物理")
+	if randf() < float(_hero_passive.get("chase", 0.0)) / 100.0:
+		var f0: Dictionary = foes[0]
+		_core._apply_dmg(f0, base * 0.5, "物理")
+		_core._push_float(float(f0["x"]), float(f0["y"]) - 40.0, "追击", Color(0.95, 0.85, 0.55))
+	if randf() < float(_hero_passive.get("qijian", 0.0)) / 100.0:
+		var at := Vector2(float(foes[0]["x"]), float(foes[0]["y"]))
+		# 剑魄：剑气进化成「万剑归宗」——范围更大、伤害更狠
+		var rad := 300.0 if _hero_jianpo else 130.0
+		var mul := 2.5 if _hero_jianpo else 1.2
+		for f_v in foes:
+			var f: Dictionary = f_v
+			if (Vector2(float(f["x"]), float(f["y"])) - at).length() <= rad:
+				_core._apply_dmg(f, base * mul, "物理")
+				_core._push_float(float(f["x"]), float(f["y"]) - 44.0,
+					"万剑归宗" if _hero_jianpo else "剑气",
+					Color(0.98, 0.94, 0.74) if _hero_jianpo else Color(0.88, 0.92, 1.0), true)
+		Aud.sfx("slash_light2" if _hero_jianpo else "slash_light", -6.0 if _hero_jianpo else -8.0)
+		if _hero_jianpo and _core != null:
+			_core.Shake_add(5.0)
+
+# ---------------- 剑魄（主角炫卡） ----------------
+func _enable_jianpo() -> void:
+	_hero_jianpo = true
+	_jpo_base_aspd = float(_core.hero.get("aspd", 1.0)) if _core != null else 1.0
+	_jpo_tid = -1
+	_jpo_stacks = 0
+	_toast("剑魄入卡组 · 连击同一目标攻速递增（换目标重置）· 剑气进化为「万剑归宗」")
+	_shiny_present("jianpo")
+
+# 剑雨：一排竖剑从天而降（剑魄专属演出）
+func _sword_rain() -> void:
+	for i in 9:
+		var r := ColorRect.new()
+		r.color = Color(0.99, 0.97, 0.86, 0.75)
+		r.size = Vector2(4, 220)
+		r.position = Vector2(40.0 + float(i) * 78.0, -240.0)
+		r.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		r.z_index = 61
+		add_child(r)
+		var tw := create_tween()
+		tw.tween_interval(0.03 * float(i))
+		tw.tween_property(r, "position:y", 1280.0, 0.34)
+		tw.tween_property(r, "modulate:a", 0.0, 0.14)
+		tw.tween_callback(func() -> void: r.queue_free())
