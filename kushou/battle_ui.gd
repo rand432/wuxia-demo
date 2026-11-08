@@ -14,6 +14,7 @@ const BattleCore := preload("res://kushou/kushou_battle.gd")
 const TokenActor := preload("res://kushou/token_actor.gd")
 const CardData := preload("res://kushou/card_data.gd")
 const AncestorData := preload("res://kushou/ancestor_data.gd")
+const AttackFx := preload("res://kushou/attack_fx.gd")
 
 const INK := Color(0.13, 0.12, 0.11)
 const PAPER := Color(0.93, 0.90, 0.82)
@@ -123,6 +124,15 @@ var _draw_anim := false
 var _hero_token = null
 var _foe_tokens := {}
 var _foe_seq := 0
+# 攻击表现（P0）：后层剑/弧，前层白边淡红/伤害字；顶部血条是主角唯一血条
+const FIELD_POS := Vector2(8, 150)
+var _fx_back: Control = null
+var _fx_front: Control = null
+var _prev_hp := {}
+var _prev_hero_hp := -1.0
+var _hp_fill: Panel = null
+var _hero_hit_btn: Button = null
+var _hero_name_lb: Label = null
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -454,7 +464,7 @@ func _build_hud() -> void:
 		c.add_child(ci)
 		add_child(c)
 	_panel(Rect2(200, 92, 235, 20), Color(0.10, 0.09, 0.08, 0.35), 3)
-	_panel(Rect2(200, 92, 235 * 0.70, 20), Color(0.61, 0.16, 0.13), 3)
+	_hp_fill = _panel(Rect2(200, 92, 235 * 0.70, 20), Color(0.61, 0.16, 0.13), 3)
 	_hp_lb = _lbl("200/200", Vector2(208, 88), Vector2(120, 28), 17, Color(0.98, 0.95, 0.88))
 	_panel(Rect2(200, 118, 235, 9), Color(0.10, 0.09, 0.08, 0.22), 4)
 	_mp_bar = _panel(Rect2(200, 118, 235 * 0.35, 9), Color(0.30, 0.52, 0.72), 4)
@@ -483,10 +493,10 @@ func _build_field() -> void:
 	_hero_token.setup(PLAYER_TEX, 44.0, Color(0.85, 0.66, 0.23), true)
 	_hero_token.set_role("player")
 	_hero_token.set_weapon("sword")
-	_hero_token.show_bar = true
-	_hero_token.bar_w = 84.0
-	_hero_token.unit_name = "少侠"
-	_hero_token.position = Vector2(360, 758)
+	_hero_token.show_bar = false          # 主角血条只看顶部 HUD，不再挂漂浮血条
+	_hero_token.bar_w = 0.0
+	_hero_token.unit_name = ""
+	_hero_token.position = _core.position + _core.hero_pos
 	_hero_token.z_index = 6
 	add_child(_hero_token)
 	var hit := Button.new()
@@ -499,12 +509,32 @@ func _build_field() -> void:
 	hit.add_theme_stylebox_override("pressed", StyleBoxEmpty.new())
 	hit.pressed.connect(func(): _show_attr(true))
 	add_child(hit)
+	_hero_hit_btn = hit
+	_hero_hit_btn.position = _hero_token.position - Vector2(48, 48)
 	# 挑战方形
 	_btn("挑战", Rect2(0, 680, 96, 96), 20, Color(0.075, 0.068, 0.060, 0.98), Color(0.91, 0.78, 0.42), func(): _toggle_challenge())
 	_build_challenge()
 	_build_card_detail()
 	# v3 技能栏（右缘竖排，6 格可视）
 	_build_skill_bar()
+	# 攻击表现层：后层在牌下面（剑/弧被牌挡住），前层在牌上面（白边/淡红/数字）
+	_fx_back = AttackFx.new()
+	_fx_back.front = false
+	_fx_back.position = FIELD_POS
+	_fx_back.size = Vector2(704, 650)
+	_fx_back.z_index = 4
+	_fx_back.clip_contents = true
+	add_child(_fx_back)
+	_fx_front = AttackFx.new()
+	_fx_front.front = true
+	_fx_front.position = FIELD_POS
+	_fx_front.size = Vector2(704, 650)
+	_fx_front.z_index = 7
+	_fx_front.clip_contents = true
+	add_child(_fx_front)
+	_hero_name_lb = _lbl("少侠", _hero_token.position + Vector2(-60, 52), Vector2(120, 24),
+		18, Color(0.30, 0.24, 0.16, 0.9), self, HORIZONTAL_ALIGNMENT_CENTER)
+	_hero_name_lb.z_index = 9
 
 class SkillIcon extends Control:
 	const F := preload("res://fonts/ink.ttf")
@@ -1013,6 +1043,9 @@ func _process(_delta: float) -> void:
 				_toast("第 %d 波清空 · 本局收工" % MAX_WAVE)
 		if _hp_lb != null:
 			_hp_lb.text = "%d/%d" % [int(float(_core.hero.get("hp", 0))), int(float(_core.hero.get("hp_max", 1)))]
+		var hpr := clampf(float(_core.hero.get("hp", 0.0)) / maxf(1.0, float(_core.hero.get("hp_max", 1.0))), 0.0, 1.0)
+		if _hp_fill != null:
+			_hp_fill.size = Vector2(maxf(4.0, 235.0 * hpr), 20.0)
 		_tick_skills(_delta)
 		_tick_minions(_delta)
 		_tick_burn(_delta)
@@ -1020,6 +1053,16 @@ func _process(_delta: float) -> void:
 			_hero_token.position = _core.position + _core.hero_pos
 			_hero_token.hp_ratio = float(_core.hero.get("hp", 0.0)) / maxf(1.0, float(_core.hero.get("hp_max", 1.0)))
 			_hero_token.queue_redraw()
+			if _hero_hit_btn != null:
+				_hero_hit_btn.position = _hero_token.position - Vector2(48, 48)
+			if _hero_name_lb != null:
+				_hero_name_lb.position = _hero_token.position + Vector2(-60, 52)
+			var hhp := float(_core.hero.get("hp", 0.0))
+			if _prev_hero_hp >= 0.0 and hhp < _prev_hero_hp - 0.05:
+				_spawn_hit_fx(_hero_token.position, _hero_token.radius,
+					int(round(_prev_hero_hp - hhp)), true, false, false)
+				_hero_token.play_hit()
+			_prev_hero_hp = hhp
 		var active := {}
 		for f in _core.foes:
 			if not f.has("_tid"):
@@ -1035,12 +1078,22 @@ func _process(_delta: float) -> void:
 				tk.unit_name = str(f.get("name", ""))
 				tk.visible = float(f.get("y", 0.0)) >= 90.0
 				tk.queue_redraw()
+				var fhp := float(f.get("hp", 0.0))
+				if _prev_hp.has(tid):
+					var prev_hp := float(_prev_hp[tid])
+					if fhp < prev_hp - 0.05:
+						var dmg := int(round(prev_hp - fhp))
+						_spawn_hit_fx(tk.position, tk.radius, dmg, false,
+							bool(_core._last_crit), int(_core._heavy) % 3 == 0)
+						tk.play_hit()
+				_prev_hp[tid] = fhp
 		for tid in _foe_tokens.keys():
 			if not active.has(tid):
 				var tk = _foe_tokens[tid]
 				if tk != null:
 					tk.play_down()
 				_foe_tokens.erase(tid)
+				_prev_hp.erase(tid)
 
 func _on_core_kill(n: int) -> void:
 	_kills += n
@@ -1497,7 +1550,28 @@ class CombinedIcon extends Control:
 		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
 			pressed.emit()
 
+func _play_attack_fx(hero_attacks: bool) -> void:
+	if _core == null or _fx_back == null or _hero_token == null:
+		return
+	var tgt: Dictionary = _core._nearest()
+	if tgt.is_empty():
+		return
+	if hero_attacks:
+		var to: Vector2 = _core.position + Vector2(float(tgt["x"]), float(tgt["y"]))
+		_fx_back.spawn_swing(_hero_token.position - FIELD_POS, to - FIELD_POS, _hero_token.radius, true)
+	else:
+		var tk = _foe_tokens.get(int(tgt.get("_tid", 0)))
+		if tk == null:
+			return
+		_fx_back.spawn_swing(tk.position - FIELD_POS, _hero_token.position - FIELD_POS, tk.radius, false)
+
+func _spawn_hit_fx(global_pos: Vector2, radius: float, dmg: int, hero_hit: bool, crit: bool, heavy: bool) -> void:
+	if _fx_front == null:
+		return
+	_fx_front.spawn_hit(global_pos - FIELD_POS, radius, dmg, hero_hit, crit or heavy, heavy)
+
 func _on_hero_attack() -> void:
+	_play_attack_fx(true)
 	_attack_count += 1
 	_hero_extra_hits()                       # 主角被动：多目标 / 追击 / 剑气
 	_trigger_combos("每次攻击")
@@ -1507,6 +1581,7 @@ func _on_hero_attack() -> void:
 		_trigger_combos("每 10 次攻击")
 
 func _on_hero_hit() -> void:
+	_play_attack_fx(false)
 	_hit_count += 1
 	_trigger_combos("每次受击")
 
