@@ -11,6 +11,8 @@ const SELFS := [
 	{"key": "crystal", "label": "灵晶", "names": [["灵涌","聚灵","引灵"],["凝晶","结晶","晶脉","灵泉"],["猎晶","夺晶","碎晶","搜灵","晶猎"],["晶河","晶海","灵潮","无尽晶","通灵","不竭"]], "own": [5,8,12,16], "own_suffix": "%", "set": ["灵涌","凝晶","猎晶","晶河"], "trigger": ["每波","每 6 秒","每次击杀","每 10 次攻击"], "combo": ["灵晶 +1","灵晶 +1","灵晶 +1","灵晶 +1"], "combo_key": ["crystal_flat","crystal_flat","crystal_flat","crystal_flat"], "combo_val": [1,1,1,1]},
 	{"key": "swarm", "label": "群", "names": [["蜂拥","蚁聚","群起"],["潮涌","兽潮","云集","压境"],["蜂起","蚁附","漫野","遮天","蔽日"],["倾巢","天罗","地网","万军","不绝","如潮"]], "own": [1,1,1,1], "own_suffix": "", "set": ["蜂拥","潮涌","蜂起","倾巢"], "trigger": ["常驻","常驻","常驻","常驻"], "combo": ["每波 +2 只","每波 +4 只","每波 +6 只","每波 +10 只"], "combo_key": ["count_flat","count_flat","count_flat","count_flat"], "combo_val": [2,4,6,10], "own_keys": ["count","count","count","count"], "own_texts": ["每波怪物 +1","每波怪物 +1","每波怪物 +1","每波怪物 +1"], "combo_extra_key": ["diff_pct","diff_pct","diff_pct","diff_pct"], "combo_extra_val": [5,10,15,25], "arts": ["res://assets/items/mat_bone.png", "res://assets/items/mat_guo.png", "res://assets/items/mat_zhi.png", "res://assets/items/fate_bloodpath.png", "res://assets/items/fate_allin.png", "res://assets/items/art_shadow.png"]},
 	{"key": "peril", "label": "险", "names": [["赏金","悬红","买路"],["晶簇","灵脉","髓光","聚灵"],["遗珍","宝光","秘藏","奇珍","异宝"],["王座","霸主","无归","独尊","天柱","压顶"]], "own": [1,1,10,10], "own_suffix": "", "set": ["赏金","晶簇","遗珍","王座"], "trigger": ["常驻","常驻","常驻","常驻"], "combo": ["文钱怪 +2/波","灵晶怪 +1/波","宝物奖励 +30%","首领奖励 +50%"], "combo_key": ["coin_count","crystal_count","treasure_pct","boss_pct"], "combo_val": [2,1,30,50], "own_keys": ["coin_count","crystal_count","treasure_pct","boss_pct"], "own_texts": ["文钱怪 +1/波","灵晶怪 +1/波","宝物奖励 +10%","首领奖励 +10%"], "combo_extra_key": ["diff_pct","diff_pct","diff_pct","diff_pct"], "combo_extra_val": [5,8,12,20], "arts": ["res://assets/items/loot_silver.png", "res://assets/items/loot_exp.png", "res://assets/items/chest_gold.png", "res://assets/items/fate_greed.png", "res://assets/items/fate_venom.png", "res://assets/items/chest_dragon.png"]},
+	{"key": "bounty", "label": "财", "names": [["进账","聚沙","愈战"],["利市","点石","连战","坐地"],["日进","金窟","久战","囤积","居奇"],["万贯","通宝","长胜","不竭","通吃","富甲"]], "own": [0,0,0,0], "own_suffix": "", "set": ["进账","利市","日进","万贯"], "trigger": ["常驻","常驻","常驻","常驻"], "combo": ["随机吞噬 1 张","随机吞噬 2 张","随机吞噬 3 张","随机吞噬 5 张"], "combo_key": ["devour_n","devour_n","devour_n","devour_n"], "combo_val": [1,2,3,5], "own_matrix": [["wen_flat","crystal_flat","kill_pct"],["wen_flat","crystal_flat","kill_pct","wen_flat"],["wen_flat","crystal_flat","kill_pct","wen_flat","crystal_flat"],["wen_flat","crystal_flat","kill_pct","wen_flat","crystal_flat","wen_flat"]], "own_val_matrix": [[10,2,10],[20,4,15,10],[35,8,20,15,4],[60,15,30,20,8,30]], "own_text_matrix": [["文钱 +10","灵晶 +2","击杀收益 +10%"],["文钱 +20","灵晶 +4","击杀收益 +15%","文钱 +10"],["文钱 +35","灵晶 +8","击杀收益 +20%","文钱 +15","灵晶 +4"],["文钱 +60","灵晶 +15","击杀收益 +30%","文钱 +20","灵晶 +8","文钱 +30"]], "arts": ["res://assets/items/loot_silver.png", "res://assets/items/loot_exp.png", "res://assets/items/fate_greed.png", "res://assets/items/chest_gold.png", "res://assets/items/chest_jade.png", "res://assets/items/chest_dragon.png"]},
+	{"key": "exp", "label": "经验", "names": [["奋起","历练","磨砺"],["精进","苦修","心得","通悟"],["顿悟","破境","明心","见性","大成"],["悟道","通天","无涯","见真","圆融","圆满"]], "own": [5,8,12,16], "own_suffix": "%", "set": ["奋起","精进","顿悟","悟道"], "trigger": ["常驻","常驻","常驻","常驻"], "combo": ["杀怪数 +5%","杀怪数 +8%","杀怪数 +12%","杀怪数 +16%"], "combo_key": ["killnum_pct","killnum_pct","killnum_pct","killnum_pct"], "combo_val": [5,8,12,16], "arts": ["res://assets/items/it_book.png", "res://assets/items/it_scroll.png", "res://assets/items/art_bell.png", "res://assets/items/loot_exp.png", "res://assets/items/art_spring.png", "res://assets/items/chest_jade.png"]},
 ]
 
 static func build() -> Dictionary:
@@ -26,7 +28,11 @@ static func build() -> Dictionary:
 				var own_val := int(s["own"][tier])
 				var own_text := ""
 				var own_key := str(s["key"]) if str(s["key"]) in ["atk","def","hp","mp"] else str(s["key"]) + "_pct"
-				if s.has("own_keys"):
+				if s.has("own_matrix"):
+					own_key = str(s["own_matrix"][tier][idx])
+					own_val = int(s["own_val_matrix"][tier][idx])
+					own_text = str(s["own_text_matrix"][tier][idx])
+				elif s.has("own_keys"):
 					own_key = str(s["own_keys"][tier])
 					own_text = str(s["own_texts"][tier])
 				elif str(s["key"]) == "atk":
@@ -37,6 +43,8 @@ static func build() -> Dictionary:
 					own_text = "气血 +" + str(own_val)
 				elif str(s["key"]) == "mp":
 					own_text = "内力 +" + str(own_val)
+				elif str(s["key"]) == "exp":
+					own_text = "杀怪数 +" + str(own_val) + "%"
 				elif str(s["key"]) == "gold":
 					own_text = "金币 +" + str(own_val) + "%"
 				else:

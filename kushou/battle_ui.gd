@@ -135,6 +135,11 @@ var _coin_count_extra := 0
 var _crystal_count_extra := 0
 var _treasure_pct := 0.0
 var _boss_pct := 0.0
+# v14 财（经济线）：击杀收益加成 + 被吞噬卡（效果/进度保留）
+var _kill_pct := 0.0
+# v15 经验线：杀怪数按百分比放大（经验 + 所有按击杀成长的机制一起吃）
+var _killnum_pct := 0.0
+var _virtual_cards: Array = []
 var _last_wave := 1
 var _attack_count := 0
 var _hit_count := 0
@@ -1144,26 +1149,30 @@ func _process(_delta: float) -> void:
 				_foe_tokens.erase(tid)
 
 func _on_core_kill(n: int) -> void:
-	_kills += n
+	# v15 经验线：杀 1 只按 1+x% 只算（经验与所有按击杀成长的机制一起吃）
+	var kn := int(round(float(n) * (1.0 + _killnum_pct / 100.0)))
+	if kn < n:
+		kn = n
+	_kills += kn
 	if _kill_lb != null:
 		_kill_lb.text = str(_kills)
-	_add_exp(20 * n)                       # v2：杀 1 只 +20 经验
-	_add_wen(WEN_KILL_BASE + WEN_KILL_WAVE * int(_core.wave))   # v6：杀怪给文钱
+	_add_exp(20 * kn)                      # v2：杀 1 只 +20 经验
+	_add_wen(int(round(float(WEN_KILL_BASE + WEN_KILL_WAVE * int(_core.wave)) * (1.0 + _kill_pct / 100.0))))
 	if _qianzhi:
-		for i in n:
+		for i in kn:
 			_core.summon_minion("纸人", Color(0.95, 0.93, 0.86), 0.72, 0.5, 8.0 / 30.0, 1.0, 0.0, 99, "", "paper")
 	if _undying_lamp:
-		_lamp_kills += n
+		_lamp_kills += kn
 		while _lamp_kills >= 5:
 			_lamp_kills -= 5
 			_aura_extra_radius += 10.0
 	if _fentian:
-		_ft_kills += n
+		_ft_kills += kn
 		while _ft_kills >= 15:
 			_ft_kills -= 15
 			_devour_random()
 	if _swallow_sea:
-		_ss_kills += n
+		_ss_kills += kn
 		while _ss_kills >= 10:
 			_ss_kills -= 10
 			_ss_pct += 4.0
@@ -1649,6 +1658,10 @@ func _apply_combo(rec: Dictionary) -> void:
 			_treasure_pct += val
 		"boss_pct":
 			_boss_pct += val
+		"devour_n":
+			_devour_keep(int(val))
+		"killnum_pct":
+			_killnum_pct += val
 	# v13：组合还带一条「全局难度」
 	var ek := str(rec.get("combo_extra_key", ""))
 	if ek == "diff_pct":
@@ -1665,7 +1678,7 @@ func _check_sets() -> void:
 			var ids: Array = _set_cards[sid]
 			var all_in := true
 			for cid in ids:
-				if not _cards.has(str(cid)):
+				if not _cards.has(str(cid)) and not _virtual_cards.has(str(cid)):
 					all_in = false
 					break
 			if all_in:
@@ -1682,7 +1695,8 @@ func _activate_set(sid: String) -> void:
 		_activate_ancestor_set(sid, first, ids)
 		return
 	var own_sum := {"atk": 0.0, "def": 0.0, "hp": 0.0, "mp": 0.0, "gold_pct": 0.0, "crystal_pct": 0.0,
-		"count": 0.0, "coin_count": 0.0, "crystal_count": 0.0, "treasure_pct": 0.0, "boss_pct": 0.0}
+		"count": 0.0, "coin_count": 0.0, "crystal_count": 0.0, "treasure_pct": 0.0, "boss_pct": 0.0,
+		"wen_flat": 0.0, "crystal_flat": 0.0, "kill_pct": 0.0, "exp_pct": 0.0}
 	var srcs: Array = []
 	for cid_v in ids:
 		var cid := str(cid_v)
@@ -1692,6 +1706,7 @@ func _activate_set(sid: String) -> void:
 		if own_sum.has(k):
 			own_sum[k] = float(own_sum[k]) + float(c["own_val"])
 		_cards.erase(cid)
+		_virtual_cards.erase(cid)          # 已被吞噬的副本也要清，否则这套会永远"凑齐"
 	var rec := {"set_id": sid, "series": str(first["series"]), "tier": int(first["tier"]),
 		"name": str(first["combo_name"]), "size": int(first["set_size"]),
 		"quality": int(first["quality"]), "art": str(first["art"]),
@@ -1703,7 +1718,7 @@ func _activate_set(sid: String) -> void:
 	_combined.append(rec)
 	_apply_own(own_sum)
 	# v13：群/险 是常驻型 —— 组合完成的瞬间就生效一次（不等"每波"）
-	if str(first["combo_key"]) in ["count_flat", "coin_count", "crystal_count", "treasure_pct", "boss_pct"]:
+	if str(first["combo_key"]) in ["count_flat", "coin_count", "crystal_count", "treasure_pct", "boss_pct", "devour_n", "killnum_pct"]:
 		_apply_combo(rec)
 	_toast_card(str(rec["name"]), int(rec["quality"]), "组合激活，" + str(rec["size"]) + " 张已清空")
 	# v8 成长系彩蛋：合成 攻击/防御/气血/内力 时 5% 掷「回潮」（一局一次）
@@ -1749,6 +1764,10 @@ func _own_text(s: Dictionary) -> String:
 	if float(s.get("crystal_count", 0.0)) > 0: arr.append("灵晶怪 +" + str(int(s["crystal_count"])))
 	if float(s.get("treasure_pct", 0.0)) > 0: arr.append("宝物 +" + str(int(s["treasure_pct"])) + "%")
 	if float(s.get("boss_pct", 0.0)) > 0: arr.append("首领 +" + str(int(s["boss_pct"])) + "%")
+	if float(s.get("wen_flat", 0.0)) > 0: arr.append("文钱 +" + str(int(s["wen_flat"])))
+	if float(s.get("crystal_flat", 0.0)) > 0: arr.append("灵晶 +" + str(int(s["crystal_flat"])))
+	if float(s.get("kill_pct", 0.0)) > 0: arr.append("击杀收益 +" + str(int(s["kill_pct"])) + "%")
+	if float(s.get("exp_pct", 0.0)) > 0: arr.append("杀怪数 +" + str(int(s["exp_pct"])) + "%")
 	return " · ".join(PackedStringArray(arr))
 
 func _apply_own(s: Dictionary) -> void:
@@ -1770,6 +1789,15 @@ func _apply_own(s: Dictionary) -> void:
 		_treasure_pct += float(s["treasure_pct"])
 	if float(s.get("boss_pct", 0.0)) > 0.0:
 		_boss_pct += float(s["boss_pct"])
+	if float(s.get("wen_flat", 0.0)) > 0.0:
+		_add_wen(int(s["wen_flat"]))
+	if float(s.get("crystal_flat", 0.0)) > 0.0:
+		_crystal += int(s["crystal_flat"])
+		_update_crystal()
+	if float(s.get("kill_pct", 0.0)) > 0.0:
+		_kill_pct += float(s["kill_pct"])
+	if float(s.get("exp_pct", 0.0)) > 0.0:
+		_killnum_pct += float(s["exp_pct"])
 	_push_run_mods()
 	if _core != null:
 		_core.hero["atk"] = float(_core.hero.get("atk", 0.0)) + float(s["atk"])
@@ -3638,3 +3666,27 @@ func _grant_copy(id: String) -> void:
 			own[k] = float(c.get("own_val", 0))
 			_apply_own(own)
 	_core._push_float(_core.hero_pos.x, _core.hero_pos.y - 80.0, "复制 · " + str(c.get("name", "")), Color(0.96, 0.88, 0.55), true)
+
+# ============================================================
+# 财（经济线）：随机吞噬卡组的卡 —— 效果与进度都保留
+# ============================================================
+var _devouring := false
+
+func _devour_keep(n: int) -> void:
+	if _devouring:
+		return
+	_devouring = true
+	if _cards.is_empty():
+		_devouring = false
+		return
+	for i in n:
+		if _cards.is_empty():
+			break
+		var pick := str(_cards[randi() % _cards.size()])
+		_cards.erase(pick)
+		var c: Dictionary = _card_db.get(pick, {})
+		if c.has("ancestor"):
+			_virtual_cards.append(pick)
+		_toast("财 · 吞噬「%s」（效果保留）" % str(c.get("name", "")))
+	_refresh_deck()
+	_devouring = false
