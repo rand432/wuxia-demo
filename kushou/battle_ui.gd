@@ -85,8 +85,13 @@ var _str_lv := 0
 var _str_round := 0
 var _str_pending := false
 var _str_layer: Control = null
-var _str_root: Control = null
 var _str_tile = null
+# 进阶页（和抽卡同一套：三张卡浮在战场，不遮不暂停；只有［刷新 · 次数］和［隐藏］）
+var _aug_cards: Array = []
+var _aug_reroll := 3          # 刷新次数（开局 3 次，每进阶一轮 +1）
+var _aug_rolled_lv := -1      # 这一手是为第几级掷的（关了再点不白刷）
+var _aug_refresh_btn: Button = null
+var _str_ban_lb: Label = null
 # v1 请神·家传卡：已请到的祖宗（aid -> 当前可收集档）／已激活的家传组合
 var _ancestors := {}
 var _ancestor_combos: Array = []
@@ -895,6 +900,7 @@ func _update_crystal() -> void:
 
 func _show_draw(v: bool) -> void:
 	if v:
+		_hide_aug_pick()                     # 进阶页开着一并收掉
 		if not _draw_paid:
 			if _pool.is_empty():
 				_toast("本局卡池已空")
@@ -1258,6 +1264,7 @@ func _on_str_tile() -> void:
 	_str_pop("强化 +1")
 	if _str_lv % STR_EVERY == 0:
 		_str_pending = true
+		_aug_reroll += 1          # 每进一轮，刷新次数 +1
 		_open_aug_pick()
 	_refresh_str_tile()
 
@@ -1316,74 +1323,121 @@ const AUG_POOL := [
 	{"key": "killheal", "name": "血战", "glyph": "血", "v": 3, "text": "击杀回血 +%d%%", "desc": "越杀越精神"},
 ]
 
+# 进阶页：**照抽卡的排版**——三张卡直接浮在战场上（不遮暗、不暂停），
+#   按钮只有两个：［刷新 · N 次］（次数型，用一次少一次）和［隐藏］。
 func _build_str() -> void:
 	_str_layer = Control.new()
 	_str_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_str_layer.mouse_filter = Control.MOUSE_FILTER_STOP
+	_str_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE     # 空白处放行给战场
 	_str_layer.visible = false
-	_str_layer.z_index = 42
+	_str_layer.z_index = 21
 	add_child(_str_layer)
-	var dim := ColorRect.new()
-	dim.color = Color(0.04, 0.03, 0.02, 0.66)
-	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	dim.mouse_filter = Control.MOUSE_FILTER_STOP
-	dim.gui_input.connect(func(ev: InputEvent) -> void:
-		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
-			_hide_aug_pick())
-	_str_layer.add_child(dim)
 	var ban := Panel.new()
-	ban.position = Vector2(230, 168)
-	ban.size = Vector2(260, 48)
+	ban.position = Vector2(230, 162)
+	ban.size = Vector2(260, 42)
 	var bsb := StyleBoxFlat.new()
-	bsb.bg_color = Color(0.48, 0.14, 0.10, 0.97)
-	bsb.set_corner_radius_all(5)
+	bsb.bg_color = Color(0.54, 0.23, 0.10)
+	bsb.set_corner_radius_all(4)
 	bsb.border_color = Color(0.95, 0.76, 0.36, 0.9)
 	bsb.set_border_width_all(2)
 	ban.add_theme_stylebox_override("panel", bsb)
 	_str_layer.add_child(ban)
-	_lbl("强  化", Vector2(0, 0), Vector2(260, 48), 24, Color(0.97, 0.90, 0.74), ban, HORIZONTAL_ALIGNMENT_CENTER)
-	_str_root = Control.new()
-	_str_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_str_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_str_layer.add_child(_str_root)
+	_str_ban_lb = _lbl("进阶", Vector2(0, 0), Vector2(260, 42), 20, Color(0.97, 0.90, 0.74), ban, HORIZONTAL_ALIGNMENT_CENTER)
+	_btn("隐藏", Rect2(620, 162, 72, 32), 17, Color(0.09, 0.08, 0.07, 0.98), GOLD, func(): _hide_aug_pick(), _str_layer)
+	for i in 3:
+		var d := AugCard.new()
+		d.position = Vector2(30 + i * 220, 220)
+		d.set_meta("base", d.position)
+		d.pivot_offset = Vector2(100, 150)
+		d.size = Vector2(200, 300)
+		d.picked.connect(func() -> void: _on_aug_card(d))
+		_str_layer.add_child(d)
+		_aug_cards.append(d)
+	_aug_refresh_btn = _btn("刷新 · 0 次", Rect2(250, 540, 220, 56), 20,
+		Color(0.09, 0.08, 0.07, 0.98), GOLD, func(): _on_aug_refresh(), _str_layer)
 
 func _open_aug_pick() -> void:
 	if _str_layer == null:
 		return
+	if _draw_layer != null:
+		_draw_layer.visible = false                 # 抽卡页开着一并收掉，别叠在一起
 	_str_round = maxi(1, _str_lv / STR_EVERY)
-	var mult := 1.0 + 0.4 * float(_str_round - 1)
-	var quality := clampi(1 + _str_round, 2, 5)
-	for c in _str_root.get_children():
-		c.queue_free()
-	var pool: Array = AUG_POOL.duplicate()
-	pool.shuffle()
-	var n := mini(3, pool.size())
-	var x0 := (720.0 - (float(n) * 200.0 + float(n - 1) * 20.0)) * 0.5
-	for i in n:
-		var o: Dictionary = (pool[i] as Dictionary).duplicate()
-		var val := int(round(float(o["v"]) * mult))
-		var ac := AugCard.new()
-		ac.title = str(o["name"])
-		ac.glyph = str(o["glyph"])
-		ac.effect = str(o["text"]) % val
-		ac.desc = str(o["desc"])
-		ac.quality = quality
-		ac.position = Vector2(x0 + float(i) * 220.0, 250)
-		ac.size = Vector2(200, 300)
-		ac.picked.connect(func() -> void: _pick_aug(o, val))
-		_str_root.add_child(ac)
-	var qn: String = ["良品", "玄品", "地品", "天品"][clampi(quality - 2, 0, 3)]
-	_lbl("第 %d 级 · 择一进阶（%s）" % [_str_lv, qn], Vector2(0, 224), Vector2(720, 24), 17,
-		Color(0.92, 0.88, 0.78), _str_root, HORIZONTAL_ALIGNMENT_CENTER)
-	_lbl("选一张 · 永久生效", Vector2(0, 566), Vector2(720, 24), 15,
-		Color(0.80, 0.74, 0.62), _str_root, HORIZONTAL_ALIGNMENT_CENTER)
+	# 同一手只掷一次：点［隐藏］关了再点［强化］，看到的是同一手（不能白刷）
+	if _aug_rolled_lv != _str_lv:
+		_aug_rolled_lv = _str_lv
+		_roll_aug()
+	if _str_ban_lb != null:
+		_str_ban_lb.text = "进阶 · 第 %d 级" % _str_lv
 	_str_layer.visible = true
 	_str_layer.move_to_front()
+	_pop_aug_cards()
 	Aud.sfx("ui_open", -8.0)
+
+# 掷三张：品阶随轮次升（良→玄→地→天），数值 ×(1+0.4×(轮-1))
+func _roll_aug() -> void:
+	var r := maxi(1, _str_round)
+	var mult := 1.0 + 0.4 * float(r - 1)
+	var quality := clampi(1 + r, 2, 5)
+	var pool: Array = AUG_POOL.duplicate()
+	pool.shuffle()
+	for i in _aug_cards.size():
+		var ac: AugCard = _aug_cards[i]
+		if i < pool.size():
+			var o: Dictionary = (pool[i] as Dictionary).duplicate()
+			ac.o = o
+			ac.oval = int(round(float(o["v"]) * mult))
+			ac.title = str(o["name"])
+			ac.glyph = str(o["glyph"])
+			ac.effect = str(o["text"]) % int(ac.oval)
+			ac.desc = str(o["desc"])
+			ac.quality = quality
+			ac.visible = true
+			ac.mouse_filter = Control.MOUSE_FILTER_STOP
+		else:
+			ac.visible = false
+		ac.queue_redraw()
+	_refresh_aug_btn()
+
+func _refresh_aug_btn() -> void:
+	if _aug_refresh_btn != null:
+		_aug_refresh_btn.text = "刷新 · %d 次" % maxi(0, _aug_reroll)
+
+# 刷新：次数型（不花文钱，但用一次少一次）
+func _on_aug_refresh() -> void:
+	if _str_layer == null or not _str_layer.visible:
+		return
+	if _aug_reroll <= 0:
+		_toast("刷新次数用完了")
+		return
+	_aug_reroll -= 1
+	_roll_aug()
+	_pop_aug_cards()
+	Aud.sfx("ui_click", -8.0)
+
+# 三张卡一起弹出来（跟抽卡一样的手感）
+func _pop_aug_cards() -> void:
+	for i in _aug_cards.size():
+		var card: AugCard = _aug_cards[i]
+		var base: Vector2 = card.get_meta("base", Vector2(30 + i * 220, 220))
+		card.visible = true
+		card.position = base + Vector2(0, 70)
+		card.scale = Vector2(0.82, 0.82)
+		card.modulate.a = 0.0
+		card.mouse_filter = Control.MOUSE_FILTER_STOP
+		var tw := create_tween()
+		tw.set_parallel(true)
+		tw.tween_property(card, "position", base, 0.24).set_delay(i * 0.055).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+		tw.tween_property(card, "scale", Vector2.ONE, 0.24).set_delay(i * 0.055)
+		tw.tween_property(card, "modulate:a", 1.0, 0.18).set_delay(i * 0.055)
 
 func _hide_aug_pick() -> void:
 	if _str_layer != null:
 		_str_layer.visible = false
+
+func _on_aug_card(card: AugCard) -> void:
+	if card == null or card.o.is_empty():
+		return
+	_pick_aug(card.o, int(card.oval))
 
 func _pick_aug(o: Dictionary, val: int) -> void:
 	_apply_aug(str(o["key"]), float(val))
@@ -1438,6 +1492,8 @@ class AugCard extends Control:
 	var effect := ""
 	var desc := ""
 	var quality := 2
+	var o: Dictionary = {}      # 这一张掷到哪条进阶
+	var oval := 0               # 放大后的数值
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_STOP
 	func _draw() -> void:
@@ -1448,15 +1504,19 @@ class AugCard extends Control:
 		sb.border_color = QC[q]
 		sb.set_border_width_all(6)
 		draw_style_box(sb, Rect2(Vector2.ZERO, size))
-		draw_string(F, Vector2(0, 32), QN[clampi(quality - 2, 0, 3)], HORIZONTAL_ALIGNMENT_CENTER, size.x, 15, QC[q])
-		draw_string(F, Vector2(0, 76), title, HORIZONTAL_ALIGNMENT_CENTER, size.x, 30, Color(0.14, 0.11, 0.08))
-		var c := Vector2(size.x * 0.5, 148.0)
-		draw_circle(c, 52, Color(0.93, 0.90, 0.82))
-		draw_arc(c, 52.0, 0.0, TAU, 48, QC[q], 2.0)
-		draw_string(F, c + Vector2(-16, 17), glyph, HORIZONTAL_ALIGNMENT_LEFT, -1, 46, Color(0.13, 0.12, 0.11))
-		draw_string(F, Vector2(0, 228), effect, HORIZONTAL_ALIGNMENT_CENTER, size.x, 22, Color(0.46, 0.20, 0.10))
+		# 右上角品阶印（和抽卡卡面的"标题在最上"对齐，不抢标题的位置）
+		var tp := Vector2(size.x - 62, 14)
+		draw_rect(Rect2(tp, Vector2(48, 22)), QC[q])
+		draw_string(F, tp + Vector2(0, 16), QN[clampi(quality - 2, 0, 3)],
+			HORIZONTAL_ALIGNMENT_CENTER, 48, 13, Color(0.98, 0.96, 0.90))
+		draw_string(F, Vector2(0, 52), title, HORIZONTAL_ALIGNMENT_CENTER, size.x, 28, Color(0.14, 0.11, 0.08))
+		var c := Vector2(size.x * 0.5, 150.0)
+		draw_circle(c, 50, Color(0.93, 0.90, 0.82))
+		draw_arc(c, 50.0, 0.0, TAU, 48, QC[q], 2.0)
+		draw_string(F, c + Vector2(-15, 16), glyph, HORIZONTAL_ALIGNMENT_LEFT, -1, 44, Color(0.13, 0.12, 0.11))
+		draw_string(F, Vector2(0, 232), effect, HORIZONTAL_ALIGNMENT_CENTER, size.x, 22, Color(0.46, 0.20, 0.10))
 		draw_string(F, Vector2(10, 262), desc, HORIZONTAL_ALIGNMENT_CENTER, size.x - 20, 14, Color(0.38, 0.33, 0.26))
-		draw_string(F, Vector2(0, 288), "点击选取", HORIZONTAL_ALIGNMENT_CENTER, size.x, 14, Color(0.58, 0.50, 0.36))
+		draw_string(F, Vector2(0, 284), "点击选取", HORIZONTAL_ALIGNMENT_CENTER, size.x, 14, Color(0.58, 0.50, 0.36))
 	func _gui_input(ev: InputEvent) -> void:
 		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
 			picked.emit()
