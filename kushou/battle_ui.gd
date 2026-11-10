@@ -44,7 +44,12 @@ var _detail_pips: Array = []
 var _deck_count_lb: Label
 var _attr_layer: Control
 var _attr_val_lbs: Array = []
-var _attr_bond_lb: Label = null
+# 总计页：顶部分类钮（卡组 / 宝物 / 组合）
+var _tot_tabs: Array = []
+var _tot_keys: Array = ["deck", "bond", "combo"]
+var _tot_tab := "deck"
+var _tot_deck_root: Control = null
+var _tot_bond_root: Control = null
 var _exit_layer: Control
 var _toast_lb: RichTextLabel
 var _toast_seq := 0
@@ -1017,7 +1022,7 @@ func _build_attr() -> void:
 	add_child(_attr_layer)
 	var p := Panel.new()
 	p.position = Vector2(50, 300)
-	p.size = Vector2(620, 334)
+	p.size = Vector2(620, 240)
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(0.95, 0.92, 0.85)
 	sb.set_corner_radius_all(6)
@@ -1034,16 +1039,7 @@ func _build_attr() -> void:
 		_attr_val_lbs.append(_lbl("-", Vector2(140, y), Vector2(120, 30), 21, INK, p, HORIZONTAL_ALIGNMENT_RIGHT))
 		_lbl(names[r * 2 + 1], Vector2(330, y), Vector2(110, 30), 19, DIM, p)
 		_attr_val_lbs.append(_lbl("-", Vector2(440, y), Vector2(120, 30), 21, INK, p, HORIZONTAL_ALIGNMENT_RIGHT))
-	var line := ColorRect.new()
-	line.position = Vector2(26, 202)
-	line.size = Vector2(568, 1)
-	line.color = Color(0.42, 0.34, 0.24, 0.35)
-	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	p.add_child(line)
-	_lbl("羁 绊", Vector2(26, 212), Vector2(200, 26), 18, Color(0.54, 0.35, 0.12), p)
-	_lbl("凑齐 3 个已合成的组合即成，成即消耗", Vector2(104, 216), Vector2(490, 22), 14, DIM, p)
-	_attr_bond_lb = _lbl("", Vector2(26, 244), Vector2(568, 80), 15, INK, p)
-	_attr_bond_lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_lbl("羁绊与卡组看顶栏［总计］", Vector2(30, 206), Vector2(500, 24), 15, DIM, p)
 	_btn("×", Rect2(566, 8, 44, 36), 22, Color(0.95, 0.92, 0.85), DIM, func(): _show_attr(false), p)
 
 func _show_attr(v: bool) -> void:
@@ -1052,7 +1048,6 @@ func _show_attr(v: bool) -> void:
 	if v:
 		_attr_layer.move_to_front()
 		_refresh_attr_values()
-		_refresh_attr_bonds()
 
 # 属性表：直接从 core.hero 读（不再写死数字）
 func _refresh_attr_values() -> void:
@@ -1073,28 +1068,6 @@ func _refresh_attr_values() -> void:
 		if i < _attr_val_lbs.size():
 			(_attr_val_lbs[i] as Label).text = str(vals[i])
 
-# 羁绊清单：进度 + 还缺哪个组合
-func _refresh_attr_bonds() -> void:
-	if _attr_bond_lb == null:
-		return
-	if _bonds.is_empty():
-		_attr_bond_lb.text = "（无）凑齐组合即可结成羁绊"
-		return
-	var lines: Array = []
-	for b_v in _bonds:
-		var b: Dictionary = b_v
-		var need: Array = b["need"]
-		var miss: Array = []
-		for nm_v in need:
-			if not _combo_has(str(nm_v)):
-				miss.append(str(nm_v))
-		if miss.is_empty():
-			lines.append("%s　%d/%d　已成" % [str(b["name"]), _bond_prog(b), need.size()])
-		else:
-			lines.append("%s　%d/%d　缺 %s" % [str(b["name"]), _bond_prog(b), need.size(),
-				"·".join(PackedStringArray(miss))])
-	_attr_bond_lb.text = "
-".join(PackedStringArray(lines))
 
 # ---------------- 退出 ----------------
 func _build_exit() -> void:
@@ -1749,7 +1722,8 @@ func _bond_check() -> void:
 			changed = true
 	if changed:
 		_refresh_trea_tile()
-		_refresh_attr_bonds()
+		if _combined_layer != null and _combined_layer.visible and _tot_tab == "bond":
+			_refresh_tot_bond()
 
 # 刷新：次数型
 func _on_trea_refresh() -> void:
@@ -1775,12 +1749,91 @@ func _on_trea_abandon() -> void:
 	_toast("放弃宝物 · 刷新 +1（现有 %d 次）" % _trea_reroll)
 	Aud.sfx("ui_back", -8.0)
 
+# 顶栏［总计］：打开总计页（顶部三个分类钮：卡组 / 宝物 / 组合）
 func _show_totals() -> void:
-	var atk := 0.0
+	if _combined_layer == null:
+		return
+	_combined_layer.visible = true
+	_combined_layer.move_to_front()
+	_set_tot_tab(_tot_tab)
+
+func _set_tot_tab(k: String) -> void:
+	_tot_tab = k
+	for i in _tot_tabs.size():
+		var b: Button = _tot_tabs[i]
+		var on := str(_tot_keys[i]) == k
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.48, 0.14, 0.10, 0.96) if on else Color(0.93, 0.90, 0.82, 0.98)
+		sb.set_corner_radius_all(6)
+		sb.border_color = Color(0.95, 0.76, 0.36, 0.95) if on else Color(0.55, 0.45, 0.30, 0.55)
+		sb.set_border_width_all(2)
+		b.add_theme_stylebox_override("normal", sb)
+		b.add_theme_stylebox_override("hover", sb)
+		b.add_theme_stylebox_override("pressed", sb)
+		b.add_theme_color_override("font_color", Color(0.97, 0.90, 0.74) if on else Color(0.40, 0.33, 0.24))
+		b.add_theme_color_override("font_hover_color", Color(0.97, 0.90, 0.74) if on else Color(0.24, 0.18, 0.10))
+	if _tot_deck_root == null:
+		return
+	_tot_deck_root.visible = k == "deck"
+	_tot_bond_root.visible = k == "bond"
+	_combined_icons.visible = k == "combo"
+	if k == "deck":
+		_refresh_tot_deck()
+	elif k == "bond":
+		_refresh_tot_bond()
+	else:
+		_refresh_combined()
+
+# 卡组分页：这一局抽到的卡
+func _refresh_tot_deck() -> void:
+	for ch in _tot_deck_root.get_children():
+		ch.queue_free()
+	var head := "卡组 %d/10" % _cards.size()
 	if _core != null:
-		atk = float(_core.hero.get("atk", 0.0))
-	_toast("卡组 %d/10 · 强化 Lv %d · 攻击 %.0f · 羁绊 %d（已成 %d）" % [
-		_cards.size(), _str_lv, atk, _bonds.size(), _bonds_done])
+		head += "　·　攻击 %.0f　气血 %d/%d" % [float(_core.hero.get("atk", 0.0)),
+			int(float(_core.hero.get("hp", 0))), int(float(_core.hero.get("hp_max", 1)))]
+	_lbl(head, Vector2(0, 0), Vector2(600, 26), 18, DIM, _tot_deck_root)
+	if _cards.is_empty():
+		_lbl("卡组是空的 —— 去［抽卡］", Vector2(0, 40), Vector2(600, 30), 20,
+			Color(0.55, 0.48, 0.36), _tot_deck_root)
+		return
+	for i in mini(_cards.size(), 10):
+		var c: Dictionary = _card_db.get(str(_cards[i]), {})
+		var y := 34.0 + float(i) * 58.0
+		_panel(Rect2(0, y, 600, 50), Color(0.99, 0.97, 0.92, 0.92), 6, Color(0.55, 0.45, 0.30, 0.22), 1, _tot_deck_root)
+		_lbl(str(c.get("name", "?")), Vector2(16, y + 10), Vector2(220, 30), 22,
+			QUALITY_COLORS[clampi(int(c.get("quality", 1)) - 1, 0, 4)], _tot_deck_root)
+		_lbl(str(c.get("own_text", "")), Vector2(250, y + 14), Vector2(330, 26), 17, INK,
+			_tot_deck_root, HORIZONTAL_ALIGNMENT_RIGHT)
+
+# 宝物分页：羁绊清单（进度 X/3 · 缺哪个组合 · 成后效果）
+func _refresh_tot_bond() -> void:
+	for ch in _tot_bond_root.get_children():
+		ch.queue_free()
+	_lbl("羁绊 %d 张（已消耗 %d）　·　凑齐 3 个组合即成　·　组合 = 同系同阶 3 张卡合成" % [_bonds.size(), _bonds_done],
+		Vector2(0, 0), Vector2(600, 26), 16, DIM, _tot_bond_root)
+	if _bonds.is_empty():
+		_lbl("还没有羁绊 —— 每清一波有 1 次宝物机会", Vector2(0, 40), Vector2(600, 30), 20,
+			Color(0.55, 0.48, 0.36), _tot_bond_root)
+		return
+	for i in mini(_bonds.size(), 8):
+		var b: Dictionary = _bonds[i]
+		var need: Array = b["need"]
+		var miss: Array = []
+		for nm_v in need:
+			if not _combo_has(str(nm_v)):
+				miss.append(str(nm_v))
+		var y := 34.0 + float(i) * 76.0
+		_panel(Rect2(0, y, 600, 68), Color(0.99, 0.97, 0.92, 0.92), 6, Color(0.55, 0.45, 0.30, 0.22), 1, _tot_bond_root)
+		_lbl(str(b["name"]), Vector2(16, y + 6), Vector2(200, 30), 22, Color(0.46, 0.20, 0.10), _tot_bond_root)
+		_lbl("%d/%d" % [_bond_prog(b), need.size()], Vector2(210, y + 8), Vector2(70, 28), 20,
+			Color(0.30, 0.42, 0.28) if miss.is_empty() else Color(0.62, 0.42, 0.14), _tot_bond_root)
+		_lbl(str(b["text"]) % int(b["val"]), Vector2(300, y + 10), Vector2(284, 26), 17, INK,
+			_tot_bond_root, HORIZONTAL_ALIGNMENT_RIGHT)
+		_lbl("已完成" if miss.is_empty() else ("缺 " + "·".join(PackedStringArray(miss))),
+			Vector2(16, y + 38), Vector2(570, 24), 15, Color(0.48, 0.40, 0.30), _tot_bond_root)
+	if _bonds.size() > 8:
+		_lbl("…… 还有 %d 张" % (_bonds.size() - 8), Vector2(0, 34.0 + 8.0 * 76.0), Vector2(600, 24), 15, DIM, _tot_bond_root)
 
 func _apply_aug(key: String, val: float) -> void:
 	if _core == null:
@@ -2280,11 +2333,28 @@ func _build_combined() -> void:
 	panel.add_theme_stylebox_override("panel", sb)
 	panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	_combined_layer.add_child(panel)
-	_lbl("总 计", Vector2(60, 168), Vector2(260, 46), 34, INK, _combined_layer)
-	_lbl("已激活组合 · 本局有效", Vector2(60, 216), Vector2(360, 28), 18, DIM, _combined_layer)
+	_lbl("总 计", Vector2(60, 166), Vector2(260, 46), 34, INK, _combined_layer)
 	_btn("×", Rect2(624, 170, 44, 36), 22, Color(0.95, 0.91, 0.83), DIM, func(): _show_combined(false), _combined_layer)
+	# 顶部分类钮：卡组 / 宝物 / 组合
+	var tabs := [["deck", "卡组"], ["bond", "宝物"], ["combo", "组合"]]
+	_tot_tabs.clear()
+	for i in tabs.size():
+		var b := _btn(str(tabs[i][1]), Rect2(60.0 + float(i) * 136.0, 216, 128, 42), 20,
+			Color(0.09, 0.08, 0.07, 0.98), LIGHT, _set_tot_tab.bind(str(tabs[i][0])), _combined_layer)
+		_tot_tabs.append(b)
+	# 三个分页的内容区
+	_tot_deck_root = Control.new()
+	_tot_deck_root.position = Vector2(50, 280)
+	_tot_deck_root.size = Vector2(620, 640)
+	_tot_deck_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_combined_layer.add_child(_tot_deck_root)
+	_tot_bond_root = Control.new()
+	_tot_bond_root.position = Vector2(50, 280)
+	_tot_bond_root.size = Vector2(620, 640)
+	_tot_bond_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_combined_layer.add_child(_tot_bond_root)
 	_combined_icons = Control.new()
-	_combined_icons.position = Vector2(50, 260)
+	_combined_icons.position = Vector2(50, 280)
 	_combined_icons.size = Vector2(620, 640)
 	_combined_icons.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_combined_layer.add_child(_combined_icons)
@@ -2292,12 +2362,13 @@ func _build_combined() -> void:
 	_combined_detail.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_combined_detail.visible = false
 	_combined_layer.add_child(_combined_detail)
+	_set_tot_tab("deck")
 
 func _show_combined(v: bool) -> void:
 	_combined_layer.visible = v
 	if v:
-		_refresh_combined()
 		_combined_layer.move_to_front()
+		_set_tot_tab(_tot_tab)
 
 func _refresh_combined() -> void:
 	for ch in _combined_icons.get_children(): ch.queue_free()
