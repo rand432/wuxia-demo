@@ -359,7 +359,7 @@ var boss_alive := false
 var _spawn_t := 0.6
 var _hero_cd := 0.0
 # 主角出手：先起手（表现层同步挥剑），到兵器接触点才结算伤害
-const HERO_ATTACK_TIME := 1.4
+const HERO_ATTACK_TIME := 1.8      # v6：默认攻速 1.8 秒/刀（设计稿）
 const HERO_WINDUP := 0.18
 var _hero_pending: Dictionary = {}
 var _hero_pending_t := -1.0
