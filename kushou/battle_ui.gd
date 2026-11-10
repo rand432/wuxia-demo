@@ -114,6 +114,8 @@ var _str_ban_lb: Label = null
 # ============================================================
 const TREA_CHARGE_START := 1
 var _bonds: Array = []          # 身上的羁绊（凑齐就消耗掉，所以不设上限）
+var _bond_unlocked := {}        # 已解锁的羁绊名（只有这些会出现在三选一里）
+var _bond_taken := {}           # 已经结过的羁绊名（不重复出现）
 var _bonds_done := 0            # 这一局已经成过几张
 var _trea_charge := TREA_CHARGE_START
 var _trea_reroll := 3
@@ -1543,29 +1545,38 @@ const SERIES_CN := {
 }
 
 const BOND_POOL := [
-	# ---- 线羁绊（3 条）：该线每个系都完成「初阶组合」→ 整条线所有组合 +50% ----
+	# ============ 四条羁绊链 ============
+	#   每次只从「已解锁」的羁绊里抽三张；结成一条 → 它的下一条入池（跟卡牌的入口卡一个套路）
+	#   ① 成长链 ② 经济链 ③ 危途链 ④ 家传链
+	{"name": "攻防", "glyph": "攻", "need_series": ["atk", "def"], "boost": 30, "desc": "成长链 · 1", "next": "内视"},
+	{"name": "内视", "glyph": "内", "need_series": ["hp", "mp"], "boost": 30, "desc": "成长链 · 2", "next": "血勇"},
+	{"name": "血勇", "glyph": "勇", "need_series": ["atk", "hp"], "boost": 30, "desc": "成长链 · 3", "next": "守中"},
+	{"name": "守中", "glyph": "守", "need_series": ["def", "mp"], "boost": 30, "desc": "成长链 · 4", "next": "根基"},
 	{"name": "根基", "glyph": "根", "line": "成长线", "need": ["三锋", "铁壁", "生机", "凝息"], "boost": 50,
-		"lbl": "成长线 +%d%%", "desc": "攻 / 防 / 血 / 内 四系初阶"},
+		"lbl": "成长线 +%d%%", "desc": "成长链 · 终 · 攻/防/血/内 四系初阶"},
+
+	{"name": "金银", "glyph": "金", "need_series": ["gold", "crystal"], "boost": 30, "desc": "经济链 · 1", "next": "悬赏"},
+	{"name": "悬赏", "glyph": "赏", "need_series": ["exp", "peril"], "boost": 30, "desc": "经济链 · 2", "next": "生财"},
+	{"name": "生财", "glyph": "生", "need_series": ["bounty", "gold"], "boost": 30, "desc": "经济链 · 3", "next": "财险"},
+	{"name": "财险", "glyph": "险", "need_series": ["peril", "crystal"], "boost": 30, "desc": "经济链 · 4", "next": "名利"},
+	{"name": "名利", "glyph": "名", "need_series": ["atk", "gold"], "boost": 30, "desc": "经济链 · 5", "next": "开源"},
 	{"name": "开源", "glyph": "源", "line": "经济线", "need": ["聚财", "灵涌", "奋起", "赏金", "进账"], "boost": 50,
-		"lbl": "经济线 +%d%%", "desc": "文钱 / 灵晶 / 杀敌 / 挑战 / 收益"},
+		"lbl": "经济线 +%d%%", "desc": "经济链 · 终 · 文钱/灵晶/杀敌/挑战/收益 初阶"},
+
+	{"name": "养战", "glyph": "战", "need_series": ["hp", "swarm"], "boost": 30, "desc": "危途链 · 1", "next": "危途"},
 	{"name": "危途", "glyph": "危", "line": "危途线", "need": ["蜂拥", "潮涌", "蜂起", "倾巢"], "boost": 50,
-		"lbl": "危途线 +%d%%", "desc": "增怪四阶全通"},
-	# ---- 小羁绊（10 条）：两个**系**各凑「任意一阶」组合 → 这两系所有组合 +30% ----
-	{"name": "攻防", "glyph": "攻", "need_series": ["atk", "def"], "boost": 30, "desc": "成长线内 · 攻与守"},
-	{"name": "内视", "glyph": "内", "need_series": ["hp", "mp"], "boost": 30, "desc": "成长线内 · 血与气"},
-	{"name": "血勇", "glyph": "勇", "need_series": ["atk", "hp"], "boost": 30, "desc": "成长线内 · 越拼越硬"},
-	{"name": "守中", "glyph": "守", "need_series": ["def", "mp"], "boost": 30, "desc": "成长线内 · 守住再还手"},
-	{"name": "金银", "glyph": "金", "need_series": ["gold", "crystal"], "boost": 30, "desc": "经济线内 · 两本钱账"},
-	{"name": "悬赏", "glyph": "赏", "need_series": ["exp", "peril"], "boost": 30, "desc": "经济线内 · 杀得多赏得多"},
-	{"name": "生财", "glyph": "生", "need_series": ["bounty", "gold"], "boost": 30, "desc": "经济线内 · 捞一笔再生一笔"},
-	{"name": "财险", "glyph": "险", "need_series": ["peril", "crystal"], "boost": 30, "desc": "经济线内 · 险里出灵晶"},
-	{"name": "名利", "glyph": "名", "need_series": ["atk", "gold"], "boost": 30, "desc": "成长 × 经济"},
-	{"name": "养战", "glyph": "战", "need_series": ["hp", "swarm"], "boost": 30, "desc": "成长 × 危途"},
-	# ---- 家传羁绊：同属性 / 同类型两位祖宗配对，效果只加本命技数值 ----
-	{"name": "剑棍同源", "glyph": "剑", "need": ["剑势", "冲撞"], "boost": 40, "lbl": "家传技能 +%d%%", "desc": "主角 · 滚地龙 · 同为物理"},
-	{"name": "同气连枝", "glyph": "鸾", "need": ["剑势", "飞刃"], "boost": 40, "lbl": "家传技能 +%d%%", "desc": "主角 · 苏青鸾 · 同为物理"},
-	{"name": "市井三侠", "glyph": "侠", "need": ["手快", "冲撞", "飞刃"], "boost": 30, "lbl": "家传技能 +%d%%", "desc": "小乞儿 · 滚地龙 · 苏青鸾"},
+		"lbl": "危途线 +%d%%", "desc": "危途链 · 终 · 增怪四阶全通"},
+
+	{"name": "剑棍同源", "glyph": "剑", "need": ["剑势", "冲撞"], "boost": 40, "lbl": "家传技能 +%d%%",
+		"desc": "家传链 · 1 · 主角＋滚地龙", "next": "同气连枝"},
+	{"name": "同气连枝", "glyph": "鸾", "need": ["剑势", "飞刃"], "boost": 40, "lbl": "家传技能 +%d%%",
+		"desc": "家传链 · 2 · 主角＋苏青鸾", "next": "市井三侠"},
+	{"name": "市井三侠", "glyph": "侠", "need": ["手快", "冲撞", "飞刃"], "boost": 30, "lbl": "家传技能 +%d%%",
+		"desc": "家传链 · 3 · 小乞儿＋滚地龙＋苏青鸾"},
 ]
+
+# 每条链的第一条（开局就在池子里）
+const BOND_ENTRIES := ["攻防", "金银", "养战", "剑棍同源"]
 
 # 宝物页：和抽卡/进阶同一套排版，按钮三个：刷新 · N 次 / 隐藏 / 放弃 +1 刷新
 func _build_trea() -> void:
@@ -1633,6 +1644,9 @@ func _on_trea_tile() -> void:
 	if _trea_charge <= 0:
 		_toast("还没攒到宝物机会（每清一波 +1）")
 		return
+	if _bond_pool().is_empty() and not _trea_pending:
+		_toast("本局羁绊已全部结过")
+		return
 	_trea_charge -= 1
 	_trea_pending = true
 	_roll_trea()
@@ -1651,10 +1665,20 @@ func _open_trea() -> void:
 	_pop_trea_cards()
 	Aud.sfx("ui_open", -8.0)
 
+# 现在能抽到的羁绊：已解锁 且 还没结过
+func _bond_pool() -> Array:
+	var out: Array = []
+	for e_v in BOND_POOL:
+		var e: Dictionary = e_v
+		var nm := str(e["name"])
+		if bool(_bond_unlocked.get(nm, false)) and not _bond_taken.has(nm):
+			out.append(e)
+	return out
+
 func _roll_trea() -> void:
 	var q := _trea_quality()
 	var mult: float = [1.0, 1.5, 2.0, 3.0][clampi(q - 2, 0, 3)]
-	var pool: Array = BOND_POOL.duplicate()
+	var pool: Array = _bond_pool()
 	pool.shuffle()
 	for i in _trea_cards.size():
 		var c: AugCard = _trea_cards[i]
@@ -1717,6 +1741,12 @@ func _pick_trea(o: Dictionary, val: int) -> void:
 	if o.has("line"):
 		b["line"] = str(o["line"])          # 线羁绊：成后抬整条线，不只是需求里那几个
 	_bonds.append(b)
+	_bond_taken[str(o["name"])] = true
+	if o.has("next"):
+		var nx := str(o["next"])
+		if not bool(_bond_unlocked.get(nx, false)):
+			_bond_unlocked[nx] = true
+			_toast("羁绊「%s」解锁入池" % nx)
 	_trea_pending = false
 	_hide_trea()
 	_toast("结成羁绊 · %s（%d/%d，凑齐即消耗）" % [str(o["name"]), _bond_prog(b), _bond_need_n(b)])
@@ -1904,7 +1934,7 @@ func _set_tot_tab(k: String) -> void:
 func _refresh_tot_bond() -> void:
 	for ch in _tot_bond_root.get_children():
 		ch.queue_free()
-	_lbl("羁绊 %d 张（已消耗 %d）　·　凑齐指定组合即成　·　点图标看详情" % [_bonds.size(), _bonds_done],
+	_lbl("羁绊 %d 张（已成 %d）　·　已解锁 %d/%d　·　点图标看详情" % [_bonds.size(), _bonds_done, _bond_unlocked.size(), BOND_POOL.size()],
 		Vector2(0, 0), Vector2(600, 26), 16, DIM, _tot_bond_root)
 	if _bonds.is_empty():
 		_lbl("还没有羁绊 —— 每清一波有 1 次宝物机会", Vector2(0, 40), Vector2(600, 30), 20,
@@ -2174,6 +2204,10 @@ func _init_cards() -> void:
 	_devoured.clear()
 	_combo_boost.clear()
 	_combo_frac.clear()
+	_bond_unlocked.clear()
+	_bond_taken.clear()
+	for nm_v in BOND_ENTRIES:
+		_bond_unlocked[str(nm_v)] = true
 	_anc_mod.clear()
 	_elem_mod.clear()
 	_shiny_rolled.clear()
