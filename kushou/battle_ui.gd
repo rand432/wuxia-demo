@@ -92,6 +92,26 @@ var _aug_reroll := 3          # 刷新次数（开局 3 次，每进阶一轮 +1
 var _aug_rolled_lv := -1      # 这一手是为第几级掷的（关了再点不白刷）
 var _aug_refresh_btn: Button = null
 var _str_ban_lb: Label = null
+
+# ============================================================
+# ---------------- 宝物（v8）----------------
+#   用户："宝物的抽取界面也和抽卡一致 【刷新次数/隐藏/放弃【增加一次刷新 对 这个进阶也要】】"
+#   · 每清一波 +1 次宝物机会；开一次三张，挑一张带走
+#   · 最多带 3 件；品质随波数升（1-2 良 / 3 玄 / 4 地 / 6+ 天）
+#   · 三个按钮：刷新 · N 次（次数型）/ 隐藏（收起来，这一手还在）/ 放弃（+1 刷新，这手作废）
+#   · ［放弃］进阶页也有：放弃这一轮进阶，换 1 次刷新
+# ============================================================
+const TREA_SLOTS := 3
+const TREA_CHARGE_START := 1
+var _treasures: Array = []
+var _trea_charge := TREA_CHARGE_START
+var _trea_reroll := 3
+var _trea_pending := false
+var _trea_layer: Control = null
+var _trea_cards: Array = []
+var _trea_refresh_btn: Button = null
+var _trea_tile = null
+var _exp_pct := 0.0
 # v1 请神·家传卡：已请到的祖宗（aid -> 当前可收集档）／已激活的家传组合
 var _ancestors := {}
 var _ancestor_combos: Array = []
@@ -200,6 +220,7 @@ func _ready() -> void:
 	_build_combined()
 	_build_god_pick()
 	_build_str()
+	_build_trea()
 	_refresh_deck()
 	set_process(true)
 
@@ -517,7 +538,7 @@ func _build_hud() -> void:
 	_panel(Rect2(200, 118, 235, 9), Color(0.10, 0.09, 0.08, 0.22), 4)
 	_mp_bar = _panel(Rect2(200, 118, 235 * 0.35, 9), Color(0.30, 0.52, 0.72), 4)
 	_lbl("首领 00:37", Vector2(450, 96), Vector2(120, 30), 17, SEAL)
-	_btn("总计", Rect2(570, 88, 68, 42), 17, Color(0.10, 0.09, 0.08, 0.98), LIGHT, func(): _toast("总计：卡组 7/10 · 宝物 3/3"))
+	_btn("总计", Rect2(570, 88, 68, 42), 17, Color(0.10, 0.09, 0.08, 0.98), LIGHT, func(): _show_totals())
 	_btn("退出", Rect2(646, 88, 60, 42), 17, Color(0.10, 0.09, 0.08, 0.98), LIGHT, func(): _show_exit(true))
 
 # ---------------- 战场 ----------------
@@ -744,12 +765,13 @@ func _build_bottom() -> void:
 	_exp_bar = _panel(Rect2(96, 992, 4, 12), Color(0.85, 0.66, 0.23), 6)
 	_exp_lb = _lbl("0/100", Vector2(616, 986), Vector2(90, 24), 16, Color(0.80, 0.75, 0.65), self, HORIZONTAL_ALIGNMENT_RIGHT)
 	_tile(24, 1020, 124, "market", "黑市", false)
-	_tile(158, 1020, 124, "treasure", "宝物", false)
+	_trea_tile = _tile(158, 1020, 124, "treasure", "宝物", false)
 	_mate_tile = _tile(292, 1020, 124, "mate", "请神", false)
 	_str_tile = _tile(426, 1020, 124, "skill", "强化", false)
 	_tile(560, 1008, 136, "draw", "抽卡", true)
 	_refresh_level_ui()
 	_refresh_str_tile()
+	_refresh_trea_tile()
 
 func _tile(x: float, y: float, s: float, kind: String, label: String, hot: bool):
 	var t := Tile.new()
@@ -762,7 +784,7 @@ func _tile(x: float, y: float, s: float, kind: String, label: String, hot: bool)
 		match kind:
 			"draw": _show_draw(true)
 			"market": _toast("黑市")
-			"treasure": _toast("宝物")
+			"treasure": _on_trea_tile()
 			"mate": _on_mate_tile()
 			"skill": _on_str_tile()
 			_: _toast(label)
@@ -901,6 +923,7 @@ func _update_crystal() -> void:
 func _show_draw(v: bool) -> void:
 	if v:
 		_hide_aug_pick()                     # 进阶页开着一并收掉
+		_hide_trea()                         # 宝物页同理
 		if not _draw_paid:
 			if _pool.is_empty():
 				_toast("本局卡池已空")
@@ -1191,7 +1214,7 @@ func _on_core_kill(n: int) -> void:
 func _add_exp(v: int) -> void:
 	if v <= 0:
 		return
-	_exp += v
+	_exp += int(round(float(v) * (1.0 + _exp_pct / 100.0)))
 	var up := 0
 	while _exp >= _exp_need:
 		_exp -= _exp_need
@@ -1221,6 +1244,8 @@ func _refresh_level_ui() -> void:
 func _on_wave_clear(cleared_wave: int) -> void:
 	_add_exp(50)                            # v2：清一波 +50 经验
 	_add_wen(WEN_WAVE_CLEAR * cleared_wave)  # v6：清一波给一笔文钱
+	_trea_charge += 1                      # v8：清一波给一次宝物机会
+	_refresh_trea_tile()
 	_toast("第 %d 波清空" % cleared_wave)
 
 func _on_mate_tile() -> void:
@@ -1353,14 +1378,17 @@ func _build_str() -> void:
 		d.picked.connect(func() -> void: _on_aug_card(d))
 		_str_layer.add_child(d)
 		_aug_cards.append(d)
-	_aug_refresh_btn = _btn("刷新 · 0 次", Rect2(250, 540, 220, 56), 20,
+	_aug_refresh_btn = _btn("刷新 · 0 次", Rect2(140, 540, 200, 54), 19,
 		Color(0.09, 0.08, 0.07, 0.98), GOLD, func(): _on_aug_refresh(), _str_layer)
+	_btn("放弃 +1 刷新", Rect2(360, 540, 200, 54), 19,
+		Color(0.09, 0.08, 0.07, 0.98), Color(0.80, 0.62, 0.34), func(): _on_aug_abandon(), _str_layer)
 
 func _open_aug_pick() -> void:
 	if _str_layer == null:
 		return
 	if _draw_layer != null:
 		_draw_layer.visible = false                 # 抽卡页开着一并收掉，别叠在一起
+	_hide_trea()
 	_str_round = maxi(1, _str_lv / STR_EVERY)
 	# 同一手只掷一次：点［隐藏］关了再点［强化］，看到的是同一手（不能白刷）
 	if _aug_rolled_lv != _str_lv:
@@ -1414,6 +1442,18 @@ func _on_aug_refresh() -> void:
 	_pop_aug_cards()
 	Aud.sfx("ui_click", -8.0)
 
+# 放弃：这一轮进阶不要了，换 1 次刷新（刷新次数是攒着的，下次进阶能用）
+func _on_aug_abandon() -> void:
+	if not _str_pending:
+		return
+	_str_pending = false
+	_aug_reroll += 1
+	_hide_aug_pick()
+	_refresh_str_tile()
+	_refresh_aug_btn()
+	_toast("放弃进阶 · 刷新 +1（现有 %d 次）" % _aug_reroll)
+	Aud.sfx("ui_back", -8.0)
+
 # 三张卡一起弹出来（跟抽卡一样的手感）
 func _pop_aug_cards() -> void:
 	for i in _aug_cards.size():
@@ -1446,6 +1486,210 @@ func _pick_aug(o: Dictionary, val: int) -> void:
 	_toast("进阶 · %s（%s）" % [str(o["name"]), str(o["text"]) % val])
 	Aud.sfx("levelup", -6.0)
 	_refresh_str_tile()
+
+# ============================================================
+# ---------------- 宝物（v8）----------------
+# ============================================================
+# 宝物池：品质决定数值倍率（良×1 / 玄×1.5 / 地×2 / 天×3）
+const TREA_POOL := [
+	{"key": "atk_pct", "name": "雁翎刀", "glyph": "刀", "v": 10, "text": "攻击 +%d%%", "desc": "锋出鞘，血未干"},
+	{"key": "hp_pct", "name": "和氏璧", "glyph": "璧", "v": 12, "text": "气血上限 +%d%%", "desc": "温润养人"},
+	{"key": "aspd_pct", "name": "追风靴", "glyph": "靴", "v": 8, "text": "攻速 +%d%%", "desc": "风在脚下"},
+	{"key": "crit_add", "name": "星陨珠", "glyph": "珠", "v": 5, "text": "暴击 +%d%%", "desc": "天外一点寒"},
+	{"key": "critdmg_add", "name": "断罪印", "glyph": "印", "v": 20, "text": "暴击伤害 +%d%%", "desc": "一击定生死"},
+	{"key": "cut_add", "name": "玄铁令", "glyph": "令", "v": 5, "text": "护甲 +%d%%", "desc": "铁律如山，只挡刀剑"},
+	{"key": "cutall_add", "name": "龟息甲", "glyph": "甲", "v": 4, "text": "全伤害减免 +%d%%", "desc": "缩进壳里最安稳"},
+	{"key": "dodge_add", "name": "幻影纱", "glyph": "纱", "v": 4, "text": "闪避 +%d%%", "desc": "看得见，摸不着"},
+	{"key": "dmgall_add", "name": "天机筒", "glyph": "机", "v": 7, "text": "全部伤害 +%d%%", "desc": "算准了才动手"},
+	{"key": "killheal", "name": "血玉髓", "glyph": "血", "v": 2, "text": "击杀回血 +%d%%", "desc": "杀一人，暖三分"},
+	{"key": "mp_add", "name": "玄冰盏", "glyph": "盏", "v": 40, "text": "内力上限 +%d", "desc": "一盏冷茶，静心"},
+	{"key": "exp_pct", "name": "悟道石", "glyph": "悟", "v": 15, "text": "经验 +%d%%", "desc": "坐忘一日，胜读十年"},
+]
+
+# 宝物页：和抽卡/进阶同一套排版，按钮三个：刷新 · N 次 / 隐藏 / 放弃 +1 刷新
+func _build_trea() -> void:
+	_trea_layer = Control.new()
+	_trea_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_trea_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_trea_layer.visible = false
+	_trea_layer.z_index = 22
+	add_child(_trea_layer)
+	var ban := Panel.new()
+	ban.position = Vector2(230, 162)
+	ban.size = Vector2(260, 42)
+	var bsb := StyleBoxFlat.new()
+	bsb.bg_color = Color(0.54, 0.23, 0.10)
+	bsb.set_corner_radius_all(4)
+	bsb.border_color = Color(0.95, 0.76, 0.36, 0.9)
+	bsb.set_border_width_all(2)
+	ban.add_theme_stylebox_override("panel", bsb)
+	_trea_layer.add_child(ban)
+	_lbl("宝物 · 择一携带", Vector2(0, 0), Vector2(260, 42), 20, Color(0.97, 0.90, 0.74), ban, HORIZONTAL_ALIGNMENT_CENTER)
+	_btn("隐藏", Rect2(620, 162, 72, 32), 17, Color(0.09, 0.08, 0.07, 0.98), GOLD, func(): _hide_trea(), _trea_layer)
+	for i in 3:
+		var d := AugCard.new()
+		d.position = Vector2(30 + i * 220, 220)
+		d.set_meta("base", d.position)
+		d.pivot_offset = Vector2(100, 150)
+		d.size = Vector2(200, 300)
+		d.picked.connect(func() -> void: _on_trea_card(d))
+		_trea_layer.add_child(d)
+		_trea_cards.append(d)
+	_trea_refresh_btn = _btn("刷新 · 0 次", Rect2(140, 540, 200, 54), 19,
+		Color(0.09, 0.08, 0.07, 0.98), GOLD, func(): _on_trea_refresh(), _trea_layer)
+	_btn("放弃 +1 刷新", Rect2(360, 540, 200, 54), 19,
+		Color(0.09, 0.08, 0.07, 0.98), Color(0.80, 0.62, 0.34), func(): _on_trea_abandon(), _trea_layer)
+
+# 品质随波数升：1-2 良 · 3 玄 · 4-5 地 · 6+ 天
+func _trea_quality() -> int:
+	var w := 1
+	if _core != null:
+		w = int(_core.wave)
+	if w >= 6:
+		return 5
+	if w >= 4:
+		return 4
+	if w >= 3:
+		return 3
+	return 2
+
+func _refresh_trea_tile() -> void:
+	if _trea_tile == null:
+		return
+	var s := "待选宝物" if _trea_pending else "%d/%d" % [_treasures.size(), TREA_SLOTS]
+	var hot := _trea_pending or (_trea_charge > 0 and _treasures.size() < TREA_SLOTS)
+	if _trea_tile.sub != s or _trea_tile.hot != hot:
+		_trea_tile.sub = s
+		_trea_tile.hot = hot
+		_trea_tile.queue_redraw()
+	_trea_tile.badge = 1 if _trea_pending else maxi(0, _trea_charge)
+
+# 点［宝物］：有一手没选就接着看那一手；否则花掉一次机会、掷三张
+func _on_trea_tile() -> void:
+	if _trea_pending:
+		_open_trea()
+		return
+	if _treasures.size() >= TREA_SLOTS:
+		_toast("宝物格已满（%d/%d）" % [_treasures.size(), TREA_SLOTS])
+		return
+	if _trea_charge <= 0:
+		_toast("还没攒到宝物机会（每清一波 +1）")
+		return
+	_trea_charge -= 1
+	_trea_pending = true
+	_roll_trea()
+	_refresh_trea_tile()
+	_open_trea()
+
+func _open_trea() -> void:
+	if _trea_layer == null:
+		return
+	if _draw_layer != null:
+		_draw_layer.visible = false
+	if _str_layer != null:
+		_str_layer.visible = false
+	_trea_layer.visible = true
+	_trea_layer.move_to_front()
+	_pop_trea_cards()
+	Aud.sfx("ui_open", -8.0)
+
+func _roll_trea() -> void:
+	var q := _trea_quality()
+	var mult: float = [1.0, 1.5, 2.0, 3.0][clampi(q - 2, 0, 3)]
+	var pool: Array = TREA_POOL.duplicate()
+	pool.shuffle()
+	for i in _trea_cards.size():
+		var c: AugCard = _trea_cards[i]
+		if i < pool.size():
+			var o: Dictionary = (pool[i] as Dictionary).duplicate()
+			c.o = o
+			c.oval = int(round(float(o["v"]) * mult))
+			c.title = str(o["name"])
+			c.glyph = str(o["glyph"])
+			c.effect = str(o["text"]) % int(c.oval)
+			c.desc = str(o["desc"])
+			c.quality = q
+			c.visible = true
+			c.mouse_filter = Control.MOUSE_FILTER_STOP
+		else:
+			c.visible = false
+		c.queue_redraw()
+	_refresh_trea_btn()
+
+func _refresh_trea_btn() -> void:
+	if _trea_refresh_btn != null:
+		_trea_refresh_btn.text = "刷新 · %d 次" % maxi(0, _trea_reroll)
+
+func _pop_trea_cards() -> void:
+	for i in _trea_cards.size():
+		var card: AugCard = _trea_cards[i]
+		var base: Vector2 = card.get_meta("base", Vector2(30 + i * 220, 220))
+		card.visible = true
+		card.position = base + Vector2(0, 70)
+		card.scale = Vector2(0.82, 0.82)
+		card.modulate.a = 0.0
+		card.mouse_filter = Control.MOUSE_FILTER_STOP
+		var tw := create_tween()
+		tw.set_parallel(true)
+		tw.tween_property(card, "position", base, 0.24).set_delay(i * 0.055).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+		tw.tween_property(card, "scale", Vector2.ONE, 0.24).set_delay(i * 0.055)
+		tw.tween_property(card, "modulate:a", 1.0, 0.18).set_delay(i * 0.055)
+
+func _hide_trea() -> void:
+	if _trea_layer != null:
+		_trea_layer.visible = false
+
+func _on_trea_card(card: AugCard) -> void:
+	if card == null or card.o.is_empty():
+		return
+	_pick_trea(card.o, int(card.oval))
+
+func _pick_trea(o: Dictionary, val: int) -> void:
+	if _treasures.size() >= TREA_SLOTS:
+		_toast("宝物格已满（%d/%d）" % [_treasures.size(), TREA_SLOTS])
+		return
+	_apply_aug(str(o["key"]), float(val))
+	_treasures.append({"name": str(o["name"]), "text": str(o["text"]) % val, "quality": _trea_quality()})
+	_trea_pending = false
+	_hide_trea()
+	_toast("得宝物 · %s（%s）" % [str(o["name"]), str(o["text"]) % val])
+	Aud.sfx("levelup", -6.0)
+	_refresh_trea_tile()
+
+# 刷新：次数型
+func _on_trea_refresh() -> void:
+	if _trea_layer == null or not _trea_layer.visible:
+		return
+	if _trea_reroll <= 0:
+		_toast("刷新次数用完了")
+		return
+	_trea_reroll -= 1
+	_roll_trea()
+	_pop_trea_cards()
+	Aud.sfx("ui_click", -8.0)
+
+# 放弃：这一手不要了，换 1 次刷新（机会已经被这次开页吃掉，不能白刷）
+func _on_trea_abandon() -> void:
+	if not _trea_pending:
+		return
+	_trea_pending = false
+	_trea_reroll += 1
+	_hide_trea()
+	_refresh_trea_tile()
+	_refresh_trea_btn()
+	_toast("放弃宝物 · 刷新 +1（现有 %d 次）" % _trea_reroll)
+	Aud.sfx("ui_back", -8.0)
+
+func _show_totals() -> void:
+	var names: Array = []
+	for t_v in _treasures:
+		names.append(str((t_v as Dictionary)["name"]))
+	var ts := "、".join(PackedStringArray(names)) if not names.is_empty() else "无"
+	var atk := 0.0
+	if _core != null:
+		atk = float(_core.hero.get("atk", 0.0))
+	_toast("卡组 %d/10 · 宝物 %d/%d（%s）· 强化 Lv %d · 攻击 %.0f" % [
+		_cards.size(), _treasures.size(), TREA_SLOTS, ts, _str_lv, atk])
 
 func _apply_aug(key: String, val: float) -> void:
 	if _core == null:
@@ -1480,6 +1724,8 @@ func _apply_aug(key: String, val: float) -> void:
 			_gold_pct += val
 		"killheal":
 			_core.kill_heal = float(_core.kill_heal) + val / 100.0
+		"exp_pct":
+			_exp_pct += val
 
 # 进阶卡：三选一的卡面（200×300）
 class AugCard extends Control:
