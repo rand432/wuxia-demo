@@ -153,27 +153,46 @@ func _open_forge(key: String) -> Node:
 	return fs
 
 # ---------------- 属性（一行四条：攻击 / 气血 / 内力 / 攻速） ----------------
-#   数值暂时来自装备合计（FD.totals）＋ 两个基础常量；
-#   等人物属性层接进来后，这里改成读 attr_final()。
-const ATK_BASE := 12.0        # 攻击基础（与 kushou/kushou_battle.gd 的 ATTR_BASE 对齐）
-const HP_BASE := 200.0        # 气血基础
-const MP_BASE := 100.0        # 内力基础
-const ATK_SEC := 1.8          # 攻速基础：1.8 秒/刀
+#   数值来自 shared/char_sheet.gd（装备合计 ＋ 基础常量），
+#   **点这一行任意处** → 打开详细属性页（和战斗里同一套面板）。
+var _sheet = null          # shared/char_sheet.gd
+var _detail = null         # kushou/attr_panel.gd
 
 func _build_attr() -> void:
+	if _sheet == null:
+		_sheet = load("res://shared/char_sheet.gd").new()
+	_sheet.refresh()
+	var h: Dictionary = _sheet.hero
 	UI.label(self, "属 性", Vector2(24, 648), Vector2(120, 32), 22, P.DIM)
 	UI.label(self, "点属性看详细", Vector2(556, 652), Vector2(144, 26), 14, Color(0.70, 0.67, 0.61))
-	var t := FD.totals()
 	var cells := [
-		["攻 击", str(int(ATK_BASE + float(t["atk"])))],
-		["气 血", str(int(HP_BASE + float(t["hp"])))],
-		["内 力", str(int(MP_BASE))],
-		["攻 速", "%.2f/秒" % (1.0 / ATK_SEC)],
+		["攻 击", str(int(float(h["atk"])))],
+		["气 血", str(int(float(h["hp_max"])))],
+		["内 力", str(int(float(h["mp_max"])))],
+		["攻 速", "%.2f/秒" % (float(h["aspd"]) / 1.8)],
 	]
 	for c in cells.size():
 		var x := 24.0 + float(c) * 168.0
 		UI.label(self, str(cells[c][0]), Vector2(x, 690), Vector2(96, 32), 20, P.DIM)
 		UI.label(self, str(cells[c][1]), Vector2(x + 76, 686), Vector2(92, 34), 24, P.INK)
+	# 整行可点：透明按钮盖住四条属性
+	var hit := Button.new()
+	hit.position = Vector2(24, 676)
+	hit.size = Vector2(672, 60)
+	hit.flat = true
+	hit.focus_mode = Control.FOCUS_NONE
+	hit.pressed.connect(_open_detail)
+	add_child(hit)
+
+func _open_detail() -> void:
+	if _sheet == null:
+		return
+	if _detail == null:
+		_detail = load("res://kushou/attr_panel.gd").new()
+		add_child(_detail)
+		_detail.z_index = 60
+	_detail.setup(_sheet)
+	_detail.open()
 
 # ---------------- 背包（三类 + 竖直滚动） ----------------
 const CATS2 := ["装备", "材料", "道具"]
