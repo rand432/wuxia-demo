@@ -43,6 +43,8 @@ var _detail_combo_text: Label
 var _detail_pips: Array = []
 var _deck_count_lb: Label
 var _attr_layer: Control
+var _attr_val_lbs: Array = []
+var _attr_bond_lb: Label = null
 var _exit_layer: Control
 var _toast_lb: RichTextLabel
 var _toast_seq := 0
@@ -101,9 +103,9 @@ var _str_ban_lb: Label = null
 #   · 三个按钮：刷新 · N 次（次数型）/ 隐藏（收起来，这一手还在）/ 放弃（+1 刷新，这手作废）
 #   · ［放弃］进阶页也有：放弃这一轮进阶，换 1 次刷新
 # ============================================================
-const TREA_SLOTS := 3
 const TREA_CHARGE_START := 1
-var _treasures: Array = []
+var _bonds: Array = []          # 身上的羁绊（凑齐就消耗掉，所以不设上限）
+var _bonds_done := 0            # 这一局已经成过几张
 var _trea_charge := TREA_CHARGE_START
 var _trea_reroll := 3
 var _trea_pending := false
@@ -1015,7 +1017,7 @@ func _build_attr() -> void:
 	add_child(_attr_layer)
 	var p := Panel.new()
 	p.position = Vector2(50, 300)
-	p.size = Vector2(620, 240)
+	p.size = Vector2(620, 334)
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(0.95, 0.92, 0.85)
 	sb.set_corner_radius_all(6)
@@ -1023,18 +1025,25 @@ func _build_attr() -> void:
 	sb.set_border_width_all(2)
 	p.add_theme_stylebox_override("panel", sb)
 	_attr_layer.add_child(p)
-	var rows := [
-		["气血", "320", "速度", "12"],
-		["攻击", "21", "暴伤", "150%"],
-		["防御", "8", "闪避", "5%"],
-		["暴击", "15%", "伤害", "+2"],
-	]
+	# v9：属性表改成**真数据**（原来写死 320/21/8/15%）
+	var names := ["气血", "攻击", "速度", "暴伤", "护甲", "闪避", "暴击", "伤害"]
+	_attr_val_lbs.clear()
 	for r in 4:
-		var y := 30.0 + float(r) * 44.0
-		_lbl(rows[r][0], Vector2(30, y), Vector2(100, 30), 20, DIM, p)
-		_lbl(rows[r][1], Vector2(120, y), Vector2(90, 30), 22, INK, p, HORIZONTAL_ALIGNMENT_RIGHT)
-		_lbl(rows[r][2], Vector2(330, y), Vector2(100, 30), 20, DIM, p)
-		_lbl(rows[r][3], Vector2(420, y), Vector2(100, 30), 22, INK, p, HORIZONTAL_ALIGNMENT_RIGHT)
+		var y := 26.0 + float(r) * 42.0
+		_lbl(names[r * 2], Vector2(30, y), Vector2(110, 30), 19, DIM, p)
+		_attr_val_lbs.append(_lbl("-", Vector2(140, y), Vector2(120, 30), 21, INK, p, HORIZONTAL_ALIGNMENT_RIGHT))
+		_lbl(names[r * 2 + 1], Vector2(330, y), Vector2(110, 30), 19, DIM, p)
+		_attr_val_lbs.append(_lbl("-", Vector2(440, y), Vector2(120, 30), 21, INK, p, HORIZONTAL_ALIGNMENT_RIGHT))
+	var line := ColorRect.new()
+	line.position = Vector2(26, 202)
+	line.size = Vector2(568, 1)
+	line.color = Color(0.42, 0.34, 0.24, 0.35)
+	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	p.add_child(line)
+	_lbl("羁 绊", Vector2(26, 212), Vector2(200, 26), 18, Color(0.54, 0.35, 0.12), p)
+	_lbl("凑齐 3 个组合即成，成即消耗", Vector2(110, 216), Vector2(460, 22), 14, DIM, p)
+	_attr_bond_lb = _lbl("", Vector2(26, 244), Vector2(568, 80), 15, INK, p)
+	_attr_bond_lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_btn("×", Rect2(566, 8, 44, 36), 22, Color(0.95, 0.92, 0.85), DIM, func(): _show_attr(false), p)
 
 func _show_attr(v: bool) -> void:
@@ -1042,6 +1051,50 @@ func _show_attr(v: bool) -> void:
 	_attr_layer.visible = v
 	if v:
 		_attr_layer.move_to_front()
+		_refresh_attr_values()
+		_refresh_attr_bonds()
+
+# 属性表：直接从 core.hero 读（不再写死数字）
+func _refresh_attr_values() -> void:
+	if _core == null or _attr_val_lbs.size() < 8:
+		return
+	var h: Dictionary = _core.hero
+	var vals := [
+		"%d/%d" % [int(float(h.get("hp", 0))), int(float(h.get("hp_max", 1)))],
+		"%.0f" % float(h.get("atk", 0.0)),
+		"%.2f" % float(h.get("aspd", 1.0)),
+		"%d%%" % int(round(float(h.get("crit_dmg", 2.0)) * 100.0)),
+		"%d%%" % int(round(float(h.get("cut", 0.0)) * 100.0)),
+		"%d%%" % int(round(float(h.get("dodge", 0.0)) * 100.0)),
+		"%d%%" % int(round(float(h.get("crit", 0.0)) * 100.0)),
+		"+%d%%" % int(round(float(h.get("dmg_all", 0.0)) * 100.0)),
+	]
+	for i in 8:
+		if i < _attr_val_lbs.size():
+			(_attr_val_lbs[i] as Label).text = str(vals[i])
+
+# 羁绊清单：进度 + 还缺哪个组合
+func _refresh_attr_bonds() -> void:
+	if _attr_bond_lb == null:
+		return
+	if _bonds.is_empty():
+		_attr_bond_lb.text = "（无）凑齐组合即可结成羁绊"
+		return
+	var lines: Array = []
+	for b_v in _bonds:
+		var b: Dictionary = b_v
+		var need: Array = b["need"]
+		var miss: Array = []
+		for nm_v in need:
+			if not _combo_has(str(nm_v)):
+				miss.append(str(nm_v))
+		if miss.is_empty():
+			lines.append("%s　%d/%d　已成" % [str(b["name"]), _bond_prog(b), need.size()])
+		else:
+			lines.append("%s　%d/%d　缺 %s" % [str(b["name"]), _bond_prog(b), need.size(),
+				"·".join(PackedStringArray(miss))])
+	_attr_bond_lb.text = "
+".join(PackedStringArray(lines))
 
 # ---------------- 退出 ----------------
 func _build_exit() -> void:
@@ -1490,20 +1543,24 @@ func _pick_aug(o: Dictionary, val: int) -> void:
 # ============================================================
 # ---------------- 宝物（v8）----------------
 # ============================================================
-# 宝物池：品质决定数值倍率（良×1 / 玄×1.5 / 地×2 / 天×3）
-const TREA_POOL := [
-	{"key": "atk_pct", "name": "雁翎刀", "glyph": "刀", "v": 10, "text": "攻击 +%d%%", "desc": "锋出鞘，血未干"},
-	{"key": "hp_pct", "name": "和氏璧", "glyph": "璧", "v": 12, "text": "气血上限 +%d%%", "desc": "温润养人"},
-	{"key": "aspd_pct", "name": "追风靴", "glyph": "靴", "v": 8, "text": "攻速 +%d%%", "desc": "风在脚下"},
-	{"key": "crit_add", "name": "星陨珠", "glyph": "珠", "v": 5, "text": "暴击 +%d%%", "desc": "天外一点寒"},
-	{"key": "critdmg_add", "name": "断罪印", "glyph": "印", "v": 20, "text": "暴击伤害 +%d%%", "desc": "一击定生死"},
-	{"key": "cut_add", "name": "玄铁令", "glyph": "令", "v": 5, "text": "护甲 +%d%%", "desc": "铁律如山，只挡刀剑"},
-	{"key": "cutall_add", "name": "龟息甲", "glyph": "甲", "v": 4, "text": "全伤害减免 +%d%%", "desc": "缩进壳里最安稳"},
-	{"key": "dodge_add", "name": "幻影纱", "glyph": "纱", "v": 4, "text": "闪避 +%d%%", "desc": "看得见，摸不着"},
-	{"key": "dmgall_add", "name": "天机筒", "glyph": "机", "v": 7, "text": "全部伤害 +%d%%", "desc": "算准了才动手"},
-	{"key": "killheal", "name": "血玉髓", "glyph": "血", "v": 2, "text": "击杀回血 +%d%%", "desc": "杀一人，暖三分"},
-	{"key": "mp_add", "name": "玄冰盏", "glyph": "盏", "v": 40, "text": "内力上限 +%d", "desc": "一盏冷茶，静心"},
-	{"key": "exp_pct", "name": "悟道石", "glyph": "悟", "v": 15, "text": "经验 +%d%%", "desc": "坐忘一日，胜读十年"},
+# 宝物 = 卡组羁绊（v9，用户："宝物暂定为卡组羁绊，有进度；凑齐 xx 和 xx 组合卡，效果增幅；宝物算消耗，不限件数"）
+#   · 一张羁绊 = 要 3 个组合（如 三锋 / 铁壁 / 生机），凑齐 3/3 → 效果永久生效
+#   · 进度按"这一局已经激活过的组合"算（_combined + _ancestor_combos，激活过的不会失效）
+#   · **成的那一刻羁绊就消耗掉**（从身上删掉）→ 所以不占格子、也没有携带上限
+#   · 品质随波数升（良/玄/地/天），只是把效果数值放大 ×1 / 1.5 / 2 / 3
+const BOND_POOL := [
+	{"name": "开门三式", "glyph": "三", "need": ["三锋", "铁壁", "生机"], "key": "dmgall_add", "v": 8, "text": "全部伤害 +%d%%", "desc": "攻守血，三才初成"},
+	{"name": "锋芒", "glyph": "锋", "need": ["三锋", "蓄势", "战意"], "key": "atk_pct", "v": 15, "text": "攻击 +%d%%", "desc": "一路磨到顶"},
+	{"name": "坚壁", "glyph": "壁", "need": ["铁壁", "龟息", "血守"], "key": "cut_add", "v": 6, "text": "护甲 +%d%%", "desc": "守在原地，寸步不让"},
+	{"name": "生生", "glyph": "生", "need": ["生机", "回春", "不屈"], "key": "hp_pct", "v": 18, "text": "气血上限 +%d%%", "desc": "打不死的才叫活着"},
+	{"name": "聚财", "glyph": "财", "need": ["聚财", "生息", "掠夺"], "key": "gold_pct", "v": 30, "text": "文钱 +%d%%", "desc": "钱要生钱才算钱"},
+	{"name": "灵脉", "glyph": "灵", "need": ["灵涌", "凝晶", "猎晶"], "key": "mp_add", "v": 60, "text": "内力上限 +%d", "desc": "灵气灌顶，气走周天"},
+	{"name": "攻守", "glyph": "守", "need": ["三锋", "铁壁", "龟息"], "key": "crit_add", "v": 7, "text": "暴击 +%d%%", "desc": "先站住，再找破绽"},
+	{"name": "迅雷", "glyph": "疾", "need": ["蓄势", "灵涌", "聚财"], "key": "aspd_pct", "v": 12, "text": "攻速 +%d%%", "desc": "快一步，处处先手"},
+	{"name": "血战", "glyph": "血", "need": ["血守", "不屈", "掠夺"], "key": "killheal", "v": 3, "text": "击杀回血 +%d%%", "desc": "杀得多，活得久"},
+	{"name": "同源", "glyph": "源", "need": ["三锋", "聚财", "灵涌"], "key": "dmgall_add", "v": 10, "text": "全部伤害 +%d%%", "desc": "刀钱灵，本是一家"},
+	{"name": "守拙", "glyph": "拙", "need": ["铁壁", "回春", "生息"], "key": "cutall_add", "v": 5, "text": "全伤害减免 +%d%%", "desc": "越笨的法子越管用"},
+	{"name": "破阵", "glyph": "破", "need": ["战意", "血守", "掠夺"], "key": "critdmg_add", "v": 25, "text": "暴击伤害 +%d%%", "desc": "阵一破，人就散了"},
 ]
 
 # 宝物页：和抽卡/进阶同一套排版，按钮三个：刷新 · N 次 / 隐藏 / 放弃 +1 刷新
@@ -1524,7 +1581,7 @@ func _build_trea() -> void:
 	bsb.set_border_width_all(2)
 	ban.add_theme_stylebox_override("panel", bsb)
 	_trea_layer.add_child(ban)
-	_lbl("宝物 · 择一携带", Vector2(0, 0), Vector2(260, 42), 20, Color(0.97, 0.90, 0.74), ban, HORIZONTAL_ALIGNMENT_CENTER)
+	_lbl("宝物 · 择一羁绊", Vector2(0, 0), Vector2(260, 42), 20, Color(0.97, 0.90, 0.74), ban, HORIZONTAL_ALIGNMENT_CENTER)
 	_btn("隐藏", Rect2(620, 162, 72, 32), 17, Color(0.09, 0.08, 0.07, 0.98), GOLD, func(): _hide_trea(), _trea_layer)
 	for i in 3:
 		var d := AugCard.new()
@@ -1556,8 +1613,8 @@ func _trea_quality() -> int:
 func _refresh_trea_tile() -> void:
 	if _trea_tile == null:
 		return
-	var s := "待选宝物" if _trea_pending else "%d/%d" % [_treasures.size(), TREA_SLOTS]
-	var hot := _trea_pending or (_trea_charge > 0 and _treasures.size() < TREA_SLOTS)
+	var s := "待选羁绊" if _trea_pending else "羁绊 %d" % _bonds.size()
+	var hot := _trea_pending or _trea_charge > 0
 	if _trea_tile.sub != s or _trea_tile.hot != hot:
 		_trea_tile.sub = s
 		_trea_tile.hot = hot
@@ -1568,9 +1625,6 @@ func _refresh_trea_tile() -> void:
 func _on_trea_tile() -> void:
 	if _trea_pending:
 		_open_trea()
-		return
-	if _treasures.size() >= TREA_SLOTS:
-		_toast("宝物格已满（%d/%d）" % [_treasures.size(), TREA_SLOTS])
 		return
 	if _trea_charge <= 0:
 		_toast("还没攒到宝物机会（每清一波 +1）")
@@ -1596,7 +1650,7 @@ func _open_trea() -> void:
 func _roll_trea() -> void:
 	var q := _trea_quality()
 	var mult: float = [1.0, 1.5, 2.0, 3.0][clampi(q - 2, 0, 3)]
-	var pool: Array = TREA_POOL.duplicate()
+	var pool: Array = BOND_POOL.duplicate()
 	pool.shuffle()
 	for i in _trea_cards.size():
 		var c: AugCard = _trea_cards[i]
@@ -1607,7 +1661,7 @@ func _roll_trea() -> void:
 			c.title = str(o["name"])
 			c.glyph = str(o["glyph"])
 			c.effect = str(o["text"]) % int(c.oval)
-			c.desc = str(o["desc"])
+			c.desc = "需 " + "·".join(PackedStringArray(o["need"]))
 			c.quality = q
 			c.visible = true
 			c.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -1645,16 +1699,57 @@ func _on_trea_card(card: AugCard) -> void:
 	_pick_trea(card.o, int(card.oval))
 
 func _pick_trea(o: Dictionary, val: int) -> void:
-	if _treasures.size() >= TREA_SLOTS:
-		_toast("宝物格已满（%d/%d）" % [_treasures.size(), TREA_SLOTS])
-		return
-	_apply_aug(str(o["key"]), float(val))
-	_treasures.append({"name": str(o["name"]), "text": str(o["text"]) % val, "quality": _trea_quality()})
+	var b := {"name": str(o["name"]), "need": (o["need"] as Array).duplicate(),
+		"key": str(o["key"]), "val": int(val), "text": str(o["text"]), "prog": 0}
+	_bonds.append(b)
 	_trea_pending = false
 	_hide_trea()
-	_toast("得宝物 · %s（%s）" % [str(o["name"]), str(o["text"]) % val])
+	_toast("结成羁绊 · %s（%d/%d，凑齐即消耗）" % [str(o["name"]), _bond_prog(b), (b["need"] as Array).size()])
 	Aud.sfx("levelup", -6.0)
+	_bond_check()
 	_refresh_trea_tile()
+
+# ---- 羁绊结算 ----
+func _combo_has(nm: String) -> bool:
+	for r_v in _combined:
+		if str((r_v as Dictionary).get("name", "")) == nm:
+			return true
+	for r_v in _ancestor_combos:
+		if str((r_v as Dictionary).get("name", "")) == nm:
+			return true
+	return false
+
+func _bond_prog(b: Dictionary) -> int:
+	var n := 0
+	for nm_v in b["need"]:
+		if _combo_has(str(nm_v)):
+			n += 1
+	return n
+
+# 每次组合激活后都算一遍：凑齐 → 生效并**消耗**这张羁绊
+func _bond_check() -> void:
+	if _bonds.is_empty():
+		return
+	var changed := false
+	for i in range(_bonds.size() - 1, -1, -1):
+		var b: Dictionary = _bonds[i]
+		var need: Array = b["need"]
+		var prog := _bond_prog(b)
+		b["prog"] = prog
+		if prog >= need.size():
+			_apply_aug(str(b["key"]), float(b["val"]))
+			_bonds.remove_at(i)
+			_bonds_done += 1
+			_toast("羁绊成 · %s（%s）" % [str(b["name"]), str(b["text"]) % int(b["val"])])
+			Aud.sfx("levelup", -6.0)
+			changed = true
+		elif prog > int(b.get("last", 0)):
+			b["last"] = prog
+			_toast("羁绊「%s」进度 %d/%d" % [str(b["name"]), prog, need.size()])
+			changed = true
+	if changed:
+		_refresh_trea_tile()
+		_refresh_attr_bonds()
 
 # 刷新：次数型
 func _on_trea_refresh() -> void:
@@ -1681,15 +1776,11 @@ func _on_trea_abandon() -> void:
 	Aud.sfx("ui_back", -8.0)
 
 func _show_totals() -> void:
-	var names: Array = []
-	for t_v in _treasures:
-		names.append(str((t_v as Dictionary)["name"]))
-	var ts := "、".join(PackedStringArray(names)) if not names.is_empty() else "无"
 	var atk := 0.0
 	if _core != null:
 		atk = float(_core.hero.get("atk", 0.0))
-	_toast("卡组 %d/10 · 宝物 %d/%d（%s）· 强化 Lv %d · 攻击 %.0f" % [
-		_cards.size(), _treasures.size(), TREA_SLOTS, ts, _str_lv, atk])
+	_toast("卡组 %d/10 · 强化 Lv %d · 攻击 %.0f · 羁绊 %d（已成 %d）" % [
+		_cards.size(), _str_lv, atk, _bonds.size(), _bonds_done])
 
 func _apply_aug(key: String, val: float) -> void:
 	if _core == null:
@@ -1890,6 +1981,7 @@ func _activate_ancestor_set(sid: String, first: Dictionary, ids: Array) -> void:
 		_toast_card(str((_card_db[nid] as Dictionary)["name"]), int(first["quality"]), "下一档入口已入池")
 	_page = 0
 	_refresh_deck()
+	_bond_check()
 	if _combined_layer != null and _combined_layer.visible:
 		_refresh_combined()
 
@@ -2054,6 +2146,7 @@ func _activate_set(sid: String) -> void:
 					var ec: Dictionary = _card_db[entry]
 					_toast_card(str(ec["name"]), int(ec["quality"]), "已加入卡池")
 	_refresh_deck()
+	_bond_check()
 	if _combined_layer != null and _combined_layer.visible:
 		_refresh_combined()
 
