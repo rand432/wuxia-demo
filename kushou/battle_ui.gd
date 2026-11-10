@@ -1165,6 +1165,7 @@ func _process(_delta: float) -> void:
 		if _hp_fill != null:
 			_hp_fill.size = Vector2(maxf(4.0, 235.0 * hpr), 20.0)
 		_tick_skills(_delta)
+		_tick_rare_buffs(_delta)
 		_tick_minions(_delta)
 		_tick_burn(_delta)
 		_tick_poison(_delta)
@@ -1762,6 +1763,80 @@ func _roll_trea() -> void:
 		c.queue_redraw()
 	_refresh_trea_btn()
 
+# 灵晶一切收入的唯一入口（「倾囊」把 _crystal_lock 打开后，这里就再也不给）
+func _gain_crystal(n: int) -> void:
+	if n <= 0 or _crystal_lock:
+		return
+	_crystal += n
+	_update_crystal()
+
+# 稀有单卡：拿到当场结算，不进羁绊
+func _apply_rare(o: Dictionary) -> void:
+	var kind := str(o.get("kind", "res"))
+	var v := int(o.get("v", 0))
+	match kind:
+		"crystal_burst":
+			_gain_crystal(v)                 # 先给，再上锁
+			_crystal_lock = true
+			_update_crystal()
+			_toast("稀有 · 灵晶 +%d，此后灵晶不再增加" % v)
+		"convert":
+			if _crystal_lock:
+				_toast("灵晶已锁，换不了")
+				return
+			var rate := maxi(1, v)
+			var cap := int(o.get("cap", 50))
+			var spend := mini(_wen, rate * cap)
+			var got := int(spend / rate)
+			if got <= 0:
+				_toast("文钱不够，换不了")
+				return
+			_wen -= spend
+			if _coin_lb != null:
+				_coin_lb.text = str(_wen)
+			_crystal += got
+			_update_crystal()
+			_toast("稀有 · %d 文钱换 %d 灵晶" % [spend, got])
+		"buff":
+			_apply_rare_buff(o)
+		_:
+			match str(o.get("res", "")):
+				"wen":
+					_add_wen(v)
+				"crystal":
+					_gain_crystal(v)
+				"kill":
+					_kills += v
+					if _kill_lb != null:
+						_kill_lb.text = str(_kills)
+					_add_exp(20 * v)
+			_toast("稀有 · " + str(o.get("effect", "")))
+	Aud.sfx("levelup", -4.0)
+	_refresh_trea_tile()
+	_refresh_str_tile()
+
+# 限时 buff：先加一份固定的攻击，到点再把这同一份减掉（不吃后续变化的账）
+func _apply_rare_buff(o: Dictionary) -> void:
+	if _core == null:
+		return
+	var pct := float(o.get("v", 0)) / 100.0
+	var dur := float(o.get("dur", 30))
+	var h: Dictionary = _core.hero
+	var add := float(h.get("atk", 0.0)) * pct
+	h["atk"] = float(h.get("atk", 0.0)) + add
+	_rare_buffs.append({"amount": add, "t": dur})
+	_toast("稀有 · 攻击 +%d%%（%d 秒）" % [int(o.get("v", 0)), int(dur)])
+
+func _tick_rare_buffs(dt: float) -> void:
+	if _rare_buffs.is_empty() or _core == null:
+		return
+	for i in range(_rare_buffs.size() - 1, -1, -1):
+		var rb: Dictionary = _rare_buffs[i]
+		rb["t"] = float(rb["t"]) - dt
+		if float(rb["t"]) <= 0.0:
+			_core.hero["atk"] = maxf(1.0, float(_core.hero.get("atk", 0.0)) - float(rb["amount"]))
+			_rare_buffs.remove_at(i)
+
 func _refresh_trea_btn() -> void:
 	if _trea_refresh_btn != null:
 		_trea_refresh_btn.text = "刷新 · %d 次" % maxi(0, _trea_reroll)
@@ -2272,6 +2347,8 @@ func _init_cards() -> void:
 	_combo_frac.clear()
 	_bond_unlocked.clear()
 	_bond_taken.clear()
+	_crystal_lock = false
+	_rare_buffs.clear()
 	for nm_v in BOND_ENTRIES:
 		_bond_unlocked[str(nm_v)] = true
 	_anc_mod.clear()
@@ -2380,7 +2457,7 @@ func _apply_combo(rec: Dictionary) -> void:
 			_wen += _take_int(rec, val)
 			if _coin_lb != null: _coin_lb.text = str(_wen)
 		"crystal_flat":
-			_crystal += _take_int(rec, val)
+			_gain_crystal(_take_int(rec, val))
 			_update_crystal()
 		"mp_flat":
 			_mp = minf(_mp_max, _mp + val)     # v5：内力系组合 → 回内力
@@ -2544,7 +2621,7 @@ func _apply_own(s: Dictionary) -> void:
 	if float(s.get("wen_flat", 0.0)) > 0.0:
 		_add_wen(int(s["wen_flat"]))
 	if float(s.get("crystal_flat", 0.0)) > 0.0:
-		_crystal += int(s["crystal_flat"])
+		_gain_crystal(int(s["crystal_flat"]))
 		_update_crystal()
 	if float(s.get("kill_pct", 0.0)) > 0.0:
 		_kill_pct += float(s["kill_pct"])
@@ -3040,7 +3117,7 @@ func _do_devour(shiny_id: String) -> void:
 	dev_rec["crystal"] = crystal
 	dev_rec["pct"] = 10 * n
 	_wen += wen
-	_crystal += crystal
+	_gain_crystal(crystal)
 	if _coin_lb != null:
 		_coin_lb.text = str(_wen)
 	_update_crystal()
@@ -4428,12 +4505,10 @@ func _grant_rtype(rt: String) -> void:
 		"coin":
 			_add_wen(int(20.0 * (1.0 + _treasure_pct / 100.0)))
 		"crystal":
-			_crystal += int(round(2.0 * (1.0 + _treasure_pct / 100.0)))
-			_update_crystal()
+			_gain_crystal(int(round(2.0 * (1.0 + _treasure_pct / 100.0))))
 		"boss":
 			_add_wen(int(200.0 * (1.0 + _boss_pct / 100.0)))
-			_crystal += int(round(20.0 * (1.0 + _boss_pct / 100.0)))
-			_update_crystal()
+			_gain_crystal(int(round(20.0 * (1.0 + _boss_pct / 100.0))))
 
 # ============================================================
 # 重利（经济系炫卡）：合成经济系 3% 出
