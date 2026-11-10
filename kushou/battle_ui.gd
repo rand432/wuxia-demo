@@ -1039,7 +1039,15 @@ func _build_attr() -> void:
 	p.add_theme_stylebox_override("panel", sb)
 	_attr_layer.add_child(p)
 	# v9：属性表改成**真数据**（原来写死 320/21/8/15%）
-	var names := ["气血", "攻击", "速度", "暴伤", "护甲", "闪避", "暴击", "伤害"]
+	var names := ["气血", "攻击", "内力", "攻速", "暴击", "爆伤", "物理减免", "全系增幅"]
+	# v6：整块面板可点 → 打开详细属性（不是按钮，点面板任意处）
+	var hit := Button.new()
+	hit.position = Vector2.ZERO
+	hit.size = Vector2(620, 240)
+	hit.flat = true
+	hit.focus_mode = Control.FOCUS_NONE
+	hit.pressed.connect(func(): _open_attr_page())
+	p.add_child(hit)
 	_attr_val_lbs.clear()
 	for r in 4:
 		var y := 26.0 + float(r) * 42.0
@@ -1047,8 +1055,21 @@ func _build_attr() -> void:
 		_attr_val_lbs.append(_lbl("-", Vector2(140, y), Vector2(120, 30), 21, INK, p, HORIZONTAL_ALIGNMENT_RIGHT))
 		_lbl(names[r * 2 + 1], Vector2(330, y), Vector2(110, 30), 19, DIM, p)
 		_attr_val_lbs.append(_lbl("-", Vector2(440, y), Vector2(120, 30), 21, INK, p, HORIZONTAL_ALIGNMENT_RIGHT))
-	_lbl("羁绊与卡组看顶栏［总计］", Vector2(30, 206), Vector2(500, 24), 15, DIM, p)
+	_lbl("点这里看详细属性 →", Vector2(30, 206), Vector2(500, 24), 15, GOLD, p)
 	_btn("×", Rect2(566, 8, 44, 36), 22, Color(0.95, 0.92, 0.85), DIM, func(): _show_attr(false), p)
+
+# v6：详细属性页（kushou/attr_panel.gd），懒加载一次，之后复用
+var _attr_page = null
+
+func _open_attr_page() -> void:
+	if _core == null:
+		return
+	if _attr_page == null:
+		_attr_page = load("res://kushou/attr_panel.gd").new()
+		add_child(_attr_page)
+		_attr_page.z_index = 60
+	_attr_page.setup(_core)
+	_attr_page.open()
 
 func _show_attr(v: bool) -> void:
 	_attr_open = v
@@ -1062,14 +1083,16 @@ func _refresh_attr_values() -> void:
 	if _core == null or _attr_val_lbs.size() < 8:
 		return
 	var h: Dictionary = _core.hero
+	# v6：闪避下线；攻速显示成「次/秒」（1.8 秒/刀 ＝ 0.56 次/秒）
+	var aspd := float(h.get("aspd", 1.0))
 	var vals := [
 		"%d/%d" % [int(float(h.get("hp", 0))), int(float(h.get("hp_max", 1)))],
 		"%.0f" % float(h.get("atk", 0.0)),
-		"%.2f" % float(h.get("aspd", 1.0)),
-		"%d%%" % int(round(float(h.get("crit_dmg", 2.0)) * 100.0)),
-		"%d%%" % int(round(float(h.get("cut", 0.0)) * 100.0)),
-		"%d%%" % int(round(float(h.get("dodge", 0.0)) * 100.0)),
+		"%d/%d" % [int(float(h.get("mp", 0))), int(float(h.get("mp_max", 1)))],
+		"%.2f/秒" % (aspd / 1.8),
 		"%d%%" % int(round(float(h.get("crit", 0.0)) * 100.0)),
+		"%d%%" % int(round(float(h.get("crit_dmg", 2.0)) * 100.0)),
+		"%d%%" % int(round((float(h.get("cut_all", 0.0)) + float(h.get("cut", 0.0))) * 100.0)),
 		"+%d%%" % int(round(float(h.get("dmg_all", 0.0)) * 100.0)),
 	]
 	for i in 8:
@@ -1376,8 +1399,8 @@ const AUG_POOL := [
 	{"key": "critdmg_add", "name": "锐意", "glyph": "锐", "v": 25, "text": "暴击伤害 +%d%%", "desc": "暴击时更疼"},
 	{"key": "cut_add", "name": "玄甲", "glyph": "甲", "v": 8, "text": "护甲 +%d%%", "desc": "只挡刀剑，不挡法术"},
 	{"key": "cutall_add", "name": "金刚", "glyph": "刚", "v": 6, "text": "全伤害减免 +%d%%", "desc": "金木水火土一概硬扛"},
-	{"key": "dodge_add", "name": "身法", "glyph": "身", "v": 6, "text": "闪避 +%d%%", "desc": "闪得开才有下一招"},
-	{"key": "dmgall_add", "name": "剑意", "glyph": "意", "v": 10, "text": "全部伤害 +%d%%", "desc": "刀、术、火、召唤一起涨"},
+	{"key": "pen_flat", "name": "贯石", "glyph": "贯", "v": 6, "text": "全系穿透 +%d", "desc": "管你什么护体，先凿个洞"},
+	{"key": "dmgall_add", "name": "剑意", "glyph": "意", "v": 10, "text": "全系增幅 +%d%%", "desc": "七种伤害一起涨"},
 	{"key": "mp_add", "name": "藏气", "glyph": "气", "v": 60, "text": "内力上限 +%d", "desc": "功法放得更勤"},
 	{"key": "gold_pct", "name": "聚财", "glyph": "财", "v": 20, "text": "文钱 +%d%%", "desc": "杀得越多，来得越多"},
 	{"key": "killheal", "name": "血战", "glyph": "血", "v": 3, "text": "击杀回血 +%d%%", "desc": "越杀越精神"},
@@ -2201,8 +2224,11 @@ func _apply_aug(key: String, val: float) -> void:
 			h["cut"] = float(h.get("cut", 0.0)) + val / 100.0
 		"cutall_add":
 			h["cut_all"] = float(h.get("cut_all", 0.0)) + val / 100.0
-		"dodge_add":
-			h["dodge"] = minf(0.75, float(h.get("dodge", 0.05)) + val / 100.0)
+		"pen_flat":
+			# v6：七系固定穿透一起加（真实不吃穿透，跳过）
+			for t in _core.DMG_TYPES:
+				if t != "真实":
+					_core.type_add(t, "pen_f", val / 100.0)
 		"dmgall_add":
 			h["dmg_all"] = float(h.get("dmg_all", 0.0)) + val / 100.0
 		"mp_add":
