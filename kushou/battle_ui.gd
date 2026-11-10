@@ -49,6 +49,7 @@ var _tot_tabs: Array = []
 var _tot_keys: Array = ["bond", "combo"]
 var _tot_tab := "bond"
 var _devoured: Array = []          # 被吞噬的炫名单卡（组合页里也显示）
+var _combo_boost := {}             # 组合名 → 效果增幅（羁绊换来的，永久有效）
 var _tot_deck_root: Control = null
 var _tot_bond_root: Control = null
 var _exit_layer: Control
@@ -1522,19 +1523,29 @@ func _pick_aug(o: Dictionary, val: int) -> void:
 #   · 进度按"这一局已经激活过的组合"算（_combined + _ancestor_combos，激活过的不会失效）
 #   · **成的那一刻羁绊就消耗掉**（从身上删掉）→ 所以不占格子、也没有携带上限
 #   · 品质随波数升（良/玄/地/天），只是把效果数值放大 ×1 / 1.5 / 2 / 3
+#   羁绊的效果**只能是"对应组合的效果增幅"**（用户口径）：
+#   凑齐 3 个组合 → 这三套组合以后每次触发的效果 ×(1+boost%)
+#   （比如「开门三式」成 → 三锋 每波攻击+1 变 +1.4、铁壁 防御+1 变 +1.4、生机 气血+10 变 +14）
 const BOND_POOL := [
-	{"name": "开门三式", "glyph": "三", "need": ["三锋", "铁壁", "生机"], "key": "dmgall_add", "v": 8, "text": "全部伤害 +%d%%", "desc": "攻守血，三才初成"},
-	{"name": "锋芒", "glyph": "锋", "need": ["三锋", "蓄势", "战意"], "key": "atk_pct", "v": 15, "text": "攻击 +%d%%", "desc": "一路磨到顶"},
-	{"name": "坚壁", "glyph": "壁", "need": ["铁壁", "龟息", "血守"], "key": "cut_add", "v": 6, "text": "护甲 +%d%%", "desc": "守在原地，寸步不让"},
-	{"name": "生生", "glyph": "生", "need": ["生机", "回春", "不屈"], "key": "hp_pct", "v": 18, "text": "气血上限 +%d%%", "desc": "打不死的才叫活着"},
-	{"name": "聚财", "glyph": "财", "need": ["聚财", "生息", "掠夺"], "key": "gold_pct", "v": 30, "text": "文钱 +%d%%", "desc": "钱要生钱才算钱"},
-	{"name": "灵脉", "glyph": "灵", "need": ["灵涌", "凝晶", "猎晶"], "key": "mp_add", "v": 60, "text": "内力上限 +%d", "desc": "灵气灌顶，气走周天"},
-	{"name": "攻守", "glyph": "守", "need": ["三锋", "铁壁", "龟息"], "key": "crit_add", "v": 7, "text": "暴击 +%d%%", "desc": "先站住，再找破绽"},
-	{"name": "迅雷", "glyph": "疾", "need": ["蓄势", "灵涌", "聚财"], "key": "aspd_pct", "v": 12, "text": "攻速 +%d%%", "desc": "快一步，处处先手"},
-	{"name": "血战", "glyph": "血", "need": ["血守", "不屈", "掠夺"], "key": "killheal", "v": 3, "text": "击杀回血 +%d%%", "desc": "杀得多，活得久"},
-	{"name": "同源", "glyph": "源", "need": ["三锋", "聚财", "灵涌"], "key": "dmgall_add", "v": 10, "text": "全部伤害 +%d%%", "desc": "刀钱灵，本是一家"},
-	{"name": "守拙", "glyph": "拙", "need": ["铁壁", "回春", "生息"], "key": "cutall_add", "v": 5, "text": "全伤害减免 +%d%%", "desc": "越笨的法子越管用"},
-	{"name": "破阵", "glyph": "破", "need": ["战意", "血守", "掠夺"], "key": "critdmg_add", "v": 25, "text": "暴击伤害 +%d%%", "desc": "阵一破，人就散了"},
+	{"name": "开门三式", "glyph": "三", "need": ["三锋", "铁壁", "生机"], "boost": 40, "desc": "攻守血，三才初成"},
+	{"name": "锋芒", "glyph": "锋", "need": ["三锋", "蓄势", "战意"], "boost": 40, "desc": "一路磨到顶"},
+	{"name": "坚壁", "glyph": "壁", "need": ["铁壁", "龟息", "血守"], "boost": 40, "desc": "守在原地，寸步不让"},
+	{"name": "生生", "glyph": "生", "need": ["生机", "回春", "不屈"], "boost": 40, "desc": "打不死的才叫活着"},
+	{"name": "聚财", "glyph": "财", "need": ["聚财", "生息", "掠夺"], "boost": 40, "desc": "钱要生钱才算钱"},
+	{"name": "灵脉", "glyph": "灵", "need": ["灵涌", "凝晶", "猎晶"], "boost": 40, "desc": "灵气灌顶，气走周天"},
+	{"name": "攻守", "glyph": "守", "need": ["三锋", "铁壁", "龟息"], "boost": 35, "desc": "先站住，再找破绽"},
+	{"name": "迅雷", "glyph": "疾", "need": ["蓄势", "灵涌", "聚财"], "boost": 45, "desc": "快一步，处处先手"},
+	{"name": "血战", "glyph": "血", "need": ["血守", "不屈", "掠夺"], "boost": 50, "desc": "杀得多，活得久"},
+	{"name": "同源", "glyph": "源", "need": ["三锋", "聚财", "灵涌"], "boost": 40, "desc": "刀钱灵，本是一家"},
+	{"name": "守拙", "glyph": "拙", "need": ["铁壁", "回春", "生息"], "boost": 45, "desc": "越笨的法子越管用"},
+	{"name": "破阵", "glyph": "破", "need": ["战意", "血守", "掠夺"], "boost": 50, "desc": "阵一破，人就散了"},
+	# ---- 家传羁绊：**同属性/同类型**的两位祖宗配对，成后放大他们的本命技 ----
+	{"name": "剑棍同源", "glyph": "剑", "need": ["剑势", "冲撞"], "boost": 40, "lbl": "家传技能 +%d%%",
+		"desc": "主角 · 滚地龙 · 同为物理"},
+	{"name": "同气连枝", "glyph": "鸾", "need": ["剑势", "飞刃"], "boost": 40, "lbl": "家传技能 +%d%%",
+		"desc": "主角 · 苏青鸾 · 同为物理"},
+	{"name": "市井三侠", "glyph": "侠", "need": ["手快", "冲撞", "飞刃"], "boost": 30, "lbl": "家传技能 +%d%%",
+		"desc": "小乞儿 · 滚地龙 · 苏青鸾"},
 ]
 
 # 宝物页：和抽卡/进阶同一套排版，按钮三个：刷新 · N 次 / 隐藏 / 放弃 +1 刷新
@@ -1631,10 +1642,10 @@ func _roll_trea() -> void:
 		if i < pool.size():
 			var o: Dictionary = (pool[i] as Dictionary).duplicate()
 			c.o = o
-			c.oval = int(round(float(o["v"]) * mult))
+			c.oval = int(round(float(o["boost"]) * mult))
 			c.title = str(o["name"])
 			c.glyph = str(o["glyph"])
-			c.effect = str(o["text"]) % int(c.oval)
+			c.effect = str(o.get("lbl", "组合效果 +%d%%")) % int(c.oval)
 			c.desc = "需合成 " + "·".join(PackedStringArray(o["need"]))
 			c.quality = q
 			c.visible = true
@@ -1674,7 +1685,7 @@ func _on_trea_card(card: AugCard) -> void:
 
 func _pick_trea(o: Dictionary, val: int) -> void:
 	var b := {"name": str(o["name"]), "need": (o["need"] as Array).duplicate(),
-		"key": str(o["key"]), "val": int(val), "text": str(o["text"]), "prog": 0,
+		"boost": int(val), "prog": 0, "lbl": str(o.get("lbl", "组合效果 +%d%%")),
 		"glyph": str(o.get("glyph", "羁")), "quality": _trea_quality()}
 	_bonds.append(b)
 	_trea_pending = false
@@ -1694,6 +1705,16 @@ func _combo_has(nm: String) -> bool:
 			return true
 	return false
 
+# 这个组合名是不是某位祖宗的家传组合？是就返回祖宗 id（柳卿卿有两套，取第一套对上就行）
+func _ancestor_of_combo(nm: String) -> String:
+	for aid_v in AncestorData.ANCESTORS.keys():
+		var aid := str(aid_v)
+		var a: Dictionary = AncestorData.ANCESTORS[aid]
+		for t_v in a.get("tiers", []):
+			if str((t_v as Dictionary).get("combo_name", "")) == nm:
+				return aid
+	return ""
+
 func _bond_prog(b: Dictionary) -> int:
 	var n := 0
 	for nm_v in b["need"]:
@@ -1712,10 +1733,25 @@ func _bond_check() -> void:
 		var prog := _bond_prog(b)
 		b["prog"] = prog
 		if prog >= need.size():
-			_apply_aug(str(b["key"]), float(b["val"]))
+			# 羁绊成 → 它点名的组合全部增幅，永久：
+			#   5 系组合：以后每次触发 ×(1+boost%)（_apply_combo 里乘）
+			#   家传组合：那位祖宗的本命技伤害直接 +boost%（跟家传组合自己那套账同一个 _anc_mod.dmg_pct）
+			var pct := float(b.get("boost", 0)) / 100.0
+			for nm2_v in need:
+				var nm2 := str(nm2_v)
+				var aid2 := _ancestor_of_combo(nm2)
+				if aid2 != "":
+					if not _anc_mod.has(aid2):
+						_anc_mod[aid2] = {"dmg_pct": 0.0, "cd_pct": 0.0, "mp_flat": 0.0, "para_s": 0.0, "para_amp": 0.0,
+							"life_flat": 0.0, "cap_add": 0.0, "wave_evo": 0.0, "tgt_add": 0.0,
+							"ignite_add": 0.0, "burn_add": 0.0}
+					_anc_mod[aid2]["dmg_pct"] = float(_anc_mod[aid2].get("dmg_pct", 0.0)) + pct * 100.0
+				else:
+					_combo_boost[nm2] = float(_combo_boost.get(nm2, 0.0)) + pct
 			_bonds.remove_at(i)
 			_bonds_done += 1
-			_toast("羁绊成 · %s（%s）" % [str(b["name"]), str(b["text"]) % int(b["val"])])
+			_toast("羁绊成 · %s（%s 效果 +%d%%）" % [str(b["name"]),
+				"·".join(PackedStringArray(need)), int(b.get("boost", 0))])
 			Aud.sfx("levelup", -6.0)
 			changed = true
 		elif prog > int(b.get("last", 0)):
@@ -1789,7 +1825,7 @@ func _set_tot_tab(k: String) -> void:
 func _refresh_tot_bond() -> void:
 	for ch in _tot_bond_root.get_children():
 		ch.queue_free()
-	_lbl("羁绊 %d 张（已消耗 %d）　·　凑齐 3 个组合即成　·　点图标看详情" % [_bonds.size(), _bonds_done],
+	_lbl("羁绊 %d 张（已消耗 %d）　·　凑齐指定组合即成　·　点图标看详情" % [_bonds.size(), _bonds_done],
 		Vector2(0, 0), Vector2(600, 26), 16, DIM, _tot_bond_root)
 	if _bonds.is_empty():
 		_lbl("还没有羁绊 —— 每清一波有 1 次宝物机会", Vector2(0, 40), Vector2(600, 30), 20,
@@ -1826,9 +1862,9 @@ func _show_bond_detail(b: Dictionary) -> void:
 	_lbl(str(b["name"]), Vector2(170, 322), Vector2(360, 40), 30, INK, _combined_detail, HORIZONTAL_ALIGNMENT_CENTER)
 	_lbl("羁 绊　%d/%d" % [_bond_prog(b), need.size()], Vector2(170, 366), Vector2(360, 28), 19,
 		Color(0.46, 0.20, 0.10), _combined_detail, HORIZONTAL_ALIGNMENT_CENTER)
-	_lbl("成后：" + str(b["text"]) % int(b["val"]), Vector2(170, 404), Vector2(380, 32), 22, INK, _combined_detail)
-	_lbl("要凑齐的组合（同系同阶 3 张合成）：", Vector2(170, 446), Vector2(380, 26), 16, DIM, _combined_detail)
-	var y := 478.0
+	_lbl("成后：" + str(b.get("lbl", "组合效果 +%d%%")) % int(b.get("boost", 0)), Vector2(170, 402), Vector2(380, 32), 21, INK, _combined_detail)
+	_lbl("要凑齐的组合（每套 3 张同套卡合成）：", Vector2(170, 442), Vector2(380, 26), 16, DIM, _combined_detail)
+	var y := 472.0
 	for nm_v in need:
 		var nm := str(nm_v)
 		var ok := _combo_has(nm)
@@ -2031,6 +2067,7 @@ func _init_cards() -> void:
 		"shiny_per": ""}
 	_backwash_done = false
 	_devoured.clear()
+	_combo_boost.clear()
 	_anc_mod.clear()
 	_elem_mod.clear()
 	_shiny_rolled.clear()
@@ -2115,7 +2152,8 @@ func _trigger_combos(trigger: String) -> void:
 func _apply_combo(rec: Dictionary) -> void:
 	rec["stacks"] = int(rec.get("stacks", 0)) + 1
 	var key := str(rec.get("combo_key", ""))
-	var val := float(rec.get("combo_val", 0))
+	# 羁绊增幅：这张组合被羁绊点名过，就按比例放大（_combo_boost 里是 0.4 = +40%）
+	var val := float(rec.get("combo_val", 0)) * (1.0 + float(_combo_boost.get(str(rec.get("name", "")), 0.0)))
 	match key:
 		"atk":
 			_stats["atk"] = float(_stats["atk"]) + val
@@ -2480,10 +2518,12 @@ func _show_combined_detail(rec: Dictionary) -> void:
 	p.add_theme_stylebox_override("panel", sb)
 	_combined_detail.add_child(p)
 	_lbl(str(rec["name"]), Vector2(170, 326), Vector2(360, 40), 30, INK, _combined_detail, HORIZONTAL_ALIGNMENT_CENTER)
-	var sz_cn: Array = ["", "三", "四", "五", "六"]
-	_lbl(str(sz_cn[clampi(int(rec["size"]), 1, 6)]) + "合一", Vector2(420, 330), Vector2(100, 28), 18, Color(0.64,0.22,0.15), _combined_detail)
+	var sz_cn: Array = ["三", "四", "五", "六"]
+	_lbl(str(sz_cn[clampi(int(rec["size"]) - 3, 0, 3)]) + "合一", Vector2(420, 330), Vector2(100, 28), 18, Color(0.64,0.22,0.15), _combined_detail)
 	_lbl("卡面合计：" + str(rec["own_text"]), Vector2(170, 390), Vector2(380, 32), 20, INK, _combined_detail)
-	_lbl("组合：" + str(rec["combo_text"]), Vector2(170, 430), Vector2(380, 32), 20, INK, _combined_detail)
+	var bst := float(_combo_boost.get(str(rec["name"]), 0.0))
+	var btail := "" if bst <= 0.0 else ("　羁绊 +%d%%" % int(round(bst * 100.0)))
+	_lbl("组合：" + str(rec["combo_text"]) + btail, Vector2(170, 430), Vector2(380, 32), 20, INK, _combined_detail)
 	_lbl("触发：" + str(rec["trigger"]) + "　已叠 " + str(int(rec["stacks"])), Vector2(170, 470), Vector2(380, 30), 18, DIM, _combined_detail)
 	_lbl("源：" + " · ".join(PackedStringArray(rec["sources"])), Vector2(170, 510), Vector2(380, 60), 17, Color(0.38,0.30,0.20), _combined_detail)
 	_btn("×", Rect2(592, 302, 34, 30), 20, Color(0.97,0.93,0.85), DIM, func(): _combined_detail.visible = false, _combined_detail)
