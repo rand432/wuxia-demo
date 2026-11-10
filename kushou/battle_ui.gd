@@ -1041,7 +1041,7 @@ func _build_attr() -> void:
 	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	p.add_child(line)
 	_lbl("羁 绊", Vector2(26, 212), Vector2(200, 26), 18, Color(0.54, 0.35, 0.12), p)
-	_lbl("凑齐 3 个组合即成，成即消耗", Vector2(110, 216), Vector2(460, 22), 14, DIM, p)
+	_lbl("凑齐 3 个已合成的组合即成，成即消耗", Vector2(104, 216), Vector2(490, 22), 14, DIM, p)
 	_attr_bond_lb = _lbl("", Vector2(26, 244), Vector2(568, 80), 15, INK, p)
 	_attr_bond_lb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_btn("×", Rect2(566, 8, 44, 36), 22, Color(0.95, 0.92, 0.85), DIM, func(): _show_attr(false), p)
@@ -1661,7 +1661,7 @@ func _roll_trea() -> void:
 			c.title = str(o["name"])
 			c.glyph = str(o["glyph"])
 			c.effect = str(o["text"]) % int(c.oval)
-			c.desc = "需 " + "·".join(PackedStringArray(o["need"]))
+			c.desc = "需合成 " + "·".join(PackedStringArray(o["need"]))
 			c.quality = q
 			c.visible = true
 			c.mouse_filter = Control.MOUSE_FILTER_STOP
