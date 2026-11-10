@@ -50,6 +50,7 @@ var _tot_keys: Array = ["bond", "combo"]
 var _tot_tab := "bond"
 var _devoured: Array = []          # 被吞噬的炫名单卡（组合页里也显示）
 var _combo_boost := {}             # 组合名 → 效果增幅（羁绊换来的，永久有效）
+var _sys_combos := {}              # 5 系组合名集合（跟家传组合重名时，按 5 系算）
 var _tot_deck_root: Control = null
 var _tot_bond_root: Control = null
 var _exit_layer: Control
@@ -1697,9 +1698,13 @@ func _pick_trea(o: Dictionary, val: int) -> void:
 
 # ---- 羁绊结算 ----
 func _combo_has(nm: String) -> bool:
+	# ⚠ 回春 / 生息 这两个名字两边都有：5 系优先，命中 5 系名单就只认 _combined
+	var sys_first: bool = _sys_combos.has(nm)
 	for r_v in _combined:
 		if str((r_v as Dictionary).get("name", "")) == nm:
 			return true
+	if sys_first:
+		return false
 	for r_v in _ancestor_combos:
 		if str((r_v as Dictionary).get("name", "")) == nm:
 			return true
@@ -1739,7 +1744,7 @@ func _bond_check() -> void:
 			var pct := float(b.get("boost", 0)) / 100.0
 			for nm2_v in need:
 				var nm2 := str(nm2_v)
-				var aid2 := _ancestor_of_combo(nm2)
+				var aid2 := "" if _sys_combos.has(nm2) else _ancestor_of_combo(nm2)
 				if aid2 != "":
 					if not _anc_mod.has(aid2):
 						_anc_mod[aid2] = {"dmg_pct": 0.0, "cd_pct": 0.0, "mp_flat": 0.0, "para_s": 0.0, "para_amp": 0.0,
@@ -2025,6 +2030,16 @@ func _init_cards() -> void:
 	var d: Dictionary = CardData.build()
 	_card_db = d["cards"]
 	_set_cards = d["sets"]
+	# ⚠ 5 系组合与家传组合有重名（回春 / 生息），先记下 5 系这一批名字，
+	#   羁绊结算时优先按 5 系算，别认成某位祖宗的家传组合
+	_sys_combos.clear()
+	for sid_v in _set_cards.keys():
+		var ids0: Array = _set_cards[sid_v]
+		if ids0.is_empty():
+			continue
+		var c0: Dictionary = _card_db.get(str(ids0[0]), {})
+		if not c0.is_empty() and not c0.has("ancestor"):
+			_sys_combos[str(c0.get("combo_name", ""))] = true
 	_pool = (d["entries"] as Array).duplicate()
 	_cards.clear()
 	_acquired.clear()
