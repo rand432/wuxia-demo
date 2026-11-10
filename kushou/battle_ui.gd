@@ -50,7 +50,7 @@ var _tot_keys: Array = ["bond", "combo"]
 var _tot_tab := "bond"
 var _devoured: Array = []          # 被吞噬的炫名单卡（组合页里也显示）
 var _combo_boost := {}             # 组合名 → 效果增幅（羁绊换来的，永久有效）
-var _sys_combos := {}              # 5 系组合名集合（跟家传组合重名时，按 5 系算）
+var _sys_combos := {}              # 普通卡组合名集合（跟家传组合重名时，按普通卡算）
 var _tot_deck_root: Control = null
 var _tot_bond_root: Control = null
 var _exit_layer: Control
@@ -1698,7 +1698,7 @@ func _pick_trea(o: Dictionary, val: int) -> void:
 
 # ---- 羁绊结算 ----
 func _combo_has(nm: String) -> bool:
-	# ⚠ 回春 / 生息 这两个名字两边都有：5 系优先，命中 5 系名单就只认 _combined
+	# ⚠ 回春 / 生息 这两个名字两边都有：普通卡优先，命中普通卡名单就只认 _combined
 	var sys_first: bool = _sys_combos.has(nm)
 	for r_v in _combined:
 		if str((r_v as Dictionary).get("name", "")) == nm:
@@ -1739,7 +1739,7 @@ func _bond_check() -> void:
 		b["prog"] = prog
 		if prog >= need.size():
 			# 羁绊成 → 它点名的组合全部增幅，永久：
-			#   5 系组合：以后每次触发 ×(1+boost%)（_apply_combo 里乘）
+			#   普通卡组合：以后每次触发 ×(1+boost%)（_apply_combo 里乘）
 			#   家传组合：那位祖宗的本命技伤害直接 +boost%（跟家传组合自己那套账同一个 _anc_mod.dmg_pct）
 			var pct := float(b.get("boost", 0)) / 100.0
 			for nm2_v in need:
@@ -2030,8 +2030,8 @@ func _init_cards() -> void:
 	var d: Dictionary = CardData.build()
 	_card_db = d["cards"]
 	_set_cards = d["sets"]
-	# ⚠ 5 系组合与家传组合有重名（回春 / 生息），先记下 5 系这一批名字，
-	#   羁绊结算时优先按 5 系算，别认成某位祖宗的家传组合
+	# ⚠ 普通卡组合与家传组合有重名（回春 / 生息），先记下普通卡这一批名字，
+	#   羁绊结算时优先按普通卡算，别认成某位祖宗的家传组合
 	_sys_combos.clear()
 	for sid_v in _set_cards.keys():
 		var ids0: Array = _set_cards[sid_v]
@@ -2046,7 +2046,7 @@ func _init_cards() -> void:
 	_combined.clear()
 	_ancestors.clear()
 	_ancestor_combos.clear()
-	# 家传卡：并进同一套卡表（形状与 5 系一致，所以直接合并）
+	# 家传卡：并进同一套卡表（形状与普通卡一致，所以直接合并）
 	var a: Dictionary = AncestorData.build()
 	var acards: Dictionary = a["cards"]
 	for cid_v in acards.keys():
@@ -2106,7 +2106,7 @@ func _grant_ancestor(aid: String) -> void:
 	if _card_db.has(eid) and not _pool.has(eid) and not _acquired.has(eid):
 		_pool.append(eid)
 
-# 家传组合激活：不做 5 系那套属性结算，只登记 + 解锁下一档入口
+# 家传组合激活：不做普通卡那套属性结算，只登记 + 解锁下一档入口
 func _activate_ancestor_set(sid: String, first: Dictionary, ids: Array) -> void:
 	var srcs: Array = []
 	for cid_v in ids:

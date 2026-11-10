@@ -1,5 +1,5 @@
 extends RefCounted
-# 组合卡数据：5 系 × 4 阶；每阶 N 张不同卡，第一张为入口卡
+# 组合卡数据：10 系 × 4 阶；每阶 N 张不同卡，第一张为入口卡
 
 const QUALITY_OF_TIER := [2, 3, 4, 5]  # 初=良 中=玄 高=地 特=天
 const SELFS := [
