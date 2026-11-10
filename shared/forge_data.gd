@@ -33,11 +33,42 @@ static var equipped := {
 	"jade": {},
 	"cloak": {},
 }
-static var bag := [
-	{"slot": "weapon", "name": "铁剑", "quality": 1, "plus": 3, "trait": ""},
-	{"slot": "armor", "name": "皮甲", "quality": 2, "plus": 7, "trait": "不折"},
-	{"slot": "jade", "name": "玉佩", "quality": 2, "plus": 0, "trait": ""},
-]
+static var bag: Array = []
+static var _bag_ready := false
+
+const _WPN := ["铁剑", "长刀", "短刀", "重剑", "柳叶刀", "飞匕", "青锋", "赤霄"]
+const _ARM := ["皮甲", "铁甲", "锁子甲", "软甲", "战袍", "护心镜"]
+const _JADE := ["玉佩", "玉环", "玉坠"]
+const _CLOAK := ["披风", "斗篷", "披帛"]
+const _MAT := ["朱果", "兽骨", "灵米", "紫芝", "雪参", "金髓", "赤铜", "玄铁", "寒晶", "火髓", "风灵", "雷精"]
+const _TOOL := ["龙鳞", "淬火油", "星砂", "悔恨法条", "锻造石", "银两袋", "定神香", "炉心病"]
+
+static func ensure_bag() -> void:
+	if _bag_ready:
+		return
+	_bag_ready = true
+	for i in 18:
+		var nm := str(_WPN[i % _WPN.size()]) if i < 8 else (str(_ARM[i % _ARM.size()]) if i < 14 else str(_JADE[i % _JADE.size()]))
+		var slot := "weapon" if i < 8 else ("armor" if i < 14 else "jade")
+		var icon: String = str(SLOT_ART.get(slot, "res://assets/items/it_sword.png"))
+		bag.append({"cat": "装备", "slot": slot, "name": nm, "quality": 1 + (i % 5),
+			"plus": (i * 3) % 20, "icon": icon})
+	for i in 16:
+		bag.append({"cat": "材料", "slot": "", "name": str(_MAT[i % _MAT.size()]),
+			"quality": 1 + (i % 5), "plus": 0, "icon": "res://assets/items/art_spring.png" if i % 3 == 0 else ("res://assets/items/art_stone.png" if i % 3 == 1 else "res://assets/items/it_ingot.png")})
+	for i in 12:
+		bag.append({"cat": "道具", "slot": "", "name": str(_TOOL[i % _TOOL.size()]),
+			"quality": 1 + (i % 5), "plus": 0, "icon": "res://assets/items/chest_gold.png" if i % 2 == 0 else "res://assets/items/art_stone.png"})
+
+static func bag_of(cat: String) -> Array:
+	ensure_bag()
+	if cat == "":
+		return bag
+	var out: Array = []
+	for it in bag:
+		if str(it.get("cat", "")) == cat:
+			out.append(it)
+	return out
 
 static func qname(q: int) -> String:
 	return QUALITY_NAME[clampi(q - 1, 0, 4)]

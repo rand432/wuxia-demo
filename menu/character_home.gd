@@ -52,8 +52,8 @@ func _build_figure() -> void:
 	var tex := CharArt.full("player")
 	if tex != null:
 		var clip := Control.new()
-		clip.position = Vector2(196, 158)
-		clip.size = Vector2(328, 480)
+		clip.position = Vector2(196, 152)
+		clip.size = Vector2(328, 448)
 		clip.clip_contents = true
 		clip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		add_child(clip)
@@ -167,51 +167,42 @@ func _build_attr() -> void:
 			UI.label(self, str(rows[r][c * 2]), Vector2(x, y), Vector2(96, 32), 20, P.INK)
 			UI.label(self, str(rows[r][c * 2 + 1]), Vector2(x + 100, y), Vector2(80, 32), 20, P.INK)
 
-# ---------------- 背包 ----------------
+# ---------------- 背包（三类 + 竖直滚动） ----------------
+const CATS2 := ["装备", "材料", "道具"]
+var _scroll: ScrollContainer = null
+var _grid: GridContainer = null
+var _count_lb: Label = null
+
 func _build_bag() -> void:
-	UI.label(self, "背 包   3 / 40", Vector2(24, 776), Vector2(240, 32), 22, P.DIM)
-	for i in 10:
-		var r := i / 5
-		var c := i % 5
-		var rect := Rect2(24.0 + float(c) * 132.0, 812.0 + float(r) * 108.0, 120, 96)
-		var pan := Panel.new()
-		pan.position = rect.position
-		pan.size = rect.size
-		var sb := StyleBoxFlat.new()
-		sb.bg_color = Color(0.988, 0.976, 0.949)
-		sb.set_corner_radius_all(8)
-		sb.border_color = Color(0.804, 0.745, 0.647)
-		sb.set_border_width_all(1)
-		pan.add_theme_stylebox_override("panel", sb)
-		add_child(pan)
-		_bag_roots.append(pan)
-	_fill_bag()
-	for i in CATS.size():
+	UI.label(self, "背 包", Vector2(24, 770), Vector2(120, 34), 22, P.DIM)
+	_count_lb = UI.label(self, "", Vector2(140, 770), Vector2(200, 34), 18, Color(0.588, 0.541, 0.471))
+	for i in CATS2.size():
 		var b := Button.new()
-		b.text = CATS[i]
-		b.position = Vector2(24.0 + float(i) * 172.0, 1046)
-		b.size = Vector2(156, 52)
+		b.text = CATS2[i]
+		b.position = Vector2(300.0 + float(i) * 136.0, 766)
+		b.size = Vector2(126, 44)
 		b.focus_mode = Control.FOCUS_NONE
-		b.add_theme_font_size_override("font_size", 20)
+		b.add_theme_font_size_override("font_size", 19)
 		b.pressed.connect(func() -> void:
 			_cat = i
 			Audio.sfx("ui_click", -8.0)
-			_style_cats())
+			_style_cats()
+			_fill_grid())
 		add_child(b)
 		_cats.append(b)
 	_style_cats()
-	var all := Button.new()
-	all.text = "背包全览 ›"
-	all.position = Vector2(516, 1108)
-	all.size = Vector2(180, 40)
-	all.flat = true
-	all.focus_mode = Control.FOCUS_NONE
-	all.add_theme_font_size_override("font_size", 21)
-	all.add_theme_color_override("font_color", P.SEAL)
-	for st in ["normal", "hover", "pressed"]:
-		all.add_theme_stylebox_override(st, StyleBoxEmpty.new())
-	all.pressed.connect(func() -> void: _show_toast("背包全览（下一步接）"))
-	add_child(all)
+	_scroll = ScrollContainer.new()
+	_scroll.position = Vector2(24, 822)
+	_scroll.size = Vector2(660, 344)
+	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
+	add_child(_scroll)
+	_grid = GridContainer.new()
+	_grid.columns = 5
+	_grid.add_theme_constant_override("h_separation", 12)
+	_grid.add_theme_constant_override("v_separation", 12)
+	_scroll.add_child(_grid)
+	_fill_grid()
 
 func _style_cats() -> void:
 	for i in _cats.size():
@@ -219,7 +210,7 @@ func _style_cats() -> void:
 		var on := i == _cat
 		var sb := StyleBoxFlat.new()
 		sb.bg_color = P.SEAL if on else P.PAPER_HI
-		sb.set_corner_radius_all(26)
+		sb.set_corner_radius_all(22)
 		sb.border_color = P.GOLD if on else Color(0.784, 0.737, 0.659)
 		sb.set_border_width_all(2)
 		b.add_theme_stylebox_override("normal", sb)
@@ -227,37 +218,56 @@ func _style_cats() -> void:
 		b.add_theme_stylebox_override("pressed", sb)
 		b.add_theme_color_override("font_color", Color(0.980, 0.929, 0.839) if on else P.DIM)
 
-func _fill_bag() -> void:
-	for i in FD.bag.size():
-		if i >= _bag_roots.size():
-			break
-		var it: Dictionary = FD.bag[i]
-		var root: Panel = _bag_roots[i]
-		var q := int(it.get("quality", 1))
-		var sb := root.get_theme_stylebox("panel") as StyleBoxFlat
-		sb.border_color = P.quality(q)
-		sb.set_border_width_all(2)
-		var slot := str(it.get("slot", "weapon"))
-		var art: String = str(FD.SLOT_ART.get(slot, ""))
-		if art != "" and ResourceLoader.exists(art):
-			var tr := TextureRect.new()
-			tr.texture = load(art)
-			tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-			tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-			tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			root.add_child(tr)
-			tr.position = Vector2(32, 4)
-			tr.size = Vector2(56, 56)
+func _fill_grid() -> void:
+	if _grid == null:
+		return
+	for c in _grid.get_children():
+		_grid.remove_child(c)
+		c.queue_free()
+	if _count_lb != null:
+		_count_lb.text = str(_grid.get_child_count()) + " / " + str(FD.bag.size())
+	var cat: String = str(CATS2[_cat])
+	var list: Array = FD.bag_of(cat)
+	for it_v in list:
+		var it: Dictionary = it_v
+		_grid.add_child(_bag_cell(it))
+	if _count_lb != null:
+		_count_lb.text = str(list.size()) + "　件"
+
+func _bag_cell(it: Dictionary) -> Control:
+	var root := Panel.new()
+	root.custom_minimum_size = Vector2(120, 104)
+	root.size = Vector2(120, 104)
+	var q := int(it.get("quality", 1))
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.988, 0.976, 0.949)
+	sb.set_corner_radius_all(8)
+	sb.border_color = P.quality(q) if str(it.get("cat", "")) == "装备" else Color(0.784, 0.737, 0.659)
+	sb.set_border_width_all(2 if str(it.get("cat", "")) == "装备" else 1)
+	root.add_theme_stylebox_override("panel", sb)
+	var art: String = str(it.get("icon", ""))
+	if art != "" and ResourceLoader.exists(art):
+		var tr := TextureRect.new()
+		tr.texture = load(art)
+		tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		root.add_child(tr)
+		tr.position = Vector2(34, 8)
+		tr.size = Vector2(52, 52)
+	UI.label(root, str(it.get("name", "")), Vector2(0, 64), Vector2(120, 24), 15, P.INK, HORIZONTAL_ALIGNMENT_CENTER)
+	if int(it.get("plus", 0)) > 0:
 		var tagp := Panel.new()
-		tagp.position = Vector2(84, 4)
+		tagp.position = Vector2(88, 4)
 		tagp.size = Vector2(28, 20)
-		var tsb2 := StyleBoxFlat.new()
-		tsb2.bg_color = Color(0.149, 0.129, 0.106)
-		tsb2.set_corner_radius_all(4)
-		tagp.add_theme_stylebox_override("panel", tsb2)
+		var tsb := StyleBoxFlat.new()
+		tsb.bg_color = Color(0.149, 0.129, 0.106)
+		tsb.set_corner_radius_all(4)
+		tagp.add_theme_stylebox_override("panel", tsb)
 		tagp.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		root.add_child(tagp)
-		UI.label(root, "+" + str(int(it.get("plus", 0))), Vector2(84, 4), Vector2(28, 20), 12, Color(0.973, 0.886, 0.659), HORIZONTAL_ALIGNMENT_CENTER)
+		UI.label(root, "+" + str(int(it.get("plus", 0))), Vector2(88, 4), Vector2(28, 20), 12, Color(0.973, 0.886, 0.659), HORIZONTAL_ALIGNMENT_CENTER)
+	return root
 
 # ---------------- 底栏 / 提示 ----------------
 func _on_dock(key: String) -> void:
