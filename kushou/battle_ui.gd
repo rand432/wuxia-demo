@@ -1535,6 +1535,13 @@ const CARD_LINES := {
 	"危途线": ["swarm"],
 }
 
+# 系 → 中文名（小羁绊的卡面/详情要用）
+const SERIES_CN := {
+	"atk": "攻击", "def": "防御", "hp": "气血", "mp": "内力",
+	"gold": "文钱", "crystal": "灵晶", "exp": "杀敌数", "peril": "挑战",
+	"bounty": "收益", "swarm": "增怪",
+}
+
 const BOND_POOL := [
 	# ---- 线羁绊（3 条）：该线每个系都完成「初阶组合」→ 整条线所有组合 +50% ----
 	{"name": "根基", "glyph": "根", "line": "成长线", "need": ["三锋", "铁壁", "生机", "凝息"], "boost": 50,
@@ -1543,13 +1550,17 @@ const BOND_POOL := [
 		"lbl": "经济线 +%d%%", "desc": "文钱 / 灵晶 / 杀敌 / 挑战 / 收益"},
 	{"name": "危途", "glyph": "危", "line": "危途线", "need": ["蜂拥", "潮涌", "蜂起", "倾巢"], "boost": 50,
 		"lbl": "危途线 +%d%%", "desc": "增怪四阶全通"},
-	# ---- 跨线羁绊（6 条）：两条线各挑一套 → 那两套组合 +40% ----
-	{"name": "钱途", "glyph": "钱", "need": ["三锋", "聚财"], "boost": 40, "desc": "成长 × 经济"},
-	{"name": "守财", "glyph": "守", "need": ["铁壁", "灵涌"], "boost": 40, "desc": "成长 × 经济"},
-	{"name": "养战", "glyph": "兵", "need": ["生机", "蜂拥"], "boost": 40, "desc": "成长 × 危途"},
-	{"name": "险财", "glyph": "险", "need": ["猎晶", "潮涌"], "boost": 40, "desc": "经济 × 危途"},
-	{"name": "屠戮", "glyph": "屠", "need": ["战意", "倾巢"], "boost": 40, "desc": "成长 × 危途"},
-	{"name": "算计", "glyph": "算", "need": ["进账", "蜂起"], "boost": 40, "desc": "经济 × 危途"},
+	# ---- 小羁绊（10 条）：两个**系**各凑「任意一阶」组合 → 这两系所有组合 +30% ----
+	{"name": "攻防", "glyph": "攻", "need_series": ["atk", "def"], "boost": 30, "desc": "成长线内 · 攻与守"},
+	{"name": "内视", "glyph": "内", "need_series": ["hp", "mp"], "boost": 30, "desc": "成长线内 · 血与气"},
+	{"name": "血勇", "glyph": "勇", "need_series": ["atk", "hp"], "boost": 30, "desc": "成长线内 · 越拼越硬"},
+	{"name": "守中", "glyph": "守", "need_series": ["def", "mp"], "boost": 30, "desc": "成长线内 · 守住再还手"},
+	{"name": "金银", "glyph": "金", "need_series": ["gold", "crystal"], "boost": 30, "desc": "经济线内 · 两本钱账"},
+	{"name": "悬赏", "glyph": "赏", "need_series": ["exp", "peril"], "boost": 30, "desc": "经济线内 · 杀得多赏得多"},
+	{"name": "生财", "glyph": "生", "need_series": ["bounty", "gold"], "boost": 30, "desc": "经济线内 · 捞一笔再生一笔"},
+	{"name": "财险", "glyph": "险", "need_series": ["peril", "crystal"], "boost": 30, "desc": "经济线内 · 险里出灵晶"},
+	{"name": "名利", "glyph": "名", "need_series": ["atk", "gold"], "boost": 30, "desc": "成长 × 经济"},
+	{"name": "养战", "glyph": "战", "need_series": ["hp", "swarm"], "boost": 30, "desc": "成长 × 危途"},
 	# ---- 家传羁绊：同属性 / 同类型两位祖宗配对，效果只加本命技数值 ----
 	{"name": "剑棍同源", "glyph": "剑", "need": ["剑势", "冲撞"], "boost": 40, "lbl": "家传技能 +%d%%", "desc": "主角 · 滚地龙 · 同为物理"},
 	{"name": "同气连枝", "glyph": "鸾", "need": ["剑势", "飞刃"], "boost": 40, "lbl": "家传技能 +%d%%", "desc": "主角 · 苏青鸾 · 同为物理"},
@@ -1653,8 +1664,12 @@ func _roll_trea() -> void:
 			c.oval = int(round(float(o["boost"]) * mult))
 			c.title = str(o["name"])
 			c.glyph = str(o["glyph"])
-			c.effect = str(o.get("lbl", "组合效果 +%d%%")) % int(c.oval)
-			c.desc = "需合成 " + "·".join(PackedStringArray(o["need"]))
+			if o.has("need_series"):
+				c.effect = "组合效果 +%d%%" % int(c.oval)
+				c.desc = "需合成 " + _series_pair_cn(o) + "（任意一阶）"
+			else:
+				c.effect = str(o.get("lbl", "组合效果 +%d%%")) % int(c.oval)
+				c.desc = "需合成 " + "·".join(PackedStringArray(o["need"]))
 			c.quality = q
 			c.visible = true
 			c.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -1692,15 +1707,19 @@ func _on_trea_card(card: AugCard) -> void:
 	_pick_trea(card.o, int(card.oval))
 
 func _pick_trea(o: Dictionary, val: int) -> void:
-	var b := {"name": str(o["name"]), "need": (o["need"] as Array).duplicate(),
-		"boost": int(val), "prog": 0, "lbl": str(o.get("lbl", "组合效果 +%d%%")),
+	var b := {"name": str(o["name"]), "boost": int(val), "prog": 0,
+		"lbl": str(o.get("lbl", "组合效果 +%d%%")),
 		"glyph": str(o.get("glyph", "羁")), "quality": _trea_quality()}
+	if o.has("need_series"):
+		b["need_series"] = (o["need_series"] as Array).duplicate()   # 小羁绊：按系算，任一一阶都行
+	else:
+		b["need"] = (o["need"] as Array).duplicate()
 	if o.has("line"):
 		b["line"] = str(o["line"])          # 线羁绊：成后抬整条线，不只是需求里那几个
 	_bonds.append(b)
 	_trea_pending = false
 	_hide_trea()
-	_toast("结成羁绊 · %s（%d/%d，凑齐即消耗）" % [str(o["name"]), _bond_prog(b), (b["need"] as Array).size()])
+	_toast("结成羁绊 · %s（%d/%d，凑齐即消耗）" % [str(o["name"]), _bond_prog(b), _bond_need_n(b)])
 	Aud.sfx("levelup", -6.0)
 	_bond_check()
 	_refresh_trea_tile()
@@ -1729,12 +1748,45 @@ func _ancestor_of_combo(nm: String) -> String:
 				return aid
 	return ""
 
+# "气血·内力" / "文钱·灵晶"
+func _series_pair_cn(d: Dictionary) -> String:
+	var out: Array = []
+	for sk_v in d.get("need_series", []):
+		out.append(str(SERIES_CN.get(str(sk_v), str(sk_v))))
+	return "·".join(PackedStringArray(out))
+
 func _bond_prog(b: Dictionary) -> int:
 	var n := 0
+	if b.has("need_series"):
+		for sk_v in b["need_series"]:
+			if _series_active(str(sk_v)):
+				n += 1
+		return n
 	for nm_v in b["need"]:
 		if _combo_has(str(nm_v)):
 			n += 1
 	return n
+
+# 这个系有没有合成过**任意一阶**组合（小羁绊按"系"算，不挑具体是哪一阶）
+func _series_active(sk: String) -> bool:
+	for r_v in _combined:
+		if str((r_v as Dictionary).get("series", "")) == sk:
+			return true
+	return false
+
+# 这张羁绊要几条（线/小羁绊按系，其它按组合名）
+func _bond_need_n(b: Dictionary) -> int:
+	if b.has("need_series"):
+		return (b["need_series"] as Array).size()
+	return (b["need"] as Array).size()
+
+# 该系四阶组合一起抬
+func _boost_series(sk: String, pct: float) -> void:
+	for tt in 4:
+		var cc: Dictionary = _card_db.get("%s_%d_0" % [sk, tt], {})
+		var cn := str(cc.get("combo_name", ""))
+		if cn != "":
+			_combo_boost[cn] = float(_combo_boost.get(cn, 0.0)) + pct
 
 # 每次组合激活后都算一遍：凑齐 → 生效并**消耗**这张羁绊
 func _bond_check() -> void:
@@ -1743,22 +1795,22 @@ func _bond_check() -> void:
 	var changed := false
 	for i in range(_bonds.size() - 1, -1, -1):
 		var b: Dictionary = _bonds[i]
-		var need: Array = b["need"]
+		var need: Array = b.get("need", [])
 		var prog := _bond_prog(b)
 		b["prog"] = prog
-		if prog >= need.size():
+		if prog >= _bond_need_n(b):
 			# 羁绊成 → 它点名的组合全部增幅，永久：
 			#   普通卡组合：以后每次触发 ×(1+boost%)（_apply_combo 里乘）
 			#   家传组合：那位祖宗的本命技伤害直接 +boost%（跟家传组合自己那套账同一个 _anc_mod.dmg_pct）
 			var pct := float(b.get("boost", 0)) / 100.0
-			if b.has("line"):
+			if b.has("need_series"):
+				# 小羁绊：点名的那两个系，四阶组合一起抬
+				for sk_v in (b["need_series"] as Array):
+					_boost_series(str(sk_v), pct)
+			elif b.has("line"):
 				# 线羁绊：这条线**所有系、所有阶**的组合一起抬（不止需求里那几个）
 				for sk_v in (CARD_LINES.get(str(b["line"]), []) as Array):
-					for tt in 4:
-						var cc: Dictionary = _card_db.get("%s_%d_0" % [str(sk_v), tt], {})
-						var cn := str(cc.get("combo_name", ""))
-						if cn != "":
-							_combo_boost[cn] = float(_combo_boost.get(cn, 0.0)) + pct
+					_boost_series(str(sk_v), pct)
 			for nm2_v in need:
 				var nm2 := str(nm2_v)
 				var aid2 := "" if _sys_combos.has(nm2) else _ancestor_of_combo(nm2)
@@ -1768,12 +1820,14 @@ func _bond_check() -> void:
 							"life_flat": 0.0, "cap_add": 0.0, "wave_evo": 0.0, "tgt_add": 0.0,
 							"ignite_add": 0.0, "burn_add": 0.0}
 					_anc_mod[aid2]["dmg_pct"] = float(_anc_mod[aid2].get("dmg_pct", 0.0)) + pct * 100.0
-				elif not b.has("line"):
+				elif not b.has("line") and not b.has("need_series"):
 					_combo_boost[nm2] = float(_combo_boost.get(nm2, 0.0)) + pct
 			_bonds.remove_at(i)
 			_bonds_done += 1
 			if b.has("line"):
 				_toast("羁绊成 · %s（%s 全部组合 +%d%%）" % [str(b["name"]), str(b["line"]), int(b.get("boost", 0))])
+			elif b.has("need_series"):
+				_toast("羁绊成 · %s（%s 全部组合 +%d%%）" % [str(b["name"]), _series_pair_cn(b), int(b.get("boost", 0))])
 			else:
 				_toast("羁绊成 · %s（%s 效果 +%d%%）" % [str(b["name"]),
 					"·".join(PackedStringArray(need)), int(b.get("boost", 0))])
@@ -1865,7 +1919,7 @@ func _refresh_tot_bond() -> void:
 		ic.glyph = str(b.get("glyph", "羁"))
 		ic.quality = int(b.get("quality", 2))
 		ic.prog = _bond_prog(b)
-		ic.need_n = (b["need"] as Array).size()
+		ic.need_n = _bond_need_n(b)
 		ic.pressed.connect(func() -> void: _show_bond_detail(b))
 		_tot_bond_root.add_child(ic)
 
@@ -1883,21 +1937,35 @@ func _show_bond_detail(b: Dictionary) -> void:
 	sb.set_border_width_all(7)
 	p.add_theme_stylebox_override("panel", sb)
 	_combined_detail.add_child(p)
-	var need: Array = b["need"]
+	var need: Array = b.get("need", [])
 	_lbl(str(b["name"]), Vector2(170, 322), Vector2(360, 40), 30, INK, _combined_detail, HORIZONTAL_ALIGNMENT_CENTER)
-	_lbl("羁 绊　%d/%d" % [_bond_prog(b), need.size()], Vector2(170, 366), Vector2(360, 28), 19,
+	_lbl("羁 绊　%d/%d" % [_bond_prog(b), _bond_need_n(b)], Vector2(170, 366), Vector2(360, 28), 19,
 		Color(0.46, 0.20, 0.10), _combined_detail, HORIZONTAL_ALIGNMENT_CENTER)
-	_lbl("成后：" + str(b.get("lbl", "组合效果 +%d%%")) % int(b.get("boost", 0)), Vector2(170, 402), Vector2(380, 32), 21, INK, _combined_detail)
+	if b.has("need_series"):
+		_lbl("成后：" + _series_pair_cn(b) + " 全部组合 +%d%%" % int(b.get("boost", 0)), Vector2(170, 402), Vector2(380, 32), 20, INK, _combined_detail)
+	else:
+		_lbl("成后：" + str(b.get("lbl", "组合效果 +%d%%")) % int(b.get("boost", 0)), Vector2(170, 402), Vector2(380, 32), 21, INK, _combined_detail)
 	if b.has("line"):
 		_lbl("（整条线不分阶，全部吃这个增幅）", Vector2(170, 424), Vector2(380, 24), 15, Color(0.46, 0.20, 0.10), _combined_detail)
-	_lbl("要凑齐的组合（每套 3 张同套卡合成）：", Vector2(170, 442), Vector2(380, 26), 16, DIM, _combined_detail)
+	elif b.has("need_series"):
+		_lbl("（每个系任意一阶组合都算）", Vector2(170, 424), Vector2(380, 24), 15, Color(0.46, 0.20, 0.10), _combined_detail)
+	_lbl("要凑齐的组合（每套 3 张同套卡合成）：" if not b.has("need_series") else "要凑齐的系（任一一阶组合即可）：",
+		Vector2(170, 442), Vector2(380, 26), 16, DIM, _combined_detail)
 	var y := 472.0
-	for nm_v in need:
-		var nm := str(nm_v)
-		var ok := _combo_has(nm)
-		_lbl(("已合成　" if ok else "还缺　　") + nm, Vector2(184, y), Vector2(360, 26), 18,
-			Color(0.28, 0.44, 0.26) if ok else Color(0.56, 0.40, 0.26), _combined_detail)
-		y += 30.0
+	if b.has("need_series"):
+		for sk_v in b["need_series"]:
+			var sk := str(sk_v)
+			var ok2 := _series_active(sk)
+			_lbl(("已合成　" if ok2 else "还缺　　") + str(SERIES_CN.get(sk, sk)) + " 系任意一套", Vector2(184, y), Vector2(360, 26), 18,
+				Color(0.28, 0.44, 0.26) if ok2 else Color(0.56, 0.40, 0.26), _combined_detail)
+			y += 30.0
+	else:
+		for nm_v in need:
+			var nm := str(nm_v)
+			var ok := _combo_has(nm)
+			_lbl(("已合成　" if ok else "还缺　　") + nm, Vector2(184, y), Vector2(360, 26), 18,
+				Color(0.28, 0.44, 0.26) if ok else Color(0.56, 0.40, 0.26), _combined_detail)
+			y += 30.0
 	_btn("×", Rect2(592, 302, 34, 30), 20, Color(0.97, 0.93, 0.85), DIM,
 		func(): _combined_detail.visible = false, _combined_detail)
 
