@@ -58,23 +58,17 @@ func _apply_dmg(f: Dictionary, amount: float, dtype: String) -> float:
 	var o := hero_out_dmg(amount, dtype)
 	var amt := float(o["dmg"])
 	var final := amt
-	if dtype == DMG_PHYS:
-		final = maxf(1.0, amt - float(f["hp_max"]) * 0.02)      # 物理吃怪的"防御"折算
+	# v6：目标减免统一成百分比，并**过一次我的穿透**（固定扣点 → 百分比削剩余）。
+	#   穿透为 0 时，结果与旧公式逐位相同：
+	#     物理 = max(1, amt − 气血上限×2%)　元素 = max(1, amt × (1 − 抗性))
+	#   boss 词缀「重甲」不吃这一套，它单独走下面的乘法减伤
+	if float(f.get("boss_cut", 0.0)) <= 0.0:
+		final = foe_take(amt, f, dtype)
 	# v15w 破阵刀客「破甲」：被破甲的目标护甲 −20%
 	if float(f.get("armor_break_t", 0.0)) > 0.0:
 		final *= 0.80
 	if float(f.get("boss_cut", 0.0)) > 0.0:
 		final *= 1.0 - float(f["boss_cut"])            # v14g：boss 词缀"重甲"减伤
-	elif dtype == DMG_METAL:
-		final = maxf(1.0, amt * (1.0 - float(f.get("res_metal", 0.0))))
-	elif dtype == DMG_WOOD:
-		final = maxf(1.0, amt * (1.0 - float(f.get("res_wood", 0.0))))
-	elif dtype == DMG_FIRE:
-		final = maxf(1.0, amt * (1.0 - float(f.get("res_fire", 0.0))))
-	elif dtype == DMG_WATER:
-		final = maxf(1.0, amt * (1.0 - float(f.get("res_water", 0.0))))
-	elif dtype == DMG_EARTH:
-		final = maxf(1.0, amt * (1.0 - float(f.get("res_earth", 0.0))))
 	# v16k：盾兵**正面格挡**——扣血前再削一刀（−45%），并飘个"挡"字
 	if blocked:
 		final *= 0.55
@@ -373,6 +367,30 @@ func _attr_sync_from_hero() -> void:
 		type_attr[t]["amp_f"] = dmg_all + ea
 		type_attr[t]["red_f"] = red
 	# 穿透 / 百分比减免：本步一律 0（新属性，还没有任何来源）
+
+# ---- 目标侧：减免换算 ＋ 穿透结算 ----
+# v6：把目标的减免换算成**百分比**，好让穿透在同一把尺子上工作
+func foe_red(f: Dictionary, dtype: String, amt: float) -> float:
+	if dtype == DMG_TRUE:
+		return 0.0
+	if dtype == DMG_PHYS:
+		# 旧规矩：物理按「目标气血上限的 2%」折算减伤 —— 等价于这个百分比
+		return 0.02 * float(f.get("hp_max", 0.0)) / maxf(1.0, amt)
+	match dtype:
+		DMG_METAL: return float(f.get("res_metal", 0.0))
+		DMG_WOOD:  return float(f.get("res_wood", 0.0))
+		DMG_FIRE:  return float(f.get("res_fire", 0.0))
+		DMG_WATER: return float(f.get("res_water", 0.0))
+		DMG_EARTH: return float(f.get("res_earth", 0.0))
+	return 0.0
+
+# v6：吃满我的穿透之后，这一下实际打进去多少
+func foe_take(amt: float, f: Dictionary, dtype: String) -> float:
+	if dtype == DMG_TRUE:
+		return amt                                    # 真实：全额
+	_attr_sync_from_hero()
+	var left := red_after_pen(foe_red(f, dtype, amt), dtype)
+	return maxf(1.0, amt * (1.0 - left))
 
 var foes: Array = []
 var wave := 1
