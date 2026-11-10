@@ -349,6 +349,31 @@ func take_after_red(amount: float, t: String) -> float:
 	var p := clampf(type_field(t, "red_p"), 0.0, 0.6)
 	return amount * (1.0 - f) * (1.0 - p)
 
+# v6 桥：外壳目前仍把数值写在 hero 的旧字段上（atk/cut/dmg_all/crit…），
+#   这里在每次结算前把它们抄进新层。等外壳全部改用 attr_add / attr_add_amp 后，这个函数就删掉。
+func _attr_sync_from_hero() -> void:
+	_attr_ensure()
+	attr["crit"]["base"] = float(hero.get("crit", 0.05))
+	attr["cdmg"]["base"] = float(hero.get("crit_dmg", 2.0))
+	var dmg_all := float(hero.get("dmg_all", 0.0)) + float(hero.get("dmg_pct", 0.0))
+	var elem_amp := float(hero.get("elem_amp", 0.0))
+	var dmg_elem: Dictionary = hero.get("dmg_elem", {})
+	var res_elem: Dictionary = hero.get("res_elem", {})
+	for t in DMG_TYPES:
+		if t == DMG_TRUE:
+			type_attr[t]["amp_f"] = float(hero.get("dmg_true", 0.0))
+			continue
+		var ea := 0.0
+		var red := float(hero.get("cut_all", 0.0))
+		if t == DMG_PHYS:
+			red += float(hero.get("cut", 0.0))
+		else:
+			ea = elem_amp + float(dmg_elem.get(t, 0.0))
+			red += float(res_elem.get(t, 0.0))
+		type_attr[t]["amp_f"] = dmg_all + ea
+		type_attr[t]["red_f"] = red
+	# 穿透 / 百分比减免：本步一律 0（新属性，还没有任何来源）
+
 var foes: Array = []
 var wave := 1
 var running := false
@@ -5171,19 +5196,18 @@ func live_foes() -> int:
 
 # 出伤：把主角这一下的伤害算全（返回 Dictionary：{dmg, crit, lucky}）
 func hero_out_dmg(base: float, dtype: String) -> Dictionary:
-	# v5g（用户："真实伤害 不吃增幅 不吃抗性 除了加真实伤害的"）：
-	#   真实伤害**只吃"加真实伤害"这一条**——全伤/元素/暴击/幸运/抗性全都不参与
+	# v6：改走新属性层（attr / type_attr）。本步是**桥**——
+	#   _attr_sync_from_hero() 先把外壳写在旧字段上的值抄进新层，平衡数值不变。
+	_attr_sync_from_hero()
 	if dtype == DMG_TRUE:
-		return {"dmg": base * (1.0 + float(hero.get("dmg_true", 0.0))), "crit": false, "lucky": false}
-	var d := base * (1.0 + float(hero.get("dmg_all", 0.0)))       # 全伤害增加
-	if dtype != DMG_PHYS and dtype != DMG_TRUE:
-		d *= 1.0 + float(hero.get("elem_amp", 0.0))                # 悟性给的元素攻击
-		d *= 1.0 + float((hero.get("dmg_elem", {}) as Dictionary).get(dtype, 0.0))   # 该元素加成
+		# 真实：只吃「真实伤害增幅」，攻击增幅 / 暴击 / 穿透 / 减免一概不吃
+		return {"dmg": base * (1.0 + type_amp(dtype)), "crit": false, "lucky": false}
+	var d := base * (1.0 + type_amp(dtype))        # 该系增幅 = 固定 ×(1＋百分比)
 	var crit := false
 	if dtype == DMG_PHYS:                                          # **元素与真实不暴击**
-		crit = randf() < float(hero.get("crit", 0.05))
+		crit = randf() < attr_final("crit")
 		if crit:
-			d *= float(hero.get("crit_dmg", 2.0))                  # 暴击伤害（无上限）
+			d *= attr_final("cdmg")
 	var lucky := false
 	var lk := minf(LUCKY_CAP, float(hero.get("lucky", 0.0)))
 	if lk > 0.0 and randf() < lk / 3.0:                            # 概率＝幸运/3（满 300% 必触发）
@@ -5199,11 +5223,9 @@ func hero_in_dmg(amount: float, dtype: String) -> float:
 		return 0.0
 	if dtype == DMG_TRUE:
 		return amount
-	var cut := float(hero.get("cut_all", 0.0))                     # 全伤害减免（含横练）
-	if dtype == DMG_PHYS:
-		cut += float(hero.get("cut", 0.0))                         # 护甲只减物理
-	else:
-		cut += float((hero.get("res_elem", {}) as Dictionary).get(dtype, 0.0))
+	# v6：减免也走新层（固定减免 ＝ 护甲 + 全减免 + 抗性，桥里已合好）
+	_attr_sync_from_hero()
+	var cut := type_field(dtype, "red_f")
 	if p_active("shigandang"):
 		cut += 0.25 + 0.05 * float(partners["shigandang"].get("cut_lv", 0))
 	# v15w 铁面僧「铁面」：窗口内受伤再 −25%（并且减免量还给主角回血）
@@ -5216,7 +5238,7 @@ func hero_in_dmg(amount: float, dtype: String) -> float:
 	#   防御系卡（hero["def"]）之前一直是死数值（没人读），现在才开始生效。
 	cut += float(hero.get("cut_extra", 0.0))          # 陈石石皮这类"临时额外减伤"
 	var after_flat := maxf(1.0, amount - float(hero.get("def", 0.0)))
-	var taken := maxf(0.0, after_flat * (1.0 - minf(0.90, cut)))
+	var taken := maxf(0.0, after_flat * (1.0 - clampf(cut, 0.0, 0.60)))   # 上限 60%（设计稿）
 	if dr > 0.0 and taken > 0.0:
 		hero["hp"] = minf(float(hero["hp_max"]), float(hero["hp"]) + amount * dr * 0.5)
 	return taken
