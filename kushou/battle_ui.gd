@@ -46,8 +46,9 @@ var _attr_layer: Control
 var _attr_val_lbs: Array = []
 # 总计页：顶部分类钮（卡组 / 宝物 / 组合）
 var _tot_tabs: Array = []
-var _tot_keys: Array = ["deck", "bond", "combo"]
-var _tot_tab := "deck"
+var _tot_keys: Array = ["bond", "combo"]
+var _tot_tab := "bond"
+var _devoured: Array = []          # 被吞噬的炫名单卡（组合页里也显示）
 var _tot_deck_root: Control = null
 var _tot_bond_root: Control = null
 var _exit_layer: Control
@@ -1673,7 +1674,8 @@ func _on_trea_card(card: AugCard) -> void:
 
 func _pick_trea(o: Dictionary, val: int) -> void:
 	var b := {"name": str(o["name"]), "need": (o["need"] as Array).duplicate(),
-		"key": str(o["key"]), "val": int(val), "text": str(o["text"]), "prog": 0}
+		"key": str(o["key"]), "val": int(val), "text": str(o["text"]), "prog": 0,
+		"glyph": str(o.get("glyph", "羁")), "quality": _trea_quality()}
 	_bonds.append(b)
 	_trea_pending = false
 	_hide_trea()
@@ -1772,68 +1774,107 @@ func _set_tot_tab(k: String) -> void:
 		b.add_theme_stylebox_override("pressed", sb)
 		b.add_theme_color_override("font_color", Color(0.97, 0.90, 0.74) if on else Color(0.40, 0.33, 0.24))
 		b.add_theme_color_override("font_hover_color", Color(0.97, 0.90, 0.74) if on else Color(0.24, 0.18, 0.10))
-	if _tot_deck_root == null:
+	if _tot_bond_root == null:
 		return
-	_tot_deck_root.visible = k == "deck"
 	_tot_bond_root.visible = k == "bond"
 	_combined_icons.visible = k == "combo"
-	if k == "deck":
-		_refresh_tot_deck()
-	elif k == "bond":
+	_combined_detail.visible = false
+	if k == "bond":
 		_refresh_tot_bond()
 	else:
 		_refresh_combined()
 
 # 卡组分页：这一局抽到的卡
-func _refresh_tot_deck() -> void:
-	for ch in _tot_deck_root.get_children():
-		ch.queue_free()
-	var head := "卡组 %d/10" % _cards.size()
-	if _core != null:
-		head += "　·　攻击 %.0f　气血 %d/%d" % [float(_core.hero.get("atk", 0.0)),
-			int(float(_core.hero.get("hp", 0))), int(float(_core.hero.get("hp_max", 1)))]
-	_lbl(head, Vector2(0, 0), Vector2(600, 26), 18, DIM, _tot_deck_root)
-	if _cards.is_empty():
-		_lbl("卡组是空的 —— 去［抽卡］", Vector2(0, 40), Vector2(600, 30), 20,
-			Color(0.55, 0.48, 0.36), _tot_deck_root)
-		return
-	for i in mini(_cards.size(), 10):
-		var c: Dictionary = _card_db.get(str(_cards[i]), {})
-		var y := 34.0 + float(i) * 58.0
-		_panel(Rect2(0, y, 600, 50), Color(0.99, 0.97, 0.92, 0.92), 6, Color(0.55, 0.45, 0.30, 0.22), 1, _tot_deck_root)
-		_lbl(str(c.get("name", "?")), Vector2(16, y + 10), Vector2(220, 30), 22,
-			QUALITY_COLORS[clampi(int(c.get("quality", 1)) - 1, 0, 4)], _tot_deck_root)
-		_lbl(str(c.get("own_text", "")), Vector2(250, y + 14), Vector2(330, 26), 17, INK,
-			_tot_deck_root, HORIZONTAL_ALIGNMENT_RIGHT)
-
-# 宝物分页：羁绊清单（进度 X/3 · 缺哪个组合 · 成后效果）
+# 宝物分页：羁绊图标墙（点图标才看详情）
 func _refresh_tot_bond() -> void:
 	for ch in _tot_bond_root.get_children():
 		ch.queue_free()
-	_lbl("羁绊 %d 张（已消耗 %d）　·　凑齐 3 个组合即成　·　组合 = 同系同阶 3 张卡合成" % [_bonds.size(), _bonds_done],
+	_lbl("羁绊 %d 张（已消耗 %d）　·　凑齐 3 个组合即成　·　点图标看详情" % [_bonds.size(), _bonds_done],
 		Vector2(0, 0), Vector2(600, 26), 16, DIM, _tot_bond_root)
 	if _bonds.is_empty():
 		_lbl("还没有羁绊 —— 每清一波有 1 次宝物机会", Vector2(0, 40), Vector2(600, 30), 20,
 			Color(0.55, 0.48, 0.36), _tot_bond_root)
 		return
-	for i in mini(_bonds.size(), 8):
+	for i in mini(_bonds.size(), 12):
 		var b: Dictionary = _bonds[i]
-		var need: Array = b["need"]
-		var miss: Array = []
-		for nm_v in need:
-			if not _combo_has(str(nm_v)):
-				miss.append(str(nm_v))
-		var y := 34.0 + float(i) * 76.0
-		_panel(Rect2(0, y, 600, 68), Color(0.99, 0.97, 0.92, 0.92), 6, Color(0.55, 0.45, 0.30, 0.22), 1, _tot_bond_root)
-		_lbl(str(b["name"]), Vector2(16, y + 6), Vector2(200, 30), 22, Color(0.46, 0.20, 0.10), _tot_bond_root)
-		_lbl("%d/%d" % [_bond_prog(b), need.size()], Vector2(210, y + 8), Vector2(70, 28), 20,
-			Color(0.30, 0.42, 0.28) if miss.is_empty() else Color(0.62, 0.42, 0.14), _tot_bond_root)
-		_lbl(str(b["text"]) % int(b["val"]), Vector2(300, y + 10), Vector2(284, 26), 17, INK,
-			_tot_bond_root, HORIZONTAL_ALIGNMENT_RIGHT)
-		_lbl("已完成" if miss.is_empty() else ("缺 " + "·".join(PackedStringArray(miss))),
-			Vector2(16, y + 38), Vector2(570, 24), 15, Color(0.48, 0.40, 0.30), _tot_bond_root)
-	if _bonds.size() > 8:
-		_lbl("…… 还有 %d 张" % (_bonds.size() - 8), Vector2(0, 34.0 + 8.0 * 76.0), Vector2(600, 24), 15, DIM, _tot_bond_root)
+		var ic := BondIcon.new()
+		ic.position = Vector2(float(i % 4) * 146.0, 40.0 + float(i / 4) * 152.0)
+		ic.size = Vector2(132, 132)
+		ic.title = str(b["name"])
+		ic.glyph = str(b.get("glyph", "羁"))
+		ic.quality = int(b.get("quality", 2))
+		ic.prog = _bond_prog(b)
+		ic.need_n = (b["need"] as Array).size()
+		ic.pressed.connect(func() -> void: _show_bond_detail(b))
+		_tot_bond_root.add_child(ic)
+
+func _show_bond_detail(b: Dictionary) -> void:
+	for ch in _combined_detail.get_children():
+		ch.queue_free()
+	_combined_detail.visible = true
+	var p := Panel.new()
+	p.position = Vector2(140, 300)
+	p.size = Vector2(440, 392)
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.97, 0.93, 0.85, 0.99)
+	sb.set_corner_radius_all(9)
+	sb.border_color = QUALITY_COLORS[clampi(int(b.get("quality", 2)) - 1, 0, 4)]
+	sb.set_border_width_all(7)
+	p.add_theme_stylebox_override("panel", sb)
+	_combined_detail.add_child(p)
+	var need: Array = b["need"]
+	_lbl(str(b["name"]), Vector2(170, 322), Vector2(360, 40), 30, INK, _combined_detail, HORIZONTAL_ALIGNMENT_CENTER)
+	_lbl("羁 绊　%d/%d" % [_bond_prog(b), need.size()], Vector2(170, 366), Vector2(360, 28), 19,
+		Color(0.46, 0.20, 0.10), _combined_detail, HORIZONTAL_ALIGNMENT_CENTER)
+	_lbl("成后：" + str(b["text"]) % int(b["val"]), Vector2(170, 404), Vector2(380, 32), 22, INK, _combined_detail)
+	_lbl("要凑齐的组合（同系同阶 3 张合成）：", Vector2(170, 446), Vector2(380, 26), 16, DIM, _combined_detail)
+	var y := 478.0
+	for nm_v in need:
+		var nm := str(nm_v)
+		var ok := _combo_has(nm)
+		_lbl(("已合成　" if ok else "还缺　　") + nm, Vector2(184, y), Vector2(360, 26), 18,
+			Color(0.28, 0.44, 0.26) if ok else Color(0.56, 0.40, 0.26), _combined_detail)
+		y += 30.0
+	_btn("×", Rect2(592, 302, 34, 30), 20, Color(0.97, 0.93, 0.85), DIM,
+		func(): _combined_detail.visible = false, _combined_detail)
+
+# 羁绊图标：品阶描边 + 墨字圆章 + 右上进度角标
+class BondIcon extends Control:
+	const F := preload("res://fonts/ink.ttf")
+	const QC := [Color(0.54,0.48,0.38), Color(0.31,0.48,0.29), Color(0.18,0.42,0.45), Color(0.42,0.29,0.48), Color(0.72,0.53,0.16)]
+	signal pressed
+	var title := ""
+	var glyph := "羁"
+	var quality := 2
+	var prog := 0
+	var need_n := 3
+	func _ready() -> void:
+		mouse_filter = Control.MOUSE_FILTER_STOP
+	func _draw() -> void:
+		var q := clampi(quality - 1, 0, 4)
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.96, 0.93, 0.86, 0.98)
+		sb.set_corner_radius_all(8)
+		sb.border_color = QC[q]
+		sb.set_border_width_all(5)
+		draw_style_box(sb, Rect2(Vector2.ZERO, size))
+		var c := Vector2(size.x * 0.5, size.y * 0.38)
+		var r := size.x * 0.24
+		draw_circle(c, r, Color(0.93, 0.90, 0.82))
+		draw_arc(c, r, 0.0, TAU, 40, QC[q], 2.0)
+		draw_string(F, c + Vector2(-r * 0.40, r * 0.42), glyph, HORIZONTAL_ALIGNMENT_LEFT, -1,
+			int(size.x * 0.28), Color(0.14, 0.11, 0.08))
+		draw_string(F, Vector2(2, size.y - 12), title, HORIZONTAL_ALIGNMENT_CENTER, size.x - 4, 16,
+			Color(0.20, 0.16, 0.12))
+		var done := prog >= need_n
+		draw_rect(Rect2(size.x - 46, 6, 40, 20), Color(0.30, 0.44, 0.26) if done else Color(0.62, 0.42, 0.14))
+		draw_string(F, Vector2(size.x - 46, 22), "%d/%d" % [prog, need_n], HORIZONTAL_ALIGNMENT_CENTER,
+			40, 14, Color(0.98, 0.96, 0.90))
+		draw_rect(Rect2(6, 6, 22, 20), Color(0.64, 0.22, 0.15))
+		draw_string(F, Vector2(6, 22), "羁", HORIZONTAL_ALIGNMENT_CENTER, 22, 14, Color(0.98, 0.92, 0.78))
+	func _gui_input(ev: InputEvent) -> void:
+		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
+			pressed.emit()
 
 func _apply_aug(key: String, val: float) -> void:
 	if _core == null:
@@ -1989,6 +2030,7 @@ func _init_cards() -> void:
 		"shiny_devour": "进卡组即触发：波数回退 5 波",
 		"shiny_per": ""}
 	_backwash_done = false
+	_devoured.clear()
 	_anc_mod.clear()
 	_elem_mod.clear()
 	_shiny_rolled.clear()
@@ -2335,19 +2377,14 @@ func _build_combined() -> void:
 	_combined_layer.add_child(panel)
 	_lbl("总 计", Vector2(60, 166), Vector2(260, 46), 34, INK, _combined_layer)
 	_btn("×", Rect2(624, 170, 44, 36), 22, Color(0.95, 0.91, 0.83), DIM, func(): _show_combined(false), _combined_layer)
-	# 顶部分类钮：卡组 / 宝物 / 组合
-	var tabs := [["deck", "卡组"], ["bond", "宝物"], ["combo", "组合"]]
+	# 顶部分类钮：宝物 / 组合
+	var tabs := [["bond", "宝物"], ["combo", "组合"]]
 	_tot_tabs.clear()
 	for i in tabs.size():
-		var b := _btn(str(tabs[i][1]), Rect2(60.0 + float(i) * 136.0, 216, 128, 42), 20,
+		var b := _btn(str(tabs[i][1]), Rect2(60.0 + float(i) * 140.0, 216, 128, 42), 20,
 			Color(0.09, 0.08, 0.07, 0.98), LIGHT, _set_tot_tab.bind(str(tabs[i][0])), _combined_layer)
 		_tot_tabs.append(b)
-	# 三个分页的内容区
-	_tot_deck_root = Control.new()
-	_tot_deck_root.position = Vector2(50, 280)
-	_tot_deck_root.size = Vector2(620, 640)
-	_tot_deck_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_combined_layer.add_child(_tot_deck_root)
+	# 两个分页的内容区（都是图标墙：点图标才看详情）
 	_tot_bond_root = Control.new()
 	_tot_bond_root.position = Vector2(50, 280)
 	_tot_bond_root.size = Vector2(620, 640)
@@ -2362,7 +2399,7 @@ func _build_combined() -> void:
 	_combined_detail.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_combined_detail.visible = false
 	_combined_layer.add_child(_combined_detail)
-	_set_tot_tab("deck")
+	_set_tot_tab("bond")
 
 func _show_combined(v: bool) -> void:
 	_combined_layer.visible = v
@@ -2370,22 +2407,64 @@ func _show_combined(v: bool) -> void:
 		_combined_layer.move_to_front()
 		_set_tot_tab(_tot_tab)
 
+# 组合页：已合成的组合 + 被吞噬的单卡，全是图标，点开看详情
 func _refresh_combined() -> void:
 	for ch in _combined_icons.get_children(): ch.queue_free()
 	_combined_detail.visible = false
-	if _combined.is_empty():
+	if _combined.is_empty() and _devoured.is_empty():
 		_lbl("还没有已激活组合", Vector2(20, 20), Vector2(580, 40), 22, DIM, _combined_icons)
 		return
+	var k := 0
 	for i in _combined.size():
 		var rec: Dictionary = _combined[i]
 		var ic := CombinedIcon.new()
-		ic.position = Vector2(float(i % 5) * 120.0, float(i / 5) * 130.0)
+		ic.position = Vector2(float(k % 5) * 120.0, float(k / 5) * 130.0)
 		ic.size = Vector2(100, 100)
 		ic.quality = int(rec["quality"])
 		ic.art = load(str(rec["art"]))
 		ic.size_n = int(rec["size"])
+		ic.mark = "合"
 		ic.pressed.connect(func() -> void: _show_combined_detail(rec))
 		_combined_icons.add_child(ic)
+		k += 1
+	for d_v in _devoured:
+		var d: Dictionary = d_v
+		var ic2 := CombinedIcon.new()
+		ic2.position = Vector2(float(k % 5) * 120.0, float(k / 5) * 130.0)
+		ic2.size = Vector2(100, 100)
+		ic2.quality = int(d.get("quality", 4))
+		var ap := str(d.get("art", ""))
+		if ap != "" and ResourceLoader.exists(ap):
+			ic2.art = load(ap)
+		ic2.size_n = 0
+		ic2.mark = "吞"
+		ic2.pressed.connect(func() -> void: _show_devour_detail(d))
+		_combined_icons.add_child(ic2)
+		k += 1
+
+# 吞噬单卡的详情
+func _show_devour_detail(d: Dictionary) -> void:
+	for ch in _combined_detail.get_children():
+		ch.queue_free()
+	_combined_detail.visible = true
+	var p := Panel.new()
+	p.position = Vector2(140, 320)
+	p.size = Vector2(440, 262)
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.97, 0.93, 0.85, 0.99)
+	sb.set_corner_radius_all(9)
+	sb.border_color = QUALITY_COLORS[clampi(int(d.get("quality", 4)) - 1, 0, 4)]
+	sb.set_border_width_all(7)
+	p.add_theme_stylebox_override("panel", sb)
+	_combined_detail.add_child(p)
+	_lbl(str(d.get("name", "炫卡")), Vector2(170, 340), Vector2(360, 40), 30, INK, _combined_detail, HORIZONTAL_ALIGNMENT_CENTER)
+	_lbl("吞　噬", Vector2(170, 382), Vector2(360, 26), 18, Color(0.64, 0.22, 0.15), _combined_detail, HORIZONTAL_ALIGNMENT_CENTER)
+	_lbl("吞下 %d 张家传卡" % int(d.get("n", 0)), Vector2(170, 422), Vector2(380, 30), 21, INK, _combined_detail)
+	_lbl("灵晶 +%d　文钱 +%d" % [int(d.get("crystal", 0)), int(d.get("wen", 0))], Vector2(170, 458), Vector2(380, 30), 19, INK, _combined_detail)
+	_lbl("%s +%d%%" % [str(d.get("skill", "技能")), int(d.get("pct", 0))], Vector2(170, 494), Vector2(380, 30), 19,
+		Color(0.46, 0.20, 0.10), _combined_detail)
+	_btn("×", Rect2(592, 322, 34, 30), 20, Color(0.97, 0.93, 0.85), DIM,
+		func(): _combined_detail.visible = false, _combined_detail)
 
 func _show_combined_detail(rec: Dictionary) -> void:
 	for ch in _combined_detail.get_children(): ch.queue_free()
@@ -2416,6 +2495,7 @@ class CombinedIcon extends Control:
 	var quality := 3
 	var art: Texture2D = null
 	var size_n := 3
+	var mark := "合"
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_STOP
 	func _draw() -> void:
@@ -2428,8 +2508,9 @@ class CombinedIcon extends Control:
 		if art != null:
 			draw_texture_rect(art, Rect2(8,8,size.x-16,size.y-16), false)
 		draw_rect(Rect2(size.x-32,6,26,22), Color(0.64,0.22,0.15))
-		draw_string(F, Vector2(size.x-30,23), "合", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(0.98,0.92,0.78))
-		draw_string(F, Vector2(size.x-34,size.y-8), str(size_n), HORIZONTAL_ALIGNMENT_RIGHT, 26, 16, Color(0.38,0.30,0.20))
+		draw_string(F, Vector2(size.x-30,23), mark, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(0.98,0.92,0.78))
+		if size_n > 0:
+			draw_string(F, Vector2(size.x-34,size.y-8), str(size_n), HORIZONTAL_ALIGNMENT_RIGHT, 26, 16, Color(0.38,0.30,0.20))
 	func _gui_input(ev: InputEvent) -> void:
 		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
 			pressed.emit()
@@ -2683,6 +2764,9 @@ func _do_devour(shiny_id: String) -> void:
 	_shiny_used[aid] = true
 	_pool.erase(shiny_id)
 	var n := 0
+	_devoured.append({"name": nm, "art": str(c.get("art", "")), "quality": int(c.get("quality", 4)),
+		"n": 0, "skill": _label_skill(aid), "pct": 0, "crystal": 0, "wen": 0})
+	var dev_rec: Dictionary = _devoured[_devoured.size() - 1]
 	for cid in _cards.duplicate():
 		var cc: Dictionary = _card_db.get(str(cid), {})
 		if str(cc.get("ancestor", "")) == aid:
@@ -2691,6 +2775,10 @@ func _do_devour(shiny_id: String) -> void:
 	_cards.erase(shiny_id)
 	var wen := 150 * n
 	var crystal := 20 * n
+	dev_rec["n"] = n
+	dev_rec["wen"] = wen
+	dev_rec["crystal"] = crystal
+	dev_rec["pct"] = 10 * n
 	_wen += wen
 	_crystal += crystal
 	if _coin_lb != null:
