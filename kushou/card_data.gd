@@ -38,7 +38,7 @@ static func build() -> Dictionary:
 				elif str(s["key"]) == "atk":
 					own_text = "攻击 +" + str(own_val)
 				elif str(s["key"]) == "def":
-					own_text = "防御 +" + str(own_val)
+					own_text = "全系减免 +" + str(own_val * 3) + "%"     # v6：防御 → 固定减免（1 点 = 3%）
 				elif str(s["key"]) == "hp":
 					own_text = "气血 +" + str(own_val)
 				elif str(s["key"]) == "mp":

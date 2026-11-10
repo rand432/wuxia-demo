@@ -166,6 +166,8 @@ const MAX_ASPD := 5.0
 const SEALED := ["zl", "cuisanniang", "jicanghai", "chenshi"]
 var _combined: Array = []
 var _stats := {"atk": 0.0, "def": 0.0, "hp": 0.0}
+# v6：卡池「防御」换算成固定减免的系数（1 点防御 = 3%，按 100 伤等效对齐旧手感）
+const DEF_CARD_TO_RED := 0.03
 var _gold_pct := 0.0
 var _crystal_pct := 0.0
 # v13 群/险 两系：每波定额加成 · 全局难度 · 怪物类型收益
@@ -2656,7 +2658,12 @@ func _apply_own(s: Dictionary) -> void:
 	_push_run_mods()
 	if _core != null:
 		_core.hero["atk"] = float(_core.hero.get("atk", 0.0)) + float(s["atk"])
-		_core.hero["def"] = float(_core.hero.get("def", 0.0)) + float(s["def"])
+		# v6：防御卡不再加「数值减伤」，改成七系固定减免（1 点防御 = 3% 减免，跟旧手感对齐）
+		var def_red := float(s["def"]) * DEF_CARD_TO_RED
+		if def_red > 0.0:
+			for t in _core.DMG_TYPES:
+				if t != "真实":
+					_core.type_add(t, "red_add", def_red)
 		var hp_add := float(s["hp"])
 		_core.hero["hp_max"] = float(_core.hero.get("hp_max", 1.0)) + hp_add
 		_core.hero["hp"] = float(_core.hero.get("hp", 0.0)) + hp_add

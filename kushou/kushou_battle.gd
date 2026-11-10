@@ -281,7 +281,8 @@ func _attr_ensure() -> void:
 	type_attr = {}
 	for t in DMG_TYPES:
 		type_attr[t] = {"atk": 0.0, "pen_f": 0.0, "pen_p": 0.0,
-			"red_f": 0.0, "red_p": 0.0, "amp_f": 0.0, "amp_p": 0.0}
+			"red_f": 0.0, "red_p": 0.0, "amp_f": 0.0, "amp_p": 0.0,
+			"red_add": 0.0}   # v6：卡牌/进阶直接给的那部分固定减免（同步时叠加上去）
 
 # ---- 基础 5 条 ----
 func attr_final(key: String) -> float:
@@ -366,7 +367,8 @@ func _attr_sync_from_hero() -> void:
 			ea = elem_amp + float(dmg_elem.get(t, 0.0))
 			red += float(res_elem.get(t, 0.0))
 		type_attr[t]["amp_f"] = dmg_all + ea
-		type_attr[t]["red_f"] = red
+		# 固定减免 = 旧字段(护甲/全减免/抗性) ＋ 卡牌直接给的 red_add
+		type_attr[t]["red_f"] = red + float((type_attr[t] as Dictionary).get("red_add", 0.0))
 	# 穿透 / 百分比减免：本步一律 0（新属性，还没有任何来源）
 
 # ---- 目标侧：减免换算 ＋ 穿透结算 ----
