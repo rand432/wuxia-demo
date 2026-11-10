@@ -50,6 +50,7 @@ var _tot_keys: Array = ["bond", "combo"]
 var _tot_tab := "bond"
 var _devoured: Array = []          # 被吞噬的炫名单卡（组合页里也显示）
 var _combo_boost := {}             # 组合名 → 效果增幅（羁绊换来的，永久有效）
+var _combo_frac := {}              # 整数类组合的小数余额（+40% 攒两次给一次）
 var _sys_combos := {}              # 普通卡组合名集合（跟家传组合重名时，按普通卡算）
 var _tot_deck_root: Control = null
 var _tot_bond_root: Control = null
@@ -1528,25 +1529,28 @@ func _pick_aug(o: Dictionary, val: int) -> void:
 #   凑齐 3 个组合 → 这三套组合以后每次触发的效果 ×(1+boost%)
 #   （比如「开门三式」成 → 三锋 每波攻击+1 变 +1.4、铁壁 防御+1 变 +1.4、生机 气血+10 变 +14）
 const BOND_POOL := [
-	{"name": "开门三式", "glyph": "三", "need": ["三锋", "铁壁", "生机"], "boost": 40, "desc": "攻守血，三才初成"},
-	{"name": "锋芒", "glyph": "锋", "need": ["三锋", "蓄势", "战意"], "boost": 40, "desc": "一路磨到顶"},
-	{"name": "坚壁", "glyph": "壁", "need": ["铁壁", "龟息", "血守"], "boost": 40, "desc": "守在原地，寸步不让"},
-	{"name": "生生", "glyph": "生", "need": ["生机", "回春", "不屈"], "boost": 40, "desc": "打不死的才叫活着"},
-	{"name": "聚财", "glyph": "财", "need": ["聚财", "生息", "掠夺"], "boost": 40, "desc": "钱要生钱才算钱"},
-	{"name": "灵脉", "glyph": "灵", "need": ["灵涌", "凝晶", "猎晶"], "boost": 40, "desc": "灵气灌顶，气走周天"},
-	{"name": "攻守", "glyph": "守", "need": ["三锋", "铁壁", "龟息"], "boost": 35, "desc": "先站住，再找破绽"},
-	{"name": "迅雷", "glyph": "疾", "need": ["蓄势", "灵涌", "聚财"], "boost": 45, "desc": "快一步，处处先手"},
-	{"name": "血战", "glyph": "血", "need": ["血守", "不屈", "掠夺"], "boost": 50, "desc": "杀得多，活得久"},
-	{"name": "同源", "glyph": "源", "need": ["三锋", "聚财", "灵涌"], "boost": 40, "desc": "刀钱灵，本是一家"},
-	{"name": "守拙", "glyph": "拙", "need": ["铁壁", "回春", "生息"], "boost": 45, "desc": "越笨的法子越管用"},
-	{"name": "破阵", "glyph": "破", "need": ["战意", "血守", "掠夺"], "boost": 50, "desc": "阵一破，人就散了"},
-	# ---- 家传羁绊：**同属性/同类型**的两位祖宗配对，成后放大他们的本命技 ----
-	{"name": "剑棍同源", "glyph": "剑", "need": ["剑势", "冲撞"], "boost": 40, "lbl": "家传技能 +%d%%",
-		"desc": "主角 · 滚地龙 · 同为物理"},
-	{"name": "同气连枝", "glyph": "鸾", "need": ["剑势", "飞刃"], "boost": 40, "lbl": "家传技能 +%d%%",
-		"desc": "主角 · 苏青鸾 · 同为物理"},
-	{"name": "市井三侠", "glyph": "侠", "need": ["手快", "冲撞", "飞刃"], "boost": 30, "lbl": "家传技能 +%d%%",
-		"desc": "小乞儿 · 滚地龙 · 苏青鸾"},
+	# ---- 线羁绊：这条线 4 阶组合全通 → 这条线所有组合效果 +50% ----
+	{"name": "剑道", "glyph": "剑", "need": ["三锋", "蓄势", "战意", "无前"], "boost": 50, "desc": "攻击线 · 全四阶"},
+	{"name": "铜墙", "glyph": "壁", "need": ["铁壁", "龟息", "血守", "不摧"], "boost": 50, "desc": "防御线 · 全四阶"},
+	{"name": "生生诀", "glyph": "生", "need": ["生机", "回春", "不屈", "长生"], "boost": 50, "desc": "气血线 · 全四阶"},
+	{"name": "气宗", "glyph": "气", "need": ["凝息", "聚气", "通脉", "化虚"], "boost": 50, "desc": "内力线 · 全四阶"},
+	{"name": "财路", "glyph": "财", "need": ["聚财", "生息", "掠夺", "财源"], "boost": 50, "desc": "金币线 · 全四阶"},
+	{"name": "灵河", "glyph": "灵", "need": ["灵涌", "凝晶", "猎晶", "晶河"], "boost": 50, "desc": "灵晶线 · 全四阶"},
+	{"name": "蚁潮", "glyph": "潮", "need": ["蜂拥", "潮涌", "蜂起", "倾巢"], "boost": 50, "desc": "群线 · 全四阶"},
+	{"name": "险途", "glyph": "险", "need": ["赏金", "晶簇", "遗珍", "王座"], "boost": 50, "desc": "险线 · 全四阶"},
+	{"name": "商道", "glyph": "商", "need": ["进账", "利市", "日进", "万贯"], "boost": 50, "desc": "经济线 · 全四阶"},
+	{"name": "悟真", "glyph": "悟", "need": ["奋起", "精进", "顿悟", "悟道"], "boost": 50, "desc": "经验线 · 全四阶"},
+	# ---- 跨线羁绊：两条线各挑一套 → 那两套组合 +40% ----
+	{"name": "攻守", "glyph": "守", "need": ["三锋", "铁壁"], "boost": 40, "desc": "攻线 + 防线 · 初阶"},
+	{"name": "血刃", "glyph": "血", "need": ["战意", "血守"], "boost": 40, "desc": "击杀即长的攻与防"},
+	{"name": "钱灵", "glyph": "钱", "need": ["聚财", "灵涌"], "boost": 40, "desc": "每波结算的两种钱"},
+	{"name": "群险", "glyph": "众", "need": ["蜂拥", "赏金"], "boost": 40, "desc": "人越多 / 赏越多"},
+	{"name": "财悟", "glyph": "赚", "need": ["进账", "奋起"], "boost": 40, "desc": "赚钱与成长绑一起"},
+	{"name": "气守", "glyph": "息", "need": ["凝息", "龟息"], "boost": 40, "desc": "耗得住才守得住"},
+	# ---- 家传羁绊：同属性 / 同类型两位祖宗配对，效果只加本命技数值 ----
+	{"name": "剑棍同源", "glyph": "剑", "need": ["剑势", "冲撞"], "boost": 40, "lbl": "家传技能 +%d%%", "desc": "主角 · 滚地龙 · 同为物理"},
+	{"name": "同气连枝", "glyph": "鸾", "need": ["剑势", "飞刃"], "boost": 40, "lbl": "家传技能 +%d%%", "desc": "主角 · 苏青鸾 · 同为物理"},
+	{"name": "市井三侠", "glyph": "侠", "need": ["手快", "冲撞", "飞刃"], "boost": 30, "lbl": "家传技能 +%d%%", "desc": "小乞儿 · 滚地龙 · 苏青鸾"},
 ]
 
 # 宝物页：和抽卡/进阶同一套排版，按钮三个：刷新 · N 次 / 隐藏 / 放弃 +1 刷新
@@ -1987,8 +1991,8 @@ class AugCard extends Control:
 		draw_arc(c, 50.0, 0.0, TAU, 48, QC[q], 2.0)
 		draw_string(F, c + Vector2(-15, 16), glyph, HORIZONTAL_ALIGNMENT_LEFT, -1, 44, Color(0.13, 0.12, 0.11))
 		draw_string(F, Vector2(0, 232), effect, HORIZONTAL_ALIGNMENT_CENTER, size.x, 22, Color(0.46, 0.20, 0.10))
-		draw_string(F, Vector2(10, 262), desc, HORIZONTAL_ALIGNMENT_CENTER, size.x - 20, 14, Color(0.38, 0.33, 0.26))
-		draw_string(F, Vector2(0, 284), "点击选取", HORIZONTAL_ALIGNMENT_CENTER, size.x, 14, Color(0.58, 0.50, 0.36))
+		draw_multiline_string(F, Vector2(10, 250), desc, HORIZONTAL_ALIGNMENT_CENTER, size.x - 20, 13, 2, Color(0.38, 0.33, 0.26))
+		draw_string(F, Vector2(0, 292), "点击选取", HORIZONTAL_ALIGNMENT_CENTER, size.x, 12, Color(0.58, 0.50, 0.36))
 	func _gui_input(ev: InputEvent) -> void:
 		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
 			picked.emit()
@@ -2083,6 +2087,7 @@ func _init_cards() -> void:
 	_backwash_done = false
 	_devoured.clear()
 	_combo_boost.clear()
+	_combo_frac.clear()
 	_anc_mod.clear()
 	_elem_mod.clear()
 	_shiny_rolled.clear()
@@ -2186,26 +2191,26 @@ func _apply_combo(rec: Dictionary) -> void:
 		"gold_pct":
 			_gold_pct += val
 		"gold_flat":
-			_wen += int(val)
+			_wen += _take_int(rec, val)
 			if _coin_lb != null: _coin_lb.text = str(_wen)
 		"crystal_flat":
-			_crystal += int(val)
+			_crystal += _take_int(rec, val)
 			_update_crystal()
 		"mp_flat":
 			_mp = minf(_mp_max, _mp + val)     # v5：内力系组合 → 回内力
 		# ---- v13 群 / 险 ----
 		"count_flat":
-			_wave_extra += int(val)
+			_wave_extra += _take_int(rec, val)
 		"coin_count":
-			_coin_count_extra += int(val)
+			_coin_count_extra += _take_int(rec, val)
 		"crystal_count":
-			_crystal_count_extra += int(val)
+			_crystal_count_extra += _take_int(rec, val)
 		"treasure_pct":
 			_treasure_pct += val
 		"boss_pct":
 			_boss_pct += val
 		"devour_n":
-			_devour_keep(int(val))
+			_devour_keep(_take_int(rec, val))
 		"killnum_pct":
 			_killnum_pct += val
 	# v13：组合还带一条「全局难度」
@@ -2214,6 +2219,20 @@ func _apply_combo(rec: Dictionary) -> void:
 		_diff_pct += float(rec.get("combo_extra_val", 0))
 	if key in ["count_flat", "coin_count", "crystal_count", "treasure_pct", "boss_pct"] or ek == "diff_pct":
 		_push_run_mods()
+
+# 整数类组合（+1 文钱 / +2 只怪 / +1 张吞噬…）的增幅取整：
+#   +40% 作用在 1 上 = 1.4，直接 int() 会被抹成 1（等于没加）。
+#   这里把小数攒进 _combo_frac，攒够 1 就多给 1 点 —— 长时间看就是实打实的 +40%。
+func _take_int(rec: Dictionary, val: float) -> int:
+	var nm := str(rec.get("name", ""))
+	var whole := int(floor(val))
+	var frac := val - float(whole)
+	if frac <= 0.0001:
+		return whole
+	var acc := float(_combo_frac.get(nm, 0.0)) + frac
+	var extra := int(floor(acc))
+	_combo_frac[nm] = acc - float(extra)
+	return whole + extra
 
 func _check_sets() -> void:
 	var changed := true
