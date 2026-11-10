@@ -2935,6 +2935,10 @@ var _mp_bar: Panel = null
 var _skill_slots: Array = []
 var _god_layer: Control = null
 var _god_root: Control = null
+var _god_ban_lb: Label = null
+var _god_refresh_btn: Button = null
+var _god_reroll := 0            # 请神刷新次数（放弃 +1，刷新 -1）
+var _god_hand_charge := -1      # 记住这一手是几次请神时掷的（隐藏再开不重掷）
 
 # ---------------- 技能栏 ----------------
 func _build_skill_bar() -> void:
@@ -3153,33 +3157,30 @@ func _label_skill(aid: String) -> String:
 func _build_god_pick() -> void:
 	_god_layer = Control.new()
 	_god_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_god_layer.mouse_filter = Control.MOUSE_FILTER_STOP
+	_god_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE      # 空白处放行给战场
 	_god_layer.visible = false
 	_god_layer.z_index = 40
 	add_child(_god_layer)
-	var dim := ColorRect.new()
-	dim.color = Color(0.04, 0.03, 0.02, 0.66)
-	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	dim.mouse_filter = Control.MOUSE_FILTER_STOP
-	dim.gui_input.connect(func(ev: InputEvent) -> void:
-		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
-			_hide_god_pick())
-	_god_layer.add_child(dim)
 	var ban := Panel.new()
-	ban.position = Vector2(230, 168)
-	ban.size = Vector2(260, 48)
+	ban.position = Vector2(230, 162)
+	ban.size = Vector2(260, 42)
 	var bsb := StyleBoxFlat.new()
 	bsb.bg_color = Color(0.48, 0.14, 0.10, 0.97)
-	bsb.set_corner_radius_all(5)
+	bsb.set_corner_radius_all(4)
 	bsb.border_color = Color(0.95, 0.76, 0.36, 0.9)
 	bsb.set_border_width_all(2)
 	ban.add_theme_stylebox_override("panel", bsb)
 	_god_layer.add_child(ban)
-	_lbl("请  神", Vector2(0, 0), Vector2(260, 48), 24, Color(0.97, 0.90, 0.74), ban, HORIZONTAL_ALIGNMENT_CENTER)
+	_god_ban_lb = _lbl("请神", Vector2(0, 0), Vector2(260, 42), 20, Color(0.97, 0.90, 0.74), ban, HORIZONTAL_ALIGNMENT_CENTER)
+	_btn("隐藏", Rect2(620, 162, 72, 32), 17, Color(0.09, 0.08, 0.07, 0.98), GOLD, func(): _hide_god_pick(), _god_layer)
 	_god_root = Control.new()
 	_god_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_god_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_god_layer.add_child(_god_root)
+	_god_refresh_btn = _btn("刷新 · 0 次", Rect2(140, 620, 200, 54), 19,
+		Color(0.09, 0.08, 0.07, 0.98), GOLD, func(): _on_god_refresh(), _god_layer)
+	_btn("放弃 +1 刷新", Rect2(360, 620, 200, 54), 19,
+		Color(0.09, 0.08, 0.07, 0.98), Color(0.80, 0.62, 0.34), func(): _on_god_abandon(), _god_layer)
 
 func _show_god_pick() -> void:
 	if _god_layer == null:
@@ -3187,7 +3188,24 @@ func _show_god_pick() -> void:
 	if _draw_charge <= 0:
 		_toast("升级后可请神")
 		return
+	if _draw_layer != null:
+		_draw_layer.visible = false                    # 抽卡页开着一并收掉
+	# 同一手只掷一次：点［隐藏］关了再点［请神］，看到的是同一手（不能白刷）
+	if _god_hand_charge != _draw_charge:
+		_god_hand_charge = _draw_charge
+		_roll_god()
+	if _god_ban_lb != null:
+		_god_ban_lb.text = "请神 · 剩 %d 次" % _draw_charge
+	if _god_refresh_btn != null:
+		_god_refresh_btn.text = "刷新 · %d 次" % maxi(0, _god_reroll)
+		_god_refresh_btn.disabled = _god_reroll <= 0
+	_god_layer.visible = true
+	_god_layer.move_to_front()
+
+# 掷这一手（二选一）
+func _roll_god() -> void:
 	for c in _god_root.get_children():
+		_god_root.remove_child(c)          # 立刻摘掉，别等帧末（否则新旧卡片会同时存在）
 		c.queue_free()
 	var cands: Array = []
 	for aid_v in AncestorData.ANCESTORS.keys():
@@ -3196,12 +3214,15 @@ func _show_god_pick() -> void:
 			continue
 		if not _ancestors.has(aid):
 			cands.append(aid)
+	if _god_ban_lb != null:
+		_god_ban_lb.text = "请神 · 剩 %d 次" % _draw_charge
 	if cands.is_empty():
 		_toast("可请的祖宗都已上身（高品祖宗需抽取，暂未开放）")
+		_hide_god_pick()
 		return
 	cands.shuffle()
-	var n := mini(3, cands.size())
-	var total_w := float(n) * 200.0 + float(n - 1) * 20.0
+	var n := mini(2, cands.size())
+	var total_w := float(n) * 260.0 + float(maxi(0, n - 1)) * 40.0
 	var x0 := (720.0 - total_w) * 0.5
 	for i in n:
 		var gc := GodCard.new()
@@ -3213,14 +3234,29 @@ func _show_god_pick() -> void:
 		gc.element = str(a.get("dtype", ""))
 		gc.quality = int(a["quality"])
 		gc.icon = load(str(a["art"]))
-		gc.position = Vector2(x0 + float(i) * 220.0, 250)
-		gc.size = Vector2(200, 300)
+		gc.position = Vector2(x0 + float(i) * 300.0, 214)
+		gc.size = Vector2(260, 390)
 		gc.picked.connect(func() -> void: _pick_god(aid))
 		_god_root.add_child(gc)
-	_lbl("择一祖宗上身 · 剩余 %d 次" % _draw_charge, Vector2(0, 224), Vector2(720, 24), 17,
-		Color(0.92, 0.88, 0.78), _god_root, HORIZONTAL_ALIGNMENT_CENTER)
-	_god_layer.visible = true
-	_god_layer.move_to_front()
+	if _god_refresh_btn != null:
+		_god_refresh_btn.text = "刷新 · %d 次" % maxi(0, _god_reroll)
+		_god_refresh_btn.disabled = _god_reroll <= 0
+
+# 刷新：次数型（用一次少一次）
+func _on_god_refresh() -> void:
+	if _god_reroll <= 0:
+		_toast("刷新次数用完了")
+		return
+	_god_reroll -= 1
+	_roll_god()
+	Aud.sfx("ui_click", -10.0)
+
+# 放弃：这一手不要了，换 1 次刷新（下次请神能用）
+func _on_god_abandon() -> void:
+	_god_reroll += 1
+	_hide_god_pick()
+	_toast("放弃请神 · 刷新 +1（现有 %d 次）" % _god_reroll)
+	Aud.sfx("ui_back", -10.0)
 
 func _hide_god_pick() -> void:
 	if _god_layer != null:
@@ -3299,30 +3335,34 @@ class GodCard extends Control:
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_STOP
 	func _draw() -> void:
+		# 全部按卡片尺寸比例画 —— 卡多大字就多大（请神改成二选一后卡放大到 260×390）
 		var qc: Color = QC[clampi(quality - 1, 0, 4)]
+		var w := size.x
+		var h := size.y
 		var sb := StyleBoxFlat.new()
 		sb.bg_color = Color(0.965, 0.945, 0.90, 1.0)
-		sb.set_corner_radius_all(9)
+		sb.set_corner_radius_all(int(11.0 * w / 260.0))
 		sb.border_color = qc
-		sb.set_border_width_all(6)
+		sb.set_border_width_all(int(7.0 * w / 260.0))
 		draw_style_box(sb, Rect2(Vector2.ZERO, size))
-		draw_string(F, Vector2(0, 36), god_name, HORIZONTAL_ALIGNMENT_CENTER, size.x, 26, Color(0.14, 0.11, 0.08))
-		var pr := Rect2(Vector2(40, 52), Vector2(120, 120))
+		draw_string(F, Vector2(0, h * 0.108), god_name, HORIZONTAL_ALIGNMENT_CENTER, w, int(w * 0.130), Color(0.14, 0.11, 0.08))
+		var side := w * 0.56
+		var pr := Rect2(Vector2((w - side) * 0.5, h * 0.145), Vector2(side, side))
 		draw_rect(pr, Color(0.88, 0.85, 0.78))
 		if icon != null:
 			var ts := icon.get_size()
 			var asp: float = pr.size.x / pr.size.y
-			var w: float = ts.x
-			var h: float = w / asp
-			if h > ts.y:
-				h = ts.y
-				w = h * asp
-			draw_texture_rect_region(icon, pr, Rect2((ts.x - w) * 0.5, (ts.y - h) * 0.5, w, h))
-		draw_rect(pr, Color(0.35, 0.30, 0.24, 0.30), false, 1.5)
-		draw_string(F, Vector2(0, 204), skill_name, HORIZONTAL_ALIGNMENT_CENTER, size.x, 21, Color(0.20, 0.15, 0.10))
-		draw_line(Vector2(18, 220), Vector2(size.x - 18, 220), Color(0.5, 0.4, 0.25, 0.35), 1.5)
-		draw_string(F, Vector2(0, 246), element, HORIZONTAL_ALIGNMENT_CENTER, size.x, 17, Color(0.42, 0.30, 0.12))
-		draw_string(F, Vector2(0, 280), "点 击 请 神", HORIZONTAL_ALIGNMENT_CENTER, size.x, 16, Color(0.66, 0.22, 0.15))
+			var iw: float = ts.x
+			var ih: float = iw / asp
+			if ih > ts.y:
+				ih = ts.y
+				iw = ih * asp
+			draw_texture_rect_region(icon, pr, Rect2((ts.x - iw) * 0.5, (ts.y - ih) * 0.5, iw, ih))
+		draw_rect(pr, Color(0.35, 0.30, 0.24, 0.30), false, 2.0)
+		draw_string(F, Vector2(0, h * 0.725), skill_name, HORIZONTAL_ALIGNMENT_CENTER, w, int(w * 0.100), Color(0.20, 0.15, 0.10))
+		draw_line(Vector2(w * 0.08, h * 0.768), Vector2(w * 0.92, h * 0.768), Color(0.5, 0.4, 0.25, 0.35), 1.6)
+		draw_string(F, Vector2(0, h * 0.845), element, HORIZONTAL_ALIGNMENT_CENTER, w, int(w * 0.082), Color(0.42, 0.30, 0.12))
+		draw_string(F, Vector2(0, h * 0.945), "点 击 请 神", HORIZONTAL_ALIGNMENT_CENTER, w, int(w * 0.076), Color(0.66, 0.22, 0.15))
 	func _gui_input(ev: InputEvent) -> void:
 		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
 			picked.emit()

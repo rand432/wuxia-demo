@@ -2,11 +2,11 @@ extends Control
 # ============================================================
 # kushou/attr_panel.gd —— 详细属性页 + 属性弹窗（设计稿 v6）
 #
-#   结构：基础 5 行（只写结果）＋ 伤害类型 7 页签（穿透/减免/增幅 两段）
-#   交互：点任意一行 → 弹窗（拆解 → 算式 → 总结）
+#   基础 6 行（攻击 / 气血 / 攻速 / 内力 / 暴击 / 爆伤）—— 只写结果
+#   伤害类型 7 页签（物理 / 金木水火土 / 真实）—— 穿透 / 减免 / 增幅 两段
+#   点任意一行 → 弹窗（拆解 → 算式 → 总结）
 #
-#   数据来源：core.attr_final(key) / core.type_field(系, field)
-#   本文件**只管画与点**，不参与结算。
+#   数据全部读 core.attr_final / core.type_field，本文件只管画与点。
 # ============================================================
 
 const F := preload("res://fonts/ink.ttf")
@@ -26,6 +26,7 @@ const BASE_ROWS := [
 	{"key": "atk", "icon": "sword", "name": "攻击"},
 	{"key": "hp", "icon": "heart", "name": "气血"},
 	{"key": "aspd", "icon": "aspd", "name": "攻速"},
+	{"key": "mp", "icon": "drop", "name": "内力"},
 	{"key": "crit", "icon": "star", "name": "暴击"},
 	{"key": "cdmg", "icon": "burst", "name": "爆伤"},
 ]
@@ -38,7 +39,8 @@ const TYPE_ROWS := [
 var core = null
 var tab := 0
 var popup := -1          # 弹窗对应的行（-1＝没开）
-var _rows: Array = []    # 命中测试：{rect, kind, idx}
+var popup_kind := ""     # base / type / real
+var _rows: Array = []
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
@@ -72,97 +74,132 @@ func _base_text(i: int) -> String:
 		0: return _fmt_num(_h("atk", 12.0))
 		1: return _fmt_num(_h("hp_max", 200.0))
 		2: return "%.2f 次/秒" % (_h("aspd", 1.0) / 1.8)
-		3: return _fmt_num(_h("crit", 0.05) * 100.0) + "%"
-		4: return _fmt_num(_h("crit_dmg", 2.0) * 100.0) + "%"
+		3: return _fmt_num(_h("mp_max", 100.0))
+		4: return _fmt_num(_h("crit", 0.05) * 100.0) + "%"
+		5: return _fmt_num(_h("crit_dmg", 2.0) * 100.0) + "%"
 	return "—"
 
 func _type_f(field: String) -> float:
 	if core == null:
 		return 0.0
 	var t: String = str(TYPES[clampi(tab, 0, TYPES.size() - 1)])
-	if field == "pen":
-		return float(core.type_field(t, "pen_f"))
-	if field == "pen_p":
-		return float(core.type_field(t, "pen_p"))
-	if field == "red":
-		return float(core.type_field(t, "red_f"))
-	if field == "red_p":
-		return float(core.type_field(t, "red_p"))
-	if field == "amp":
-		return float(core.type_field(t, "amp_f"))
+	match field:
+		"pen": return float(core.type_field(t, "pen_f"))
+		"pen_p": return float(core.type_field(t, "pen_p"))
+		"red": return float(core.type_field(t, "red_f"))
+		"red_p": return float(core.type_field(t, "red_p"))
+		"amp": return float(core.type_field(t, "amp_f"))
 	return float(core.type_field(t, "amp_p"))
+
+func _type_f_raw(t: String, f: String) -> float:
+	if core == null:
+		return 0.0
+	return float(core.type_field(t, f))
 
 # ---------------- 画 ----------------
 func _draw() -> void:
 	var f_t := _font(42)
-	var f_n := _font(30)
-	var f_v := _font(46)
+	var f_n := _font(28)
+	var f_v := _font(42)
 	var f_lab := _font(18)
 	var f_tab := _font(22)
 	var f_small := _font(16)
-	var f_gold := _font(40)
+	var f_gold := _font(38)
 
 	draw_rect(Rect2(0, 0, 720, 1280), Color(0.10, 0.09, 0.08, 0.55))
 	_panel(Rect2(28, 56, 664, 1168), PAPER, Color(0.78, 0.70, 0.55), 14)
 	draw_string(f_t, Vector2(64, 118), "详细属性", HORIZONTAL_ALIGNMENT_LEFT, -1, 42, INK)
 	draw_string(f_t, Vector2(636, 120), "×", HORIZONTAL_ALIGNMENT_LEFT, -1, 32, DIM)
-	draw_line(Vector2(64, 158), Vector2(656, 158), Color(0.80, 0.76, 0.66), 2.0)
-	draw_string(f_lab, Vector2(64, 196), "基 础", HORIZONTAL_ALIGNMENT_LEFT, -1, 18, GOLD)
+	draw_line(Vector2(64, 152), Vector2(656, 152), Color(0.80, 0.76, 0.66), 2.0)
+	draw_string(f_lab, Vector2(64, 186), "基 础", HORIZONTAL_ALIGNMENT_LEFT, -1, 18, GOLD)
 
 	_rows.clear()
 	for i in BASE_ROWS.size():
-		var y := 208.0 + float(i) * 100.0
-		_icon(Vector2(88, y + 34), str(BASE_ROWS[i]["icon"]), INK)
-		draw_string(f_n, Vector2(122, y + 44), str(BASE_ROWS[i]["name"]), HORIZONTAL_ALIGNMENT_LEFT, -1, 30, DIM)
-		_right(f_v, 470, y + 48, _base_text(i), INK, 46)
-		_rows.append({"rect": Rect2(64, y, 592, 92), "kind": "base", "idx": i})
+		var y := 200.0 + float(i) * 92.0
+		_icon(Vector2(88, y + 32), str(BASE_ROWS[i]["icon"]), INK)
+		draw_string(f_n, Vector2(122, y + 42), str(BASE_ROWS[i]["name"]), HORIZONTAL_ALIGNMENT_LEFT, -1, 28, DIM)
+		var txt := _base_text(i)
+		var sz := 42 if txt.length() <= 4 else 34
+		_right(_font(sz), 470, y + 44, txt, INK, sz)
+		_rows.append({"rect": Rect2(64, y, 592, 86), "kind": "base", "idx": i})
 
-	draw_line(Vector2(64, 714), Vector2(656, 714), Color(0.80, 0.76, 0.66), 2.0)
-	draw_string(f_lab, Vector2(64, 752), "伤害类型", HORIZONTAL_ALIGNMENT_LEFT, -1, 18, GOLD)
+	draw_line(Vector2(64, 770), Vector2(656, 770), Color(0.80, 0.76, 0.66), 2.0)
+	draw_string(f_lab, Vector2(64, 804), "伤害类型", HORIZONTAL_ALIGNMENT_LEFT, -1, 18, GOLD)
 
 	for i in TYPES.size():
 		var x := 64.0 + float(i) * 85.0
 		var on := i == tab
-		var r := Rect2(x, 766, 82, 50)
+		var r := Rect2(x, 820, 82, 48)
 		draw_rect(r, SEAL if on else Color(0.98, 0.96, 0.92), true)
 		if not on:
 			draw_rect(r, FAINT, false, 1.0)
 		var col := Color(0.98, 0.95, 0.88) if on else INK
-		draw_string(f_tab, Vector2(x, 800), str(TAB_LABEL[i]), HORIZONTAL_ALIGNMENT_CENTER, 82, 22, col)
+		draw_string(f_tab, Vector2(x, 852), str(TAB_LABEL[i]), HORIZONTAL_ALIGNMENT_CENTER, 82, 22, col)
 		_rows.append({"rect": r, "kind": "tab", "idx": i})
 
-	var real := tab == 6
-	for i in TYPE_ROWS.size():
-		var y2 := 846.0 + float(i) * 100.0
-		_icon(Vector2(88, y2 + 34), str(TYPE_ROWS[i]["icon"]), INK)
-		draw_string(f_n, Vector2(122, y2 + 44), str(TYPE_ROWS[i]["name"]), HORIZONTAL_ALIGNMENT_LEFT, -1, 30, DIM)
-		if real and i < 2:
-			_right(f_gold, 470, y2 + 44, "—", FAINT, 40)
-			draw_string(f_small, Vector2(486, y2 + 40), "不吃", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, FAINT)
-		else:
-			_right(f_v, 352, y2 + 48, _fmt_num(_type_f(str(TYPE_ROWS[i]["field"])) * 100.0), INK, 46)
-			draw_string(_font(34), Vector2(368, y2 + 44), "/", HORIZONTAL_ALIGNMENT_LEFT, -1, 34, FAINT)
-			_right(_font(40), 470, y2 + 44, _fmt_num(_type_f(str(TYPE_ROWS[i]["field"]) + "_p") * 100.0) + "%", GOLD, 40)
-		_rows.append({"rect": Rect2(64, y2, 592, 92), "kind": "type", "idx": i})
-
-	draw_string(f_small, Vector2(64, 1180), "点任意一行看说明", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, FAINT)
+	if tab == 6:
+		_real_rows(f_n, f_v, f_gold, f_small)
+	else:
+		for i in TYPE_ROWS.size():
+			var y2 := 892.0 + float(i) * 96.0
+			_icon(Vector2(88, y2 + 32), str(TYPE_ROWS[i]["icon"]), INK)
+			draw_string(f_n, Vector2(122, y2 + 42), str(TYPE_ROWS[i]["name"]), HORIZONTAL_ALIGNMENT_LEFT, -1, 28, DIM)
+			_type_pair(y2, str(TYPE_ROWS[i]["field"]), f_v, f_gold)
+			_rows.append({"rect": Rect2(64, y2, 592, 90), "kind": "type", "idx": i})
+		draw_string(f_small, Vector2(64, 1188), "点任意一行看说明", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, FAINT)
 
 	if popup >= 0:
 		_draw_popup()
 
+func _real_rows(f_n: Font, f_v: Font, f_gold: Font, f_small: Font) -> void:
+	var defs := [
+		{"icon": "diamond", "name": "真实攻击", "val": _fmt_num(_type_f_raw("真实", "atk")), "grey": false},
+		{"icon": "up", "name": "真实伤害增幅", "val": _fmt_num(_type_f_raw("真实", "amp_f") * 100.0),
+			"val2": _fmt_num(_type_f_raw("真实", "amp_p") * 100.0) + "%", "grey": false},
+		{"icon": "arrow", "name": "穿透", "val": "—", "grey": true},
+		{"icon": "shield", "name": "减免", "val": "—", "grey": true},
+	]
+	for i in defs.size():
+		var y2 := 892.0 + float(i) * 78.0
+		var grey := bool(defs[i]["grey"])
+		_icon(Vector2(88, y2 + 28), str(defs[i]["icon"]), FAINT if grey else INK)
+		draw_string(f_n, Vector2(122, y2 + 38), str(defs[i]["name"]), HORIZONTAL_ALIGNMENT_LEFT, -1, 28, FAINT if grey else DIM)
+		if grey:
+			_right(f_gold, 470, y2 + 36, "—", FAINT, 38)
+			draw_string(f_small, Vector2(486, y2 + 32), "不吃", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, FAINT)
+		elif defs[i].has("val2"):
+			_right(_font(42), 352, y2 + 40, str(defs[i]["val"]), INK, 42)
+			draw_string(_font(32), Vector2(368, y2 + 36), "/", HORIZONTAL_ALIGNMENT_LEFT, -1, 32, FAINT)
+			_right(_font(38), 470, y2 + 36, str(defs[i]["val2"]), GOLD, 38)
+		else:
+			_right(_font(42), 470, y2 + 40, str(defs[i]["val"]), INK, 42)
+		_rows.append({"rect": Rect2(64, y2, 592, 74), "kind": "real", "idx": i})
+
+func _type_pair(y2: float, field: String, f_v: Font, f_gold: Font) -> void:
+	_right(_font(42), 352, y2 + 44, _fmt_num(_type_f(field) * 100.0), INK, 42)
+	draw_string(_font(32), Vector2(368, y2 + 40), "/", HORIZONTAL_ALIGNMENT_LEFT, -1, 32, FAINT)
+	_right(_font(38), 470, y2 + 40, _fmt_num(_type_f(field + "_p") * 100.0) + "%", GOLD, 38)
+
 func _draw_popup() -> void:
 	var f_title := _font(56)
-	var f_lab := _font(38)
+	var f_lab := _font(36)
 	var f_val := _font(50)
 	var f_mid := _font(34)
 	var f_eq := _font(40)
 	var f_res := _font(46)
 
 	draw_rect(Rect2(0, 0, 720, 1280), Color(0.10, 0.09, 0.08, 0.45))
-	_panel(Rect2(56, 196, 608, 820), Color(0.99, 0.97, 0.93), Color(0.78, 0.70, 0.55), 18)
+	_panel(Rect2(56, 196, 608, 780), Color(0.99, 0.97, 0.93), Color(0.78, 0.70, 0.55), 18)
 
-	var is_base := popup < 5
-	var name := str(BASE_ROWS[popup]["name"]) if is_base else str(TYPE_ROWS[popup - 5]["name"])
+	var is_base := popup_kind == "base"
+	var is_real := popup_kind == "real"
+	var name := ""
+	if is_base:
+		name = str(BASE_ROWS[popup]["name"])
+	elif is_real:
+		name = ["真实攻击", "真实伤害增幅", "穿透", "减免"][popup]
+	else:
+		name = str(TYPE_ROWS[popup]["name"])
 	draw_string(f_title, Vector2(96, 268), name, HORIZONTAL_ALIGNMENT_LEFT, -1, 56, INK)
 	draw_string(f_mid, Vector2(596, 268), "×", HORIZONTAL_ALIGNMENT_LEFT, -1, 40, DIM)
 	draw_line(Vector2(96, 300), Vector2(624, 300), FAINT, 2.0)
@@ -171,36 +208,65 @@ func _draw_popup() -> void:
 		var i := popup
 		var total := 0.0
 		var base := 0.0
+		var is_pct := false
 		match i:
 			0: total = _h("atk", 12.0); base = 12.0
 			1: total = _h("hp_max", 200.0); base = 200.0
-			2: total = _h("aspd", 1.0); base = 1.0
-			3: total = _h("crit", 0.05) * 100.0; base = 5.0
-			4: total = _h("crit_dmg", 2.0) * 100.0; base = 200.0
+			2: total = _h("aspd", 1.0) / 1.8; base = 1.0 / 1.8; is_pct = true
+			3: total = _h("mp_max", 100.0); base = 100.0
+			4: total = _h("crit", 0.05) * 100.0; base = 5.0
+			5: total = _h("crit_dmg", 2.0) * 100.0; base = 200.0
 		var temp := total - base
-		draw_string(f_lab, Vector2(96, 372), "基础", HORIZONTAL_ALIGNMENT_LEFT, -1, 38, DIM)
-		_right(f_val, 624, 366, _fmt_num(base), INK, 50)
-		draw_string(f_lab, Vector2(96, 452), "临时", HORIZONTAL_ALIGNMENT_LEFT, -1, 38, DIM)
-		_right(f_val, 624, 446, ("%+d" % int(round(temp))), GRN, 50)
+		draw_string(f_lab, Vector2(96, 372), "基础", HORIZONTAL_ALIGNMENT_LEFT, -1, 36, DIM)
+		_right(f_val, 624, 366, _fmt_val(base, is_pct), INK, 50)
+		draw_string(f_lab, Vector2(96, 452), "临时", HORIZONTAL_ALIGNMENT_LEFT, -1, 36, DIM)
+		_right(f_val, 624, 446, _fmt_delta(temp, is_pct), GRN, 50)
 		draw_line(Vector2(96, 508), Vector2(624, 508), FAINT, 2.0)
-		draw_string(f_mid, Vector2(96, 546), "（基础 ＋ 临时）× 增幅", HORIZONTAL_ALIGNMENT_LEFT, -1, 34, INK)
-		draw_string(f_eq, Vector2(120, 616), _fmt_num(base) + " ＋ " + _fmt_num(temp), HORIZONTAL_ALIGNMENT_LEFT, -1, 40, DIM)
-		_right(f_eq, 624, 610, _fmt_num(total), INK, 40)
-		_right(f_res, 624, 700, _fmt_num(total), SEAL, 46)
+		draw_string(f_mid, Vector2(96, 552), "（基础 ＋ 临时）× 增幅", HORIZONTAL_ALIGNMENT_LEFT, -1, 34, INK)
+		draw_string(f_eq, Vector2(120, 622), _fmt_val(base, is_pct) + " ＋ " + _fmt_delta(temp, is_pct), HORIZONTAL_ALIGNMENT_LEFT, -1, 40, DIM)
+		_right(f_res, 624, 700, _fmt_val(total, is_pct), SEAL, 46)
+	elif is_real:
+		if popup == 0:
+			draw_string(f_lab, Vector2(96, 372), "真实攻击", HORIZONTAL_ALIGNMENT_LEFT, -1, 36, DIM)
+			_right(f_val, 624, 366, _fmt_num(_type_f_raw("真实", "atk")), INK, 50)
+			draw_line(Vector2(96, 424), Vector2(624, 424), FAINT, 2.0)
+			draw_string(f_mid, Vector2(96, 470), "由请神技能换算", HORIZONTAL_ALIGNMENT_LEFT, -1, 34, INK)
+			draw_string(f_mid, Vector2(96, 514), "不吃总攻击", HORIZONTAL_ALIGNMENT_LEFT, -1, 34, INK)
+			draw_string(_font(28), Vector2(96, 570), "例：刺骨 ＝ 气血上限 × 2.5%", HORIZONTAL_ALIGNMENT_LEFT, -1, 28, DIM)
+		elif popup == 1:
+			var af := _type_f_raw("真实", "amp_f") * 100.0
+			var ap := _type_f_raw("真实", "amp_p") * 100.0
+			draw_string(f_lab, Vector2(96, 372), "固定", HORIZONTAL_ALIGNMENT_LEFT, -1, 36, DIM)
+			_right(f_val, 624, 366, _fmt_num(af), INK, 50)
+			draw_string(f_lab, Vector2(96, 452), "百分比", HORIZONTAL_ALIGNMENT_LEFT, -1, 36, DIM)
+			_right(f_val, 624, 446, _fmt_num(ap) + "%", GOLD, 50)
+			draw_line(Vector2(96, 508), Vector2(624, 508), FAINT, 2.0)
+			draw_string(f_mid, Vector2(96, 552), "唯一对真实伤害生效的加成", HORIZONTAL_ALIGNMENT_LEFT, -1, 34, INK)
+		else:
+			draw_string(f_mid, Vector2(96, 410), "真实伤害不吃它", HORIZONTAL_ALIGNMENT_LEFT, -1, 34, INK)
+			draw_string(f_mid, Vector2(96, 460), "没有抗性可穿、也不可减免", HORIZONTAL_ALIGNMENT_LEFT, -1, 34, DIM)
 	else:
-		var j := popup - 5
+		var j := popup
 		var flat := _type_f(str(TYPE_ROWS[j]["field"])) * 100.0
 		var pct := _type_f(str(TYPE_ROWS[j]["field"]) + "_p") * 100.0
-		draw_string(f_lab, Vector2(96, 372), "固定", HORIZONTAL_ALIGNMENT_LEFT, -1, 38, DIM)
+		draw_string(f_lab, Vector2(96, 372), "固定", HORIZONTAL_ALIGNMENT_LEFT, -1, 36, DIM)
 		_right(f_val, 624, 366, _fmt_num(flat), INK, 50)
-		draw_string(f_lab, Vector2(96, 452), "百分比", HORIZONTAL_ALIGNMENT_LEFT, -1, 38, DIM)
+		draw_string(f_lab, Vector2(96, 452), "百分比", HORIZONTAL_ALIGNMENT_LEFT, -1, 36, DIM)
 		_right(f_val, 624, 446, _fmt_num(pct) + "%", GOLD, 50)
 		draw_line(Vector2(96, 508), Vector2(624, 508), FAINT, 2.0)
-		draw_string(f_mid, Vector2(96, 548), "两段依次作用，不对对手做假设", HORIZONTAL_ALIGNMENT_LEFT, -1, 34, INK)
+		draw_string(f_mid, Vector2(96, 552), "两段依次作用", HORIZONTAL_ALIGNMENT_LEFT, -1, 34, INK)
 
 # ---------------- 小工具 ----------------
 func _font(sz: int) -> Font:
 	return F
+
+func _fmt_val(v: float, pct: bool) -> String:
+	return "%.2f" % v if pct else _fmt_num(v)
+
+func _fmt_delta(v: float, pct: bool) -> String:
+	if pct:
+		return "%+.2f" % v
+	return "%+d" % int(round(v))
 
 func _panel(r: Rect2, bg: Color, border: Color, rad: int) -> void:
 	var sb := StyleBoxFlat.new()
@@ -230,6 +296,9 @@ func _icon(c: Vector2, kind: String, col: Color) -> void:
 			draw_line(c + Vector2(-11, -7), c + Vector2(2, -7), col, w)
 			draw_line(c + Vector2(-11, 0), c + Vector2(7, 0), col, w)
 			draw_line(c + Vector2(-11, 7), c + Vector2(12, 7), col, w)
+		"drop":
+			draw_circle(c + Vector2(0, 3), 7.0, col)
+			draw_colored_polygon(PackedVector2Array([c + Vector2(-6.5, 0), c + Vector2(6.5, 0), c + Vector2(0, -11)]), col)
 		"star":
 			var pts := [Vector2(0, -12), Vector2(-3, -3), Vector2(-12, 0), Vector2(-3, 3), Vector2(0, 12), Vector2(3, 3), Vector2(12, 0), Vector2(3, -3)]
 			var arr := PackedVector2Array()
@@ -251,6 +320,10 @@ func _icon(c: Vector2, kind: String, col: Color) -> void:
 			draw_polyline(sh, col, w, true)
 		"up":
 			draw_colored_polygon(PackedVector2Array([c + Vector2(0, -12), c + Vector2(9, -2), c + Vector2(3.5, -2), c + Vector2(3.5, 11), c + Vector2(-3.5, 11), c + Vector2(-3.5, -2), c + Vector2(-9, -2)]), col)
+		"diamond":
+			var dm := PackedVector2Array([c + Vector2(0, -11), c + Vector2(8, 0), c + Vector2(0, 11), c + Vector2(-8, 0)])
+			dm.append(dm[0])
+			draw_polyline(dm, col, w, true)
 
 # ---------------- 点 ----------------
 func _gui_input(ev: InputEvent) -> void:
@@ -271,7 +344,8 @@ func _gui_input(ev: InputEvent) -> void:
 			if str(r["kind"]) == "tab":
 				tab = int(r["idx"])
 			else:
-				popup = int(r["idx"]) if str(r["kind"]) == "base" else 5 + int(r["idx"])
+				popup_kind = str(r["kind"])
+				popup = int(r["idx"])
 			queue_redraw()
 			accept_event()
 			return
