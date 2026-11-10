@@ -116,6 +116,8 @@ const TREA_CHARGE_START := 1
 var _bonds: Array = []          # 身上的羁绊（凑齐就消耗掉，所以不设上限）
 var _bond_unlocked := {}        # 已解锁的羁绊名（只有这些会出现在三选一里）
 var _bond_taken := {}           # 已经结过的羁绊名（不重复出现）
+var _crystal_lock := false      # 「倾囊」之后：灵晶收入归零
+var _rare_buffs: Array = []     # 限时 buff：{amount, t}
 var _bonds_done := 0            # 这一局已经成过几张
 var _trea_charge := TREA_CHARGE_START
 var _trea_reroll := 3
@@ -1578,6 +1580,44 @@ const BOND_POOL := [
 # 每条链的第一条（开局就在池子里）
 const BOND_ENTRIES := ["攻防", "金银", "养战", "剑棍同源"]
 
+# ============================================================
+# 稀有单卡（不成套、不占羁绊链、拿到即用，效果只做数值）
+#   四类：① 巨额灵晶一次性（之后灵晶收入归零）② 文钱换灵晶
+#        ③ 限时 buff ④ 直接给资源（文钱 / 灵晶 / 杀敌，小中大）
+# ============================================================
+const RARE_POOL := [
+	{"name": "倾囊", "glyph": "晶", "rare": true, "kind": "crystal_burst", "v": 200,
+		"effect": "灵晶 +200", "desc": "稀有 · 之后灵晶收入归零"},
+	{"name": "折钱", "glyph": "换", "rare": true, "kind": "convert", "v": 10, "cap": 50,
+		"effect": "文钱 10:1 换灵晶", "desc": "稀有 · 最多换 50 灵晶"},
+	{"name": "狂血", "glyph": "狂", "rare": true, "kind": "buff", "stat": "atk_pct", "v": 60, "dur": 30,
+		"effect": "30 秒 攻击 +60%", "desc": "稀有 · 即得即用"},
+
+	{"name": "小晶囊", "glyph": "小", "rare": true, "kind": "res", "res": "crystal", "v": 20,
+		"effect": "灵晶 +20", "desc": "稀有 · 小"},
+	{"name": "中晶囊", "glyph": "中", "rare": true, "kind": "res", "res": "crystal", "v": 40,
+		"effect": "灵晶 +40", "desc": "稀有 · 中"},
+	{"name": "大晶囊", "glyph": "大", "rare": true, "kind": "res", "res": "crystal", "v": 80,
+		"effect": "灵晶 +80", "desc": "稀有 · 大"},
+
+	{"name": "小钱袋", "glyph": "小", "rare": true, "kind": "res", "res": "wen", "v": 300,
+		"effect": "文钱 +300", "desc": "稀有 · 小"},
+	{"name": "中钱袋", "glyph": "中", "rare": true, "kind": "res", "res": "wen", "v": 600,
+		"effect": "文钱 +600", "desc": "稀有 · 中"},
+	{"name": "大钱袋", "glyph": "大", "rare": true, "kind": "res", "res": "wen", "v": 1200,
+		"effect": "文钱 +1200", "desc": "稀有 · 大"},
+
+	{"name": "小杀令", "glyph": "小", "rare": true, "kind": "res", "res": "kill", "v": 50,
+		"effect": "杀敌 +50", "desc": "稀有 · 小"},
+	{"name": "中杀令", "glyph": "中", "rare": true, "kind": "res", "res": "kill", "v": 100,
+		"effect": "杀敌 +100", "desc": "稀有 · 中"},
+	{"name": "大杀令", "glyph": "大", "rare": true, "kind": "res", "res": "kill", "v": 200,
+		"effect": "杀敌 +200", "desc": "稀有 · 大"},
+]
+
+# 稀有单卡出现概率（每一手三张里）
+const RARE_CHANCE := 0.30
+
 # 宝物页：和抽卡/进阶同一套排版，按钮三个：刷新 · N 次 / 隐藏 / 放弃 +1 刷新
 func _build_trea() -> void:
 	_trea_layer = Control.new()
@@ -1680,14 +1720,36 @@ func _roll_trea() -> void:
 	var mult: float = [1.0, 1.5, 2.0, 3.0][clampi(q - 2, 0, 3)]
 	var pool: Array = _bond_pool()
 	pool.shuffle()
+	var picks: Array = []
+	for i in _trea_cards.size():
+		picks.append((pool[i] as Dictionary) if i < pool.size() else {})
+	# 稀有单卡：30% 概率顶掉一张（优先顶掉空位）
+	if not RARE_POOL.is_empty() and randf() < RARE_CHANCE:
+		var r: Dictionary = (RARE_POOL[randi() % RARE_POOL.size()] as Dictionary).duplicate()
+		var slot := 0
+		for i in picks.size():
+			if (picks[i] as Dictionary).is_empty():
+				slot = i
+				break
+		picks[slot] = r
 	for i in _trea_cards.size():
 		var c: AugCard = _trea_cards[i]
-		if i < pool.size():
-			var o: Dictionary = (pool[i] as Dictionary).duplicate()
-			c.o = o
+		var o: Dictionary = picks[i] if i < picks.size() else {}
+		if o.is_empty():
+			c.visible = false
+			c.queue_redraw()
+			continue
+		c.o = o
+		c.title = str(o["name"])
+		c.glyph = str(o["glyph"])
+		if bool(o.get("rare", false)):
+			# 稀有单卡：数值固定，不吃品质
+			c.oval = int(o["v"])
+			c.effect = str(o.get("effect", ""))
+			c.desc = str(o.get("desc", "稀有单卡"))
+			c.quality = 5
+		else:
 			c.oval = int(round(float(o["boost"]) * mult))
-			c.title = str(o["name"])
-			c.glyph = str(o["glyph"])
 			if o.has("need_series"):
 				c.effect = "组合效果 +%d%%" % int(c.oval)
 				c.desc = "需合成 " + _series_pair_cn(o) + "（任意一阶）"
@@ -1695,10 +1757,8 @@ func _roll_trea() -> void:
 				c.effect = str(o.get("lbl", "组合效果 +%d%%")) % int(c.oval)
 				c.desc = "需合成 " + "·".join(PackedStringArray(o["need"]))
 			c.quality = q
-			c.visible = true
-			c.mouse_filter = Control.MOUSE_FILTER_STOP
-		else:
-			c.visible = false
+		c.visible = true
+		c.mouse_filter = Control.MOUSE_FILTER_STOP
 		c.queue_redraw()
 	_refresh_trea_btn()
 
@@ -1731,6 +1791,12 @@ func _on_trea_card(card: AugCard) -> void:
 	_pick_trea(card.o, int(card.oval))
 
 func _pick_trea(o: Dictionary, val: int) -> void:
+	if bool(o.get("rare", false)):
+		_trea_pending = false
+		_hide_trea()
+		_trea_reroll += 0
+		_apply_rare(o)
+		return
 	var b := {"name": str(o["name"]), "boost": int(val), "prog": 0,
 		"lbl": str(o.get("lbl", "组合效果 +%d%%")),
 		"glyph": str(o.get("glyph", "羁")), "quality": _trea_quality()}
