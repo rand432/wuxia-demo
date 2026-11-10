@@ -152,20 +152,28 @@ func _open_forge(key: String) -> Node:
 	fs.open(key)
 	return fs
 
-# ---------------- 属性 ----------------
+# ---------------- 属性（一行四条：攻击 / 气血 / 内力 / 攻速） ----------------
+#   数值暂时来自装备合计（FD.totals）＋ 两个基础常量；
+#   等人物属性层接进来后，这里改成读 attr_final()。
+const ATK_BASE := 12.0        # 攻击基础（与 kushou/kushou_battle.gd 的 ATTR_BASE 对齐）
+const HP_BASE := 200.0        # 气血基础
+const MP_BASE := 100.0        # 内力基础
+const ATK_SEC := 1.8          # 攻速基础：1.8 秒/刀
+
 func _build_attr() -> void:
 	UI.label(self, "属 性", Vector2(24, 648), Vector2(120, 32), 22, P.DIM)
+	UI.label(self, "点属性看详细", Vector2(556, 652), Vector2(144, 26), 14, Color(0.70, 0.67, 0.61))
 	var t := FD.totals()
-	var rows := [
-		["攻 击", str(int(t["atk"])), "气 血", str(int(t["hp"])), "防 御", str(int(t["def"]))],
-		["速 度", str(int(t["spd"])), "暴 击", "15%", "闪 避", "5%"],
+	var cells := [
+		["攻 击", str(int(ATK_BASE + float(t["atk"])))],
+		["气 血", str(int(HP_BASE + float(t["hp"])))],
+		["内 力", str(int(MP_BASE))],
+		["攻 速", "%.2f/秒" % (1.0 / ATK_SEC)],
 	]
-	for r in rows.size():
-		var y := 690.0 + float(r) * 44.0
-		for c in 3:
-			var x := 24.0 + float(c) * 224.0
-			UI.label(self, str(rows[r][c * 2]), Vector2(x, y), Vector2(96, 32), 20, P.INK)
-			UI.label(self, str(rows[r][c * 2 + 1]), Vector2(x + 100, y), Vector2(80, 32), 20, P.INK)
+	for c in cells.size():
+		var x := 24.0 + float(c) * 168.0
+		UI.label(self, str(cells[c][0]), Vector2(x, 690), Vector2(96, 32), 20, P.DIM)
+		UI.label(self, str(cells[c][1]), Vector2(x + 76, 686), Vector2(92, 34), 24, P.INK)
 
 # ---------------- 背包（三类 + 竖直滚动） ----------------
 const CATS2 := ["装备", "材料", "道具"]
