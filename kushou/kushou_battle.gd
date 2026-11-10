@@ -157,7 +157,7 @@ var kill_heal := 0.08               # 击杀回血 = 上限的 8%（v18j 定值�
 var WAVE_HP := 1.08                 # 每波怪血 ×（v18j：1.14 → 1.08，实测同一套续航下 1-1 能多撑 2 波）
 var WAVE_ATK := 1.08                # 每波怪攻 ×
 const BASE_FOE_HP := 34.0           # v16x：30 -> 34（第 1 波怪血 +13%）
-var BASE_FOE_ATK := 4.5              # v17c（用户："调整怪伤害略微增加"）：4.0 -> 4.5　·　v18j 改 var：调参口
+var BASE_FOE_ATK := 3.8              # v6：删闪避后怪必中，怪攻 4.5→3.8 补偿　·　v17c（用户："调整怪伤害略微增加"）：4.0 -> 4.5　·　v18j 改 var：调参口
 const FOE_ASPD := 0.6               # 怪每秒打几下
 const FOE_SPD := 74.0               # 怪往下走的速度（像素/秒）
 #   v3i 用户"怪可以稍微再快一点"：42 → 58；v3k 用户"怪再快一点"：58 → 74
@@ -245,8 +245,9 @@ func _boss_pick(tier: int) -> Dictionary:
 const FOE_NAMES := ["狱狼", "疯牛", "毒蝎", "牢鼠"]
 
 var hide_units := true
+# v6：闪避下线（设计稿）—— 怪打人必中；命中率补偿见 BASE_FOE_ATK
 var hero := {"atk": 12.0, "hp": 200.0, "hp_max": 200.0, "mp": 100.0, "mp_max": 100.0,
-	"aspd": 1.0, "crit": 0.05, "dodge": 0.05, "cut": 0.0, "dmg_pct": 0.0}
+	"aspd": 1.0, "crit": 0.05, "cut": 0.0, "dmg_pct": 0.0}
 # ============================================================
 # v6 人物属性（设计稿：docs/人物属性_设计稿.md）
 #
@@ -403,6 +404,7 @@ var _spawn_t := 0.6
 var _hero_cd := 0.0
 # 主角出手：先起手（表现层同步挥剑），到兵器接触点才结算伤害
 const HERO_ATTACK_TIME := 1.8      # v6：默认攻速 1.8 秒/刀（设计稿）
+const HERO_DODGE := 0.0            # v6：闪避下线，恒 0（留个手柄，要回滚把它改回 0.05）
 const HERO_WINDUP := 0.18
 var _hero_pending: Dictionary = {}
 var _hero_pending_t := -1.0
@@ -1248,7 +1250,7 @@ func _process(delta: float) -> void:
 				if float(f.get("blind_t", 0.0)) > 0.0 and randf() < 0.35:
 					_push_float(hero_pos.x, hero_pos.y - 70.0, "打空", Color(0.86, 0.86, 0.62))
 					continue
-				if randf() < float(hero["dodge"]):
+				if randf() < HERO_DODGE:                              # v6：闪避下线 → 永不进这个分支
 					_push_float(size.x * 0.5, size.y - HERO_LINE - 40.0, "闪", Color(0.60, 0.80, 0.90))
 				else:
 					d2 = maxf(1.0, d2 * (1.0 - float(hero["cut"])))
@@ -3369,13 +3371,13 @@ var _waves_fx: Array = []           # 大浪拍击的水浪：{x, y, r, t}
 #   **团队增益**机制 —— 强度分两部分：
 #     基础值（低，0.05~0.10）＋ **属性换算**（三属性之一，每 100 点 +k）
 #   三属性取战斗里已被折算进 hero 的三项（跟外壳口径一致）：
-#     臂力 → atk ｜ 身法 → dodge ｜ 悟性 → mp_max
+#     臂力 → atk ｜ 身法 → 攻速加成 ｜ 悟性 → mp_max（v6：闪避下线，身法改喂攻速）
 #   ⚠ 基础值刻意压低（"初始不要太变态"），主要靠属性堆出来。
 # ============================================================
 func stat_of(attr: String) -> float:
 	match attr:
 		"arm": return float(hero.get("atk", 0.0))
-		"agi": return float(hero.get("dodge", 0.0)) * 100.0
+		"agi": return maxf(0.0, (float(hero.get("aspd", 1.0)) - 1.0) * 100.0)   # v6：身法 → 攻速加成
 		"wit": return float(hero.get("mp_max", 0.0))
 		_:     return 0.0
 
