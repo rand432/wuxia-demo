@@ -1528,25 +1528,28 @@ func _pick_aug(o: Dictionary, val: int) -> void:
 #   羁绊的效果**只能是"对应组合的效果增幅"**（用户口径）：
 #   凑齐 3 个组合 → 这三套组合以后每次触发的效果 ×(1+boost%)
 #   （比如「开门三式」成 → 三锋 每波攻击+1 变 +1.4、铁壁 防御+1 变 +1.4、生机 气血+10 变 +14）
+# 卡组的**三大线**（设计稿《困兽_请神与家传卡组_设计稿》§八·八，2026-11-09 定）
+const CARD_LINES := {
+	"成长线": ["atk", "def", "hp", "mp"],
+	"经济线": ["gold", "crystal", "exp", "peril", "bounty"],
+	"危途线": ["swarm"],
+}
+
 const BOND_POOL := [
-	# ---- 线羁绊：这条线 4 阶组合全通 → 这条线所有组合效果 +50% ----
-	{"name": "剑道", "glyph": "剑", "need": ["三锋", "蓄势", "战意", "无前"], "boost": 50, "desc": "攻击线 · 全四阶"},
-	{"name": "铜墙", "glyph": "壁", "need": ["铁壁", "龟息", "血守", "不摧"], "boost": 50, "desc": "防御线 · 全四阶"},
-	{"name": "生生诀", "glyph": "生", "need": ["生机", "回春", "不屈", "长生"], "boost": 50, "desc": "气血线 · 全四阶"},
-	{"name": "气宗", "glyph": "气", "need": ["凝息", "聚气", "通脉", "化虚"], "boost": 50, "desc": "内力线 · 全四阶"},
-	{"name": "财路", "glyph": "财", "need": ["聚财", "生息", "掠夺", "财源"], "boost": 50, "desc": "金币线 · 全四阶"},
-	{"name": "灵河", "glyph": "灵", "need": ["灵涌", "凝晶", "猎晶", "晶河"], "boost": 50, "desc": "灵晶线 · 全四阶"},
-	{"name": "蚁潮", "glyph": "潮", "need": ["蜂拥", "潮涌", "蜂起", "倾巢"], "boost": 50, "desc": "群线 · 全四阶"},
-	{"name": "险途", "glyph": "险", "need": ["赏金", "晶簇", "遗珍", "王座"], "boost": 50, "desc": "险线 · 全四阶"},
-	{"name": "商道", "glyph": "商", "need": ["进账", "利市", "日进", "万贯"], "boost": 50, "desc": "经济线 · 全四阶"},
-	{"name": "悟真", "glyph": "悟", "need": ["奋起", "精进", "顿悟", "悟道"], "boost": 50, "desc": "经验线 · 全四阶"},
-	# ---- 跨线羁绊：两条线各挑一套 → 那两套组合 +40% ----
-	{"name": "攻守", "glyph": "守", "need": ["三锋", "铁壁"], "boost": 40, "desc": "攻线 + 防线 · 初阶"},
-	{"name": "血刃", "glyph": "血", "need": ["战意", "血守"], "boost": 40, "desc": "击杀即长的攻与防"},
-	{"name": "钱灵", "glyph": "钱", "need": ["聚财", "灵涌"], "boost": 40, "desc": "每波结算的两种钱"},
-	{"name": "群险", "glyph": "众", "need": ["蜂拥", "赏金"], "boost": 40, "desc": "人越多 / 赏越多"},
-	{"name": "财悟", "glyph": "赚", "need": ["进账", "奋起"], "boost": 40, "desc": "赚钱与成长绑一起"},
-	{"name": "气守", "glyph": "息", "need": ["凝息", "龟息"], "boost": 40, "desc": "耗得住才守得住"},
+	# ---- 线羁绊（3 条）：该线每个系都完成「初阶组合」→ 整条线所有组合 +50% ----
+	{"name": "根基", "glyph": "根", "line": "成长线", "need": ["三锋", "铁壁", "生机", "凝息"], "boost": 50,
+		"lbl": "成长线 +%d%%", "desc": "攻 / 防 / 血 / 内 四系初阶"},
+	{"name": "开源", "glyph": "源", "line": "经济线", "need": ["聚财", "灵涌", "奋起", "赏金", "进账"], "boost": 50,
+		"lbl": "经济线 +%d%%", "desc": "文钱 / 灵晶 / 杀敌 / 挑战 / 收益"},
+	{"name": "危途", "glyph": "危", "line": "危途线", "need": ["蜂拥", "潮涌", "蜂起", "倾巢"], "boost": 50,
+		"lbl": "危途线 +%d%%", "desc": "增怪四阶全通"},
+	# ---- 跨线羁绊（6 条）：两条线各挑一套 → 那两套组合 +40% ----
+	{"name": "钱途", "glyph": "钱", "need": ["三锋", "聚财"], "boost": 40, "desc": "成长 × 经济"},
+	{"name": "守财", "glyph": "守", "need": ["铁壁", "灵涌"], "boost": 40, "desc": "成长 × 经济"},
+	{"name": "养战", "glyph": "兵", "need": ["生机", "蜂拥"], "boost": 40, "desc": "成长 × 危途"},
+	{"name": "险财", "glyph": "险", "need": ["猎晶", "潮涌"], "boost": 40, "desc": "经济 × 危途"},
+	{"name": "屠戮", "glyph": "屠", "need": ["战意", "倾巢"], "boost": 40, "desc": "成长 × 危途"},
+	{"name": "算计", "glyph": "算", "need": ["进账", "蜂起"], "boost": 40, "desc": "经济 × 危途"},
 	# ---- 家传羁绊：同属性 / 同类型两位祖宗配对，效果只加本命技数值 ----
 	{"name": "剑棍同源", "glyph": "剑", "need": ["剑势", "冲撞"], "boost": 40, "lbl": "家传技能 +%d%%", "desc": "主角 · 滚地龙 · 同为物理"},
 	{"name": "同气连枝", "glyph": "鸾", "need": ["剑势", "飞刃"], "boost": 40, "lbl": "家传技能 +%d%%", "desc": "主角 · 苏青鸾 · 同为物理"},
@@ -1692,6 +1695,8 @@ func _pick_trea(o: Dictionary, val: int) -> void:
 	var b := {"name": str(o["name"]), "need": (o["need"] as Array).duplicate(),
 		"boost": int(val), "prog": 0, "lbl": str(o.get("lbl", "组合效果 +%d%%")),
 		"glyph": str(o.get("glyph", "羁")), "quality": _trea_quality()}
+	if o.has("line"):
+		b["line"] = str(o["line"])          # 线羁绊：成后抬整条线，不只是需求里那几个
 	_bonds.append(b)
 	_trea_pending = false
 	_hide_trea()
@@ -1746,6 +1751,14 @@ func _bond_check() -> void:
 			#   普通卡组合：以后每次触发 ×(1+boost%)（_apply_combo 里乘）
 			#   家传组合：那位祖宗的本命技伤害直接 +boost%（跟家传组合自己那套账同一个 _anc_mod.dmg_pct）
 			var pct := float(b.get("boost", 0)) / 100.0
+			if b.has("line"):
+				# 线羁绊：这条线**所有系、所有阶**的组合一起抬（不止需求里那几个）
+				for sk_v in (CARD_LINES.get(str(b["line"]), []) as Array):
+					for tt in 4:
+						var cc: Dictionary = _card_db.get("%s_%d_0" % [str(sk_v), tt], {})
+						var cn := str(cc.get("combo_name", ""))
+						if cn != "":
+							_combo_boost[cn] = float(_combo_boost.get(cn, 0.0)) + pct
 			for nm2_v in need:
 				var nm2 := str(nm2_v)
 				var aid2 := "" if _sys_combos.has(nm2) else _ancestor_of_combo(nm2)
@@ -1755,12 +1768,15 @@ func _bond_check() -> void:
 							"life_flat": 0.0, "cap_add": 0.0, "wave_evo": 0.0, "tgt_add": 0.0,
 							"ignite_add": 0.0, "burn_add": 0.0}
 					_anc_mod[aid2]["dmg_pct"] = float(_anc_mod[aid2].get("dmg_pct", 0.0)) + pct * 100.0
-				else:
+				elif not b.has("line"):
 					_combo_boost[nm2] = float(_combo_boost.get(nm2, 0.0)) + pct
 			_bonds.remove_at(i)
 			_bonds_done += 1
-			_toast("羁绊成 · %s（%s 效果 +%d%%）" % [str(b["name"]),
-				"·".join(PackedStringArray(need)), int(b.get("boost", 0))])
+			if b.has("line"):
+				_toast("羁绊成 · %s（%s 全部组合 +%d%%）" % [str(b["name"]), str(b["line"]), int(b.get("boost", 0))])
+			else:
+				_toast("羁绊成 · %s（%s 效果 +%d%%）" % [str(b["name"]),
+					"·".join(PackedStringArray(need)), int(b.get("boost", 0))])
 			Aud.sfx("levelup", -6.0)
 			changed = true
 		elif prog > int(b.get("last", 0)):
@@ -1872,6 +1888,8 @@ func _show_bond_detail(b: Dictionary) -> void:
 	_lbl("羁 绊　%d/%d" % [_bond_prog(b), need.size()], Vector2(170, 366), Vector2(360, 28), 19,
 		Color(0.46, 0.20, 0.10), _combined_detail, HORIZONTAL_ALIGNMENT_CENTER)
 	_lbl("成后：" + str(b.get("lbl", "组合效果 +%d%%")) % int(b.get("boost", 0)), Vector2(170, 402), Vector2(380, 32), 21, INK, _combined_detail)
+	if b.has("line"):
+		_lbl("（整条线不分阶，全部吃这个增幅）", Vector2(170, 424), Vector2(380, 24), 15, Color(0.46, 0.20, 0.10), _combined_detail)
 	_lbl("要凑齐的组合（每套 3 张同套卡合成）：", Vector2(170, 442), Vector2(380, 26), 16, DIM, _combined_detail)
 	var y := 472.0
 	for nm_v in need:
@@ -1985,7 +2003,7 @@ class AugCard extends Control:
 		draw_rect(Rect2(tp, Vector2(48, 22)), QC[q])
 		draw_string(F, tp + Vector2(0, 16), QN[clampi(quality - 2, 0, 3)],
 			HORIZONTAL_ALIGNMENT_CENTER, 48, 13, Color(0.98, 0.96, 0.90))
-		draw_string(F, Vector2(0, 52), title, HORIZONTAL_ALIGNMENT_CENTER, size.x, 28, Color(0.14, 0.11, 0.08))
+		draw_string(F, Vector2(0, 52), title, HORIZONTAL_ALIGNMENT_CENTER, size.x, 28 if title.length() <= 3 else 24, Color(0.14, 0.11, 0.08))
 		var c := Vector2(size.x * 0.5, 150.0)
 		draw_circle(c, 50, Color(0.93, 0.90, 0.82))
 		draw_arc(c, 50.0, 0.0, TAU, 48, QC[q], 2.0)
