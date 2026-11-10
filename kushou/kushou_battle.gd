@@ -253,6 +253,102 @@ const FOE_NAMES := ["狱狼", "疯牛", "毒蝎", "牢鼠"]
 var hide_units := true
 var hero := {"atk": 12.0, "hp": 200.0, "hp_max": 200.0, "mp": 100.0, "mp_max": 100.0,
 	"aspd": 1.0, "crit": 0.05, "dodge": 0.05, "cut": 0.0, "dmg_pct": 0.0}
+# ============================================================
+# v6 人物属性（设计稿：docs/人物属性_设计稿.md）
+#
+#   基础 5 条：  值 =（基础 ＋ 临时）× 增幅
+#     攻击 / 气血 / 攻速 三层；暴击 / 爆伤 只有基础＋临时（百分点）
+#
+#   七种伤害类型：物理 / 金系 / 木系 / 水系 / 火系 / 土系 / 真实
+#     六常规系各存一个「临时攻击」字段（默认 0，内部规则、不上界面）
+#     穿透 / 减免 / 增幅 各两段：固定（百分点）＋ 百分比
+#     真实：只吃真实伤害增幅；穿透、减免对它无效；攻基独立、不吃总攻击
+#
+#   ⚠ 本步只建**数据层 + 取值函数**，不改任何现有结算：
+#     hero 上的旧字段（atk/hp_max/aspd/crit/crit_dmg/cut/dmg_all…）仍是权威，
+#     下一步才把 _apply_dmg / hero_out_dmg / hero_in_dmg 切到这一层。
+# ============================================================
+const DMG_TYPES := ["物理", "金系", "木系", "水系", "火系", "土系", "真实"]
+const ATTR_BASE := {"atk": 12.0, "hp": 200.0, "aspd": 1.8, "crit": 0.05, "cdmg": 2.0}
+var attr: Dictionary = {}          # attr[key] = {base, temp[, amp]}
+var type_attr: Dictionary = {}     # type_attr[系] = {atk, pen_f, pen_p, red_f, red_p, amp_f, amp_p}
+
+func _attr_ensure() -> void:
+	if not attr.is_empty():
+		return
+	attr = {
+		"atk":  {"base": ATTR_BASE["atk"],  "temp": 0.0, "amp": 0.0},
+		"hp":   {"base": ATTR_BASE["hp"],   "temp": 0.0, "amp": 0.0},
+		"aspd": {"base": ATTR_BASE["aspd"], "temp": 0.0, "amp": 0.0},
+		"crit": {"base": ATTR_BASE["crit"], "temp": 0.0},
+		"cdmg": {"base": ATTR_BASE["cdmg"], "temp": 0.0},
+	}
+	type_attr = {}
+	for t in DMG_TYPES:
+		type_attr[t] = {"atk": 0.0, "pen_f": 0.0, "pen_p": 0.0,
+			"red_f": 0.0, "red_p": 0.0, "amp_f": 0.0, "amp_p": 0.0}
+
+# ---- 基础 5 条 ----
+func attr_final(key: String) -> float:
+	_attr_ensure()
+	var a: Dictionary = attr.get(key, {})
+	if key == "crit" or key == "cdmg":
+		return float(a.get("base", 0.0)) + float(a.get("temp", 0.0))
+	return (float(a.get("base", 0.0)) + float(a.get("temp", 0.0))) * (1.0 + float(a.get("amp", 0.0)))
+
+func attr_add(key: String, v: float) -> void:
+	_attr_ensure()
+	if attr.has(key):
+		attr[key]["temp"] = float(attr[key]["temp"]) + v
+
+func attr_add_amp(key: String, pct: float) -> void:
+	_attr_ensure()
+	if attr.has(key) and (attr[key] as Dictionary).has("amp"):
+		attr[key]["amp"] = float(attr[key]["amp"]) + pct
+
+func attr_set_base(key: String, v: float) -> void:
+	_attr_ensure()
+	if attr.has(key):
+		attr[key]["base"] = v
+
+# ---- 七种伤害类型 ----
+func type_field(t: String, f: String) -> float:
+	_attr_ensure()
+	if not type_attr.has(t):
+		return 0.0
+	return float((type_attr[t] as Dictionary).get(f, 0.0))
+
+func type_add(t: String, f: String, v: float) -> void:
+	_attr_ensure()
+	if type_attr.has(t) and (type_attr[t] as Dictionary).has(f):
+		type_attr[t][f] = float(type_attr[t][f]) + v
+
+# 该系攻击值：六常规＝总攻击＋该系临时；真实＝独立值（不吃总攻击）
+func type_atk(t: String) -> float:
+	_attr_ensure()
+	if t == DMG_TRUE:
+		return type_field(t, "atk")
+	return attr_final("atk") + type_field(t, "atk")
+
+# 该系最终增幅：固定 × (1 ＋ 百分比)
+func type_amp(t: String) -> float:
+	return type_field(t, "amp_f") * (1.0 + type_field(t, "amp_p"))
+
+# 穿透两段：对手固定减免先被我固定穿透扣，剩下的再被我百分比穿透削
+func red_after_pen(target_red_f: float, t: String) -> float:
+	if t == DMG_TRUE:
+		return 0.0
+	var left := maxf(0.0, target_red_f - type_field(t, "pen_f"))
+	return left * (1.0 - clampf(type_field(t, "pen_p"), 0.0, 1.0))
+
+# 我挨打：减免两段（真实伤害不吃）
+func take_after_red(amount: float, t: String) -> float:
+	if t == DMG_TRUE:
+		return amount
+	var f := clampf(type_field(t, "red_f"), 0.0, 0.6)
+	var p := clampf(type_field(t, "red_p"), 0.0, 0.6)
+	return amount * (1.0 - f) * (1.0 - p)
+
 var foes: Array = []
 var wave := 1
 var running := false
@@ -344,6 +440,7 @@ func setup(stats: Dictionary) -> void:
 	#   现在：血**按比例**跟着血上限走 —— 上限涨了多少百分比，当前血就涨同样的百分比
 	#   （满血还是满血；残血还是那个残血比例；血 0 还是 0）。要真回血只有三条正路：
 	#   玉壶 / 吸血与治疗类技能 / 浴血（复活给半血）。
+	_attr_ensure()
 	var ratio := -1.0
 	if float(hero["hp_max"]) > 0.0:
 		ratio = clampf(float(hero["hp"]) / float(hero["hp_max"]), 0.0, 1.0)
