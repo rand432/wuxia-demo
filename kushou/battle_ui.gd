@@ -209,6 +209,7 @@ var _chal_cd: Array = [0.0, 0.0, 0.0, 0.0, 0.0]   # 五种挑战的冷却剩余
 const PFX2D := preload("res://addons/pixelfx/nodes/pixel_fx_2d.gd")
 var _pfx_root: Node2D = null      # pixelfx 特效层（命中/暴击等）
 var _pfx_count := 0
+var _last_combo := 0            # 连杀里程碑用（每 10 连炸一口）
 const PFX_MAX_LIVE := 26          # 同屏特效上限（超过就不再生，保丝滑）
 # 开局先把常用的几种烘好（BAKED 首次播放要烘，烘在开打前就不会卡第一下）
 # [effect, scale, palette, light, speed, hold秒]：hold = 让它播完整，把每一帧都烘进缓存
@@ -627,7 +628,7 @@ func _build_field() -> void:
 	_core.hero_hit.connect(_on_hero_hit)
 	_core.hero_foe_hit.connect(_on_hero_foe_hit)
 	_core.hero_down.connect(_on_hero_down)
-	_core.boss_arrived.connect(func(_t: int) -> void: _toast("首领来了"))
+	_core.boss_arrived.connect(_on_boss_arrived)
 	_core.start_run()
 	# 旧内核的隐形宠物会偷偷咬怪（怪还没到就掉血）；这个模式先关掉宠物伤害
 	_core.set_pet_cfg({"cd": 99999.0, "dmg": 0.0})
@@ -1546,6 +1547,13 @@ func _process(_delta: float) -> void:
 		_tick_skills(_delta)
 		_tick_rare_buffs(_delta)
 		_tick_curio(_delta)
+		if _core != null:
+			var cb := int(_core._combo)
+			if cb != _last_combo:
+				if cb > _last_combo and cb % 10 == 0:
+					_spawn_pfx("holy/sunburst", _hero_screen(), 1.05, "gold", 1.9)
+					_core._shake = maxf(float(_core._shake), 7.0)
+				_last_combo = cb
 		_tick_chal(_delta)
 		_q_tick(_delta)
 		_tick_minions(_delta)
@@ -3267,6 +3275,20 @@ func _apply_own(s: Dictionary) -> void:
 		_core.hero["hp"] = float(_core.hero.get("hp", 0.0)) + hp_add
 
 # 选择类反馈：抽卡 / 进阶 / 宝物 / 请神 / 升级 各一口特效＋一声音
+# 首领登场：暗红炸开 + 重震 + 鼓
+func _on_boss_arrived(_tier: int) -> void:
+	var p := Vector2(360, 250)
+	var b: Dictionary = _core._boss_foe() if _core != null else {}
+	if not b.is_empty():
+		p = _core.position + Vector2(float(b["x"]), float(b["y"]) - 24.0)
+	# 别糊到顶部 HUD 上：压回战场内
+	p.x = clampf(p.x, 90.0, 630.0)
+	p.y = clampf(p.y, 210.0, 800.0)
+	_spawn_pfx("shadow/dark-explosion", p, 1.7, "shadow", 1.9)
+	_core._shake = maxf(float(_core._shake), 15.0)
+	Aud.sfx("drum", -6.0, 0.85)
+	Aud.sfx("tension", -14.0, 0.95)
+
 func _choice_fx(kind: String) -> void:
 	var hpos := _hero_screen()
 	match kind:
