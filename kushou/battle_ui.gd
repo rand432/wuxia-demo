@@ -221,6 +221,9 @@ var _late_baked := false       # 稀有特效是否已烘焙
 var _baked_keys: Dictionary = {}   # 已烘过的 (effect|palette|light)
 var _flash_rect: ColorRect = null  # 技能释放时的整屏微闪
 var _cast_dtype := ""              # 最近一次释放的技能属性（决定闪光颜色）
+var _boss_veil: ColorRect = null   # 首领登场：压暗
+var _boss_spot: Sprite2D = null    # 首领登场：聚光
+var _boss_name_lb: Label = null    # 首领登场：名字大字
 var _last_combo := 0            # 连杀里程碑用（每 10 连炸一口）
 const PFX_MAX_LIVE := 26          # 同屏特效上限（实测 60fps 有余量，放回 26）
 # 开局先把常用的几种烘好（BAKED 首次播放要烘，烘在开打前就不会卡第一下）
@@ -703,6 +706,44 @@ func _build_field() -> void:
 	_pfx_root = Node2D.new()
 	_pfx_root.z_index = 7
 	add_child(_pfx_root)
+	# 首领登场演出三件套（平时隐藏）
+	_boss_veil = ColorRect.new()
+	_boss_veil.color = Color(0.08, 0.06, 0.05, 0.0)
+	_boss_veil.position = Vector2(0, 150)
+	_boss_veil.size = Vector2(720, 720)
+	_boss_veil.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_boss_veil.z_index = 14
+	_boss_veil.visible = false
+	add_child(_boss_veil)
+	_boss_spot = Sprite2D.new()
+	var g := Gradient.new()
+	g.set_color(0, Color(1.0, 0.92, 0.74, 0.75))
+	g.set_color(1, Color(1.0, 0.85, 0.6, 0.0))
+	var gt := GradientTexture2D.new()
+	gt.gradient = g
+	gt.fill = GradientTexture2D.FILL_RADIAL
+	gt.fill_from = Vector2(0.5, 0.5)
+	gt.fill_to = Vector2(1.0, 0.5)
+	gt.width = 512
+	gt.height = 512
+	_boss_spot.texture = gt
+	_boss_spot.z_index = 15
+	_boss_spot.visible = false
+	add_child(_boss_spot)
+	_boss_name_lb = Label.new()
+	_boss_name_lb.size = Vector2(720, 70)
+	_boss_name_lb.position = Vector2(0, 560)
+	_boss_name_lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_boss_name_lb.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_boss_name_lb.add_theme_font_override("font", FONT)
+	_boss_name_lb.add_theme_font_size_override("font_size", 44)
+	_boss_name_lb.add_theme_color_override("font_color", Color(0.42, 0.12, 0.08))
+	_boss_name_lb.add_theme_color_override("font_outline_color", Color(0.99, 0.94, 0.84, 0.95))
+	_boss_name_lb.add_theme_constant_override("outline_size", 8)
+	_boss_name_lb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_boss_name_lb.z_index = 16
+	_boss_name_lb.visible = false
+	add_child(_boss_name_lb)
 	_flash_rect = ColorRect.new()
 	_flash_rect.color = Color(1.0, 0.96, 0.85, 0.0)
 	_flash_rect.position = Vector2(0, 150)
@@ -3567,6 +3608,41 @@ func _on_boss_arrived(_tier: int) -> void:
 	_core._shake = maxf(float(_core._shake), 15.0)
 	Aud.sfx("drum", -6.0, 0.85)
 	Aud.sfx("tension", -14.0, 0.95)
+	_boss_intro_show(p, str(b.get("name", "首领")) if not b.is_empty() else "首领")
+
+# 首领登场演出：战场压暗 → 聚光罩住首领 → 名字大字弹入
+func _boss_intro_show(at: Vector2, nm: String) -> void:
+	if _boss_veil == null or _boss_spot == null or _boss_name_lb == null:
+		return
+	_boss_veil.visible = true
+	_boss_veil.color.a = 0.0
+	var t1 := create_tween().bind_node(_boss_veil)
+	t1.tween_property(_boss_veil, "color:a", 0.55, 0.22)
+	t1.tween_interval(0.55)
+	t1.tween_property(_boss_veil, "color:a", 0.0, 0.75)
+	t1.tween_callback(func() -> void: _boss_veil.visible = false)
+	_boss_spot.visible = true
+	_boss_spot.position = at
+	_boss_spot.scale = Vector2(0.35, 0.35)
+	_boss_spot.modulate.a = 0.0
+	var t2 := create_tween().bind_node(_boss_spot)
+	t2.set_parallel(true)
+	t2.tween_property(_boss_spot, "modulate:a", 1.0, 0.16)
+	t2.tween_property(_boss_spot, "scale", Vector2(1.25, 1.25), 0.95).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	t2.chain().tween_property(_boss_spot, "modulate:a", 0.0, 0.45)
+	t2.chain().tween_callback(func() -> void: _boss_spot.visible = false)
+	_boss_name_lb.text = nm
+	_boss_name_lb.visible = true
+	_boss_name_lb.pivot_offset = Vector2(360, 35)
+	_boss_name_lb.scale = Vector2(1.5, 1.5)
+	_boss_name_lb.modulate.a = 0.0
+	var t3 := create_tween().bind_node(_boss_name_lb)
+	t3.set_parallel(true)
+	t3.tween_property(_boss_name_lb, "scale", Vector2.ONE, 0.38).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	t3.tween_property(_boss_name_lb, "modulate:a", 1.0, 0.22)
+	t3.chain().tween_interval(0.95)
+	t3.chain().tween_property(_boss_name_lb, "modulate:a", 0.0, 0.45)
+	t3.chain().tween_callback(func() -> void: _boss_name_lb.visible = false)
 
 # Boss/壮汉延迟技砸下来：按属性给一口命中特效
 const LAND_FX := {
