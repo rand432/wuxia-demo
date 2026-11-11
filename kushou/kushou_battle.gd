@@ -109,6 +109,7 @@ signal kill(n: int)
 signal hero_down()
 signal boss_arrived(tier: int)
 signal delayed_land(pos: Vector2, elem: String)   # 延迟技落点（外壳在这里挂 pixelfx）
+signal boss_died(pos: Vector2)                    # 首领倒下（外壳做演出）
 signal hero_attack()
 signal hero_hit()
 # 主角的剑真正打中某只怪（伤害/暴击/重击）；表现层只认这个信号出数字
@@ -2156,6 +2157,7 @@ func _kill_foe(f: Dictionary) -> void:
 		boss_alive = false
 		_shake = 22.0                      # boss 死：整屏重震 ＋ 长顿帧
 		_hitstop = maxf(_hitstop, 0.28)
+		boss_died.emit(Vector2(float(f["x"]), float(f["y"])))
 	coin_drop.emit(coins, Vector2(float(f["x"]), float(f["y"])))
 	# 连杀不再在每只怪头上飘字（那是刷屏）：只留屏幕中上那行大字
 	Audio.sfx("coin", -10.0)

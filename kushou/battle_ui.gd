@@ -672,6 +672,7 @@ func _build_field() -> void:
 	_core.hero_down.connect(_on_hero_down)
 	_core.boss_arrived.connect(_on_boss_arrived)
 	_core.delayed_land.connect(_on_delayed_land)
+	_core.boss_died.connect(_on_boss_died)
 	_core.start_run()
 	# 旧内核的隐形宠物会偷偷咬怪（怪还没到就掉血）；这个模式先关掉宠物伤害
 	_core.set_pet_cfg({"cd": 99999.0, "dmg": 0.0})
@@ -3658,6 +3659,20 @@ func _on_delayed_land(pos: Vector2, elem: String) -> void:
 	var wp: Vector2 = _core.position + pos
 	_spawn_pfx(str(e[0]), wp, float(e[2]), str(e[1]), 1.30)
 
+# 首领倒下：白闪 + 大爆 + 金耀 + 重震，配一段很短的慢镜头
+func _on_boss_died(pos: Vector2) -> void:
+	var wp: Vector2 = _core.position + pos
+	wp.x = clampf(wp.x, 90.0, 630.0)
+	wp.y = clampf(wp.y, 210.0, 800.0)
+	_screen_flash(Color(1.0, 0.97, 0.88), 0.42, 0.55)
+	_spawn_pfx("shadow/dark-explosion", wp, 1.9, "shadow", 1.8)
+	_spawn_pfx("holy/sunburst", wp, 1.4, "gold", 1.9)
+	_core._shake = maxf(float(_core._shake), 18.0)
+	_core._hitstop = maxf(float(_core._hitstop), 0.22)
+	Aud.sfx("hit_heavy", -2.0, 0.72)
+	Aud.sfx("bell", -4.0, 0.9)
+	Aud.sfx("levelup", -6.0, 0.95)
+
 func _choice_fx(kind: String) -> void:
 	var hpos := _hero_screen()
 	match kind:
@@ -6118,10 +6133,17 @@ func _q_finish(why: String) -> void:
 			_q_done += 1
 			_q_reward(q)
 			_spawn_pfx("holy/feather-burst", _hero_screen(), 1.0, "gold", 1.7)
+			_spawn_pfx("holy/sunburst", _hero_screen(), 0.9, "gold", 1.9)
+			_screen_flash(Color(1.0, 0.92, 0.62), 0.10, 0.22)
+			_core._shake = maxf(float(_core._shake), 4.0)
 			_q_notify("奇遇完成 · %s" % str(q["n"]))
 			Aud.sfx("levelup", -6.0)
+			Aud.sfx("bell", -8.0, 1.05)
 		"fail":
 			_q_fail += 1
+			_screen_flash(Color(0.72, 0.28, 0.22), 0.10, 0.22)
+			_spawn_pfx("impacts/blunt-hit", _hero_screen() + Vector2(0, -20), 0.9, "blood", 1.2)
+			Aud.sfx("ui_close", -8.0, 0.9)
 			_q_notify("奇遇失败 · %s" % str(q["n"]))
 	_q_cleanup(q)
 	_q_cur = {}
