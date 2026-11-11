@@ -243,6 +243,7 @@ func _ready() -> void:
 	_build_field()
 	_build_deck()
 	_build_bottom()
+	_q_init()
 	_build_draw()
 	_build_attr()
 	_build_exit()
@@ -591,7 +592,7 @@ func _build_field() -> void:
 	_core = BattleCore.new()
 	_core.position = Vector2(8, 150)
 	_core.size = Vector2(704, 720)
-	_core.mouse_filter = Control.MOUSE_FILTER_STOP
+	_core.mouse_filter = Control.MOUSE_FILTER_IGNORE   # 战斗没有手动：点击穿透
 	_core.modulate = Color(1, 1, 1, 0.25)
 	add_child(_core)
 	_core.setup({"atk": 12.0, "hp_max": 200.0, "mp_max": 100.0})
@@ -600,6 +601,8 @@ func _build_field() -> void:
 	_core.coin_drop.connect(_on_coin_drop)   # v6：钱怪/匪首掉的真钱
 	_core.kill.connect(_on_core_kill)
 	_core.chal_drop.connect(_on_chal_drop)
+	_core.guard_broken.connect(func() -> void: _q_fail_kind("guard"))
+	_core.champion_down.connect(func() -> void: _q_done_kind("champion"))
 	_core.hero_attack.connect(_on_hero_attack)
 	_core.hero_hit.connect(_on_hero_hit)
 	_core.hero_foe_hit.connect(_on_hero_foe_hit)
@@ -736,6 +739,7 @@ func _chal_press(i: int) -> void:
 		return
 	_chal_cd[i] = _chal_base_cd(i)
 	_chal_count += 1
+	_qc("chal", 1)
 	_core.spawn_challenge(i, int(CHAL_GROUP[i]))
 	_toast("挑战 · " + str(CHAL_NAMES[i]))
 	Aud.sfx("ui_open", -8.0)
@@ -1476,6 +1480,7 @@ func _process(_delta: float) -> void:
 		_tick_rare_buffs(_delta)
 		_tick_curio(_delta)
 		_tick_chal(_delta)
+		_q_tick(_delta)
 		_tick_minions(_delta)
 		_tick_burn(_delta)
 		_tick_poison(_delta)
@@ -1528,6 +1533,7 @@ func _on_core_kill(n: int) -> void:
 	if kn < n:
 		kn = n
 	_kills += kn
+	_qc("kill", kn)
 	if _kill_lb != null:
 		_kill_lb.text = str(_kills)
 	if _bm != null:
@@ -1573,6 +1579,7 @@ func _add_exp(v: int) -> void:
 			_draw_charge += 1         # 请神：每 5 级 +1（开局不送）
 			god += 1
 		up += 1
+	_qc("lv", up)
 	_refresh_level_ui()
 	if up > 0:
 		var msg := "升到 Lv %d · 攻+%d · 血+%d" % [_lv, up, up * 6]
@@ -1811,6 +1818,7 @@ func _apply_str_levels(n: int) -> void:
 	var ratio := 1.0
 	if float(h["hp_max"]) > 0.0:
 		ratio = clampf(float(h["hp"]) / float(h["hp_max"]), 0.0, 1.0)
+	_qc("str", n)
 	var add_atk := STR_PER_ATK * float(n)
 	var add_hp := STR_PER_HP * float(n)
 	_core.attr_add("atk", add_atk)
@@ -2368,6 +2376,7 @@ func _pick_trea(o: Dictionary, val: int) -> void:
 		_trea_pending = false
 		_hide_trea()
 		_rare_taken[str(o["name"])] = true        # 稀有单卡也是唯一，拿过不再出
+		_qc("trea", 1)
 		_apply_rare(o)
 		return
 	var b := {"name": str(o["name"]), "boost": int(val), "prog": 0,
@@ -3175,6 +3184,7 @@ func _apply_own(s: Dictionary) -> void:
 
 func _add_card(id: String) -> void:
 	if not _card_db.has(id): return
+	_qc("draw", 1)
 	if str(id) == "shiny_zhongli":
 		_enable_zhongli()
 	elif str(id) == "shiny_chenshi2":
@@ -3804,6 +3814,7 @@ func _pick_god(aid: String) -> void:
 	if _draw_charge <= 0:
 		return
 	_draw_charge -= 1
+	_qc("god", 1)
 	_grant_ancestor(aid)
 	var def: Dictionary = SKILL_DEFS.get(aid, {})
 	if not def.is_empty() and not _has_skill(aid):
@@ -5176,3 +5187,353 @@ func _devour_keep(n: int) -> void:
 		_toast("财 · 吞噬「%s」（效果保留）" % str(c.get("name", "")))
 	_refresh_deck()
 	_devouring = false
+
+
+# ============================================================
+# 奇遇：每 75 秒冒一条限时任务，自动进任务栏（最多 2 条）
+#   完成给厚赏 · 放弃 +10 灵晶 · 超时没做完就消失（不给东西）
+#   接了奇遇，自动战斗优先去做（奇遇目标 > 默认）；战斗没有手动操作
+# ============================================================
+const Q_TICK := 75.0
+const Q_MAX := 2
+const Q_GIVEUP_CRYSTAL := 10
+const Q_TIER_W := [[45.0, 55.0, 0.0, 0.0], [20.0, 50.0, 30.0, 0.0], [10.0, 35.0, 40.0, 15.0]]
+
+const QUEST_POOL := [
+	{"id": "tu", "n": "屠场", "tier": 0, "kind": "count", "key": "kill", "need": 40, "lim": 60.0, "desc": "杀 40 只", "r": {"crystal": 25}},
+	{"id": "can", "n": "参悟", "tier": 0, "kind": "count", "key": "draw", "need": 3, "lim": 0.0, "desc": "抽 3 张卡", "r": {"crystal": 25}},
+	{"id": "xb", "n": "寻宝", "tier": 0, "kind": "count", "key": "trea", "need": 1, "lim": 0.0, "desc": "拿 1 件宝物", "r": {"crystal": 25, "trea_rr": 1}},
+	{"id": "sl", "n": "试炼", "tier": 0, "kind": "count", "key": "chal", "need": 2, "lim": 0.0, "desc": "完成 2 次挑战", "r": {"crystal": 30}},
+	{"id": "ch", "n": "淬火", "tier": 0, "kind": "count", "key": "str", "need": 5, "lim": 0.0, "desc": "强化自身 5 次", "r": {"crystal": 25}},
+	{"id": "qs", "n": "请神", "tier": 0, "kind": "count", "key": "god", "need": 1, "lim": 0.0, "desc": "请 1 位祖宗", "r": {"crystal": 30}},
+	{"id": "yx", "n": "夜巡", "tier": 0, "kind": "survive", "need": 0, "lim": 60.0, "desc": "撑过 60 秒不倒", "r": {"crystal": 30}},
+
+	{"id": "pz", "n": "破阵", "tier": 1, "kind": "statue", "need": 3, "lim": 60.0, "desc": "打碎 3 座石像", "r": {"crystal": 60}},
+	{"id": "sg", "n": "升格", "tier": 1, "kind": "count", "key": "lv", "need": 2, "lim": 0.0, "desc": "连升 2 级", "r": {"crystal": 50, "aug_rr": 1}},
+	{"id": "ky", "n": "苦役", "tier": 1, "kind": "restrain", "key": "chal", "lim": 30.0, "desc": "30 秒内不用挑战", "r": {"crystal": 50}},
+	{"id": "qdf", "n": "清道夫", "tier": 1, "kind": "count", "key": "clearwave", "need": 1, "lim": 0.0, "desc": "一波结束时场上无怪", "r": {"crystal": 50, "trea_rr": 1}},
+
+	{"id": "sh", "n": "守护", "tier": 2, "kind": "guard", "need": 0, "lim": 60.0, "desc": "牢车不碎", "r": {"crystal": 100, "trea_rr": 2}},
+	{"id": "zd", "n": "占点", "tier": 2, "kind": "zone", "need": 12, "lim": 45.0, "desc": "站住法阵 12 秒", "r": {"crystal": 90, "aug_rr": 2}},
+	{"id": "bs", "n": "不杀", "tier": 2, "kind": "restrain", "key": "kill", "lim": 30.0, "desc": "30 秒内不击杀", "r": {"crystal": 90}},
+	{"id": "xj", "n": "献祭", "tier": 2, "kind": "survive", "need": 0, "lim": 60.0, "desc": "扣 20% 气血，活过 60 秒", "r": {"crystal": 130}},
+
+	{"id": "dt", "n": "单挑", "tier": 3, "kind": "champion", "need": 0, "lim": 90.0, "desc": "打死拦路高手", "r": {"crystal": 180, "trea": 1}},
+	{"id": "sy", "n": "三英", "tier": 3, "kind": "elite", "need": 3, "lim": 120.0, "desc": "杀掉 3 只精英", "r": {"crystal": 200, "trea": 1}},
+	{"id": "dj", "n": "赌局", "tier": 3, "kind": "instant", "need": 0, "lim": 0.0, "desc": "押 100 文，五五开赢 400", "r": {}},
+]
+
+var _quests: Array = []
+var _q_t := 0.0
+var _q_done := 0
+var _q_giveup := 0
+var _q_fail := 0
+var _q_stats: Dictionary = {}
+var _q_layer: Control = null
+var _q_rows: Array = []
+var _q_banner: Label = null
+var _q_banner_box: Control = null
+var _q_banner_t := 0.0
+var _q_ai_t := 0.0
+
+func _q_init() -> void:
+	_q_layer = Control.new()
+	_q_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_q_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_q_layer.z_index = 9
+	add_child(_q_layer)
+	_q_banner_box = Control.new()
+	_q_banner_box.position = Vector2(14, 150)
+	_q_banner_box.size = Vector2(692, 38)
+	_q_banner_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_q_banner_box.visible = false
+	_q_layer.add_child(_q_banner_box)
+	_panel(Rect2(0, 0, 692, 38), Color(0.10, 0.09, 0.08, 0.90), 6, Color(0.72, 0.28, 0.20, 0.65), 1, _q_banner_box)
+	_q_banner = _lbl("", Vector2(8, 7), Vector2(676, 26), 16, Color(0.98, 0.90, 0.78), _q_banner_box, HORIZONTAL_ALIGNMENT_CENTER)
+	for i in Q_MAX:
+		var y := 556.0 + float(i) * 56.0
+		_panel(Rect2(8, y, 366, 48), Color(0.10, 0.09, 0.08, 0.86), 6, Color(0.85, 0.66, 0.23, 0.55), 1, _q_layer)
+		var lb := _lbl("", Vector2(16, y + 12), Vector2(268, 24), 15, Color(0.95, 0.90, 0.80), _q_layer)
+		var idx := i
+		var btn := _btn("放弃", Rect2(292, y + 8, 72, 32), 15, Color(0.42, 0.16, 0.12),
+			Color(0.98, 0.92, 0.82), func() -> void: _q_giveup_at(idx), _q_layer)
+		_q_rows.append({"lb": lb, "btn": btn})
+		lb.visible = false
+		btn.visible = false
+
+func _banner_q(text: String) -> void:
+	if _q_banner == null:
+		return
+	_q_banner.text = text
+	_q_banner_box.visible = true
+	_q_banner_t = 3.0
+
+func _q_giveup_at(i: int) -> void:
+	if i >= _quests.size():
+		return
+	_q_finish(i, "giveup")
+
+func _q_cleanup(q: Dictionary) -> void:
+	if _core == null:
+		return
+	match str(q.get("kind", "")):
+		"statue":
+			_core.clear_statues()
+		"zone":
+			_core.clear_zone()
+		"guard":
+			_core.clear_guard()
+		"champion":
+			_core.clear_champion()
+		"elite":
+			_core.clear_elite()
+
+func _q_reward(q: Dictionary) -> void:
+	var r: Dictionary = q.get("r", {})
+	if r.has("crystal"):
+		_gain_crystal(int(r["crystal"]))
+	if r.has("wen"):
+		_add_wen(int(r["wen"]))
+	if r.has("trea_rr"):
+		_trea_reroll += int(r["trea_rr"])
+	if r.has("aug_rr"):
+		_aug_reroll += int(r["aug_rr"])
+	if r.has("trea"):
+		_trea_charge += int(r["trea"])
+	_refresh_trea_tile()
+
+func _q_finish(i: int, why: String) -> void:
+	if i < 0 or i >= _quests.size():
+		return
+	var q: Dictionary = _quests[i]
+	_q_cleanup(q)
+	_quests.remove_at(i)
+	match why:
+		"done":
+			_q_done += 1
+			_q_reward(q)
+			_banner_q("奇遇完成 · %s" % str(q["n"]))
+			Aud.sfx("levelup", -6.0)
+		"giveup":
+			_q_giveup += 1
+			_gain_crystal(Q_GIVEUP_CRYSTAL)
+			_banner_q("放弃奇遇 · 灵晶 +%d" % Q_GIVEUP_CRYSTAL)
+			Aud.sfx("ui_back", -8.0)
+		_:
+			_q_fail += 1
+			_banner_q("奇遇失败 · %s" % str(q["n"]))
+	_q_refresh()
+
+func _q_refresh() -> void:
+	for i in _q_rows.size():
+		var row: Dictionary = _q_rows[i]
+		var lb: Label = row["lb"]
+		var btn: Button = row["btn"]
+		if i < _quests.size():
+			var q: Dictionary = _quests[i]
+			var s := "「%s」%s" % [str(q["n"]), str(q["desc"])]
+			if int(q.get("need", 0)) > 0:
+				s += " %d/%d" % [int(q.get("prog", 0)), int(q["need"])]
+			if float(q.get("lim", 0.0)) > 0.0:
+				s += " %.0f 秒" % ceil(float(q["t"]))
+			lb.text = s
+			lb.visible = true
+			btn.visible = true
+		else:
+			lb.visible = false
+			btn.visible = false
+
+func _q_roll() -> void:
+	if _core == null:
+		return
+	var wave := int(_core.wave)
+	var tw: Array = Q_TIER_W[0] if wave <= 2 else (Q_TIER_W[1] if wave == 3 else Q_TIER_W[2])
+	var roll := randf() * 100.0
+	var tier := 0
+	var acc := 0.0
+	for i in tw.size():
+		acc += float(tw[i])
+		if roll <= acc:
+			tier = i
+			break
+	var cand: Array = []
+	for e_v in QUEST_POOL:
+		var e: Dictionary = e_v
+		if int(e["tier"]) != tier:
+			continue
+		var busy := false
+		for q_v in _quests:
+			if str((q_v as Dictionary)["id"]) == str(e["id"]):
+				busy = true
+		if not busy:
+			cand.append(e)
+	if cand.is_empty():
+		return
+	var pick: Dictionary = (cand[randi() % cand.size()] as Dictionary).duplicate()
+	pick["prog"] = 0
+	pick["t"] = float(pick["lim"])
+	pick["mark"] = int(_q_stats.get(str(pick.get("key", "")), 0))
+	match str(pick["kind"]):
+		"statue":
+			_core.spawn_statues(int(pick["need"]))
+		"zone":
+			_core.spawn_zone(150.0, float(pick["need"]))
+		"guard":
+			_core.spawn_guard()
+		"champion":
+			_core.spawn_champion()
+		"elite":
+			_core.spawn_elite(int(pick["need"]))
+		"survive":
+			if str(pick["id"]) == "xj":
+				var h: Dictionary = _core.hero
+				h["hp"] = maxf(1.0, float(h.get("hp", 0.0)) * 0.8)
+		"instant":
+			_q_instant(pick)
+			return
+	_quests.append(pick)
+	_banner_q("【奇遇】%s —— %s · 奖 %d 灵晶" % [str(pick["n"]), str(pick["desc"]), int(pick.get("r", {}).get("crystal", 0))])
+	_q_refresh()
+
+func _q_instant(q: Dictionary) -> void:
+	if _wen < 100:
+		_banner_q("赌局 · 庄家不收空手客")
+		return
+	_wen -= 100
+	if _coin_lb != null:
+		_coin_lb.text = str(_wen)
+	if randf() < 0.5:
+		_add_wen(400)
+		_banner_q("赌局 · 赢了 400 文")
+	else:
+		_banner_q("赌局 · 输了 100 文")
+
+# 计数钩子：各系统完成后叫它
+func _qc(key: String, n: int) -> void:
+	if n <= 0:
+		return
+	_q_stats[key] = int(_q_stats.get(key, 0)) + n
+	for i in range(_quests.size() - 1, -1, -1):
+		var q: Dictionary = _quests[i]
+		if str(q.get("kind", "")) != "count" or str(q.get("key", "")) != key:
+			continue
+		q["prog"] = int(q.get("prog", 0)) + n
+		if int(q["prog"]) >= int(q["need"]):
+			_q_finish(i, "done")
+
+func _q_check(q: Dictionary) -> void:
+	if _core == null:
+		return
+	match str(q.get("kind", "")):
+		"statue":
+			q["prog"] = int(q["need"]) - _core.statues_left()
+		"zone":
+			q["prog"] = int(_core.zone_prog())
+		"elite":
+			var alive := 0
+			for f_v in _core.foes:
+				if str((f_v as Dictionary).get("kind", "")) == "elite":
+					alive += 1
+			q["prog"] = int(q["need"]) - alive
+
+func _q_tick(dt: float) -> void:
+	if _run_over:
+		return
+	if _q_banner_t > 0.0:
+		_q_banner_t -= dt
+		if _q_banner_t <= 0.0 and _q_banner_box != null:
+			_q_banner_box.visible = false
+	_q_t += dt
+	if _q_t >= Q_TICK:
+		_q_t = 0.0
+		if _quests.size() < Q_MAX:
+			_q_roll()
+	for i in range(_quests.size() - 1, -1, -1):
+		var q: Dictionary = _quests[i]
+		_q_check(q)
+		if int(q.get("need", 0)) > 0 and int(q.get("prog", 0)) >= int(q["need"]):
+			_q_finish(i, "done")
+			continue
+		if str(q.get("kind", "")) == "restrain":
+			if int(_q_stats.get(str(q.get("key", "")), 0)) != int(q.get("mark", 0)):
+				_q_finish(i, "fail")
+				continue
+		if float(q.get("lim", 0.0)) > 0.0:
+			q["t"] = float(q["t"]) - dt
+			if float(q["t"]) <= 0.0:
+				if str(q["kind"]) in ["survive", "restrain", "guard"]:
+					_q_finish(i, "done")
+				else:
+					_q_finish(i, "fail")
+				continue
+	_q_refresh()
+	_q_ai(dt)
+
+# 奇遇优先的自动战斗：奇遇目标 > 默认（没有手动操作）
+func _q_ai(dt: float) -> void:
+	_q_ai_t += dt
+	if _q_ai_t < 0.3:
+		return
+	_q_ai_t = 0.0
+	if _run_over or _core == null or _quests.is_empty():
+		return
+	for q_v in _quests:
+		var q: Dictionary = q_v
+		match str(q.get("kind", "")):
+			"statue":
+				var target: Dictionary = {}
+				for f_v in _core.foes:
+					var f: Dictionary = f_v
+					if not bool(f.get("still", false)) or float(f.get("dying", 0.0)) > 0.0:
+						continue
+					if target.is_empty() or _core.hero_pos.distance_to(Vector2(float(f["x"]), float(f["y"]))) < _core.hero_pos.distance_to(Vector2(float(target["x"]), float(target["y"]))):
+						target = f
+				if not target.is_empty():
+					_core.order_focus(target)
+					return
+			"zone":
+				var z: Dictionary = _core.zone
+				if not z.is_empty() and float(z.get("prog", 0.0)) < float(z.get("goal", 12.0)):
+					_core.order_move(Vector2(float(z["x"]), float(z["y"])))
+					return
+			"guard":
+				var g: Dictionary = _core.guard
+				if not g.is_empty():
+					var best: Dictionary = {}
+					var bd := 1e9
+					for f_v2 in _core.foes:
+						var f2: Dictionary = f_v2
+						if float(f2.get("hp", 0.0)) <= 0.0 or bool(f2.get("still", false)):
+							continue
+						var dd := Vector2(float(f2["x"]), float(f2["y"])).distance_to(Vector2(float(g["x"]), float(g["y"])))
+						if dd < bd:
+							bd = dd
+							best = f2
+					if not best.is_empty():
+						_core.order_focus(best)
+						return
+			"champion":
+				for f_v3 in _core.foes:
+					var f3: Dictionary = f_v3
+					if str(f3.get("kind", "")) == "champion":
+						_core.order_focus(f3)
+						return
+			"elite":
+				for f_v4 in _core.foes:
+					var f4: Dictionary = f_v4
+					if str(f4.get("kind", "")) == "elite":
+						_core.order_focus(f4)
+						return
+	_core.clear_order()
+
+func _q_fail_kind(kind: String) -> void:
+	for i in range(_quests.size() - 1, -1, -1):
+		if str((_quests[i] as Dictionary).get("kind", "")) == kind:
+			_q_finish(i, "fail")
+			return
+
+func _q_done_kind(kind: String) -> void:
+	for i in range(_quests.size() - 1, -1, -1):
+		if str((_quests[i] as Dictionary).get("kind", "")) == kind:
+			_q_finish(i, "done")
+			return
