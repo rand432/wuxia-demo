@@ -15,6 +15,7 @@ const TokenActor := preload("res://kushou/token_actor.gd")
 const CardData := preload("res://kushou/card_data.gd")
 const AncestorData := preload("res://kushou/ancestor_data.gd")
 const AttackFx := preload("res://kushou/attack_fx.gd")
+const BlackMarket := preload("res://kushou/black_market.gd")
 
 const INK := Color(0.13, 0.12, 0.11)
 const PAPER := Color(0.93, 0.90, 0.82)
@@ -196,6 +197,7 @@ var _slots: Array = []
 var _draw_cards: Array = []
 var _enemies: Array = []
 var _core = null
+var _bm = null
 var _coin_lb: Label
 var _kill_lb: Label
 var _wave_lb: Label
@@ -238,6 +240,11 @@ func _ready() -> void:
 	_build_god_pick()
 	_build_str()
 	_build_trea()
+	_bm = BlackMarket.new()
+	_bm.setup(_core, self)
+	add_child(_bm)
+	_bm.z_index = 40
+	_bm.visible = false
 	_refresh_deck()
 	set_process(true)
 
@@ -800,7 +807,7 @@ func _tile(x: float, y: float, s: float, kind: String, label: String, hot: bool)
 	var hit := func() -> void:
 		match kind:
 			"draw": _show_draw(true)
-			"market": _toast("黑市")
+			"market": _open_bm()
 			"treasure": _on_trea_tile()
 			"mate": _on_mate_tile()
 			"skill": _on_str_tile()
@@ -1245,6 +1252,8 @@ func _on_core_kill(n: int) -> void:
 	_kills += kn
 	if _kill_lb != null:
 		_kill_lb.text = str(_kills)
+	if _bm != null:
+		_bm.add_kill(kn)
 	_add_exp(20 * kn)                      # v2：杀 1 只 +20 经验
 	_add_wen(int(round(float(WEN_KILL_BASE + WEN_KILL_WAVE * int(_core.wave)) * (1.0 + _kill_pct / 100.0))))
 	if _qianzhi:
@@ -1332,6 +1341,10 @@ func _refresh_str_tile() -> void:
 		_str_tile.queue_redraw()
 
 # 点［强化］：扣文钱升一级；正好到 10 的倍数就开三选一
+func _open_bm() -> void:
+	if _bm != null:
+		_bm.open_panel()
+
 func _on_str_tile() -> void:
 	if _str_pending:
 		_open_aug_pick()                     # 上一手还没选 → 重新打开（不重复扣钱）
