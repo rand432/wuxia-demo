@@ -219,6 +219,7 @@ var _boss_bar_t := 0.0
 var _boss_on := false          # 首领在场时特效降档（首领战场景本来就重）
 var _late_baked := false       # 稀有特效是否已烘焙
 var _baked_keys: Dictionary = {}   # 已烘过的 (effect|palette|light)
+var _flash_rect: ColorRect = null  # 技能释放时的整屏微闪
 var _last_combo := 0            # 连杀里程碑用（每 10 连炸一口）
 const PFX_MAX_LIVE := 26          # 同屏特效上限（实测 60fps 有余量，放回 26）
 # 开局先把常用的几种烘好（BAKED 首次播放要烘，烘在开打前就不会卡第一下）
@@ -701,6 +702,12 @@ func _build_field() -> void:
 	_pfx_root = Node2D.new()
 	_pfx_root.z_index = 7
 	add_child(_pfx_root)
+	_flash_rect = ColorRect.new()
+	_flash_rect.color = Color(1.0, 0.96, 0.85, 0.0)
+	_flash_rect.size = Vector2(720, 1280)
+	_flash_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_flash_rect.z_index = 20
+	add_child(_flash_rect)
 	_boss_bar = BossBar.new()
 	_boss_bar.position = Vector2(110, 192)
 	_boss_bar.size = Vector2(500, 22)
@@ -3255,6 +3262,20 @@ func _spawn_fly(from: Vector2, to: Vector2, col: Color, n: int) -> void:
 			"tx": to.x + randf_range(-18.0, 18.0), "ty": to.y + randf_range(-8.0, 8.0),
 			"t": randf_range(0.0, 0.12), "col": col, "r": randf_range(4.5, 7.0)})
 
+# 整屏微闪（技能释放/大事件用）：暖纸色一闪，不刺眼
+func _screen_flash(col: Color, a: float, dur := 0.16) -> void:
+	if _flash_rect == null:
+		return
+	_flash_rect.color = Color(col.r, col.g, col.b, a)
+	var tw := create_tween().bind_node(_flash_rect)
+	tw.tween_property(_flash_rect, "color:a", 0.0, dur)
+
+# 技能释放的整体反馈：微闪 + 轻震 + 顿帧
+func _skill_cast_juice() -> void:
+	_screen_flash(Color(1.0, 0.94, 0.80), 0.16, 0.18)
+	_core._shake = maxf(float(_core._shake), 5.0)
+	_core._hitstop = maxf(float(_core._hitstop), 0.045)
+
 func _pulse_chip(lb: Label) -> void:
 	if lb == null:
 		return
@@ -3988,8 +4009,10 @@ func _tick_skills(dt: float) -> void:
 		if float(sk["cd_t"]) <= 0.0 and _mp >= float(sk["mp"]):
 			var cd_before := float(sk["cd_t"])
 			_cast_skill(i)
-			if float(sk["cd_t"]) > cd_before + 0.01 and i < _skill_slots.size():
-				_skill_slots[i].flash = 1.0
+			if float(sk["cd_t"]) > cd_before + 0.01:
+				if i < _skill_slots.size():
+					_skill_slots[i].flash = 1.0
+				_skill_cast_juice()
 	for i in _skill_slots.size():
 		var s = _skill_slots[i]
 		if i < _skills.size():

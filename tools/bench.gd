@@ -31,6 +31,10 @@ func _ready() -> void:
 	_ui = (load("res://kushou/battle_ui.tscn") as PackedScene).instantiate()
 	add_child(_ui)
 	_flags = OS.get_cmdline_user_args()
+	if not _flags.has("noskill"):
+		_ui._draw_charge = 1
+		_ui._pick_god("jicanghai")
+		_ui._hide_god_pick()
 	if _flags.has("nopfx"):
 		_ui._pfx_root = null
 	if _flags.has("noland"):
