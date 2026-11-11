@@ -133,15 +133,16 @@ var _wave_spawned := 0              # 已经刷了几只
 var _last_quota_wave := 1           # v17x：上一次结算定额时的波数（用来检测换波）
 
 func _wave_quota_for(w: int) -> int:
-	if w <= 3:   return 8
-	if w <= 6:   return 10
-	if w <= 10:  return 12
+	if w <= 3:   return 24
+	if w <= 6:   return 28
+	if w <= 10:  return 32
 	if w <= 15:  return 14
 	if w <= 20:  return 16
 	if w <= 25:  return 18
 	return 20
 
-var SPAWN_EVERY := 1.2               # 几秒刷一只（第 10 波后 0.9）· v18j 改 var：调参口
+var SPAWN_EVERY := 1.6               # 每批之间的间隔（原来是 1.2 秒刷一只；现在成批刷）
+var SPAWN_PACK := 4                  # 一批几只（割草：一次涌出 4 只，凑成可被横扫的一团）
 var SPAWN_EVERY_LATE := 0.9
 const HERO_LINE := 96.0             # 主角离战场底边多高（脚）
 const FOE_STOP := 150.0             # 怪走到离主角多近就停下开打
@@ -879,8 +880,12 @@ func _process(delta: float) -> void:
 		_spawn_t = SPAWN_EVERY_LATE if wave >= 10 else SPAWN_EVERY
 		# v17x：这一波只刷定额那么多（刷完就等玩家清场，然后提前进下一波）
 		if _wave_spawned < _wave_quota:
-			_spawn_foe()
-			_wave_spawned += 1
+			# 割草：**成批涌出**（一次 3 只），比一只一只刷更容易被横扫/技能一起吃
+			for _k in SPAWN_PACK:
+				if _wave_spawned >= _wave_quota:
+					break
+				_spawn_foe()
+				_wave_spawned += 1
 	_hero_cd -= delta
 	if _hero_pending_t > 0.0:
 		_hero_pending_t -= delta
