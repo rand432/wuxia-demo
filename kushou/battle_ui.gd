@@ -209,6 +209,8 @@ var _chal_cd: Array = [0.0, 0.0, 0.0, 0.0, 0.0]   # 五种挑战的冷却剩余
 const PFX2D := preload("res://addons/pixelfx/nodes/pixel_fx_2d.gd")
 var _pfx_root: Node2D = null      # pixelfx 特效层（命中/暴击等）
 var _pfx_count := 0
+var _streak := 0              # 连杀（2.2 秒内继续杀就累加）
+var _streak_t := 0.0
 const PFX_MAX_LIVE := 26          # 同屏特效上限（超过就不再生，保丝滑）
 # 开局先把常用的几种烘好（BAKED 首次播放要烘，烘在开打前就不会卡第一下）
 const PFX_PREWARM := [
@@ -1537,6 +1539,10 @@ func _process(_delta: float) -> void:
 		_tick_skills(_delta)
 		_tick_rare_buffs(_delta)
 		_tick_curio(_delta)
+		if _streak_t > 0.0:
+			_streak_t = maxf(0.0, _streak_t - _delta)
+			if _streak_t <= 0.0:
+				_streak = 0
 		_tick_chal(_delta)
 		_q_tick(_delta)
 		_tick_minions(_delta)
@@ -1585,7 +1591,35 @@ func _process(_delta: float) -> void:
 					tk.play_down()
 					# 阵亡小爆点（割草感：每杀一只都有一口）
 					_spawn_pfx("impacts/blunt-hit", tk.position + Vector2(0, -8), 0.60, "dust", 1.1, 1.15)
+					_streak += 1
+					_streak_t = 2.2
+					if _streak >= 3:
+						_float_streak(tk.position, _streak)
+						Aud.sfx("hit_slash2", -14.0, clampf(0.92 + 0.045 * float(_streak), 0.92, 1.85))
+					if _streak > 0 and _streak % 10 == 0:
+						_core._shake = maxf(float(_core._shake), 9.0)   # 每 10 连震一下屏
 				_foe_tokens.erase(tid)
+
+# 连杀飘字：金色 ×N，越大号越亮，往上飘着淡掉
+func _float_streak(pos: Vector2, n: int) -> void:
+	var lb := Label.new()
+	lb.text = "×" + str(n)
+	lb.position = pos + Vector2(-40, -70)
+	lb.size = Vector2(80, 40)
+	lb.add_theme_font_override("font", FONT)
+	lb.add_theme_font_size_override("font_size", mini(20 + n * 2, 44))
+	lb.add_theme_color_override("font_color", Color(0.85, 0.60, 0.16) if n < 10 else Color(0.92, 0.40, 0.16))
+	lb.add_theme_color_override("font_outline_color", Color(0.99, 0.95, 0.86, 0.85))
+	lb.add_theme_constant_override("outline_size", 4)
+	lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	lb.z_index = 12
+	add_child(lb)
+	var tw := create_tween().bind_node(lb)
+	tw.set_parallel(true)
+	tw.tween_property(lb, "position", lb.position + Vector2(0, -46), 0.55).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tw.tween_property(lb, "modulate:a", 0.0, 0.55).set_delay(0.18)
+	tw.chain().tween_callback(lb.queue_free)
 
 func _on_core_kill(n: int) -> void:
 	# v15 经验线：杀 1 只按 1+x% 只算（经验与所有按击杀成长的机制一起吃）
