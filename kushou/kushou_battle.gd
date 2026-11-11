@@ -5256,62 +5256,67 @@ func _draw() -> void:
 	for dv in _delayed:
 		var d: Dictionary = dv
 		var pr := clampf(float(d["t"]) / maxf(0.01, float(d["warn"])), 0.0, 1.0)
-		# "由淡转深"：alpha 与颜色同时推进
-		var fa := 0.06 + 0.49 * pr                       # 面填充：很淡 → 半实
-		var ea := 0.30 + 0.68 * pr                       # 边描线：暗 → 亮
-		var fr := 0.52 + 0.48 * pr                       # 红通道 0.52 → 1.0
-		var fg := 0.08 + 0.40 * pr                       # 绿通道 0.08 → 0.48（越深越"烫"）
+		# 手绘预警：极淡的墨洗填充 + 断续笔触描边（不是一块实心色板）
+		var fa := 0.05 + 0.16 * pr
+		var ea := 0.30 + 0.55 * pr
+		var fr := 0.46 + 0.30 * pr
+		var fg := 0.10 + 0.20 * pr
 		var dc := Vector2(float(d["x"]), float(d["y"])) + shk
 		var rr := float(d["r"])
 		var shape := str(d["shape"])
+		var hot := Color(fr, fg * 1.5, 0.12, ea)
 		if shape == "beam":
-			# 剑气：一条长柱（沿 dir 方向）
-			var dv2 := Vector2(d["dir"])
+			# 剑气/冲锋：两端收笔、中段最粗的毛笔形
+			var dv2 := Vector2(d["dir"]).normalized()
 			var nrm := Vector2(-dv2.y, dv2.x)
 			var ln := float(d["len"])
-			draw_colored_polygon(PackedVector2Array([dc + nrm * rr, dc - nrm * rr,
-				dc - nrm * rr + dv2 * ln, dc + nrm * rr + dv2 * ln]), Color(fr, fg, 0.10, fa))
-			draw_line(dc + nrm * rr, dc + nrm * rr + dv2 * ln, Color(fr, fg * 1.4, 0.18, ea), 3.0)
-			draw_line(dc - nrm * rr, dc - nrm * rr + dv2 * ln, Color(fr, fg * 1.4, 0.18, ea), 3.0)
+			var a := dc
+			var b := dc + dv2 * ln
+			var p0 := a + nrm * rr * 0.45
+			var p1 := a + dv2 * (ln * 0.33) + nrm * rr
+			var p2 := b + nrm * rr * 0.35
+			var p3 := b - nrm * rr * 0.35
+			var p4 := a + dv2 * (ln * 0.33) - nrm * rr
+			var p5 := a - nrm * rr * 0.45
+			draw_colored_polygon(PackedVector2Array([p0, p1, p2, p3, p4, p5]), Color(fr, fg, 0.10, fa))
+			_dashed_line(p0, p1, hot, 2.0)
+			_dashed_line(p1, p2, hot, 2.0)
+			_dashed_line(p3, p4, hot, 2.0)
+			_dashed_line(p4, p5, hot, 2.0)
 		elif shape == "sector":
-			# 扇形横扫：一段圆弧 ＋ 从圆心散出去的边线
 			var fwd := Vector2(d["dir"]).normalized()
 			var half := float(d["spread"]) * 0.5
 			var a0 := fwd.angle() - half
 			var a1 := fwd.angle() + half
 			draw_colored_polygon(PackedVector2Array([dc, dc + Vector2(cos(a0), sin(a0)) * rr,
 				dc + Vector2(cos((a0 + a1) * 0.5), sin((a0 + a1) * 0.5)) * rr, dc + Vector2(cos(a1), sin(a1)) * rr]),
-				Color(fr, fg, 0.10, fa))
-			draw_arc(dc, rr, a0, a1, 28, Color(fr, fg * 1.4, 0.18, ea), 3.0)
-			draw_line(dc, dc + Vector2(cos(a0), sin(a0)) * rr, Color(fr, fg * 1.4, 0.18, ea * 0.8), 2.0)
-			draw_line(dc, dc + Vector2(cos(a1), sin(a1)) * rr, Color(fr, fg * 1.4, 0.18, ea * 0.8), 2.0)
+				Color(fr, fg, 0.09, fa))
+			_dashed_arc(dc, rr, a0, a1, hot, 2.0, 26)
+			_dashed_line(dc, dc + Vector2(cos(a0), sin(a0)) * rr, hot, 2.0)
+			_dashed_line(dc, dc + Vector2(cos(a1), sin(a1)) * rr, hot, 2.0)
 		elif shape == "ring":
-			# 冲击环：预警时是一圈**细环**（中间几乎不填），越深越粗
-			draw_arc(dc, rr, 0.0, TAU, 48, Color(fr, fg * 1.4, 0.18, ea), 2.0 + 3.0 * pr)
-			draw_circle(dc, rr, Color(fr, fg, 0.10, fa * 0.35))
+			_dashed_arc(dc, rr, 0.0, TAU, hot, 2.0 + 2.0 * pr, 40)
+			draw_circle(dc, rr, Color(fr, fg, 0.10, fa * 0.6))
 		elif shape == "bolt":
-			# 落雷：一条**竖着的细长条**（从天上劈到脚下）
 			var bw := maxf(10.0, rr * 0.5)
 			draw_colored_polygon(PackedVector2Array([
-				dc + Vector2(-bw, -280.0), dc + Vector2(bw, -280.0),
-				dc + Vector2(bw * 0.7, 10.0), dc + Vector2(-bw * 0.7, 10.0)]), Color(fr, fg, 0.16, fa))
-			draw_line(dc + Vector2(-bw, -280.0), dc + Vector2(-bw * 0.7, 10.0), Color(fr, fg * 1.5, 0.22, ea), 2.0)
-			draw_line(dc + Vector2(bw, -280.0), dc + Vector2(bw * 0.7, 10.0), Color(fr, fg * 1.5, 0.22, ea), 2.0)
-			draw_circle(dc, rr * 0.6, Color(fr, fg, 0.14, fa))
+				dc + Vector2(-bw * 0.55, -280.0), dc + Vector2(bw * 0.55, -280.0),
+				dc + Vector2(bw, 10.0), dc + Vector2(-bw, 10.0)]), Color(fr, fg, 0.12, fa))
+			_dashed_line(dc + Vector2(-bw * 0.55, -280.0), dc + Vector2(-bw, 10.0), hot, 2.0)
+			_dashed_line(dc + Vector2(bw * 0.55, -280.0), dc + Vector2(bw, 10.0), hot, 2.0)
+			draw_circle(dc, rr * 0.6, Color(fr, fg, 0.12, fa))
 		elif shape == "pool":
-			# 毒圈 / 火海：**留在地上**的持续区（比别的更实一点，一眼看出"还在这儿"）
-			draw_circle(dc, rr, Color(fr * 0.8, fg, 0.16, 0.16 + 0.28 * pr))
-			draw_arc(dc, rr, 0.0, TAU, 40, Color(fr * 0.85, fg * 1.3, 0.20, 0.45 + 0.4 * pr), 3.0)
-			draw_arc(dc, rr * (0.5 + 0.4 * sin(_t * 4.0)), 0.0, TAU, 28, Color(fr, fg * 1.6, 0.24, 0.30), 2.0)
+			draw_circle(dc, rr, Color(fr * 0.8, fg, 0.16, 0.10 + 0.18 * pr))
+			_dashed_arc(dc, rr, 0.0, TAU, Color(fr * 0.85, fg * 1.3, 0.20, 0.40 + 0.30 * pr), 2.5, 36)
+			draw_arc(dc, rr * (0.5 + 0.4 * sin(_t * 4.0)), 0.0, TAU, 28, Color(fr, fg * 1.6, 0.24, 0.24), 2.0)
 		else:
-			# 圆（含跟随型：圈一路贴在主角脚下跑）
-			draw_circle(dc, rr, Color(fr, fg, 0.10, fa))
-			draw_arc(dc, rr, 0.0, TAU, 40, Color(fr, fg * 1.4, 0.18, ea), 3.0)
-			draw_arc(dc, rr * pr, 0.0, TAU, 32, Color(fr, fg * 1.6, 0.24, ea * 0.75), 2.0)
-		# "深到发亮"＝就快释放了：最后 0.25 秒再压一层高亮
+			draw_circle(dc, rr, Color(fr, fg, 0.09, fa))
+			_dashed_arc(dc, rr, 0.0, TAU, hot, 2.5, 40)
+			draw_arc(dc, rr * pr, 0.0, TAU, 32, Color(fr, fg * 1.6, 0.24, ea * 0.7), 2.0)
+		# 最后 0.25 秒：只加一层很淡的朱砂红提示，不再压成实心
 		if pr > 0.80:
 			var fl2 := (pr - 0.80) / 0.20
-			var col2 := Color(1.0, 0.46, 0.24, 0.34 * fl2)
+			var col2 := Color(0.86, 0.32, 0.20, 0.14 * fl2)
 			if shape == "beam":
 				var dv3 := Vector2(d["dir"])
 				var nrm2 := Vector2(-dv3.y, dv3.x)
@@ -6011,3 +6016,25 @@ func _stick(c: Vector2, s: float, col: Color, up: bool) -> void:
 					Color(0.86, 0.84, 0.78), 1.6 * s)
 			_:
 				pass
+
+# 断续笔触：预警区的手绘描边
+func _dashed_line(a: Vector2, b: Vector2, col: Color, w := 2.0, dash := 11.0, gap := 8.0) -> void:
+	var d := b - a
+	var L := d.length()
+	if L < 0.5:
+		return
+	var dir := d / L
+	var t := 0.0
+	while t < L:
+		var t2 := minf(t + dash, L)
+		draw_line(a + dir * t, a + dir * t2, col, w)
+		t = t2 + gap
+
+func _dashed_arc(c: Vector2, r: float, a0: float, a1: float, col: Color, w := 2.0, segs := 24) -> void:
+	var span := a1 - a0
+	for i in segs:
+		if i % 2 == 1:
+			continue
+		var t0 := a0 + span * float(i) / float(segs)
+		var t1 := a0 + span * float(i + 1) / float(segs)
+		draw_arc(c, r, t0, t1, 3, col, w)
