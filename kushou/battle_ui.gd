@@ -5190,14 +5190,16 @@ func _devour_keep(n: int) -> void:
 
 
 # ============================================================
-# 奇遇：每 75 秒冒一条限时任务，自动进任务栏（最多 2 条）
-#   完成给厚赏 · 放弃 +10 灵晶 · 超时没做完就消失（不给东西）
-#   接了奇遇，自动战斗优先去做（奇遇目标 > 默认）；战斗没有手动操作
+# 奇遇：每 75 秒掷一条；**血条正下方那一条就是入口**
+#   掷到 → 那一条显示「点开看详情」→ 点开弹框［接受］［放弃］
+#   接受后才开始计时 / 布置战场；**战斗中途不能放弃**
+#   掷到的下一条只会储存（不显示），当前那条结束才顶上来
 # ============================================================
 const Q_TICK := 75.0
-const Q_MAX := 2
-const Q_GIVEUP_CRYSTAL := 10
+const Q_QUEUE_MAX := 3
+const Q_TIER_CN := ["简单", "普通", "困难", "特殊"]
 const Q_TIER_W := [[45.0, 55.0, 0.0, 0.0], [20.0, 50.0, 30.0, 0.0], [10.0, 35.0, 40.0, 15.0]]
+const Q_TIER_COL := [Color(0.40, 0.46, 0.34), Color(0.40, 0.36, 0.24), Color(0.52, 0.30, 0.16), Color(0.52, 0.18, 0.16)]
 
 const QUEST_POOL := [
 	{"id": "tu", "n": "屠场", "tier": 0, "kind": "count", "key": "kill", "need": 40, "lim": 60.0, "desc": "杀 40 只", "r": {"crystal": 25}},
@@ -5223,17 +5225,19 @@ const QUEST_POOL := [
 	{"id": "dj", "n": "赌局", "tier": 3, "kind": "instant", "need": 0, "lim": 0.0, "desc": "押 100 文，五五开赢 400", "r": {}},
 ]
 
-var _quests: Array = []
+var _q_offer: Dictionary = {}     # 掷到、等玩家点开看的那一条
+var _q_cur: Dictionary = {}       # 已接受、正在做的那一条（同时只有一条）
+var _q_queue: Array = []          # 储存（界面不显示）
 var _q_t := 0.0
 var _q_done := 0
 var _q_giveup := 0
 var _q_fail := 0
 var _q_stats: Dictionary = {}
 var _q_layer: Control = null
-var _q_rows: Array = []
-var _q_banner: Label = null
-var _q_banner_box: Control = null
-var _q_banner_t := 0.0
+var _q_bar: Panel = null
+var _q_lb: Label = null
+var _q_hit: Button = null
+var _q_pop: Control = null
 var _q_ai_t := 0.0
 
 func _q_init() -> void:
@@ -5242,40 +5246,157 @@ func _q_init() -> void:
 	_q_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_q_layer.z_index = 9
 	add_child(_q_layer)
-	_q_banner_box = Control.new()
-	_q_banner_box.position = Vector2(14, 150)
-	_q_banner_box.size = Vector2(692, 38)
-	_q_banner_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_q_banner_box.visible = false
-	_q_layer.add_child(_q_banner_box)
-	_panel(Rect2(0, 0, 692, 38), Color(0.10, 0.09, 0.08, 0.90), 6, Color(0.72, 0.28, 0.20, 0.65), 1, _q_banner_box)
-	_q_banner = _lbl("", Vector2(8, 7), Vector2(676, 26), 16, Color(0.98, 0.90, 0.78), _q_banner_box, HORIZONTAL_ALIGNMENT_CENTER)
-	for i in Q_MAX:
-		var y := 556.0 + float(i) * 56.0
-		var pnl := _panel(Rect2(8, y, 366, 48), Color(0.10, 0.09, 0.08, 0.86), 6, Color(0.85, 0.66, 0.23, 0.55), 1, _q_layer)
-		var lb := _lbl("", Vector2(16, y + 12), Vector2(268, 24), 15, Color(0.95, 0.90, 0.80), _q_layer)
-		var idx := i
-		var btn := _btn("放弃", Rect2(292, y + 8, 72, 32), 15, Color(0.42, 0.16, 0.12),
-			Color(0.98, 0.92, 0.82), func() -> void: _q_giveup_at(idx), _q_layer)
-		_q_rows.append({"lb": lb, "btn": btn, "panel": pnl})
-		pnl.visible = false
-		lb.visible = false
-		btn.visible = false
+	# 主角血条正下方：这一条本身就是入口
+	_q_bar = _panel(Rect2(96, 138, 528, 34), Color(0.10, 0.09, 0.08, 0.92), 6, Color(0.85, 0.66, 0.23, 0.75), 2, _q_layer)
+	_q_lb = _lbl("", Vector2(110, 145), Vector2(500, 22), 15, Color(0.95, 0.90, 0.80), _q_layer)
+	_q_hit = Button.new()
+	_q_hit.position = Vector2(96, 138)
+	_q_hit.size = Vector2(528, 34)
+	_q_hit.flat = true
+	_q_hit.focus_mode = Control.FOCUS_NONE
+	for st in ["normal", "hover", "pressed"]:
+		_q_hit.add_theme_stylebox_override(st, StyleBoxEmpty.new())
+	_q_hit.pressed.connect(_q_open_popup)
+	_q_layer.add_child(_q_hit)
+	_q_bar.visible = false
+	_q_lb.visible = false
+	_q_hit.visible = false
 
-func _banner_q(text: String) -> void:
-	if _q_banner == null:
+func _q_refresh() -> void:
+	var show_bar := not _q_cur.is_empty() or not _q_offer.is_empty()
+	_q_bar.visible = show_bar
+	_q_lb.visible = show_bar
+	_q_hit.visible = show_bar
+	if not show_bar:
 		return
-	_q_banner.text = text
-	_q_banner_box.visible = true
-	_q_banner_t = 3.0
+	if not _q_cur.is_empty():
+		var q: Dictionary = _q_cur
+		var s := "「%s」%s" % [str(q["n"]), str(q["desc"])]
+		if int(q.get("need", 0)) > 0:
+			s += "  %d/%d" % [int(q.get("prog", 0)), int(q["need"])]
+		if float(q.get("lim", 0.0)) > 0.0:
+			s += "  ·  %.0f 秒" % ceil(float(q["t"]))
+		s += "　　点开看详情"
+		_q_lb.text = s
+		_q_bar.add_theme_stylebox_override("panel", _q_style(Color(0.30, 0.24, 0.12), 2))
+	else:
+		var o: Dictionary = _q_offer
+		_q_lb.text = "「%s」%s · 奖 %d 灵晶　　点开：接受 / 放弃" % [str(o["n"]), str(o["desc"]), int(o.get("r", {}).get("crystal", 0))]
+		_q_bar.add_theme_stylebox_override("panel", _q_style(Color(0.85, 0.66, 0.23), 3))
 
-func _q_giveup_at(i: int) -> void:
-	if i >= _quests.size():
+func _q_style(border: Color, w: int) -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.10, 0.09, 0.08, 0.92)
+	sb.set_corner_radius_all(6)
+	sb.border_color = border
+	sb.set_border_width_all(w)
+	return sb
+
+func _q_close_popup() -> void:
+	if _q_pop != null:
+		_q_pop.queue_free()
+		_q_pop = null
+
+# 点那一条：弹详情（掷到的：接受/放弃；已接受：只看）
+func _q_open_popup() -> void:
+	_q_close_popup()
+	var is_offer := _q_cur.is_empty() and not _q_offer.is_empty()
+	var q: Dictionary = _q_offer if is_offer else _q_cur
+	if q.is_empty():
 		return
-	_q_finish(i, "giveup")
+	var layer := Control.new()
+	layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	layer.mouse_filter = Control.MOUSE_FILTER_STOP
+	layer.z_index = 34
+	add_child(layer)
+	_q_pop = layer
+	var dim := ColorRect.new()
+	dim.color = Color(0.05, 0.04, 0.03, 0.55)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(dim)
+	_panel(Rect2(120, 330, 480, 470), Color(0.97, 0.93, 0.85, 0.99), 10, Color(0.85, 0.66, 0.23), 3, layer)
+	_lbl(str(q["n"]), Vector2(150, 348), Vector2(220, 44), 32, INK, layer)
+	var tier := clampi(int(q.get("tier", 0)), 0, 3)
+	_panel(Rect2(400, 356, 120, 26), Q_TIER_COL[tier], 4, Q_TIER_COL[tier], 0, layer)
+	_lbl("奇遇 · " + str(Q_TIER_CN[tier]), Vector2(400, 358), Vector2(120, 22), 14, Color(0.99, 0.95, 0.87), layer, HORIZONTAL_ALIGNMENT_CENTER)
+	var r: Dictionary = q.get("r", {})
+	var rw := "灵晶 " + str(int(r.get("crystal", 0)))
+	if r.has("trea_rr"):
+		rw += " · 宝物刷新 " + str(int(r["trea_rr"]))
+	if r.has("aug_rr"):
+		rw += " · 进阶刷新 " + str(int(r["aug_rr"]))
+	if r.has("trea"):
+		rw += " · 宝物机会 " + str(int(r["trea"]))
+	var rows := [
+		["条件", str(q["desc"])],
+		["限时", ("%d 秒（接受后才开始算）" % int(q["lim"])) if float(q.get("lim", 0.0)) > 0.0 else "不限时"],
+		["奖励", rw],
+		["失败", "超时自动消失，不给东西"],
+	]
+	var y := 420.0
+	for row in rows:
+		_lbl(str(row[0]), Vector2(152, y), Vector2(70, 22), 14, Color(0.47, 0.41, 0.33), layer)
+		_lbl(str(row[1]), Vector2(212, y - 3), Vector2(340, 26), 18, INK, layer)
+		y += 50.0
+	if is_offer:
+		_btn("接 受", Rect2(152, 700, 180, 62), 26, Color(0.85, 0.66, 0.23), Color(0.13, 0.10, 0.06),
+			func() -> void: _q_accept(), layer)
+		_btn("放 弃", Rect2(388, 700, 180, 62), 26, Color(0.93, 0.89, 0.80), Color(0.35, 0.28, 0.18),
+			func() -> void: _q_decline(), layer)
+	else:
+		_btn("关 闭", Rect2(270, 700, 180, 62), 26, Color(0.93, 0.89, 0.80), Color(0.35, 0.28, 0.18),
+			func() -> void: _q_close_popup(), layer)
+		_lbl("接了就得打完 · 中途不能放弃", Vector2(150, 672), Vector2(420, 22), 14, Color(0.62, 0.20, 0.14), layer, HORIZONTAL_ALIGNMENT_CENTER)
+
+func _q_accept() -> void:
+	if _q_offer.is_empty():
+		return
+	var q: Dictionary = _q_offer
+	_q_offer = {}
+	_q_close_popup()
+	_q_activate(q)
+
+func _q_decline() -> void:
+	if _q_offer.is_empty():
+		return
+	_q_giveup += 1
+	_q_offer = {}
+	_q_close_popup()
+	_q_refresh()
+	_q_pull_queue()
+
+func _q_pull_queue() -> void:
+	if not _q_cur.is_empty() or not _q_offer.is_empty():
+		return
+	if _q_queue.is_empty():
+		return
+	_q_offer = _q_queue.pop_front()
+	_q_refresh()
+
+func _q_notify(text: String) -> void:
+	_toast(text)
+
+func _q_finish(why: String) -> void:
+	if _q_cur.is_empty():
+		return
+	var q: Dictionary = _q_cur
+	match why:
+		"done":
+			_q_done += 1
+			_q_reward(q)
+			_q_notify("奇遇完成 · %s" % str(q["n"]))
+			Aud.sfx("levelup", -6.0)
+		"fail":
+			_q_fail += 1
+			_q_notify("奇遇失败 · %s" % str(q["n"]))
+	_q_cleanup(q)
+	_q_cur = {}
+	_q_refresh()
+	_q_pull_queue()
 
 func _q_cleanup(q: Dictionary) -> void:
-	if _core == null:
+	if _core == null or q.is_empty():
 		return
 	match str(q.get("kind", "")):
 		"statue":
@@ -5303,49 +5424,15 @@ func _q_reward(q: Dictionary) -> void:
 		_trea_charge += int(r["trea"])
 	_refresh_trea_tile()
 
-func _q_finish(i: int, why: String) -> void:
-	if i < 0 or i >= _quests.size():
-		return
-	var q: Dictionary = _quests[i]
-	_q_cleanup(q)
-	_quests.remove_at(i)
-	match why:
-		"done":
-			_q_done += 1
-			_q_reward(q)
-			_banner_q("奇遇完成 · %s" % str(q["n"]))
-			Aud.sfx("levelup", -6.0)
-		"giveup":
-			_q_giveup += 1
-			_gain_crystal(Q_GIVEUP_CRYSTAL)
-			_banner_q("放弃奇遇 · 灵晶 +%d" % Q_GIVEUP_CRYSTAL)
-			Aud.sfx("ui_back", -8.0)
-		_:
-			_q_fail += 1
-			_banner_q("奇遇失败 · %s" % str(q["n"]))
-	_q_refresh()
+func _q_fail_kind(kind: String) -> void:
+	if not _q_cur.is_empty() and str(_q_cur.get("kind", "")) == kind:
+		_q_finish("fail")
 
-func _q_refresh() -> void:
-	for i in _q_rows.size():
-		var row: Dictionary = _q_rows[i]
-		var lb: Label = row["lb"]
-		var btn: Button = row["btn"]
-		var pnl: Panel = row["panel"]
-		pnl.visible = i < _quests.size()
-		if i < _quests.size():
-			var q: Dictionary = _quests[i]
-			var s := "「%s」%s" % [str(q["n"]), str(q["desc"])]
-			if int(q.get("need", 0)) > 0:
-				s += " %d/%d" % [int(q.get("prog", 0)), int(q["need"])]
-			if float(q.get("lim", 0.0)) > 0.0:
-				s += " %.0f 秒" % ceil(float(q["t"]))
-			lb.text = s
-			lb.visible = true
-			btn.visible = true
-		else:
-			lb.visible = false
-			btn.visible = false
+func _q_done_kind(kind: String) -> void:
+	if not _q_cur.is_empty() and str(_q_cur.get("kind", "")) == kind:
+		_q_finish("done")
 
+# 掷到一条：没人做也没人待接 → 直接摆出来；否则储存
 func _q_roll() -> void:
 	if _core == null:
 		return
@@ -5364,68 +5451,76 @@ func _q_roll() -> void:
 		var e: Dictionary = e_v
 		if int(e["tier"]) != tier:
 			continue
-		var busy := false
-		for q_v in _quests:
-			if str((q_v as Dictionary)["id"]) == str(e["id"]):
-				busy = true
-		if not busy:
-			cand.append(e)
+		if not _q_cur.is_empty() and str(_q_cur["id"]) == str(e["id"]):
+			continue
+		if not _q_offer.is_empty() and str(_q_offer["id"]) == str(e["id"]):
+			continue
+		cand.append(e)
 	if cand.is_empty():
 		return
 	var pick: Dictionary = (cand[randi() % cand.size()] as Dictionary).duplicate()
-	pick["prog"] = 0
-	pick["t"] = float(pick["lim"])
-	pick["mark"] = int(_q_stats.get(str(pick.get("key", "")), 0))
-	match str(pick["kind"]):
+	if _q_cur.is_empty() and _q_offer.is_empty():
+		_q_offer = pick
+		_q_refresh()
+	elif _q_queue.size() < Q_QUEUE_MAX:
+		_q_queue.append(pick)
+
+# 接受后：布置战场 + 倒计时从这里才开始
+func _q_activate(q: Dictionary) -> void:
+	q["prog"] = 0
+	q["t"] = float(q.get("lim", 0.0))
+	q["mark"] = int(_q_stats.get(str(q.get("key", "")), 0))
+	match str(q.get("kind", "")):
 		"statue":
-			_core.spawn_statues(int(pick["need"]))
+			_core.spawn_statues(int(q["need"]))
 		"zone":
-			_core.spawn_zone(150.0, float(pick["need"]))
+			_core.spawn_zone(150.0, float(q["need"]))
 		"guard":
 			_core.spawn_guard()
 		"champion":
 			_core.spawn_champion()
 		"elite":
-			_core.spawn_elite(int(pick["need"]))
+			_core.spawn_elite(int(q["need"]))
 		"survive":
-			if str(pick["id"]) == "xj":
+			if str(q["id"]) == "xj":
 				var h: Dictionary = _core.hero
 				h["hp"] = maxf(1.0, float(h.get("hp", 0.0)) * 0.8)
 		"instant":
-			_q_instant(pick)
+			_q_instant(q)
+			_q_refresh()
+			_q_pull_queue()
 			return
-	_quests.append(pick)
-	_banner_q("【奇遇】%s —— %s · 奖 %d 灵晶" % [str(pick["n"]), str(pick["desc"]), int(pick.get("r", {}).get("crystal", 0))])
+	_q_cur = q
 	_q_refresh()
+	Aud.sfx("ui_open", -10.0)
 
 func _q_instant(q: Dictionary) -> void:
 	if _wen < 100:
-		_banner_q("赌局 · 庄家不收空手客")
+		_q_notify("赌局 · 庄家不收空手客")
 		return
 	_wen -= 100
 	if _coin_lb != null:
 		_coin_lb.text = str(_wen)
 	if randf() < 0.5:
 		_add_wen(400)
-		_banner_q("赌局 · 赢了 400 文")
+		_q_notify("赌局 · 赢了 400 文")
 	else:
-		_banner_q("赌局 · 输了 100 文")
+		_q_notify("赌局 · 输了 100 文")
 
-# 计数钩子：各系统完成后叫它
 func _qc(key: String, n: int) -> void:
 	if n <= 0:
 		return
 	_q_stats[key] = int(_q_stats.get(key, 0)) + n
-	for i in range(_quests.size() - 1, -1, -1):
-		var q: Dictionary = _quests[i]
-		if str(q.get("kind", "")) != "count" or str(q.get("key", "")) != key:
-			continue
-		q["prog"] = int(q.get("prog", 0)) + n
-		if int(q["prog"]) >= int(q["need"]):
-			_q_finish(i, "done")
+	if _q_cur.is_empty():
+		return
+	if str(_q_cur.get("kind", "")) != "count" or str(_q_cur.get("key", "")) != key:
+		return
+	_q_cur["prog"] = int(_q_cur.get("prog", 0)) + n
+	if int(_q_cur["prog"]) >= int(_q_cur["need"]):
+		_q_finish("done")
 
 func _q_check(q: Dictionary) -> void:
-	if _core == null:
+	if _core == null or q.is_empty():
 		return
 	match str(q.get("kind", "")):
 		"statue":
@@ -5442,101 +5537,83 @@ func _q_check(q: Dictionary) -> void:
 func _q_tick(dt: float) -> void:
 	if _run_over:
 		return
-	if _q_banner_t > 0.0:
-		_q_banner_t -= dt
-		if _q_banner_t <= 0.0 and _q_banner_box != null:
-			_q_banner_box.visible = false
 	_q_t += dt
 	if _q_t >= Q_TICK:
 		_q_t = 0.0
-		if _quests.size() < Q_MAX:
-			_q_roll()
-	for i in range(_quests.size() - 1, -1, -1):
-		var q: Dictionary = _quests[i]
-		_q_check(q)
-		if int(q.get("need", 0)) > 0 and int(q.get("prog", 0)) >= int(q["need"]):
-			_q_finish(i, "done")
-			continue
-		if str(q.get("kind", "")) == "restrain":
-			if int(_q_stats.get(str(q.get("key", "")), 0)) != int(q.get("mark", 0)):
-				_q_finish(i, "fail")
-				continue
-		if float(q.get("lim", 0.0)) > 0.0:
-			q["t"] = float(q["t"]) - dt
-			if float(q["t"]) <= 0.0:
-				if str(q["kind"]) in ["survive", "restrain", "guard"]:
-					_q_finish(i, "done")
-				else:
-					_q_finish(i, "fail")
-				continue
+		_q_roll()
+	if _q_cur.is_empty():
+		_q_pull_queue()
+		return
+	var q: Dictionary = _q_cur
+	_q_check(q)
+	if int(q.get("need", 0)) > 0 and int(q.get("prog", 0)) >= int(q["need"]):
+		_q_finish("done")
+		return
+	if str(q.get("kind", "")) == "restrain":
+		if int(_q_stats.get(str(q.get("key", "")), 0)) != int(q.get("mark", 0)):
+			_q_finish("fail")
+			return
+	if float(q.get("lim", 0.0)) > 0.0:
+		q["t"] = float(q["t"]) - dt
+		if float(q["t"]) <= 0.0:
+			if str(q["kind"]) in ["survive", "restrain", "guard"]:
+				_q_finish("done")
+			else:
+				_q_finish("fail")
+			return
 	_q_refresh()
 	_q_ai(dt)
 
-# 奇遇优先的自动战斗：奇遇目标 > 默认（没有手动操作）
 func _q_ai(dt: float) -> void:
 	_q_ai_t += dt
 	if _q_ai_t < 0.3:
 		return
 	_q_ai_t = 0.0
-	if _run_over or _core == null or _quests.is_empty():
+	if _run_over or _core == null or _q_cur.is_empty():
 		return
-	for q_v in _quests:
-		var q: Dictionary = q_v
-		match str(q.get("kind", "")):
-			"statue":
-				var target: Dictionary = {}
-				for f_v in _core.foes:
-					var f: Dictionary = f_v
-					if not bool(f.get("still", false)) or float(f.get("dying", 0.0)) > 0.0:
+	match str(_q_cur.get("kind", "")):
+		"statue":
+			var target: Dictionary = {}
+			for f_v in _core.foes:
+				var f: Dictionary = f_v
+				if not bool(f.get("still", false)) or float(f.get("dying", 0.0)) > 0.0:
+					continue
+				if target.is_empty() or _core.hero_pos.distance_to(Vector2(float(f["x"]), float(f["y"]))) < _core.hero_pos.distance_to(Vector2(float(target["x"]), float(target["y"]))):
+					target = f
+			if not target.is_empty():
+				_core.order_focus(target)
+				return
+		"zone":
+			var z: Dictionary = _core.zone
+			if not z.is_empty() and float(z.get("prog", 0.0)) < float(z.get("goal", 12.0)):
+				_core.order_move(Vector2(float(z["x"]), float(z["y"])))
+				return
+		"guard":
+			var g: Dictionary = _core.guard
+			if not g.is_empty():
+				var best: Dictionary = {}
+				var bd := 1e9
+				for f_v2 in _core.foes:
+					var f2: Dictionary = f_v2
+					if float(f2.get("hp", 0.0)) <= 0.0 or bool(f2.get("still", false)):
 						continue
-					if target.is_empty() or _core.hero_pos.distance_to(Vector2(float(f["x"]), float(f["y"]))) < _core.hero_pos.distance_to(Vector2(float(target["x"]), float(target["y"]))):
-						target = f
-				if not target.is_empty():
-					_core.order_focus(target)
+					var dd := Vector2(float(f2["x"]), float(f2["y"])).distance_to(Vector2(float(g["x"]), float(g["y"])))
+					if dd < bd:
+						bd = dd
+						best = f2
+				if not best.is_empty():
+					_core.order_focus(best)
 					return
-			"zone":
-				var z: Dictionary = _core.zone
-				if not z.is_empty() and float(z.get("prog", 0.0)) < float(z.get("goal", 12.0)):
-					_core.order_move(Vector2(float(z["x"]), float(z["y"])))
+		"champion":
+			for f_v3 in _core.foes:
+				var f3: Dictionary = f_v3
+				if str(f3.get("kind", "")) == "champion":
+					_core.order_focus(f3)
 					return
-			"guard":
-				var g: Dictionary = _core.guard
-				if not g.is_empty():
-					var best: Dictionary = {}
-					var bd := 1e9
-					for f_v2 in _core.foes:
-						var f2: Dictionary = f_v2
-						if float(f2.get("hp", 0.0)) <= 0.0 or bool(f2.get("still", false)):
-							continue
-						var dd := Vector2(float(f2["x"]), float(f2["y"])).distance_to(Vector2(float(g["x"]), float(g["y"])))
-						if dd < bd:
-							bd = dd
-							best = f2
-					if not best.is_empty():
-						_core.order_focus(best)
-						return
-			"champion":
-				for f_v3 in _core.foes:
-					var f3: Dictionary = f_v3
-					if str(f3.get("kind", "")) == "champion":
-						_core.order_focus(f3)
-						return
-			"elite":
-				for f_v4 in _core.foes:
-					var f4: Dictionary = f_v4
-					if str(f4.get("kind", "")) == "elite":
-						_core.order_focus(f4)
-						return
+		"elite":
+			for f_v4 in _core.foes:
+				var f4: Dictionary = f_v4
+				if str(f4.get("kind", "")) == "elite":
+					_core.order_focus(f4)
+					return
 	_core.clear_order()
-
-func _q_fail_kind(kind: String) -> void:
-	for i in range(_quests.size() - 1, -1, -1):
-		if str((_quests[i] as Dictionary).get("kind", "")) == kind:
-			_q_finish(i, "fail")
-			return
-
-func _q_done_kind(kind: String) -> void:
-	for i in range(_quests.size() - 1, -1, -1):
-		if str((_quests[i] as Dictionary).get("kind", "")) == kind:
-			_q_finish(i, "done")
-			return
