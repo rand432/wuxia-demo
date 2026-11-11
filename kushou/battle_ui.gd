@@ -209,6 +209,15 @@ var _chal_cd: Array = [0.0, 0.0, 0.0, 0.0, 0.0]   # 五种挑战的冷却剩余
 const PFX2D := preload("res://addons/pixelfx/nodes/pixel_fx_2d.gd")
 var _pfx_root: Node2D = null      # pixelfx 特效层（命中/暴击等）
 var _pfx_count := 0
+const PFX_MAX_LIVE := 26          # 同屏特效上限（超过就不再生，保丝滑）
+# 开局先把常用的几种烘好（BAKED 首次播放要烘，烘在开打前就不会卡第一下）
+const PFX_PREWARM := [
+	["impacts/hit-spark", 0.72, "", 1.0],
+	["impacts/crit-hit", 0.95, "gold", 1.9],
+	["impacts/crit-hit", 0.80, "", 1.4],
+	["impacts/blunt-hit", 0.70, "blood", 1.2],
+	["impacts/blunt-hit", 0.60, "dust", 1.1],
+]
 var _curio_sq = null             # 奇物方块（战场右下，与挑战对称）
 var _curio_cd := 0.0             # 奇物冷却剩余
 var _curio_uses := 0             # 本局喝了几次（详情页显示）
@@ -645,6 +654,7 @@ func _build_field() -> void:
 	_pfx_root = Node2D.new()
 	_pfx_root.z_index = 7
 	add_child(_pfx_root)
+	_prewarm_pfx.call_deferred()
 	_build_card_detail()
 	# v3 技能栏（右缘竖排，6 格可视）
 	_build_skill_bar()
@@ -1573,6 +1583,8 @@ func _process(_delta: float) -> void:
 				var tk = _foe_tokens[tid]
 				if tk != null:
 					tk.play_down()
+					# 阵亡小爆点（割草感：每杀一只都有一口）
+					_spawn_pfx("impacts/blunt-hit", tk.position + Vector2(0, -8), 0.60, "dust", 1.1, 1.15)
 				_foe_tokens.erase(tid)
 
 func _on_core_kill(n: int) -> void:
@@ -3478,22 +3490,44 @@ func _spawn_hit_fx(global_pos: Vector2, radius: float, dmg: int, hero_hit: bool,
 	if _fx_front == null:
 		return
 	_fx_front.spawn_hit(global_pos - FIELD_POS, radius, dmg, hero_hit, crit or heavy, heavy)
-	# 像素命中特效（pixelfx，MIT）：挨打 / 暴击 / 普通各一种
+	# 像素命中特效（pixelfx，MIT）：普通小、暴击金亮、挨打偏血
 	if hero_hit:
-		_spawn_pfx("impacts/blunt-hit", global_pos + Vector2(0, -14), 0.70)
-	elif crit or heavy:
-		_spawn_pfx("impacts/crit-hit", global_pos + Vector2(0, -8), 0.85)
+		_spawn_pfx("impacts/blunt-hit", global_pos + Vector2(0, -14), 0.70, "blood", 1.2)
+	elif crit:
+		_spawn_pfx("impacts/crit-hit", global_pos + Vector2(0, -8), 0.95, "gold", 1.9)
+	elif heavy:
+		_spawn_pfx("impacts/crit-hit", global_pos + Vector2(0, -8), 0.80, "", 1.4)
 	else:
-		_spawn_pfx("impacts/hit-spark", global_pos + Vector2(0, -6), 0.80)
+		_spawn_pfx("impacts/hit-spark", global_pos + Vector2(0, -6), 0.72, "", 1.0)
 
 # pixelfx：播一个特效，播完自毁
-func _spawn_pfx(effect: String, pos: Vector2, s := 1.0) -> void:
+func _prewarm_pfx() -> void:
+	await get_tree().create_timer(0.35).timeout
+	if _pfx_root == null:
+		return
+	for it in PFX_PREWARM:
+		var e := str(it[0])
+		var s := float(it[1])
+		var pal := str(it[2])
+		var lig := float(it[3])
+		_spawn_pfx(e, Vector2(-4000, -4000), s, pal, lig, 1.0)
+		await get_tree().process_frame
+		await get_tree().process_frame
+
+func _spawn_pfx(effect: String, pos: Vector2, s := 1.0, pal := "", lig := 1.0, spd := 1.0, flip := false) -> void:
 	if _pfx_root == null or not ResourceLoader.exists("res://addons/pixelfx/nodes/pixel_fx_2d.gd"):
+		return
+	if _pfx_root.get_child_count() >= PFX_MAX_LIVE:
 		return
 	var fx = PFX2D.new()
 	fx.effect = effect
 	fx.position = pos
 	fx.scale = Vector2(s, s)
+	fx.light = lig
+	fx.speed_scale = spd
+	fx.flip = flip
+	if pal != "":
+		fx.palette_preset = pal
 	fx.free_when_done = true
 	_pfx_root.add_child(fx)
 	_pfx_count += 1
