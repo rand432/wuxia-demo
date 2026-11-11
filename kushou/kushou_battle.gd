@@ -1957,7 +1957,10 @@ func clear_champion() -> void:
 var _death_sfx_t := 0.0
 
 func _death_sfx(kind: String, is_boss: bool) -> void:
-	var pt := randf_range(0.92, 1.14)          # 每只高一点低一点，听着不机械
+	# 连杀递进：连得越多，死的音越高（割草时一串往上走的音阶）；再加一点随机免得机械
+	var pt := clampf(0.92 + float(mini(_combo, 14)) * 0.035, 0.92, 1.42) * randf_range(0.99, 1.03)
+	if _combo > 0 and _combo % 10 == 0:
+		Audio.sfx("bell", -10.0, clampf(1.0 + 0.06 * float(_combo / 10), 1.0, 1.8))
 	if is_boss:
 		Audio.sfx("hit_heavy", -1.0, 0.72)
 		# v16o（用户："背景喊杀声太多了 其实没必要有喊杀声"）：已去掉喊杀/战鼓声
@@ -2135,8 +2138,7 @@ func _kill_foe(f: Dictionary) -> void:
 		_shake = 22.0                      # boss 死：整屏重震 ＋ 长顿帧
 		_hitstop = maxf(_hitstop, 0.28)
 	coin_drop.emit(coins, Vector2(float(f["x"]), float(f["y"])))
-	if _combo >= 3:
-		_push_float(float(f["x"]), float(f["y"]) - 46.0, "连杀 ×" + str(_combo), Color(1.0, 0.84, 0.34), true)
+	# 连杀不再在每只怪头上飘字（那是刷屏）：只留屏幕中上那行大字
 	Audio.sfx("coin", -10.0)
 	if kind != "normal" and kind != "coin":
 		special.emit(kind, coins, Vector2(float(f["x"]), float(f["y"])))
