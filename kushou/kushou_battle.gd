@@ -1198,18 +1198,12 @@ func _process(delta: float) -> void:
 						self.queue_delayed(hero_pos.x, hero_pos.y - 6.0, 70.0, float(f["atk"]) * 1.7,
 							DMG_FIRE, 1.0, "法火", "circle")
 				elif bool(f.get("brute", false)):
-					# 壮汉：撞开一段（往远离它的方向推）
-					var pdx := 16.0 if hero_pos.x < float(f["x"]) else -16.0
-					hero_pos.x = clampf(hero_pos.x + pdx, 70.0, size.x - 70.0)
-					hero_pos.y = clampf(hero_pos.y + 22.0, 40.0, size.y - HERO_LINE * 0.5)
-					_push_float(hero_pos.x, hero_pos.y - 78.0, "撞开", Color(1.0, 0.72, 0.42))
-					_shake = maxf(_shake, 5.0)
+					# v6：**普通挨打不再击退**——壮汉只有那次延迟冲锋才把主角撞开
 					Audio.sfx("hit_heavy", -8.0)                 # 壮汉：闷重一记
-					# 壮汉有 1/4 概率改成**延迟冲锋**（先在地上拉一条预警，再冲过来）
-					if randf() < 0.25:
+					if randf() < 0.35:
 						var cdir := (hero_pos - Vector2(float(f["x"]), float(f["y"]))).normalized()
 						self.queue_delayed(float(f["x"]), float(f["y"]) - 10.0, 52.0, float(f["atk"]) * 2.2,
-							DMG_PHYS, 1.15, "冲锋", "beam", cdir, 300.0)
+							DMG_PHYS, 1.15, "冲锋", "beam", cdir, 300.0, 0.0, 0, 0.0, 0.0, 110.0)
 						# v16o（用户："背景喊杀声太多了 其实没必要有喊杀声"）：已去掉喊杀/战鼓声
 				elif bool(f.get("ranged", false)):
 					# 弓手：一支箭从它那儿射过来
@@ -1458,10 +1452,10 @@ var _delayed: Array = []            # 正在预警/即将落下的延迟技
 #   pool　＝毒圈 / 火海（持续伤害区：落下后**留在地上**每秒跳一次）
 func queue_delayed(x: float, y: float, r: float, dmg: float, elem: String, warn := 1.2,
 	kind := "火雨", shape := "circle", dir := Vector2.RIGHT, len := 0.0,
-	spread := 0.0, count := 0, gap := 0.0, life := 0.0) -> void:
+	spread := 0.0, count := 0, gap := 0.0, life := 0.0, push := 0.0) -> void:
 	_delayed.append({"x": x, "y": y, "r": r, "t": 0.0, "warn": maxf(0.35, warn),
 		"dmg": dmg, "elem": elem, "kind": kind, "shape": shape, "dir": dir, "len": len,
-		"spread": spread, "count": count, "gap": gap, "life": life, "tick": 0.0})
+		"spread": spread, "count": count, "gap": gap, "life": life, "tick": 0.0, "push": push})
 	Audio.sfx("heartbeat", -10.0)
 
 # 多段连招：按顺序排同一只 boss 的几招（每段自带延迟，看着就是"连着来"）
@@ -1576,6 +1570,14 @@ func _delayed_hit(d: Dictionary) -> void:
 		hero["hp"] = maxf(0.0, float(hero["hp"]) - dm)
 		_push_float(hero_pos.x, hero_pos.y - 100.0, str(d["kind"]) + "！ -" + str(int(dm)),
 			Color(1.0, 0.52, 0.34), true)
+		# 只有带 push 的招式（冲撞类机制）才把主角推开；普通挨打不位移
+		var psh := float(d.get("push", 0.0))
+		if psh > 0.0:
+			var away := (hero_pos - c)
+			if away.length() < 1.0:
+				away = Vector2(0.0, 1.0)
+			hero_pos += away.normalized() * psh
+			_shake = maxf(_shake, 6.0)
 	_bursts.append({"x": c.x, "y": c.y, "t": 0.0, "col": Color(1.0, 0.52, 0.26), "scale": maxf(1.2, r / 60.0)})
 	_shake = maxf(_shake, 12.0)
 	# v16o（用户："背景喊杀声太多了 其实没必要有喊杀声"）：已去掉喊杀/战鼓声
