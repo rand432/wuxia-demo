@@ -968,6 +968,7 @@ var _curio_extra_used := false # 玉壶 Lv5：濒死额外一次
 var _curio_kills := 0
 var _tie_stacks := 0           # 铁布衫：硬气层数
 var _tie_idle := 0.0           # 铁布衫：多久没挨打
+var _zhiren := 0               # 纸人替身：剩余数量
 
 func _curio_init_data() -> void:
 	_curio_id = GameState.curio_id
@@ -1034,6 +1035,10 @@ func _tick_curio(dt: float) -> void:
 			_curio_tick_tiebushan(dt)
 		"hanyu":
 			_curio_tick_hanyu(dt)
+		"zhaohunfan":
+			_curio_tick_zhaohunfan()
+		"tongjing":
+			_curio_tick_tongjing()
 
 func _curio_tick_yuhu() -> void:
 	if _curio_cd > 0.0:
@@ -1144,6 +1149,81 @@ func _curio_on_attack() -> void:
 	Aud.sfx("dart", -14.0, 1.1)
 	if float(best.get("hp", 0.0)) <= 0.0:
 		_core._kill_foe(best)
+
+# ---------------- 召唤类奇物 ----------------
+func _curio_summon(tag: String, nm: String, col: Color, life: float, dmg_pct: float, boom: float, lc := 0.0) -> void:
+	if _core == null:
+		return
+	var idx := _minions.size()
+	var pos: Vector2 = _core.hero_pos + Vector2(-60.0 + float(idx % 3) * 60.0, 20.0)
+	var tk = TokenActor.new()
+	tk.setup(null, 20.0, col, false)
+	tk.show_bar = true
+	tk.bar_w = 44.0
+	tk.unit_name = nm
+	tk.z_index = 5
+	tk.position = _core.position + pos
+	if _cam != null:
+		_cam.add_child(tk)
+	else:
+		add_child(tk)
+	# 召唤物图标（没有立绘，用一个字标出身份）
+	var mk := Label.new()
+	mk.text = nm.substr(0, 1)
+	mk.position = Vector2(-22, -44)
+	mk.size = Vector2(44, 44)
+	mk.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	mk.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	mk.add_theme_font_override("font", FONT)
+	mk.add_theme_font_size_override("font_size", 24)
+	mk.add_theme_color_override("font_color", col.darkened(0.25))
+	mk.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tk.add_child(mk)
+	var atk := float(_core.hero.get("atk", 12.0))
+	_minions.append({"pos": pos, "life": life, "max_life": life, "atk_cd": 0.5, "wave_cd": 999.0,
+		"dmg": atk * dmg_pct, "wave_dmg": 0.0, "tk": tk, "curio": tag, "boom": boom, "lc": lc})
+
+func _curio_count_minions(tag: String) -> int:
+	var n := 0
+	for m_v in _minions:
+		if str((m_v as Dictionary).get("curio", "")) == tag:
+			n += 1
+	return n
+
+func _curio_tick_zhaohunfan() -> void:
+	if _curio_cd > 0.0 or _core == null:
+		return
+	if _live_foes().is_empty():
+		return
+	var cap := 2 if _curio_lv >= 3 else 1
+	if _curio_count_minions("zhaohunfan") >= cap:
+		return
+	_curio_summon("zhaohunfan", "鬼影", Color(0.55, 0.45, 0.85),
+		10.0 if _curio_lv >= 2 else 8.0,
+		0.35 if _curio_lv >= 4 else 0.25,
+		0.80 if _curio_lv >= 5 else 0.0)
+	_curio_cd = 25.0
+	_curio_uses += 1
+	_curio_flash()
+	_toast("招魂幡 · 鬼影现形")
+	Aud.sfx("enlighten", -10.0, 0.9)
+
+func _curio_tick_tongjing() -> void:
+	if _curio_cd > 0.0 or _core == null:
+		return
+	if _live_foes().is_empty():
+		return
+	if _curio_count_minions("tongjing") > 0:
+		return
+	_curio_summon("tongjing", "镜影", Color(0.72, 0.70, 0.78),
+		7.0 if _curio_lv >= 2 else 5.0,
+		0.70 if _curio_lv >= 4 else 0.50,
+		0.0, 0.10 if _curio_lv >= 3 else 0.0)
+	_curio_cd = 20.0
+	_curio_uses += 1
+	_curio_flash()
+	_toast("铜镜 · 镜影离体")
+	Aud.sfx("bell", -12.0, 1.2)
 
 # 醉翁壶：击杀累计（每 10 只进入醉）
 func _curio_on_kill(n: int) -> void:
@@ -1257,6 +1337,12 @@ func _curio_on_wave_clear(wave: int) -> void:
 		_spawn_fly(_hero_screen(), Vector2(99, 40), Color(0.90, 0.71, 0.30), 4)
 		_toast("聚宝盆 · 文钱 +%d" % amt)
 		_curio_uses += 1
+		_curio_flash()
+	if _curio_id == "zhiren":
+		var cap_z := 3 if _curio_lv >= 2 else 2
+		var gain := 2 if _curio_lv >= 4 else 1
+		_zhiren = mini(cap_z, _zhiren + gain)
+		_toast("纸人替身 · 现有 %d 个" % _zhiren)
 		_curio_flash()
 	if _curio_id == "xumingdeng":
 		var every := 3
@@ -2225,6 +2311,28 @@ func _refresh_life_ui() -> void:
 
 func _on_hero_down() -> void:
 	if _run_over:
+		return
+	# 奇物·纸人替身：替你挡一次致命伤害（不扣命、不清场）
+	if _curio_id == "zhiren" and _zhiren > 0:
+		_zhiren -= 1
+		_core.hero["hp"] = float(_core.hero.get("hp_max", 1.0))
+		_core.running = true
+		if _curio_lv >= 3:
+			var at_p: Vector2 = _core.hero_pos
+			for f_v2 in _core.foes.duplicate():
+				var f2: Dictionary = f_v2
+				if float(f2.get("hp", 0.0)) <= 0.0:
+					continue
+				if at_p.distance_to(Vector2(float(f2["x"]), float(f2["y"]))) > 140.0:
+					continue
+				_core._apply_dmg(f2, float(_core.hero.get("atk", 12.0)), "物理")
+				if float(f2.get("hp", 0.0)) <= 0.0:
+					_core._kill_foe(f2)
+		_curio_uses += 1
+		_curio_flash()
+		_toast("纸人替身 · 挡住致命一击（剩 %d）" % _zhiren)
+		Aud.sfx("paper", -6.0, 1.0)
+		_spawn_pfx("holy/heal", _hero_screen(), 1.0, "heal", 1.5)
 		return
 	var loss := 0
 	for f_v in _core.foes:
@@ -4940,6 +5048,20 @@ func _tick_minions(dt: float) -> void:
 		if float(m["life"]) <= 0.0:
 			if tk != null and is_instance_valid(tk):
 				tk.play_down()
+			# 奇物·招魂幡 Lv5：鬼影消失时自爆
+			if float(m.get("boom", 0.0)) > 0.0 and _core != null:
+				var at_e: Vector2 = m["pos"]
+				for f_v2 in _core.foes.duplicate():
+					var f2: Dictionary = f_v2
+					if float(f2.get("hp", 0.0)) <= 0.0:
+						continue
+					if at_e.distance_to(Vector2(float(f2["x"]), float(f2["y"]))) > 90.0:
+						continue
+					_core._apply_dmg(f2, float(_core.hero.get("atk", 12.0)) * float(m["boom"]), "召唤")
+					if float(f2.get("hp", 0.0)) <= 0.0:
+						_core._kill_foe(f2)
+				if _core != null:
+					_spawn_pfx("impacts/crit-hit", _core.position + at_e, 0.9, "", 1.4)
 			_minions.erase(m)
 			continue
 		var mp0: Vector2 = m["pos"]
@@ -4962,7 +5084,11 @@ func _tick_minions(dt: float) -> void:
 				m["atk_cd"] = float(m["atk_cd"]) - dt
 				if float(m["atk_cd"]) <= 0.0:
 					m["atk_cd"] = 1.1
-					_core._apply_dmg(best, float(m["dmg"]), "召唤")
+					var md: float = _core._apply_dmg(best, float(m["dmg"]), "召唤")
+					# 奇物·铜镜 Lv3：镜影攻击吸血
+					if float(m.get("lc", 0.0)) > 0.0 and md > 0.0 and _core != null:
+						var hh: Dictionary = _core.hero
+						hh["hp"] = minf(float(hh.get("hp_max", 1.0)), float(hh.get("hp", 0.0)) + md * float(m["lc"]))
 			m["wave_cd"] = float(m["wave_cd"]) - dt
 			if float(m["wave_cd"]) <= 0.0:
 				m["wave_cd"] = 20.0
@@ -5166,6 +5292,11 @@ func _shiny_present(kind: String) -> void:
 		"zhongli":
 			Aud.sfx("coin", -4.0, 1.15)
 			Aud.sfx("chest", -8.0, 1.0)
+	# ---- 视频（有视频就用视频，没有才退回程序化动画）----
+	if _play_shiny_video(kind):
+		if _core != null:
+			_core.Shake_add(6.0)
+		return
 	# ---- 动画 ----
 	match kind:
 		"devour":
@@ -6678,3 +6809,69 @@ func _q_ai(dt: float) -> void:
 					_core.order_focus(f4)
 					return
 	_core.clear_order()
+
+# ============================================================
+# 炫卡出场视频（assets/video/shiny/*.ogv，Theora）
+#   暗底的两段（噬雷/滚山）用加色混合，黑=透明
+# ============================================================
+const SHINY_VIDEO := {
+	"devour": "zl",
+	"swallow_sea": "cuisanniang",
+	"fentian": "jicanghai",
+	"backwash": "backwash",
+	"jianpo": "zhujue",
+	"gunshan": "gundilong",
+	"qianzhi": "zhiyuan",
+	"wanren": "qingluan",
+	"baicao": "liuqingqing2",
+	"undying": "mingzhu",
+	"shiyun": "chenshi2",
+	"zhongli": "zhongli",
+}
+# 暗底的段（噬雷/滚山）：实测加色混合在纸色背景上会被冲白，改成正常混合，
+# 直接当「雷雨/泥石流过场」——战斗已冻结，黑底反而更有压迫感。
+const SHINY_VIDEO_ADD: Array = []
+
+var _shiny_video_busy := false
+
+func _play_shiny_video(kind: String) -> bool:
+	var key := str(SHINY_VIDEO.get(kind, ""))
+	if key == "":
+		return false
+	var path := "res://assets/video/shiny/shiny_" + key + ".ogv"
+	if not ResourceLoader.exists(path):
+		return false
+	var stream = load(path)
+	if stream == null:
+		return false
+	var v := VideoStreamPlayer.new()
+	v.stream = stream
+	v.expand = true
+	v.position = Vector2.ZERO
+	v.size = Vector2(720, 1280)
+	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	v.z_index = 71
+	if SHINY_VIDEO_ADD.has(key):
+		var mat := CanvasItemMaterial.new()
+		mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+		v.material = mat
+	add_child(v)
+	# 演出期间冻结战斗（炫卡登场 = 过场，不是"怪继续打你"）
+	var was_running := false
+	if _core != null:
+		was_running = bool(_core.running)
+		_core.running = false
+	_shiny_video_busy = true
+	v.modulate.a = 0.0
+	var tw := create_tween()
+	tw.tween_property(v, "modulate:a", 1.0, 0.15)
+	tw.tween_interval(2.55)
+	tw.tween_property(v, "modulate:a", 0.0, 0.5)
+	tw.tween_callback(func() -> void:
+		v.stop()
+		v.queue_free()
+		_shiny_video_busy = false
+		if _core != null and was_running:
+			_core.running = true)
+	v.play()
+	return true
