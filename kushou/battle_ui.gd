@@ -775,6 +775,9 @@ func _chal_press(i: int) -> void:
 	_chal_count += 1
 	_qc("chal", 1)
 	_core.spawn_challenge(i, int(CHAL_GROUP[i]))
+	# 挑战开打：战场上方一口落地冲击 + 鼓，给"应战"的分量
+	_spawn_pfx("impacts/ground-slam", Vector2(360, 235), 0.95, "shadow", 1.5)
+	Aud.sfx("drum", -12.0, 1.10)
 	_toast("挑战 · " + str(CHAL_NAMES[i]))
 	Aud.sfx("ui_open", -8.0)
 	_refresh_chal_panel()
