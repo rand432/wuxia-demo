@@ -206,6 +206,9 @@ var _run_over := false            # 本局已结算（命尽 / 通关）
 var _skip_reward_wave := false    # 这一波打输了：过波但不给奖励
 var _run_time := 0.0              # 本局存活时间
 var _chal_cd: Array = [0.0, 0.0, 0.0, 0.0, 0.0]   # 五种挑战的冷却剩余
+const PFX2D := preload("res://addons/pixelfx/nodes/pixel_fx_2d.gd")
+var _pfx_root: Node2D = null      # pixelfx 特效层（命中/暴击等）
+var _pfx_count := 0
 var _curio_sq = null             # 奇物方块（战场右下，与挑战对称）
 var _curio_cd := 0.0             # 奇物冷却剩余
 var _curio_uses := 0             # 本局喝了几次（详情页显示）
@@ -638,6 +641,10 @@ func _build_field() -> void:
 	_btn("挑战", Rect2(0, 760, 96, 96), 20, Color(0.075, 0.068, 0.060, 0.98), Color(0.91, 0.78, 0.42), func(): _toggle_challenge())
 	_build_challenge()
 	_build_curio()
+	# pixelfx 特效层：盖在战场和角色之上、UI 之下
+	_pfx_root = Node2D.new()
+	_pfx_root.z_index = 7
+	add_child(_pfx_root)
 	_build_card_detail()
 	# v3 技能栏（右缘竖排，6 格可视）
 	_build_skill_bar()
@@ -3471,6 +3478,25 @@ func _spawn_hit_fx(global_pos: Vector2, radius: float, dmg: int, hero_hit: bool,
 	if _fx_front == null:
 		return
 	_fx_front.spawn_hit(global_pos - FIELD_POS, radius, dmg, hero_hit, crit or heavy, heavy)
+	# 像素命中特效（pixelfx，MIT）：挨打 / 暴击 / 普通各一种
+	if hero_hit:
+		_spawn_pfx("impacts/blunt-hit", global_pos + Vector2(0, -14), 0.70)
+	elif crit or heavy:
+		_spawn_pfx("impacts/crit-hit", global_pos + Vector2(0, -8), 0.85)
+	else:
+		_spawn_pfx("impacts/hit-spark", global_pos + Vector2(0, -6), 0.80)
+
+# pixelfx：播一个特效，播完自毁
+func _spawn_pfx(effect: String, pos: Vector2, s := 1.0) -> void:
+	if _pfx_root == null or not ResourceLoader.exists("res://addons/pixelfx/nodes/pixel_fx_2d.gd"):
+		return
+	var fx = PFX2D.new()
+	fx.effect = effect
+	fx.position = pos
+	fx.scale = Vector2(s, s)
+	fx.free_when_done = true
+	_pfx_root.add_child(fx)
+	_pfx_count += 1
 
 func _on_hero_attack() -> void:
 	_play_attack_fx(true)
