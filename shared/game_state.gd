@@ -18,7 +18,7 @@ static func role_grade_cn(_rid: String) -> String:
 
 # ---------------- 奇物（局外） ----------------
 # 单槽：curio_id 为空 = 不带；curio_lv 是每件的强化等级（默认 1）
-static var curio_id := ""
+static var curio_id := "yuhu"   # 默认带玉壶（原来每局必有的那件）
 static var curio_lv := {}
 
 static func curio_level(id: String) -> int:
