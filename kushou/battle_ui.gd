@@ -216,6 +216,7 @@ var _boss_bar = null           # 首领血条
 var _foe_pool: Array = []      # 怪物牌对象池（省掉每只都建 Shader/节点的开销）
 var _recycle_q: Array = []     # 阵亡动画播完再回收
 var _boss_bar_t := 0.0
+var _boss_on := false          # 首领在场时特效降档（首领战场景本来就重）
 var _last_combo := 0            # 连杀里程碑用（每 10 连炸一口）
 const PFX_MAX_LIVE := 20          # 同屏特效上限（超过就不再生，保丝滑）
 # 开局先把常用的几种烘好（BAKED 首次播放要烘，烘在开打前就不会卡第一下）
@@ -1639,6 +1640,7 @@ func _process(_delta: float) -> void:
 					_recycle_q.remove_at(i)
 		if _boss_bar != null:
 			var bf: Dictionary = _core._boss_foe() if _core != null else {}
+			_boss_on = not bf.is_empty()
 			if bf.is_empty():
 				if _boss_bar.visible:
 					_boss_bar_t = maxf(0.0, _boss_bar_t - _delta)
@@ -1707,7 +1709,7 @@ func _process(_delta: float) -> void:
 					tk.play_down()
 					_recycle_q.append([tk, 1.10])
 					# 阵亡小爆点（割草感：每杀一只都有一口）
-					if randf() < 0.35:
+					if randf() < (0.20 if _boss_on else 0.35):
 						_spawn_pfx("impacts/blunt-hit", tk.position + Vector2(0, -8), 0.60, "dust", 1.1, 1.15)
 				_foe_tokens.erase(tid)
 
@@ -3770,8 +3772,8 @@ func _spawn_hit_fx(global_pos: Vector2, radius: float, dmg: int, hero_hit: bool,
 		_spawn_pfx("impacts/crit-hit", global_pos + Vector2(0, -8), 0.95, "gold", 1.9)
 	elif heavy:
 		_spawn_pfx("impacts/crit-hit", global_pos + Vector2(0, -8), 0.80, "", 1.4)
-	elif randf() < 0.40:
-		# 横扫一次打好几只时，普通命中不每只都放（保丝滑，观感也够）
+	elif randf() < (0.25 if _boss_on else 0.40):
+		# 横扫一次打好几只时，普通命中不每只都放（保丝滑，观感也够）；首领战再降一档
 		_spawn_pfx("impacts/hit-spark", global_pos + Vector2(0, -6), 0.72, "", 1.0)
 
 # pixelfx：播一个特效，播完自毁
