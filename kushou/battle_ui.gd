@@ -1744,6 +1744,8 @@ func _on_hero_down() -> void:
 	_refresh_life_ui()
 	_core.foes.clear()               # 怪全清：不掉落、不给经验
 	_chal_all_cd()                   # 挑战全部进冷却
+	_spawn_pfx("shadow/dark-explosion", _hero_screen(), 1.25, "blood", 1.7)
+	_core._shake = maxf(float(_core._shake), 12.0)
 	_core.hero["hp"] = float(_core.hero.get("hp_max", 1.0))   # 满血站起来（不做浴血）
 	_core.running = true
 	Aud.sfx("ui_back", -4.0)
@@ -5677,6 +5679,7 @@ func _q_finish(why: String) -> void:
 		"done":
 			_q_done += 1
 			_q_reward(q)
+			_spawn_pfx("holy/feather-burst", _hero_screen(), 1.0, "gold", 1.7)
 			_q_notify("奇遇完成 · %s" % str(q["n"]))
 			Aud.sfx("levelup", -6.0)
 		"fail":
