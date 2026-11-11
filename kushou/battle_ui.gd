@@ -529,20 +529,21 @@ func _build_bg() -> void:
 	add_child(bg)
 
 func _chip(x: float, kind: String, value: String, cap: String) -> Label:
-	_panel(Rect2(x, 8, 216, 64), Color(0.075, 0.068, 0.060, 0.98), 8, Color(0.85, 0.66, 0.23, 0.45), 1)
+	_panel(Rect2(x, 8, 162, 64), Color(0.075, 0.068, 0.060, 0.98), 8, Color(0.85, 0.66, 0.23, 0.45), 1)
 	var ic := Ico.new()
 	ic.kind = kind
-	ic.position = Vector2(x + 12, 21)
-	ic.size = Vector2(38, 38)
+	ic.position = Vector2(x + 10, 22)
+	ic.size = Vector2(34, 34)
 	add_child(ic)
-	var vl := _lbl(value, Vector2(x + 58, 4), Vector2(146, 36), 28, Color(0.95, 0.91, 0.83), self, HORIZONTAL_ALIGNMENT_RIGHT)
-	_lbl(cap, Vector2(x + 58, 40), Vector2(146, 20), 17, Color(0.80, 0.75, 0.65), self, HORIZONTAL_ALIGNMENT_RIGHT)
+	var vl := _lbl(value, Vector2(x + 48, 4), Vector2(106, 36), 26, Color(0.95, 0.91, 0.83), self, HORIZONTAL_ALIGNMENT_RIGHT)
+	_lbl(cap, Vector2(x + 48, 40), Vector2(106, 20), 16, Color(0.80, 0.75, 0.65), self, HORIZONTAL_ALIGNMENT_RIGHT)
 	return vl
 
 func _build_hud() -> void:
-	_coin_lb = _chip(24, "coin", "0", "文钱")
-	_crystal_lb = _chip(252, "crystal", "100", "灵晶")
-	_kill_lb = _chip(480, "kill", "0", "杀敌")
+	_coin_lb = _chip(18, "coin", "0", "文钱")
+	_crystal_lb = _chip(192, "crystal", "100", "灵晶")
+	_kill_lb = _chip(366, "kill", "0", "杀敌")
+	_life_lb = _chip(540, "heart", "100", "命")
 	_wave_lb = _lbl("波 1/5", Vector2(22, 92), Vector2(100, 48), 26, INK)
 	for i in 5:
 		var d := Color(0.85, 0.66, 0.23) if i == 0 else Color(0.38, 0.33, 0.26, 0.55)
@@ -569,7 +570,7 @@ func _build_hud() -> void:
 func _build_field() -> void:
 	_core = BattleCore.new()
 	_core.position = Vector2(8, 150)
-	_core.size = Vector2(704, 650)
+	_core.size = Vector2(704, 720)
 	_core.mouse_filter = Control.MOUSE_FILTER_STOP
 	_core.modulate = Color(1, 1, 1, 0.25)
 	add_child(_core)
@@ -610,7 +611,7 @@ func _build_field() -> void:
 	_hero_hit_btn = hit
 	_hero_hit_btn.position = _hero_token.position - Vector2(48, 48)
 	# 挑战方形
-	_btn("挑战", Rect2(0, 680, 96, 96), 20, Color(0.075, 0.068, 0.060, 0.98), Color(0.91, 0.78, 0.42), func(): _toggle_challenge())
+	_btn("挑战", Rect2(0, 760, 96, 96), 20, Color(0.075, 0.068, 0.060, 0.98), Color(0.91, 0.78, 0.42), func(): _toggle_challenge())
 	_build_challenge()
 	_build_card_detail()
 	# v3 技能栏（右缘竖排，6 格可视）
@@ -619,14 +620,14 @@ func _build_field() -> void:
 	_fx_back = AttackFx.new()
 	_fx_back.front = false
 	_fx_back.position = FIELD_POS
-	_fx_back.size = Vector2(704, 650)
+	_fx_back.size = Vector2(704, 720)
 	_fx_back.z_index = 4
 	_fx_back.clip_contents = true
 	add_child(_fx_back)
 	_fx_front = AttackFx.new()
 	_fx_front.front = true
 	_fx_front.position = FIELD_POS
-	_fx_front.size = Vector2(704, 650)
+	_fx_front.size = Vector2(704, 720)
 	_fx_front.z_index = 7
 	_fx_front.clip_contents = true
 	add_child(_fx_front)
@@ -718,13 +719,13 @@ func _build_card_detail() -> void:
 
 # ---------------- 卡组 ----------------
 func _build_deck() -> void:
-	_deck_count_lb = _lbl("卡组 0/10", Vector2(22, 840), Vector2(160, 30), 20, INK)
-	_page_lb = _lbl("1/2", Vector2(330, 840), Vector2(60, 30), 17, DIM, self, HORIZONTAL_ALIGNMENT_CENTER)
-	_btn("<", Rect2(8, 890, 56, 60), 28, Color(0.09, 0.08, 0.07, 0.98), GOLD, func(): _flip(-1))
-	_btn(">", Rect2(656, 890, 56, 60), 28, Color(0.09, 0.08, 0.07, 0.98), GOLD, func(): _flip(1))
+	_deck_count_lb = _lbl("卡组 0/10", Vector2(22, 910), Vector2(160, 30), 20, INK)
+	_page_lb = _lbl("1/2", Vector2(330, 910), Vector2(60, 30), 17, DIM, self, HORIZONTAL_ALIGNMENT_CENTER)
+	_btn("<", Rect2(8, 960, 56, 60), 28, Color(0.09, 0.08, 0.07, 0.98), GOLD, func(): _flip(-1))
+	_btn(">", Rect2(656, 960, 56, 60), 28, Color(0.09, 0.08, 0.07, 0.98), GOLD, func(): _flip(1))
 	for i in 5:
 		var s := CardSlot.new()
-		s.position = Vector2(46 + i * 132, 870)
+		s.position = Vector2(46 + i * 132, 940)
 		s.size = Vector2(100, 100)
 		s.idx = ""
 		s.pressed.connect(func(): _pick_card(str(s.idx)))
@@ -783,16 +784,16 @@ func _pick_card(id: String) -> void:
 
 # ---------------- 底栏 ----------------
 func _build_bottom() -> void:
-	_panel(Rect2(8, 980, 704, 240), Color(0.075, 0.068, 0.060, 0.98), 10, Color(0.85, 0.66, 0.23, 0.45), 2)
-	_lv_lb = _lbl("Lv 1", Vector2(22, 992), Vector2(70, 28), 18, GOLD)
-	_panel(Rect2(96, 992, 520, 12), Color(0.93, 0.90, 0.82, 0.16), 6)
-	_exp_bar = _panel(Rect2(96, 992, 4, 12), Color(0.85, 0.66, 0.23), 6)
-	_exp_lb = _lbl("0/100", Vector2(616, 986), Vector2(90, 24), 16, Color(0.80, 0.75, 0.65), self, HORIZONTAL_ALIGNMENT_RIGHT)
-	_tile(24, 1020, 124, "market", "黑市", false)
-	_trea_tile = _tile(158, 1020, 124, "treasure", "宝物", false)
-	_mate_tile = _tile(292, 1020, 124, "mate", "请神", false)
-	_str_tile = _tile(426, 1020, 124, "skill", "强化", false)
-	_tile(560, 1008, 136, "draw", "抽卡", true)
+	_panel(Rect2(8, 1076, 704, 204), Color(0.075, 0.068, 0.060, 0.98), 10, Color(0.85, 0.66, 0.23, 0.45), 2)
+	_lv_lb = _lbl("Lv 1", Vector2(22, 1088), Vector2(70, 28), 18, GOLD)
+	_panel(Rect2(96, 1090, 600, 16), Color(0.93, 0.90, 0.82, 0.16), 8)
+	_exp_bar = _panel(Rect2(96, 1090, 4, 16), Color(0.85, 0.66, 0.23), 8)
+	_exp_lb = _lbl("0/100", Vector2(600, 1088), Vector2(92, 20), 15, Color(0.88, 0.82, 0.70), self, HORIZONTAL_ALIGNMENT_RIGHT)
+	_tile(24, 1128, 124, "market", "黑市", false)
+	_trea_tile = _tile(158, 1128, 124, "treasure", "宝物", false)
+	_mate_tile = _tile(292, 1128, 124, "mate", "请神", false)
+	_str_tile = _tile(426, 1128, 124, "skill", "强化", false)
+	_tile(560, 1116, 136, "draw", "抽卡", true)
 	_refresh_level_ui()
 	_refresh_str_tile()
 	_refresh_trea_tile()
