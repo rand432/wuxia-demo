@@ -651,13 +651,20 @@ func _build_hud() -> void:
 	_btn("退出", Rect2(646, 88, 60, 42), 17, Color(0.10, 0.09, 0.08, 0.98), LIGHT, func(): _show_exit(true))
 
 # ---------------- 战场 ----------------
+# 镜头容器：战场内容都挂在它下面，做推进（zoom）时整体一起缩放
+var _cam: Control = null
 func _build_field() -> void:
+	_cam = Control.new()
+	_cam.size = Vector2(720, 1280)
+	_cam.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_cam.pivot_offset = Vector2(360, 510)   # 以战场中心为缩放中心
+	add_child(_cam)
 	_core = BattleCore.new()
 	_core.position = Vector2(8, 150)
 	_core.size = Vector2(704, 720)
 	_core.mouse_filter = Control.MOUSE_FILTER_IGNORE   # 战斗没有手动：点击穿透
 	_core.modulate = Color(1, 1, 1, 0.25)
-	add_child(_core)
+	_cam.add_child(_core)
 	_core.setup({"atk": 12.0, "hp_max": 200.0, "mp_max": 100.0})
 	_core.set_wave(1)
 	_core.coin.connect(_on_core_coin)
@@ -686,7 +693,7 @@ func _build_field() -> void:
 	_hero_token.unit_name = ""
 	_hero_token.position = _core.position + _core.hero_pos
 	_hero_token.z_index = 6
-	add_child(_hero_token)
+	_cam.add_child(_hero_token)
 	var hit := Button.new()
 	hit.position = Vector2(312, 710)
 	hit.size = Vector2(96, 96)
@@ -696,7 +703,7 @@ func _build_field() -> void:
 	hit.add_theme_stylebox_override("hover", StyleBoxEmpty.new())
 	hit.add_theme_stylebox_override("pressed", StyleBoxEmpty.new())
 	hit.pressed.connect(func(): _show_attr(true))
-	add_child(hit)
+	_cam.add_child(hit)
 	_hero_hit_btn = hit
 	_hero_hit_btn.position = _hero_token.position - Vector2(48, 48)
 	# 挑战方形
@@ -706,7 +713,7 @@ func _build_field() -> void:
 	# pixelfx 特效层：盖在战场和角色之上、UI 之下
 	_pfx_root = Node2D.new()
 	_pfx_root.z_index = 7
-	add_child(_pfx_root)
+	_cam.add_child(_pfx_root)
 	# 首领登场演出三件套（平时隐藏）
 	_boss_veil = ColorRect.new()
 	_boss_veil.color = Color(0.08, 0.06, 0.05, 0.0)
@@ -733,7 +740,7 @@ func _build_field() -> void:
 	add_child(_boss_spot)
 	_boss_name_lb = Label.new()
 	_boss_name_lb.size = Vector2(720, 70)
-	_boss_name_lb.position = Vector2(0, 560)
+	_boss_name_lb.position = Vector2(0, 468)
 	_boss_name_lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_boss_name_lb.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_boss_name_lb.add_theme_font_override("font", FONT)
@@ -1978,6 +1985,8 @@ func _end_run(win: bool) -> void:
 	_run_over = true
 	if _core != null:
 		_core.running = false
+	if _cam != null:
+		_cam.scale = Vector2.ONE
 	# 结算前的"定格式"反馈：一闪 + 长顿帧，然后才弹面板
 	_screen_flash(Color(1.0, 0.96, 0.82) if win else Color(0.52, 0.17, 0.13), 0.34 if win else 0.28, 0.5)
 	if _core != null:
@@ -3142,7 +3151,6 @@ func _make_foe_token(f: Dictionary):
 	tk.unit_name = str(f.get("name", ""))
 	tk.z_index = 5
 	tk.position = _core.position + Vector2(float(f["x"]), float(f["y"]))
-	add_child(tk)
 	var mark := Label.new()
 	mark.text = mark_ch
 	mark.position = Vector2(-rad, -rad * 2.0 + 6.0)
@@ -3155,6 +3163,7 @@ func _make_foe_token(f: Dictionary):
 	mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	tk.add_child(mark)
 	tk.set_meta("mark", mark)
+	_cam.add_child(tk)
 	return tk
 
 # ---------------- 卡池 / 组合 ----------------
@@ -3314,6 +3323,22 @@ func _spawn_fly(from: Vector2, to: Vector2, col: Color, n: int) -> void:
 			"t": randf_range(0.0, 0.12), "col": col, "r": randf_range(4.5, 7.0)})
 
 # 整屏微闪（技能释放/大事件用）：暖纸色一闪，不刺眼
+# 镜头推进（缩放战场内容，不动 HUD）
+# 收尾镜头：推近 → 停一下 → 退回
+func _cam_pulse(s: float, hold: float) -> void:
+	if _cam == null:
+		return
+	_cam_zoom_to(s, 0.26)
+	var tw := create_tween().bind_node(_cam)
+	tw.tween_interval(hold)
+	tw.tween_property(_cam, "scale", Vector2.ONE, 0.42).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+
+func _cam_zoom_to(s: float, dur: float) -> void:
+	if _cam == null:
+		return
+	var tw := create_tween().bind_node(_cam)
+	tw.tween_property(_cam, "scale", Vector2(s, s), dur).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+
 func _screen_flash(col: Color, a: float, dur := 0.16) -> void:
 	if _flash_rect == null:
 		return
@@ -3617,6 +3642,7 @@ func _on_boss_arrived(_tier: int) -> void:
 	Aud.sfx("drum", -6.0, 0.85)
 	Aud.sfx("tension", -14.0, 0.95)
 	_boss_intro_show(p, str(b.get("name", "首领")) if not b.is_empty() else "首领")
+	_cam_zoom_to(1.05, 0.75)     # 首领战：镜头推近，压场
 
 # 首领登场演出：战场压暗 → 聚光罩住首领 → 名字大字弹入
 func _boss_intro_show(at: Vector2, nm: String) -> void:
@@ -3679,6 +3705,7 @@ func _on_boss_died(pos: Vector2) -> void:
 	Aud.sfx("hit_heavy", -2.0, 0.72)
 	Aud.sfx("bell", -4.0, 0.9)
 	Aud.sfx("levelup", -6.0, 0.95)
+	_cam_zoom_to(1.0, 0.85)      # 首领倒下：镜头退回
 
 func _choice_fx(kind: String) -> void:
 	var hpos := _hero_screen()
@@ -4152,12 +4179,12 @@ const SKILL_FX := {
 
 # 技能音效：按属性挑一个"自己的音色"（只放一次，跟着起手特效走）
 const SKILL_SFX := {
-	"金系": ["slash_light2", -8.0, 1.15],
-	"火系": ["drum", -10.0, 0.92],
-	"木系": ["wood_down", -8.0, 1.10],
-	"召唤": ["bell", -10.0, 1.05],
-	"物理": ["sword_draw", -8.0, 1.00],
-	"真实": ["hit_heavy", -6.0, 0.85],
+	"金系": [["slash_light2", -8.0, 1.15], ["bell", -13.0, 1.25]],
+	"火系": [["swing", -8.0, 0.88], ["drum", -9.0, 0.90]],
+	"木系": [["wood_down", -8.0, 1.10], ["dart", -15.0, 1.20]],
+	"召唤": [["enlighten", -8.0, 1.05], ["flute", -12.0, 1.12]],
+	"物理": [["sword_in_ground", -7.0, 1.00], ["hit_heavy", -10.0, 0.95]],
+	"真实": [["heartbeat", -10.0, 0.90], ["tension", -13.0, 1.00]],
 }
 
 func _skill_fx(dtype: String, world_pos: Vector2, big := false) -> void:
@@ -4166,9 +4193,10 @@ func _skill_fx(dtype: String, world_pos: Vector2, big := false) -> void:
 		return
 	_spawn_pfx(str(e[0]), world_pos, float(e[2]) * (1.35 if big else 1.0), str(e[1]), 1.9, 1.0)
 	if not big:
-		var s: Array = SKILL_SFX.get(dtype, [])
-		if not s.is_empty():
-			Aud.sfx(str(s[0]), float(s[1]), float(s[2]))
+		var layers: Array = SKILL_SFX.get(dtype, [])
+		for one in layers:
+			if one.size() >= 3:
+				Aud.sfx(str(one[0]), float(one[1]), float(one[2]))
 
 func _hero_screen() -> Vector2:
 	return _core.position + _core.hero_pos
@@ -6143,6 +6171,7 @@ func _q_finish(why: String) -> void:
 			_spawn_pfx("holy/sunburst", _hero_screen(), 0.9, "gold", 1.9)
 			_screen_flash(Color(1.0, 0.92, 0.62), 0.10, 0.22)
 			_core._shake = maxf(float(_core._shake), 4.0)
+			_cam_pulse(1.05, 0.42)
 			_q_notify("奇遇完成 · %s" % str(q["n"]))
 			Aud.sfx("levelup", -6.0)
 			Aud.sfx("bell", -8.0, 1.05)
@@ -6150,6 +6179,7 @@ func _q_finish(why: String) -> void:
 			_q_fail += 1
 			_screen_flash(Color(0.72, 0.28, 0.22), 0.10, 0.22)
 			_spawn_pfx("impacts/blunt-hit", _hero_screen() + Vector2(0, -20), 0.9, "blood", 1.2)
+			_cam_pulse(1.03, 0.22)
 			Aud.sfx("ui_close", -8.0, 0.9)
 			_q_notify("奇遇失败 · %s" % str(q["n"]))
 	_q_cleanup(q)
