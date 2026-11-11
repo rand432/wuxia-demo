@@ -1650,10 +1650,22 @@ func _process(_delta: float) -> void:
 				_boss_bar.visible = true
 				_boss_bar_t = 1.2
 				var rr := clampf(float(bf["hp"]) / maxf(1.0, float(bf["hp_max"])), 0.0, 1.0)
-				_boss_bar.ratio = rr
-				_boss_bar.ghost = move_toward(float(_boss_bar.ghost), rr, _delta * 0.45) if float(_boss_bar.ghost) > rr else rr
-				_boss_bar.bname = str(bf.get("name", "首领"))
-				_boss_bar.queue_redraw()
+				var need := false
+				if absf(rr - float(_boss_bar.ratio)) > 0.0005:
+					_boss_bar.ratio = rr
+					need = true
+				if float(_boss_bar.ghost) > rr:
+					_boss_bar.ghost = move_toward(float(_boss_bar.ghost), rr, _delta * 0.45)
+					need = true
+				elif not is_equal_approx(float(_boss_bar.ghost), rr):
+					_boss_bar.ghost = rr
+					need = true
+				var nm := str(bf.get("name", "首领"))
+				if nm != _boss_bar.bname:
+					_boss_bar.bname = nm
+					need = true
+				if need:
+					_boss_bar.queue_redraw()
 		if _core != null:
 			var cb := int(_core._combo)
 			if cb != _last_combo:
@@ -1675,8 +1687,10 @@ func _process(_delta: float) -> void:
 		_tick_knock(_delta)
 		if _hero_token != null:
 			_hero_token.position = _core.position + _core.hero_pos
-			_hero_token.hp_ratio = float(_core.hero.get("hp", 0.0)) / maxf(1.0, float(_core.hero.get("hp_max", 1.0)))
-			_hero_token.queue_redraw()
+			var hpr_tok := float(_core.hero.get("hp", 0.0)) / maxf(1.0, float(_core.hero.get("hp_max", 1.0)))
+			if absf(hpr_tok - float(_hero_token.hp_ratio)) > 0.0015:
+				_hero_token.hp_ratio = hpr_tok
+				_hero_token.queue_redraw()
 			if _hero_hit_btn != null:
 				_hero_hit_btn.position = _hero_token.position - Vector2(48, 48)
 			if _hero_name_lb != null:
@@ -1698,10 +1712,15 @@ func _process(_delta: float) -> void:
 			var tk = _foe_tokens.get(tid)
 			if tk != null:
 				tk.position = _core.position + Vector2(float(f["x"]), float(f["y"]))
-				tk.hp_ratio = float(f["hp"]) / maxf(1.0, float(f["hp_max"]))
-				tk.unit_name = str(f.get("name", ""))
+				var hr := float(f["hp"]) / maxf(1.0, float(f["hp_max"]))
+				if absf(hr - float(tk.hp_ratio)) > 0.0015:
+					tk.hp_ratio = hr
+					tk.queue_redraw()
+				var uname := str(f.get("name", ""))
+				if uname != tk.unit_name:
+					tk.unit_name = uname
+					tk.queue_redraw()
 				tk.visible = float(f.get("y", 0.0)) >= 90.0
-				tk.queue_redraw()
 		for tid in _foe_tokens.keys():
 			if not active.has(tid):
 				var tk = _foe_tokens[tid]
