@@ -1649,6 +1649,8 @@ func _add_exp(v: int) -> void:
 			god += 1
 		up += 1
 	_qc("lv", up)
+	if up > 0:
+		_choice_fx("lv")
 	_refresh_level_ui()
 	if up > 0:
 		var msg := "升到 Lv %d · 攻+%d · 血+%d" % [_lv, up, up * 6]
@@ -2060,6 +2062,7 @@ func _on_aug_card(card: AugCard) -> void:
 	_pick_aug(card.o, int(card.oval))
 
 func _pick_aug(o: Dictionary, val: int) -> void:
+	_choice_fx("aug")
 	_apply_aug(str(o["key"]), float(val))
 	_str_pending = false
 	_hide_aug_pick()
@@ -2447,6 +2450,7 @@ func _hide_trea() -> void:
 func _on_trea_card(card: AugCard) -> void:
 	if card == null or card.o.is_empty():
 		return
+	_choice_fx("rare" if bool(card.o.get("rare", false)) else "trea")
 	_pick_trea(card.o, int(card.oval))
 
 func _pick_trea(o: Dictionary, val: int) -> void:
@@ -3260,8 +3264,34 @@ func _apply_own(s: Dictionary) -> void:
 		_core.hero["hp_max"] = float(_core.hero.get("hp_max", 1.0)) + hp_add
 		_core.hero["hp"] = float(_core.hero.get("hp", 0.0)) + hp_add
 
+# 选择类反馈：抽卡 / 进阶 / 宝物 / 请神 / 升级 各一口特效＋一声音
+func _choice_fx(kind: String) -> void:
+	var hpos := _hero_screen()
+	match kind:
+		"draw":
+			_spawn_pfx("arcane/spell-charge", hpos, 0.90, "arcane", 1.4)
+			Aud.sfx("paper", -12.0, 1.05)
+		"aug":
+			_spawn_pfx("holy/halo", hpos, 0.95, "gold", 1.5)
+			Aud.sfx("enlighten", -11.0, 1.02)
+		"trea":
+			_spawn_pfx("holy/halo", hpos, 1.05, "holy", 1.5)
+			Aud.sfx("chest", -10.0, 1.05)
+		"rare":
+			_spawn_pfx("holy/sunburst", hpos, 1.10, "gold", 1.9)
+			Aud.sfx("levelup", -8.0, 1.10)
+			_core._shake = maxf(float(_core._shake), 6.0)
+		"god":
+			_spawn_pfx("holy/sunburst", hpos, 1.25, "holy", 2.1)
+			Aud.sfx("enlighten", -7.0, 0.95)
+			_core._shake = maxf(float(_core._shake), 8.0)
+			_core._hitstop = maxf(float(_core._hitstop), 0.10)
+		"lv":
+			_spawn_pfx("holy/halo", hpos, 0.80, "heal", 1.2)
+
 func _add_card(id: String) -> void:
 	if not _card_db.has(id): return
+	_choice_fx("draw")
 	_qc("draw", 1)
 	if str(id) == "shiny_zhongli":
 		_enable_zhongli()
@@ -3978,6 +4008,7 @@ func _hide_god_pick() -> void:
 func _pick_god(aid: String) -> void:
 	if _draw_charge <= 0:
 		return
+	_choice_fx("god")
 	_draw_charge -= 1
 	_qc("god", 1)
 	_grant_ancestor(aid)
