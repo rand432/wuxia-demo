@@ -70,3 +70,5 @@ assets/gen/audio/
 tools/ai-cutout/
 tools/spine-bake/
 assets/gen/char/
+# ---- pixelfx 预览任务文件（工具临时输入）----
+.pfx_job.json
