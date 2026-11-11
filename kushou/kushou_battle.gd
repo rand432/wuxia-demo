@@ -108,6 +108,7 @@ signal coin_drop(amount: int, pos: Vector2)
 signal kill(n: int)
 signal hero_down()
 signal boss_arrived(tier: int)
+signal delayed_land(pos: Vector2, elem: String)   # 延迟技落点（外壳在这里挂 pixelfx）
 signal hero_attack()
 signal hero_hit()
 # 主角的剑真正打中某只怪（伤害/暴击/重击）；表现层只认这个信号出数字
@@ -1579,6 +1580,7 @@ func _delayed_hit(d: Dictionary) -> void:
 			hero_pos += away.normalized() * psh
 			_shake = maxf(_shake, 6.0)
 	_bursts.append({"x": c.x, "y": c.y, "t": 0.0, "col": Color(1.0, 0.52, 0.26), "scale": maxf(1.2, r / 60.0)})
+	delayed_land.emit(c, elem)
 	_shake = maxf(_shake, 12.0)
 	# v16o（用户："背景喊杀声太多了 其实没必要有喊杀声"）：已去掉喊杀/战鼓声
 	if _hitstop < 0.10:

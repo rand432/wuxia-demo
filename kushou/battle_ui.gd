@@ -629,6 +629,7 @@ func _build_field() -> void:
 	_core.hero_foe_hit.connect(_on_hero_foe_hit)
 	_core.hero_down.connect(_on_hero_down)
 	_core.boss_arrived.connect(_on_boss_arrived)
+	_core.delayed_land.connect(_on_delayed_land)
 	_core.start_run()
 	# 旧内核的隐形宠物会偷偷咬怪（怪还没到就掉血）；这个模式先关掉宠物伤害
 	_core.set_pet_cfg({"cd": 99999.0, "dmg": 0.0})
@@ -3293,6 +3294,20 @@ func _on_boss_arrived(_tier: int) -> void:
 	_core._shake = maxf(float(_core._shake), 15.0)
 	Aud.sfx("drum", -6.0, 0.85)
 	Aud.sfx("tension", -14.0, 0.95)
+
+# Boss/壮汉延迟技砸下来：按属性给一口命中特效
+const LAND_FX := {
+	"物理": ["impacts/ground-slam", "metal", 0.90],
+	"火系": ["fire/fireball", "", 0.90],
+	"金系": ["lightning/zap-hit", "volt", 0.95],
+	"木系": ["nature/leaf-storm", "leaf", 0.85],
+	"真实": ["shadow/soul-drain", "", 0.80],
+}
+
+func _on_delayed_land(pos: Vector2, elem: String) -> void:
+	var e: Array = LAND_FX.get(elem, ["impacts/crit-hit", "", 0.85])
+	var wp: Vector2 = _core.position + pos
+	_spawn_pfx(str(e[0]), wp, float(e[2]), str(e[1]), 1.30)
 
 func _choice_fx(kind: String) -> void:
 	var hpos := _hero_screen()
