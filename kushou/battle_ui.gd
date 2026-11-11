@@ -220,6 +220,7 @@ var _boss_on := false          # 首领在场时特效降档（首领战场景�
 var _late_baked := false       # 稀有特效是否已烘焙
 var _baked_keys: Dictionary = {}   # 已烘过的 (effect|palette|light)
 var _flash_rect: ColorRect = null  # 技能释放时的整屏微闪
+var _cast_dtype := ""              # 最近一次释放的技能属性（决定闪光颜色）
 var _last_combo := 0            # 连杀里程碑用（每 10 连炸一口）
 const PFX_MAX_LIVE := 26          # 同屏特效上限（实测 60fps 有余量，放回 26）
 # 开局先把常用的几种烘好（BAKED 首次播放要烘，烘在开打前就不会卡第一下）
@@ -704,7 +705,8 @@ func _build_field() -> void:
 	add_child(_pfx_root)
 	_flash_rect = ColorRect.new()
 	_flash_rect.color = Color(1.0, 0.96, 0.85, 0.0)
-	_flash_rect.size = Vector2(720, 1280)
+	_flash_rect.position = Vector2(0, 150)
+	_flash_rect.size = Vector2(720, 720)   # 只闪战场，不染 HUD
 	_flash_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_flash_rect.z_index = 20
 	add_child(_flash_rect)
@@ -3271,8 +3273,19 @@ func _screen_flash(col: Color, a: float, dur := 0.16) -> void:
 	tw.tween_property(_flash_rect, "color:a", 0.0, dur)
 
 # 技能释放的整体反馈：微闪 + 轻震 + 顿帧
+# 每系一个闪光颜色：火橙、金金、木绿、召唤紫、真实暗紫、物理纸
+const SKILL_TINT := {
+	"金系": Color(1.0, 0.92, 0.60),
+	"火系": Color(1.0, 0.70, 0.40),
+	"木系": Color(0.70, 0.95, 0.64),
+	"召唤": Color(0.78, 0.70, 1.0),
+	"物理": Color(0.96, 0.93, 0.86),
+	"真实": Color(0.72, 0.52, 0.88),
+}
+
 func _skill_cast_juice() -> void:
-	_screen_flash(Color(1.0, 0.94, 0.80), 0.16, 0.18)
+	_screen_flash(SKILL_TINT.get(_cast_dtype, Color(1.0, 0.94, 0.80)), 0.16, 0.18)
+	Aud.sfx("swing", -7.0, 0.85)
 	_core._shake = maxf(float(_core._shake), 5.0)
 	_core._hitstop = maxf(float(_core._hitstop), 0.045)
 
@@ -4063,6 +4076,8 @@ func _hero_screen() -> Vector2:
 	return _core.position + _core.hero_pos
 
 func _cast_skill(i: int) -> void:
+	if i >= 0 and i < _skills.size():
+		_cast_dtype = str(_skills[i].get("dtype", ""))
 	var sk: Dictionary = _skills[i]
 	var aid0 := str(sk["aid"])
 	var md0: Dictionary = _anc_mod.get(aid0, {})
