@@ -206,6 +206,10 @@ var _run_over := false            # 本局已结算（命尽 / 通关）
 var _skip_reward_wave := false    # 这一波打输了：过波但不给奖励
 var _run_time := 0.0              # 本局存活时间
 var _chal_cd: Array = [0.0, 0.0, 0.0, 0.0, 0.0]   # 五种挑战的冷却剩余
+var _curio_sq = null             # 奇物方块（战场右下，与挑战对称）
+var _curio_cd := 0.0             # 奇物冷却剩余
+var _curio_uses := 0             # 本局喝了几次（详情页显示）
+var _curio_detail: Control = null
 var _wave_lb: Label
 var _hp_lb: Label
 var _wen := 0
@@ -594,6 +598,7 @@ func _build_field() -> void:
 	_core.coin.connect(_on_core_coin)
 	_core.coin_drop.connect(_on_coin_drop)   # v6：钱怪/匪首掉的真钱
 	_core.kill.connect(_on_core_kill)
+	_core.chal_drop.connect(_on_chal_drop)
 	_core.hero_attack.connect(_on_hero_attack)
 	_core.hero_hit.connect(_on_hero_hit)
 	_core.hero_foe_hit.connect(_on_hero_foe_hit)
@@ -628,6 +633,7 @@ func _build_field() -> void:
 	# 挑战方形
 	_btn("挑战", Rect2(0, 760, 96, 96), 20, Color(0.075, 0.068, 0.060, 0.98), Color(0.91, 0.78, 0.42), func(): _toggle_challenge())
 	_build_challenge()
+	_build_curio()
 	_build_card_detail()
 	# v3 技能栏（右缘竖排，6 格可视）
 	_build_skill_bar()
@@ -673,7 +679,21 @@ class SkillIcon extends Control:
 func _toggle_challenge() -> void:
 	_chal_layer.visible = not _chal_layer.visible
 	if _chal_layer.visible:
+		_refresh_chal_panel()
 		_chal_layer.move_to_front()
+
+# ============================================================
+# 挑战：冷却制 + 按波解锁，打完给资源
+#   钱怪（文钱走 coin_drop）· 晶怪 · 书怪（额外经验）· 宝箱（宝物机会+刷新，不给钱）· 匪首（钱/晶 + 各刷新）
+# ============================================================
+const CHAL_NAMES := ["钱怪", "晶怪", "书怪", "宝箱", "匪首"]
+const CHAL_GROUP := [6, 3, 4, 1, 1]
+
+var _chal_btns: Array = []
+var _chal_auto_btn: Button = null
+var _auto_chal := false
+var _chal_t := 0.0
+var _chal_count := 0
 
 func _build_challenge() -> void:
 	_chal_layer = Control.new()
@@ -682,12 +702,200 @@ func _build_challenge() -> void:
 	_chal_layer.visible = false
 	_chal_layer.z_index = 15
 	add_child(_chal_layer)
-	_panel(Rect2(8, 360, 320, 320), Color(0.94, 0.90, 0.82, 0.98), 8, Color(0.85, 0.66, 0.23, 0.6), 2, _chal_layer)
-	var names := ["钱怪", "晶怪", "书怪", "宝箱", "匪首"]
-	for i in names.size():
-		var x := 28.0 + float(i % 2) * 140.0
-		var y := 380.0 + float(i / 2) * 96.0
-		_btn(names[i], Rect2(x, y, 76, 76), 18, Color(0.09, 0.08, 0.07, 0.98), Color(0.91, 0.78, 0.42), func(): _toast("挑战：" + names[i]); _chal_layer.visible = false, _chal_layer)
+	_panel(Rect2(8, 360, 320, 340), Color(0.94, 0.90, 0.82, 0.98), 8, Color(0.85, 0.66, 0.23, 0.6), 2, _chal_layer)
+	for i in CHAL_NAMES.size():
+		var x := 24.0 + float(i % 2) * 148.0
+		var y := 376.0 + float(i / 2) * 84.0
+		var idx := i
+		var b := _btn(str(CHAL_NAMES[i]), Rect2(x, y, 132, 72), 17, Color(0.09, 0.08, 0.07, 0.98),
+			Color(0.91, 0.78, 0.42), func() -> void: _chal_press(idx), _chal_layer)
+		_chal_btns.append(b)
+	_chal_auto_btn = _btn("自动挑战：关", Rect2(24, 636, 272, 48), 18, Color(0.13, 0.11, 0.09),
+		Color(0.91, 0.78, 0.42), func() -> void: _toggle_auto_chal(), _chal_layer)
+
+func _toggle_auto_chal() -> void:
+	_auto_chal = not _auto_chal
+	if _chal_auto_btn != null:
+		_chal_auto_btn.text = "自动挑战：" + ("开" if _auto_chal else "关")
+	_refresh_chal_panel()
+
+func _chal_unlocked(i: int) -> bool:
+	if _core == null:
+		return false
+	return int(_core.wave) >= int(CHAL_MIN_WAVE[clampi(i, 0, CHAL_MIN_WAVE.size() - 1)])
+
+func _chal_press(i: int) -> void:
+	if _run_over or _core == null:
+		return
+	if not _chal_unlocked(i):
+		_toast("「%s」第 %d 波才解锁" % [str(CHAL_NAMES[i]), int(CHAL_MIN_WAVE[i])])
+		return
+	if float(_chal_cd[i]) > 0.0:
+		_toast("「%s」冷却中 %.0f 秒" % [str(CHAL_NAMES[i]), ceil(float(_chal_cd[i]))])
+		return
+	_chal_cd[i] = _chal_base_cd(i)
+	_chal_count += 1
+	_core.spawn_challenge(i, int(CHAL_GROUP[i]))
+	_toast("挑战 · " + str(CHAL_NAMES[i]))
+	Aud.sfx("ui_open", -8.0)
+	_refresh_chal_panel()
+
+func _refresh_chal_panel() -> void:
+	for i in _chal_btns.size():
+		var b: Button = _chal_btns[i]
+		if b == null:
+			continue
+		var cd := float(_chal_cd[i])
+		if not _chal_unlocked(i):
+			b.text = "%s\n第 %d 波解锁" % [str(CHAL_NAMES[i]), int(CHAL_MIN_WAVE[i])]
+			b.disabled = true
+		elif cd > 0.0:
+			b.text = "%s\n%.0f 秒" % [str(CHAL_NAMES[i]), ceil(cd)]
+			b.disabled = true
+		else:
+			b.text = "%s\n×%d" % [str(CHAL_NAMES[i]), int(CHAL_GROUP[i])]
+			b.disabled = false
+		b.add_theme_font_size_override("font_size", 17)
+
+func _chal_auto_try() -> void:
+	if not _auto_chal or _run_over or _core == null:
+		return
+	for i in _chal_btns.size():
+		if _chal_unlocked(i) and float(_chal_cd[i]) <= 0.0:
+			_chal_press(i)
+			return
+
+func _tick_chal(dt: float) -> void:
+	for i in _chal_cd.size():
+		if float(_chal_cd[i]) > 0.0:
+			_chal_cd[i] = maxf(0.0, float(_chal_cd[i]) - dt)
+	_chal_t += dt
+	if _chal_t < 0.5:
+		return
+	_chal_t = 0.0
+	if _chal_layer != null and _chal_layer.visible:
+		_refresh_chal_panel()
+	_chal_auto_try()
+
+# 挑战怪死亡：按类型结算（钱怪走 coin_drop，这里不重复给）
+func _on_chal_drop(kind: int, _pos: Vector2) -> void:
+	if _core == null:
+		return
+	match kind:
+		1:
+			_gain_crystal(int(float(4 + randi() % 4) * _core.chal_crystal_mul()))
+		2:
+			_add_exp(80)                      # 书怪：额外经验，快速练级
+		3:
+			_trea_charge += 1
+			_trea_reroll += 1
+			if randf() < float(_treasure_pct) / 100.0:
+				_trea_reroll += 1
+			_refresh_trea_tile()
+			_toast("宝箱 · 宝物机会 +1 · 刷新 +1")
+		4:
+			_add_wen(int(220.0 * _core.chal_money_mul() * (1.0 + _boss_pct / 100.0)))
+			_gain_crystal(int(round(30.0 * _core.chal_crystal_mul() * (1.0 + _boss_pct / 100.0))))
+			_trea_charge += 1
+			_trea_reroll += 1
+			_aug_reroll += 1
+			_refresh_trea_tile()
+			_toast("匪首 · 文钱/灵晶 + 宝物机会 + 刷新")
+
+# ============================================================
+# 奇物（局外一件 · 局内全自动，不用玩家点）
+#   首件 玲珑玉壶：气血低于 30% 立刻喝；低于 50% 且身边有敌也喝
+#   回气血 25% / 内力 25%，冷却 60 秒
+# ============================================================
+const CURIO := {
+	"id": "yuhu", "name": "玲珑玉壶", "glyph": "壶", "tier": 1,
+	"hp_pct": 0.25, "mp_pct": 0.25,
+	"low": 0.30, "hp": 0.50, "near": 220.0, "cd": 60.0,
+}
+
+func _build_curio() -> void:
+	_curio_sq = CurioSquare.new()
+	_curio_sq.position = Vector2(624, 760)
+	_curio_sq.size = Vector2(96, 96)
+	_curio_sq.glyph = str(CURIO["glyph"])
+	_curio_sq.label = "奇物"
+	_curio_sq.cd_max = float(CURIO["cd"])
+	_curio_sq.pressed.connect(_show_curio_detail)
+	add_child(_curio_sq)
+
+func _foe_near(pos: Vector2, r: float) -> bool:
+	for f_v in _core.foes:
+		var f: Dictionary = f_v
+		if float(f.get("hp", 0.0)) <= 0.0:
+			continue
+		if pos.distance_to(Vector2(float(f.get("x", 0.0)), float(f.get("y", 0.0)))) <= r:
+			return true
+	return false
+
+# 智能触发：危险线立刻喝；中等血量但有怪贴身也喝；安全时攒着
+func _tick_curio(dt: float) -> void:
+	if _curio_sq == null:
+		return
+	if _curio_cd > 0.0:
+		_curio_cd = maxf(0.0, _curio_cd - dt)
+		_curio_sq.cd_left = _curio_cd
+		_curio_sq.queue_redraw()
+	if _run_over or _core == null:
+		return
+	var h: Dictionary = _core.hero
+	var hpr := float(h.get("hp", 0.0)) / maxf(1.0, float(h.get("hp_max", 1.0)))
+	if _curio_cd > 0.0 or hpr <= 0.0 or hpr >= float(CURIO["hp"]):
+		return
+	if hpr <= float(CURIO["low"]) or _foe_near(_core.hero_pos, float(CURIO["near"])):
+		_curio_use()
+
+func _curio_use() -> void:
+	var h: Dictionary = _core.hero
+	var mx := float(h.get("hp_max", 1.0))
+	var hp_add := mx * float(CURIO["hp_pct"])
+	h["hp"] = minf(mx, float(h.get("hp", 0.0)) + hp_add)
+	var mp_add := _mp_max * float(CURIO["mp_pct"])
+	_mp = minf(_mp_max, _mp + mp_add)
+	_curio_cd = float(CURIO["cd"])
+	_curio_uses += 1
+	_curio_sq.cd_left = _curio_cd
+	_curio_sq.queue_redraw()
+	_toast("玉壶 · 气血 +%d · 内力 +%d" % [int(hp_add), int(mp_add)])
+	Aud.sfx("levelup", -6.0)
+
+func _show_curio_detail() -> void:
+	if _curio_detail != null:
+		_curio_detail.queue_free()
+	var layer := Control.new()
+	layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	layer.mouse_filter = Control.MOUSE_FILTER_STOP
+	layer.z_index = 32
+	add_child(layer)
+	_curio_detail = layer
+	var dim := ColorRect.new()
+	dim.color = Color(0.05, 0.04, 0.03, 0.58)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(dim)
+	_panel(Rect2(120, 360, 480, 430), Color(0.97, 0.93, 0.85, 0.99), 10, Color(0.85, 0.66, 0.23), 3, layer)
+	_lbl(str(CURIO["name"]), Vector2(120, 376), Vector2(480, 42), 32, INK, layer, HORIZONTAL_ALIGNMENT_CENTER)
+	_panel(Rect2(268, 420, 184, 28), Color(0.62, 0.44, 0.12, 0.92), 5, Color(0.62, 0.44, 0.12), 0, layer)
+	_lbl("奇物 · 一阶", Vector2(268, 422), Vector2(184, 24), 15, Color(0.99, 0.95, 0.87), layer, HORIZONTAL_ALIGNMENT_CENTER)
+	_lbl(str(CURIO["glyph"]), Vector2(120, 456), Vector2(480, 70), 46, Color(0.36, 0.28, 0.12), layer, HORIZONTAL_ALIGNMENT_CENTER)
+	var rows := [
+		["效果", "气血 +%d%%　内力 +%d%%" % [int(float(CURIO["hp_pct"]) * 100.0), int(float(CURIO["mp_pct"]) * 100.0)]],
+		["触发", "气血低于 %d%%；或低于 %d%% 且身边有敌" % [int(float(CURIO["low"]) * 100.0), int(float(CURIO["hp"]) * 100.0)]],
+		["冷却", "%d 秒（自动使用，不用操作）" % int(CURIO["cd"])],
+		["本局", "已用 %d 次" % _curio_uses],
+	]
+	var y := 546.0
+	for r in rows:
+		_lbl(str(r[0]), Vector2(146, y), Vector2(80, 24), 15, Color(0.47, 0.41, 0.33), layer)
+		_lbl(str(r[1]), Vector2(212, y - 3), Vector2(360, 26), 18, INK, layer)
+		y += 46.0
+	_lbl("全自动使用，玩家不需要点它；点这里只是看详情", Vector2(146, 744), Vector2(430, 22), 15, Color(0.47, 0.41, 0.33), layer)
+	_btn("×", Rect2(556, 372, 34, 30), 20, Color(0.97, 0.93, 0.85), DIM,
+		func() -> void: _curio_detail.visible = false, layer)
 
 func _build_card_detail() -> void:
 	_detail_layer = Control.new()
@@ -831,6 +1039,30 @@ func _tile(x: float, y: float, s: float, kind: String, label: String, hot: bool)
 	t.pressed.connect(hit)
 	add_child(t)
 	return t
+
+# 奇物方块：跟「挑战」一样 96×96，冷却时压暗 + 显示秒数
+class CurioSquare extends Control:
+	const F := preload("res://fonts/ink.ttf")
+	signal pressed
+	var glyph := "壶"
+	var label := "奇物"
+	var cd_left := 0.0
+	var cd_max := 60.0
+	func _ready() -> void:
+		mouse_filter = Control.MOUSE_FILTER_STOP
+	func _gui_input(ev: InputEvent) -> void:
+		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
+			pressed.emit()
+	func _draw() -> void:
+		draw_rect(Rect2(Vector2.ZERO, size), Color(0.075, 0.068, 0.060, 0.98))
+		draw_rect(Rect2(Vector2.ZERO, size), Color(0.85, 0.66, 0.23, 0.55), false, 2.0)
+		var ready := cd_left <= 0.001
+		var col := Color(0.91, 0.78, 0.42) if ready else Color(0.52, 0.48, 0.40)
+		draw_string(F, Vector2(0, 54), glyph, HORIZONTAL_ALIGNMENT_CENTER, size.x, 38, col)
+		draw_string(F, Vector2(0, 84), label, HORIZONTAL_ALIGNMENT_CENTER, size.x, 18, col)
+		if not ready:
+			draw_rect(Rect2(Vector2.ZERO, size), Color(0.02, 0.02, 0.02, 0.42))
+			draw_string(F, Vector2(0, 62), str(int(ceil(cd_left))), HORIZONTAL_ALIGNMENT_CENTER, size.x, 30, Color(0.94, 0.89, 0.78))
 
 class Tile extends Control:
 	const F := preload("res://fonts/ink.ttf")
@@ -1241,6 +1473,8 @@ func _process(_delta: float) -> void:
 			_hp_fill.size = Vector2(maxf(4.0, 235.0 * hpr), 20.0)
 		_tick_skills(_delta)
 		_tick_rare_buffs(_delta)
+		_tick_curio(_delta)
+		_tick_chal(_delta)
 		_tick_minions(_delta)
 		_tick_burn(_delta)
 		_tick_poison(_delta)
@@ -2568,6 +2802,10 @@ func _init_cards() -> void:
 	_bond_taken.clear()
 	_crystal_lock = false
 	_rare_buffs.clear()
+	_curio_cd = 0.0
+	_curio_uses = 0
+	_run_over = false
+	_run_time = 0.0
 	for nm_v in BOND_ENTRIES:
 		_bond_unlocked[str(nm_v)] = true
 	_anc_mod.clear()
