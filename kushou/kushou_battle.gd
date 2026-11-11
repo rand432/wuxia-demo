@@ -380,7 +380,7 @@ var boss_alive := false
 var _spawn_t := 0.6
 var _hero_cd := 0.0
 # 主角出手：先起手（表现层同步挥剑），到兵器接触点才结算伤害
-const HERO_ATTACK_TIME := 1.8      # v6：默认攻速 1.8 秒/刀（设计稿）
+const HERO_ATTACK_TIME := 0.95     # v6 原为 1.8；割草手感（可一行还原）
 const HERO_DODGE := 0.0            # v6：闪避下线，恒 0（留个手柄，要回滚把它改回 0.05）
 const HERO_WINDUP := 0.18
 var _hero_pending: Dictionary = {}
@@ -491,6 +491,9 @@ func reset_partners() -> void:
 func start_run() -> void:
 	running = true
 	intro_wait = INTRO_WAIT
+	# 原来开局沿用默认定额 8（_last_quota_wave 初值等于 wave，自动换波检测不触发）
+	_last_quota_wave = -1
+	wave_reset_quota()
 
 # 距离→速度：远了提速追、近了慢下来（用户："走近了就慢、远了才快"）
 func _chase_spd(near: float, far: float, d: float) -> float:
@@ -2652,15 +2655,18 @@ func aspd_mul() -> float:
 #   溅射从"同时打 N 个"改成"**按范围**打"——每级把横扫半径撑大，
 #   命中点周围 R 以内的敌人**全都被扫到**（不必再数目标数，玩家看得见圈在变大）。
 #   R = 84 ＋ 26×(等级−1)：Lv1 84 → Lv5 188（战场上差不多是半个横排）。
+const SPLASH_BASE_R := 72.0        # 基础横扫半径（没学溅射也有；割草地基，改 0 即还原单体）
+const SPLASH_BASE_MUL := 0.55      # 基础横扫对旁怪的伤害倍率
+
 func splash_radius() -> float:
 	var lv := int(skill["splash"])
 	if lv <= 0:
-		return 0.0
+		return SPLASH_BASE_R
 	return 84.0 + 26.0 * float(lv - 1)
 
 func splash_mul() -> float:
 	if int(skill["splash"]) <= 0:
-		return 1.0
+		return SPLASH_BASE_MUL
 	return 0.70 * (1.0 + 0.15 * float(skill["splash_dmg"]))
 
 func qi_mul() -> float:

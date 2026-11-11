@@ -3580,7 +3580,8 @@ func _spawn_hit_fx(global_pos: Vector2, radius: float, dmg: int, hero_hit: bool,
 		_spawn_pfx("impacts/crit-hit", global_pos + Vector2(0, -8), 0.95, "gold", 1.9)
 	elif heavy:
 		_spawn_pfx("impacts/crit-hit", global_pos + Vector2(0, -8), 0.80, "", 1.4)
-	else:
+	elif randf() < 0.55:
+		# 横扫一次打好几只时，普通命中不每只都放（保丝滑，观感也够）
 		_spawn_pfx("impacts/hit-spark", global_pos + Vector2(0, -6), 0.72, "", 1.0)
 
 # pixelfx：播一个特效，播完自毁
