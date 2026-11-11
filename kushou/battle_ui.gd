@@ -2,7 +2,7 @@ extends Control
 # ============================================================
 # kushou/battle_ui.gd —— 新战斗界面（按 v31 草图）
 #   独立场景：先跑通布局/交互，再接进关卡流程。
-#   720×1280：顶部资源 64 / 战场 140..830 / 卡组 830..980 / 底栏 980..1220
+#   720×1280：顶栏 0..80 / 战场 150..870 / 卡组 880..1050 / 底栏 1076..1280
 #   抽卡页无外框、不暂停；三张卡框浮在战场上。
 # ============================================================
 
@@ -200,6 +200,12 @@ var _core = null
 var _bm = null
 var _coin_lb: Label
 var _kill_lb: Label
+var _life_lb: Label
+var _life := 100          # 当局生命：主角倒下不再直接结束，按剩余怪扣命
+var _run_over := false            # 本局已结算（命尽 / 通关）
+var _skip_reward_wave := false    # 这一波打输了：过波但不给奖励
+var _run_time := 0.0              # 本局存活时间
+var _chal_cd: Array = [0.0, 0.0, 0.0, 0.0, 0.0]   # 五种挑战的冷却剩余
 var _wave_lb: Label
 var _hp_lb: Label
 var _wen := 0
@@ -337,12 +343,12 @@ class BgArt extends Control:
 		draw_rect(Rect2(0, 0, 720, 1280), Color(0.93, 0.90, 0.82))
 		# 纸纹/山
 		var pts := [
-			Vector2(0, 830), Vector2(90, 690), Vector2(170, 790), Vector2(260, 660),
-			Vector2(360, 800), Vector2(470, 670), Vector2(580, 790), Vector2(700, 700),
-			Vector2(720, 830)
+			Vector2(0, 870), Vector2(90, 730), Vector2(170, 830), Vector2(260, 700),
+			Vector2(360, 840), Vector2(470, 710), Vector2(580, 830), Vector2(700, 740),
+			Vector2(720, 870)
 		]
 		draw_polyline(PackedVector2Array(pts), Color(0.52, 0.46, 0.38, 0.30), 2.0, true)
-		draw_line(Vector2(0, 830), Vector2(720, 830), Color(0.38, 0.32, 0.24, 0.55), 2.0)
+		draw_line(Vector2(0, 870), Vector2(720, 870), Color(0.38, 0.32, 0.24, 0.55), 2.0)
 		# 淡墨点
 		for i in 6:
 			draw_circle(Vector2(60 + i * 118, 200 + (i % 3) * 150), 46.0, Color(0.45, 0.38, 0.30, 0.025))
@@ -363,6 +369,15 @@ class Ico extends Control:
 			draw_arc(c, r, 0, TAU, 40, Color(0.36, 0.27, 0.12, 0.7), 2.0)
 			draw_circle(c, r * 0.30, Color(0.10, 0.09, 0.08))
 			draw_rect(Rect2(c - Vector2(r * 0.20, r * 0.20), Vector2(r * 0.40, r * 0.40)), Color(0.10, 0.09, 0.08), false, 3.0)
+		elif kind == "heart":
+			# 红心（当局生命）：参数方程描点，圆心落在图标中心
+			var hp := PackedVector2Array()
+			for i in 40:
+				var t := TAU * float(i) / 40.0
+				var hx := 16.0 * pow(sin(t), 3.0)
+				var hy := 13.0 * cos(t) - 5.0 * cos(2.0 * t) - 2.0 * cos(3.0 * t) - cos(4.0 * t)
+				hp.append(c + Vector2(hx, -hy) * (r / 17.0))
+			draw_colored_polygon(hp, Color(0.80, 0.24, 0.20))
 		elif kind == "crystal":
 			var pts := PackedVector2Array([
 				c + Vector2(0, -r), c + Vector2(r * 0.72, -r * 0.2), c + Vector2(r * 0.44, r * 0.9),
@@ -582,7 +597,7 @@ func _build_field() -> void:
 	_core.hero_attack.connect(_on_hero_attack)
 	_core.hero_hit.connect(_on_hero_hit)
 	_core.hero_foe_hit.connect(_on_hero_foe_hit)
-	_core.hero_down.connect(func() -> void: _toast("倒下了"))
+	_core.hero_down.connect(_on_hero_down)
 	_core.boss_arrived.connect(func(_t: int) -> void: _toast("首领来了"))
 	_core.start_run()
 	# 旧内核的隐形宠物会偷偷咬怪（怪还没到就掉血）；这个模式先关掉宠物伤害
@@ -1201,6 +1216,7 @@ func _process(_delta: float) -> void:
 		if int(_core.wave) != _last_wave:
 			_last_wave = int(_core.wave)
 			_trigger_combos("每波")
+		_run_time += _delta
 		_combo_t += _delta
 		if _combo_t >= 6.0:
 			_combo_t -= 6.0
@@ -1217,7 +1233,7 @@ func _process(_delta: float) -> void:
 				_on_wave_clear(cleared_wave)
 			else:
 				_run_cleared = true
-				_toast("第 %d 波清空 · 本局收工" % MAX_WAVE)
+				_end_run(true)
 		if _hp_lb != null:
 			_hp_lb.text = "%d/%d" % [int(float(_core.hero.get("hp", 0))), int(float(_core.hero.get("hp_max", 1)))]
 		var hpr := clampf(float(_core.hero.get("hp", 0.0)) / maxf(1.0, float(_core.hero.get("hp_max", 1.0))), 0.0, 1.0)
@@ -1337,7 +1353,120 @@ func _refresh_level_ui() -> void:
 			_mate_tile.queue_redraw()
 		_mate_tile.badge = _draw_charge
 
+# ============================================================
+# 当局生命：主角倒下 = 这一波没打下来，不是直接结束
+#   扣命（按剩余怪权重）→ 怪全清（无掉落/无经验）→ 过波且无奖励
+#   → 挑战全部进冷却 → 主角满血站起来 → 命 <= 0 才结算
+# ============================================================
+const CHAL_BASE_CD := [25.0, 30.0, 30.0, 90.0, 150.0]
+const CHAL_MIN_WAVE := [1, 1, 2, 3, 5]
+
+func _chal_base_cd(i: int) -> float:
+	return float(CHAL_BASE_CD[clampi(i, 0, CHAL_BASE_CD.size() - 1)])
+
+# 挑战全部进冷却（失败惩罚 + 本局结束时也顺手调）
+func _chal_all_cd() -> void:
+	for i in _chal_cd.size():
+		_chal_cd[i] = maxf(float(_chal_cd[i]), _chal_base_cd(i))
+
+# 一只怪折算多少"命"：小怪 1 · 挑战群怪 2 · 挑战大怪 5 · 首领 10
+func _foe_life_weight(f: Dictionary) -> int:
+	if f.has("chal"):
+		return 5 if int(f["chal"]) >= 3 else 2
+	if bool(f.get("boss", false)):
+		return 10
+	return 1
+
+func _refresh_life_ui() -> void:
+	if _life_lb == null:
+		return
+	_life_lb.text = str(_life)
+	_life_lb.add_theme_color_override("font_color",
+		Color(0.86, 0.24, 0.18) if _life <= 20 else Color(0.95, 0.91, 0.83))
+
+func _on_hero_down() -> void:
+	if _run_over:
+		return
+	var loss := 0
+	for f_v in _core.foes:
+		var f: Dictionary = f_v
+		if float(f.get("hp", 0.0)) > 0.0:
+			loss += _foe_life_weight(f)
+	loss = maxi(1, loss)
+	_life = maxi(0, _life - loss)
+	_refresh_life_ui()
+	_core.foes.clear()               # 怪全清：不掉落、不给经验
+	_chal_all_cd()                   # 挑战全部进冷却
+	_core.hero["hp"] = float(_core.hero.get("hp_max", 1.0))   # 满血站起来（不做浴血）
+	_core.running = true
+	Aud.sfx("ui_back", -4.0)
+	# 这一波直接判负：不给奖励，立刻进下一波（最后一波打输 = 本局结束）
+	var cleared_wave := int(_core.wave)
+	if cleared_wave < MAX_WAVE:
+		_toast("第 %d 波没打下来 · 命 -%d" % [cleared_wave, loss])
+		_core.set_wave(cleared_wave + 1)
+		_core.wave_reset_quota()
+		_spawn_typed_foes()
+	else:
+		_toast("第 %d 波没打下来 · 命 -%d" % [cleared_wave, loss])
+		_end_run(false)
+	if _life <= 0:
+		_end_run(false)
+
+# ---- 本局结束：命尽（输） / 通关（赢） ----
+var _result_layer: Control = null
+
+func _end_run(win: bool) -> void:
+	if _run_over:
+		return
+	_run_over = true
+	if _core != null:
+		_core.running = false
+	_build_result(win)
+	Aud.sfx("levelup" if win else "ui_back", -3.0)
+
+func _build_result(win: bool) -> void:
+	var layer := Control.new()
+	layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	layer.mouse_filter = Control.MOUSE_FILTER_STOP
+	layer.z_index = 40
+	add_child(layer)
+	_result_layer = layer
+	var dim := ColorRect.new()
+	dim.color = Color(0.05, 0.04, 0.03, 0.62)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	layer.add_child(dim)
+	_panel(Rect2(90, 320, 540, 480), Color(0.97, 0.93, 0.85, 0.99), 12,
+		Color(0.85, 0.66, 0.23) if win else Color(0.64, 0.22, 0.15), 3, layer)
+	_lbl("通　关" if win else "命　尽", Vector2(90, 348), Vector2(540, 58), 42,
+		Color(0.62, 0.44, 0.12) if win else Color(0.62, 0.20, 0.14), layer, HORIZONTAL_ALIGNMENT_CENTER)
+	var mins := int(_run_time) / 60
+	var secs := int(_run_time) % 60
+	var total_bonds := _bonds.size() + _bonds_done
+	var rows := [
+		["到达波数", "%d / %d" % [mini(int(_core.wave), MAX_WAVE), MAX_WAVE]],
+		["击杀", str(_kills)],
+		["文钱", str(_wen)],
+		["灵晶", str(_crystal)],
+		["羁绊", "%d 条（已成 %d）" % [total_bonds, _bonds_done]],
+		["存活", "%d 分 %02d 秒" % [mins, secs]],
+	]
+	var y := 428.0
+	for r in rows:
+		_lbl(str(r[0]), Vector2(146, y), Vector2(150, 30), 20, DIM, layer)
+		_lbl(str(r[1]), Vector2(300, y), Vector2(276, 30), 22, INK, layer, HORIZONTAL_ALIGNMENT_RIGHT)
+		y += 44.0
+	_btn("再来一局", Rect2(120, 700, 210, 64), 24, Color(0.86, 0.66, 0.24), Color(0.14, 0.11, 0.08),
+		func() -> void: get_tree().reload_current_scene(), layer)
+	_btn("回主界面", Rect2(390, 700, 210, 64), 24, Color(0.93, 0.89, 0.80), INK,
+		func() -> void: get_tree().change_scene_to_file("res://menu/main_home.tscn"), layer)
+
 func _on_wave_clear(cleared_wave: int) -> void:
+	if _skip_reward_wave:
+		_skip_reward_wave = false
+		_toast("第 %d 波没打下来 · 无奖励" % cleared_wave)
+		return
 	_add_exp(50)                            # v2：清一波 +50 经验
 	_add_wen(WEN_WAVE_CLEAR * cleared_wave)  # v6：清一波给一笔文钱
 	_trea_charge += 1                      # v8：清一波给一次宝物机会
