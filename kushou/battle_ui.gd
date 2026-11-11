@@ -211,6 +211,7 @@ var _pfx_root: Node2D = null      # pixelfx 特效层（命中/暴击等）
 var _pfx_count := 0
 var _fly_layer = null           # 资源飞行层
 var _fly: Array = []
+var _pulses: Dictionary = {}   # 资源格被加钱时的缩放脉冲
 var _last_combo := 0            # 连杀里程碑用（每 10 连炸一口）
 const PFX_MAX_LIVE := 20          # 同屏特效上限（超过就不再生，保丝滑）
 # 开局先把常用的几种烘好（BAKED 首次播放要烘，烘在开打前就不会卡第一下）
@@ -1569,6 +1570,7 @@ func _process(_delta: float) -> void:
 		_tick_rare_buffs(_delta)
 		_tick_curio(_delta)
 		_tick_fly(_delta)
+		_tick_pulses(_delta)
 		if _core != null:
 			var cb := int(_core._combo)
 			if cb != _last_combo:
@@ -1636,6 +1638,8 @@ func _on_core_kill(n: int) -> void:
 	_qc("kill", kn)
 	if _kill_lb != null:
 		_kill_lb.text = str(_kills)
+	_pulse_chip(_kill_lb)
+	_spawn_fly(_hero_screen() + Vector2(0, -26), Vector2(447, 40), Color(0.80, 0.36, 0.24), 2)
 	if _bm != null:
 		_bm.add_kill(kn)
 	_add_exp(20 * kn)                      # v2：杀 1 只 +20 经验
@@ -2377,6 +2381,8 @@ func _gain_crystal(n: int) -> void:
 		return
 	_crystal += n
 	_update_crystal()
+	_pulse_chip(_crystal_lb)
+	_spawn_fly(_hero_screen() + Vector2(0, -30), Vector2(273, 40), Color(0.52, 0.78, 0.88), 2)
 
 # 稀有单卡：拿到当场结算，不进羁绊
 func _apply_rare(o: Dictionary) -> void:
@@ -3058,6 +3064,7 @@ func _on_core_coin(n: int) -> void:
 
 # v6：一切文钱收入都走这里（好让［强化］的价钱灯跟着亮/灭）
 func _add_wen(raw: int) -> void:
+	_pulse_chip(_coin_lb)
 	if raw <= 0:
 		return
 	_wen += int(round(float(raw) * (1.0 + _gold_pct / 100.0)))
@@ -3078,7 +3085,27 @@ func _spawn_fly(from: Vector2, to: Vector2, col: Color, n: int) -> void:
 		_fly.append({"sx": from.x + randf_range(-16.0, 16.0), "sy": from.y + randf_range(-12.0, 12.0),
 			"x": from.x, "y": from.y,
 			"tx": to.x + randf_range(-18.0, 18.0), "ty": to.y + randf_range(-8.0, 8.0),
-			"t": randf_range(0.0, 0.12), "col": col, "r": randf_range(3.5, 6.0)})
+			"t": randf_range(0.0, 0.12), "col": col, "r": randf_range(4.5, 7.0)})
+
+func _pulse_chip(lb: Label) -> void:
+	if lb == null:
+		return
+	lb.pivot_offset = lb.size * 0.5
+	_pulses[lb] = 1.0
+
+func _tick_pulses(dt: float) -> void:
+	if _pulses.is_empty():
+		return
+	for lb_v in _pulses.keys():
+		var lb: Label = lb_v
+		var v := float(_pulses[lb_v]) - dt * 3.5
+		if v <= 0.0:
+			lb.scale = Vector2.ONE
+			_pulses.erase(lb_v)
+		else:
+			_pulses[lb_v] = v
+			var k := 1.0 + 0.22 * v
+			lb.scale = Vector2(k, k)
 
 func _tick_fly(dt: float) -> void:
 	if _fly.is_empty():
