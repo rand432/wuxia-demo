@@ -240,6 +240,23 @@ const PFX_PREWARM := [
 	["lightning/zap-hit", 0.95, "volt", 1.30, 1.0, 0.70],
 	["nature/leaf-storm", 0.85, "leaf", 1.30, 1.0, 1.20],
 	["shadow/soul-drain", 0.80, "", 1.30, 1.0, 1.00],
+	# —— 其余所有实际用到的变体（不漏任何一个，否则第一次播会卡一下）——
+	["impacts/ground-slam", 0.95, "shadow", 1.5, 1.0, 0.90],
+	["holy/heal", 0.85, "heal", 1.5, 1.0, 0.90],
+	["holy/sunburst", 1.05, "gold", 1.9, 1.0, 1.10],
+	["holy/sunburst", 1.25, "holy", 2.1, 1.0, 1.10],
+	["holy/sunburst", 1.9, "holy", 1.8, 1.0, 1.10],
+	["shadow/dark-explosion", 1.25, "blood", 1.7, 1.0, 1.40],
+	["shadow/dark-explosion", 1.7, "shadow", 1.9, 1.0, 1.40],
+	["shadow/dark-explosion", 1.9, "shadow", 1.8, 1.0, 1.40],
+	["arcane/spell-charge", 0.90, "arcane", 1.4, 1.0, 0.90],
+	["arcane/rune-circle", 1.0, "arcane", 1.4, 1.0, 1.00],
+	["holy/halo", 0.95, "gold", 1.5, 1.0, 0.90],
+	["holy/halo", 1.05, "holy", 1.5, 1.0, 0.90],
+	["holy/halo", 0.80, "heal", 1.2, 1.0, 0.90],
+	["holy/feather-burst", 1.0, "gold", 1.7, 1.0, 1.00],
+	["impacts/hit-spark", 0.55, "fire", 1.2, 1.0, 0.60],
+	["impacts/hit-spark", 0.55, "poison", 1.2, 1.0, 0.60],
 ]
 var _curio_sq = null             # 奇物方块（战场右下，与挑战对称）
 var _curio_cd := 0.0             # 奇物冷却剩余
