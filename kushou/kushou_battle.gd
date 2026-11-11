@@ -264,7 +264,7 @@ var hero := {"atk": 12.0, "hp": 200.0, "hp_max": 200.0, "mp": 100.0, "mp_max": 1
 #     下一步才把 _apply_dmg / hero_out_dmg / hero_in_dmg 切到这一层。
 # ============================================================
 const DMG_TYPES := ["物理", "金系", "木系", "水系", "火系", "土系", "真实"]
-const ATTR_BASE := {"atk": 12.0, "hp": 200.0, "aspd": 1.8, "crit": 0.05, "cdmg": 2.0}
+const ATTR_BASE := {"atk": 12.0, "hp": 200.0, "mp": 100.0, "aspd": 1.8, "crit": 0.05, "cdmg": 2.0}
 var attr: Dictionary = {}          # attr[key] = {base, temp[, amp]}
 var type_attr: Dictionary = {}     # type_attr[系] = {atk, pen_f, pen_p, red_f, red_p, amp_f, amp_p}
 
@@ -274,6 +274,7 @@ func _attr_ensure() -> void:
 	attr = {
 		"atk":  {"base": ATTR_BASE["atk"],  "temp": 0.0, "amp": 0.0},
 		"hp":   {"base": ATTR_BASE["hp"],   "temp": 0.0, "amp": 0.0},
+		"mp":   {"base": ATTR_BASE["mp"],   "temp": 0.0, "amp": 0.0},
 		"aspd": {"base": ATTR_BASE["aspd"], "temp": 0.0, "amp": 0.0},
 		"crit": {"base": ATTR_BASE["crit"], "temp": 0.0},
 		"cdmg": {"base": ATTR_BASE["cdmg"], "temp": 0.0},
@@ -345,32 +346,6 @@ func take_after_red(amount: float, t: String) -> float:
 	var p := clampf(type_field(t, "red_p"), 0.0, 0.6)
 	return amount * (1.0 - f) * (1.0 - p)
 
-# v6 桥：外壳目前仍把数值写在 hero 的旧字段上（atk/cut/dmg_all/crit…），
-#   这里在每次结算前把它们抄进新层。等外壳全部改用 attr_add / attr_add_amp 后，这个函数就删掉。
-func _attr_sync_from_hero() -> void:
-	_attr_ensure()
-	attr["crit"]["base"] = float(hero.get("crit", 0.05))
-	attr["cdmg"]["base"] = float(hero.get("crit_dmg", 2.0))
-	var dmg_all := float(hero.get("dmg_all", 0.0)) + float(hero.get("dmg_pct", 0.0))
-	var elem_amp := float(hero.get("elem_amp", 0.0))
-	var dmg_elem: Dictionary = hero.get("dmg_elem", {})
-	var res_elem: Dictionary = hero.get("res_elem", {})
-	for t in DMG_TYPES:
-		if t == DMG_TRUE:
-			type_attr[t]["amp_f"] = float(hero.get("dmg_true", 0.0))
-			continue
-		var ea := 0.0
-		var red := float(hero.get("cut_all", 0.0))
-		if t == DMG_PHYS:
-			red += float(hero.get("cut", 0.0))
-		else:
-			ea = elem_amp + float(dmg_elem.get(t, 0.0))
-			red += float(res_elem.get(t, 0.0))
-		type_attr[t]["amp_f"] = dmg_all + ea
-		# 固定减免 = 旧字段(护甲/全减免/抗性) ＋ 卡牌直接给的 red_add
-		type_attr[t]["red_f"] = red + float((type_attr[t] as Dictionary).get("red_add", 0.0))
-	# 穿透 / 百分比减免：本步一律 0（新属性，还没有任何来源）
-
 # ---- 目标侧：减免换算 ＋ 穿透结算 ----
 # v6：把目标的减免换算成**百分比**，好让穿透在同一把尺子上工作
 func foe_red(f: Dictionary, dtype: String, amt: float) -> float:
@@ -391,7 +366,6 @@ func foe_red(f: Dictionary, dtype: String, amt: float) -> float:
 func foe_take(amt: float, f: Dictionary, dtype: String) -> float:
 	if dtype == DMG_TRUE:
 		return amt                                    # 真实：全额
-	_attr_sync_from_hero()
 	var left := red_after_pen(foe_red(f, dtype, amt), dtype)
 	return maxf(1.0, amt * (1.0 - left))
 
@@ -456,7 +430,7 @@ const HERO_SPD_FAR := 178.0         # 主角"离得远"的追击速度（快）
 const CHASE_FAR := 230.0            # 超过这个距离算"远"，提速追
 const CHASE_NEAR := 96.0            # 进这个距离算"近"，慢下来
 const INTRO_WAIT := 3.0             # 开场先站几秒（让怪先走进画面）
-const HERO_TOP := 0.25              # 主角/宠物能到的最高那条线（战场高度的比例）
+const HERO_TOP := 0.42              # 自动追击时主角能到的最高线；再往上就回中间等怪
 									#   v3j 从 0.40 收到 0.25；两条路都吃它：自动追击 与 点哪走哪
 									#   ⚠ v15j 一度改成 0.30，用户确认 25% 才是原设计 → 已改回
 # v15y（用户："我的意思是主角跑到中间就不跑了就等着怪过来"）：
@@ -5218,9 +5192,7 @@ func live_foes() -> int:
 
 # 出伤：把主角这一下的伤害算全（返回 Dictionary：{dmg, crit, lucky}）
 func hero_out_dmg(base: float, dtype: String) -> Dictionary:
-	# v6：改走新属性层（attr / type_attr）。本步是**桥**——
-	#   _attr_sync_from_hero() 先把外壳写在旧字段上的值抄进新层，平衡数值不变。
-	_attr_sync_from_hero()
+	# v6：直接读新属性层（attr / type_attr），不再有旧字段桥
 	if dtype == DMG_TRUE:
 		# 真实：只吃「真实伤害增幅」，攻击增幅 / 暴击 / 穿透 / 减免一概不吃
 		return {"dmg": base * (1.0 + type_amp(dtype)), "crit": false, "lucky": false}
@@ -5245,8 +5217,7 @@ func hero_in_dmg(amount: float, dtype: String) -> float:
 		return 0.0
 	if dtype == DMG_TRUE:
 		return amount
-	# v6：减免也走新层（固定减免 ＝ 护甲 + 全减免 + 抗性，桥里已合好）
-	_attr_sync_from_hero()
+	# v6：减免直接读新层固定减免
 	var cut := type_field(dtype, "red_f")
 	if p_active("shigandang"):
 		cut += 0.25 + 0.05 * float(partners["shigandang"].get("cut_lv", 0))
@@ -5255,12 +5226,8 @@ func hero_in_dmg(amount: float, dtype: String) -> float:
 	if float(hero.get("dr_t", 0.0)) > 0.0:
 		dr = float(hero.get("dr", 0.0))
 		cut += dr
-	# v18（用户："全局改 但是是数值减伤 比如攻击-防御"）：
-	#   护甲从"百分比"改成**数值减伤**：先减防御，再乘其它减伤率。
-	#   防御系卡（hero["def"]）之前一直是死数值（没人读），现在才开始生效。
-	cut += float(hero.get("cut_extra", 0.0))          # 陈石石皮这类"临时额外减伤"
-	var after_flat := maxf(1.0, amount - float(hero.get("def", 0.0)))
-	var taken := maxf(0.0, after_flat * (1.0 - clampf(cut, 0.0, 0.60)))   # 上限 60%（设计稿）
+	# v6：防御/石皮已折进 red_f；不再有 hero.def 数值减伤和 cut_extra 旧口
+	var taken := maxf(0.0, amount * (1.0 - clampf(cut, 0.0, 0.60)))   # 上限 60%（设计稿）
 	if dr > 0.0 and taken > 0.0:
 		hero["hp"] = minf(float(hero["hp_max"]), float(hero["hp"]) + amount * dr * 0.5)
 	return taken

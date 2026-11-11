@@ -1087,6 +1087,30 @@ func _show_attr(v: bool) -> void:
 		_attr_layer.move_to_front()
 		_refresh_attr_values()
 
+# v6：新属性层 → 旧 hero 字段（atk / hp）。技能、召唤物、顶部血条还在读旧字段。
+func _sync_attrs_to_hero() -> void:
+	if _core == null:
+		return
+	var h: Dictionary = _core.hero
+	h["atk"] = _core.attr_final("atk")
+	h["crit"] = _core.attr_final("crit")
+	h["crit_dmg"] = _core.attr_final("cdmg")
+	h["cut"] = _core.type_field("物理", "red_f")
+	h["cut_all"] = 0.0
+	h["dmg_all"] = _core.type_amp("物理")
+	h["aspd"] = float(_core.attr_final("aspd")) / 1.8
+	var mp_new: float = float(_core.attr_final("mp"))
+	h["mp_max"] = mp_new
+	h["mp"] = minf(mp_new, float(h.get("mp", 0.0)))
+	_mp_max = mp_new
+	_mp = minf(_mp_max, _mp)
+	var hp_new: float = float(_core.attr_final("hp"))
+	var ratio := 1.0
+	if float(h.get("hp_max", 1.0)) > 0.0:
+		ratio = clampf(float(h.get("hp", 0.0)) / float(h.get("hp_max", 1.0)), 0.0, 1.0)
+	h["hp_max"] = hp_new
+	h["hp"] = minf(hp_new, hp_new * ratio)
+
 # 属性表：直接从 core.hero 读（不再写死数字）
 func _refresh_attr_values() -> void:
 	if _core == null or _attr_val_lbs.size() < 8:
@@ -1171,6 +1195,8 @@ func _process(_delta: float) -> void:
 		var e: Control = _enemies[i]
 		e.position.y = float(e.get_meta("base_y", e.position.y)) + sin(t * 1.6 + i) * 2.0
 	if _core != null:
+		# v6：新属性层是结算源；每帧把攻击/气血回写到旧 hero，给技能/召唤物/顶部血条读
+		_sync_attrs_to_hero()
 		if int(_core.wave) != _last_wave:
 			_last_wave = int(_core.wave)
 			_trigger_combos("每波")
@@ -1397,8 +1423,14 @@ func _apply_str_levels(n: int) -> void:
 		ratio = clampf(float(h["hp"]) / float(h["hp_max"]), 0.0, 1.0)
 	var add_atk := STR_PER_ATK * float(n)
 	var add_hp := STR_PER_HP * float(n)
+	_core.attr_add("atk", add_atk)
+	_core.attr_add("hp", add_hp)
 	h["atk"] = float(h["atk"]) + add_atk
-	h["cut"] = float(h.get("cut", 0.0)) + STR_PER_CUT * float(n)
+	var cut_add := STR_PER_CUT * float(n)
+	for t in _core.DMG_TYPES:
+		if t != "真实":
+			_core.type_add(t, "red_f", cut_add)
+	h["cut"] = float(h.get("cut", 0.0)) + cut_add
 	h["hp_max"] = float(h["hp_max"]) + add_hp
 	h["hp"] = float(h["hp_max"]) * ratio
 	_stats["atk"] = float(_stats["atk"]) + add_atk
@@ -1862,6 +1894,8 @@ func _apply_rare_buff(o: Dictionary) -> void:
 	var h: Dictionary = _core.hero
 	var add := float(h.get("atk", 0.0)) * pct
 	h["atk"] = float(h.get("atk", 0.0)) + add
+	if _core != null:
+		_core.attr_add("atk", add)
 	_rare_buffs.append({"amount": add, "t": dur})
 	_toast("稀有 · 攻击 +%d%%（%d 秒）" % [int(o.get("v", 0)), int(dur)])
 
@@ -1873,6 +1907,7 @@ func _tick_rare_buffs(dt: float) -> void:
 		rb["t"] = float(rb["t"]) - dt
 		if float(rb["t"]) <= 0.0:
 			_core.hero["atk"] = maxf(1.0, float(_core.hero.get("atk", 0.0)) - float(rb["amount"]))
+			_core.attr_add("atk", -float(rb["amount"]))
 			_rare_buffs.remove_at(i)
 
 func _refresh_trea_btn() -> void:
@@ -2222,22 +2257,31 @@ func _apply_aug(key: String, val: float) -> void:
 	var h: Dictionary = _core.hero
 	match key:
 		"atk_pct":
+			_core.attr_add_amp("atk", val / 100.0)
 			h["atk"] = float(h["atk"]) * (1.0 + val / 100.0)
 		"hp_pct":
 			var ratio := 1.0
 			if float(h["hp_max"]) > 0.0:
 				ratio = clampf(float(h["hp"]) / float(h["hp_max"]), 0.0, 1.0)
+			_core.attr_add_amp("hp", val / 100.0)
 			h["hp_max"] = float(h["hp_max"]) * (1.0 + val / 100.0)
 			h["hp"] = float(h["hp_max"]) * ratio
 		"aspd_pct":
+			_core.attr_add_amp("aspd", val / 100.0)
 			h["aspd"] = minf(MAX_ASPD, float(h.get("aspd", 1.0)) * (1.0 + val / 100.0))
 		"crit_add":
+			_core.attr_add("crit", val / 100.0)
 			h["crit"] = minf(1.0, float(h.get("crit", 0.05)) + val / 100.0)
 		"critdmg_add":
+			_core.attr_add("cdmg", val / 100.0)
 			h["crit_dmg"] = float(h.get("crit_dmg", 2.0)) + val / 100.0
 		"cut_add":
+			_core.type_add("物理", "red_f", val / 100.0)
 			h["cut"] = float(h.get("cut", 0.0)) + val / 100.0
 		"cutall_add":
+			for t in _core.DMG_TYPES:
+				if t != "真实":
+					_core.type_add(t, "red_f", val / 100.0)
 			h["cut_all"] = float(h.get("cut_all", 0.0)) + val / 100.0
 		"pen_flat":
 			# v6：七系固定穿透一起加（真实不吃穿透，跳过）
@@ -2245,8 +2289,12 @@ func _apply_aug(key: String, val: float) -> void:
 				if t != "真实":
 					_core.type_add(t, "pen_f", val / 100.0)
 		"dmgall_add":
+			for t in _core.DMG_TYPES:
+				if t != "真实":
+					_core.type_add(t, "amp_f", val / 100.0)
 			h["dmg_all"] = float(h.get("dmg_all", 0.0)) + val / 100.0
 		"mp_add":
+			_core.attr_add("mp", val)
 			_mp_bonus += val
 		"gold_pct":
 			_gold_pct += val
@@ -2481,13 +2529,22 @@ func _apply_combo(rec: Dictionary) -> void:
 	match key:
 		"atk":
 			_stats["atk"] = float(_stats["atk"]) + val
-			if _core != null: _core.hero["atk"] = float(_core.hero.get("atk", 0.0)) + val
+			if _core != null:
+				_core.attr_add("atk", val)
+				_core.hero["atk"] = float(_core.hero.get("atk", 0.0)) + val
 		"def":
-			_stats["def"] = float(_stats["def"]) + val
-			if _core != null: _core.hero["def"] = float(_core.hero.get("def", 0.0)) + val
+			# v6: def removed
+			if _core != null:
+				# v6：组合防御也走七系固定减免，和卡牌防御一致
+				var def_red := val * DEF_CARD_TO_RED
+				if def_red > 0.0:
+					for t in _core.DMG_TYPES:
+						if t != "真实":
+							_core.type_add(t, "red_f", def_red)
 		"hp":
 			_stats["hp"] = float(_stats["hp"]) + val
 			if _core != null:
+				_core.attr_add("hp", val)
 				_core.hero["hp_max"] = float(_core.hero.get("hp_max", 1.0)) + val
 				_core.hero["hp"] = float(_core.hero.get("hp", 0.0)) + val
 		"heal":
@@ -2642,9 +2699,11 @@ func _own_text(s: Dictionary) -> String:
 
 func _apply_own(s: Dictionary) -> void:
 	_stats["atk"] = float(_stats["atk"]) + float(s["atk"])
-	_stats["def"] = float(_stats["def"]) + float(s["def"])
+	# v6: def removed
 	_stats["hp"] = float(_stats["hp"]) + float(s["hp"])
 	if float(s.get("mp", 0.0)) > 0.0:
+		if _core != null:
+			_core.attr_add("mp", float(s["mp"]))
 		_mp_bonus += float(s["mp"])          # v5：内力系卡 → 内力上限
 	_gold_pct += float(s["gold_pct"])
 	_crystal_pct += float(s["crystal_pct"])
@@ -2670,13 +2729,16 @@ func _apply_own(s: Dictionary) -> void:
 		_killnum_pct += float(s["exp_pct"])
 	_push_run_mods()
 	if _core != null:
+		# v6：新属性层是结算源；旧 hero 字段继续给技能/召唤物读，两边一起加
+		_core.attr_add("atk", float(s["atk"]))
+		_core.attr_add("hp", float(s["hp"]))
 		_core.hero["atk"] = float(_core.hero.get("atk", 0.0)) + float(s["atk"])
 		# v6：防御卡不再加「数值减伤」，改成七系固定减免（1 点防御 = 3% 减免，跟旧手感对齐）
 		var def_red := float(s["def"]) * DEF_CARD_TO_RED
 		if def_red > 0.0:
 			for t in _core.DMG_TYPES:
 				if t != "真实":
-					_core.type_add(t, "red_add", def_red)
+					_core.type_add(t, "red_f", def_red)
 		var hp_add := float(s["hp"])
 		_core.hero["hp_max"] = float(_core.hero.get("hp_max", 1.0)) + hp_add
 		_core.hero["hp"] = float(_core.hero.get("hp", 0.0)) + hp_add
@@ -3826,9 +3888,11 @@ func _apply_hero_passive(eff: Dictionary) -> void:
 	var ep: Dictionary = eff.get("elem_pct", {})
 	pct += float(ep.get("物理", 0.0))
 	if pct != 0.0:
+		_core.attr_add_amp("atk", pct / 100.0)
 		_core.hero["atk"] = float(_core.hero["atk"]) * (1.0 + pct / 100.0)
 	# 攻速：直接抬 hero.aspd（核心的普攻间隔就是 1/aspd）
 	if eff.has("aspd_pct"):
+		_core.attr_add_amp("aspd", float(eff["aspd_pct"]) / 100.0)
 		_core.hero["aspd"] = minf(MAX_ASPD, float(_core.hero.get("aspd", 1.0)) * (1.0 + float(eff["aspd_pct"]) / 100.0))
 	# 多目标 / 追击 / 剑气：记下来，普攻时结算
 	for k in ["tgt_add", "chase", "qijian"]:
@@ -3856,9 +3920,12 @@ func _hero_extra_hits() -> void:
 		var tid := int(foes[0].get("_tid", -1))
 		if tid != _jpo_tid:
 			_jpo_tid = tid
+			if _jpo_stacks > 0:
+				_core.attr_add_amp("aspd", -0.06 * float(_jpo_stacks))
 			_jpo_stacks = 0
 		else:
 			_jpo_stacks += 1                      # 不设上限：只靠"换目标"重置
+			_core.attr_add_amp("aspd", 0.06)
 		_core.hero["aspd"] = minf(MAX_ASPD, _jpo_base_aspd * (1.0 + 0.06 * float(_jpo_stacks)))
 	if _hero_passive.is_empty():
 		return
@@ -4039,6 +4106,7 @@ func _tick_knock(dt: float) -> void:
 				o["_ky"] = d.y * RAM_KNOCK * pm2
 			# 滚山：每次反弹 → 气血上限固定 +8（占位，炫卡实装后打开）
 			if _ram_shiny:
+				_core.attr_add("hp", 8.0)
 				_core.hero["hp_max"] = float(_core.hero["hp_max"]) + 8.0
 				_core.hero["hp"] = float(_core.hero["hp"]) + 8.0
 			break
@@ -4066,6 +4134,7 @@ func _enable_gunshan() -> void:
 	_shiny_present("gunshan")
 
 func _gunshan_grow() -> void:
+	_core.attr_add("hp", GUNSHAN_HP)
 	_core.hero["hp_max"] = float(_core.hero["hp_max"]) + GUNSHAN_HP
 	_core.hero["hp"] = float(_core.hero["hp"]) + GUNSHAN_HP
 
@@ -4367,6 +4436,7 @@ var _shixi := false
 var _stone_layers := 0
 var _stone_acc := 0.0
 var _stone_def := 0.0
+var _stone_red_applied := 0.0
 var _stone_burst := 0
 var _shiyun := false
 
@@ -4377,8 +4447,15 @@ func _stone_per_def() -> float:
 func _apply_stone_def() -> void:
 	if _core == null:
 		return
-	_core.hero["def"] = _stone_def + float(_stone_layers) * _stone_per_def()
-	_core.hero["cut_extra"] = 0.25 if (_shiyun and _stone_layers > 0) else 0.0
+	var def_pts := _stone_def + float(_stone_layers) * _stone_per_def()
+	# v6：不再走 hero.def 数值减伤；1 点防御 = 3% 固定减免，石韵再加 25%
+	var red := def_pts * 0.03 + (0.25 if (_shiyun and _stone_layers > 0) else 0.0)
+	var delta := red - _stone_red_applied
+	if absf(delta) > 0.0001:
+		for t in _core.DMG_TYPES:
+			if t != "真实":
+				_core.type_add(t, "red_f", delta)
+		_stone_red_applied = red
 
 func _tick_stone(dt: float) -> void:
 	if not _shixi or _core == null:
