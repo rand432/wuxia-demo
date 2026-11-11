@@ -1069,6 +1069,31 @@ class CurioSquare extends Control:
 			draw_rect(Rect2(Vector2.ZERO, size), Color(0.02, 0.02, 0.02, 0.42))
 			draw_string(F, Vector2(0, 62), str(int(ceil(cd_left))), HORIZONTAL_ALIGNMENT_CENTER, size.x, 30, Color(0.94, 0.89, 0.78))
 
+# 奇遇圆钮：只在新奇遇掷到时出现，靠在主角左侧；上面浮着大红字「奇遇！」
+class QuestOrb extends Control:
+	const F := preload("res://fonts/ink.ttf")
+	signal pressed
+	func _ready() -> void:
+		mouse_filter = Control.MOUSE_FILTER_STOP
+	func _gui_input(ev: InputEvent) -> void:
+		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
+			pressed.emit()
+	func _draw() -> void:
+		var c := size * 0.5
+		var r := minf(size.x, size.y) * 0.5 - 3.0
+		draw_circle(c, r, Color(0.12, 0.09, 0.07, 0.96))
+		draw_arc(c, r, 0.0, TAU, 48, Color(0.80, 0.24, 0.18), 3.0)
+		draw_arc(c, r - 6.0, 0.0, TAU, 48, Color(0.85, 0.66, 0.23, 0.55), 1.5)
+		# 卷轴图标
+		var w := r * 1.0
+		var h := r * 0.66
+		var box := Rect2(c - Vector2(w * 0.5, h * 0.5), Vector2(w, h))
+		draw_rect(box, Color(0.88, 0.83, 0.70), true)
+		draw_rect(box, Color(0.28, 0.20, 0.10), false, 2.0)
+		for i in 3:
+			var yy := c.y - h * 0.22 + float(i) * h * 0.24
+			draw_line(Vector2(c.x - w * 0.30, yy), Vector2(c.x + w * 0.30, yy), Color(0.42, 0.32, 0.18), 1.6)
+
 class Tile extends Control:
 	const F := preload("res://fonts/ink.ttf")
 	signal pressed
@@ -5238,6 +5263,8 @@ var _q_bar: Panel = null
 var _q_lb: Label = null
 var _q_hit: Button = null
 var _q_pop: Control = null
+var _q_orb: QuestOrb = null
+var _q_orb_lb: Label = null
 var _q_ai_t := 0.0
 
 func _q_init() -> void:
@@ -5261,28 +5288,38 @@ func _q_init() -> void:
 	_q_bar.visible = false
 	_q_lb.visible = false
 	_q_hit.visible = false
+	# 待接受：主角左侧的圆钮 + 大红字「奇遇！」
+	_q_orb = QuestOrb.new()
+	_q_orb.position = Vector2(196, 706)
+	_q_orb.size = Vector2(92, 92)
+	_q_orb.visible = false
+	_q_orb.pressed.connect(_q_open_popup)
+	_q_layer.add_child(_q_orb)
+	_q_orb_lb = _lbl("奇遇！", Vector2(132, 644), Vector2(220, 56), 40, Color(0.82, 0.16, 0.10), _q_layer, HORIZONTAL_ALIGNMENT_CENTER)
+	_q_orb_lb.visible = false
 
 func _q_refresh() -> void:
-	var show_bar := not _q_cur.is_empty() or not _q_offer.is_empty()
-	_q_bar.visible = show_bar
-	_q_lb.visible = show_bar
-	_q_hit.visible = show_bar
-	if not show_bar:
+	var has_cur := not _q_cur.is_empty()
+	var has_offer := (not _q_offer.is_empty()) and _q_cur.is_empty()
+	# 进行中：血条下面那一条（不写提示，玩家自己点会出详情）
+	_q_bar.visible = has_cur
+	_q_lb.visible = has_cur
+	_q_hit.visible = has_cur
+	# 待接受：主角左侧的圆钮 + 大红字
+	if _q_orb != null:
+		_q_orb.visible = has_offer
+	if _q_orb_lb != null:
+		_q_orb_lb.visible = has_offer
+	if not has_cur:
 		return
-	if not _q_cur.is_empty():
-		var q: Dictionary = _q_cur
-		var s := "「%s」%s" % [str(q["n"]), str(q["desc"])]
-		if int(q.get("need", 0)) > 0:
-			s += "  %d/%d" % [int(q.get("prog", 0)), int(q["need"])]
-		if float(q.get("lim", 0.0)) > 0.0:
-			s += "  ·  %.0f 秒" % ceil(float(q["t"]))
-		s += "　　点开看详情"
-		_q_lb.text = s
-		_q_bar.add_theme_stylebox_override("panel", _q_style(Color(0.30, 0.24, 0.12), 2))
-	else:
-		var o: Dictionary = _q_offer
-		_q_lb.text = "「%s」%s · 奖 %d 灵晶　　点开：接受 / 放弃" % [str(o["n"]), str(o["desc"]), int(o.get("r", {}).get("crystal", 0))]
-		_q_bar.add_theme_stylebox_override("panel", _q_style(Color(0.85, 0.66, 0.23), 3))
+	var q: Dictionary = _q_cur
+	var s := "「%s」%s" % [str(q["n"]), str(q["desc"])]
+	if int(q.get("need", 0)) > 0:
+		s += "  %d/%d" % [int(q.get("prog", 0)), int(q["need"])]
+	if float(q.get("lim", 0.0)) > 0.0:
+		s += "  ·  %.0f 秒" % ceil(float(q["t"]))
+	_q_lb.text = s
+	_q_bar.add_theme_stylebox_override("panel", _q_style(Color(0.30, 0.24, 0.12), 2))
 
 func _q_style(border: Color, w: int) -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()
@@ -5374,8 +5411,9 @@ func _q_pull_queue() -> void:
 	_q_offer = _q_queue.pop_front()
 	_q_refresh()
 
-func _q_notify(text: String) -> void:
-	_toast(text)
+# 奇遇尽量不出声明：这里留空（奖励自己看数字变化）
+func _q_notify(_text: String) -> void:
+	pass
 
 func _q_finish(why: String) -> void:
 	if _q_cur.is_empty():
