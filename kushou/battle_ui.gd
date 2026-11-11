@@ -4286,6 +4286,8 @@ func _tick_burn(dt: float) -> void:
 			f["burn_acc"] = float(f["burn_acc"]) - 1.0
 			_core._apply_dmg(f, _burn_dps() * st, "火系")
 			_core._push_float(float(f["x"]), float(f["y"]) - 30.0, "烧", Color(0.88, 0.45, 0.20))
+			if randf() < 0.6:
+				_spawn_pfx("impacts/hit-spark", _core.position + Vector2(float(f["x"]), float(f["y"]) - 18.0), 0.55, "fire", 1.2)
 		f["burn_t"] = float(f.get("burn_t", 0.0)) - dt
 		if float(f["burn_t"]) <= 0.0 and not _burn_unlimited:
 			f["burn"] = maxf(0.0, st - 1.0)
@@ -4960,6 +4962,8 @@ func _tick_poison(dt: float) -> void:
 			var dmg := float(_core.hero.get("atk", 12.0)) * POISON_RATE * (1.0 + wood / 100.0) * st
 			_core._apply_dmg(f, dmg * _vuln_mul(f), "木系")
 			_core._push_float(float(f["x"]), float(f["y"]) - 34.0, "毒", Color(0.45, 0.80, 0.40))
+			if randf() < 0.6:
+				_spawn_pfx("impacts/hit-spark", _core.position + Vector2(float(f["x"]), float(f["y"]) - 18.0), 0.55, "poison", 1.2)
 		f["poison_t"] = float(f.get("poison_t", 0.0)) - dt
 		if float(f["poison_t"]) <= 0.0:
 			f["poison"] = maxf(0.0, st - 1.0)
