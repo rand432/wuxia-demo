@@ -210,7 +210,7 @@ const PFX2D := preload("res://addons/pixelfx/nodes/pixel_fx_2d.gd")
 var _pfx_root: Node2D = null      # pixelfx 特效层（命中/暴击等）
 var _pfx_count := 0
 var _last_combo := 0            # 连杀里程碑用（每 10 连炸一口）
-const PFX_MAX_LIVE := 26          # 同屏特效上限（超过就不再生，保丝滑）
+const PFX_MAX_LIVE := 20          # 同屏特效上限（超过就不再生，保丝滑）
 # 开局先把常用的几种烘好（BAKED 首次播放要烘，烘在开打前就不会卡第一下）
 # [effect, scale, palette, light, speed, hold秒]：hold = 让它播完整，把每一帧都烘进缓存
 const PFX_PREWARM := [
@@ -1605,7 +1605,7 @@ func _process(_delta: float) -> void:
 				if tk != null:
 					tk.play_down()
 					# 阵亡小爆点（割草感：每杀一只都有一口）
-					if randf() < 0.6:
+					if randf() < 0.35:
 						_spawn_pfx("impacts/blunt-hit", tk.position + Vector2(0, -8), 0.60, "dust", 1.1, 1.15)
 				_foe_tokens.erase(tid)
 
@@ -3580,27 +3580,30 @@ func _spawn_hit_fx(global_pos: Vector2, radius: float, dmg: int, hero_hit: bool,
 		_spawn_pfx("impacts/crit-hit", global_pos + Vector2(0, -8), 0.95, "gold", 1.9)
 	elif heavy:
 		_spawn_pfx("impacts/crit-hit", global_pos + Vector2(0, -8), 0.80, "", 1.4)
-	elif randf() < 0.55:
+	elif randf() < 0.40:
 		# 横扫一次打好几只时，普通命中不每只都放（保丝滑，观感也够）
 		_spawn_pfx("impacts/hit-spark", global_pos + Vector2(0, -6), 0.72, "", 1.0)
 
 # pixelfx：播一个特效，播完自毁
+# 用插件自带的 prebake 把每一帧都烘好（静态缓存，所有节点共享），
+# 这样第一次播放就不存在"边播边烘"造成的单帧尖峰。
 func _prewarm_pfx() -> void:
 	await get_tree().create_timer(0.35).timeout
 	if _pfx_root == null:
 		return
 	for it in PFX_PREWARM:
 		var e := str(it[0])
-		var s := float(it[1])
 		var pal := str(it[2])
 		var lig := float(it[3])
-		var spd := float(it[4]) if it.size() > 4 else 1.0
-		var fx = _spawn_pfx(e, Vector2(-4000, -4000), s, pal, lig, spd)
+		var tmp = PFX2D.new()
+		tmp.effect = e
+		tmp.light = lig
+		if pal != "":
+			tmp.palette_preset = pal
+		var opts: Dictionary = tmp.fx_options()
+		tmp.free()
+		PFX2D.prebake(e, opts, "")
 		await get_tree().process_frame
-		await get_tree().process_frame
-		# 便宜预热：播两帧就扔（完整烘焙太贵，会在开局拖帧）
-		if fx != null and is_instance_valid(fx):
-			fx.queue_free()
 
 func _spawn_pfx(effect: String, pos: Vector2, s := 1.0, pal := "", lig := 1.0, spd := 1.0, flip := false):
 	if _pfx_root == null or not ResourceLoader.exists("res://addons/pixelfx/nodes/pixel_fx_2d.gd"):
