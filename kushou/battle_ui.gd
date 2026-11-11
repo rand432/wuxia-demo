@@ -969,6 +969,8 @@ var _curio_kills := 0
 var _tie_stacks := 0           # 铁布衫：硬气层数
 var _tie_idle := 0.0           # 铁布衫：多久没挨打
 var _zhiren := 0               # 纸人替身：剩余数量
+var _draw_free := 0            # 万应符：免费抽卡刷新次数
+var _wanying_add := 0          # 万应符：每种刷新 +N
 
 func _curio_init_data() -> void:
 	_curio_id = GameState.curio_id
@@ -996,6 +998,7 @@ func _build_curio() -> void:
 	_curio_sq.cd_max = maxf(1.0, float(info.get("cd", 1.0)))
 	_curio_sq.pressed.connect(_show_curio_detail)
 	add_child(_curio_sq)
+	_curio_apply_static()
 
 func _curio_flash() -> void:
 	if _curio_sq != null:
@@ -1149,6 +1152,46 @@ func _curio_on_attack() -> void:
 	Aud.sfx("dart", -14.0, 1.1)
 	if float(best.get("hp", 0.0)) <= 0.0:
 		_core._kill_foe(best)
+
+# 规则类：进局时一次性应用（刷新次数 / 技能冷却）
+func _curio_apply_static() -> void:
+	if _curio_id == "wanyingfu":
+		var add := 1
+		if _curio_lv >= 2:
+			add = 2
+		if _curio_lv >= 4:
+			add = 3
+		_wanying_add = add
+		_trea_reroll += add
+		_aug_reroll += add
+		_god_reroll += add
+		_draw_free += add
+	elif _curio_id == "zhiren":
+		_zhiren = 1
+
+# 万应符 Lv5：25% 概率这次刷新不消耗次数
+func _rr_free() -> bool:
+	return _curio_id == "wanyingfu" and _curio_lv >= 5 and randf() < 0.25
+
+# 定风珠：技能冷却缩减
+func _curio_skill_cd_mul() -> float:
+	if _curio_id != "dingfengzhu":
+		return 1.0
+	if _curio_lv >= 4:
+		return 0.75
+	if _curio_lv >= 2:
+		return 0.80
+	return 0.85
+
+# 镇魂铃：奇遇刷新间隔
+func _q_interval() -> float:
+	var base := Q_TICK
+	if _curio_id == "zhenhunling":
+		if _curio_lv >= 4:
+			base = Q_TICK / 1.40
+		elif _curio_lv >= 1:
+			base = Q_TICK / 1.25
+	return base
 
 # ---------------- 召唤类奇物 ----------------
 func _curio_summon(tag: String, nm: String, col: Color, life: float, dmg_pct: float, boom: float, lc := 0.0) -> void:
@@ -1338,6 +1381,15 @@ func _curio_on_wave_clear(wave: int) -> void:
 		_toast("聚宝盆 · 文钱 +%d" % amt)
 		_curio_uses += 1
 		_curio_flash()
+	if _curio_id == "wanyingfu" and _curio_lv >= 3:
+		var which := randi() % 3
+		if which == 0:
+			_trea_reroll += 1
+		elif which == 1:
+			_aug_reroll += 1
+		else:
+			_god_reroll += 1
+		_toast("万应符 · 随机刷新 +1")
 	if _curio_id == "zhiren":
 		var cap_z := 3 if _curio_lv >= 2 else 2
 		var gain := 2 if _curio_lv >= 4 else 1
@@ -1835,11 +1887,18 @@ func _on_refresh() -> void:
 	if _pool.is_empty():
 		_toast("卡池已空，没法刷新")
 		return
-	if _crystal < 5:
-		_toast("灵晶不够：刷新要 5")
-		return
-	_crystal -= 5
-	_update_crystal()
+	var paid := true
+	if _draw_free > 0:
+		_draw_free -= 1
+		paid = false
+	elif _rr_free():
+		paid = false
+	if paid:
+		if _crystal < 5:
+			_toast("灵晶不够：刷新要 5")
+			return
+		_crystal -= 5
+		_update_crystal()
 	_draw_anim = true
 	for card in _draw_cards:
 		var tw := create_tween()
@@ -2641,7 +2700,8 @@ func _on_aug_refresh() -> void:
 	if _aug_reroll <= 0:
 		_toast("刷新次数用完了")
 		return
-	_aug_reroll -= 1
+	if not _rr_free():
+		_aug_reroll -= 1
 	_roll_aug()
 	_pop_aug_cards()
 	Aud.sfx("ui_click", -8.0)
@@ -3234,7 +3294,8 @@ func _on_trea_refresh() -> void:
 	if _trea_reroll <= 0:
 		_toast("刷新次数用完了")
 		return
-	_trea_reroll -= 1
+	if not _rr_free():
+		_trea_reroll -= 1
 	_roll_trea()
 	_pop_trea_cards()
 	Aud.sfx("ui_click", -8.0)
@@ -4535,10 +4596,18 @@ func _tick_skills(dt: float) -> void:
 		var sk: Dictionary = _skills[i]
 		if float(sk["cd_t"]) > 0.0:
 			sk["cd_t"] = maxf(0.0, float(sk["cd_t"]) - dt)
-		if float(sk["cd_t"]) <= 0.0 and _mp >= float(sk["mp"]):
+		var free_cast := _curio_id == "dingfengzhu" and _curio_lv >= 5 and randf() < 0.15
+		if float(sk["cd_t"]) <= 0.0 and (_mp >= float(sk["mp"]) or free_cast):
 			var cd_before := float(sk["cd_t"])
+			var mp_before := _mp
+			if free_cast:
+				_mp = _mp_max
 			_cast_skill(i)
 			if float(sk["cd_t"]) > cd_before + 0.01:
+				if free_cast:
+					_mp = mp_before
+				elif _curio_id == "dingfengzhu" and _curio_lv >= 3:
+					_mp = minf(_mp_max, _mp + float(sk["mp"]) * 0.5)
 				if i < _skill_slots.size():
 					_skill_slots[i].flash = 1.0
 				_skill_cast_juice()
@@ -4871,7 +4940,8 @@ func _on_god_refresh() -> void:
 	if _god_reroll <= 0:
 		_toast("刷新次数用完了")
 		return
-	_god_reroll -= 1
+	if not _rr_free():
+		_god_reroll -= 1
 	_roll_god()
 	Aud.sfx("ui_click", -10.0)
 
@@ -4896,6 +4966,7 @@ func _pick_god(aid: String) -> void:
 	var def: Dictionary = SKILL_DEFS.get(aid, {})
 	if not def.is_empty() and not _has_skill(aid):
 		var sk: Dictionary = def.duplicate()
+		sk["cd"] = float(sk["cd"]) * _curio_skill_cd_mul()   # 奇物·定风珠
 		sk["aid"] = aid
 		sk["cd_t"] = 0.0
 		sk["quality"] = int((AncestorData.ANCESTORS[aid] as Dictionary)["quality"])
@@ -6572,6 +6643,10 @@ func _q_finish(why: String) -> void:
 			_screen_flash(Color(1.0, 0.92, 0.62), 0.10, 0.22)
 			_core._shake = maxf(float(_core._shake), 4.0)
 			_cam_pulse(1.05, 0.42)
+			if _curio_id == "zhenhunling" and _curio_lv >= 5 and randf() < 0.30:
+				_trea_charge += 1
+				_refresh_trea_tile()
+				_toast("镇魂铃 · 额外宝物机会 +1")
 			_q_notify("奇遇完成 · %s" % str(q["n"]))
 			Aud.sfx("levelup", -6.0)
 			Aud.sfx("bell", -8.0, 1.05)
@@ -6604,10 +6679,13 @@ func _q_cleanup(q: Dictionary) -> void:
 
 func _q_reward(q: Dictionary) -> void:
 	var r: Dictionary = q.get("r", {})
+	var boost := 1.0
+	if _curio_id == "zhenhunling" and _curio_lv >= 2:
+		boost = 1.3
 	if r.has("crystal"):
-		_gain_crystal(int(r["crystal"]))
+		_gain_crystal(int(round(float(r["crystal"]) * boost)))
 	if r.has("wen"):
-		_add_wen(int(r["wen"]))
+		_add_wen(int(round(float(r["wen"]) * boost)))
 	if r.has("trea_rr"):
 		_trea_reroll += int(r["trea_rr"])
 	if r.has("aug_rr"):
@@ -6659,6 +6737,8 @@ func _q_roll() -> void:
 
 # 接受后：布置战场 + 倒计时从这里才开始
 func _q_activate(q: Dictionary) -> void:
+	if _curio_id == "zhenhunling" and _curio_lv >= 3:
+		q["need"] = maxi(1, int(round(float(q.get("need", 0)) * 0.8)))
 	q["prog"] = 0
 	q["t"] = float(q.get("lim", 0.0))
 	q["mark"] = int(_q_stats.get(str(q.get("key", "")), 0))
@@ -6730,7 +6810,7 @@ func _q_tick(dt: float) -> void:
 	if _run_over:
 		return
 	_q_t += dt
-	if _q_t >= Q_TICK:
+	if _q_t >= _q_interval():
 		_q_t = 0.0
 		_q_roll()
 	if _q_cur.is_empty():
