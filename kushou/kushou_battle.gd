@@ -379,6 +379,8 @@ var kills_total := 0
 var boss_alive := false
 
 var _spawn_t := 0.6
+var _spawn_left := 0                 # 本批还剩几只没放出来
+var _spawn_gap := 0.0                # 下一只的间隔计时
 var _hero_cd := 0.0
 # 主角出手：先起手（表现层同步挥剑），到兵器接触点才结算伤害
 const HERO_ATTACK_TIME := 0.95     # v6 原为 1.8；割草手感（可一行还原）
@@ -494,6 +496,8 @@ func start_run() -> void:
 	intro_wait = INTRO_WAIT
 	# 原来开局沿用默认定额 8（_last_quota_wave 初值等于 wave，自动换波检测不触发）
 	_last_quota_wave = -1
+	_spawn_left = 0
+	_spawn_gap = 0.0
 	wave_reset_quota()
 
 # 距离→速度：远了提速追、近了慢下来（用户："走近了就慢、远了才快"）
@@ -879,13 +883,18 @@ func _process(delta: float) -> void:
 	if _spawn_t <= 0.0:
 		_spawn_t = SPAWN_EVERY_LATE if wave >= 10 else SPAWN_EVERY
 		# v17x：这一波只刷定额那么多（刷完就等玩家清场，然后提前进下一波）
-		if _wave_spawned < _wave_quota:
-			# 割草：**成批涌出**（一次 3 只），比一只一只刷更容易被横扫/技能一起吃
-			for _k in SPAWN_PACK:
-				if _wave_spawned >= _wave_quota:
-					break
-				_spawn_foe()
-				_wave_spawned += 1
+		if _wave_spawned + _spawn_left < _wave_quota:
+			# 割草：成批涌出（一波最多 SPAWN_PACK 只），但**错开 0.12 秒一只**
+			# —— 视觉上仍是一群，却不会同一帧建 4 个令牌造成尖峰
+			_spawn_left = mini(SPAWN_PACK, _wave_quota - _wave_spawned - _spawn_left)
+			_spawn_gap = 0.0
+	if _spawn_left > 0:
+		_spawn_gap -= delta
+		if _spawn_gap <= 0.0:
+			_spawn_gap = 0.12
+			_spawn_foe()
+			_wave_spawned += 1
+			_spawn_left -= 1
 	_hero_cd -= delta
 	if _hero_pending_t > 0.0:
 		_hero_pending_t -= delta

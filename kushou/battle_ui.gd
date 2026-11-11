@@ -1345,9 +1345,10 @@ func _show_draw(v: bool) -> void:
 			_update_crystal()
 			_roll_draw()
 			_draw_paid = true
-		_draw_layer.visible = true
-		_draw_layer.move_to_front()
-		_pop_draw_cards()
+			_draw_layer.visible = true
+			_layer_in(_draw_layer)
+			_draw_layer.move_to_front()
+			_pop_draw_cards()
 	else:
 		_draw_layer.visible = false
 		_draw_open = false
@@ -2363,6 +2364,7 @@ func _open_trea() -> void:
 	if _str_layer != null:
 		_str_layer.visible = false
 	_trea_layer.visible = true
+	_layer_in(_trea_layer)
 	_trea_layer.move_to_front()
 	_pop_trea_cards()
 	Aud.sfx("ui_open", -8.0)
@@ -2742,11 +2744,24 @@ func _on_trea_abandon() -> void:
 	Aud.sfx("ui_back", -8.0)
 
 # 顶栏［总计］：打开总计页（顶部三个分类钮：卡组 / 宝物 / 组合）
+# 整层入场：淡入 + 从 0.965 弹回（比"啪地出现"顺滑）
+func _layer_in(c) -> void:
+	if c == null:
+		return
+	c.pivot_offset = Vector2(360, 640)
+	c.scale = Vector2(0.965, 0.965)
+	c.modulate.a = 0.0
+	var tw := create_tween().bind_node(c)
+	tw.set_parallel(true)
+	tw.tween_property(c, "modulate:a", 1.0, 0.15)
+	tw.tween_property(c, "scale", Vector2.ONE, 0.24).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
 func _show_totals() -> void:
 	if _combined_layer == null:
 		return
 	_combined_layer.visible = true
 	_combined_layer.move_to_front()
+	_layer_in(_combined_layer)
 	_set_tot_tab(_tot_tab)
 
 func _set_tot_tab(k: String) -> void:
@@ -4179,6 +4194,7 @@ func _show_god_pick() -> void:
 		_god_refresh_btn.text = "刷新 · %d 次" % maxi(0, _god_reroll)
 		_god_refresh_btn.disabled = _god_reroll <= 0
 	_god_layer.visible = true
+	_layer_in(_god_layer)
 	_god_layer.move_to_front()
 
 # 掷这一手（二选一）
