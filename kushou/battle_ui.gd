@@ -213,6 +213,8 @@ var _fly_layer = null           # 资源飞行层
 var _fly: Array = []
 var _pulses: Dictionary = {}   # 资源格被加钱时的缩放脉冲
 var _boss_bar = null           # 首领血条
+var _foe_pool: Array = []      # 怪物牌对象池（省掉每只都建 Shader/节点的开销）
+var _recycle_q: Array = []     # 阵亡动画播完再回收
 var _boss_bar_t := 0.0
 var _last_combo := 0            # 连杀里程碑用（每 10 连炸一口）
 const PFX_MAX_LIVE := 20          # 同屏特效上限（超过就不再生，保丝滑）
@@ -1612,6 +1614,22 @@ func _process(_delta: float) -> void:
 		_tick_curio(_delta)
 		_tick_fly(_delta)
 		_tick_pulses(_delta)
+		if not _recycle_q.is_empty():
+			for i in range(_recycle_q.size() - 1, -1, -1):
+				var it: Array = _recycle_q[i]
+				var tkq = it[0]
+				if not is_instance_valid(tkq):
+					_recycle_q.remove_at(i)
+					continue
+				it[1] = float(it[1]) - _delta
+				if float(it[1]) <= 0.0:
+					tkq.reset_pose()
+					tkq.visible = false
+					if _foe_pool.size() < 40:
+						_foe_pool.append(tkq)
+					else:
+						tkq.queue_free()
+					_recycle_q.remove_at(i)
 		if _boss_bar != null:
 			var bf: Dictionary = _core._boss_foe() if _core != null else {}
 			if bf.is_empty():
@@ -1680,6 +1698,7 @@ func _process(_delta: float) -> void:
 				var tk = _foe_tokens[tid]
 				if tk != null:
 					tk.play_down()
+					_recycle_q.append([tk, 1.10])
 					# 阵亡小爆点（割草感：每杀一只都有一口）
 					if randf() < 0.35:
 						_spawn_pfx("impacts/blunt-hit", tk.position + Vector2(0, -8), 0.60, "dust", 1.1, 1.15)
@@ -2966,6 +2985,28 @@ func _make_foe_token(f: Dictionary):
 		ring = Color(0.35, 0.55, 0.75)
 	elif boss:
 		ring = Color(0.68, 0.18, 0.14)
+	var mark_ch := "王" if boss else ("钱" if kind == "coin" else ("晶" if kind == "crystal" else "怪"))
+	var msize := 22 if not boss else 28
+	# 池里有就复用（TokenActor 每建一个都要 new Shader/ShaderMaterial，很贵）
+	if not _foe_pool.is_empty():
+		var tk0 = _foe_pool.pop_back()
+		tk0.reset_pose()
+		tk0.setup(null, rad, ring, false)
+		if is_instance_valid(tk0._sprite):
+			tk0._sprite.position = Vector2(0.0, -rad)
+		tk0.show_bar = true
+		tk0.bar_w = 84.0 if boss else 54.0
+		tk0.unit_name = str(f.get("name", ""))
+		tk0.position = _core.position + Vector2(float(f["x"]), float(f["y"]))
+		tk0.visible = true
+		var mk: Label = tk0.get_meta("mark", null)
+		if mk != null:
+			mk.text = mark_ch
+			mk.position = Vector2(-rad, -rad * 2.0 + 6.0)
+			mk.size = Vector2(rad * 2.0, rad * 1.5)
+			mk.add_theme_font_size_override("font_size", msize)
+		tk0.queue_redraw()
+		return tk0
 	var tk = TokenActor.new()
 	tk.setup(null, rad, ring, false)
 	tk.show_bar = true
@@ -2975,16 +3016,17 @@ func _make_foe_token(f: Dictionary):
 	tk.position = _core.position + Vector2(float(f["x"]), float(f["y"]))
 	add_child(tk)
 	var mark := Label.new()
-	mark.text = "王" if boss else ("钱" if kind == "coin" else ("晶" if kind == "crystal" else "怪"))
+	mark.text = mark_ch
 	mark.position = Vector2(-rad, -rad * 2.0 + 6.0)
 	mark.size = Vector2(rad * 2.0, rad * 1.5)
 	mark.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	mark.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	mark.add_theme_font_override("font", FONT)
-	mark.add_theme_font_size_override("font_size", 22 if not boss else 28)
+	mark.add_theme_font_size_override("font_size", msize)
 	mark.add_theme_color_override("font_color", Color(0.30, 0.24, 0.16))
 	mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	tk.add_child(mark)
+	tk.set_meta("mark", mark)
 	return tk
 
 # ---------------- 卡池 / 组合 ----------------
