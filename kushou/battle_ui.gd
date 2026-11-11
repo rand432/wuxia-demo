@@ -217,6 +217,8 @@ var _foe_pool: Array = []      # 怪物牌对象池（省掉每只都建 Shader/
 var _recycle_q: Array = []     # 阵亡动画播完再回收
 var _boss_bar_t := 0.0
 var _boss_on := false          # 首领在场时特效降档（首领战场景本来就重）
+var _late_baked := false       # 稀有特效是否已烘焙
+var _baked_keys: Dictionary = {}   # 已烘过的 (effect|palette|light)
 var _last_combo := 0            # 连杀里程碑用（每 10 连炸一口）
 const PFX_MAX_LIVE := 20          # 同屏特效上限（超过就不再生，保丝滑）
 # 开局先把常用的几种烘好（BAKED 首次播放要烘，烘在开打前就不会卡第一下）
@@ -240,23 +242,27 @@ const PFX_PREWARM := [
 	["lightning/zap-hit", 0.95, "volt", 1.30, 1.0, 0.70],
 	["nature/leaf-storm", 0.85, "leaf", 1.30, 1.0, 1.20],
 	["shadow/soul-drain", 0.80, "", 1.30, 1.0, 1.00],
-	# —— 其余所有实际用到的变体（不漏任何一个，否则第一次播会卡一下）——
-	["impacts/ground-slam", 0.95, "shadow", 1.5, 1.0, 0.90],
-	["holy/heal", 0.85, "heal", 1.5, 1.0, 0.90],
-	["holy/sunburst", 1.05, "gold", 1.9, 1.0, 1.10],
-	["holy/sunburst", 1.25, "holy", 2.1, 1.0, 1.10],
-	["holy/sunburst", 1.9, "holy", 1.8, 1.0, 1.10],
-	["shadow/dark-explosion", 1.25, "blood", 1.7, 1.0, 1.40],
+	# 首领登场（每场只用一次，但绝不能卡在首领出场那一刻）
 	["shadow/dark-explosion", 1.7, "shadow", 1.9, 1.0, 1.40],
-	["shadow/dark-explosion", 1.9, "shadow", 1.8, 1.0, 1.40],
-	["arcane/spell-charge", 0.90, "arcane", 1.4, 1.0, 0.90],
-	["arcane/rune-circle", 1.0, "arcane", 1.4, 1.0, 1.00],
-	["holy/halo", 0.95, "gold", 1.5, 1.0, 0.90],
-	["holy/halo", 1.05, "holy", 1.5, 1.0, 0.90],
-	["holy/halo", 0.80, "heal", 1.2, 1.0, 0.90],
-	["holy/feather-burst", 1.0, "gold", 1.7, 1.0, 1.00],
-	["impacts/hit-spark", 0.55, "fire", 1.2, 1.0, 0.60],
-	["impacts/hit-spark", 0.55, "poison", 1.2, 1.0, 0.60],
+]
+
+# 稀有变体：不在开局烘（每个要 ~0.2 秒），等对应面板打开时再烘
+const PFX_LATE := [
+	["impacts/ground-slam", 0.95, "shadow", 1.5],
+	["holy/heal", 0.85, "heal", 1.5],
+	["holy/sunburst", 1.05, "gold", 1.9],
+	["holy/sunburst", 1.25, "holy", 2.1],
+	["holy/sunburst", 1.9, "holy", 1.8],
+	["shadow/dark-explosion", 1.25, "blood", 1.7],
+	["shadow/dark-explosion", 1.9, "shadow", 1.8],
+	["arcane/spell-charge", 0.90, "arcane", 1.4],
+	["arcane/rune-circle", 1.0, "arcane", 1.4],
+	["holy/halo", 0.95, "gold", 1.5],
+	["holy/halo", 1.05, "holy", 1.5],
+	["holy/halo", 0.80, "heal", 1.2],
+	["holy/feather-burst", 1.0, "gold", 1.7],
+	["impacts/hit-spark", 0.55, "fire", 1.2],
+	["impacts/hit-spark", 0.55, "poison", 1.2],
 ]
 var _curio_sq = null             # 奇物方块（战场右下，与挑战对称）
 var _curio_cd := 0.0             # 奇物冷却剩余
@@ -2792,6 +2798,7 @@ func _on_trea_abandon() -> void:
 func _layer_in(c) -> void:
 	if c == null:
 		return
+	_prebake_late.call_deferred()      # 稀有特效趁面板打开时烘（卡顿藏在动画里）
 	c.pivot_offset = Vector2(360, 640)
 	c.scale = Vector2(0.965, 0.965)
 	c.modulate.a = 0.0
@@ -3815,11 +3822,38 @@ func _spawn_hit_fx(global_pos: Vector2, radius: float, dmg: int, hero_hit: bool,
 # pixelfx：播一个特效，播完自毁
 # 用插件自带的 prebake 把每一帧都烘好（静态缓存，所有节点共享），
 # 这样第一次播放就不存在"边播边烘"造成的单帧尖峰。
+# ⚠ 每个变体要 0.1~0.25 秒，所以只烘"每场必用"的那几个；稀有的等面板打开时再补。
 func _prewarm_pfx() -> void:
 	await get_tree().create_timer(0.35).timeout
 	if _pfx_root == null:
 		return
-	for it in PFX_PREWARM:
+	await _prebake_list(PFX_PREWARM)
+
+func _prebake_late() -> void:
+	if _pfx_root == null or _late_baked:
+		return
+	_late_baked = true
+	await _prebake_list(PFX_LATE)
+
+func _pfx_baked_key(effect: String, pal: String, lig: float) -> String:
+	return effect + "|" + pal + "|" + str(snappedf(lig, 0.01))
+
+func _prebake_one(effect: String, pal: String, lig: float) -> void:
+	var k := _pfx_baked_key(effect, pal, lig)
+	if _baked_keys.has(k):
+		return
+	_baked_keys[k] = true
+	var tmp = PFX2D.new()
+	tmp.effect = effect
+	tmp.light = lig
+	if pal != "":
+		tmp.palette_preset = pal
+	var opts: Dictionary = tmp.fx_options()
+	tmp.free()
+	PFX2D.prebake(effect, opts, "")
+
+func _prebake_list(entries: Array) -> void:
+	for it in entries:
 		var e := str(it[0])
 		var pal := str(it[2])
 		var lig := float(it[3])
@@ -3831,11 +3865,15 @@ func _prewarm_pfx() -> void:
 		var opts: Dictionary = tmp.fx_options()
 		tmp.free()
 		PFX2D.prebake(e, opts, "")
+		_baked_keys[_pfx_baked_key(e, pal, lig)] = true
 		await get_tree().process_frame
 
 func _spawn_pfx(effect: String, pos: Vector2, s := 1.0, pal := "", lig := 1.0, spd := 1.0, flip := false):
 	if _pfx_root == null or not ResourceLoader.exists("res://addons/pixelfx/nodes/pixel_fx_2d.gd"):
 		return null
+	# 没烘过的变体：先同步烘一次（否则边播边烘会连卡好几秒）
+	if not _baked_keys.has(_pfx_baked_key(effect, pal, lig)):
+		_prebake_one(effect, pal, lig)
 	if _pfx_root.get_child_count() >= PFX_MAX_LIVE:
 		return null
 	var fx = PFX2D.new()
