@@ -5252,12 +5252,13 @@ func _q_init() -> void:
 	_q_banner = _lbl("", Vector2(8, 7), Vector2(676, 26), 16, Color(0.98, 0.90, 0.78), _q_banner_box, HORIZONTAL_ALIGNMENT_CENTER)
 	for i in Q_MAX:
 		var y := 556.0 + float(i) * 56.0
-		_panel(Rect2(8, y, 366, 48), Color(0.10, 0.09, 0.08, 0.86), 6, Color(0.85, 0.66, 0.23, 0.55), 1, _q_layer)
+		var pnl := _panel(Rect2(8, y, 366, 48), Color(0.10, 0.09, 0.08, 0.86), 6, Color(0.85, 0.66, 0.23, 0.55), 1, _q_layer)
 		var lb := _lbl("", Vector2(16, y + 12), Vector2(268, 24), 15, Color(0.95, 0.90, 0.80), _q_layer)
 		var idx := i
 		var btn := _btn("放弃", Rect2(292, y + 8, 72, 32), 15, Color(0.42, 0.16, 0.12),
 			Color(0.98, 0.92, 0.82), func() -> void: _q_giveup_at(idx), _q_layer)
-		_q_rows.append({"lb": lb, "btn": btn})
+		_q_rows.append({"lb": lb, "btn": btn, "panel": pnl})
+		pnl.visible = false
 		lb.visible = false
 		btn.visible = false
 
@@ -5329,6 +5330,8 @@ func _q_refresh() -> void:
 		var row: Dictionary = _q_rows[i]
 		var lb: Label = row["lb"]
 		var btn: Button = row["btn"]
+		var pnl: Panel = row["panel"]
+		pnl.visible = i < _quests.size()
 		if i < _quests.size():
 			var q: Dictionary = _quests[i]
 			var s := "「%s」%s" % [str(q["n"]), str(q["desc"])]
