@@ -159,7 +159,7 @@ const FOE_STOP := 150.0             # 怪走到离主角多近就停下开打
 var kill_heal := 0.08               # 击杀回血 = 上限的 8%（v18j 定值：见交接文档 §3.6 的实测表）
 var WAVE_HP := 1.08                 # 每波怪血 ×（v18j：1.14 → 1.08，实测同一套续航下 1-1 能多撑 2 波）
 var WAVE_ATK := 1.08                # 每波怪攻 ×
-const BASE_FOE_HP := 20.0           # v16x 原为 34；割草：小怪两刀死（可一行还原）
+const BASE_FOE_HP := 10.0           # v16x 原为 34；割草：前几波一刀一只（可一行还原）
 var BASE_FOE_ATK := 3.8              # v6：删闪避后怪必中，怪攻 4.5→3.8 补偿　·　v17c（用户："调整怪伤害略微增加"）：4.0 -> 4.5　·　v18j 改 var：调参口
 const FOE_ASPD := 0.6               # 怪每秒打几下
 const FOE_SPD := 74.0               # 怪往下走的速度（像素/秒）
@@ -384,7 +384,7 @@ var _spawn_left := 0                 # 本批还剩几只没放出来
 var _spawn_gap := 0.0                # 下一只的间隔计时
 var _hero_cd := 0.0
 # 主角出手：先起手（表现层同步挥剑），到兵器接触点才结算伤害
-const HERO_ATTACK_TIME := 0.95     # v6 原为 1.8；割草手感（可一行还原）
+const HERO_ATTACK_TIME := 0.60     # v6 原为 1.8；割草手感（可一行还原）
 const HERO_DODGE := 0.0            # v6：闪避下线，恒 0（留个手柄，要回滚把它改回 0.05）
 const HERO_WINDUP := 0.18
 var _hero_pending: Dictionary = {}
@@ -2671,8 +2671,8 @@ func aspd_mul() -> float:
 #   溅射从"同时打 N 个"改成"**按范围**打"——每级把横扫半径撑大，
 #   命中点周围 R 以内的敌人**全都被扫到**（不必再数目标数，玩家看得见圈在变大）。
 #   R = 84 ＋ 26×(等级−1)：Lv1 84 → Lv5 188（战场上差不多是半个横排）。
-const SPLASH_BASE_R := 72.0        # 基础横扫半径（没学溅射也有；割草地基，改 0 即还原单体）
-const SPLASH_BASE_MUL := 0.55      # 基础横扫对旁怪的伤害倍率
+const SPLASH_BASE_R := 96.0        # 基础横扫半径（没学溅射也有；割草地基，改 0 即还原单体）
+const SPLASH_BASE_MUL := 0.65      # 基础横扫对旁怪的伤害倍率
 
 func splash_radius() -> float:
 	var lv := int(skill["splash"])
