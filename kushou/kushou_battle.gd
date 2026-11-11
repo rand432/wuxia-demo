@@ -80,6 +80,9 @@ func _apply_dmg(f: Dictionary, amount: float, dtype: String) -> float:
 	# v13d P3：石像在，怪少挨 20%
 	if float(f.get("buff", 0.0)) > 0.0:
 		final *= STATUE_CUT
+	# 奇物·寒玉扳指：被冻结的目标受到伤害提高
+	if float(f.get("cold_dmg", 0.0)) > 0.0 and float(f.get("para", 0.0)) > 0.0:
+		final *= 1.0 + float(f["cold_dmg"])
 	f["hp"] = float(f["hp"]) - final
 	# v15w 杏林医女「回春针」：吸血窗口内，按伤害的百分比回血
 	if float(hero.get("lifesteal_t", 0.0)) > 0.0 and float(hero["hp"]) > 0.0:
@@ -1046,7 +1049,7 @@ func _process(delta: float) -> void:
 			var combo_aspd := 0.0
 			if float(hero.get("mech_comboaspd", 0.0)) > 0.0:
 				combo_aspd = minf(0.50, float(_combo) / 10.0 * float(hero["mech_comboaspd"]))
-			_hero_cd = HERO_ATTACK_TIME / maxf(0.2, float(hero["aspd"]) * aspd_mul() * (1.0 + combo_aspd))
+			_hero_cd = HERO_ATTACK_TIME / maxf(0.2, float(hero["aspd"]) * aspd_mul() * (1.0 + combo_aspd) * (1.0 + float(hero.get("curio_aspd", 0.0))))
 			_hero_pending = tgt
 			_hero_pending_t = HERO_WINDUP
 			hero_attack.emit()
@@ -1242,7 +1245,7 @@ func _process(delta: float) -> void:
 				if randf() < HERO_DODGE:                              # v6：闪避下线 → 永不进这个分支
 					_push_float(size.x * 0.5, size.y - HERO_LINE - 40.0, "闪", Color(0.60, 0.80, 0.90))
 				else:
-					d2 = maxf(1.0, d2 * (1.0 - float(hero["cut"])))
+					d2 = maxf(1.0, d2 * (1.0 - float(hero["cut"]) - float(hero.get("curio_cut", 0.0))))
 					# v4o：先扣护盾（法度·怒目金刚），盾破了才动血
 					d2 = _absorb_by_shield(d2)
 					hero["hp"] = float(hero["hp"]) - d2
@@ -1615,7 +1618,7 @@ func _boss_foe() -> Dictionary:
 # 一次出手：算伤害（含技能加成/暴击/重击）→ 打中 → 横扫（溅射）→ 命中后弹剑气 → 手感特效
 func _hero_strike(tgt: Dictionary) -> void:
 	# v14b 燕无归「鹰眼」：持续期内暴击 +25%
-	var crit_rate := float(hero["crit"])
+	var crit_rate := float(hero["crit"]) + float(hero.get("curio_crit", 0.0))
 	if p_active("yanwugui"):
 		crit_rate += 0.25 + 0.05 * float(partners["yanwugui"].get("crit_lv", 0))
 	var crit := randf() < crit_rate

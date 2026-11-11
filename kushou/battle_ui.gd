@@ -966,6 +966,8 @@ var _curio_atk_t := 0.0        # 血葫芦：剩余持续
 var _curio_atk_add := 0.0      # 血葫芦：攻击加成
 var _curio_extra_used := false # 玉壶 Lv5：濒死额外一次
 var _curio_kills := 0
+var _tie_stacks := 0           # 铁布衫：硬气层数
+var _tie_idle := 0.0           # 铁布衫：多久没挨打
 
 func _curio_init_data() -> void:
 	_curio_id = GameState.curio_id
@@ -1016,6 +1018,8 @@ func _tick_curio(dt: float) -> void:
 		_curio_atk_t = maxf(0.0, _curio_atk_t - dt)
 		if _curio_atk_t <= 0.0:
 			_curio_atk_add = 0.0
+			_core.hero["curio_aspd"] = 0.0
+			_core.hero["curio_crit"] = 0.0
 	_core.hero["curio_atk"] = _curio_atk_add if _curio_atk_t > 0.0 else 0.0
 	match _curio_id:
 		"yuhu":
@@ -1024,6 +1028,12 @@ func _tick_curio(dt: float) -> void:
 			_curio_tick_xuehulu()
 		"jingtangmu":
 			_curio_tick_jingtangmu()
+		"zuiweng":
+			_curio_tick_zuiweng(dt)
+		"tiebushan":
+			_curio_tick_tiebushan(dt)
+		"hanyu":
+			_curio_tick_hanyu(dt)
 
 func _curio_tick_yuhu() -> void:
 	if _curio_cd > 0.0:
@@ -1134,6 +1144,103 @@ func _curio_on_attack() -> void:
 	Aud.sfx("dart", -14.0, 1.1)
 	if float(best.get("hp", 0.0)) <= 0.0:
 		_core._kill_foe(best)
+
+# 醉翁壶：击杀累计（每 10 只进入醉）
+func _curio_on_kill(n: int) -> void:
+	if _curio_id != "zuiweng" or _core == null:
+		return
+	_curio_kills += n
+	while _curio_kills >= 10:
+		_curio_kills -= 10
+		_curio_zui_start()
+
+func _curio_zui_start() -> void:
+	_curio_atk_add = 0.45 if _curio_lv >= 4 else 0.30
+	_curio_atk_t = 10.0 if _curio_lv >= 2 else 8.0
+	_core.hero["curio_aspd"] = 0.10
+	if _curio_lv >= 3:
+		_core.hero["curio_crit"] = 0.10
+	_curio_uses += 1
+	_curio_flash()
+	_toast("醉翁壶 · 醉意上涌")
+	Aud.sfx("drink", -10.0, 0.95)
+	_spawn_pfx("impacts/crit-hit", _hero_screen(), 0.8, "", 1.4)
+
+# 醉翁壶：这里只管 buff 到期清空
+func _curio_tick_zuiweng(_dt: float) -> void:
+	pass
+
+# 铁布衫：5 秒不挨打清空层数
+func _curio_tick_tiebushan(dt: float) -> void:
+	if _tie_stacks <= 0:
+		return
+	_tie_idle += dt
+	if _tie_idle >= 5.0:
+		_tie_stacks = 0
+		_core.hero["curio_cut"] = 0.0
+
+# 寒玉扳指：寒层计时衰减
+func _curio_tick_hanyu(dt: float) -> void:
+	for f_v in _core.foes:
+		var f: Dictionary = f_v
+		if float(f.get("cold_t", 0.0)) > 0.0:
+			f["cold_t"] = maxf(0.0, float(f["cold_t"]) - dt)
+			if float(f["cold_t"]) <= 0.0:
+				f["cold"] = 0
+				f["cold_dmg"] = 0.0
+
+# 铁布衫：受击叠层 + 满层反弹
+func _curio_on_hero_hurt() -> void:
+	if _curio_id != "tiebushan" or _core == null:
+		return
+	var cap := 8 if _curio_lv >= 2 else 5
+	_tie_stacks = mini(cap, _tie_stacks + 1)
+	_tie_idle = 0.0
+	var per := 0.03 if _curio_lv >= 4 else 0.02
+	_core.hero["curio_cut"] = float(_tie_stacks) * per
+	if _curio_lv >= 3 and _tie_stacks >= cap:
+		var live: Array = _live_foes()
+		if live.is_empty():
+			return
+		var f: Dictionary = live[0]
+		_core._apply_dmg(f, float(_core.hero.get("atk", 12.0)) * 0.30, "物理")
+		_spawn_pfx("impacts/hit-spark", _core.position + Vector2(float(f["x"]), float(f["y"]) - 18.0), 0.72, "", 1.0)
+		if float(f.get("hp", 0.0)) <= 0.0:
+			_core._kill_foe(f)
+
+# 寒玉扳指：暴击叠寒、3 层冻结；醉翁壶 Lv5：暴击延长醉
+func _curio_on_crit(tgt: Dictionary) -> void:
+	if _core == null:
+		return
+	if _curio_id == "zuiweng" and _curio_lv >= 5 and _curio_atk_t > 0.0:
+		_curio_atk_t = minf(_curio_atk_t + 1.0, 15.0)
+	if _curio_id != "hanyu":
+		return
+	var c := int(tgt.get("cold", 0)) + 1
+	tgt["cold"] = c
+	tgt["cold_t"] = 3.0
+	tgt["slow_t"] = maxf(float(tgt.get("slow_t", 0.0)), 3.0)
+	if c < 3:
+		return
+	tgt["cold"] = 0
+	tgt["para"] = maxf(float(tgt.get("para", 0.0)), 0.8)
+	if _curio_lv >= 3:
+		tgt["cold_dmg"] = 0.25
+	_curio_uses += 1
+	_curio_flash()
+	_spawn_pfx("impacts/crit-hit", _core.position + Vector2(float(tgt["x"]), float(tgt["y"]) - 16.0), 0.8, "", 1.4)
+	Aud.sfx("bell", -12.0, 1.3)
+	if _curio_lv >= 5:
+		var at := Vector2(float(tgt["x"]), float(tgt["y"]))
+		for o_v in _core.foes.duplicate():
+			var o: Dictionary = o_v
+			if o == tgt or float(o.get("hp", 0.0)) <= 0.0:
+				continue
+			if at.distance_to(Vector2(float(o["x"]), float(o["y"]))) > 70.0:
+				continue
+			_core._apply_dmg(o, float(_core.hero.get("atk", 12.0)) * 0.6, "物理")
+			if float(o.get("hp", 0.0)) <= 0.0:
+				_core._kill_foe(o)
 
 # 清波结算：聚宝盆 / 续命灯
 func _curio_on_wave_clear(wave: int) -> void:
@@ -1988,6 +2095,7 @@ func _process(_delta: float) -> void:
 				_foe_tokens.erase(tid)
 
 func _on_core_kill(n: int) -> void:
+	_curio_on_kill(n)                        # 奇物：醉翁壶（击杀累计）
 	# v15 经验线：杀 1 只按 1+x% 只算（经验与所有按击杀成长的机制一起吃）
 	var kn := int(round(float(n) * (1.0 + _killnum_pct / 100.0)))
 	if kn < n:
@@ -4238,12 +4346,15 @@ func _on_hero_attack() -> void:
 		_trigger_combos("每 10 次攻击")
 
 func _on_hero_hit() -> void:
+	_curio_on_hero_hurt()                    # 奇物：铁布衫（受击叠层）
 	_play_attack_fx(false)
 	_hit_count += 1
 	_trigger_combos("每次受击")
 	_stone_on_hit()
 
 func _on_hero_foe_hit(tgt: Dictionary, dmg: float, crit: bool, heavy: bool) -> void:
+	if crit:
+		_curio_on_crit(tgt)                  # 奇物：寒玉扳指 / 醉翁壶
 	if _fx_front == null:
 		return
 	var tk = _foe_tokens.get(int(tgt.get("_tid", 0)))
