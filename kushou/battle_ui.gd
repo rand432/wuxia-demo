@@ -3710,7 +3710,10 @@ func _tick_skills(dt: float) -> void:
 		if float(sk["cd_t"]) > 0.0:
 			sk["cd_t"] = maxf(0.0, float(sk["cd_t"]) - dt)
 		if float(sk["cd_t"]) <= 0.0 and _mp >= float(sk["mp"]):
+			var cd_before := float(sk["cd_t"])
 			_cast_skill(i)
+			if float(sk["cd_t"]) > cd_before + 0.01 and i < _skill_slots.size():
+				_skill_slots[i].flash = 1.0
 	for i in _skill_slots.size():
 		var s = _skill_slots[i]
 		if i < _skills.size():
@@ -3721,6 +3724,8 @@ func _tick_skills(dt: float) -> void:
 			s.cd_left = float(sk2["cd_t"])
 			s.cd_max = maxf(0.01, float(sk2["cd"]))
 			s.mp_cost = int(sk2["mp"])
+			if s.flash > 0.0:
+				s.flash = maxf(0.0, s.flash - dt * 2.2)
 			s.queue_redraw()
 		else:
 			s.visible = false
@@ -4083,6 +4088,7 @@ class SkillSlot extends Control:
 	var cd_left := 0.0
 	var cd_max := 1.0
 	var mp_cost := 0
+	var flash := 0.0          # 刚放完技能：一圈金色扩散
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
 	func _draw() -> void:
@@ -4098,6 +4104,11 @@ class SkillSlot extends Control:
 		if skill_name.length() > 0:
 			ch = skill_name.substr(1 if skill_name.length() > 1 else 0, 1)
 		draw_string(F, Vector2(0, c.y + 8), ch, HORIZONTAL_ALIGNMENT_CENTER, size.x, 22, Color(0.20, 0.16, 0.11))
+		if flash > 0.0:
+			var k := 1.0 - flash
+			var rr := size.x * (0.5 + 0.45 * k)
+			draw_arc(c, rr, 0.0, TAU, 32, Color(0.98, 0.82, 0.36, flash * 0.9), 3.0)
+			draw_circle(c, size.x * (0.55 + 0.25 * k), Color(0.98, 0.82, 0.36, flash * 0.16))
 		if cd_left > 0.0:
 			draw_circle(c, size.x * 0.5 - 2.0, Color(0.05, 0.04, 0.03, 0.58))
 			draw_string(F, Vector2(0, c.y + 8), str(int(ceil(cd_left))),
