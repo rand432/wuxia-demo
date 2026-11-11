@@ -685,16 +685,19 @@ func _toggle_challenge() -> void:
 	if _chal_layer.visible:
 		_refresh_chal_panel()
 		_chal_layer.move_to_front()
+		if _chal_holder != null:
+			_pop_bounce(_chal_holder)
+			_breathe(_chal_holder)
 
 # ============================================================
 # 挑战：冷却制 + 按波解锁，打完给资源
-#   钱怪（文钱走 coin_drop）· 晶怪 · 书怪（额外经验）· 宝箱（宝物机会+刷新，不给钱）· 匪首（钱/晶 + 各刷新）
 # ============================================================
 const CHAL_NAMES := ["钱怪", "晶怪", "书怪", "宝箱", "匪首"]
 const CHAL_GROUP := [6, 3, 4, 1, 1]
 
 var _chal_btns: Array = []
 var _chal_auto_btn: Button = null
+var _chal_holder: Control = null
 var _auto_chal := false
 var _chal_t := 0.0
 var _chal_count := 0
@@ -706,16 +709,21 @@ func _build_challenge() -> void:
 	_chal_layer.visible = false
 	_chal_layer.z_index = 15
 	add_child(_chal_layer)
-	_panel(Rect2(8, 360, 320, 340), Color(0.94, 0.90, 0.82, 0.98), 8, Color(0.85, 0.66, 0.23, 0.6), 2, _chal_layer)
+	_chal_holder = Control.new()
+	_chal_holder.position = Vector2(8, 360)
+	_chal_holder.size = Vector2(320, 340)
+	_chal_holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_chal_layer.add_child(_chal_holder)
+	_panel(Rect2(0, 0, 320, 340), Color(0.94, 0.90, 0.82, 0.98), 8, Color(0.85, 0.66, 0.23, 0.6), 2, _chal_holder)
 	for i in CHAL_NAMES.size():
-		var x := 24.0 + float(i % 2) * 148.0
-		var y := 376.0 + float(i / 2) * 84.0
+		var x := 16.0 + float(i % 2) * 148.0
+		var y := 16.0 + float(i / 2) * 84.0
 		var idx := i
 		var b := _btn(str(CHAL_NAMES[i]), Rect2(x, y, 132, 72), 17, Color(0.09, 0.08, 0.07, 0.98),
-			Color(0.91, 0.78, 0.42), func() -> void: _chal_press(idx), _chal_layer)
+			Color(0.91, 0.78, 0.42), func() -> void: _chal_press(idx), _chal_holder)
 		_chal_btns.append(b)
-	_chal_auto_btn = _btn("自动挑战：关", Rect2(24, 636, 272, 48), 18, Color(0.13, 0.11, 0.09),
-		Color(0.91, 0.78, 0.42), func() -> void: _toggle_auto_chal(), _chal_layer)
+	_chal_auto_btn = _btn("自动挑战：关", Rect2(16, 276, 288, 48), 18, Color(0.13, 0.11, 0.09),
+		Color(0.91, 0.78, 0.42), func() -> void: _toggle_auto_chal(), _chal_holder)
 
 func _toggle_auto_chal() -> void:
 	_auto_chal = not _auto_chal
@@ -882,25 +890,32 @@ func _show_curio_detail() -> void:
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layer.add_child(dim)
-	_panel(Rect2(120, 360, 480, 430), Color(0.97, 0.93, 0.85, 0.99), 10, Color(0.85, 0.66, 0.23), 3, layer)
-	_lbl(str(CURIO["name"]), Vector2(120, 376), Vector2(480, 42), 32, INK, layer, HORIZONTAL_ALIGNMENT_CENTER)
-	_panel(Rect2(268, 420, 184, 28), Color(0.62, 0.44, 0.12, 0.92), 5, Color(0.62, 0.44, 0.12), 0, layer)
-	_lbl("奇物 · 一阶", Vector2(268, 422), Vector2(184, 24), 15, Color(0.99, 0.95, 0.87), layer, HORIZONTAL_ALIGNMENT_CENTER)
-	_lbl(str(CURIO["glyph"]), Vector2(120, 456), Vector2(480, 70), 46, Color(0.36, 0.28, 0.12), layer, HORIZONTAL_ALIGNMENT_CENTER)
+	var holder := Control.new()
+	holder.position = Vector2(120, 360)
+	holder.size = Vector2(480, 430)
+	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(holder)
+	_panel(Rect2(0, 0, 480, 430), Color(0.97, 0.93, 0.85, 0.99), 10, Color(0.85, 0.66, 0.23), 3, holder)
+	_lbl(str(CURIO["name"]), Vector2(0, 16), Vector2(480, 42), 32, INK, holder, HORIZONTAL_ALIGNMENT_CENTER)
+	_panel(Rect2(148, 60, 184, 28), Color(0.62, 0.44, 0.12, 0.92), 5, Color(0.62, 0.44, 0.12), 0, holder)
+	_lbl("奇物 · 一阶", Vector2(148, 62), Vector2(184, 24), 15, Color(0.99, 0.95, 0.87), holder, HORIZONTAL_ALIGNMENT_CENTER)
+	_lbl(str(CURIO["glyph"]), Vector2(0, 96), Vector2(480, 70), 46, Color(0.36, 0.28, 0.12), holder, HORIZONTAL_ALIGNMENT_CENTER)
 	var rows := [
 		["效果", "气血 +%d%%　内力 +%d%%" % [int(float(CURIO["hp_pct"]) * 100.0), int(float(CURIO["mp_pct"]) * 100.0)]],
 		["触发", "气血低于 %d%%；或低于 %d%% 且身边有敌" % [int(float(CURIO["low"]) * 100.0), int(float(CURIO["hp"]) * 100.0)]],
 		["冷却", "%d 秒（自动使用，不用操作）" % int(CURIO["cd"])],
 		["本局", "已用 %d 次" % _curio_uses],
 	]
-	var y := 546.0
+	var y := 186.0
 	for r in rows:
-		_lbl(str(r[0]), Vector2(146, y), Vector2(80, 24), 15, Color(0.47, 0.41, 0.33), layer)
-		_lbl(str(r[1]), Vector2(212, y - 3), Vector2(360, 26), 18, INK, layer)
+		_lbl(str(r[0]), Vector2(26, y), Vector2(80, 24), 15, Color(0.47, 0.41, 0.33), holder)
+		_lbl(str(r[1]), Vector2(92, y - 3), Vector2(360, 26), 18, INK, holder)
 		y += 46.0
-	_lbl("全自动使用，玩家不需要点它；点这里只是看详情", Vector2(146, 744), Vector2(430, 22), 15, Color(0.47, 0.41, 0.33), layer)
-	_btn("×", Rect2(556, 372, 34, 30), 20, Color(0.97, 0.93, 0.85), DIM,
-		func() -> void: _curio_detail.visible = false, layer)
+	_lbl("全自动使用，玩家不需要点它；点这里只是看详情", Vector2(26, 384), Vector2(430, 22), 15, Color(0.47, 0.41, 0.33), holder)
+	_btn("×", Rect2(436, 12, 34, 30), 20, Color(0.97, 0.93, 0.85), DIM,
+		func() -> void: _curio_detail.visible = false, holder)
+	_pop_bounce(holder)
+	_breathe(holder)
 
 func _build_card_detail() -> void:
 	_detail_layer = Control.new()
@@ -1163,6 +1178,7 @@ func _build_draw() -> void:
 	sb.set_border_width_all(2)
 	banner.add_theme_stylebox_override("panel", sb)
 	_draw_layer.add_child(banner)
+	_breathe(banner)
 	_lbl("抽卡 · 20 灵晶", Vector2(0, 0), Vector2(260, 42), 20, Color(0.97, 0.90, 0.74), banner, HORIZONTAL_ALIGNMENT_CENTER)
 	_btn("隐藏", Rect2(620, 162, 72, 32), 17, Color(0.09, 0.08, 0.07, 0.98), GOLD, func(): _show_draw(false), _draw_layer)
 	for i in 3:
@@ -1729,10 +1745,15 @@ func _build_result(win: bool) -> void:
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	dim.mouse_filter = Control.MOUSE_FILTER_STOP
 	layer.add_child(dim)
-	_panel(Rect2(90, 320, 540, 480), Color(0.97, 0.93, 0.85, 0.99), 12,
-		Color(0.85, 0.66, 0.23) if win else Color(0.64, 0.22, 0.15), 3, layer)
-	_lbl("通　关" if win else "命　尽", Vector2(90, 348), Vector2(540, 58), 42,
-		Color(0.62, 0.44, 0.12) if win else Color(0.62, 0.20, 0.14), layer, HORIZONTAL_ALIGNMENT_CENTER)
+	var holder := Control.new()
+	holder.position = Vector2(90, 320)
+	holder.size = Vector2(540, 480)
+	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(holder)
+	_panel(Rect2(0, 0, 540, 480), Color(0.97, 0.93, 0.85, 0.99), 12,
+		Color(0.85, 0.66, 0.23) if win else Color(0.64, 0.22, 0.15), 3, holder)
+	_lbl("通　关" if win else "命　尽", Vector2(0, 26), Vector2(540, 58), 42,
+		Color(0.62, 0.44, 0.12) if win else Color(0.62, 0.20, 0.14), holder, HORIZONTAL_ALIGNMENT_CENTER)
 	var mins := int(_run_time) / 60
 	var secs := int(_run_time) % 60
 	var total_bonds := _bonds.size() + _bonds_done
@@ -1744,15 +1765,17 @@ func _build_result(win: bool) -> void:
 		["羁绊", "%d 条（已成 %d）" % [total_bonds, _bonds_done]],
 		["存活", "%d 分 %02d 秒" % [mins, secs]],
 	]
-	var y := 428.0
+	var y := 108.0
 	for r in rows:
-		_lbl(str(r[0]), Vector2(146, y), Vector2(150, 30), 20, DIM, layer)
-		_lbl(str(r[1]), Vector2(300, y), Vector2(276, 30), 22, INK, layer, HORIZONTAL_ALIGNMENT_RIGHT)
+		_lbl(str(r[0]), Vector2(56, y), Vector2(150, 30), 20, DIM, holder)
+		_lbl(str(r[1]), Vector2(210, y), Vector2(276, 30), 22, INK, holder, HORIZONTAL_ALIGNMENT_RIGHT)
 		y += 44.0
-	_btn("再来一局", Rect2(120, 700, 210, 64), 24, Color(0.86, 0.66, 0.24), Color(0.14, 0.11, 0.08),
-		func() -> void: get_tree().reload_current_scene(), layer)
-	_btn("回主界面", Rect2(390, 700, 210, 64), 24, Color(0.93, 0.89, 0.80), INK,
-		func() -> void: get_tree().change_scene_to_file("res://menu/main_home.tscn"), layer)
+	_btn("再来一局", Rect2(30, 380, 210, 64), 24, Color(0.86, 0.66, 0.24), Color(0.14, 0.11, 0.08),
+		func() -> void: get_tree().reload_current_scene(), holder)
+	_btn("回主界面", Rect2(300, 380, 210, 64), 24, Color(0.93, 0.89, 0.80), INK,
+		func() -> void: get_tree().change_scene_to_file("res://menu/main_home.tscn"), holder)
+	_pop_bounce(holder)
+	_breathe(holder)
 
 func _on_wave_clear(cleared_wave: int) -> void:
 	if _skip_reward_wave:
@@ -1895,6 +1918,7 @@ func _build_str() -> void:
 	bsb.set_border_width_all(2)
 	ban.add_theme_stylebox_override("panel", bsb)
 	_str_layer.add_child(ban)
+	_breathe(ban)
 	_str_ban_lb = _lbl("进阶", Vector2(0, 0), Vector2(260, 42), 20, Color(0.97, 0.90, 0.74), ban, HORIZONTAL_ALIGNMENT_CENTER)
 	_btn("隐藏", Rect2(620, 162, 72, 32), 17, Color(0.09, 0.08, 0.07, 0.98), GOLD, func(): _hide_aug_pick(), _str_layer)
 	for i in 3:
@@ -2129,6 +2153,7 @@ func _build_trea() -> void:
 	bsb.set_border_width_all(2)
 	ban.add_theme_stylebox_override("panel", bsb)
 	_trea_layer.add_child(ban)
+	_breathe(ban)
 	_lbl("宝物 · 择一羁绊", Vector2(0, 0), Vector2(260, 42), 20, Color(0.97, 0.90, 0.74), ban, HORIZONTAL_ALIGNMENT_CENTER)
 	_btn("隐藏", Rect2(620, 162, 72, 32), 17, Color(0.09, 0.08, 0.07, 0.98), GOLD, func(): _hide_trea(), _trea_layer)
 	for i in 3:
@@ -3744,6 +3769,7 @@ func _build_god_pick() -> void:
 	bsb.set_border_width_all(2)
 	ban.add_theme_stylebox_override("panel", bsb)
 	_god_layer.add_child(ban)
+	_breathe(ban)
 	_god_ban_lb = _lbl("请神", Vector2(0, 0), Vector2(260, 42), 20, Color(0.97, 0.90, 0.74), ban, HORIZONTAL_ALIGNMENT_CENTER)
 	_btn("隐藏", Rect2(620, 162, 72, 32), 17, Color(0.09, 0.08, 0.07, 0.98), GOLD, func(): _hide_god_pick(), _god_layer)
 	_god_root = Control.new()
@@ -5265,6 +5291,7 @@ var _q_hit: Button = null
 var _q_pop: Control = null
 var _q_orb: QuestOrb = null
 var _q_orb_lb: Label = null
+var _q_pulse: Tween = null
 var _q_ai_t := 0.0
 
 func _q_init() -> void:
@@ -5310,6 +5337,7 @@ func _q_refresh() -> void:
 		_q_orb.visible = has_offer
 	if _q_orb_lb != null:
 		_q_orb_lb.visible = has_offer
+	_q_set_pulse(has_offer)
 	if not has_cur:
 		return
 	var q: Dictionary = _q_cur
@@ -5320,6 +5348,53 @@ func _q_refresh() -> void:
 		s += "  ·  %.0f 秒" % ceil(float(q["t"]))
 	_q_lb.text = s
 	_q_bar.add_theme_stylebox_override("panel", _q_style(Color(0.30, 0.24, 0.12), 2))
+
+# 「奇遇！」呼吸：缩放 + 半透明来回，只在有奇遇待接时跑
+func _q_set_pulse(on: bool) -> void:
+	if _q_orb_lb == null:
+		return
+	if on:
+		if _q_pulse != null and _q_pulse.is_valid():
+			return
+		_q_orb_lb.pivot_offset = _q_orb_lb.size * 0.5
+		_q_orb_lb.scale = Vector2.ONE
+		_q_orb_lb.modulate = Color(1, 1, 1, 1)
+		_q_pulse = create_tween().set_loops()
+		_q_pulse.tween_property(_q_orb_lb, "scale", Vector2(1.12, 1.12), 0.5) \
+			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		_q_pulse.parallel().tween_property(_q_orb_lb, "modulate:a", 0.70, 0.5)
+		_q_pulse.tween_property(_q_orb_lb, "scale", Vector2.ONE, 0.5) \
+			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		_q_pulse.parallel().tween_property(_q_orb_lb, "modulate:a", 1.0, 0.5)
+	else:
+		if _q_pulse != null:
+			_q_pulse.kill()
+			_q_pulse = null
+		_q_orb_lb.scale = Vector2.ONE
+		_q_orb_lb.modulate = Color(1, 1, 1, 1)
+
+# 弹窗统一手感：先「弹进来」，再轻轻呼吸
+func _pop_bounce(c: Control, delay := 0.0) -> void:
+	if c == null:
+		return
+	c.pivot_offset = c.size * 0.5
+	c.scale = Vector2(0.88, 0.88)
+	c.modulate.a = 0.0
+	var tw := create_tween().bind_node(c)   # 节点被 free 时自动收回，避免空转
+	tw.set_parallel(true)
+	tw.tween_property(c, "scale", Vector2.ONE, 0.28).set_delay(delay) \
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	tw.tween_property(c, "modulate:a", 1.0, 0.16).set_delay(delay)
+
+func _breathe(c: Control) -> void:
+	if c == null:
+		return
+	c.pivot_offset = c.size * 0.5
+	var tw := create_tween().bind_node(c).set_loops()
+	tw.tween_property(c, "scale", Vector2(1.015, 1.015), 1.2) \
+		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	tw.tween_property(c, "scale", Vector2.ONE, 1.2) \
+		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 
 func _q_style(border: Color, w: int) -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()
@@ -5352,11 +5427,17 @@ func _q_open_popup() -> void:
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layer.add_child(dim)
-	_panel(Rect2(120, 330, 480, 470), Color(0.97, 0.93, 0.85, 0.99), 10, Color(0.85, 0.66, 0.23), 3, layer)
-	_lbl(str(q["n"]), Vector2(150, 348), Vector2(220, 44), 32, INK, layer)
+	# 内容装进 holder：整体弹入 + 呼吸
+	var holder := Control.new()
+	holder.position = Vector2(120, 330)
+	holder.size = Vector2(480, 470)
+	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(holder)
+	_panel(Rect2(0, 0, 480, 470), Color(0.97, 0.93, 0.85, 0.99), 10, Color(0.85, 0.66, 0.23), 3, holder)
+	_lbl(str(q["n"]), Vector2(30, 18), Vector2(220, 44), 32, INK, holder)
 	var tier := clampi(int(q.get("tier", 0)), 0, 3)
-	_panel(Rect2(400, 356, 120, 26), Q_TIER_COL[tier], 4, Q_TIER_COL[tier], 0, layer)
-	_lbl("奇遇 · " + str(Q_TIER_CN[tier]), Vector2(400, 358), Vector2(120, 22), 14, Color(0.99, 0.95, 0.87), layer, HORIZONTAL_ALIGNMENT_CENTER)
+	_panel(Rect2(280, 26, 120, 26), Q_TIER_COL[tier], 4, Q_TIER_COL[tier], 0, holder)
+	_lbl("奇遇 · " + str(Q_TIER_CN[tier]), Vector2(280, 28), Vector2(120, 22), 14, Color(0.99, 0.95, 0.87), holder, HORIZONTAL_ALIGNMENT_CENTER)
 	var r: Dictionary = q.get("r", {})
 	var rw := "灵晶 " + str(int(r.get("crystal", 0)))
 	if r.has("trea_rr"):
@@ -5371,20 +5452,22 @@ func _q_open_popup() -> void:
 		["奖励", rw],
 		["失败", "超时自动消失，不给东西"],
 	]
-	var y := 420.0
+	var y := 90.0
 	for row in rows:
-		_lbl(str(row[0]), Vector2(152, y), Vector2(70, 22), 14, Color(0.47, 0.41, 0.33), layer)
-		_lbl(str(row[1]), Vector2(212, y - 3), Vector2(340, 26), 18, INK, layer)
+		_lbl(str(row[0]), Vector2(32, y), Vector2(70, 22), 14, Color(0.47, 0.41, 0.33), holder)
+		_lbl(str(row[1]), Vector2(92, y - 3), Vector2(340, 26), 18, INK, holder)
 		y += 50.0
 	if is_offer:
-		_btn("接 受", Rect2(152, 700, 180, 62), 26, Color(0.85, 0.66, 0.23), Color(0.13, 0.10, 0.06),
-			func() -> void: _q_accept(), layer)
-		_btn("放 弃", Rect2(388, 700, 180, 62), 26, Color(0.93, 0.89, 0.80), Color(0.35, 0.28, 0.18),
-			func() -> void: _q_decline(), layer)
+		_btn("接 受", Rect2(32, 370, 180, 62), 26, Color(0.85, 0.66, 0.23), Color(0.13, 0.10, 0.06),
+			func() -> void: _q_accept(), holder)
+		_btn("放 弃", Rect2(268, 370, 180, 62), 26, Color(0.93, 0.89, 0.80), Color(0.35, 0.28, 0.18),
+			func() -> void: _q_decline(), holder)
 	else:
-		_btn("关 闭", Rect2(270, 700, 180, 62), 26, Color(0.93, 0.89, 0.80), Color(0.35, 0.28, 0.18),
-			func() -> void: _q_close_popup(), layer)
-		_lbl("接了就得打完 · 中途不能放弃", Vector2(150, 672), Vector2(420, 22), 14, Color(0.62, 0.20, 0.14), layer, HORIZONTAL_ALIGNMENT_CENTER)
+		_btn("关 闭", Rect2(150, 370, 180, 62), 26, Color(0.93, 0.89, 0.80), Color(0.35, 0.28, 0.18),
+			func() -> void: _q_close_popup(), holder)
+		_lbl("接了就得打完 · 中途不能放弃", Vector2(30, 342), Vector2(420, 22), 14, Color(0.62, 0.20, 0.14), holder, HORIZONTAL_ALIGNMENT_CENTER)
+	_pop_bounce(holder)
+	_breathe(holder)
 
 func _q_accept() -> void:
 	if _q_offer.is_empty():
