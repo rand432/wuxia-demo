@@ -212,6 +212,8 @@ var _pfx_count := 0
 var _fly_layer = null           # 资源飞行层
 var _fly: Array = []
 var _pulses: Dictionary = {}   # 资源格被加钱时的缩放脉冲
+var _boss_bar = null           # 首领血条
+var _boss_bar_t := 0.0
 var _last_combo := 0            # 连杀里程碑用（每 10 连炸一口）
 const PFX_MAX_LIVE := 20          # 同屏特效上限（超过就不再生，保丝滑）
 # 开局先把常用的几种烘好（BAKED 首次播放要烘，烘在开打前就不会卡第一下）
@@ -667,6 +669,12 @@ func _build_field() -> void:
 	_pfx_root = Node2D.new()
 	_pfx_root.z_index = 7
 	add_child(_pfx_root)
+	_boss_bar = BossBar.new()
+	_boss_bar.position = Vector2(110, 192)
+	_boss_bar.size = Vector2(500, 22)
+	_boss_bar.visible = false
+	_boss_bar.z_index = 6
+	add_child(_boss_bar)
 	_fly_layer = FlyLayer.new()
 	_fly_layer.size = Vector2(720, 1280)
 	_fly_layer.z_index = 9
@@ -1100,6 +1108,39 @@ func _tile(x: float, y: float, s: float, kind: String, label: String, hot: bool)
 	return t
 
 # 奇物方块：跟「挑战」一样 96×96，冷却时压暗 + 显示秒数
+# 首领血条：顶部横条，带"掉血残影"（ghost 慢慢追上来）
+class BossBar extends Control:
+	const F := preload("res://fonts/ink.ttf")
+	var ratio := 1.0
+	var ghost := 1.0
+	var bname := ""
+	func _ready() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+	func _draw() -> void:
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.14, 0.11, 0.08, 0.90)
+		sb.set_corner_radius_all(7)
+		sb.border_color = Color(0.62, 0.50, 0.32, 0.95)
+		sb.set_border_width_all(2)
+		draw_style_box(sb, Rect2(Vector2.ZERO, size))
+		var inner := Rect2(3, 3, size.x - 6, size.y - 6)
+		# 残影（掉下去的那一截，慢慢缩）
+		draw_rect(Rect2(inner.position, Vector2(inner.size.x * clampf(ghost, 0.0, 1.0), inner.size.y)),
+			Color(0.88, 0.66, 0.36, 0.38))
+		# 当前血量
+		draw_rect(Rect2(inner.position, Vector2(inner.size.x * clampf(ratio, 0.0, 1.0), inner.size.y)),
+			Color(0.70, 0.15, 0.11, 0.98))
+		# 四等分刻度（看得出还剩几段）
+		for i in range(1, 4):
+			var tx := inner.position.x + inner.size.x * float(i) / 4.0
+			draw_line(Vector2(tx, inner.position.y), Vector2(tx, inner.position.y + inner.size.y),
+				Color(0.10, 0.08, 0.06, 0.35), 1.0)
+		# 名字（先描一层暗影，红底/金底上都看得清）
+		draw_string(F, Vector2(1, size.y * 0.5 + 6), bname,
+			HORIZONTAL_ALIGNMENT_CENTER, size.x, 14, Color(0.0, 0.0, 0.0, 0.55))
+		draw_string(F, Vector2(0, size.y * 0.5 + 5), bname,
+			HORIZONTAL_ALIGNMENT_CENTER, size.x, 14, Color(0.98, 0.94, 0.85))
+
 # 资源飞行层：击杀掉的金币/晶石飞向右上角资源条（割草的正反馈）
 class FlyLayer extends Control:
 	var dots: Array = []
@@ -1571,6 +1612,21 @@ func _process(_delta: float) -> void:
 		_tick_curio(_delta)
 		_tick_fly(_delta)
 		_tick_pulses(_delta)
+		if _boss_bar != null:
+			var bf: Dictionary = _core._boss_foe() if _core != null else {}
+			if bf.is_empty():
+				if _boss_bar.visible:
+					_boss_bar_t = maxf(0.0, _boss_bar_t - _delta)
+					if _boss_bar_t <= 0.0:
+						_boss_bar.visible = false
+			else:
+				_boss_bar.visible = true
+				_boss_bar_t = 1.2
+				var rr := clampf(float(bf["hp"]) / maxf(1.0, float(bf["hp_max"])), 0.0, 1.0)
+				_boss_bar.ratio = rr
+				_boss_bar.ghost = move_toward(float(_boss_bar.ghost), rr, _delta * 0.45) if float(_boss_bar.ghost) > rr else rr
+				_boss_bar.bname = str(bf.get("name", "首领"))
+				_boss_bar.queue_redraw()
 		if _core != null:
 			var cb := int(_core._combo)
 			if cb != _last_combo:
