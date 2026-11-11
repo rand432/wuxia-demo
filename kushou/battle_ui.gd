@@ -220,7 +220,7 @@ var _boss_on := false          # 首领在场时特效降档（首领战场景�
 var _late_baked := false       # 稀有特效是否已烘焙
 var _baked_keys: Dictionary = {}   # 已烘过的 (effect|palette|light)
 var _last_combo := 0            # 连杀里程碑用（每 10 连炸一口）
-const PFX_MAX_LIVE := 20          # 同屏特效上限（超过就不再生，保丝滑）
+const PFX_MAX_LIVE := 26          # 同屏特效上限（实测 60fps 有余量，放回 26）
 # 开局先把常用的几种烘好（BAKED 首次播放要烘，烘在开打前就不会卡第一下）
 # [effect, scale, palette, light, speed, hold秒]：hold = 让它播完整，把每一帧都烘进缓存
 const PFX_PREWARM := [
@@ -1751,8 +1751,12 @@ func _process(_delta: float) -> void:
 					tk.play_down()
 					_recycle_q.append([tk, 1.10])
 					# 阵亡小爆点（割草感：每杀一只都有一口）
-					if randf() < (0.20 if _boss_on else 0.35):
+					if randf() < (0.40 if _boss_on else 0.60):
 						_spawn_pfx("impacts/blunt-hit", tk.position + Vector2(0, -8), 0.60, "dust", 1.1, 1.15)
+					# 微顿帧＋连杀轻震：每杀一只都"顿一下"
+					_core._hitstop = maxf(float(_core._hitstop), 0.030)
+					if int(_core._combo) >= 5:
+						_core._shake = maxf(float(_core._shake), 2.5)
 				_foe_tokens.erase(tid)
 
 func _on_core_kill(n: int) -> void:
@@ -3813,9 +3817,11 @@ func _spawn_hit_fx(global_pos: Vector2, radius: float, dmg: int, hero_hit: bool,
 		_spawn_pfx("impacts/blunt-hit", global_pos + Vector2(0, -14), 0.70, "blood", 1.2)
 	elif crit:
 		_spawn_pfx("impacts/crit-hit", global_pos + Vector2(0, -8), 0.95, "gold", 1.9)
+		# 暴击再叠一口小的错位金爆（同一个已烘变体，只改缩放/位置）
+		_spawn_pfx("impacts/crit-hit", global_pos + Vector2(randf_range(-14.0, 14.0), -8.0 + randf_range(-10.0, 6.0)), 0.58, "gold", 1.9)
 	elif heavy:
 		_spawn_pfx("impacts/crit-hit", global_pos + Vector2(0, -8), 0.80, "", 1.4)
-	elif randf() < (0.25 if _boss_on else 0.40):
+	elif randf() < (0.40 if _boss_on else 0.70):
 		# 横扫一次打好几只时，普通命中不每只都放（保丝滑，观感也够）；首领战再降一档
 		_spawn_pfx("impacts/hit-spark", global_pos + Vector2(0, -6), 0.72, "", 1.0)
 
