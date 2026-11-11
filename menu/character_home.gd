@@ -164,7 +164,19 @@ func _build_attr() -> void:
 	_sheet.refresh()
 	var h: Dictionary = _sheet.hero
 	UI.label(self, "属 性", Vector2(24, 648), Vector2(120, 32), 22, P.DIM)
-	UI.label(self, "点属性看详细", Vector2(556, 652), Vector2(144, 26), 14, Color(0.70, 0.67, 0.61))
+	# 「ⓘ」：点它或点整行都能开详细属性
+	var info := Panel.new()
+	info.position = Vector2(150, 654)
+	info.size = Vector2(22, 22)
+	var isb := StyleBoxFlat.new()
+	isb.bg_color = Color(0, 0, 0, 0)
+	isb.set_corner_radius_all(11)
+	isb.border_color = Color(0.627, 0.588, 0.533)
+	isb.set_border_width_all(1)
+	info.add_theme_stylebox_override("panel", isb)
+	info.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(info)
+	UI.label(self, "i", Vector2(150, 654), Vector2(22, 22), 14, Color(0.588, 0.549, 0.494), HORIZONTAL_ALIGNMENT_CENTER)
 	var cells := [
 		["攻 击", str(int(float(h["atk"])))],
 		["气 血", str(int(float(h["hp_max"])))],
@@ -175,10 +187,17 @@ func _build_attr() -> void:
 		var x := 24.0 + float(c) * 168.0
 		UI.label(self, str(cells[c][0]), Vector2(x, 690), Vector2(96, 32), 20, P.DIM)
 		UI.label(self, str(cells[c][1]), Vector2(x + 76, 686), Vector2(92, 34), 24, P.INK)
-	# 整行可点：透明按钮盖住四条属性
+	# 属性区与背包区之间的极淡分隔线
+	var line := ColorRect.new()
+	line.position = Vector2(24, 752)
+	line.size = Vector2(672, 1)
+	line.color = Color(0.804, 0.757, 0.678)
+	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(line)
+	# 整块可点：标题行 + 四条属性
 	var hit := Button.new()
-	hit.position = Vector2(24, 676)
-	hit.size = Vector2(672, 60)
+	hit.position = Vector2(24, 644)
+	hit.size = Vector2(672, 96)
 	hit.flat = true
 	hit.focus_mode = Control.FOCUS_NONE
 	hit.pressed.connect(_open_detail)
@@ -219,8 +238,8 @@ func _build_bag() -> void:
 		_cats.append(b)
 	_style_cats()
 	_scroll = ScrollContainer.new()
-	_scroll.position = Vector2(24, 822)
-	_scroll.size = Vector2(660, 344)
+	_scroll.position = Vector2(24, 818)
+	_scroll.size = Vector2(660, 348)
 	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
 	add_child(_scroll)
