@@ -3637,6 +3637,25 @@ func _tick_skills(dt: float) -> void:
 		else:
 			s.visible = false
 
+# 请神技能特效：按技能属性挑效果 + 换色（pixelfx）
+const SKILL_FX := {
+	"金系": ["lightning/zap-hit", "volt", 1.10],
+	"火系": ["fire/fireball", "", 1.00],
+	"木系": ["nature/leaf-storm", "leaf", 0.95],
+	"召唤": ["arcane/magic-circle-cast", "", 1.10],
+	"物理": ["impacts/ground-slam", "metal", 0.95],
+	"真实": ["shadow/soul-drain", "", 0.85],
+}
+
+func _skill_fx(dtype: String, world_pos: Vector2, big := false) -> void:
+	var e: Array = SKILL_FX.get(dtype, [])
+	if e.is_empty():
+		return
+	_spawn_pfx(str(e[0]), world_pos, float(e[2]) * (1.35 if big else 1.0), str(e[1]), 1.9, 1.0)
+
+func _hero_screen() -> Vector2:
+	return _core.position + _core.hero_pos
+
 func _cast_skill(i: int) -> void:
 	var sk: Dictionary = _skills[i]
 	var aid0 := str(sk["aid"])
@@ -3652,6 +3671,7 @@ func _cast_skill(i: int) -> void:
 		_mp -= cost0
 		sk["cd_t"] = maxf(0.5, float(sk["cd"]) * (1.0 - clampf(float(md0.get("cd_pct", 0.0)), 0.0, 80.0) / 100.0))
 		_cast_paper()
+		_skill_fx("召唤", _hero_screen())
 		return
 	# 治疗流：回血 + 环毒 + 易伤
 	if aid0 == "liuqingqing2":
@@ -3660,6 +3680,7 @@ func _cast_skill(i: int) -> void:
 		var times := 1
 		if _baicao:
 			times = _baicao_times()
+		_skill_fx("木系", _hero_screen())
 		for _i in times:
 			_cast_heal(float(sk["mul"]))
 		if times > 1:
@@ -3672,6 +3693,7 @@ func _cast_skill(i: int) -> void:
 		_mp -= cost0
 		sk["cd_t"] = maxf(0.5, float(sk["cd"]) * (1.0 - clampf(float(md0.get("cd_pct", 0.0)), 0.0, 80.0) / 100.0))
 		_cast_feiren(float(sk["mul"]))
+		_skill_fx("物理", _hero_screen())
 		return
 	# 撞击流：按气血上限算伤害，并把目标撞飞
 	if aid0 == "gundilong":
@@ -3680,6 +3702,7 @@ func _cast_skill(i: int) -> void:
 		_mp -= cost0
 		sk["cd_t"] = maxf(0.5, float(sk["cd"]) * (1.0 - clampf(float(md0.get("cd_pct", 0.0)), 0.0, 80.0) / 100.0))
 		_charge_ram()
+		_skill_fx("物理", _hero_screen(), true)
 		return
 	# 火系：直伤 + 灼烧（引燃多名）
 	if aid0 == "jicanghai":
@@ -3688,12 +3711,14 @@ func _cast_skill(i: int) -> void:
 		_mp -= cost0
 		sk["cd_t"] = maxf(0.5, float(sk["cd"]) * (1.0 - clampf(float(md0.get("cd_pct", 0.0)), 0.0, 80.0) / 100.0))
 		_cast_fire()
+		_skill_fx("火系", _hero_screen())
 		return
 	# 召唤系：不直接出伤，召一条蛟龙顶上去
 	if aid0 == "cuisanniang":
 		_mp -= cost0
 		sk["cd_t"] = maxf(0.5, float(sk["cd"]) * (1.0 - clampf(float(md0.get("cd_pct", 0.0)), 0.0, 80.0) / 100.0))
 		_summon_dragon(float(md0.get("dmg_pct", 0.0)) + float(_elem_mod.get("召唤", 0.0)))
+		_skill_fx("召唤", _hero_screen())
 		return
 	var foes: Array = []
 	for f_v in _core.foes:
@@ -3733,6 +3758,7 @@ func _cast_skill(i: int) -> void:
 		if para_s > 0.0:
 			f["para"] = maxf(float(f.get("para", 0.0)), para_s)
 		_core._push_float(float(f["x"]), float(f["y"]) - 46.0, str(sk["name"]), sk["col"], true)
+		_skill_fx(dtype, _core.position + Vector2(float(f["x"]), float(f["y"]) - 26.0), true)
 	Aud.sfx("skill", -10.0)
 
 func _add_ancestor_effects(aid: String, eff: Dictionary) -> void:
