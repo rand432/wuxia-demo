@@ -15,6 +15,11 @@ const SELFS := [
 	{"key": "exp", "label": "经验", "names": [["奋起","历练","磨砺"],["精进","苦修","心得","通悟"],["顿悟","破境","明心","见性","大成"],["悟道","通天","无涯","见真","圆融","圆满"]], "own": [5,8,12,16], "own_suffix": "%", "set": ["奋起","精进","顿悟","悟道"], "trigger": ["常驻","常驻","常驻","常驻"], "combo": ["杀怪数 +5%","杀怪数 +8%","杀怪数 +12%","杀怪数 +16%"], "combo_key": ["killnum_pct","killnum_pct","killnum_pct","killnum_pct"], "combo_val": [5,8,12,16], "arts": ["res://assets/items/it_book.png", "res://assets/items/it_scroll.png", "res://assets/items/art_bell.png", "res://assets/items/loot_exp.png", "res://assets/items/art_spring.png", "res://assets/items/chest_jade.png"]},
 ]
 
+# 全新卡组接口：当前为空，L10 Boss 首通后由 GameState.new_cards_unlocked 打开。
+# 以后把新卡组数据填进 new_group() 返回的 cards/entries 即可，不改抽卡主流程。
+static func new_group() -> Dictionary:
+	return {"cards": {}, "entries": []}
+
 static func build() -> Dictionary:
 	var cards := {}
 	var sets := {}

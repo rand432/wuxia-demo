@@ -3,6 +3,13 @@ extends Node
 
 static var player_name := "少侠"
 static var coins := {"wen": 0, "silver": 0, "yuanbao": 0}
+# 十关首通掉落占位（实际系统后续接）
+static var skill_mat := 0
+static var forge_mat := 0
+static var equip_tokens := 0
+static var advance_tokens := 0
+static var new_cards_unlocked := false
+static var new_curio_unlocked := false
 
 static func coin(k: String) -> int:
 	return int(coins.get(k, 0))

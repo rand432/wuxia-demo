@@ -71,6 +71,9 @@ var _max_wave := 5
 var _chips := {}
 var _chal_btn = null
 var _tut = null
+var _boss_spawned := false
+var _market_tile = null
+var _draw_tile = null
 var _lv := 1
 var _exp := 0
 var _exp_need := 100
@@ -315,7 +318,7 @@ func _ready() -> void:
 	_build_bottom()
 	_q_init()
 	_build_draw()
-	_build_attr()
+	# v6：角色属性统一走详细属性页（attr_panel），旧 8 行窗不再创建
 	_build_exit()
 	_build_toast()
 	_build_combined()
@@ -330,6 +333,7 @@ func _ready() -> void:
 	_tut = TutorialOverlay.new()
 	add_child(_tut)
 	_refresh_deck()
+	_maybe_level_button_tutorial.call_deferred()
 	set_process(true)
 
 # ---------------- 通用 ----------------
@@ -718,7 +722,7 @@ func _build_field() -> void:
 	hit.add_theme_stylebox_override("normal", StyleBoxEmpty.new())
 	hit.add_theme_stylebox_override("hover", StyleBoxEmpty.new())
 	hit.add_theme_stylebox_override("pressed", StyleBoxEmpty.new())
-	hit.pressed.connect(func(): _show_attr(true))
+	hit.pressed.connect(func(): _open_attr_page())
 	_cam.add_child(hit)
 	_hero_hit_btn = hit
 	_hero_hit_btn.position = _hero_token.position - Vector2(48, 48)
@@ -1632,15 +1636,15 @@ func _build_bottom() -> void:
 	_panel(Rect2(96, 1090, 600, 16), Color(0.93, 0.90, 0.82, 0.16), 8)
 	_exp_bar = _panel(Rect2(96, 1090, 4, 16), Color(0.85, 0.66, 0.23), 8)
 	_exp_lb = _lbl("0/100", Vector2(600, 1088), Vector2(92, 20), 15, Color(0.88, 0.82, 0.70), self, HORIZONTAL_ALIGNMENT_RIGHT)
-	var market: Tile = _tile(24, 1128, 124, "market", "黑市", false)
-	market.visible = LevelState.show_button("market")
+	_market_tile = _tile(24, 1128, 124, "market", "黑市", false)
+	_market_tile.visible = LevelState.show_button("market")
 	_trea_tile = _tile(158, 1128, 124, "treasure", "宝物", false)
 	_trea_tile.visible = LevelState.show_button("treasure")
 	_mate_tile = _tile(292, 1128, 124, "mate", "请神", false)
 	_mate_tile.visible = LevelState.show_button("mate")
 	_str_tile = _tile(426, 1128, 124, "skill", "强化", false)
-	var draw: Tile = _tile(560, 1116, 136, "draw", "抽卡", true)
-	draw.visible = LevelState.show_button("draw")
+	_draw_tile = _tile(560, 1116, 136, "draw", "抽卡", true)
+	_draw_tile.visible = LevelState.show_button("draw")
 	_refresh_level_ui()
 	_refresh_str_tile()
 	_refresh_trea_tile()
@@ -2154,6 +2158,9 @@ func _process(_delta: float) -> void:
 		if int(_core.wave) != _last_wave:
 			_last_wave = int(_core.wave)
 			_trigger_combos("每波")
+		if not _boss_spawned and not _run_cleared and int(_core.wave) >= _max_wave:
+			_boss_spawned = true
+			_core.start_boss(LevelState.boss_tier(), "")
 		_run_time += _delta
 		_combo_t += _delta
 		if _combo_t >= 6.0:
@@ -2484,6 +2491,10 @@ func _on_hero_down() -> void:
 var _result_layer: Control = null
 
 func _end_run(win: bool) -> void:
+	if win:
+		var first := LevelState.mark_first_clear()
+		if first:
+			_grant_first_clear(LevelState.current_level)
 	if _run_over:
 		return
 	_run_over = true
@@ -2546,6 +2557,26 @@ func _build_result(win: bool) -> void:
 	_breathe(holder)
 	_spawn_pfx("holy/sunburst" if win else "shadow/dark-explosion", Vector2(360, 235), 1.9, "holy" if win else "shadow", 1.8)
 
+func _grant_first_clear(lv: int) -> void:
+	var r := LevelState.first_reward(lv)
+	if r.is_empty():
+		return
+	if r.has("wen"):
+		GameState.add_coin("wen", int(r["wen"]))
+	if r.has("skill_mat"):
+		GameState.skill_mat += int(r["skill_mat"])
+	if r.has("forge_mat"):
+		GameState.forge_mat += int(r["forge_mat"])
+	if r.has("equip"):
+		GameState.equip_tokens += int(r["equip"])
+	if r.has("advance"):
+		GameState.advance_tokens += int(r["advance"])
+	if r.has("curio"):
+		GameState.new_curio_unlocked = true
+	if r.has("new_cards"):
+		GameState.new_cards_unlocked = true
+	_toast("首通 · " + str(r.get("text", "")))
+
 func _on_wave_clear(cleared_wave: int) -> void:
 	if _skip_reward_wave:
 		_skip_reward_wave = false
@@ -2561,7 +2592,10 @@ func _on_wave_clear(cleared_wave: int) -> void:
 		_l1_tutorial("l1_wen", _str_tile, "文钱可以强化自身", _on_str_tile)
 
 func _l1_tutorial(key: String, target: Control, text: String, cb: Callable) -> void:
-	if LevelState.current_level != 1 or _tut == null:
+	_tutorial(key, target, text, cb)
+
+func _tutorial(key: String, target: Control, text: String, cb: Callable) -> void:
+	if _tut == null:
 		return
 	if LevelState.tutorial_was_done(key):
 		return
@@ -2569,6 +2603,37 @@ func _l1_tutorial(key: String, target: Control, text: String, cb: Callable) -> v
 		return
 	LevelState.mark_tutorial(key)
 	_tut.open(target, text, cb, func() -> void: _tutorial_pause(true), func() -> void: _tutorial_pause(false))
+
+# 每一关新按钮的首次教学：只出一句，点目标才继续
+func _maybe_level_button_tutorial() -> void:
+	var lv := LevelState.current_level
+	var key := ""
+	var target: Control = null
+	var text := ""
+	match lv:
+		2:
+			key = "l2_draw"
+			target = _draw_tile
+			text = "灵晶可以抽卡，组成卡组"
+		3:
+			key = "l3_trea"
+			target = _trea_tile
+			text = "宝物可以开出资源和装备"
+		4:
+			key = "l4_chal"
+			target = _chal_btn
+			text = "挑战会刷出额外怪，收益更高"
+		5:
+			key = "l5_mate"
+			target = _mate_tile
+			text = "升级可以选请神，带家传卡"
+		6:
+			key = "l6_market"
+			target = _market_tile
+			text = "黑市可以买装备、存仓库"
+		_:
+			return
+	_tutorial(key, target, text, func() -> void: pass)
 
 func _tutorial_pause(p: bool) -> void:
 	set_process(not p)
@@ -2621,7 +2686,7 @@ func _on_str_tile() -> void:
 	_apply_str_levels(1)
 	Aud.sfx("ui_click", -6.0)
 	_str_pop("强化 +1")
-	_l1_tutorial("l1_attr", _hero_hit_btn, "点角色查看属性", func() -> void: _show_attr(true))
+	_l1_tutorial("l1_attr", _hero_hit_btn, "点角色查看属性", func() -> void: _open_attr_page())
 	if _str_lv % STR_EVERY == 0:
 		_str_pending = true
 		_aug_reroll += 1          # 每进一轮，刷新次数 +1
@@ -3710,7 +3775,17 @@ func _init_cards() -> void:
 		var c0: Dictionary = _card_db.get(str(ids0[0]), {})
 		if not c0.is_empty() and not c0.has("ancestor"):
 			_sys_combos[str(c0.get("combo_name", ""))] = true
-	_pool = (d["entries"] as Array).duplicate()
+	_pool = []
+	for id_v in d["entries"]:
+		if LevelState.card_allowed(str(id_v)):
+			_pool.append(id_v)
+	if GameState.new_cards_unlocked:
+		var ng: Dictionary = CardData.new_group()
+		var ng_cards: Dictionary = ng.get("cards", {})
+		for cid_v in ng_cards.keys():
+			_card_db[str(cid_v)] = ng_cards[cid_v]
+		for id_v in ng.get("entries", []):
+			_pool.append(id_v)
 	_cards.clear()
 	_acquired.clear()
 	_combined.clear()
@@ -4992,11 +5067,14 @@ func _roll_god() -> void:
 		_god_root.remove_child(c)          # 立刻摘掉，别等帧末（否则新旧卡片会同时存在）
 		c.queue_free()
 	var cands: Array = []
-	for aid_v in AncestorData.ANCESTORS.keys():
+	var allowed := LevelState.god_ids()
+	var unseen := allowed.duplicate()
+	unseen.shuffle()
+	for aid_v in unseen:
 		var aid := str(aid_v)
 		if SEALED.has(aid):
 			continue
-		if not _ancestors.has(aid):
+		if not _ancestors.has(aid) and AncestorData.ANCESTORS.has(aid):
 			cands.append(aid)
 	if _god_ban_lb != null:
 		_god_ban_lb.text = "请神 · 剩 %d 次" % _draw_charge

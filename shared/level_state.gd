@@ -25,6 +25,22 @@ const LEVELS := [
 		"show": {"strengthen": true, "curio": true, "draw": true, "crystal": true, "treasure": true, "challenge": true, "mate": true, "market": true}},
 ]
 
+# 10 系分线：成长 4 / 经济 4 / 危途 2（挑战 peril 已从经济线移过来）
+const LINE_GROWTH := ["atk", "def", "hp", "mp"]
+const LINE_ECON := ["gold", "crystal", "exp", "bounty"]
+const LINE_DANGER := ["swarm", "peril"]
+
+# 首通掉落（7/8/9/10 关）；实际系统未做的先留字段，文案照设计
+const FIRST_REWARDS := {
+	7: {"wen": 300, "skill_mat": 2, "text": "文钱 +300 · 技能升级材料 +2"},
+	8: {"wen": 300, "equip": 1, "forge_mat": 2, "text": "装备 +1 · 锻造材料 +2"},
+	9: {"wen": 300, "advance": 1, "text": "角色进阶 +1"},
+	10: {"wen": 300, "curio": 1, "new_cards": 1, "text": "新奇物 + 固定新卡组"},
+}
+
+# 请神六位：L5 开 2 位，之后每关 +1，L9 满 6；顺序按设计固定
+const GOD_ORDER := ["zl", "cuisanniang", "jicanghai", "qingluan", "chenshi", "liuqingqing"]
+
 const SAVE_PATH := "user://level_state.cfg"
 
 static var current_level := 1
@@ -61,9 +77,55 @@ static func config(level: int = -1) -> Dictionary:
 static func waves(level: int = -1) -> int:
 	return int(config(level).get("waves", 5))
 
+# 十关循环用现有 16 只 Boss 的 4 阶：1-3 关一阶，4-6 二阶，7-9 三阶，10 四阶
+static func god_count(level: int = -1) -> int:
+	var lv := current_level if level < 0 else level
+	if lv < 5:
+		return 0
+	return mini(6, 2 + (lv - 5))
+
+static func god_ids(level: int = -1) -> Array:
+	return GOD_ORDER.slice(0, god_count(level))
+
+static func boss_tier(level: int = -1) -> int:
+	var lv := current_level if level < 0 else level
+	return clampi(1 + (lv - 1) / 3, 1, 4)
+
 static func show_button(kind: String, level: int = -1) -> bool:
 	var sh: Dictionary = config(level).get("show", {})
 	return bool(sh.get(kind, false))
+
+# 卡池门控：id = key_tier_idx
+# L1 无卡；L2 成长初/中；L3 +经济初/中；L4 +危途；L5 家传不走抽卡；
+# L6 全系高级；L7 全系特级
+static func card_allowed(id: String, level: int = -1) -> bool:
+	var lv := current_level if level < 0 else level
+	if lv <= 1:
+		return false
+	var parts := id.split("_")
+	if parts.size() < 2:
+		return false
+	var key := str(parts[0])
+	var tier := int(parts[1])
+	if key in LINE_GROWTH:
+		pass
+	elif key in LINE_ECON:
+		if lv < 3:
+			return false
+	elif key in LINE_DANGER:
+		if lv < 4:
+			return false
+	else:
+		return false
+	if lv <= 5:
+		return tier <= 1
+	if lv == 6:
+		return tier <= 2
+	return tier <= 3
+
+static func first_reward(level: int = -1) -> Dictionary:
+	var lv := current_level if level < 0 else level
+	return FIRST_REWARDS.get(lv, {}) as Dictionary
 
 static func mark_first_clear(level: int = -1) -> bool:
 	ensure_loaded()

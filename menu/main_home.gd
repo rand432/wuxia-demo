@@ -6,6 +6,7 @@ extends Control
 const UI := preload("res://shared/ui_kit.gd")
 const P := preload("res://shared/ui_pal.gd")
 const GameState := preload("res://shared/game_state.gd")
+const LevelState := preload("res://shared/level_state.gd")
 const Audio := preload("res://shared/audio.gd")
 const STAGE_1 := preload("res://assets/art/ui/stage_1.png")
 
@@ -166,6 +167,8 @@ func _on_dock(key: String) -> void:
 		"curio":
 			get_tree().change_scene_to_file("res://menu/curio_home.tscn")
 		"start":
+			LevelState.ensure_loaded()
+			LevelState.current_level = LevelState.max_unlocked
 			get_tree().change_scene_to_file("res://kushou/battle_ui.tscn")
 
 # ---------------- 刷新 ----------------
