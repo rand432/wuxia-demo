@@ -13,6 +13,8 @@ const PLAYER_TEX := preload("res://assets/char/player_q.png")
 const BattleCore := preload("res://kushou/kushou_battle.gd")
 const TokenActor := preload("res://kushou/token_actor.gd")
 const CardData := preload("res://kushou/card_data.gd")
+const LevelState := preload("res://shared/level_state.gd")
+const TutorialOverlay := preload("res://kushou/tutorial_overlay.gd")
 const AncestorData := preload("res://kushou/ancestor_data.gd")
 const AttackFx := preload("res://kushou/attack_fx.gd")
 const BlackMarket := preload("res://kushou/black_market.gd")
@@ -65,6 +67,10 @@ var _pool: Array = []
 var _acquired := {}
 # v2 波次 / 经验 / 升级（波次推进 + 升级点亮请神）
 const MAX_WAVE := 5
+var _max_wave := 5
+var _chips := {}
+var _chal_btn = null
+var _tut = null
 var _lv := 1
 var _exp := 0
 var _exp_need := 100
@@ -295,6 +301,7 @@ var _hero_hit_btn: Button = null
 var _hero_name_lb: Label = null
 
 func _ready() -> void:
+	_max_wave = LevelState.waves()
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var th := Theme.new()
 	th.default_font = FONT
@@ -320,6 +327,8 @@ func _ready() -> void:
 	add_child(_bm)
 	_bm.z_index = 40
 	_bm.visible = false
+	_tut = TutorialOverlay.new()
+	add_child(_tut)
 	_refresh_deck()
 	set_process(true)
 
@@ -613,22 +622,28 @@ func _build_bg() -> void:
 	add_child(bg)
 
 func _chip(x: float, kind: String, value: String, cap: String) -> Label:
-	_panel(Rect2(x, 8, 162, 64), Color(0.075, 0.068, 0.060, 0.98), 8, Color(0.85, 0.66, 0.23, 0.45), 1)
+	var box := Control.new()
+	box.size = Vector2(720, 80)
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(box)
+	_panel(Rect2(x, 8, 162, 64), Color(0.075, 0.068, 0.060, 0.98), 8, Color(0.85, 0.66, 0.23, 0.45), 1, box)
 	var ic := Ico.new()
 	ic.kind = kind
 	ic.position = Vector2(x + 10, 22)
 	ic.size = Vector2(34, 34)
-	add_child(ic)
-	var vl := _lbl(value, Vector2(x + 48, 4), Vector2(106, 36), 26, Color(0.95, 0.91, 0.83), self, HORIZONTAL_ALIGNMENT_RIGHT)
-	_lbl(cap, Vector2(x + 48, 40), Vector2(106, 20), 16, Color(0.80, 0.75, 0.65), self, HORIZONTAL_ALIGNMENT_RIGHT)
+	box.add_child(ic)
+	var vl := _lbl(value, Vector2(x + 48, 4), Vector2(106, 36), 26, Color(0.95, 0.91, 0.83), box, HORIZONTAL_ALIGNMENT_RIGHT)
+	_lbl(cap, Vector2(x + 48, 40), Vector2(106, 20), 16, Color(0.80, 0.75, 0.65), box, HORIZONTAL_ALIGNMENT_RIGHT)
+	_chips[cap] = box
 	return vl
 
 func _build_hud() -> void:
 	_coin_lb = _chip(18, "coin", "0", "文钱")
 	_crystal_lb = _chip(192, "crystal", "100", "灵晶")
+	_chips["灵晶"].visible = LevelState.show_button("crystal")
 	_kill_lb = _chip(366, "kill", "0", "杀敌")
 	_life_lb = _chip(540, "heart", "100", "命")
-	_wave_lb = _lbl("波 1/5", Vector2(22, 92), Vector2(100, 48), 26, INK)
+	_wave_lb = _lbl("波 1/%d" % _max_wave, Vector2(22, 92), Vector2(100, 48), 26, INK)
 	for i in 5:
 		var d := Color(0.85, 0.66, 0.23) if i == 0 else Color(0.38, 0.33, 0.26, 0.55)
 		var c := Control.new()
@@ -708,7 +723,8 @@ func _build_field() -> void:
 	_hero_hit_btn = hit
 	_hero_hit_btn.position = _hero_token.position - Vector2(48, 48)
 	# 挑战方形
-	_btn("挑战", Rect2(0, 760, 96, 96), 20, Color(0.075, 0.068, 0.060, 0.98), Color(0.91, 0.78, 0.42), func(): _toggle_challenge())
+	_chal_btn = _btn("挑战", Rect2(0, 760, 96, 96), 20, Color(0.075, 0.068, 0.060, 0.98), Color(0.91, 0.78, 0.42), func(): _toggle_challenge())
+	_chal_btn.visible = LevelState.show_button("challenge")
 	_build_challenge()
 	_build_curio()
 	# pixelfx 特效层：盖在战场和角色之上、UI 之下
@@ -1616,16 +1632,20 @@ func _build_bottom() -> void:
 	_panel(Rect2(96, 1090, 600, 16), Color(0.93, 0.90, 0.82, 0.16), 8)
 	_exp_bar = _panel(Rect2(96, 1090, 4, 16), Color(0.85, 0.66, 0.23), 8)
 	_exp_lb = _lbl("0/100", Vector2(600, 1088), Vector2(92, 20), 15, Color(0.88, 0.82, 0.70), self, HORIZONTAL_ALIGNMENT_RIGHT)
-	_tile(24, 1128, 124, "market", "黑市", false)
+	var market: Tile = _tile(24, 1128, 124, "market", "黑市", false)
+	market.visible = LevelState.show_button("market")
 	_trea_tile = _tile(158, 1128, 124, "treasure", "宝物", false)
+	_trea_tile.visible = LevelState.show_button("treasure")
 	_mate_tile = _tile(292, 1128, 124, "mate", "请神", false)
+	_mate_tile.visible = LevelState.show_button("mate")
 	_str_tile = _tile(426, 1128, 124, "skill", "强化", false)
-	_tile(560, 1116, 136, "draw", "抽卡", true)
+	var draw: Tile = _tile(560, 1116, 136, "draw", "抽卡", true)
+	draw.visible = LevelState.show_button("draw")
 	_refresh_level_ui()
 	_refresh_str_tile()
 	_refresh_trea_tile()
 
-func _tile(x: float, y: float, s: float, kind: String, label: String, hot: bool):
+func _tile(x: float, y: float, s: float, kind: String, label: String, hot: bool) -> Tile:
 	var t := Tile.new()
 	t.position = Vector2(x, y)
 	t.size = Vector2(s, s)
@@ -2140,11 +2160,11 @@ func _process(_delta: float) -> void:
 			_combo_t -= 6.0
 			_trigger_combos("每 6 秒")
 		if _wave_lb != null:
-			_wave_lb.text = "波 %d/%d" % [int(_core.wave), MAX_WAVE]
+			_wave_lb.text = "波 %d/%d" % [int(_core.wave), _max_wave]
 		# v2 波次推进：本波定额刷完 + 场上清空 → 进下一波；满 MAX_WAVE 收工
 		if not _run_cleared and _core.wave_cleared():
 			var cleared_wave := int(_core.wave)
-			if cleared_wave < MAX_WAVE:
+			if cleared_wave < _max_wave:
 				_core.set_wave(cleared_wave + 1)
 				_core.wave_reset_quota()
 				_spawn_typed_foes()
@@ -2155,6 +2175,8 @@ func _process(_delta: float) -> void:
 		if _hp_lb != null:
 			_hp_lb.text = "%d/%d" % [int(float(_core.hero.get("hp", 0))), int(float(_core.hero.get("hp_max", 1)))]
 		var hpr := clampf(float(_core.hero.get("hp", 0.0)) / maxf(1.0, float(_core.hero.get("hp_max", 1.0))), 0.0, 1.0)
+		if int(_core.wave) >= 2 and hpr <= 0.50:
+			_l1_tutorial("l1_yuhu", _curio_sq, "气血不足时，玉壶会自动回血", _show_curio_detail)
 		if _hp_fill != null:
 			_hp_fill.size = Vector2(maxf(4.0, 235.0 * hpr), 20.0)
 		_tick_skills(_delta)
@@ -2447,7 +2469,7 @@ func _on_hero_down() -> void:
 	Aud.sfx("ui_back", -4.0)
 	# 这一波直接判负：不给奖励，立刻进下一波（最后一波打输 = 本局结束）
 	var cleared_wave := int(_core.wave)
-	if cleared_wave < MAX_WAVE:
+	if cleared_wave < _max_wave:
 		_toast("第 %d 波没打下来 · 命 -%d" % [cleared_wave, loss])
 		_core.set_wave(cleared_wave + 1)
 		_core.wave_reset_quota()
@@ -2504,7 +2526,7 @@ func _build_result(win: bool) -> void:
 	var secs := int(_run_time) % 60
 	var total_bonds := _bonds.size() + _bonds_done
 	var rows := [
-		["到达波数", "%d / %d" % [mini(int(_core.wave), MAX_WAVE), MAX_WAVE]],
+		["到达波数", "%d / %d" % [mini(int(_core.wave), _max_wave), _max_wave]],
 		["击杀", str(_kills)],
 		["文钱", str(_wen)],
 		["灵晶", str(_crystal)],
@@ -2535,6 +2557,26 @@ func _on_wave_clear(cleared_wave: int) -> void:
 	_trea_charge += 1                      # v8：清一波给一次宝物机会
 	_refresh_trea_tile()
 	_toast("第 %d 波清空" % cleared_wave)
+	if cleared_wave == 1:
+		_l1_tutorial("l1_wen", _str_tile, "文钱可以强化自身", _on_str_tile)
+
+func _l1_tutorial(key: String, target: Control, text: String, cb: Callable) -> void:
+	if LevelState.current_level != 1 or _tut == null:
+		return
+	if LevelState.tutorial_was_done(key):
+		return
+	if target == null or not is_instance_valid(target) or not target.is_visible_in_tree():
+		return
+	LevelState.mark_tutorial(key)
+	_tut.open(target, text, cb, func() -> void: _tutorial_pause(true), func() -> void: _tutorial_pause(false))
+
+func _tutorial_pause(p: bool) -> void:
+	set_process(not p)
+	if _core != null:
+		_core.set_process(not p)
+
+
+
 
 func _on_mate_tile() -> void:
 	if _draw_charge <= 0:
@@ -2579,10 +2621,12 @@ func _on_str_tile() -> void:
 	_apply_str_levels(1)
 	Aud.sfx("ui_click", -6.0)
 	_str_pop("强化 +1")
+	_l1_tutorial("l1_attr", _hero_hit_btn, "点角色查看属性", func() -> void: _show_attr(true))
 	if _str_lv % STR_EVERY == 0:
 		_str_pending = true
 		_aug_reroll += 1          # 每进一轮，刷新次数 +1
 		_open_aug_pick()
+		_l1_tutorial("l1_aug", _str_layer, "强化 10 次可进阶", func() -> void: pass)
 	_refresh_str_tile()
 
 # 点一下的即时反馈：［强化］钮上方冒一行字，往上飘走（不用 toast，免得连点排队）
@@ -5341,7 +5385,7 @@ func _backwash() -> void:
 	_last_wave = nw
 	_run_cleared = false
 	if _wave_lb != null:
-		_wave_lb.text = "波 %d/%d" % [nw, MAX_WAVE]
+		_wave_lb.text = "波 %d/%d" % [nw, _max_wave]
 	_toast("回潮 · 波数 %d → %d，重头再刷" % [w, nw])
 	_shiny_present("backwash")
 
