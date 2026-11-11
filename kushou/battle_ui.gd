@@ -899,7 +899,8 @@ func _curio_use() -> void:
 	_curio_sq.cd_left = _curio_cd
 	_curio_sq.queue_redraw()
 	_toast("玉壶 · 气血 +%d · 内力 +%d" % [int(hp_add), int(mp_add)])
-	Aud.sfx("levelup", -6.0)
+	Aud.sfx("drink", -10.0, 1.05)
+	_spawn_pfx("holy/heal", _hero_screen(), 0.85, "heal", 1.5)
 
 func _show_curio_detail() -> void:
 	if _curio_detail != null:
@@ -1806,6 +1807,7 @@ func _build_result(win: bool) -> void:
 		func() -> void: get_tree().change_scene_to_file("res://menu/main_home.tscn"), holder)
 	_pop_bounce(holder)
 	_breathe(holder)
+	_spawn_pfx("holy/sunburst" if win else "shadow/dark-explosion", Vector2(360, 235), 1.9, "holy" if win else "shadow", 1.8)
 
 func _on_wave_clear(cleared_wave: int) -> void:
 	if _skip_reward_wave:
@@ -5620,6 +5622,8 @@ func _q_accept() -> void:
 	var q: Dictionary = _q_offer
 	_q_offer = {}
 	_q_close_popup()
+	_spawn_pfx("arcane/rune-circle", _hero_screen(), 1.0, "arcane", 1.4)
+	Aud.sfx("ui_open", -10.0, 1.05)
 	_q_activate(q)
 
 func _q_decline() -> void:
