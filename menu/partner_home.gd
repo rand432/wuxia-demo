@@ -347,6 +347,8 @@ func _build_hot() -> void:
 	_hot(Rect2(188, 1180, 172, 90), func() -> void: get_tree().change_scene_to_file("res://menu/character_home.tscn"))
 	_hot(Rect2(360, 1180, 172, 90), func() -> void: pass)
 	_hot(Rect2(532, 1180, 180, 90), func() -> void: print("[请神页] 设置"))
+	# 奇物入口：底图底栏没有这一格，先挂在右上方空白处（等重画底图再归位）
+	_hot(Rect2(600, 96, 110, 44), func() -> void: get_tree().change_scene_to_file("res://menu/curio_home.tscn"))
 
 func _hot(rect: Rect2, cb: Callable) -> void:
 	var b := Button.new()

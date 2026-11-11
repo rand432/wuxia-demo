@@ -28,6 +28,7 @@ func _ready() -> void:
 	_build_all()
 
 func _build_all() -> void:
+	FD.load_game()
 	theme = UI.theme()
 	_bag_roots.clear()
 	_cats.clear()
@@ -122,6 +123,13 @@ func _build_slot(key: String, rect: Rect2) -> void:
 		root.add_child(dash)
 		UI.label(root, "空", Vector2(0, 12), Vector2(rect.size.x, 76), 17, Color(0.737, 0.698, 0.639), HORIZONTAL_ALIGNMENT_CENTER)
 	UI.label(root, str(FD.SLOT_LABEL.get(key, key)), Vector2(0, 100), Vector2(rect.size.x, 26), 19, P.DIM, HORIZONTAL_ALIGNMENT_CENTER)
+	# 入神中：流动彩虹边 + 呼吸金晕
+	var stt: Dictionary = FD.state.get(key, {}) if FD.state.has(key) else {}
+	if int(stt.get("trance", 0)) > 0:
+		var ov := SlotTrance.new()
+		ov.size = rect.size
+		ov.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		root.add_child(ov)
 	var hit := Button.new()
 	hit.flat = true
 	hit.focus_mode = Control.FOCUS_NONE
@@ -323,6 +331,8 @@ func _on_dock(key: String) -> void:
 			pass
 		"god":
 			get_tree().change_scene_to_file("res://menu/partner_home.tscn")
+		"curio":
+			get_tree().change_scene_to_file("res://menu/curio_home.tscn")
 		"start":
 			get_tree().change_scene_to_file("res://kushou/battle_ui.tscn")
 
@@ -341,3 +351,31 @@ func _show_toast(t: String) -> void:
 	if seq == _toast_seq and lb != null and is_instance_valid(lb):
 		lb.queue_free()
 		_toast = null
+# ---------------- 槽位·入神流光 ----------------
+class SlotTrance extends Control:
+	var _t := 0.0
+	func _ready() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		set_process(true)
+	func _process(d: float) -> void:
+		_t += d
+		queue_redraw()
+	func _draw() -> void:
+		var pulse := 0.5 + 0.5 * sin(_t * 2.4)
+		var r := Rect2(Vector2(3, 3), size - Vector2(6, 6))
+		var pts := [
+			r.position, Vector2(r.end.x, r.position.y), r.end, Vector2(r.position.x, r.end.y)
+		]
+		for e in 4:
+			draw_line(pts[e], pts[(e + 1) % 4], Color(1.0, 0.84, 0.46, 0.10 + 0.18 * pulse), 10.0, true)
+		var n := 8
+		var idx := 0
+		for e in 4:
+			var p0: Vector2 = pts[e]
+			var p1: Vector2 = pts[(e + 1) % 4]
+			for i in n:
+				var u0 := float(i) / float(n)
+				var u1 := float(i + 1) / float(n)
+				var h := fmod(_t * 0.35 + float(idx) / 32.0, 1.0)
+				draw_line(p0.lerp(p1, u0), p0.lerp(p1, u1), Color.from_hsv(h, 0.42, 1.0, 0.95), 3.0, true)
+				idx += 1

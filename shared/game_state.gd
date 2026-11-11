@@ -15,3 +15,24 @@ static func role_data(_rid: String) -> Dictionary:
 
 static func role_grade_cn(_rid: String) -> String:
 	return "玄品"
+
+# ---------------- 奇物（局外） ----------------
+# 单槽：curio_id 为空 = 不带；curio_lv 是每件的强化等级（默认 1）
+static var curio_id := ""
+static var curio_lv := {}
+
+static func curio_level(id: String) -> int:
+	return clampi(int(curio_lv.get(id, 1)), 1, 5)
+
+static func curio_equip(id: String) -> void:
+	curio_id = id
+
+static func curio_unequip() -> void:
+	curio_id = ""
+
+static func curio_upgrade(id: String) -> bool:
+	var lv := curio_level(id)
+	if lv >= 5:
+		return false
+	curio_lv[id] = lv + 1
+	return true

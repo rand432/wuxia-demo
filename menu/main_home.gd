@@ -163,6 +163,8 @@ func _on_dock(key: String) -> void:
 			get_tree().change_scene_to_file("res://menu/character_home.tscn")
 		"god":
 			get_tree().change_scene_to_file("res://menu/partner_home.tscn")
+		"curio":
+			get_tree().change_scene_to_file("res://menu/curio_home.tscn")
 		"start":
 			get_tree().change_scene_to_file("res://kushou/battle_ui.tscn")
 
