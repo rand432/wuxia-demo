@@ -315,12 +315,16 @@ static func sfx(key: String, vol_db := -6.0, pitch := 1.0) -> void:
 	p.finished.connect(_release_sfx_player.bind(p), CONNECT_ONE_SHOT)
 	# ⚠ 关键：add_child 失败时"补 deferred 的 play"是没用的 —— 节点压根没进树。
 	#   所以整串（入树 → 播放 → 起播兜底）都得放到父节点空闲之后再走。
+	# 池里捞出来的可能已经挂在 root 下面了（回收时不摘），别再 add_child
+	var need_add := p.get_parent() == null
 	if root.is_node_ready():
-		root.add_child(p)
+		if need_add:
+			root.add_child(p)
 		p.play()
 		_ensure_playing(p)
 	else:
-		root.add_child.call_deferred(p)
+		if need_add:
+			root.add_child.call_deferred(p)
 		_play_when_free.call_deferred(p)
 
 # v15h：延迟起播（父节点建完子节点之后再入树＋播放）

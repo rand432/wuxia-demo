@@ -233,6 +233,12 @@ const PFX_PREWARM := [
 	["arcane/magic-circle-cast", 1.10, "", 1.9, 1.0, 1.20],
 	["impacts/ground-slam", 0.95, "metal", 1.9, 1.0, 0.90],
 	["shadow/soul-drain", 0.85, "", 1.9, 1.0, 1.00],
+	# 延迟技落地那套（light 1.30，和 _on_delayed_land 对齐）
+	["impacts/ground-slam", 0.90, "metal", 1.30, 1.0, 0.90],
+	["fire/fireball", 0.90, "", 1.30, 1.0, 1.30],
+	["lightning/zap-hit", 0.95, "volt", 1.30, 1.0, 0.70],
+	["nature/leaf-storm", 0.85, "leaf", 1.30, 1.0, 1.20],
+	["shadow/soul-drain", 0.80, "", 1.30, 1.0, 1.00],
 ]
 var _curio_sq = null             # 奇物方块（战场右下，与挑战对称）
 var _curio_cd := 0.0             # 奇物冷却剩余
