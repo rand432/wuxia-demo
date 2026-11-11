@@ -6983,22 +6983,36 @@ func _play_shiny_video(kind: String) -> bool:
 		mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 		v.material = mat
 	add_child(v)
-	# 演出期间冻结战斗（炫卡登场 = 过场，不是"怪继续打你"）
+	v.modulate.a = 0.0
+	_shiny_video_busy = true
 	var was_running := false
 	if _core != null:
 		was_running = bool(_core.running)
+	# ---- 起手：顿帧 + 白闪 + 震屏（先让战场抖一下，再切视频）----
+	if _core != null:
+		_core.Shake_add(13.0)
+		_core._hitstop = maxf(float(_core._hitstop), 0.10)
+	_flash(Color(1.0, 0.98, 0.90), 0.90, 0.04, 0.20)
+	Aud.sfx("drum", -6.0)
+	_play_video_after_beat(v, was_running)
+	return true
+
+# 先让战场抖 0.12 秒（这段必须保持 running，否则震屏停住看不到），再冻结 + 播视频
+func _play_video_after_beat(v: VideoStreamPlayer, was_running: bool) -> void:
+	await get_tree().create_timer(0.12).timeout
+	if not is_instance_valid(v):
+		return
+	if _core != null:
 		_core.running = false
-	_shiny_video_busy = true
-	v.modulate.a = 0.0
+	v.play()
 	var tw := create_tween()
 	tw.tween_property(v, "modulate:a", 1.0, 0.15)
 	tw.tween_interval(2.55)
 	tw.tween_property(v, "modulate:a", 0.0, 0.5)
 	tw.tween_callback(func() -> void:
-		v.stop()
-		v.queue_free()
+		if is_instance_valid(v):
+			v.stop()
+			v.queue_free()
 		_shiny_video_busy = false
 		if _core != null and was_running:
 			_core.running = true)
-	v.play()
-	return true
