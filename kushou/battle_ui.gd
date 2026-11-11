@@ -211,12 +211,20 @@ var _pfx_root: Node2D = null      # pixelfx 特效层（命中/暴击等）
 var _pfx_count := 0
 const PFX_MAX_LIVE := 26          # 同屏特效上限（超过就不再生，保丝滑）
 # 开局先把常用的几种烘好（BAKED 首次播放要烘，烘在开打前就不会卡第一下）
+# [effect, scale, palette, light, speed, hold秒]：hold = 让它播完整，把每一帧都烘进缓存
 const PFX_PREWARM := [
-	["impacts/hit-spark", 0.72, "", 1.0],
-	["impacts/crit-hit", 0.95, "gold", 1.9],
-	["impacts/crit-hit", 0.80, "", 1.4],
-	["impacts/blunt-hit", 0.70, "blood", 1.2],
-	["impacts/blunt-hit", 0.60, "dust", 1.1],
+	["impacts/hit-spark", 0.72, "", 1.0, 1.0, 0.60],
+	["impacts/crit-hit", 0.95, "gold", 1.9, 1.0, 1.00],
+	["impacts/crit-hit", 0.80, "", 1.4, 1.0, 1.00],
+	["impacts/blunt-hit", 0.70, "blood", 1.2, 1.0, 1.00],
+	["impacts/blunt-hit", 0.60, "dust", 1.1, 1.15, 0.85],
+	# 六系技能（放得少，但也先烘一遍，第一次放不卡）
+	["lightning/zap-hit", 1.10, "volt", 1.9, 1.0, 0.70],
+	["fire/fireball", 1.00, "", 1.9, 1.0, 1.30],
+	["nature/leaf-storm", 0.95, "leaf", 1.9, 1.0, 1.20],
+	["arcane/magic-circle-cast", 1.10, "", 1.9, 1.0, 1.20],
+	["impacts/ground-slam", 0.95, "metal", 1.9, 1.0, 0.90],
+	["shadow/soul-drain", 0.85, "", 1.9, 1.0, 1.00],
 ]
 var _curio_sq = null             # 奇物方块（战场右下，与挑战对称）
 var _curio_cd := 0.0             # 奇物冷却剩余
@@ -1584,7 +1592,8 @@ func _process(_delta: float) -> void:
 				if tk != null:
 					tk.play_down()
 					# 阵亡小爆点（割草感：每杀一只都有一口）
-					_spawn_pfx("impacts/blunt-hit", tk.position + Vector2(0, -8), 0.60, "dust", 1.1, 1.15)
+					if randf() < 0.6:
+						_spawn_pfx("impacts/blunt-hit", tk.position + Vector2(0, -8), 0.60, "dust", 1.1, 1.15)
 				_foe_tokens.erase(tid)
 
 func _on_core_kill(n: int) -> void:
@@ -3510,15 +3519,19 @@ func _prewarm_pfx() -> void:
 		var s := float(it[1])
 		var pal := str(it[2])
 		var lig := float(it[3])
-		_spawn_pfx(e, Vector2(-4000, -4000), s, pal, lig, 1.0)
+		var spd := float(it[4]) if it.size() > 4 else 1.0
+		var fx = _spawn_pfx(e, Vector2(-4000, -4000), s, pal, lig, spd)
 		await get_tree().process_frame
 		await get_tree().process_frame
+		# 便宜预热：播两帧就扔（完整烘焙太贵，会在开局拖帧）
+		if fx != null and is_instance_valid(fx):
+			fx.queue_free()
 
-func _spawn_pfx(effect: String, pos: Vector2, s := 1.0, pal := "", lig := 1.0, spd := 1.0, flip := false) -> void:
+func _spawn_pfx(effect: String, pos: Vector2, s := 1.0, pal := "", lig := 1.0, spd := 1.0, flip := false):
 	if _pfx_root == null or not ResourceLoader.exists("res://addons/pixelfx/nodes/pixel_fx_2d.gd"):
-		return
+		return null
 	if _pfx_root.get_child_count() >= PFX_MAX_LIVE:
-		return
+		return null
 	var fx = PFX2D.new()
 	fx.effect = effect
 	fx.position = pos
@@ -3531,6 +3544,7 @@ func _spawn_pfx(effect: String, pos: Vector2, s := 1.0, pal := "", lig := 1.0, s
 	fx.free_when_done = true
 	_pfx_root.add_child(fx)
 	_pfx_count += 1
+	return fx
 
 func _on_hero_attack() -> void:
 	_play_attack_fx(true)
@@ -3647,11 +3661,25 @@ const SKILL_FX := {
 	"真实": ["shadow/soul-drain", "", 0.85],
 }
 
+# 技能音效：按属性挑一个"自己的音色"（只放一次，跟着起手特效走）
+const SKILL_SFX := {
+	"金系": ["slash_light2", -8.0, 1.15],
+	"火系": ["drum", -10.0, 0.92],
+	"木系": ["wood_down", -8.0, 1.10],
+	"召唤": ["bell", -10.0, 1.05],
+	"物理": ["sword_draw", -8.0, 1.00],
+	"真实": ["hit_heavy", -6.0, 0.85],
+}
+
 func _skill_fx(dtype: String, world_pos: Vector2, big := false) -> void:
 	var e: Array = SKILL_FX.get(dtype, [])
 	if e.is_empty():
 		return
 	_spawn_pfx(str(e[0]), world_pos, float(e[2]) * (1.35 if big else 1.0), str(e[1]), 1.9, 1.0)
+	if not big:
+		var s: Array = SKILL_SFX.get(dtype, [])
+		if not s.is_empty():
+			Aud.sfx(str(s[0]), float(s[1]), float(s[2]))
 
 func _hero_screen() -> Vector2:
 	return _core.position + _core.hero_pos
