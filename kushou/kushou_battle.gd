@@ -1623,6 +1623,7 @@ func _hero_strike(tgt: Dictionary) -> void:
 	var heavy := _heavy % 3 == 0
 	var base := float(hero["atk"]) * (1.0 + float(hero["dmg_pct"])) * atk_mul()
 	base += float(hero.get("_kill_atk", 0.0))            # v14a 战意：本局每杀一个 +0.4 攻击
+	base *= 1.0 + float(hero.get("curio_atk", 0.0))       # 奇物：血葫芦 / 醉翁壶的攻击加成
 	if float(hero.get("mech_laststand", 0.0)) > 0.0 \
 			and float(hero["hp"]) / maxf(1.0, float(hero["hp_max"])) <= 0.35:
 		base *= 1.0 + float(hero["mech_laststand"])      # v14a 背水：残血 +50%

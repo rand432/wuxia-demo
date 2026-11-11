@@ -26,6 +26,7 @@ var _snapshot: Dictionary = {}
 var _done := false
 
 func open(key: String) -> void:
+	FD.load_game()
 	slot_key = key
 	theme = UI.theme()
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -117,7 +118,10 @@ func _build() -> void:
 		func() -> void: _hammer(), P.GOLD, 3, 12)
 	_hammer_btn = _panel.get_child(_panel.get_child_count() - 1) as Button
 	UI.button(_panel, "收 下", Rect2(494, 1130, 170, 74), 26, Color(0.22, 0.18, 0.14), Color(0.94, 0.91, 0.85),
-		func() -> void: _close(), Color(0.47, 0.40, 0.31), 1, 12)
+		func() -> void:
+			Audio.sfx("ui_close", -10.0)
+			FD.save_game()
+			_close(), Color(0.47, 0.40, 0.31), 1, 12)
 
 func _refresh() -> void:
 	var it := _it()
@@ -200,12 +204,14 @@ func _hammer() -> void:
 		Audio.sfx("enlighten", -4.0)
 		_show_toast("入 神")
 	_refresh()
+	FD.save_game()
 
 func _on_broken() -> void:
 	Audio.sfx("sword_in_ground", -6.0)
 	Audio.sfx("fall_down", -10.0)
 	FD.equipped[slot_key] = {}
 	FD.state.erase(slot_key)
+	FD.save_game()
 	_done = true
 	for c in _panel.get_children():
 		c.queue_free()
@@ -316,6 +322,7 @@ func _use_item(nm: String) -> void:
 	if nm == "龙鳞":
 		Audio.sfx("equip", -10.0)
 	_refresh()
+	FD.save_game()
 
 func _close() -> void:
 	closed.emit()
@@ -326,13 +333,23 @@ class AnvilArt extends Control:
 	const P := preload("res://shared/ui_pal.gd")
 	var trance := false
 	var empty := false
+	var _t := 0.0
+	func _ready() -> void:
+		set_process(true)
+	func _process(d: float) -> void:
+		if trance:
+			_t += d
+			queue_redraw()
 	func _draw() -> void:
 		var ox := 0.0
 		var oy := 0.0
 		if trance and not empty:
-			for i in 4:
-				draw_circle(Vector2(320 + ox, 150 + oy), 260.0 - float(i) * 42.0,
-					Color(1.0, 0.84, 0.46, 0.035 + 0.012 * float(i)))
+			var pulse := 0.5 + 0.5 * sin(_t * 2.2)
+			for i in 5:
+				draw_circle(Vector2(320 + ox, 150 + oy), 290.0 - float(i) * 44.0,
+					Color(1.0, 0.84, 0.46, 0.020 + 0.016 * float(i) * (0.7 + 0.5 * pulse)))
+			draw_arc(Vector2(320 + ox, 150 + oy), 250.0 + 12.0 * pulse, 0, TAU, 64,
+				Color(1.0, 0.90, 0.62, 0.16 + 0.14 * pulse), 3.0, true)
 		var body := Color(0.204, 0.176, 0.149)
 		draw_rect(Rect2(100 + ox, 96 + oy, 384, 32), body)
 		draw_colored_polygon(PackedVector2Array([
@@ -343,19 +360,46 @@ class AnvilArt extends Control:
 		]), Color(0.180, 0.157, 0.133))
 		if empty:
 			return
-		var blade := Color(0.796, 0.675, 0.439) if not trance else Color(0.804, 0.706, 0.478)
-		draw_rect(Rect2(150 + ox, 72 + oy, 218, 20), blade)
-		draw_colored_polygon(PackedVector2Array([
-			Vector2(150 + ox, 72 + oy), Vector2(150 + ox, 92 + oy), Vector2(120 + ox, 82 + oy)
-		]), blade)
+		if trance:
+			# 剑身：流光彩虹（沿剑身跑色相）
+			var seg := 16
+			var sw := 218.0 / float(seg)
+			for i in seg:
+				var h := fmod(float(i) / float(seg) * 0.85 + _t * 0.30, 1.0)
+				var c := Color.from_hsv(h, 0.42, 1.0)
+				draw_rect(Rect2(150 + ox + sw * float(i), 72 + oy, sw + 1.0, 20), c)
+			var tipH := fmod(0.85 + _t * 0.30, 1.0)
+			draw_colored_polygon(PackedVector2Array([
+				Vector2(150 + ox, 72 + oy), Vector2(150 + ox, 92 + oy), Vector2(120 + ox, 82 + oy)
+			]), Color.from_hsv(tipH, 0.42, 1.0))
+			# 高光扫过
+			var hx := 150.0 + fmod(_t * 150.0, 300.0)
+			draw_rect(Rect2(hx + ox, 72 + oy, 26, 20), Color(1, 1, 1, 0.55))
+			draw_rect(Rect2(150 + ox, 74 + oy, 218, 3), Color(1, 1, 1, 0.6))
+			# 彩花
+			for i in 16:
+				var ph := float(i) * 0.7
+				var cx2 := 200.0 + fmod(float(i) * 41.0 + _t * 22.0, 300.0)
+				var cy2 := 52.0 + sin(_t * 1.5 + ph) * 30.0 + float(i % 5) * 18.0
+				var col := Color.from_hsv(fmod(float(i) * 0.17 + _t * 0.12, 1.0), 0.55, 0.98, 0.85)
+				var r := 4.0 + float(i % 3) * 1.6
+				draw_colored_polygon(PackedVector2Array([
+					Vector2(cx2, cy2 - r), Vector2(cx2 + r, cy2), Vector2(cx2, cy2 + r), Vector2(cx2 - r, cy2)
+				]), col)
+			# 剑身星点
+			for i in 4:
+				var sx := 170.0 + float(i) * 62.0 + fmod(_t * 40.0, 20.0)
+				var a := 0.4 + 0.5 * absf(sin(_t * 3.0 + float(i)))
+				draw_circle(Vector2(sx + ox, 82 + oy), 2.4, Color(1, 1, 1, a))
+		else:
+			var blade := Color(0.796, 0.675, 0.439)
+			draw_rect(Rect2(150 + ox, 72 + oy, 218, 20), blade)
+			draw_colored_polygon(PackedVector2Array([
+				Vector2(150 + ox, 72 + oy), Vector2(150 + ox, 92 + oy), Vector2(120 + ox, 82 + oy)
+			]), blade)
 		draw_rect(Rect2(368 + ox, 60 + oy, 12, 44), Color(0.588, 0.471, 0.235))
 		draw_rect(Rect2(380 + ox, 68 + oy, 50, 28), Color(0.361, 0.275, 0.188))
 		draw_circle(Vector2(434 + ox, 82 + oy), 10.0, Color(0.878, 0.678, 0.294))
-		if trance:
-			for i in 6:
-				var a: float = 0.35 + 0.5 * absf(sin(float(i) * 1.7))
-				draw_circle(Vector2(180.0 + float(i) * 48.0, 52.0 + float(i % 3) * 22.0), 3.0,
-					Color(1.0, 0.94, 0.72, a))
 
 class GaugeArt extends Control:
 	const P := preload("res://shared/ui_pal.gd")

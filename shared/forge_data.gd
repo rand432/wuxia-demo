@@ -237,3 +237,41 @@ static func apply(it: Dictionary, res: String) -> Dictionary:
 			out["trance"] = true
 		st["gauge"] = clampi(g, 0, GAUGE_MAX)
 	return out
+# ============================================================
+# 存档：equipped / bag / 资源 / 每件装备的运行时状态
+# ============================================================
+const SAVE_PATH := "user://forge.cfg"
+static var _loaded := false
+
+static func load_game() -> void:
+	if _loaded:
+		return
+	_loaded = true
+	ensure_bag()
+	var cf := ConfigFile.new()
+	if cf.load(SAVE_PATH) != OK:
+		return
+	ores = int(cf.get_value("res", "ores", ores))
+	silver = int(cf.get_value("res", "silver", silver))
+	var it_v = cf.get_value("res", "items", null)
+	if it_v is Dictionary:
+		items = it_v
+	var eq_v = cf.get_value("res", "equipped", null)
+	if eq_v is Dictionary:
+		equipped = eq_v
+	var bg_v = cf.get_value("res", "bag", null)
+	if bg_v is Array and (bg_v as Array).size() > 0:
+		bag = bg_v
+	var st_v = cf.get_value("res", "state", null)
+	if st_v is Dictionary:
+		state = st_v
+
+static func save_game() -> void:
+	var cf := ConfigFile.new()
+	cf.set_value("res", "ores", ores)
+	cf.set_value("res", "silver", silver)
+	cf.set_value("res", "items", items)
+	cf.set_value("res", "equipped", equipped)
+	cf.set_value("res", "bag", bag)
+	cf.set_value("res", "state", state)
+	cf.save(SAVE_PATH)

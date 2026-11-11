@@ -956,21 +956,22 @@ func _on_chal_drop(kind: int, _pos: Vector2) -> void:
 #   首件 玲珑玉壶：气血低于 30% 立刻喝；低于 50% 且身边有敌也喝
 #   回气血 25% / 内力 25%，冷却 60 秒
 # ============================================================
-const CURIO := {
-	"id": "yuhu", "name": "玲珑玉壶", "glyph": "壶", "tier": 1,
-	"hp_pct": 0.25, "mp_pct": 0.25,
-	"low": 0.30, "hp": 0.50, "near": 220.0, "cd": 60.0,
-}
+# ---------------- 奇物（单槽 · 全自动） ----------------
+const CurioData := preload("res://shared/curio_data.gd")
+const GameState := preload("res://shared/game_state.gd")
 
-func _build_curio() -> void:
-	_curio_sq = CurioSquare.new()
-	_curio_sq.position = Vector2(624, 760)
-	_curio_sq.size = Vector2(96, 96)
-	_curio_sq.glyph = str(CURIO["glyph"])
-	_curio_sq.label = "奇物"
-	_curio_sq.cd_max = float(CURIO["cd"])
-	_curio_sq.pressed.connect(_show_curio_detail)
-	add_child(_curio_sq)
+var _curio_id := ""
+var _curio_lv := 1
+var _curio_atk_t := 0.0        # 血葫芦：剩余持续
+var _curio_atk_add := 0.0      # 血葫芦：攻击加成
+var _curio_extra_used := false # 玉壶 Lv5：濒死额外一次
+var _curio_kills := 0
+
+func _curio_init_data() -> void:
+	_curio_id = GameState.curio_id
+	if _curio_id != "" and CurioData.get_curio(_curio_id).is_empty():
+		_curio_id = ""
+	_curio_lv = GameState.curio_level(_curio_id) if _curio_id != "" else 1
 
 func _foe_near(pos: Vector2, r: float) -> bool:
 	for f_v in _core.foes:
@@ -981,7 +982,24 @@ func _foe_near(pos: Vector2, r: float) -> bool:
 			return true
 	return false
 
-# 智能触发：危险线立刻喝；中等血量但有怪贴身也喝；安全时攒着
+func _build_curio() -> void:
+	_curio_init_data()
+	var info := CurioData.get_curio(_curio_id)
+	_curio_sq = CurioSquare.new()
+	_curio_sq.position = Vector2(624, 760)
+	_curio_sq.size = Vector2(96, 96)
+	_curio_sq.glyph = str(info.get("glyph", "奇")) if not info.is_empty() else "奇"
+	_curio_sq.label = "奇物"
+	_curio_sq.cd_max = maxf(1.0, float(info.get("cd", 1.0)))
+	_curio_sq.pressed.connect(_show_curio_detail)
+	add_child(_curio_sq)
+
+func _curio_flash() -> void:
+	if _curio_sq != null:
+		_curio_sq.flash = 1.0
+		_curio_sq.queue_redraw()
+
+# 每帧：冷却 + 持续 buff + 各奇物的自动触发
 func _tick_curio(dt: float) -> void:
 	if _curio_sq == null:
 		return
@@ -989,33 +1007,169 @@ func _tick_curio(dt: float) -> void:
 		_curio_cd = maxf(0.0, _curio_cd - dt)
 		_curio_sq.cd_left = _curio_cd
 		_curio_sq.queue_redraw()
-	if _run_over or _core == null:
+	if _curio_sq.flash > 0.0:
+		_curio_sq.flash = maxf(0.0, _curio_sq.flash - dt * 2.2)
+		_curio_sq.queue_redraw()
+	if _run_over or _core == null or _curio_id == "":
+		return
+	if _curio_atk_t > 0.0:
+		_curio_atk_t = maxf(0.0, _curio_atk_t - dt)
+		if _curio_atk_t <= 0.0:
+			_curio_atk_add = 0.0
+	_core.hero["curio_atk"] = _curio_atk_add if _curio_atk_t > 0.0 else 0.0
+	match _curio_id:
+		"yuhu":
+			_curio_tick_yuhu()
+		"xuehulu":
+			_curio_tick_xuehulu()
+		"jingtangmu":
+			_curio_tick_jingtangmu()
+
+func _curio_tick_yuhu() -> void:
+	if _curio_cd > 0.0:
 		return
 	var h: Dictionary = _core.hero
-	var hpr := float(h.get("hp", 0.0)) / maxf(1.0, float(h.get("hp_max", 1.0)))
-	if _curio_cd > 0.0 or hpr <= 0.0 or hpr >= float(CURIO["hp"]):
+	var mx := maxf(1.0, float(h.get("hp_max", 1.0)))
+	var hpr := float(h.get("hp", 0.0)) / mx
+	if hpr <= 0.0:
 		return
-	if hpr <= float(CURIO["low"]) or _foe_near(_core.hero_pos, float(CURIO["near"])):
+	if _curio_lv >= 5 and not _curio_extra_used and hpr <= 0.15:
+		_curio_extra_used = true
+		_curio_use()
+		return
+	if hpr <= 0.30 or (hpr <= 0.50 and _foe_near(_core.hero_pos, 220.0)):
 		_curio_use()
 
 func _curio_use() -> void:
 	var h: Dictionary = _core.hero
 	var mx := float(h.get("hp_max", 1.0))
-	var hp_add := mx * float(CURIO["hp_pct"])
+	var pct := 0.30 if _curio_lv >= 2 else 0.25
+	var cd := 45.0 if _curio_lv >= 4 else 60.0
+	var hp_add := mx * pct
 	h["hp"] = minf(mx, float(h.get("hp", 0.0)) + hp_add)
-	var mp_add := _mp_max * float(CURIO["mp_pct"])
+	var mp_add := _mp_max * pct
 	_mp = minf(_mp_max, _mp + mp_add)
-	_curio_cd = float(CURIO["cd"])
+	_curio_cd = cd
+	if _curio_sq != null:
+		_curio_sq.cd_max = cd
 	_curio_uses += 1
-	_curio_sq.cd_left = _curio_cd
-	_curio_sq.queue_redraw()
+	_curio_flash()
 	_toast("玉壶 · 气血 +%d · 内力 +%d" % [int(hp_add), int(mp_add)])
 	Aud.sfx("drink", -10.0, 1.05)
 	_spawn_pfx("holy/heal", _hero_screen(), 0.85, "heal", 1.5)
 
+func _curio_tick_xuehulu() -> void:
+	if _curio_cd > 0.0:
+		return
+	var h: Dictionary = _core.hero
+	var mx := maxf(1.0, float(h.get("hp_max", 1.0)))
+	var hpr := float(h.get("hp", 0.0)) / mx
+	if hpr > 0.70 or not _foe_near(_core.hero_pos, 300.0):
+		return
+	var cost := float(h.get("hp", 0.0)) * 0.10
+	if _curio_lv >= 5:
+		cost = (mx - float(h.get("hp", 0.0))) * 0.10
+	h["hp"] = maxf(1.0, float(h.get("hp", 1.0)) - cost)
+	_curio_atk_add = 0.80 if _curio_lv >= 4 else 0.60
+	_curio_atk_t = 11.0 if _curio_lv >= 2 else 8.0
+	_curio_cd = 45.0
+	_curio_uses += 1
+	_curio_flash()
+	_toast("血葫芦 · 攻击 +%d%%" % int(_curio_atk_add * 100.0))
+	Aud.sfx("drum", -9.0, 0.9)
+	_spawn_pfx("impacts/crit-hit", _hero_screen(), 0.9, "", 1.5)
+
+func _curio_tick_jingtangmu() -> void:
+	if _curio_cd > 0.0:
+		return
+	var live: Array = _live_foes()
+	if live.size() < 2:
+		return
+	var dur := 2.5 if _curio_lv >= 2 else 2.0
+	var targets := 2 if _curio_lv >= 4 else 1
+	var n := 0
+	for f_v in live:
+		if n >= targets:
+			break
+		var f: Dictionary = f_v
+		if bool(f.get("boss", false)):
+			continue
+		f["para"] = maxf(float(f.get("para", 0.0)), dur)
+		n += 1
+		_spawn_pfx("impacts/ground-slam", _core.position + Vector2(float(f["x"]), float(f["y"]) - 20.0), 0.6, "", 1.2)
+		if _curio_lv >= 5:
+			_core._apply_dmg(f, float(_core.hero.get("atk", 12.0)) * 0.8, "物理")
+			if float(f.get("hp", 0.0)) <= 0.0:
+				_core._kill_foe(f)
+	if n <= 0:
+		return
+	_curio_cd = 35.0
+	_curio_uses += 1
+	_curio_flash()
+	Aud.sfx("wood_down", -8.0, 0.9)
+	_toast("惊堂木 · 定身 %d 只" % n)
+
+# 铜钱剑：每次普攻附带一枚钱镖（打到更远的怪）
+func _curio_on_attack() -> void:
+	if _curio_id != "tongqianjian" or _core == null:
+		return
+	var reach := 194.0 + (80.0 if _curio_lv >= 4 else 0.0)
+	var best: Dictionary = {}
+	var bd := 1e9
+	for f_v in _core.foes:
+		var f: Dictionary = f_v
+		if float(f.get("hp", 0.0)) <= 0.0 or float(f.get("dying", 0.0)) > 0.0:
+			continue
+		var d: float = _core.hero_pos.distance_to(Vector2(float(f["x"]), float(f["y"])))
+		if d > reach or d < 60.0:
+			continue
+		if d < bd:
+			bd = d
+			best = f
+	if best.is_empty():
+		return
+	var mul := 0.45 if _curio_lv >= 2 else 0.35
+	_core._apply_dmg(best, float(_core.hero.get("atk", 12.0)) * mul, "物理")
+	_spawn_pfx("impacts/crit-hit", _core.position + Vector2(float(best["x"]), float(best["y"]) - 16.0), 0.5, "gold", 1.9)
+	Aud.sfx("dart", -14.0, 1.1)
+	if float(best.get("hp", 0.0)) <= 0.0:
+		_core._kill_foe(best)
+
+# 清波结算：聚宝盆 / 续命灯
+func _curio_on_wave_clear(wave: int) -> void:
+	if _core == null:
+		return
+	if _curio_id == "jubaopen":
+		var per := 3
+		if _curio_lv >= 2:
+			per = 4
+		if _curio_lv >= 4:
+			per = 5
+		var amt := per * maxi(1, wave)
+		_add_wen(amt)
+		_spawn_fly(_hero_screen(), Vector2(99, 40), Color(0.90, 0.71, 0.30), 4)
+		_toast("聚宝盆 · 文钱 +%d" % amt)
+		_curio_uses += 1
+		_curio_flash()
+	if _curio_id == "xumingdeng":
+		var every := 3
+		if _curio_lv >= 2:
+			every = 2
+		if _curio_lv >= 5:
+			every = 1
+		if wave % every == 0:
+			var add := 3 if _curio_lv >= 4 else 2
+			_life = mini(100, _life + add)
+			_refresh_life_ui()
+			_toast("续命灯 · 命 +%d" % add)
+			_curio_uses += 1
+			_curio_flash()
+
 func _show_curio_detail() -> void:
 	if _curio_detail != null:
 		_curio_detail.queue_free()
+	var info := CurioData.get_curio(_curio_id)
+	var has := not info.is_empty()
 	var layer := Control.new()
 	layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	layer.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -1028,27 +1182,38 @@ func _show_curio_detail() -> void:
 	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layer.add_child(dim)
 	var holder := Control.new()
-	holder.position = Vector2(120, 360)
-	holder.size = Vector2(480, 430)
+	holder.position = Vector2(120, 340)
+	holder.size = Vector2(480, 470)
 	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layer.add_child(holder)
-	_panel(Rect2(0, 0, 480, 430), Color(0.97, 0.93, 0.85, 0.99), 10, Color(0.85, 0.66, 0.23), 3, holder)
-	_lbl(str(CURIO["name"]), Vector2(0, 16), Vector2(480, 42), 32, INK, holder, HORIZONTAL_ALIGNMENT_CENTER)
+	_panel(Rect2(0, 0, 480, 470), Color(0.97, 0.93, 0.85, 0.99), 10, Color(0.85, 0.66, 0.23), 3, holder)
+	if not has:
+		_lbl("本局没有携带奇物", Vector2(0, 40), Vector2(480, 44), 28, INK, holder, HORIZONTAL_ALIGNMENT_CENTER)
+		_lbl("在局外「奇物」页选择一件再出击", Vector2(0, 96), Vector2(480, 30), 18, DIM, holder, HORIZONTAL_ALIGNMENT_CENTER)
+		_btn("×", Rect2(436, 12, 34, 30), 20, Color(0.97, 0.93, 0.85), DIM,
+			func() -> void: _curio_detail.visible = false, holder)
+		_pop_bounce(holder)
+		return
+	_lbl(str(info.get("name", "")), Vector2(0, 16), Vector2(480, 42), 32, INK, holder, HORIZONTAL_ALIGNMENT_CENTER)
 	_panel(Rect2(148, 60, 184, 28), Color(0.62, 0.44, 0.12, 0.92), 5, Color(0.62, 0.44, 0.12), 0, holder)
-	_lbl("奇物 · 一阶", Vector2(148, 62), Vector2(184, 24), 15, Color(0.99, 0.95, 0.87), holder, HORIZONTAL_ALIGNMENT_CENTER)
-	_lbl(str(CURIO["glyph"]), Vector2(0, 96), Vector2(480, 70), 46, Color(0.36, 0.28, 0.12), holder, HORIZONTAL_ALIGNMENT_CENTER)
+	_lbl("奇物 · Lv %d" % _curio_lv, Vector2(148, 62), Vector2(184, 24), 15, Color(0.99, 0.95, 0.87), holder, HORIZONTAL_ALIGNMENT_CENTER)
+	_lbl(str(info.get("glyph", "?")), Vector2(0, 96), Vector2(480, 70), 46, Color(0.36, 0.28, 0.12), holder, HORIZONTAL_ALIGNMENT_CENTER)
+	var cdv := float(info.get("cd", 0.0))
 	var rows := [
-		["效果", "气血 +%d%%　内力 +%d%%" % [int(float(CURIO["hp_pct"]) * 100.0), int(float(CURIO["mp_pct"]) * 100.0)]],
-		["触发", "气血低于 %d%%；或低于 %d%% 且身边有敌" % [int(float(CURIO["low"]) * 100.0), int(float(CURIO["hp"]) * 100.0)]],
-		["冷却", "%d 秒（自动使用，不用操作）" % int(CURIO["cd"])],
-		["本局", "已用 %d 次" % _curio_uses],
+		["当前", CurioData.level_text(_curio_id, _curio_lv)],
+		["触发", str(info.get("trig", ""))],
+		["冷却", ("%d 秒（自动使用，不用操作）" % int(cdv)) if cdv > 0.0 else "被动 · 常驻"],
+		["本局", "已触发 %d 次" % _curio_uses],
 	]
 	var y := 186.0
 	for r in rows:
-		_lbl(str(r[0]), Vector2(26, y), Vector2(80, 24), 15, Color(0.47, 0.41, 0.33), holder)
+		_lbl(str(r[0]), Vector2(26, y), Vector2(70, 24), 15, Color(0.47, 0.41, 0.33), holder)
 		_lbl(str(r[1]), Vector2(92, y - 3), Vector2(360, 26), 18, INK, holder)
-		y += 46.0
-	_lbl("全自动使用，玩家不需要点它；点这里只是看详情", Vector2(26, 384), Vector2(430, 22), 15, Color(0.47, 0.41, 0.33), holder)
+		y += 52.0
+	if _curio_lv < 5:
+		_lbl("下一档：%s" % CurioData.level_text(_curio_id, _curio_lv + 1),
+			Vector2(26, 388), Vector2(430, 24), 16, Color(0.47, 0.41, 0.33), holder)
+	_lbl("全自动使用，玩家不需要点它；点这里只是看详情", Vector2(26, 424), Vector2(430, 22), 15, Color(0.47, 0.41, 0.33), holder)
 	_btn("×", Rect2(436, 12, 34, 30), 20, Color(0.97, 0.93, 0.85), DIM,
 		func() -> void: _curio_detail.visible = false, holder)
 	_pop_bounce(holder)
@@ -1248,6 +1413,7 @@ class CurioSquare extends Control:
 	var label := "奇物"
 	var cd_left := 0.0
 	var cd_max := 60.0
+	var flash := 0.0            # 触发时闪一圈金环
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_STOP
 	func _gui_input(ev: InputEvent) -> void:
@@ -1263,6 +1429,10 @@ class CurioSquare extends Control:
 		if not ready:
 			draw_rect(Rect2(Vector2.ZERO, size), Color(0.02, 0.02, 0.02, 0.42))
 			draw_string(F, Vector2(0, 62), str(int(ceil(cd_left))), HORIZONTAL_ALIGNMENT_CENTER, size.x, 30, Color(0.94, 0.89, 0.78))
+		if flash > 0.0:
+			var k := 1.0 - flash
+			draw_arc(size * 0.5, size.x * (0.5 + 0.30 * k), 0.0, TAU, 32,
+				Color(0.98, 0.82, 0.36, flash * 0.9), 3.0)
 
 # 奇遇圆钮：只在新奇遇掷到时出现，靠在主角左侧；上面浮着大红字「奇遇！」
 class QuestOrb extends Control:
@@ -2049,6 +2219,7 @@ func _on_wave_clear(cleared_wave: int) -> void:
 		return
 	_add_exp(50)                            # v2：清一波 +50 经验
 	_add_wen(WEN_WAVE_CLEAR * cleared_wave)  # v6：清一波给一笔文钱
+	_curio_on_wave_clear(cleared_wave)       # 奇物：聚宝盆 / 续命灯
 	_trea_charge += 1                      # v8：清一波给一次宝物机会
 	_refresh_trea_tile()
 	_toast("第 %d 波清空" % cleared_wave)
@@ -4059,6 +4230,7 @@ func _on_hero_attack() -> void:
 	_play_attack_fx(true)
 	_attack_count += 1
 	_hero_extra_hits()                       # 主角被动：多目标 / 追击 / 剑气
+	_curio_on_attack()                       # 奇物：铜钱剑（普攻附带钱镖）
 	_trigger_combos("每次攻击")
 	if _attack_count % 5 == 0:
 		_trigger_combos("每 5 次攻击")
