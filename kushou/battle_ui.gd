@@ -4306,20 +4306,6 @@ func _cast_skill(i: int) -> void:
 			f["para"] = maxf(float(f.get("para", 0.0)), para_s)
 		_core._push_float(float(f["x"]), float(f["y"]) - 46.0, str(sk["name"]), sk["col"], true)
 		_skill_fx(dtype, _core.position + Vector2(float(f["x"]), float(f["y"]) - 26.0), true)
-		# 技能溅射：这一下把周围 90px 的怪也扫到 45%（割草靠技能清一片）
-		var hit_at := Vector2(float(f["x"]), float(f["y"]))
-		for o_v in _core.foes.duplicate():
-			var o: Dictionary = o_v
-			if o == f or float(o.get("hp", 0.0)) <= 0.0 or float(o.get("dying", 0.0)) > 0.0:
-				continue
-			if hit_at.distance_to(Vector2(float(o["x"]), float(o["y"]))) > 90.0:
-				continue
-			var sd: float = _core._apply_dmg(o, base * extra * 0.45, dtype)
-			_core._push_float(float(o["x"]), float(o["y"]) - 20.0, str(int(sd)), sk["col"])
-			if randf() < 0.35:
-				_skill_fx(dtype, _core.position + Vector2(float(o["x"]), float(o["y"]) - 22.0), false)
-			if float(o["hp"]) <= 0.0:
-				_core._kill_foe(o)
 	Aud.sfx("skill", -10.0)
 
 func _add_ancestor_effects(aid: String, eff: Dictionary) -> void:

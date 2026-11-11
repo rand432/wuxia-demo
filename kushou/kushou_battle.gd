@@ -2671,18 +2671,15 @@ func aspd_mul() -> float:
 #   溅射从"同时打 N 个"改成"**按范围**打"——每级把横扫半径撑大，
 #   命中点周围 R 以内的敌人**全都被扫到**（不必再数目标数，玩家看得见圈在变大）。
 #   R = 84 ＋ 26×(等级−1)：Lv1 84 → Lv5 188（战场上差不多是半个横排）。
-const SPLASH_BASE_R := 96.0        # 基础横扫半径（没学溅射也有；割草地基，改 0 即还原单体）
-const SPLASH_BASE_MUL := 0.65      # 基础横扫对旁怪的伤害倍率
-
 func splash_radius() -> float:
 	var lv := int(skill["splash"])
 	if lv <= 0:
-		return SPLASH_BASE_R
+		return 0.0
 	return 84.0 + 26.0 * float(lv - 1)
 
 func splash_mul() -> float:
 	if int(skill["splash"]) <= 0:
-		return SPLASH_BASE_MUL
+		return 1.0
 	return 0.70 * (1.0 + 0.15 * float(skill["splash_dmg"]))
 
 func qi_mul() -> float:
