@@ -680,6 +680,7 @@ func _build_field() -> void:
 	_core.boss_arrived.connect(_on_boss_arrived)
 	_core.delayed_land.connect(_on_delayed_land)
 	_core.boss_died.connect(_on_boss_died)
+	_core.paper_blocked.connect(_on_paper_blocked)
 	_core.start_run()
 	# 旧内核的隐形宠物会偷偷咬怪（怪还没到就掉血）；这个模式先关掉宠物伤害
 	_core.set_pet_cfg({"cd": 99999.0, "dmg": 0.0})
@@ -971,6 +972,8 @@ var _tie_idle := 0.0           # 铁布衫：多久没挨打
 var _zhiren := 0               # 纸人替身：剩余数量
 var _draw_free := 0            # 万应符：免费抽卡刷新次数
 var _wanying_add := 0          # 万应符：每种刷新 +N
+var _yuhu_shield := 0.0        # 玉壶 Lv3：喝完后减伤剩余秒数
+var _dart_n := 0               # 铜钱剑：普攻计数（Lv3 每 3 次多一枚）
 
 func _curio_init_data() -> void:
 	_curio_id = GameState.curio_id
@@ -1027,7 +1030,7 @@ func _tick_curio(dt: float) -> void:
 	_core.hero["curio_atk"] = _curio_atk_add if _curio_atk_t > 0.0 else 0.0
 	match _curio_id:
 		"yuhu":
-			_curio_tick_yuhu()
+			_curio_tick_yuhu(dt)
 		"xuehulu":
 			_curio_tick_xuehulu()
 		"jingtangmu":
@@ -1042,8 +1045,14 @@ func _tick_curio(dt: float) -> void:
 			_curio_tick_zhaohunfan()
 		"tongjing":
 			_curio_tick_tongjing()
+		"zhiren":
+			_curio_tick_zhiren()
 
-func _curio_tick_yuhu() -> void:
+func _curio_tick_yuhu(dt: float) -> void:
+	if _yuhu_shield > 0.0:
+		_yuhu_shield = maxf(0.0, _yuhu_shield - dt)
+		if _yuhu_shield <= 0.0 and _core != null:
+			_core.hero["curio_cut"] = 0.0
 	if _curio_cd > 0.0:
 		return
 	var h: Dictionary = _core.hero
@@ -1070,6 +1079,9 @@ func _curio_use() -> void:
 	_curio_cd = cd
 	if _curio_sq != null:
 		_curio_sq.cd_max = cd
+	if _curio_lv >= 3:
+		_yuhu_shield = 4.0
+		_core.hero["curio_cut"] = 0.20
 	_curio_uses += 1
 	_curio_flash()
 	_toast("玉壶 · 气血 +%d · 内力 +%d" % [int(hp_add), int(mp_add)])
@@ -1131,27 +1143,38 @@ func _curio_tick_jingtangmu() -> void:
 func _curio_on_attack() -> void:
 	if _curio_id != "tongqianjian" or _core == null:
 		return
+	_dart_n += 1
+	var shots := 1
+	if _curio_lv >= 3 and _dart_n % 3 == 0:
+		shots = 2
 	var reach := 194.0 + (80.0 if _curio_lv >= 4 else 0.0)
-	var best: Dictionary = {}
-	var bd := 1e9
-	for f_v in _core.foes:
-		var f: Dictionary = f_v
-		if float(f.get("hp", 0.0)) <= 0.0 or float(f.get("dying", 0.0)) > 0.0:
-			continue
-		var d: float = _core.hero_pos.distance_to(Vector2(float(f["x"]), float(f["y"])))
-		if d > reach or d < 60.0:
-			continue
-		if d < bd:
-			bd = d
-			best = f
-	if best.is_empty():
-		return
-	var mul := 0.45 if _curio_lv >= 2 else 0.35
-	_core._apply_dmg(best, float(_core.hero.get("atk", 12.0)) * mul, "物理")
-	_spawn_pfx("impacts/crit-hit", _core.position + Vector2(float(best["x"]), float(best["y"]) - 16.0), 0.5, "gold", 1.9)
-	Aud.sfx("dart", -14.0, 1.1)
-	if float(best.get("hp", 0.0)) <= 0.0:
-		_core._kill_foe(best)
+	var hit: Array = []
+	for si in shots:
+		var best: Dictionary = {}
+		var bd := 1e9
+		for f_v in _core.foes:
+			var f: Dictionary = f_v
+			if float(f.get("hp", 0.0)) <= 0.0 or float(f.get("dying", 0.0)) > 0.0:
+				continue
+			if hit.has(f):
+				continue
+			var d: float = _core.hero_pos.distance_to(Vector2(float(f["x"]), float(f["y"])))
+			if d > reach or d < 60.0:
+				continue
+			if d < bd:
+				bd = d
+				best = f
+		if best.is_empty():
+			break
+		hit.append(best)
+		var mul := 0.45 if _curio_lv >= 2 else 0.35
+		if si > 0:
+			mul *= 0.5
+		_core._apply_dmg(best, float(_core.hero.get("atk", 12.0)) * mul, "物理")
+		_spawn_pfx("impacts/crit-hit", _core.position + Vector2(float(best["x"]), float(best["y"]) - 16.0), 0.5, "gold", 1.9)
+		Aud.sfx("dart", -14.0, 1.1)
+		if float(best.get("hp", 0.0)) <= 0.0:
+			_core._kill_foe(best)
 
 # 规则类：进局时一次性应用（刷新次数 / 技能冷却）
 func _curio_apply_static() -> void:
@@ -1233,6 +1256,12 @@ func _curio_count_minions(tag: String) -> int:
 			n += 1
 	return n
 
+func _curio_tick_zhiren() -> void:
+	if _core == null:
+		return
+	# Lv5：纸人也能挡首领延迟技（核心读到这个数就会消耗）
+	_core.hero["paper_guard"] = _zhiren if _curio_lv >= 5 else 0
+
 func _curio_tick_zhaohunfan() -> void:
 	if _curio_cd > 0.0 or _core == null:
 		return
@@ -1262,6 +1291,14 @@ func _curio_tick_tongjing() -> void:
 		7.0 if _curio_lv >= 2 else 5.0,
 		0.70 if _curio_lv >= 4 else 0.50,
 		0.0, 0.10 if _curio_lv >= 3 else 0.0)
+	if _curio_lv >= 5:
+		var at5: Vector2 = _core.hero_pos
+		for f_v in _core.foes:
+			var f5: Dictionary = f_v
+			if float(f5.get("hp", 0.0)) <= 0.0:
+				continue
+			if at5.distance_to(Vector2(float(f5["x"]), float(f5["y"]))) <= 220.0:
+				f5["para"] = maxf(float(f5.get("para", 0.0)), 1.5)
 	_curio_cd = 20.0
 	_curio_uses += 1
 	_curio_flash()
@@ -4141,6 +4178,16 @@ func _on_delayed_land(pos: Vector2, elem: String) -> void:
 	_spawn_pfx(str(e[0]), wp, float(e[2]), str(e[1]), 1.30)
 
 # 首领倒下：白闪 + 大爆 + 金耀 + 重震，配一段很短的慢镜头
+# 纸人 Lv5：在核心那边挡下了首领延迟技
+func _on_paper_blocked(pos: Vector2) -> void:
+	_zhiren = maxi(0, _zhiren - 1)
+	_curio_uses += 1
+	_curio_flash()
+	_toast("纸人替身 · 挡下首领一击（剩 %d）" % _zhiren)
+	Aud.sfx("paper", -8.0, 1.0)
+	if _core != null:
+		_spawn_pfx("holy/heal", _core.position + pos, 1.0, "heal", 1.5)
+
 func _on_boss_died(pos: Vector2) -> void:
 	var wp: Vector2 = _core.position + pos
 	wp.x = clampf(wp.x, 90.0, 630.0)

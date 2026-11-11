@@ -113,6 +113,7 @@ signal hero_down()
 signal boss_arrived(tier: int)
 signal delayed_land(pos: Vector2, elem: String)   # 延迟技落点（外壳在这里挂 pixelfx）
 signal boss_died(pos: Vector2)                    # 首领倒下（外壳做演出）
+signal paper_blocked(pos: Vector2)                # 奇物·纸人替身挡下延迟技
 signal hero_attack()
 signal hero_hit()
 # 主角的剑真正打中某只怪（伤害/暴击/重击）；表现层只认这个信号出数字
@@ -1587,6 +1588,12 @@ func _delayed_hit(d: Dictionary) -> void:
 	var r := float(d["r"])
 	var elem := str(d["elem"])
 	var inr := _delayed_in(d)
+	# 奇物·纸人替身 Lv5：优先用纸人挡下首领延迟技
+	if inr and int(hero.get("paper_guard", 0)) > 0:
+		hero["paper_guard"] = int(hero["paper_guard"]) - 1
+		_push_float(hero_pos.x, hero_pos.y - 100.0, "纸人挡下", Color(0.98, 0.92, 0.76), true)
+		paper_blocked.emit(c)
+		inr = false
 	if inr:
 		var dm := hero_in_dmg(float(d["dmg"]), elem)
 		hero["hp"] = maxf(0.0, float(hero["hp"]) - dm)
