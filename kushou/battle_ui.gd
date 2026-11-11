@@ -209,6 +209,8 @@ var _chal_cd: Array = [0.0, 0.0, 0.0, 0.0, 0.0]   # 五种挑战的冷却剩余
 const PFX2D := preload("res://addons/pixelfx/nodes/pixel_fx_2d.gd")
 var _pfx_root: Node2D = null      # pixelfx 特效层（命中/暴击等）
 var _pfx_count := 0
+var _fly_layer = null           # 资源飞行层
+var _fly: Array = []
 var _last_combo := 0            # 连杀里程碑用（每 10 连炸一口）
 const PFX_MAX_LIVE := 20          # 同屏特效上限（超过就不再生，保丝滑）
 # 开局先把常用的几种烘好（BAKED 首次播放要烘，烘在开打前就不会卡第一下）
@@ -664,6 +666,11 @@ func _build_field() -> void:
 	_pfx_root = Node2D.new()
 	_pfx_root.z_index = 7
 	add_child(_pfx_root)
+	_fly_layer = FlyLayer.new()
+	_fly_layer.size = Vector2(720, 1280)
+	_fly_layer.z_index = 9
+	add_child(_fly_layer)
+	_fly = _fly_layer.dots
 	_prewarm_pfx.call_deferred()
 	_build_card_detail()
 	# v3 技能栏（右缘竖排，6 格可视）
@@ -1092,6 +1099,16 @@ func _tile(x: float, y: float, s: float, kind: String, label: String, hot: bool)
 	return t
 
 # 奇物方块：跟「挑战」一样 96×96，冷却时压暗 + 显示秒数
+# 资源飞行层：击杀掉的金币/晶石飞向右上角资源条（割草的正反馈）
+class FlyLayer extends Control:
+	var dots: Array = []
+	func _ready() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+	func _draw() -> void:
+		for d_v in dots:
+			var d: Dictionary = d_v
+			draw_circle(Vector2(float(d["x"]), float(d["y"])), float(d["r"]), d["col"])
+
 class CurioSquare extends Control:
 	const F := preload("res://fonts/ink.ttf")
 	signal pressed
@@ -1551,6 +1568,7 @@ func _process(_delta: float) -> void:
 		_tick_skills(_delta)
 		_tick_rare_buffs(_delta)
 		_tick_curio(_delta)
+		_tick_fly(_delta)
 		if _core != null:
 			var cb := int(_core._combo)
 			if cb != _last_combo:
@@ -3048,8 +3066,34 @@ func _add_wen(raw: int) -> void:
 	_refresh_str_tile()
 
 # core 的 coin_drop：钱怪 / 匪首 / boss 掉的真钱（带落点，先只记账）
-func _on_coin_drop(amount: int, _pos: Vector2) -> void:
+func _on_coin_drop(amount: int, pos: Vector2) -> void:
 	_add_wen(amount)
+	_spawn_fly(_core.position + pos + Vector2(0, -18), Vector2(99, 40), Color(0.90, 0.71, 0.30), 3)
+
+# 撒一把飞向資源条的小点（金币金、灵晶蓝）
+func _spawn_fly(from: Vector2, to: Vector2, col: Color, n: int) -> void:
+	for i in n:
+		if _fly.size() > 60:
+			break
+		_fly.append({"sx": from.x + randf_range(-16.0, 16.0), "sy": from.y + randf_range(-12.0, 12.0),
+			"x": from.x, "y": from.y,
+			"tx": to.x + randf_range(-18.0, 18.0), "ty": to.y + randf_range(-8.0, 8.0),
+			"t": randf_range(0.0, 0.12), "col": col, "r": randf_range(3.5, 6.0)})
+
+func _tick_fly(dt: float) -> void:
+	if _fly.is_empty():
+		return
+	for i in range(_fly.size() - 1, -1, -1):
+		var d: Dictionary = _fly[i]
+		d["t"] = float(d["t"]) + dt * 2.6
+		if float(d["t"]) >= 1.0:
+			_fly.remove_at(i)
+			continue
+		var e := float(d["t"])
+		var ee := 1.0 - pow(1.0 - e, 2.0)          # 先快后慢
+		d["x"] = lerpf(float(d["sx"]), float(d["tx"]), ee)
+		d["y"] = lerpf(float(d["sy"]), float(d["ty"]), ee) - sin(e * PI) * 56.0
+	_fly_layer.queue_redraw()
 
 func _trigger_combos(trigger: String) -> void:
 	for rec in _combined:
