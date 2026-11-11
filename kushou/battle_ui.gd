@@ -210,6 +210,7 @@ var _curio_sq = null             # 奇物方块（战场右下，与挑战对称
 var _curio_cd := 0.0             # 奇物冷却剩余
 var _curio_uses := 0             # 本局喝了几次（详情页显示）
 var _curio_detail: Control = null
+var _rare_taken: Dictionary = {}   # 抽到过的稀有单卡（全部唯一）
 var _wave_lb: Label
 var _hp_lb: Label
 var _wen := 0
@@ -1562,15 +1563,40 @@ func _add_exp(v: int) -> void:
 		return
 	_exp += int(round(float(v) * (1.0 + _exp_pct / 100.0)))
 	var up := 0
+	var god := 0
 	while _exp >= _exp_need:
 		_exp -= _exp_need
 		_lv += 1
 		_exp_need += 50
-		_draw_charge += 1
+		_level_bonus(1)               # 每级：攻击 +1 · 气血上限 +6（内力 +25 在 _tick_skills 里）
+		if _lv % 5 == 0:
+			_draw_charge += 1         # 请神：每 5 级 +1（开局不送）
+			god += 1
 		up += 1
 	_refresh_level_ui()
 	if up > 0:
-		_toast("升到 Lv %d · 请神 +%d" % [_lv, up])
+		var msg := "升到 Lv %d · 攻+%d · 血+%d" % [_lv, up, up * 6]
+		if god > 0:
+			msg += " · 请神 +%d" % god
+		_toast(msg)
+
+# 升级给属性（只在本局生效）：攻击 +1 · 气血上限 +6
+func _level_bonus(n: int) -> void:
+	if _core == null or n <= 0:
+		return
+	var h: Dictionary = _core.hero
+	var ratio := 1.0
+	if float(h["hp_max"]) > 0.0:
+		ratio = clampf(float(h["hp"]) / float(h["hp_max"]), 0.0, 1.0)
+	var add_atk := 1.0 * float(n)
+	var add_hp := 6.0 * float(n)
+	_core.attr_add("atk", add_atk)
+	_core.attr_add("hp", add_hp)
+	h["atk"] = float(h["atk"]) + add_atk
+	h["hp_max"] = float(h["hp_max"]) + add_hp
+	h["hp"] = float(h["hp_max"]) * ratio
+	_stats["atk"] = float(_stats["atk"]) + add_atk
+	_stats["hp"] = float(_stats["hp"]) + add_hp
 
 func _refresh_level_ui() -> void:
 	if _lv_lb != null:
@@ -1579,7 +1605,7 @@ func _refresh_level_ui() -> void:
 		_exp_lb.text = "%d/%d" % [_exp, _exp_need]
 	if _exp_bar != null:
 		var r := clampf(float(_exp) / maxf(1.0, float(_exp_need)), 0.0, 1.0)
-		_exp_bar.size = Vector2(maxf(4.0, 520.0 * r), 12.0)
+		_exp_bar.size = Vector2(maxf(4.0, 600.0 * r), 16.0)
 	if _mate_tile != null:
 		var lit := _draw_charge > 0
 		if _mate_tile.hot != lit:
@@ -2021,34 +2047,33 @@ const BOND_ENTRIES := ["攻防", "金银", "养战", "剑棍同源"]
 #        ③ 限时 buff ④ 直接给资源（文钱 / 灵晶 / 杀敌，小中大）
 # ============================================================
 const RARE_POOL := [
-	{"name": "倾囊", "glyph": "晶", "rare": true, "kind": "crystal_burst", "v": 200,
-		"effect": "灵晶 +200", "desc": "稀有 · 之后灵晶收入归零"},
+	# 特殊 3
+	{"name": "倾囊", "glyph": "晶", "rare": true, "kind": "crystal_burst", "v": 2000,
+		"effect": "灵晶 +2000", "desc": "稀有 · 之后灵晶收入归零"},
 	{"name": "折钱", "glyph": "换", "rare": true, "kind": "convert", "v": 10, "cap": 50,
 		"effect": "文钱 10:1 换灵晶", "desc": "稀有 · 最多换 50 灵晶"},
 	{"name": "狂血", "glyph": "狂", "rare": true, "kind": "buff", "stat": "atk_pct", "v": 60, "dur": 30,
 		"effect": "30 秒 攻击 +60%", "desc": "稀有 · 即得即用"},
-
-	{"name": "小晶囊", "glyph": "小", "rare": true, "kind": "res", "res": "crystal", "v": 20,
-		"effect": "灵晶 +20", "desc": "稀有 · 小"},
-	{"name": "中晶囊", "glyph": "中", "rare": true, "kind": "res", "res": "crystal", "v": 40,
-		"effect": "灵晶 +40", "desc": "稀有 · 中"},
-	{"name": "大晶囊", "glyph": "大", "rare": true, "kind": "res", "res": "crystal", "v": 80,
-		"effect": "灵晶 +80", "desc": "稀有 · 大"},
-
-	{"name": "小钱袋", "glyph": "小", "rare": true, "kind": "res", "res": "wen", "v": 300,
-		"effect": "文钱 +300", "desc": "稀有 · 小"},
-	{"name": "中钱袋", "glyph": "中", "rare": true, "kind": "res", "res": "wen", "v": 600,
-		"effect": "文钱 +600", "desc": "稀有 · 中"},
-	{"name": "大钱袋", "glyph": "大", "rare": true, "kind": "res", "res": "wen", "v": 1200,
-		"effect": "文钱 +1200", "desc": "稀有 · 大"},
-
-	{"name": "小杀令", "glyph": "小", "rare": true, "kind": "res", "res": "kill", "v": 50,
-		"effect": "杀敌 +50", "desc": "稀有 · 小"},
-	{"name": "中杀令", "glyph": "中", "rare": true, "kind": "res", "res": "kill", "v": 100,
-		"effect": "杀敌 +100", "desc": "稀有 · 中"},
-	{"name": "大杀令", "glyph": "大", "rare": true, "kind": "res", "res": "kill", "v": 200,
-		"effect": "杀敌 +200", "desc": "稀有 · 大"},
+	# 资源 12（三类 × 四档）
+	{"name": "小晶囊", "glyph": "小", "rare": true, "kind": "res", "res": "crystal", "v": 40, "effect": "灵晶 +40", "desc": "稀有 · 灵晶"},
+	{"name": "中晶囊", "glyph": "中", "rare": true, "kind": "res", "res": "crystal", "v": 80, "effect": "灵晶 +80", "desc": "稀有 · 灵晶"},
+	{"name": "大晶囊", "glyph": "大", "rare": true, "kind": "res", "res": "crystal", "v": 160, "effect": "灵晶 +160", "desc": "稀有 · 灵晶"},
+	{"name": "晶山", "glyph": "山", "rare": true, "kind": "res", "res": "crystal", "v": 320, "effect": "灵晶 +320", "desc": "稀有 · 灵晶"},
+	{"name": "小钱袋", "glyph": "小", "rare": true, "kind": "res", "res": "wen", "v": 500, "effect": "文钱 +500", "desc": "稀有 · 文钱"},
+	{"name": "中钱袋", "glyph": "中", "rare": true, "kind": "res", "res": "wen", "v": 1000, "effect": "文钱 +1000", "desc": "稀有 · 文钱"},
+	{"name": "大钱袋", "glyph": "大", "rare": true, "kind": "res", "res": "wen", "v": 2000, "effect": "文钱 +2000", "desc": "稀有 · 文钱"},
+	{"name": "金库", "glyph": "库", "rare": true, "kind": "res", "res": "wen", "v": 4000, "effect": "文钱 +4000", "desc": "稀有 · 文钱"},
+	{"name": "小杀令", "glyph": "小", "rare": true, "kind": "res", "res": "kill", "v": 60, "effect": "杀敌 +60", "desc": "稀有 · 杀敌"},
+	{"name": "中杀令", "glyph": "中", "rare": true, "kind": "res", "res": "kill", "v": 120, "effect": "杀敌 +120", "desc": "稀有 · 杀敌"},
+	{"name": "大杀令", "glyph": "大", "rare": true, "kind": "res", "res": "kill", "v": 240, "effect": "杀敌 +240", "desc": "稀有 · 杀敌"},
+	{"name": "屠戮令", "glyph": "屠", "rare": true, "kind": "res", "res": "kill", "v": 480, "effect": "杀敌 +480", "desc": "稀有 · 杀敌"},
+	# 混合 2
+	{"name": "双收", "glyph": "双", "rare": true, "kind": "mix", "wen": 1000, "crystal": 80,
+		"effect": "文钱 +1000 · 灵晶 +80", "desc": "稀有 · 混合"},
+	{"name": "丰年", "glyph": "丰", "rare": true, "kind": "mix", "wen": 1500, "crystal": 120, "kill": 120,
+		"effect": "钱+1500 · 晶+120 · 杀+120", "desc": "稀有 · 混合"},
 ]
+
 
 # 稀有单卡出现概率（每一手三张里）
 const RARE_CHANCE := 0.30
@@ -2119,8 +2144,8 @@ func _on_trea_tile() -> void:
 	if _trea_charge <= 0:
 		_toast("还没攒到宝物机会（每清一波 +1）")
 		return
-	if _bond_pool().is_empty() and not _trea_pending:
-		_toast("本局羁绊已全部结过")
+	if _bond_pool().is_empty() and _rare_pool().is_empty():
+		_toast("本局宝物已抽空")
 		return
 	_trea_charge -= 1
 	_trea_pending = true
@@ -2150,23 +2175,49 @@ func _bond_pool() -> Array:
 			out.append(e)
 	return out
 
+# 稀有单卡池：抽到过的（唯一）不再出现
+func _rare_pool() -> Array:
+	var out: Array = []
+	for e_v in RARE_POOL:
+		var e: Dictionary = e_v
+		if not _rare_taken.has(str(e["name"])):
+			out.append(e)
+	return out
+
 func _roll_trea() -> void:
 	var q := _trea_quality()
 	var mult: float = [1.0, 1.5, 2.0, 3.0][clampi(q - 2, 0, 3)]
-	var pool: Array = _bond_pool()
-	pool.shuffle()
+	var bp: Array = _bond_pool()
+	var rp: Array = _rare_pool()
+	bp.shuffle()
+	rp.shuffle()
 	var picks: Array = []
-	for i in _trea_cards.size():
-		picks.append((pool[i] as Dictionary) if i < pool.size() else {})
-	# 稀有单卡：30% 概率顶掉一张（优先顶掉空位）
-	if not RARE_POOL.is_empty() and randf() < RARE_CHANCE:
-		var r: Dictionary = (RARE_POOL[randi() % RARE_POOL.size()] as Dictionary).duplicate()
-		var slot := 0
-		for i in picks.size():
-			if (picks[i] as Dictionary).is_empty():
-				slot = i
-				break
-		picks[slot] = r
+	var used := {}
+	for e_v in bp:
+		if picks.size() >= _trea_cards.size():
+			break
+		var e: Dictionary = e_v
+		if used.has(str(e["name"])):
+			continue
+		used[str(e["name"])] = true
+		picks.append(e)
+	# 稀有单卡：30% 概率塞一张（有空位就补位，没空位就随机顶掉一张）
+	if not rp.is_empty() and randf() < RARE_CHANCE:
+		var r: Dictionary = rp[0]
+		if picks.size() < _trea_cards.size():
+			picks.append(r)
+		else:
+			picks[randi() % picks.size()] = r
+		used[str(r["name"])] = true
+	# 两池兜底：羁绊不够三张就继续用稀有补；同名不重复
+	for e_v2 in rp:
+		if picks.size() >= _trea_cards.size():
+			break
+		var e2: Dictionary = e_v2
+		if used.has(str(e2["name"])):
+			continue
+		used[str(e2["name"])] = true
+		picks.append(e2)
 	for i in _trea_cards.size():
 		var c: AugCard = _trea_cards[i]
 		var o: Dictionary = picks[i] if i < picks.size() else {}
@@ -2179,7 +2230,7 @@ func _roll_trea() -> void:
 		c.glyph = str(o["glyph"])
 		if bool(o.get("rare", false)):
 			# 稀有单卡：数值固定，不吃品质
-			c.oval = int(o["v"])
+			c.oval = int(o.get("v", 0))
 			c.effect = str(o.get("effect", ""))
 			c.desc = str(o.get("desc", "稀有单卡"))
 			c.quality = 5
@@ -2233,6 +2284,16 @@ func _apply_rare(o: Dictionary) -> void:
 			_toast("稀有 · %d 文钱换 %d 灵晶" % [spend, got])
 		"buff":
 			_apply_rare_buff(o)
+		"mix":
+			_add_wen(int(o.get("wen", 0)))
+			_gain_crystal(int(o.get("crystal", 0)))
+			var kk := int(o.get("kill", 0))
+			if kk > 0:
+				_kills += kk
+				if _kill_lb != null:
+					_kill_lb.text = str(_kills)
+				_add_exp(20 * kk)
+			_toast("稀有 · " + str(o.get("effect", "")))
 		_:
 			match str(o.get("res", "")):
 				"wen":
@@ -2306,7 +2367,7 @@ func _pick_trea(o: Dictionary, val: int) -> void:
 	if bool(o.get("rare", false)):
 		_trea_pending = false
 		_hide_trea()
-		_trea_reroll += 0
+		_rare_taken[str(o["name"])] = true        # 稀有单卡也是唯一，拿过不再出
 		_apply_rare(o)
 		return
 	var b := {"name": str(o["name"]), "boost": int(val), "prog": 0,
@@ -2802,6 +2863,7 @@ func _init_cards() -> void:
 	_bond_taken.clear()
 	_crystal_lock = false
 	_rare_buffs.clear()
+	_rare_taken.clear()
 	_curio_cd = 0.0
 	_curio_uses = 0
 	_run_over = false
