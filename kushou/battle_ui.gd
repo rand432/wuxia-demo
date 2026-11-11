@@ -1978,6 +1978,13 @@ func _end_run(win: bool) -> void:
 	_run_over = true
 	if _core != null:
 		_core.running = false
+	# 结算前的"定格式"反馈：一闪 + 长顿帧，然后才弹面板
+	_screen_flash(Color(1.0, 0.96, 0.82) if win else Color(0.52, 0.17, 0.13), 0.34 if win else 0.28, 0.5)
+	if _core != null:
+		_core._hitstop = maxf(float(_core._hitstop), 0.30)
+	if win:
+		for i in 10:
+			_spawn_fly(Vector2(360, 470), Vector2(99, 40), Color(0.92, 0.74, 0.32), 1)
 	_build_result(win)
 	Aud.sfx("levelup" if win else "ui_back", -3.0)
 
