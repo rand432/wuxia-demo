@@ -308,12 +308,14 @@ var _hero_name_lb: Label = null
 
 func _ready() -> void:
 	_max_wave = LevelState.waves()
+	var _t0 := Time.get_ticks_msec()
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var th := Theme.new()
 	th.default_font = FONT
 	th.default_font_size = 17
 	theme = th
 	_init_cards()
+	print("[BOOT] init_cards=", Time.get_ticks_msec() - _t0)
 	_build_bg()
 	_build_hud()
 	_build_field()
@@ -321,6 +323,7 @@ func _ready() -> void:
 	_build_bottom()
 	_q_init()
 	_build_draw()
+	print("[BOOT] ui_core=", Time.get_ticks_msec() - _t0)
 	# v6：角色属性统一走详细属性页（attr_panel），旧 8 行窗不再创建
 	_build_exit()
 	_build_toast()
@@ -328,6 +331,7 @@ func _ready() -> void:
 	_build_god_pick()
 	_build_str()
 	_build_trea()
+	print("[BOOT] panels=", Time.get_ticks_msec() - _t0)
 	_bm = BlackMarket.new()
 	_bm.setup(_core, self)
 	add_child(_bm)
@@ -336,6 +340,7 @@ func _ready() -> void:
 	_tut = TutorialOverlay.new()
 	add_child(_tut)
 	_refresh_deck()
+	print("[BOOT] done=", Time.get_ticks_msec() - _t0)
 	_apply_level_preview()
 	_maybe_level_button_tutorial.call_deferred()
 	set_process(true)
