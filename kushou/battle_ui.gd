@@ -902,7 +902,10 @@ func _chal_press(i: int) -> void:
 	_chal_cd[i] = _chal_base_cd(i)
 	_chal_count += 1
 	_qc("chal", 1)
-	_core.spawn_challenge(i, int(CHAL_GROUP[i]))
+	var grp := int(CHAL_GROUP[i])
+	if LevelState.current_level == 4:
+		grp = maxi(1, int(round(float(grp) * 0.5)))   # 第四关挑战刷怪量减半
+	_core.spawn_challenge(i, grp)
 	# 挑战开打：战场上方一口落地冲击 + 鼓，给"应战"的分量
 	_spawn_pfx("impacts/ground-slam", Vector2(360, 235), 0.95, "shadow", 1.5)
 	Aud.sfx("drum", -12.0, 1.10)
@@ -6563,7 +6566,7 @@ func _devour_keep(n: int) -> void:
 #   接受后才开始计时 / 布置战场；**战斗中途不能放弃**
 #   掷到的下一条只会储存（不显示），当前那条结束才顶上来
 # ============================================================
-const Q_TICK := 75.0
+const Q_TICK := 180.0             # 奇遇每 180 秒一次（旧版 75s，按新节奏拉长）
 const Q_QUEUE_MAX := 3
 const Q_TIER_CN := ["简单", "普通", "困难", "特殊"]
 const Q_TIER_W := [[45.0, 55.0, 0.0, 0.0], [20.0, 50.0, 30.0, 0.0], [10.0, 35.0, 40.0, 15.0]]
