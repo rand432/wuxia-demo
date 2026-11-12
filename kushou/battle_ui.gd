@@ -2182,6 +2182,19 @@ func _process(_delta: float) -> void:
 		if _hp_lb != null:
 			_hp_lb.text = "%d/%d" % [int(float(_core.hero.get("hp", 0))), int(float(_core.hero.get("hp_max", 1)))]
 		var hpr := clampf(float(_core.hero.get("hp", 0.0)) / maxf(1.0, float(_core.hero.get("hp_max", 1.0))), 0.0, 1.0)
+		if LevelState.current_level >= 2 and LevelState.current_level <= 4:
+			# 不改怪面板，只偷偷加易伤：成长/家传组合给足，经济/危途给少一点
+			var vuln := 0.0
+			for rec in _combined:
+				var s := str(rec.get("series", ""))
+				if s in ["gold", "crystal", "exp", "bounty"]:
+					vuln += 0.06
+				elif s in ["swarm", "peril"]:
+					vuln += 0.10
+				else:
+					vuln += 0.15
+			vuln += float(_ancestor_combos.size()) * 0.15
+			_core.foe_vuln = minf(0.45, vuln)
 		if int(_core.wave) >= 2 and hpr <= 0.50:
 			_l1_tutorial("l1_yuhu", _curio_sq, "气血不足时，玉壶会自动回血", _show_curio_detail)
 		if _hp_fill != null:
@@ -2321,6 +2334,8 @@ func _on_core_kill(n: int) -> void:
 		_bm.add_kill(kn)
 	_add_exp(20 * kn)                      # v2：杀 1 只 +20 经验
 	_add_wen(int(round(float(WEN_KILL_BASE + WEN_KILL_WAVE * int(_core.wave)) * (1.0 + _kill_pct / 100.0))))
+	if LevelState.current_level == 2:
+		_gain_crystal(1)   # 只有第二关靠普通击杀补灵晶；第三关起让经济线说话
 	if _qianzhi:
 		for i in kn:
 			_core.summon_minion("纸人", Color(0.95, 0.93, 0.86), 0.72, 0.5, 8.0 / 30.0, 1.0, 0.0, 99, "", "paper")
@@ -3903,6 +3918,9 @@ func _on_core_coin(n: int) -> void:
 
 # v6：一切文钱收入都走这里（好让［强化］的价钱灯跟着亮/灭）
 func _add_wen(raw: int) -> void:
+	if LevelState.current_level == 1:
+		raw = int(round(float(raw) * 1.8))   # 第一关文钱加速：10 级进阶要 840，两波内攒得出来
+
 	_pulse_chip(_coin_lb)
 	if raw <= 0:
 		return

@@ -67,6 +67,7 @@ func _apply_dmg(f: Dictionary, amount: float, dtype: String) -> float:
 	# v15w 破阵刀客「破甲」：被破甲的目标护甲 −20%
 	if float(f.get("armor_break_t", 0.0)) > 0.0:
 		final *= 0.80
+	final *= 1.0 + foe_vuln
 	if float(f.get("boss_cut", 0.0)) > 0.0:
 		final *= 1.0 - float(f["boss_cut"])            # v14g：boss 词缀"重甲"减伤
 	# v16k：盾兵**正面格挡**——扣血前再削一刀（−45%），并飘个"挡"字
@@ -138,13 +139,14 @@ var _wave_spawned := 0              # 已经刷了几只
 var _last_quota_wave := 1           # v17x：上一次结算定额时的波数（用来检测换波）
 
 func _wave_quota_for(w: int) -> int:
+	# 割草曲线：前期就多，后期继续缓涨；不再在 11 波突然掉到 14
 	if w <= 3:   return 24
-	if w <= 6:   return 28
-	if w <= 10:  return 32
-	if w <= 15:  return 14
-	if w <= 20:  return 16
-	if w <= 25:  return 18
-	return 20
+	if w <= 6:   return 26
+	if w <= 10:  return 28
+	if w <= 15:  return 26
+	if w <= 20:  return 28
+	if w <= 25:  return 32
+	return 34
 
 var SPAWN_EVERY := 1.6               # 每批之间的间隔（原来是 1.2 秒刷一只；现在成批刷）
 var SPAWN_PACK := 4                  # 一批几只（割草：一次涌出 4 只，凑成可被横扫的一团）
@@ -161,9 +163,9 @@ const FOE_STOP := 150.0             # 怪走到离主角多近就停下开打
 #   而怪的伤害是按"随时满血"那套调的 → 前期就磨死。这条是最自然的续航：
 #   砍死一只回一小口，而且它会跟着"血上限↑、击杀速度↑"自己变强。
 var kill_heal := 0.08               # 击杀回血 = 上限的 8%（v18j 定值：见交接文档 §3.6 的实测表）
-var WAVE_HP := 1.08                 # 每波怪血 ×（v18j：1.14 → 1.08，实测同一套续航下 1-1 能多撑 2 波）
+var WAVE_HP := 1.10                 # 每波怪血 ×（1.08→1.10：前 6 波仍一刀，20 波后开始明显要补输出）
 var WAVE_ATK := 1.08                # 每波怪攻 ×
-const BASE_FOE_HP := 10.0           # v16x 原为 34；割草：前几波一刀一只（可一行还原）
+const BASE_FOE_HP := 9.0            # 波1 约 7.6 血；主角 12 攻，前 6 波稳定一刀
 var BASE_FOE_ATK := 3.8              # v6：删闪避后怪必中，怪攻 4.5→3.8 补偿　·　v17c（用户："调整怪伤害略微增加"）：4.0 -> 4.5　·　v18j 改 var：调参口
 const FOE_ASPD := 0.6               # 怪每秒打几下
 const FOE_SPD := 74.0               # 怪往下走的速度（像素/秒）
@@ -382,6 +384,7 @@ var running := false
 var intro_wait := 0.0               # 开场等待（站桩，不出手也不动）
 var kills_total := 0
 var boss_alive := false
+var foe_vuln := 0.0                 # 隐藏易伤：抽卡组合越多，怪实际吃的伤害越高
 
 var _spawn_t := 0.6
 var _spawn_left := 0                 # 本批还剩几只没放出来
@@ -544,8 +547,15 @@ func early_mul(atk: bool) -> float:
 	var k := clampf(float(maxi(1, wave) - 1) / 9.0, 0.0, 1.0)     # 波1 → 0；波10 → 1
 	return lerpf(EARLY_ATK if atk else EARLY_HP, 1.0, k)
 
+func _tutorial_hp_mul() -> float:
+	var L := preload("res://shared/level_state.gd")
+	if L.current_level != 1 or L.tutorial_l1_done():
+		return 1.0
+	var m := [1.0, 1.7, 2.5, 3.3, 4.0]
+	return float(m[clampi(wave - 1, 0, 4)])
+
 func _foe_hp() -> float:
-	return BASE_FOE_HP * pow(WAVE_HP, float(wave - 1)) * foe_mul * diff_mul() * early_mul(false)      # v14e：关卡难度倍率
+	return BASE_FOE_HP * pow(WAVE_HP, float(wave - 1)) * foe_mul * diff_mul() * early_mul(false) * _tutorial_hp_mul()      # v14e：关卡难度倍率
 
 func _foe_atk() -> float:
 	return BASE_FOE_ATK * pow(WAVE_ATK, float(wave - 1)) * foe_mul * diff_mul() * early_mul(true)     # v14e：关卡难度倍率
@@ -603,8 +613,8 @@ const CHAL_FOE_NAME := ["钱怪", "晶怪", "书怪", "宝箱大怪", "挑战 bo
 # v15o（用户："挑战方面 也会随着波次增强 奖励也会随之提升"）：
 #   挑战原来跟普通怪吃**同一条**波次曲线（血 1.12^波 / 攻 1.08^波），后期会觉得"白送"。
 #   这里再叠一层**挑战专属**的线性爬升：怪涨得比奖励快（不然灵晶经济会崩）。
-const CHAL_HP_RAMP := 0.06          # 挑战怪血：每波 +6%（波30 → ×2.74）
-const CHAL_ATK_RAMP := 0.05         # 挑战怪攻：每波 +5%（波30 → ×2.45）
+const CHAL_HP_RAMP := 0.07          # 挑战怪血：每波 +7%（波30 → ×3.03）
+const CHAL_ATK_RAMP := 0.06         # 挑战怪攻：每波 +6%（波30 → ×2.74）
 const CHAL_MONEY_RAMP := 0.05       # 钱怪文钱：每波 +5%
 const CHAL_CRYSTAL_RAMP := 0.03     # 晶怪灵晶：每波 +3%（保守：挑战每波都能刷，涨猛了一局 1500+ 灵晶）
 const CHAL_EXP_RAMP := 0.04         # 书怪经验：每波 +4%

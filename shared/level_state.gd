@@ -41,6 +41,7 @@ const FIRST_REWARDS := {
 # 请神六位：L5 开 2 位，之后每关 +1，L9 满 6；顺序按设计固定
 const GOD_ORDER := ["zl", "cuisanniang", "jicanghai", "qingluan", "chenshi", "liuqingqing"]
 
+const SAVE_VERSION := 2
 const SAVE_PATH := "user://level_state.cfg"
 
 static var current_level := 1
@@ -60,9 +61,13 @@ static func ensure_loaded() -> void:
 	max_unlocked = clampi(int(cfg.get_value("levels", "max", 1)), 1, LEVELS.size())
 	first_clear = cfg.get_value("levels", "first_clear", {}) as Dictionary
 	tutorial_done = cfg.get_value("levels", "tutorial_done", {}) as Dictionary
+	# v2：旧存档里的教学 done 是调参/探针写进去的，清掉，保证玩家能看到强制教学
+	if int(cfg.get_value("levels", "version", 1)) < SAVE_VERSION:
+		tutorial_done = {}
 
 static func save() -> void:
 	var cfg := ConfigFile.new()
+	cfg.set_value("levels", "version", SAVE_VERSION)
 	cfg.set_value("levels", "current", current_level)
 	cfg.set_value("levels", "max", max_unlocked)
 	cfg.set_value("levels", "first_clear", first_clear)
@@ -78,6 +83,9 @@ static func waves(level: int = -1) -> int:
 	return int(config(level).get("waves", 5))
 
 # 十关循环用现有 16 只 Boss 的 4 阶：1-3 关一阶，4-6 二阶，7-9 三阶，10 四阶
+static func tutorial_l1_done() -> bool:
+	return tutorial_was_done("l1_wen") and tutorial_was_done("l1_attr") and tutorial_was_done("l1_aug") and tutorial_was_done("l1_yuhu")
+
 static func god_count(level: int = -1) -> int:
 	var lv := current_level if level < 0 else level
 	if lv < 5:
@@ -89,7 +97,13 @@ static func god_ids(level: int = -1) -> Array:
 
 static func boss_tier(level: int = -1) -> int:
 	var lv := current_level if level < 0 else level
-	return clampi(1 + (lv - 1) / 3, 1, 4)
+	if lv <= 2:
+		return 1
+	if lv <= 4:
+		return 2
+	if lv <= 7:
+		return 3
+	return 4
 
 static func show_button(kind: String, level: int = -1) -> bool:
 	var sh: Dictionary = config(level).get("show", {})
@@ -111,6 +125,9 @@ static func card_allowed(id: String, level: int = -1) -> bool:
 		pass
 	elif key in LINE_ECON:
 		if lv < 3:
+			return false
+		# 第三关经济线只先给灵晶/文钱；杀敌数/直接奖励留到第四关
+		if lv == 3 and key in ["exp", "bounty"]:
 			return false
 	elif key in LINE_DANGER:
 		if lv < 4:
