@@ -32,11 +32,16 @@ const LINE_DANGER := ["swarm", "peril"]
 
 # 首通掉落（7/8/9/10 关）；实际系统未做的先留字段，文案照设计
 const FIRST_REWARDS := {
+	1: {"preview": {"crystal": 60}, "text": "下一关抽卡：灵晶 +60"},
+	2: {"preview": {"wen": 200}, "text": "下一关经济：文钱 +200"},
+	3: {"preview": {"chal": 1}, "text": "下一关挑战：次数 +1"},
+	4: {"preview": {"exp_pct": 20}, "text": "下一关经验：经验获取 +20%"},
+	5: {"preview": {"forge": 20}, "text": "下一关黑市：锻造石 +20"},
 	6: {"wen": 300, "skill_book": "玄品", "skill_book_n": 2, "text": "文钱 +300 · 玄品技能书 ×2"},
-	7: {"wen": 600, "equip": 4, "forge_mat": 10, "text": "四件凡品装备 + 文钱 +600 · 锻造石 ×10"},
-	8: {"wen": 300, "advance": 1, "text": "角色进阶材料 +1"},
-	9: {"wen": 300, "advance": 1, "text": "角色进阶 +1"},
-	10: {"wen": 300, "curio": 1, "new_cards": 1, "text": "新奇物 + 固定新卡组"},
+	7: {"wen": 1000, "equip": 4, "forge_mat": 100, "text": "四件凡品装备 + 文钱 +1000 · 锻造石 ×100"},
+	8: {"wen": 1500, "shards": {"zhujue": 30}, "text": "主角角色碎片 +30 · 文钱 +1500"},
+	9: {"wen": 1000, "curio_shards": 30, "text": "奇物碎片 +30 · 文钱 +1000"},
+	10: {"wen": 300, "new_cards": 1, "text": "新卡组解锁"},
 }
 
 # 请神六位：L5 开 2 位，之后每关 +1，L9 满 6；顺序按设计固定
@@ -50,6 +55,8 @@ static var current_level := 1
 static var max_unlocked := 1
 static var first_clear: Dictionary = {}
 static var tutorial_done: Dictionary = {}
+# 首通后给下一关的“预习”开局加成：{lv, crystal/wen/chal/god/forge}
+static var preview: Dictionary = {}
 static var _loaded := false
 
 static func ensure_loaded() -> void:
@@ -63,6 +70,7 @@ static func ensure_loaded() -> void:
 	max_unlocked = clampi(int(cfg.get_value("levels", "max", 1)), 1, LEVELS.size())
 	first_clear = cfg.get_value("levels", "first_clear", {}) as Dictionary
 	tutorial_done = cfg.get_value("levels", "tutorial_done", {}) as Dictionary
+	preview = cfg.get_value("levels", "preview", {}) as Dictionary
 	# v2：旧存档里的教学 done 是调参/探针写进去的，清掉，保证玩家能看到强制教学
 	if int(cfg.get_value("levels", "version", 1)) < SAVE_VERSION:
 		tutorial_done = {}
@@ -74,6 +82,7 @@ static func save() -> void:
 	cfg.set_value("levels", "max", max_unlocked)
 	cfg.set_value("levels", "first_clear", first_clear)
 	cfg.set_value("levels", "tutorial_done", tutorial_done)
+	cfg.set_value("levels", "preview", preview)
 	cfg.save(SAVE_PATH)
 
 static func config(level: int = -1) -> Dictionary:
@@ -154,8 +163,21 @@ static func mark_first_clear(level: int = -1) -> bool:
 		return false
 	first_clear[key] = true
 	max_unlocked = maxi(max_unlocked, mini(lv + 1, LEVELS.size()))
+	var r := first_reward(lv)
+	if r.has("preview"):
+		preview = (r["preview"] as Dictionary).duplicate()
+		preview["lv"] = mini(lv + 1, LEVELS.size())
 	save()
 	return true
+
+# 进入某关时取走属于它的“预习”加成，只生效一次
+static func take_preview(level: int) -> Dictionary:
+	if preview.is_empty() or int(preview.get("lv", 0)) != level:
+		return {}
+	var p: Dictionary = preview.duplicate()
+	preview = {}
+	save()
+	return p
 
 static func mark_tutorial(key: String) -> void:
 	ensure_loaded()

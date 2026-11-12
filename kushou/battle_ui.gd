@@ -336,8 +336,34 @@ func _ready() -> void:
 	_tut = TutorialOverlay.new()
 	add_child(_tut)
 	_refresh_deck()
+	_apply_level_preview()
 	_maybe_level_button_tutorial.call_deferred()
 	set_process(true)
+
+# 上一关首通留下的“预习”：下一关开局生效一次
+func _apply_level_preview() -> void:
+	var pv := LevelState.take_preview(LevelState.current_level)
+	if pv.is_empty():
+		return
+	if pv.has("crystal"):
+		_crystal += int(pv["crystal"])
+	if pv.has("wen"):
+		_wen += int(pv["wen"])
+	if pv.has("god"):
+		_draw_charge += int(pv["god"])
+	if pv.has("exp_pct"):
+		_exp_pct += float(pv["exp_pct"])   # 第四关预习：下一关经验加成
+	if pv.has("forge"):
+		var FDP := preload("res://shared/forge_data.gd")
+		FDP.ensure_bag()
+		FDP.ores += int(pv["forge"])
+	if pv.has("chal"):
+		for i in _chal_cd.size():
+			_chal_cd[i] = 0.0
+	_update_crystal()
+	if _coin_lb != null:
+		_coin_lb.text = str(_wen)
+	_refresh_level_ui()
 
 # ---------------- 通用 ----------------
 func _panel(rect: Rect2, bg: Color, radius := 8, border := Color(0, 0, 0, 0), bw := 0, parent: Node = null) -> Panel:
@@ -1880,6 +1906,15 @@ func _roll_draw() -> void:
 			if str(cc.get("ancestor", "")) != "":
 				fam.append(id_v)
 		cands = fam
+	# 第九关：主角家传权重再抬一档
+	if LevelState.current_level == 9:
+		var zj: Array = []
+		for id_v in cands:
+			zj.append(id_v)
+			var zc: Dictionary = _card_db.get(str(id_v), {})
+			if str(zc.get("ancestor", "")) == "zhujue":
+				zj.append(id_v)
+		cands = zj
 	cands.shuffle()
 	# v4 炫卡高权重：池里有炫卡时 80% 直接排到第一张
 	var shiny_id := ""
@@ -1928,7 +1963,10 @@ func _roll_shiny_check(cards: Array) -> void:
 		var aid := str(c["ancestor"])
 		if _shiny_used.has(aid) or _shiny_rolled.has(aid):
 			continue
-		if randf() < 0.04:
+		var shiny_p := 0.04
+		if LevelState.current_level == 9 and aid == "zhujue":
+			shiny_p = 0.20   # 第九关只对主角炫彩卡大幅提升
+		if randf() < shiny_p:
 			_shiny_rolled[aid] = true
 			var sid := "shiny_" + aid
 			if _card_db.has(sid) and not _pool.has(sid):
@@ -2427,16 +2465,14 @@ func _add_exp(v: int) -> void:
 	_exp += int(round(float(v) * (1.0 + _exp_pct / 100.0)))
 	var up := 0
 	var god := 0
-	var lv := LevelState.current_level
-	var lv_cap := 30 if lv >= 9 else (25 if lv >= 8 else (20 if lv >= 7 else (15 if lv >= 6 else 10)))
-	while _exp >= _exp_need and _lv < lv_cap:
+	# 等级不设硬上限：正常经验到通关大约 20 级；请神次数另有 god_cap 管
+	while _exp >= _exp_need:
 		_exp -= _exp_need
 		_lv += 1
 		_exp_need += 50
 		_level_bonus(1)               # 每级：攻击 +1 · 气血上限 +6（内力 +25 在 _tick_skills 里）
 		if _lv % 5 == 0:
-			var god_cap := maxi(2, LevelState.god_count())
-			_draw_charge = mini(_draw_charge + 1, god_cap)   # 请神次数跟着该关开放人数走
+			_draw_charge += 1   # 每 5 级给一次；允许溢出，后面请神候选用完就攒着
 			if LevelState.current_level >= 5:
 				_tutorial("l5_mate", _mate_tile, "升级可以选请神，带家传卡", func() -> void: pass)
 			god += 1
@@ -2654,11 +2690,21 @@ func _grant_first_clear(lv: int) -> void:
 		for slot_v in FD.SLOT_KEYS:
 			var slot := str(slot_v)
 			FD.equipped[slot] = {"name": str(en.get(slot, "装备")), "quality": 1, "plus": 0, "trait": ""}
+	if r.has("curio_shards"):
+		GameState.curio_shards += int(r["curio_shards"])
+	if r.has("new_cards"):
+		GameState.new_cards_unlocked = true
+		_toast("新卡组已解锁 · 敬请期待第十一关")
+	if r.has("shards"):
+		var sh: Dictionary = r["shards"]
+		for k in sh.keys():
+			GameState.shards[str(k)] = int(GameState.shards.get(str(k), 0)) + int(sh[k])
 	if r.has("forge_mat"):
 		var FD2 := preload("res://shared/forge_data.gd")
 		FD2.ensure_bag()
-		FD2.bag.append({"name": "锻造石", "cat": "材料", "count": int(r["forge_mat"])})
-		FD2.bag.append({"name": "银两袋", "cat": "材料", "count": int(r["forge_mat"])})
+		var ore_n := int(r["forge_mat"])
+		FD2.ores += ore_n
+		FD2.silver += ore_n * 10   # 同步给锻造用的银两，够四件 +20 还有富余
 	if r.has("forge_mat"):
 		GameState.forge_mat += int(r["forge_mat"])
 	if r.has("equip"):
@@ -5211,6 +5257,9 @@ func _roll_god() -> void:
 		_hide_god_pick()
 		return
 	var n := 1
+	if LevelState.current_level >= 7:
+		n = 2   # 后续关请神改成二选一（仍按固定顺序取前两位未请的）
+	n = mini(n, cands.size())
 	var total_w := float(n) * 260.0 + float(maxi(0, n - 1)) * 40.0
 	var x0 := (720.0 - total_w) * 0.5
 	for i in n:

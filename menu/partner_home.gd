@@ -70,10 +70,11 @@ func _ready() -> void:
 		_ids.append(str(aid_v))
 	if not _ids.has("zhujue"):
 		_ids.append("zhujue")
-	# 占位星级：张道陵 3★、崔三娘 2★、季沧海 1★、主角 2★
+	# 星级优先读局外存档；空存档才用占位
 	var demo := [3, 2, 1, 2]
 	for i in _ids.size():
-		_stars[_ids[i]] = mini(5, demo[i] if i < demo.size() else 0)
+		var aid0 := str(_ids[i])
+		_stars[aid0] = int(GameState.stars.get(aid0, mini(5, demo[i] if i < demo.size() else 0)))
 	var bg := TextureRect.new()
 	bg.texture = load("res://assets/art/ui/partner_bg.png")
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -464,6 +465,29 @@ func _show_advance() -> void:
 	# 路线
 	_push_label(box, "进 阶 路 线", 20, Color(0.55, 0.30, 0.12), Vector2(26, 292))
 	_push_label(box, "每档独立：集齐 3 张 → 组合 → 清空", 14, DIM, Vector2(174, 292), 440)
+	# 角色进阶：消耗角色碎片，升 1 星
+	var shard_n := int(GameState.shards.get(aid, 0))
+	var adv_wen := 500
+	var wen_now := GameState.coin("wen")
+	var up_btn := Button.new()
+	up_btn.text = "进阶（碎片 60 / 已有 %d　·　文钱 %d / 已有 %d）" % [shard_n, adv_wen, wen_now]
+	up_btn.position = Vector2(26, 846)
+	up_btn.size = Vector2(588, 56)
+	up_btn.add_theme_font_size_override("font_size", 19)
+	up_btn.focus_mode = Control.FOCUS_NONE
+	up_btn.disabled = shard_n < 60 or wen_now < adv_wen
+	up_btn.pressed.connect(func() -> void:
+		if int(GameState.shards.get(aid, 0)) < 60 or GameState.coin("wen") < adv_wen:
+			return
+		GameState.shards[aid] = int(GameState.shards.get(aid, 0)) - 60
+		GameState.coins["wen"] = GameState.coin("wen") - adv_wen
+		GameState.stars[aid] = mini(5, int(GameState.stars.get(aid, _stars.get(aid, 0))) + 1)
+		_stars[aid] = int(GameState.stars[aid])
+		_close_pop()
+		_show_advance()
+		_build_slots()
+	)
+	box.add_child(up_btn)
 	var tiers: Array = a["tiers"]
 	var y := 312.0
 	for t in tiers.size():

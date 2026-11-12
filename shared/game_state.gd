@@ -14,6 +14,11 @@ static var new_curio_unlocked := false
 static var skill_lv := {}
 # 技能书按品级：凡/良/玄/地/天；升级消耗对应品级技能书 + 文钱
 static var skill_books := {"凡品": 0, "良品": 0, "玄品": 0, "地品": 0, "天品": 0}
+# 角色碎片（局外进阶）：初始主角 60；aid -> 碎片数
+static var shards := {"zhujue": 60}
+# 奇物合成碎片：第十关首通给；局外奇物页消耗碎片 + 文钱合成
+static var curio_shards := 0
+static var stars := {}
 
 static func coin(k: String) -> int:
 	return int(coins.get(k, 0))
