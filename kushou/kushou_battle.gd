@@ -144,9 +144,9 @@ func _wave_quota_for(w: int) -> int:
 	if w <= 6:   return 26
 	if w <= 10:  return 28
 	if w <= 15:  return 26
-	if w <= 20:  return 28
+	if w <= 20:  return 24
 	if w <= 25:  return 32
-	return 34
+	return 30
 
 var SPAWN_EVERY := 1.6               # 每批之间的间隔（原来是 1.2 秒刷一只；现在成批刷）
 var SPAWN_PACK := 4                  # 一批几只（割草：一次涌出 4 只，凑成可被横扫的一团）

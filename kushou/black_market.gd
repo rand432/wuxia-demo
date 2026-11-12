@@ -123,7 +123,7 @@ func close_panel() -> void:
 	queue_redraw()
 
 func add_kill(n: int) -> void:
-	exp += maxi(1, n)
+	exp += maxi(1, n) * 4   # 黑市经验大幅提升：一场战斗能滚出更多黑市等级
 	while level < 5:
 		var need: int = LEVEL_EXP[level - 1]
 		if exp < need:
@@ -312,6 +312,8 @@ func _apply_consumable(it: Dictionary) -> void:
 		ui._toast("用了 %s" % str(it.get("name", "")))
 
 func _apply_item(it: Dictionary) -> void:
+	if ui != null and (str(it.get("kind", "")) == "equipment" or str(it.get("kind", "")) == "artifact"):
+		ui._equip_vuln = minf(0.45, float(ui._equip_vuln) + 0.015)   # 拿到装备/神器：怪偷偷变脆
 	var st: Dictionary = it.get("stats", {})
 	if st.has("atk"):
 		core.attr_add("atk", float(st["atk"]))

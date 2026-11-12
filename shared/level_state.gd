@@ -39,7 +39,8 @@ const FIRST_REWARDS := {
 }
 
 # 请神六位：L5 开 2 位，之后每关 +1，L9 满 6；顺序按设计固定
-const GOD_ORDER := ["zl", "cuisanniang", "jicanghai", "qingluan", "chenshi", "liuqingqing"]
+# 六格请神：只放未封印的六位；最强的张道陵/崔三娘/季沧海封印中，不在这条顺序里
+const GOD_ORDER := ["chenshi", "liuqingqing", "qingluan", "xiaoqier", "gundilong", "mingzhu"]
 
 const SAVE_VERSION := 2
 const SAVE_PATH := "user://level_state.cfg"

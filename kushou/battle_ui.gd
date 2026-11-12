@@ -146,6 +146,9 @@ var _elem_mod := {}
 # v4 炫卡：掷中（进池）／已吞（一局一次）
 var _shiny_rolled := {}
 var _shiny_used := {}
+var _equip_vuln := 0.0               # 黑市拿到装备/神器后，偷偷给怪的易伤
+var _family_shiny_ready := false     # 第五关：第二组家传合成后，下一手必出炫彩
+var _family_shiny_done := false
 # v5 召唤物
 var _minions: Array = []
 # v6 吞海（崔三娘炫卡）：蛟龙永久 + 每秒/击杀 叠属性
@@ -173,7 +176,7 @@ var _jpo_base_aspd := 1.0
 # 攻速硬上限：只防卡（1/aspd 秒一下）；数值上「剑魄」本身不封顶
 const MAX_ASPD := 5.0
 # v10 抽取功能未做 → 天品祖宗暂时封印（不进三选一）
-const SEALED := ["zl", "cuisanniang", "jicanghai", "chenshi"]
+const SEALED := ["zl", "cuisanniang", "jicanghai"]   # 最强的三位封印；其余六位可按关解锁
 var _combined: Array = []
 var _stats := {"atk": 0.0, "def": 0.0, "hp": 0.0}
 # v6：卡池「防御」换算成固定减免的系数（1 点防御 = 3%，按 100 伤等效对齐旧手感）
@@ -903,8 +906,6 @@ func _chal_press(i: int) -> void:
 	_chal_count += 1
 	_qc("chal", 1)
 	var grp := int(CHAL_GROUP[i])
-	if LevelState.current_level == 4:
-		grp = maxi(1, int(round(float(grp) * 0.5)))   # 第四关挑战刷怪量减半
 	_core.spawn_challenge(i, grp)
 	# 挑战开打：战场上方一口落地冲击 + 鼓，给"应战"的分量
 	_spawn_pfx("impacts/ground-slam", Vector2(360, 235), 0.95, "shadow", 1.5)
@@ -1853,6 +1854,32 @@ func _build_draw() -> void:
 
 func _roll_draw() -> void:
 	var cands := _pool.duplicate()
+	# 第四关暗抬危途线：危险卡在抽卡池里权重 ×2，玩家更容易摸到增怪/挑战收益
+	if LevelState.current_level == 4:
+		var weighted: Array = []
+		for id_v in cands:
+			weighted.append(id_v)
+			var sid := str(id_v)
+			if sid.begins_with("swarm_") or sid.begins_with("peril_"):
+				weighted.append(id_v)
+		cands = weighted
+	# 杀敌相关卡（经验系）权重 ×2
+	var killw: Array = []
+	for id_v in cands:
+		killw.append(id_v)
+		var kc: Dictionary = _card_db.get(str(id_v), {})
+		if str(kc.get("series", "")) == "exp":
+			killw.append(id_v)
+	cands = killw
+	# 请神后：该祖宗的家传卡权重变大
+	if not _ancestors.is_empty():
+		var fam: Array = []
+		for id_v in cands:
+			fam.append(id_v)
+			var cc: Dictionary = _card_db.get(str(id_v), {})
+			if str(cc.get("ancestor", "")) != "":
+				fam.append(id_v)
+		cands = fam
 	cands.shuffle()
 	# v4 炫卡高权重：池里有炫卡时 80% 直接排到第一张
 	var shiny_id := ""
@@ -1864,6 +1891,22 @@ func _roll_draw() -> void:
 	if shiny_id != "" and randf() < 0.80:
 		cands.erase(shiny_id)
 		cands.push_front(shiny_id)
+	# 第五关：第二组家传后，下一手必出其中一位请神的炫彩卡
+	if _family_shiny_ready:
+		_family_shiny_ready = false
+		_family_shiny_done = true
+		var sids: Array = []
+		for a_v in _ancestors.keys():
+			var s := "shiny_" + str(a_v)
+			if _card_db.has(s):
+				sids.append(s)
+		if not sids.is_empty():
+			var sid := str(sids[randi() % sids.size()])
+			if not _pool.has(sid):
+				_pool.append(sid)
+			cands.erase(sid)
+			cands.push_front(sid)
+			_toast("炫彩卡必出 · 极低概率（4%），千中无一")
 	for i in _draw_cards.size():
 		var dc: DrawCard = _draw_cards[i]
 		if i < cands.size():
@@ -1890,7 +1933,7 @@ func _roll_shiny_check(cards: Array) -> void:
 			var sid := "shiny_" + aid
 			if _card_db.has(sid) and not _pool.has(sid):
 				_pool.append(sid)
-				_toast("彩蛋！「%s」入池 —— 刷新就能看到" % str((_card_db[sid] as Dictionary)["name"]))
+				_toast("彩蛋！炫彩卡「%s」入池 —— 极低概率（4%），千中无一" % str((_card_db[sid] as Dictionary)["name"]))
 				Aud.sfx("ult_ready", -4.0)
 
 func _update_crystal() -> void:
@@ -2187,7 +2230,7 @@ func _process(_delta: float) -> void:
 		var hpr := clampf(float(_core.hero.get("hp", 0.0)) / maxf(1.0, float(_core.hero.get("hp_max", 1.0))), 0.0, 1.0)
 		if LevelState.current_level >= 2 and LevelState.current_level <= 4:
 			# 不改怪面板，只偷偷加易伤：成长/家传组合给足，经济/危途给少一点
-			var vuln := 0.0
+			var vuln := _equip_vuln
 			for rec in _combined:
 				var s := str(rec.get("series", ""))
 				if s in ["gold", "crystal", "exp", "bounty"]:
@@ -2198,6 +2241,8 @@ func _process(_delta: float) -> void:
 					vuln += 0.15
 			vuln += float(_ancestor_combos.size()) * 0.15
 			_core.foe_vuln = minf(0.45, vuln)
+		elif _equip_vuln > 0.0:
+			_core.foe_vuln = minf(0.45, _equip_vuln)
 		if int(_core.wave) >= 2 and hpr <= 0.50:
 			_l1_tutorial("l1_yuhu", _curio_sq, "气血不足时，玉壶会自动回血", _show_curio_detail)
 		if _hp_fill != null:
@@ -2369,13 +2414,18 @@ func _add_exp(v: int) -> void:
 	_exp += int(round(float(v) * (1.0 + _exp_pct / 100.0)))
 	var up := 0
 	var god := 0
-	while _exp >= _exp_need:
+	var lv := LevelState.current_level
+	var lv_cap := 30 if lv >= 9 else (25 if lv >= 8 else (20 if lv >= 7 else (15 if lv >= 6 else 10)))
+	while _exp >= _exp_need and _lv < lv_cap:
 		_exp -= _exp_need
 		_lv += 1
 		_exp_need += 50
 		_level_bonus(1)               # 每级：攻击 +1 · 气血上限 +6（内力 +25 在 _tick_skills 里）
 		if _lv % 5 == 0:
-			_draw_charge += 1         # 请神：每 5 级 +1（开局不送）
+			var god_cap := maxi(2, LevelState.god_count())
+			_draw_charge = mini(_draw_charge + 1, god_cap)   # 请神次数跟着该关开放人数走
+			if LevelState.current_level >= 5:
+				_tutorial("l5_mate", _mate_tile, "升级可以选请神，带家传卡", func() -> void: pass)
 			god += 1
 		up += 1
 	_qc("lv", up)
@@ -2642,9 +2692,7 @@ func _maybe_level_button_tutorial() -> void:
 			target = _chal_btn
 			text = "挑战会刷出额外怪，收益更高"
 		5:
-			key = "l5_mate"
-			target = _mate_tile
-			text = "升级可以选请神，带家传卡"
+			return   # 第五关的请神教学改到第一次攒到请神次数时再出
 		6:
 			key = "l6_market"
 			target = _market_tile
@@ -3125,6 +3173,23 @@ func _roll_trea() -> void:
 	var mult: float = [1.0, 1.5, 2.0, 3.0][clampi(q - 2, 0, 3)]
 	var bp: Array = _bond_pool()
 	var rp: Array = _rare_pool()
+	# 杀敌/经验相关羁绊优先：悬赏、开源（经济链终）以及描述里带杀敌的
+	var kill_bonds: Array = []
+	var other_bonds: Array = []
+	for b_v in bp:
+		var b: Dictionary = b_v
+		var is_kill := false
+		for s_v in (b.get("need_series", []) as Array):
+			if str(s_v) == "exp":
+				is_kill = true
+		var bn := str(b.get("name", ""))
+		if bn in ["悬赏", "开源"] or str(b.get("desc", "")).contains("杀敌"):
+			is_kill = true
+		if is_kill:
+			kill_bonds.append(b)
+		else:
+			other_bonds.append(b)
+	bp = kill_bonds + other_bonds
 	bp.shuffle()
 	rp.shuffle()
 	var picks: Array = []
@@ -3892,6 +3957,8 @@ func _activate_ancestor_set(sid: String, first: Dictionary, ids: Array) -> void:
 	var t := int(first["tier"])
 	_ancestor_combos.append({"ancestor": ai, "tier": t, "sources": srcs,
 		"name": str(first["combo_name"]), "text": str(first["combo_text"])})
+	if LevelState.current_level == 5 and _ancestor_combos.size() == 2 and not _family_shiny_done:
+		_family_shiny_ready = true   # 第五关是请神引导：第二组家传后必出一张炫彩
 	_add_ancestor_effects(ai, first.get("effects", {}))
 	if ai == "zhujue":
 		_apply_hero_passive(first.get("effects", {}))
@@ -4030,6 +4097,10 @@ func _trigger_combos(trigger: String) -> void:
 	if _combined_layer != null and _combined_layer.visible:
 		_refresh_combined()
 
+# 第四关挑战刷怪减半，危途“挑战收益”卡偷偷补 1.5 倍，保住风险换收益
+func _peril_scale(v: float) -> float:
+	return v
+
 func _apply_combo(rec: Dictionary) -> void:
 	rec["stacks"] = int(rec.get("stacks", 0)) + 1
 	var key := str(rec.get("combo_key", ""))
@@ -4072,13 +4143,13 @@ func _apply_combo(rec: Dictionary) -> void:
 		"count_flat":
 			_wave_extra += _take_int(rec, val)
 		"coin_count":
-			_coin_count_extra += _take_int(rec, val)
+			_coin_count_extra += _take_int(rec, _peril_scale(float(val)))
 		"crystal_count":
-			_crystal_count_extra += _take_int(rec, val)
+			_crystal_count_extra += _take_int(rec, _peril_scale(float(val)))
 		"treasure_pct":
-			_treasure_pct += val
+			_treasure_pct += _peril_scale(val)
 		"boss_pct":
-			_boss_pct += val
+			_boss_pct += _peril_scale(val)
 		"devour_n":
 			_devour_keep(_take_int(rec, val))
 		"killnum_pct":
@@ -4220,13 +4291,13 @@ func _apply_own(s: Dictionary) -> void:
 	if float(s.get("count", 0.0)) > 0.0:
 		_wave_extra += int(s["count"])
 	if float(s.get("coin_count", 0.0)) > 0.0:
-		_coin_count_extra += int(s["coin_count"])
+		_coin_count_extra += int(round(_peril_scale(float(s["coin_count"]))))
 	if float(s.get("crystal_count", 0.0)) > 0.0:
-		_crystal_count_extra += int(s["crystal_count"])
+		_crystal_count_extra += int(round(_peril_scale(float(s["crystal_count"]))))
 	if float(s.get("treasure_pct", 0.0)) > 0.0:
-		_treasure_pct += float(s["treasure_pct"])
+		_treasure_pct += _peril_scale(float(s["treasure_pct"]))
 	if float(s.get("boss_pct", 0.0)) > 0.0:
-		_boss_pct += float(s["boss_pct"])
+		_boss_pct += _peril_scale(float(s["boss_pct"]))
 	if float(s.get("wen_flat", 0.0)) > 0.0:
 		_add_wen(int(s["wen_flat"]))
 	if float(s.get("crystal_flat", 0.0)) > 0.0:
@@ -5090,7 +5161,7 @@ func _roll_god() -> void:
 	var cands: Array = []
 	var allowed := LevelState.god_ids()
 	var unseen := allowed.duplicate()
-	unseen.shuffle()
+	# 固定顺序：第一次请神给第一位，第二次给第二位，不随机
 	for aid_v in unseen:
 		var aid := str(aid_v)
 		if SEALED.has(aid):
@@ -5103,8 +5174,7 @@ func _roll_god() -> void:
 		_toast("可请的祖宗都已上身（高品祖宗需抽取，暂未开放）")
 		_hide_god_pick()
 		return
-	cands.shuffle()
-	var n := mini(2, cands.size())
+	var n := 1
 	var total_w := float(n) * 260.0 + float(maxi(0, n - 1)) * 40.0
 	var x0 := (720.0 - total_w) * 0.5
 	for i in n:
@@ -6898,6 +6968,8 @@ func _q_roll() -> void:
 		return
 	var wave := int(_core.wave)
 	var tw: Array = Q_TIER_W[0] if wave <= 2 else (Q_TIER_W[1] if wave == 3 else Q_TIER_W[2])
+	if LevelState.current_level == 4:
+		tw = [5.0, 25.0, 45.0, 25.0]   # 第四关奇遇：困难和特殊权重抬高
 	var roll := randf() * 100.0
 	var tier := 0
 	var acc := 0.0
