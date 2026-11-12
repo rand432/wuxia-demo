@@ -1,0 +1,93 @@
+=== 立绘 & 奇物 · 批量 Prompt 清单 ===
+用法：一条 prompt = 一行。复制整行丢给 AI 即可。
+
+【尺寸】1080x1920 竖构图 · 透明底 PNG（退而求其次：纯米黄 #F0E8D8）
+【安全区】左边 1/6 与右下 120x120 不放重要内容（会被 UI 盖住）
+【动态版】在任意一条后面加：| subtle looping idle animation, gentle breathing, cloth and hair swaying slightly, seamless loop, first and last frame identical, no camera movement
+
+【通用负向词】Negative: text, watermark, border, frame, logo, extra limbs, deformed hands, 3D render, plastic skin, anime big eyes, photo realistic, dark background, cropped head, cropped feet
+
+──────────────── 角色立绘（11） ────────────────
+[portrait_zl] 张道陵
+Chinese ink wash painting, xuan paper texture, wuxia, full body character, soft light, single accent color, fine ink outline, lots of negative space, transparent background, vertical composition, no text, no watermark -- elderly taoist master, long white hair and white beard, lotus crown, grey-white crane-feather robe over dark inner robe, holding a wooden-hilted ritual sword point-down in right hand, left hand in mudra, faint thunderclouds and golden sparks behind him, calm and serene, eyes half closed, gold accent
+
+[portrait_cuisanniang] 崔三娘
+Chinese ink wash painting, xuan paper texture, wuxia, full body character, soft light, single accent color, fine ink outline, lots of negative space, transparent background, vertical composition, no text, no watermark -- young fisherwoman, wide broken-brim straw hat, teal short tunic and trousers, sleeves rolled up, barefoot, holding a fishing trident in right hand with small shells hanging from the tip, rippling water at her feet, faint cyan dragon spirit coiling behind her, cyan accent
+
+[portrait_jicanghai] 季沧海
+Chinese ink wash painting, xuan paper texture, wuxia, full body character, soft light, single accent color, fine ink outline, lots of negative space, transparent background, vertical composition, no text, no watermark -- wandering martial artist in his thirties, bare chest under a worn hemp vest, red cloth wrapped around waist, rolled-up trousers, holding a wine gourd in right hand, small flame flickering on left fingertips, hair tied loosely with red cord, defiant grin, crimson accent
+
+[portrait_zhujue] 主角
+Chinese ink wash painting, xuan paper texture, wuxia, full body character, soft light, single accent color, fine ink outline, lots of negative space, transparent background, vertical composition, no text, no watermark -- young swordsman around seventeen, dark fitted martial outfit with a worn grey short cape, hair tied up, holding a plain longsword angled toward the ground, upright but modest stance, clean and slightly stubborn expression, ink black accent
+
+[portrait_chenshi] 陈石
+Chinese ink wash painting, xuan paper texture, wuxia, full body character, soft light, single accent color, fine ink outline, lots of negative space, transparent background, vertical composition, no text, no watermark -- stonemason in his forties, muscular build, coarse hemp vest, lime dust and old scars on his arms, stone hammer in right hand, chisel in left, fine stone fragments and dust floating around his shoulders and feet, stoic square-jawed face, stone grey accent
+
+[portrait_liuqingqing] 柳卿卿
+Chinese ink wash painting, xuan paper texture, wuxia, full body character, soft light, single accent color, fine ink outline, lots of negative space, transparent background, vertical composition, no text, no watermark -- young female physician in her early twenties, green long dress with plain white apron, bamboo herb basket on back with herbs sticking out, small pestle in right hand, a dew-covered herb in left palm, simple bun with wooden hairpin, gentle expression, herb green accent
+
+[portrait_xiaoqier] 小乞儿
+Chinese ink wash painting, xuan paper texture, wuxia, full body character, soft light, single accent color, fine ink outline, lots of negative space, transparent background, vertical composition, no text, no watermark -- skinny beggar child around twelve, patched ragged short jacket, messy hair, barefoot, holding a chipped bowl in one hand, two copper coins hidden behind his back in the other, dirty face with bright sly eyes and a toothy grin, earth yellow accent
+
+[portrait_gundilong] 滚地龙
+Chinese ink wash painting, xuan paper texture, wuxia, full body character, soft light, single accent color, fine ink outline, lots of negative space, transparent background, vertical composition, no text, no watermark -- burly round-bodied strongman, dark brown coarse cloth outfit, thick cloth belt wrapped around waist, cloth strips around both wrists, fists clasped in front of chest, slight horse stance ready to charge, buzz cut, simple honest grin, ochre accent
+
+[portrait_qingluan] 苏青鸾
+Chinese ink wash painting, xuan paper texture, wuxia, full body character, soft light, single accent color, fine ink outline, lots of negative space, transparent background, vertical composition, no text, no watermark -- agile swordswoman, sky-blue fitted martial outfit with light fabric, several thin throwing blades tucked at her lower back, a few azure bird feathers on her left shoulder, a blade held between two fingers of her right hand, body slightly turned as if just having thrown one, hair lifted by wind, sky blue accent
+
+[portrait_mingzhu] 明烛
+Chinese ink wash painting, xuan paper texture, wuxia, full body character, soft light, single accent color, fine ink outline, lots of negative space, transparent background, vertical composition, no text, no watermark -- woman holding a lantern, plain pale long robe with hem touching the ground, walking at night, a warm yellow paper lantern in her right hand lighting half her face, fine glowing dust motes floating around the lantern, calm expression like guiding someone home, warm gold accent
+
+[portrait_zhiyuan] 纸鸢
+Chinese ink wash painting, xuan paper texture, wuxia, full body character, soft light, single accent color, fine ink outline, lots of negative space, transparent background, vertical composition, no text, no watermark -- young paper-craft girl around fifteen, plain grey-white short jacket, sleeve cuffs stained with paper scraps and paste, long thin scissors in left hand, a freshly cut small white paper figure balanced on her right index finger, three or four translucent paper-figure spirits floating around her, paper white accent
+
+──────────────── 奇物（15） ────────────────
+[curio_yuhu] 玲珑玉壶
+single item illustration, Chinese ink wash, xuan paper texture, centered, 45 degree view, worn and aged, no character, no text, transparent background -- small exquisite jade wine pot, translucent pale green jade, carved cloud pattern, cork stopper
+
+[curio_xumingdeng] 续命灯
+single item illustration, Chinese ink wash, xuan paper texture, centered, 45 degree view, worn and aged, no character, no text, transparent background -- small brass oil lamp with a steady flame, worn patina, thin smoke
+
+[curio_xuehulu] 血葫芦
+single item illustration, Chinese ink wash, xuan paper texture, centered, 45 degree view, worn and aged, no character, no text, transparent background -- red gourd bottle, dark red lacquer, leather strap, dried blood stains
+
+[curio_tongqianjian] 铜钱剑
+single item illustration, Chinese ink wash, xuan paper texture, centered, 45 degree view, worn and aged, no character, no text, transparent background -- sword made of stacked copper coins, red cord binding, tarnished bronze
+
+[curio_zuiweng] 醉翁壶
+single item illustration, Chinese ink wash, xuan paper texture, centered, 45 degree view, worn and aged, no character, no text, transparent background -- round clay wine pot in the shape of a drunk old man, chipped spout, wine stains
+
+[curio_jingtangmu] 惊堂木
+single item illustration, Chinese ink wash, xuan paper texture, centered, 45 degree view, worn and aged, no character, no text, transparent background -- wooden court gavel block, dark rosewood, worn edges
+
+[curio_hanyu] 寒玉扳指
+single item illustration, Chinese ink wash, xuan paper texture, centered, 45 degree view, worn and aged, no character, no text, transparent background -- jade archer's thumb ring, pale blue-green jade, frost on surface
+
+[curio_jubaopen] 聚宝盆
+single item illustration, Chinese ink wash, xuan paper texture, centered, 45 degree view, worn and aged, no character, no text, transparent background -- bronze treasure basin filled with coins and gems, ornate rim
+
+[curio_wanyingfu] 万应符
+single item illustration, Chinese ink wash, xuan paper texture, centered, 45 degree view, worn and aged, no character, no text, transparent background -- stack of yellow paper talismans with red cinnabar script, frayed edges
+
+[curio_zhaohunfan] 招魂幡
+single item illustration, Chinese ink wash, xuan paper texture, centered, 45 degree view, worn and aged, no character, no text, transparent background -- tattered black funeral banner on a bamboo pole, white paper strips
+
+[curio_zhiren] 纸人替身
+single item illustration, Chinese ink wash, xuan paper texture, centered, 45 degree view, worn and aged, no character, no text, transparent background -- small paper effigy doll, white paper, crude painted face, red thread
+
+[curio_tongjing] 铜镜
+single item illustration, Chinese ink wash, xuan paper texture, centered, 45 degree view, worn and aged, no character, no text, transparent background -- ancient bronze mirror, ornate back with beast pattern, tarnished
+
+[curio_tiebushan] 铁布衫
+single item illustration, Chinese ink wash, xuan paper texture, centered, 45 degree view, worn and aged, no character, no text, transparent background -- folded iron-thread vest, dark metal mesh, worn leather straps
+
+[curio_dingfengzhu] 定风珠
+single item illustration, Chinese ink wash, xuan paper texture, centered, 45 degree view, worn and aged, no character, no text, transparent background -- translucent pearl on a small stand, swirling wind lines around it
+
+[curio_zhenhunling] 镇魂铃
+single item illustration, Chinese ink wash, xuan paper texture, centered, 45 degree view, worn and aged, no character, no text, transparent background -- bronze bell with a wooden handle, engraved runes, faded tassel
+
+──────────────── 交付命名 ────────────────
+portrait_zl.png / portrait_cuisanniang.png / portrait_jicanghai.png / portrait_zhujue.png / portrait_chenshi.png / portrait_liuqingqing.png / portrait_xiaoqier.png / portrait_gundilong.png / portrait_qingluan.png / portrait_mingzhu.png / portrait_zhiyuan.png
+curio_yuhu.png / curio_xumingdeng.png / curio_xuehulu.png / curio_tongqianjian.png / curio_zuiweng.png / curio_jingtangmu.png / curio_hanyu.png / curio_jubaopen.png / curio_wanyingfu.png / curio_zhaohunfan.png / curio_zhiren.png / curio_tongjing.png / curio_tiebushan.png / curio_dingfengzhu.png / curio_zhenhunling.png
+动态版加后缀：_loop.mp4
