@@ -32,8 +32,9 @@ const LINE_DANGER := ["swarm", "peril"]
 
 # 首通掉落（7/8/9/10 关）；实际系统未做的先留字段，文案照设计
 const FIRST_REWARDS := {
-	7: {"wen": 300, "skill_mat": 2, "text": "文钱 +300 · 技能升级材料 +2"},
-	8: {"wen": 300, "equip": 1, "forge_mat": 2, "text": "装备 +1 · 锻造材料 +2"},
+	6: {"wen": 300, "skill_book": "玄品", "skill_book_n": 2, "text": "文钱 +300 · 玄品技能书 ×2"},
+	7: {"wen": 600, "equip": 4, "forge_mat": 10, "text": "四件凡品装备 + 文钱 +600 · 锻造石 ×10"},
+	8: {"wen": 300, "advance": 1, "text": "角色进阶材料 +1"},
 	9: {"wen": 300, "advance": 1, "text": "角色进阶 +1"},
 	10: {"wen": 300, "curio": 1, "new_cards": 1, "text": "新奇物 + 固定新卡组"},
 }

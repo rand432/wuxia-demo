@@ -2241,6 +2241,19 @@ func _process(_delta: float) -> void:
 					vuln += 0.15
 			vuln += float(_ancestor_combos.size()) * 0.15
 			_core.foe_vuln = minf(0.45, vuln)
+		elif LevelState.current_level == 7:
+			# 第七关：技能升级过，怪偷偷吃更多伤害；没升级也能过，只是吃力
+			var skill_total := 0
+			for v in GameState.skill_lv.values():
+				skill_total += int(v)
+			_core.foe_vuln = minf(0.30, float(skill_total) * 0.015 + _equip_vuln)
+		elif LevelState.current_level == 8:
+			# 第八关：局外装备强化越高，怪偷偷越脆；四件 +20 共 80 级 → 20% 易伤
+			var FD8 := preload("res://shared/forge_data.gd")
+			var plus_total := 0
+			for slot_v in FD8.SLOT_KEYS:
+				plus_total += int((FD8.equipped.get(str(slot_v), {}) as Dictionary).get("plus", 0))
+			_core.foe_vuln = minf(0.35, float(plus_total) * 0.0025 + _equip_vuln)
 		elif _equip_vuln > 0.0:
 			_core.foe_vuln = minf(0.45, _equip_vuln)
 		if int(_core.wave) >= 2 and hpr <= 0.50:
@@ -2631,8 +2644,21 @@ func _grant_first_clear(lv: int) -> void:
 		return
 	if r.has("wen"):
 		GameState.add_coin("wen", int(r["wen"]))
-	if r.has("skill_mat"):
-		GameState.skill_mat += int(r["skill_mat"])
+	if r.has("skill_book"):
+		var bk := str(r["skill_book"])
+		GameState.skill_books[bk] = int(GameState.skill_books.get(bk, 0)) + int(r.get("skill_book_n", 1))
+	if r.has("equip"):
+		var FD := preload("res://shared/forge_data.gd")
+		FD.ensure_bag()
+		var en := {"weapon": "铁剑", "armor": "皮甲", "jade": "玉佩", "cloak": "披风"}
+		for slot_v in FD.SLOT_KEYS:
+			var slot := str(slot_v)
+			FD.equipped[slot] = {"name": str(en.get(slot, "装备")), "quality": 1, "plus": 0, "trait": ""}
+	if r.has("forge_mat"):
+		var FD2 := preload("res://shared/forge_data.gd")
+		FD2.ensure_bag()
+		FD2.bag.append({"name": "锻造石", "cat": "材料", "count": int(r["forge_mat"])})
+		FD2.bag.append({"name": "银两袋", "cat": "材料", "count": int(r["forge_mat"])})
 	if r.has("forge_mat"):
 		GameState.forge_mat += int(r["forge_mat"])
 	if r.has("equip"):
@@ -2697,6 +2723,10 @@ func _maybe_level_button_tutorial() -> void:
 			key = "l6_market"
 			target = _market_tile
 			text = "黑市可以买装备、存仓库"
+		7:
+			key = "l7_skill"
+			target = _mate_tile
+			text = "请神页可以用技能书升级技能"
 		_:
 			return
 	_tutorial(key, target, text, func() -> void: pass)
@@ -4818,6 +4848,12 @@ const SKILL_DEFS := {
 		"targets": 1, "col": Color(0.94, 0.92, 0.84)},
 }
 
+# 每级伤害成长：高频技能小、低频/高倍率技能大；请神页与战斗共用同一套
+const SKILL_LV_STEP := {
+	"zl": 3, "cuisanniang": 5, "jicanghai": 3, "chenshi": 3, "liuqingqing": 3,
+	"xiaoqier": 2, "gundilong": 2, "qingluan": 3, "zhujue": 2,
+}
+
 var _skills: Array = []
 var _mp := 300.0
 var _mp_max := 300.0
@@ -4997,7 +5033,7 @@ func _cast_skill(i: int) -> void:
 	var aid := str(sk["aid"])
 	var dtype := str(sk["dtype"])
 	var m: Dictionary = _anc_mod.get(aid, {})
-	var dmg_pct := float(m.get("dmg_pct", 0.0)) + float(_elem_mod.get(dtype, 0.0))
+	var dmg_pct := float(m.get("dmg_pct", 0.0)) + float(_elem_mod.get(dtype, 0.0)) + float(GameState.skill_lv.get(aid, 0)) * float(SKILL_LV_STEP.get(aid, 3))
 	var cd_pct := float(m.get("cd_pct", 0.0))
 	var mp_flat := float(m.get("mp_flat", 0.0))
 	var para_s := float(m.get("para_s", 0.0))

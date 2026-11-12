@@ -9,6 +9,35 @@ extends Control
 #   ③ 点立绘 → 「进阶路线」弹窗（六档：星级 / 档位 / 张数 / 组合 / 状态）
 # ============================================================
 const AD := preload("res://kushou/ancestor_data.gd")
+const GameState := preload("res://shared/game_state.gd")
+const LevelState := preload("res://shared/level_state.gd")
+# 每个技能自己的描述 + 伤害倍率（跟 battle_ui 的 SKILL_DEFS 保持一份数据）
+const SKILL_DEFS := {
+	"zl": {"name": "天雷道术", "dtype": "金系", "mul": 1.6, "cd": 10.0, "mp": 260.0, "targets": 3,
+		"desc": "引下天雷，对 3 名敌人造成金系伤害"},
+	"cuisanniang": {"name": "雾海龙王", "dtype": "召唤", "mul": 2.5, "cd": 60.0, "mp": 300.0, "targets": 1,
+		"desc": "召出雾海龙王，对目标造成高额召唤伤害"},
+	"jicanghai": {"name": "怒火焚身", "dtype": "火系", "mul": 1.3, "cd": 9.0, "mp": 0.0, "targets": 3,
+		"desc": "怒火外放，对 3 名敌人造成火系伤害"},
+	"chenshi": {"name": "刺骨", "dtype": "真实", "mul": 1.4, "cd": 8.0, "mp": 90.0, "targets": 1,
+		"desc": "直刺骨髓，对单体造成真实伤害"},
+	"liuqingqing": {"name": "回春", "dtype": "木系", "mul": 1.2, "cd": 12.0, "mp": 110.0, "targets": 3,
+		"desc": "木系回春，对 3 名敌人造成木系伤害并回复自身"},
+	"xiaoqier": {"name": "顺手", "dtype": "物理", "mul": 0.9, "cd": 5.0, "mp": 60.0, "targets": 1,
+		"desc": "顺手一摸，对单体造成物理伤害"},
+	"gundilong": {"name": "肉蛋冲撞", "dtype": "物理", "mul": 1.5, "cd": 6.0, "mp": 80.0, "targets": 1,
+		"desc": "滚地冲撞，对单体造成物理伤害"},
+	"qingluan": {"name": "青鸾飞刃", "dtype": "物理", "mul": 1.2, "cd": 8.0, "mp": 90.0, "targets": 1,
+		"desc": "掷出飞刃，对直线敌人造成物理伤害"},
+	"zhujue": {"name": "基础剑法", "dtype": "物理", "mul": 1.0, "cd": 0.0, "mp": 0.0, "targets": 1,
+		"desc": "主角的基础剑法，对单体造成物理伤害"},
+}
+
+# 每级伤害成长：冷却越长、基础倍率越低的技能，单级成长可以高一点；高频技能低一点
+const SKILL_LV_STEP := {
+	"zl": 3, "cuisanniang": 5, "jicanghai": 3, "chenshi": 3, "liuqingqing": 3,
+	"xiaoqier": 2, "gundilong": 2, "qingluan": 3, "zhujue": 2,
+}
 const W := 720.0
 const H := 1280.0
 const INK := Color(0.14, 0.13, 0.15)
@@ -35,8 +64,12 @@ var _plan_btns: Array = []
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	for aid_v in AD.ANCESTORS.keys():
+	LevelState.ensure_loaded()
+	# 只显示当前关卡已解锁的请神角色；主角始终在列表里（基础剑法）
+	for aid_v in LevelState.god_ids():
 		_ids.append(str(aid_v))
+	if not _ids.has("zhujue"):
+		_ids.append("zhujue")
 	# 占位星级：张道陵 3★、崔三娘 2★、季沧海 1★、主角 2★
 	var demo := [3, 2, 1, 2]
 	for i in _ids.size():
@@ -164,7 +197,8 @@ func _build_slots() -> void:
 		cell2.gui_input.connect(func(ev: InputEvent) -> void:
 			if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
 				_sel = i
-				_refresh_carousel())
+				_refresh_carousel()
+				_show_skill_detail(i))
 		add_child(cell2)
 		var tr := TextureRect.new()
 		tr.position = Vector2(22, 16)
@@ -190,6 +224,158 @@ func _build_slots() -> void:
 		lv.add_theme_font_size_override("font_size", 13)
 		lv.add_theme_color_override("font_color", GOLD)
 		cell2.add_child(lv)
+
+# 技能详情：点七格里的技能 → 上面立绘跳到该祖宗，同时弹详情；升级放在详情里
+func _show_skill_detail(i: int) -> void:
+	if i < 0 or i >= _ids.size():
+		return
+	var aid := str(_ids[i])
+	var a: Dictionary = AD.ANCESTORS[aid]
+	if _pop != null and is_instance_valid(_pop):
+		_pop.queue_free()
+		_pop = null
+	_pop = Control.new()
+	_pop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_pop.mouse_filter = Control.MOUSE_FILTER_STOP
+	_pop.z_index = 80
+	add_child(_pop)
+	var dim := ColorRect.new()
+	dim.color = Color(0.02, 0.02, 0.03, 0.55)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	_pop.add_child(dim)
+	var panel := Panel.new()
+	panel.position = Vector2(90, 300)
+	panel.size = Vector2(540, 470)
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.97, 0.93, 0.85, 0.99)
+	sb.set_corner_radius_all(12)
+	sb.border_color = Color(0.78, 0.58, 0.22)
+	sb.set_border_width_all(3)
+	panel.add_theme_stylebox_override("panel", sb)
+	_pop.add_child(panel)
+	var title := Label.new()
+	title.text = "技能详情"
+	title.position = Vector2(30, 18)
+	title.size = Vector2(300, 40)
+	title.add_theme_font_size_override("font_size", 26)
+	title.add_theme_color_override("font_color", Color(0.30, 0.20, 0.10))
+	panel.add_child(title)
+	var nm := Label.new()
+	nm.text = str(a["skill"])
+	nm.position = Vector2(30, 72)
+	nm.size = Vector2(470, 44)
+	nm.add_theme_font_size_override("font_size", 32)
+	nm.add_theme_color_override("font_color", Color(0.55, 0.20, 0.12))
+	panel.add_child(nm)
+	var owner_lb := Label.new()
+	owner_lb.text = "所属：%s · %s" % [str(a["name"]), str(a.get("dtype", ""))]
+	owner_lb.position = Vector2(30, 122)
+	owner_lb.size = Vector2(470, 28)
+	owner_lb.add_theme_font_size_override("font_size", 18)
+	owner_lb.add_theme_color_override("font_color", Color(0.40, 0.36, 0.28))
+	panel.add_child(owner_lb)
+	var lv_lb := Label.new()
+	lv_lb.text = "当前等级：Lv %d" % int(GameState.skill_lv.get(aid, 0))
+	lv_lb.position = Vector2(30, 162)
+	lv_lb.size = Vector2(300, 30)
+	lv_lb.add_theme_font_size_override("font_size", 20)
+	lv_lb.add_theme_color_override("font_color", Color(0.55, 0.38, 0.12))
+	panel.add_child(lv_lb)
+	# 伤害倍率：当前 → 下一级（每级只 +3%，慢慢养成）
+	var sk: Dictionary = SKILL_DEFS.get(aid, {})
+	var mul_pct := int(round(float(sk.get("mul", 1.0)) * 100.0))
+	var sk_desc := str(sk.get("desc", ""))
+	if sk_desc == "":
+		sk_desc = "对 %d 名敌人造成 %s 伤害" % [int(sk.get("targets", 1)), str(sk.get("dtype", a.get("dtype", "")))]
+	var desc_lb := Label.new()
+	desc_lb.text = sk_desc
+	desc_lb.position = Vector2(30, 196)
+	desc_lb.size = Vector2(470, 26)
+	desc_lb.add_theme_font_size_override("font_size", 17)
+	desc_lb.add_theme_color_override("font_color", Color(0.40, 0.36, 0.28))
+	panel.add_child(desc_lb)
+	var dmg_lb := Label.new()
+	var lv_now := int(GameState.skill_lv.get(aid, 0))
+	var lv_step := int(SKILL_LV_STEP.get(aid, 3))
+	var cur_pct := mul_pct + lv_now * lv_step
+	var nxt_pct := cur_pct + lv_step
+	dmg_lb.text = "伤害：%d%% → %d%%（%s）" % [cur_pct, nxt_pct, str(sk.get("dtype", a.get("dtype", "")))]
+	dmg_lb.position = Vector2(30, 226)
+	dmg_lb.size = Vector2(470, 26)
+	dmg_lb.add_theme_font_size_override("font_size", 18)
+	dmg_lb.add_theme_color_override("font_color", Color(0.55, 0.20, 0.12))
+	panel.add_child(dmg_lb)
+	var qnames := ["", "凡品", "良品", "玄品", "地品", "天品"]
+	var qn: String = str(qnames[clampi(int(a["quality"]), 1, 5)])
+	var cost_wen := 200
+	var book_n := int(GameState.skill_books.get(qn, 0))
+	# 文钱：需求 / 已有
+	var coin_tex: Texture2D = load("res://assets/items/loot_silver.png")
+	var coin_ic := TextureRect.new()
+	coin_ic.texture = coin_tex
+	coin_ic.position = Vector2(30, 266)
+	coin_ic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	coin_ic.stretch_mode = TextureRect.STRETCH_SCALE
+	coin_ic.size = coin_tex.get_size()
+	coin_ic.scale = Vector2(16.0 / maxf(1.0, coin_tex.get_width()), 16.0 / maxf(1.0, coin_tex.get_height()))
+	panel.add_child(coin_ic)
+	var coin_lb := Label.new()
+	coin_lb.text = "文钱 %d / %d" % [cost_wen, GameState.coin("wen")]
+	coin_lb.position = Vector2(52, 258)
+	coin_lb.size = Vector2(420, 30)
+	coin_lb.add_theme_font_size_override("font_size", 20)
+	coin_lb.add_theme_color_override("font_color", Color(0.30, 0.26, 0.20))
+	panel.add_child(coin_lb)
+	# 技能书：需求 / 已有
+	var book_tex: Texture2D = load("res://assets/items/it_book.png")
+	var book_ic := TextureRect.new()
+	book_ic.texture = book_tex
+	book_ic.position = Vector2(30, 308)
+	book_ic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	book_ic.stretch_mode = TextureRect.STRETCH_SCALE
+	book_ic.size = book_tex.get_size()
+	book_ic.scale = Vector2(16.0 / maxf(1.0, book_tex.get_width()), 16.0 / maxf(1.0, book_tex.get_height()))
+	panel.add_child(book_ic)
+	var book_lb := Label.new()
+	book_lb.text = "%s技能书 1 / %d" % [qn, book_n]
+	book_lb.position = Vector2(52, 300)
+	book_lb.size = Vector2(420, 30)
+	book_lb.add_theme_font_size_override("font_size", 20)
+	book_lb.add_theme_color_override("font_color", Color(0.30, 0.26, 0.20))
+	panel.add_child(book_lb)
+	var up := Button.new()
+	up.text = "升级"
+	up.position = Vector2(160, 372)
+	up.size = Vector2(220, 56)
+	up.add_theme_font_size_override("font_size", 22)
+	up.focus_mode = Control.FOCUS_NONE
+	up.pressed.connect(func() -> void:
+		var book := int(GameState.skill_books.get(qn, 0))
+		if book <= 0 or GameState.coin("wen") < cost_wen:
+			coin_lb.text = "文钱 %d / %d（不足）" % [cost_wen, GameState.coin("wen")]
+			book_lb.text = "%s技能书 1 / %d（不足）" % [qn, book]
+			return
+		GameState.skill_books[qn] = book - 1
+		GameState.coins["wen"] = int(GameState.coins.get("wen", 0)) - cost_wen
+		GameState.skill_lv[aid] = int(GameState.skill_lv.get(aid, 0)) + 1
+		_pop.queue_free()
+		_pop = null
+		_show_skill_detail(i)
+		_build_slots()
+	)
+	panel.add_child(up)
+	var close := Button.new()
+	close.text = "×"
+	close.position = Vector2(472, 16)
+	close.size = Vector2(44, 40)
+	close.add_theme_font_size_override("font_size", 22)
+	close.focus_mode = Control.FOCUS_NONE
+	close.pressed.connect(func() -> void:
+		_pop.queue_free()
+		_pop = null
+	)
+	panel.add_child(close)
 
 func _lbl(t: String, fs: int, col: Color, pos: Vector2) -> Label:
 	var l := Label.new()

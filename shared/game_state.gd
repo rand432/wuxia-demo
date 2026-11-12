@@ -10,6 +10,10 @@ static var equip_tokens := 0
 static var advance_tokens := 0
 static var new_cards_unlocked := false
 static var new_curio_unlocked := false
+# 技能升级（局外·请神界面消耗）：aid -> 等级
+static var skill_lv := {}
+# 技能书按品级：凡/良/玄/地/天；升级消耗对应品级技能书 + 文钱
+static var skill_books := {"凡品": 0, "良品": 0, "玄品": 0, "地品": 0, "天品": 0}
 
 static func coin(k: String) -> int:
 	return int(coins.get(k, 0))

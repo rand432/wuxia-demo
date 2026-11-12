@@ -148,6 +148,8 @@ func _refresh() -> void:
 		(_item_lbs[i] as Label).text = "×" + str(n)
 		(_item_lbs[i] as Label).add_theme_color_override("font_color", P.DIM if n > 0 else Color(0.72, 0.69, 0.65))
 	var capped := int(it.get("plus", 0)) >= FD.cap(q)
+	if capped:
+		_ores_lb.text = "已到 %s 上限 +%d —— 再锻造极可能碎裂，得不偿失" % [FD.qname(q), FD.cap(q)]
 	_hammer_btn.text = "已 满" if capped else "锤 一 下"
 	_hammer_btn.disabled = capped
 	_hammer_btn.modulate = Color(0.82, 0.80, 0.76) if capped else Color(1, 1, 1)
