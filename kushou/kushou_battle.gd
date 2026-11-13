@@ -416,23 +416,11 @@ var _bursts: Array = []             # 命中炸开（溅射/剑气用）：{x,y,
 #   主角**真的走位**——自动挑最近的怪、走过去、进了攻击距离才出手；没怪就退回原位。
 #   宠物跟在主角后面一点，也会上去咬（伤害是主角的 35%）。
 var hero_pos := Vector2(352.0, 608.0)
-var pet_pos := Vector2(256.0, 634.0)
 var _home := Vector2(352.0, 608.0)
-var _pet_cd := 0.0
-# v14d：宠物配置（外壳通过 set_pet_cfg 推进来；默认＝白狐）
-var pet_cfg := {"cd": 1.1, "dmg": 0.35, "elem": "", "chain": 1, "room": 0.0, "verb": "咬 "}
-
-func set_pet_cfg(d: Dictionary) -> void:
-	for k in d.keys():
-		pet_cfg[k] = d[k]
 var _facing := -1.0                 # -1 ＝ 朝上（打上面的怪）
 # v2k（用户："宠物打怪也要有动画 这里的宠物不是装饰品"）：
 #   宠物是**打架的**——扑咬有整套动作：蓄力（往后坐）→ 前扑（朝目标窜出去）→ 张口 → 收势；
 #   跑动时四条腿交替、尾巴摆；咬中那一下也吃抖屏与飘字。
-var _pet_lunge := 0.0               # 0..1：扑咬动作进度（1＝刚起跳）
-var _pet_wind := 0.0                # 0..1：起跳前的蓄力（往后一坐）
-var _pet_dir := Vector2(0.0, -1.0)  # 扑的方向
-var _pet_step := 0.0                # 跑动相位（腿摆）
 # v3f（用户："主角人物走的再慢一点 起码让怪大部分出现在屏幕里"）：
 #   ① 走位速度降下来（168→96，宠物 190→124）；
 #   ② 主角**不许越过战场 40% 那条线**——怪得自己走下来，交战点就留在屏幕里，
@@ -454,11 +442,6 @@ const HERO_AGGRO := 90.0
 const HERO_MID := 0.50
 const HERO_REACH := 74.0            # 进这个距离就出手
 const FOE_REACH := 66.0             # 怪进这个距离就停下开打
-const PET_SPD := 124.0              # 宠物"贴近了"的速度
-const PET_SPD_FAR := 196.0          # 宠物"离得远"的追击速度
-# v15y：宠物的"仇恨范围"——跟主角同一个道理，怪远了就不追
-const PET_AGGRO := 90.0
-const PET_REACH := 62.0
 var _sfx_t := 0.0                   # 距上一次播音效多久（节流用）
 var _combo := 0                     # 连杀（爽感：连着杀会喊"连杀 ×N"，抖屏也跟着加码）
 var _combo_t := 0.0
@@ -779,7 +762,6 @@ func reset_run() -> void:
 	_banner = ""
 	_banner_t = 0.0
 	hero_pos = Vector2(size.x * 0.5, size.y - HERO_LINE)
-	pet_pos = hero_pos + Vector2(-92.0, 26.0)
 	hero["hp"] = float(hero["hp_max"])
 	start_run()
 
@@ -828,8 +810,6 @@ func _process(delta: float) -> void:
 	# 抖屏与特效的衰减走真实时间，别被顿帧拖慢
 	_shake = maxf(0.0, _shake - delta * 60.0)
 	_hero_lunge = maxf(0.0, _hero_lunge - delta * 5.0)
-	_pet_lunge = maxf(0.0, _pet_lunge - delta * 4.2)
-	_pet_wind = maxf(0.0, _pet_wind - delta * 5.0)
 	_sfx_t = maxf(0.0, _sfx_t - delta)
 	_death_sfx_t = maxf(0.0, _death_sfx_t - delta)
 	_aspd_flash = maxf(0.0, _aspd_flash - delta)
@@ -993,69 +973,6 @@ func _process(delta: float) -> void:
 	# v15z（用户："宠物不动了 可以改成主角攻击谁他就攻击谁"）：
 	#   上一步把宠物的仇恨范围也收到 90，它就只跟着主人站位、几乎不出手了（太被动）。
 	#   现在改成**跟随主角的目标**：主人打谁它打谁——主人等怪过来，它就在旁边一起咬。
-	var pet_home := hero_pos + Vector2(-92.0, 26.0)
-	if intro_wait > 0.0:
-		pass                                    # 开场同样陪着站
-	elif not target.is_empty():
-		# v15z：**主角攻击谁，宠物就攻击谁**（不再自己找最近的）——
-		#   `tpos` 就是主角当前的目标位置，这里直接用同一个，不设仇恨范围。
-		var pd0 := pet_pos.distance_to(tpos)
-		if pd0 > PET_REACH + 12.0:
-			var st_p := minf(_chase_spd(PET_SPD, PET_SPD_FAR, pd0) * delta, pd0 - PET_REACH)
-			pet_pos += (tpos - pet_pos).normalized() * st_p
-			if st_p > 0.3:
-				_pet_step += delta * 11.0         # 真在跑，腿才摆
-	elif pet_pos.distance_to(pet_home) > 8.0:
-		var st_q := minf(PET_SPD * 0.8 * delta, pet_pos.distance_to(pet_home))
-		pet_pos += (pet_home - pet_pos).normalized() * st_q
-		if st_q > 0.3:
-			_pet_step += delta * 8.0
-	# v3g（用户："宠物也是"）：宠物同样**不许越过主角那条线**——它是跟着主人的，
-	#   不往前冲；怪得自己走下来才咬得到（原来它会独自冲到最上面去）。
-	# v15u（用户："还有主角和宠物还是会往上跑"）：⚠ 原来这里上限是**写死**的
-	#   `size.y * HERO_TOP + 12` —— 两个毛病：
-	#     ① 主角手动走位时那条线已经放开（v15j），宠物却还被卡在老位置 → 主人上去了它上不去；
-	#     ② `+12` 是"往上加"，让宠物比主角还靠上 12px，反而更早探出战场框。
-	#   现在：跟主角**共用同一条 top_line**（上面刚算过），并且往下收 6px 而不是往上加。
-	pet_pos.x = clampf(pet_pos.x, 44.0, size.x - 44.0)
-	pet_pos.y = clampf(pet_pos.y, top_line + 6.0, size.y - HERO_LINE * 0.4)
-	_pet_cd -= delta
-	if _pet_cd <= 0.0 and not target.is_empty() and pet_pos.distance_to(tpos) <= PET_REACH + 18.0:
-		# v14d（用户："宠物在困兽里面毕竟是没有生命的…给他一个加成效果【或者特效技能】和攻击伤害即可
-		#        "做一些不同类型的宠物"）：宠物只做两件事——**咬人**（伤害/频率/元素/连锁各不同）＋ **给主人的被动加成**
-		_pet_cd = float(pet_cfg.get("cd", 1.1))
-		_pet_wind = 1.0
-		_pet_lunge = 1.0
-		_pet_dir = (tpos - pet_pos).normalized()
-		var pd := maxf(1.0, float(hero["atk"]) * float(pet_cfg.get("dmg", 0.35)))
-		var elem := str(pet_cfg.get("elem", ""))
-		var chain := maxi(1, int(pet_cfg.get("chain", 1)))
-		var room := float(pet_cfg.get("room", 0.0))
-		var hits: Array = [target]
-		if chain > 1 or room > 0.0:
-			var at := Vector2(float(target["x"]), float(target["y"]))
-			for f_v in foes:
-				var fx: Dictionary = f_v
-				if fx == target or float(fx.get("dying", 0.0)) > 0.0:
-					continue
-				if room > 0.0 and at.distance_to(Vector2(float(fx["x"]), float(fx["y"]))) <= room:
-					hits.append(fx)
-				elif hits.size() < chain:
-					hits.append(fx)
-		for h_v in hits:
-			var h: Dictionary = h_v
-			var dm := _apply_dmg(h, pd * (0.7 if h != target else 1.0), elem if elem != "" else DMG_PHYS)
-			h["flash"] = 0.12
-			_slashes.append({"x": float(h["x"]) + _pet_dir.x * 10.0, "y": float(h["y"]) + _pet_dir.y * 10.0,
-				"t": 0.0, "ang": randf_range(-1.2, 1.2), "crit": false})
-			_push_float(float(h["x"]) + 16.0, float(h["y"]) - 10.0, str(pet_cfg.get("verb", "咬 ")) + str(int(dm)),
-				Color(0.84, 0.90, 0.98), true)
-			if float(h["hp"]) <= 0.0:
-				_kill_foe(h)
-		_shake = maxf(_shake, 3.0)
-		Audio.sfx("melee", -10.0, randf_range(0.92, 1.12))
-		if float(target["hp"]) <= 0.0:
-			_kill_foe(target)
 	# 出手：只在**够得着**的时候打（不再隔着半屏砍）；开场等待期间也不出手
 	if intro_wait <= 0.0 and _hero_cd <= 0.0 and not target.is_empty() and hero_pos.distance_to(tpos) <= HERO_REACH + 10.0:
 		var tgt := target
@@ -5526,8 +5443,6 @@ func _draw() -> void:
 	if _hero_lunge > 0.35:
 		draw_line(Vector2(hx + 26.0, hy2 - 10.0), Vector2(hx + 40.0, hy2 - 66.0),
 			Color(1.0, 0.96, 0.86, _hero_lunge * 0.9), 5.0)
-	if not hide_units:
-		_pet(pet_pos, shk)
 	# 刀光（打中那一下的一撇）
 	for sl_v in _slashes:
 		var sl: Dictionary = sl_v
@@ -5888,97 +5803,6 @@ func _draw_statue(c: Vector2, sc: float, fc: Color) -> void:
 	var glow := (0.55 + sin(_t * 3.0) * 0.25) * a
 	draw_rect(Rect2(c.x - 9.0 * sc, c.y - h + 12.0 * sc, 18.0 * sc, 4.0 * sc), Color(0.88, 0.74, 0.34, glow))
 	draw_rect(Rect2(c.x - 4.0 * sc, c.y - h + 8.0 * sc, 8.0 * sc, 24.0 * sc), Color(0.88, 0.74, 0.34, glow))
-# v14e（用户："宠物记得 动画样子也不一样"）：六只宠物**各画各的样子与动作**
-#   hu 尖耳大尾狐（扑咬张嘴）· gui 圆龟壳（缩头呼吸）· bao 瘦长豹（甩长尾、大摆腿）
-#   jiu 展翅鹫（拍翅悬空）· lin 独角麒麟（火焰鬃毛跳动）· chan 矮胖蟾（后腿蹬跳）
-func _pet(c: Vector2, sh: Vector2) -> void:
-	var off := _pet_dir * (_pet_lunge * 26.0 - _pet_wind * 8.0)
-	var c2 := c + off
-	var stretch := 1.0 + _pet_lunge * 0.20 - _pet_wind * 0.10
-	var squash := 1.0 - _pet_lunge * 0.12 + _pet_wind * 0.14
-	draw_set_transform(c2 + sh, atan2(_pet_dir.y, _pet_dir.x) + PI * 0.5, Vector2(stretch, squash))
-	var kind := str(pet_cfg.get("kind", "hu"))
-	var pc := Color(0.87, 0.85, 0.79)
-	match kind:
-		"gui":
-			pc = Color(0.62, 0.68, 0.52)
-			draw_circle(Vector2(0, 2), 19.0, pc)                      # 龟壳
-			draw_circle(Vector2(0, 2), 12.0, Color(0.46, 0.54, 0.40))  # 壳纹
-			for i in 4:
-				draw_line(Vector2(-11.0 + float(i) * 7.3, 16.0), Vector2(-13.0 + float(i) * 8.0, 24.0), pc, 5.0)
-			var hn := sin(_t * 2.2) * 3.0                             # 缩头呼吸
-			draw_circle(Vector2(-20, -12 + hn), 10.0, pc)
-			draw_circle(Vector2(-24, -15 + hn), 2.2, Color(0.18, 0.18, 0.18))
-		"bao":
-			pc = Color(0.88, 0.62, 0.32)
-			for i in 4:
-				var lx2 := -13.0 + float(i) * 8.6
-				var sw2 := sin(_pet_step + float(i) * 1.7) * 9.0
-				draw_line(Vector2(lx2, 12.0), Vector2(lx2 + sw2, 27.0), pc, 3.6)
-			draw_line(Vector2(-14, 2), Vector2(20, -2), pc, 13.0)      # 瘦长身
-			draw_line(Vector2(18, -2), Vector2(40 + sin(_t * 11.0) * 10.0, -22 + cos(_t * 11.0) * 8.0), pc, 3.6)
-			draw_circle(Vector2(-24, -10), 9.5, pc)                   # 头
-			draw_colored_polygon(PackedVector2Array([Vector2(-30, -18), Vector2(-24, -27), Vector2(-18, -17)]), pc)
-			for i in 3:                                               # 斑点
-				draw_circle(Vector2(-8.0 + float(i) * 10.0, 0.0), 2.0, Color(0.36, 0.24, 0.14))
-			draw_circle(Vector2(-28, -13), 2.2, Color(0.18, 0.16, 0.14))
-		"jiu":
-			pc = Color(0.66, 0.68, 0.78)
-			var flap := sin(_t * 12.0) * 12.0                          # 拍翅
-			draw_line(Vector2(-4, -4), Vector2(-26, -18 + flap), pc, 6.0)
-			draw_line(Vector2(-4, -4), Vector2(22, -18 - flap), pc, 6.0)
-			draw_circle(Vector2(0, 4 + sin(_t * 6.0) * 2.0), 12.0, pc) # 悬空浮动
-			draw_circle(Vector2(-14, -8), 9.0, pc)
-			draw_colored_polygon(PackedVector2Array([Vector2(-22, -10), Vector2(-34, -6), Vector2(-22, -2)]),
-				Color(0.92, 0.76, 0.30))                              # 喙
-			draw_line(Vector2(8, 6), Vector2(24, 16), pc, 5.0)         # 尾羽
-			draw_circle(Vector2(-17, -11), 2.0, Color(0.16, 0.16, 0.18))
-		"lin":
-			pc = Color(0.90, 0.72, 0.46)
-			for i in 4:
-				var lx3 := -11.0 + float(i) * 7.3
-				draw_line(Vector2(lx3, 12.0), Vector2(lx3 + sin(_pet_step + float(i) * 1.7) * 6.0, 26.0), pc, 4.0)
-			draw_circle(Vector2(0, 0), 16.0, pc)
-			for i in 5:                                                # 火焰鬃毛（跳动）
-				var fy := -14.0 + float(i) * 6.0
-				var fh := 8.0 + absf(sin(_t * 14.0 + float(i))) * 10.0
-				draw_colored_polygon(PackedVector2Array([
-					Vector2(6, fy), Vector2(6 + fh * 0.6, fy - 5), Vector2(6 + fh, fy + 5)]),
-					Color(1.0, 0.52 + 0.2 * float(i % 2), 0.18))
-			draw_circle(Vector2(-19, -14), 11.5, pc)
-			draw_colored_polygon(PackedVector2Array([Vector2(-26, -24), Vector2(-34, -40), Vector2(-20, -26)]),
-				Color(0.96, 0.90, 0.62))                              # 独角
-			draw_circle(Vector2(-23, -17), 2.4, Color(0.22, 0.16, 0.12))
-		"chan":
-			pc = Color(0.86, 0.74, 0.34)
-			var hop := absf(sin(_t * 7.0)) * 6.0                       # 蹬跳
-			draw_circle(Vector2(-19, -8 - hop), 12.0, pc)              # 前身
-			draw_circle(Vector2(6, 4), 17.0, pc)                       # 胖后身
-			for i in 2:
-				draw_line(Vector2(6.0 + float(i) * 8.0, 14.0), Vector2(16.0 + float(i) * 6.0, 26.0), pc, 7.0)
-			for i in 2:                                                # 两只大眼
-				draw_circle(Vector2(-24.0 + float(i) * 9.0, -18 - hop), 4.6, Color(0.98, 0.96, 0.90))
-				draw_circle(Vector2(-24.0 + float(i) * 9.0, -18 - hop), 2.2, Color(0.14, 0.13, 0.12))
-		_:
-			pc = Color(0.87, 0.85, 0.79)
-			for i in 4:
-				var lx := -11.0 + float(i) * 7.3
-				var sw := sin(_pet_step + float(i) * 1.7) * 5.0
-				draw_line(Vector2(lx, 12.0), Vector2(lx + sw, 26.0), pc, 4.0)
-			draw_circle(Vector2(0, 0), 16.0, pc)
-			draw_line(Vector2(14, -4), Vector2(30 + sin(_t * 9.0) * 5.0, -20 + cos(_t * 9.0) * 4.0), pc, 5.0)
-			draw_circle(Vector2(-19, -14), 11.5, pc)
-			draw_colored_polygon(PackedVector2Array([Vector2(-27, -22), Vector2(-20, -33), Vector2(-13, -21)]), pc)
-			if _pet_lunge > 0.25:
-				var o := _pet_lunge * 12.0
-				draw_colored_polygon(PackedVector2Array([
-					Vector2(-30, -12), Vector2(-30 - o, -20 - o * 0.4), Vector2(-30 - o, -4 + o * 0.4)]),
-					Color(0.42, 0.30, 0.28))
-			draw_circle(Vector2(-23, -17), 2.4, Color(0.20, 0.19, 0.20))
-	if kind == "jiu":
-		draw_circle(Vector2(-17, -11), 2.0, Color(0.16, 0.16, 0.18))
-	draw_set_transform(sh)      # ⚠ 还原抖屏变换，后面的刀光/飘字才不会被宠物的旋转带跑
-
 # v14s：hair / wpn 是"出战主角的长相"参数（空字符串＝原来那个默认小人，队友/怪都不受影响）
 var hair := ""
 var wpn := ""

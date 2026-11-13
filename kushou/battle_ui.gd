@@ -30,7 +30,6 @@ const QUALITY_COLORS := [Color(0.54,0.48,0.38), Color(0.31,0.48,0.29), Color(0.1
 
 var _page := 0
 var _draw_open := false
-var _attr_open := false
 var _exit_open := false
 var _draw_layer: Control
 var _chal_layer: Control
@@ -45,8 +44,6 @@ var _detail_combo: Label
 var _detail_combo_text: Label
 var _detail_pips: Array = []
 var _deck_count_lb: Label
-var _attr_layer: Control
-var _attr_val_lbs: Array = []
 # 总计页：顶部分类钮（卡组 / 宝物 / 组合）
 var _tot_tabs: Array = []
 var _tot_keys: Array = ["bond", "combo"]
@@ -218,9 +215,6 @@ var _run_over := false            # 本局已结算（命尽 / 通关）
 var _skip_reward_wave := false    # 这一波打输了：过波但不给奖励
 var _run_time := 0.0              # 本局存活时间
 var _chal_cd: Array = [0.0, 0.0, 0.0, 0.0, 0.0]   # 五种挑战的冷却剩余
-const PFX2D := preload("res://addons/pixelfx/nodes/pixel_fx_2d.gd")
-var _pfx_root: Node2D = null      # pixelfx 特效层（命中/暴击等）
-var _pfx_count := 0
 var _fly_layer = null           # 资源飞行层
 var _fly: Array = []
 var _pulses: Dictionary = {}   # 资源格被加钱时的缩放脉冲
@@ -229,8 +223,6 @@ var _foe_pool: Array = []      # 怪物牌对象池（省掉每只都建 Shader/
 var _recycle_q: Array = []     # 阵亡动画播完再回收
 var _boss_bar_t := 0.0
 var _boss_on := false          # 首领在场时特效降档（首领战场景本来就重）
-var _late_baked := false       # 稀有特效是否已烘焙
-var _baked_keys: Dictionary = {}   # 已烘过的 (effect|palette|light)
 var _flash_rect: ColorRect = null  # 技能释放时的整屏微闪
 var _cast_dtype := ""              # 最近一次释放的技能属性（决定闪光颜色）
 var _boss_veil: ColorRect = null   # 首领登场：压暗
@@ -238,49 +230,6 @@ var _boss_spot: Sprite2D = null    # 首领登场：聚光
 var _boss_name_lb: Label = null    # 首领登场：名字大字
 var _last_combo := 0            # 连杀里程碑用（每 10 连炸一口）
 const PFX_MAX_LIVE := 26          # 同屏特效上限（实测 60fps 有余量，放回 26）
-# 开局先把常用的几种烘好（BAKED 首次播放要烘，烘在开打前就不会卡第一下）
-# [effect, scale, palette, light, speed, hold秒]：hold = 让它播完整，把每一帧都烘进缓存
-const PFX_PREWARM := [
-	["impacts/hit-spark", 0.72, "", 1.0, 1.0, 0.60],
-	["impacts/crit-hit", 0.95, "gold", 1.9, 1.0, 1.00],
-	["impacts/crit-hit", 0.80, "", 1.4, 1.0, 1.00],
-	["impacts/blunt-hit", 0.70, "blood", 1.2, 1.0, 1.00],
-	["impacts/blunt-hit", 0.60, "dust", 1.1, 1.15, 0.85],
-	# 六系技能（放得少，但也先烘一遍，第一次放不卡）
-	["lightning/zap-hit", 1.10, "volt", 1.9, 1.0, 0.70],
-	["fire/fireball", 1.00, "", 1.9, 1.0, 1.30],
-	["nature/leaf-storm", 0.95, "leaf", 1.9, 1.0, 1.20],
-	["arcane/magic-circle-cast", 1.10, "", 1.9, 1.0, 1.20],
-	["impacts/ground-slam", 0.95, "metal", 1.9, 1.0, 0.90],
-	["shadow/soul-drain", 0.85, "", 1.9, 1.0, 1.00],
-	# 延迟技落地那套（light 1.30，和 _on_delayed_land 对齐）
-	["impacts/ground-slam", 0.90, "metal", 1.30, 1.0, 0.90],
-	["fire/fireball", 0.90, "", 1.30, 1.0, 1.30],
-	["lightning/zap-hit", 0.95, "volt", 1.30, 1.0, 0.70],
-	["nature/leaf-storm", 0.85, "leaf", 1.30, 1.0, 1.20],
-	["shadow/soul-drain", 0.80, "", 1.30, 1.0, 1.00],
-	# 首领登场（每场只用一次，但绝不能卡在首领出场那一刻）
-	["shadow/dark-explosion", 1.7, "shadow", 1.9, 1.0, 1.40],
-]
-
-# 稀有变体：不在开局烘（每个要 ~0.2 秒），等对应面板打开时再烘
-const PFX_LATE := [
-	["impacts/ground-slam", 0.95, "shadow", 1.5],
-	["holy/heal", 0.85, "heal", 1.5],
-	["holy/sunburst", 1.05, "gold", 1.9],
-	["holy/sunburst", 1.25, "holy", 2.1],
-	["holy/sunburst", 1.9, "holy", 1.8],
-	["shadow/dark-explosion", 1.25, "blood", 1.7],
-	["shadow/dark-explosion", 1.9, "shadow", 1.8],
-	["arcane/spell-charge", 0.90, "arcane", 1.4],
-	["arcane/rune-circle", 1.0, "arcane", 1.4],
-	["holy/halo", 0.95, "gold", 1.5],
-	["holy/halo", 1.05, "holy", 1.5],
-	["holy/halo", 0.80, "heal", 1.2],
-	["holy/feather-burst", 1.0, "gold", 1.7],
-	["impacts/hit-spark", 0.55, "fire", 1.2],
-	["impacts/hit-spark", 0.55, "poison", 1.2],
-]
 var _curio_sq = null             # 奇物方块（战场右下，与挑战对称）
 var _curio_cd := 0.0             # 奇物冷却剩余
 var _curio_uses := 0             # 本局喝了几次（详情页显示）
@@ -798,9 +747,6 @@ func _build_field() -> void:
 	_core.boss_died.connect(_on_boss_died)
 	_core.paper_blocked.connect(_on_paper_blocked)
 	_core.start_run()
-	# 旧内核的隐形宠物会偷偷咬怪（怪还没到就掉血）；这个模式先关掉宠物伤害
-	_core.set_pet_cfg({"cd": 99999.0, "dmg": 0.0})
-	_core._pet_cd = 99999.0
 	_hero_token = TokenActor.new()
 	_hero_token.setup(PLAYER_TEX, 44.0, Color(0.85, 0.66, 0.23), true)
 	_hero_token.set_role("player")
@@ -829,9 +775,6 @@ func _build_field() -> void:
 	_build_challenge()
 	_build_curio()
 	# pixelfx 特效层：盖在战场和角色之上、UI 之下
-	_pfx_root = Node2D.new()
-	_pfx_root.z_index = 7
-	_cam.add_child(_pfx_root)
 	# 首领登场演出三件套（平时隐藏）
 	_boss_veil = ColorRect.new()
 	_boss_veil.color = Color(0.08, 0.06, 0.05, 0.0)
@@ -888,7 +831,6 @@ func _build_field() -> void:
 	_fly_layer.z_index = 9
 	add_child(_fly_layer)
 	_fly = _fly_layer.dots
-	_prewarm_pfx.call_deferred()
 	_build_card_detail()
 	# v3 技能栏（右缘竖排，6 格可视）
 	_build_skill_bar()
@@ -2144,43 +2086,6 @@ func _pop_draw_cards() -> void:
 		tw.tween_property(card, "modulate:a", 1.0, 0.18).set_delay(i * 0.055)
 
 # ---------------- 属性 ----------------
-func _build_attr() -> void:
-	_attr_layer = Control.new()
-	_attr_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_attr_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_attr_layer.visible = false
-	_attr_layer.z_index = 25
-	add_child(_attr_layer)
-	var p := Panel.new()
-	p.position = Vector2(50, 300)
-	p.size = Vector2(620, 240)
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.95, 0.92, 0.85)
-	sb.set_corner_radius_all(6)
-	sb.border_color = Color(0.85, 0.66, 0.23, 0.7)
-	sb.set_border_width_all(2)
-	p.add_theme_stylebox_override("panel", sb)
-	_attr_layer.add_child(p)
-	# v9：属性表改成**真数据**（原来写死 320/21/8/15%）
-	var names := ["气血", "攻击", "内力", "攻速", "暴击", "爆伤", "物理减免", "全系增幅"]
-	# v6：整块面板可点 → 打开详细属性（不是按钮，点面板任意处）
-	var hit := Button.new()
-	hit.position = Vector2.ZERO
-	hit.size = Vector2(620, 240)
-	hit.flat = true
-	hit.focus_mode = Control.FOCUS_NONE
-	hit.pressed.connect(func(): _open_attr_page())
-	p.add_child(hit)
-	_attr_val_lbs.clear()
-	for r in 4:
-		var y := 26.0 + float(r) * 42.0
-		_lbl(names[r * 2], Vector2(30, y), Vector2(110, 30), 19, DIM, p)
-		_attr_val_lbs.append(_lbl("-", Vector2(140, y), Vector2(120, 30), 21, INK, p, HORIZONTAL_ALIGNMENT_RIGHT))
-		_lbl(names[r * 2 + 1], Vector2(330, y), Vector2(110, 30), 19, DIM, p)
-		_attr_val_lbs.append(_lbl("-", Vector2(440, y), Vector2(120, 30), 21, INK, p, HORIZONTAL_ALIGNMENT_RIGHT))
-	_lbl("点这里看详细属性 →", Vector2(30, 206), Vector2(500, 24), 15, GOLD, p)
-	_btn("×", Rect2(566, 8, 44, 36), 22, Color(0.95, 0.92, 0.85), DIM, func(): _show_attr(false), p)
-
 # v6：详细属性页（kushou/attr_panel.gd），懒加载一次，之后复用
 var _attr_page = null
 
@@ -2194,12 +2099,6 @@ func _open_attr_page() -> void:
 	_attr_page.setup(_core)
 	_attr_page.open()
 
-func _show_attr(v: bool) -> void:
-	_attr_open = v
-	_attr_layer.visible = v
-	if v:
-		_attr_layer.move_to_front()
-		_refresh_attr_values()
 
 # v6：新属性层 → 旧 hero 字段（atk / hp）。技能、召唤物、顶部血条还在读旧字段。
 func _sync_attrs_to_hero() -> void:
@@ -2224,27 +2123,6 @@ func _sync_attrs_to_hero() -> void:
 		ratio = clampf(float(h.get("hp", 0.0)) / float(h.get("hp_max", 1.0)), 0.0, 1.0)
 	h["hp_max"] = hp_new
 	h["hp"] = minf(hp_new, hp_new * ratio)
-
-# 属性表：直接从 core.hero 读（不再写死数字）
-func _refresh_attr_values() -> void:
-	if _core == null or _attr_val_lbs.size() < 8:
-		return
-	var h: Dictionary = _core.hero
-	# v6：闪避下线；攻速显示成「次/秒」（1.8 秒/刀 ＝ 0.56 次/秒）
-	var aspd := float(h.get("aspd", 1.0))
-	var vals := [
-		"%d/%d" % [int(float(h.get("hp", 0))), int(float(h.get("hp_max", 1)))],
-		"%.0f" % float(h.get("atk", 0.0)),
-		"%d/%d" % [int(float(h.get("mp", 0))), int(float(h.get("mp_max", 1)))],
-		"%.2f/秒" % (aspd / 1.8),
-		"%d%%" % int(round(float(h.get("crit", 0.0)) * 100.0)),
-		"%d%%" % int(round(float(h.get("crit_dmg", 2.0)) * 100.0)),
-		"%d%%" % int(round((float(h.get("cut_all", 0.0)) + float(h.get("cut", 0.0))) * 100.0)),
-		"+%d%%" % int(round(float(h.get("dmg_all", 0.0)) * 100.0)),
-	]
-	for i in 8:
-		if i < _attr_val_lbs.size():
-			(_attr_val_lbs[i] as Label).text = str(vals[i])
 
 
 # ---------------- 退出 ----------------
@@ -3720,7 +3598,6 @@ func _on_trea_abandon() -> void:
 func _layer_in(c) -> void:
 	if c == null:
 		return
-	_prebake_late.call_deferred()      # 稀有特效趁面板打开时烘（卡顿藏在动画里）
 	c.pivot_offset = Vector2(360, 640)
 	c.scale = Vector2(0.965, 0.965)
 	c.modulate.a = 0.0
@@ -4864,76 +4741,63 @@ func _spawn_hit_fx(global_pos: Vector2, radius: float, dmg: int, hero_hit: bool,
 		# 横扫一次打好几只时，普通命中不每只都放（保丝滑，观感也够）；首领战再降一档
 		_spawn_pfx("impacts/hit-spark", global_pos + Vector2(0, -6), 0.72, "", 1.0)
 
-# pixelfx：播一个特效，播完自毁
-# 用插件自带的 prebake 把每一帧都烘好（静态缓存，所有节点共享），
-# 这样第一次播放就不存在"边播边烘"造成的单帧尖峰。
-# ⚠ 每个变体要 0.1~0.25 秒，所以只烘"每场必用"的那几个；稀有的等面板打开时再补。
-func _prewarm_pfx() -> void:
-	await get_tree().create_timer(0.35).timeout
-	if _pfx_root == null:
-		return
-	await _prebake_list(PFX_PREWARM)
+# 轻量命中火花：程序化放射线，不预烘、不用 pixelfx，0.18 秒自毁
+class ImpactSpark extends Control:
+	var col := Color.WHITE
+	var life := 0.18
+	var t := 0.0
+	var dirs: Array = []
+	func _ready() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		z_index = 7
+		var n := 6 + randi() % 3
+		for i in n:
+			var a := TAU * float(i) / float(n) + randf_range(-0.4, 0.4)
+			dirs.append(Vector2(cos(a), sin(a)) * randf_range(0.8, 1.3))
+		set_process(true)
+	func _process(dt: float) -> void:
+		t += dt
+		if t >= life:
+			queue_free()
+			return
+		queue_redraw()
+	func _draw() -> void:
+		var k := 1.0 - t / life
+		var c := Color(col.r, col.g, col.b, k)
+		draw_circle(Vector2.ZERO, 6.0 * k, Color(col.r, col.g, col.b, k * 0.55))
+		for d in dirs:
+			var p0: Vector2 = d * 3.0
+			var p1: Vector2 = d * (7.0 + 16.0 * (1.0 - k))
+			draw_line(p0, p1, c, 2.2 * k + 0.6)
 
-func _prebake_late() -> void:
-	if _pfx_root == null or _late_baked:
-		return
-	_late_baked = true
-	await _prebake_list(PFX_LATE)
-
-func _pfx_baked_key(effect: String, pal: String, lig: float) -> String:
-	return effect + "|" + pal + "|" + str(snappedf(lig, 0.01))
-
-func _prebake_one(effect: String, pal: String, lig: float) -> void:
-	var k := _pfx_baked_key(effect, pal, lig)
-	if _baked_keys.has(k):
-		return
-	_baked_keys[k] = true
-	var tmp = PFX2D.new()
-	tmp.effect = effect
-	tmp.light = lig
-	if pal != "":
-		tmp.palette_preset = pal
-	var opts: Dictionary = tmp.fx_options()
-	tmp.free()
-	PFX2D.prebake(effect, opts, "")
-
-func _prebake_list(entries: Array) -> void:
-	for it in entries:
-		var e := str(it[0])
-		var pal := str(it[2])
-		var lig := float(it[3])
-		var tmp = PFX2D.new()
-		tmp.effect = e
-		tmp.light = lig
-		if pal != "":
-			tmp.palette_preset = pal
-		var opts: Dictionary = tmp.fx_options()
-		tmp.free()
-		PFX2D.prebake(e, opts, "")
-		_baked_keys[_pfx_baked_key(e, pal, lig)] = true
-		await get_tree().process_frame
+func _pfx_col(pal: String, effect: String) -> Color:
+	match pal:
+		"gold": return Color(1.0, 0.82, 0.30)
+		"blood": return Color(0.82, 0.20, 0.16)
+		"heal": return Color(0.42, 0.92, 0.52)
+		"holy": return Color(1.0, 0.96, 0.62)
+		"arcane": return Color(0.72, 0.52, 1.0)
+		"fire": return Color(1.0, 0.52, 0.16)
+		"poison": return Color(0.52, 0.84, 0.30)
+		"volt": return Color(0.95, 0.90, 0.35)
+		"leaf": return Color(0.45, 0.85, 0.35)
+		"metal": return Color(0.92, 0.86, 0.70)
+		"shadow": return Color(0.55, 0.20, 0.60)
+		"dust": return Color(0.80, 0.74, 0.62)
+	if effect.contains("shadow"):
+		return Color(0.55, 0.20, 0.60)
+	return Color(1.0, 0.95, 0.80)
 
 func _spawn_pfx(effect: String, pos: Vector2, s := 1.0, pal := "", lig := 1.0, spd := 1.0, flip := false):
-	if _pfx_root == null or not ResourceLoader.exists("res://addons/pixelfx/nodes/pixel_fx_2d.gd"):
+	if _cam == null:
 		return null
-	# 没烘过的变体：先同步烘一次（否则边播边烘会连卡好几秒）
-	if not _baked_keys.has(_pfx_baked_key(effect, pal, lig)):
-		_prebake_one(effect, pal, lig)
-	if _pfx_root.get_child_count() >= PFX_MAX_LIVE:
-		return null
-	var fx = PFX2D.new()
-	fx.effect = effect
-	fx.position = pos
-	fx.scale = Vector2(s, s)
-	fx.light = lig
-	fx.speed_scale = spd
-	fx.flip = flip
-	if pal != "":
-		fx.palette_preset = pal
-	fx.free_when_done = true
-	_pfx_root.add_child(fx)
-	_pfx_count += 1
-	return fx
+	var sp := ImpactSpark.new()
+	sp.position = pos
+	sp.scale = Vector2(s, s) * (1.15 if lig > 1.7 else 1.0)
+	sp.col = _pfx_col(pal, effect)
+	sp.life = 0.16 / maxf(0.6, spd)
+	_cam.add_child(sp)
+	return sp
 
 func _on_hero_attack() -> void:
 	_play_attack_fx(true)
