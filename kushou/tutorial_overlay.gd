@@ -6,7 +6,7 @@ signal done
 var _on_done: Callable
 var _on_pause: Callable
 var _on_resume: Callable
-var _target: Control = null
+var _target: Node = null
 var _dim: ColorRect
 var _ring: Panel
 var _lbl: Label
@@ -48,12 +48,12 @@ func _ready() -> void:
 	_hit.pressed.connect(_on_pressed)
 	add_child(_hit)
 
-func open(target: Control, text: String, on_done: Callable, on_pause := Callable(), on_resume := Callable()) -> void:
+func open(target: Node, text: String, on_done: Callable, on_pause := Callable(), on_resume := Callable()) -> void:
 	_target = target
 	_on_done = on_done
 	_on_pause = on_pause
 	_on_resume = on_resume
-	var gr := target.get_global_rect()
+	var gr := _target_rect(target)
 	_ring.position = gr.position - Vector2(8, 8)
 	_ring.size = gr.size + Vector2(16, 16)
 	var sb := StyleBoxFlat.new()
@@ -73,6 +73,15 @@ func open(target: Control, text: String, on_done: Callable, on_pause := Callable
 	visible = true
 	if _on_pause.is_valid():
 		_on_pause.call()
+
+func _target_rect(t: Node) -> Rect2:
+	if t is Control:
+		return (t as Control).get_global_rect()
+	if t is Node2D:
+		var n2 := t as Node2D
+		var sz := Vector2(96, 96)
+		return Rect2(n2.global_position - sz * 0.5, sz)
+	return Rect2()
 
 func _on_pressed() -> void:
 	visible = false

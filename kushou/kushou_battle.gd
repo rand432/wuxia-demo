@@ -140,12 +140,15 @@ var _last_quota_wave := 1           # v17x：上一次结算定额时的波数�
 
 func _wave_quota_for(w: int) -> int:
 	# 割草曲线：前期就多，后期继续缓涨；不再在 11 波突然掉到 14
-	if w <= 3:   return 24
-	if w <= 6:   return 26
-	if w <= 10:  return 28
+	# 第一关前期减量：让玩家更快清完进第 2 波（用户要求）
+	if w <= 1:   return 12
+	if w <= 2:   return 14
+	if w <= 3:   return 16
+	if w <= 6:   return 22
+	if w <= 10:  return 26
 	if w <= 15:  return 26
 	if w <= 20:  return 24
-	if w <= 25:  return 32
+	if w <= 25:  return 30
 	return 30
 
 var SPAWN_EVERY := 1.6               # 每批之间的间隔（原来是 1.2 秒刷一只；现在成批刷）
@@ -430,14 +433,14 @@ const HERO_SPD_FAR := 178.0         # 主角"离得远"的追击速度（快）
 const CHASE_FAR := 230.0            # 超过这个距离算"远"，提速追
 const CHASE_NEAR := 96.0            # 进这个距离算"近"，慢下来
 const INTRO_WAIT := 0.0             # 不再开场站桩；进关立刻交手
-const HERO_TOP := 0.42              # 自动追击时主角能到的最高线；再往上就回中间等怪
+const HERO_TOP := 0.10              # 自动追击时主角能到的最高线（原来 0.42 太高，怪在 y=51 时够不到）
 									#   v3j 从 0.40 收到 0.25；两条路都吃它：自动追击 与 点哪走哪
 									#   ⚠ v15j 一度改成 0.30，用户确认 25% 才是原设计 → 已改回
 # v15y（用户："我的意思是主角跑到中间就不跑了就等着怪过来"）：
 #   主角**只走到中间那条线就停住**，然后**等怪自己走下来**（怪会一直往下走到能打到主角）。
 #   这个值就是"怪要贴多近主角才动"：给小了（90）＝基本不追，怪到胸口才侧身一步。
 #   原来没有这个限制，主角会一路追到 25% 的天花板杵着（看着像"一直往前跑"）。
-const HERO_AGGRO := 90.0
+const HERO_AGGRO := 260.0           # 主角主动追击的范围（原来 90 太小：怪停在高处时主角不追，打不到）
 # 主角站哪一行：0.5 ＝ 战场正中（"跑到中间就不跑了，等怪过来"）
 const HERO_MID := 0.50
 const HERO_REACH := 74.0            # 进这个距离就出手
@@ -565,7 +568,7 @@ func _spawn_foe(kind := "normal", hp_mul := 1.0, atk_mul := 1.0, big := false, t
 		# v16m：⚠ 停距默认值原来是 FOE_STOP(150)，但改之前**根本没人读它**，
 		#   走位用的是 FOE_REACH(66)。现在 stop 真被读了，默认必须跟原来一致，
 		#   否则**所有近战怪都变成隔空打**（探针实测：普通怪停在 118~169）。
-		"stop": (FOE_REACH + 40.0 if big else FOE_REACH) + randf() * 30.0,
+		"stop": (FOE_REACH - 6.0 if big else FOE_REACH - 10.0) + randf() * 12.0,   # 必须 < HERO_REACH+10（84），否则主角够不到
 	}
 	# v16h/i（用户："小怪可以有些弓箭手啊之类的 不能全是火柴人" → "还有法师怪 肌肉壮汉啊 等等"）：
 	#   普通怪按权重挑**长相类型**（弓手 22% / 法师 18% / 壮汉 18% / 盾兵 14% / 普通 28%）。
@@ -576,10 +579,10 @@ func _spawn_foe(kind := "normal", hp_mul := 1.0, atk_mul := 1.0, big := false, t
 		var rr := randf()
 		if rr < 0.22:
 			f["ranged"] = true
-			f["stop"] = FOE_REACH + 180.0 + randf() * 40.0      # 弓手：站远（约 250）
+			f["stop"] = FOE_REACH + 80.0 + randf() * 30.0      # 弓手：站远（约 150），但留在战场内
 		elif rr < 0.40:
 			f["mage"] = true
-			f["stop"] = FOE_REACH + 220.0 + randf() * 40.0      # 法师：站最远（约 290）
+			f["stop"] = FOE_REACH + 100.0 + randf() * 30.0      # 法师：站最远（约 170），但留在战场内
 		elif rr < 0.58:
 			f["brute"] = true
 			f["scale"] = 1.22                                  # 壮汉：个头大一圈
@@ -883,7 +886,7 @@ func _process(delta: float) -> void:
 	if _spawn_t <= 0.0:
 		_spawn_t = SPAWN_EVERY_LATE if wave >= 10 else SPAWN_EVERY
 		# v17x：这一波只刷定额那么多（刷完就等玩家清场，然后提前进下一波）
-		if _wave_spawned + _spawn_left < _wave_quota:
+		if _wave_spawned + _spawn_left < _wave_quota or _wave_spawned < _wave_quota:
 			# 割草：成批涌出（一波最多 SPAWN_PACK 只），但**错开 0.12 秒一只**
 			# —— 视觉上仍是一群，却不会同一帧建 4 个令牌造成尖峰
 			_spawn_left = mini(SPAWN_PACK, _wave_quota - _wave_spawned - _spawn_left)
@@ -1098,7 +1101,8 @@ func _process(delta: float) -> void:
 				fspd *= 0.55
 			var mv := to_h.normalized() * minf(fspd * delta, dh - reach)
 			f["x"] = clampf(float(f["x"]) + mv.x, 40.0, size.x - 40.0)
-			f["y"] = float(f["y"]) + mv.y
+			# 怪不许超过战场顶部（留 70px 给顶部 UI），保证始终在屏幕内
+			f["y"] = clampf(float(f["y"]) + mv.y, 70.0, size.y - 40.0)
 		else:
 			# v9i：被雷麻痹的怪，出手计时清零（麻痹 1 秒）
 			# v17g（用户："调整 boss不吃硬控"）：

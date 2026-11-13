@@ -100,6 +100,7 @@ const WEN_KILL_BASE := 12
 const WEN_KILL_WAVE := 3
 const WEN_WAVE_CLEAR := 60
 var _str_lv := 0
+var _l1_attr_shown := false
 var _str_round := 0
 var _str_pending := false
 var _str_layer: Control = null
@@ -293,7 +294,6 @@ func _ready() -> void:
 		_bm.visible = false
 		_tut = TutorialOverlay.new()
 		add_child(_tut)
-	_build_dbg()
 	_refresh_deck()
 	_apply_level_preview()
 	_maybe_level_button_tutorial.call_deferred()
@@ -336,50 +336,6 @@ func _apply_level_preview() -> void:
 		_coin_lb.text = str(_wen)
 	_refresh_level_ui()
 
-# ---------------- F3 调试角标 ----------------
-var _dbg_lb: Label = null
-func _build_dbg() -> void:
-	_dbg_lb = Label.new()
-	_dbg_lb.position = Vector2(10, 128)
-	_dbg_lb.size = Vector2(420, 120)
-	_dbg_lb.add_theme_font_override("font", FONT)
-	_dbg_lb.add_theme_font_size_override("font_size", 16)
-	_dbg_lb.add_theme_color_override("font_color", Color(0.15, 0.85, 0.35))
-	_dbg_lb.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
-	_dbg_lb.add_theme_constant_override("outline_size", 4)
-	_dbg_lb.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_dbg_lb.z_index = 120
-	_dbg_lb.visible = true   # 直接常开，不用按 F3
-	add_child(_dbg_lb)
-
-func _input(ev: InputEvent) -> void:
-	if ev is InputEventKey and ev.pressed and not ev.echo and ev.keycode == KEY_F3:
-		if _dbg_lb != null:
-			_dbg_lb.visible = not _dbg_lb.visible
-
-var _dbg_win := 0.0
-var _dbg_worst := 0.0
-func _dbg_update(dt: float) -> void:
-	if _dbg_lb == null or not _dbg_lb.visible:
-		return
-	_dbg_win += dt
-	_dbg_worst = maxf(_dbg_worst, dt)
-	if _dbg_win >= 2.0:
-		_dbg_win = 0.0
-	var fps := Engine.get_frames_per_second()
-	var proc := Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0
-	var phys := Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0
-	var objs := Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME)
-	var prims := Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME)
-	var foes_n := 0
-	if _core != null:
-		foes_n = _core.foes.size()
-	_dbg_lb.text = "FPS %d
-proc %.2fms
-worst %.0fms
-phys %.2fms
-draw obj %d / prim %d
-foes %d  kills %d" % [fps, proc, _dbg_worst * 1000.0, phys, objs, prims, foes_n, _kills]
 
 # ---------------- 通用 ----------------
 func _panel(rect: Rect2, bg: Color, radius := 8, border := Color(0, 0, 0, 0), bw := 0, parent: Node = null) -> Panel:
@@ -675,15 +631,21 @@ func _chip(x: float, kind: String, value: String, cap: String) -> Label:
 	box.size = Vector2(720, 80)
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(box)
-	_panel(Rect2(x, 8, 162, 64), Color(0.075, 0.068, 0.060, 0.98), 8, Color(0.85, 0.66, 0.23, 0.45), 1, box)
+	# 可视区块单独一个 Control（162×64），教学高亮框只框这一块，不会拉满整行
+	var chip := Control.new()
+	chip.position = Vector2(x, 8)
+	chip.size = Vector2(162, 64)
+	chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(chip)
+	_panel(Rect2(0, 0, 162, 64), Color(0.075, 0.068, 0.060, 0.98), 8, Color(0.85, 0.66, 0.23, 0.45), 1, chip)
 	var ic := Ico.new()
 	ic.kind = kind
-	ic.position = Vector2(x + 10, 22)
+	ic.position = Vector2(10, 14)
 	ic.size = Vector2(34, 34)
-	box.add_child(ic)
-	var vl := _lbl(value, Vector2(x + 48, 4), Vector2(106, 36), 26, Color(0.95, 0.91, 0.83), box, HORIZONTAL_ALIGNMENT_RIGHT)
-	_lbl(cap, Vector2(x + 48, 40), Vector2(106, 20), 16, Color(0.80, 0.75, 0.65), box, HORIZONTAL_ALIGNMENT_RIGHT)
-	_chips[cap] = box
+	chip.add_child(ic)
+	var vl := _lbl(value, Vector2(48, -4), Vector2(106, 36), 26, Color(0.95, 0.91, 0.83), chip, HORIZONTAL_ALIGNMENT_RIGHT)
+	_lbl(cap, Vector2(48, 32), Vector2(106, 20), 16, Color(0.80, 0.75, 0.65), chip, HORIZONTAL_ALIGNMENT_RIGHT)
+	_chips[cap] = chip
 	return vl
 
 func _build_hud() -> void:
@@ -746,6 +708,9 @@ func _build_field() -> void:
 	_core.delayed_land.connect(_on_delayed_land)
 	_core.boss_died.connect(_on_boss_died)
 	_core.paper_blocked.connect(_on_paper_blocked)
+	# 教学关（1–10）每波少刷几只，节奏更快（用户要求）
+	if LevelState.current_level <= 10:
+		_core.wave_extra = -4
 	_core.start_run()
 	_hero_token = TokenActor.new()
 	_hero_token.setup(PLAYER_TEX, 44.0, Color(0.85, 0.66, 0.23), true)
@@ -1683,10 +1648,9 @@ func _build_bottom() -> void:
 	_mate_tile = _tile(292, 1128, 124, "mate", "请神", false)
 	_mate_tile.visible = LevelState.show_button("mate")
 	_str_tile = _tile(426, 1128, 124, "skill", "强化", false)
-	# 第一关：强化要等清完第一波的教学那一刻才亮出来
-	if LevelState.current_level == 1 and not LevelState.tutorial_was_done("l1_wen"):
-		_str_tile.visible = false
-		_str_tile.hot = false
+	# 强化固定隐藏：清完第一波的教学那一刻才亮出来（不因重玩而提前显示）
+	_str_tile.visible = false
+	_str_tile.hot = false
 	_draw_tile = _tile(560, 1116, 136, "draw", "抽卡", true)
 	_draw_tile.visible = LevelState.show_button("draw")
 	_refresh_level_ui()
@@ -2249,8 +2213,7 @@ func _process(_delta: float) -> void:
 			_l1_tutorial("l1_yuhu", _curio_sq, "气血不足时，玉壶会自动回血", _show_curio_detail)
 		if _hp_fill != null:
 			_hp_fill.size = Vector2(maxf(4.0, 235.0 * hpr), 20.0)
-		_dbg_update(_delta)
-		_tick_skills(_delta)
+			_tick_skills(_delta)
 		_tick_rare_buffs(_delta)
 		_tick_curio(_delta)
 		_tick_fly(_delta)
@@ -2697,16 +2660,21 @@ func _on_wave_clear(cleared_wave: int) -> void:
 			_str_tile.visible = true
 			_str_tile.hot = true
 			_str_tile.queue_redraw()
-		_l1_tutorial("l1_wen", _str_tile, "文钱可以强化自身", _on_str_tile)
+		# 两步引导：先点强化，再点文钱
+		_l1_tutorial("l1_wen", _str_tile,
+			"强化可以强化自身\n提升气血、内力和伤害（强化 Lv1）",
+			func() -> void:
+				_l1_tutorial("l1_wen2", _chips.get("文钱"),
+					"强化需要消耗文钱",
+					_on_str_tile))
 
-func _l1_tutorial(key: String, target: Control, text: String, cb: Callable) -> void:
+func _l1_tutorial(key: String, target: Node, text: String, cb: Callable) -> void:
 	_tutorial(key, target, text, cb)
 
-func _tutorial(key: String, target: Control, text: String, cb: Callable) -> void:
+func _tutorial(key: String, target: Node, text: String, cb: Callable) -> void:
 	if _tut == null:
 		return
-	if LevelState.tutorial_was_done(key):
-		return
+	# 每局都提示一次强化引导（原来只播一次，重玩时不出现）
 	if target == null or not is_instance_valid(target) or not target.is_visible_in_tree():
 		return
 	LevelState.mark_tutorial(key)
@@ -2769,7 +2737,7 @@ func _refresh_str_tile() -> void:
 	if _str_tile == null:
 		return
 	var cost := _str_cost()
-	var s := "待选进阶" if _str_pending else "Lv %d · %d文" % [_str_lv, cost]
+	var s := "待选进阶" if _str_pending else "Lv %d" % _str_lv   # 只显示等级，消耗在点击时提示
 	var hot := _str_pending or _wen >= cost
 	if _str_tile.sub != s or _str_tile.hot != hot:
 		_str_tile.sub = s
@@ -2787,7 +2755,10 @@ func _on_str_tile() -> void:
 		return
 	var cost := _str_cost()
 	if _wen < cost:
-		_toast("文钱不足：强化一次要 %d" % cost)
+		# 跟升级提示一样，在主角头顶飘一行红字
+		if _core != null:
+			_core._push_float(_core.hero_pos.x, _core.hero_pos.y - 70.0,
+				"无法强化 · 需要 %d 文钱" % cost, Color(0.94, 0.42, 0.32), true)
 		return
 	_wen -= cost
 	if _coin_lb != null:
@@ -2796,6 +2767,12 @@ func _on_str_tile() -> void:
 	_apply_str_levels(1)
 	Aud.sfx("ui_click", -6.0)
 	_str_pop("强化 +1")
+	# 主角头顶也飘一行（跟升级提示一致）
+	if _core != null:
+		var hh: Dictionary = _core.hero
+		_core._push_float(_core.hero_pos.x, _core.hero_pos.y - 70.0,
+			"强化 +1 · 气血 %d · 攻击 %d" % [int(float(hh.get("hp_max", 0))), int(float(hh.get("atk", 0)))],
+			Color(0.98, 0.86, 0.45), true)
 	if _str_tile != null:
 		var twp := create_tween()
 		twp.tween_property(_str_tile, "scale", Vector2(0.86, 0.86), 0.055)
@@ -2804,12 +2781,18 @@ func _on_str_tile() -> void:
 		var twc := create_tween()
 		twc.tween_property(_str_tile, "modulate", Color(1.35, 1.25, 0.9), 0.05)
 		twc.tween_property(_str_tile, "modulate", Color(1, 1, 1), 0.18)
-	_l1_tutorial("l1_attr", _hero_hit_btn, "点角色查看属性", func() -> void: _open_attr_page())
+	# 强化过一次后：引导点头像查看属性（屏幕压暗、头像亮起）
+	if not _l1_attr_shown:
+		_l1_attr_shown = true
+		var portrait: Node = _hero_token if _hero_token != null else _hero_hit_btn
+		_l1_tutorial("l1_attr", portrait, "点击人物头像可以查看当前属性", func() -> void: _open_attr_page())
 	if _str_lv % STR_EVERY == 0:
 		_str_pending = true
 		_aug_reroll += 1          # 每进一轮，刷新次数 +1
 		_open_aug_pick()
-		_l1_tutorial("l1_aug", _str_layer, "强化 10 次可进阶", func() -> void: pass)
+		_l1_tutorial("l1_aug", _str_layer,
+			"每强化 10 级可大幅提升属性\n并可选择自己的发展方向",
+			func() -> void: pass)
 	_refresh_str_tile()
 
 # 点一下的即时反馈：［强化］钮上方冒一行字，往上飘走（不用 toast，免得连点排队）
