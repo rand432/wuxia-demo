@@ -296,6 +296,9 @@ var _draw_paid := false
 var _draw_anim := false
 var _hero_token = null
 var _foe_tokens := {}
+var _no_tokens := false   # 对照测试用：不创建/不更新怪的本体
+var _no_ui := false       # 对照测试用：不创建 UI 面板
+var _no_ui2 := false      # 对照测试用：连背景/黑市/教学/卡牌数据都不建
 var _foe_seq := 0
 # 攻击表现（P0）：后层剑/弧，前层白边淡红/伤害字；顶部血条是主角唯一血条
 const FIELD_POS := Vector2(8, 150)
@@ -314,28 +317,33 @@ func _ready() -> void:
 	th.default_font = FONT
 	th.default_font_size = 17
 	theme = th
-	_init_cards()
-	_build_bg()
-	_build_hud()
+	if not _no_ui2:
+		_init_cards()
+		_build_bg()
+	if not _no_ui:
+		_build_hud()
 	_build_field()
-	_build_deck()
-	_build_bottom()
-	_q_init()
-	_build_draw()
+	if not _no_ui:
+		_build_deck()
+		_build_bottom()
+		_q_init()
+		_build_draw()
 	# v6：角色属性统一走详细属性页（attr_panel），旧 8 行窗不再创建
-	_build_exit()
-	_build_toast()
-	_build_combined()
-	_build_god_pick()
-	_build_str()
-	_build_trea()
-	_bm = BlackMarket.new()
-	_bm.setup(_core, self)
-	add_child(_bm)
-	_bm.z_index = 40
-	_bm.visible = false
-	_tut = TutorialOverlay.new()
-	add_child(_tut)
+	if not _no_ui:
+		_build_exit()
+		_build_toast()
+		_build_combined()
+		_build_god_pick()
+		_build_str()
+		_build_trea()
+	if not _no_ui2:
+		_bm = BlackMarket.new()
+		_bm.setup(_core, self)
+		add_child(_bm)
+		_bm.z_index = 40
+		_bm.visible = false
+		_tut = TutorialOverlay.new()
+		add_child(_tut)
 	_build_dbg()
 	_refresh_deck()
 	_apply_level_preview()
@@ -2449,7 +2457,16 @@ func _process(_delta: float) -> void:
 				_hero_token.play_hit()
 			_prev_hero_hp = hhp
 		var active := {}
-		for f in _core.foes:
+		if _no_tokens:
+			for i in range(_enemies.size() - 1, -1, -1):
+				_enemies[i].queue_free()
+			_enemies.clear()
+			for tid0 in _foe_tokens.keys():
+				var tk0 = _foe_tokens[tid0]
+				if tk0 != null:
+					tk0.queue_free()
+			_foe_tokens.clear()
+		for f in (_core.foes if not _no_tokens else []):
 			if not f.has("_tid"):
 				_foe_seq += 1
 				f["_tid"] = _foe_seq
