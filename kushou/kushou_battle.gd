@@ -441,7 +441,7 @@ const HERO_SPD := 96.0              # 主角"贴近了"的走位速度（慢）
 const HERO_SPD_FAR := 178.0         # 主角"离得远"的追击速度（快）
 const CHASE_FAR := 230.0            # 超过这个距离算"远"，提速追
 const CHASE_NEAR := 96.0            # 进这个距离算"近"，慢下来
-const INTRO_WAIT := 3.0             # 开场先站几秒（让怪先走进画面）
+const INTRO_WAIT := 0.0             # 不再开场站桩；进关立刻交手
 const HERO_TOP := 0.42              # 自动追击时主角能到的最高线；再往上就回中间等怪
 									#   v3j 从 0.40 收到 0.25；两条路都吃它：自动追击 与 点哪走哪
 									#   ⚠ v15j 一度改成 0.30，用户确认 25% 才是原设计 → 已改回
@@ -567,8 +567,12 @@ func _spawn_foe(kind := "normal", hp_mul := 1.0, atk_mul := 1.0, big := false, t
 	if foes.size() >= MAX_FOES + 16 and kind != "boss" and kind != "champion" and kind != "elite":
 		return
 	var x := 150.0 + randf() * maxf(60.0, size.x - 320.0)
+	# 第一波前几只直接从场上半区出现，别让玩家等怪从屏幕顶走下来
+	var y0 := -40.0
+	if wave <= 1 and _wave_spawned < 5:
+		y0 = 200.0 + randf() * 120.0
 	var f := {
-		"x": x, "y": -40.0,
+		"x": x, "y": y0,
 		# v13：险系卡带的全局难度 —— 血量与攻击同时乘（所有怪物，含 boss）
 		"hp": _foe_hp() * hp_mul * extra_diff_mul, "hp_max": _foe_hp() * hp_mul * extra_diff_mul,
 		"atk": _foe_atk() * atk_mul * extra_diff_mul, "t": 0.0,
@@ -5225,7 +5229,7 @@ func wave_cleared() -> bool:
 func wave_reset_quota() -> void:
 	_wave_quota = _wave_quota_for(wave) + int(wave_extra)
 	_wave_spawned = 0
-	_spawn_t = 0.6
+	_spawn_t = 0.0   # 进关/换波立刻出第一批，不再先等 0.6 秒
 
 func live_foes() -> int:
 	var n := 0

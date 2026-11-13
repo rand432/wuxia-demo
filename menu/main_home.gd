@@ -169,7 +169,7 @@ func _on_dock(key: String) -> void:
 		"start":
 			LevelState.ensure_loaded()
 			LevelState.current_level = LevelState.max_unlocked
-			get_tree().change_scene_to_file("res://kushou/battle_ui.tscn")
+			get_tree().change_scene_to_file("res://menu/loading.tscn")
 
 # ---------------- 刷新 ----------------
 func _refresh() -> void:

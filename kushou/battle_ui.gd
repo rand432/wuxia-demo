@@ -308,14 +308,12 @@ var _hero_name_lb: Label = null
 
 func _ready() -> void:
 	_max_wave = LevelState.waves()
-	var _t0 := Time.get_ticks_msec()
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var th := Theme.new()
 	th.default_font = FONT
 	th.default_font_size = 17
 	theme = th
 	_init_cards()
-	print("[BOOT] init_cards=", Time.get_ticks_msec() - _t0)
 	_build_bg()
 	_build_hud()
 	_build_field()
@@ -323,7 +321,6 @@ func _ready() -> void:
 	_build_bottom()
 	_q_init()
 	_build_draw()
-	print("[BOOT] ui_core=", Time.get_ticks_msec() - _t0)
 	# v6：角色属性统一走详细属性页（attr_panel），旧 8 行窗不再创建
 	_build_exit()
 	_build_toast()
@@ -331,7 +328,6 @@ func _ready() -> void:
 	_build_god_pick()
 	_build_str()
 	_build_trea()
-	print("[BOOT] panels=", Time.get_ticks_msec() - _t0)
 	_bm = BlackMarket.new()
 	_bm.setup(_core, self)
 	add_child(_bm)
@@ -340,9 +336,17 @@ func _ready() -> void:
 	_tut = TutorialOverlay.new()
 	add_child(_tut)
 	_refresh_deck()
-	print("[BOOT] done=", Time.get_ticks_msec() - _t0)
 	_apply_level_preview()
 	_maybe_level_button_tutorial.call_deferred()
+	var fade := ColorRect.new()
+	fade.color = Color(0.03, 0.03, 0.04, 1.0)
+	fade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	fade.mouse_filter = Control.MOUSE_FILTER_STOP
+	fade.z_index = 200
+	add_child(fade)
+	var twf := create_tween()
+	twf.tween_property(fade, "color:a", 0.0, 0.45)
+	twf.tween_callback(func() -> void: fade.queue_free())
 	set_process(true)
 
 # 上一关首通留下的“预习”：下一关开局生效一次
@@ -699,7 +703,8 @@ func _build_hud() -> void:
 	_hp_lb = _lbl("200/200", Vector2(208, 88), Vector2(120, 28), 17, Color(0.98, 0.95, 0.88))
 	_panel(Rect2(200, 118, 235, 9), Color(0.10, 0.09, 0.08, 0.22), 4)
 	_mp_bar = _panel(Rect2(200, 118, 235 * 0.35, 9), Color(0.30, 0.52, 0.72), 4)
-	_lbl("首领 00:37", Vector2(450, 96), Vector2(120, 30), 17, SEAL)
+	var _boss_timer_lb := _lbl("", Vector2(450, 96), Vector2(120, 30), 17, SEAL)
+	_boss_timer_lb.visible = false   # 原来写死的“首领 00:37”是假的，改成首领真的出现时才显示
 	_btn("总计", Rect2(570, 88, 68, 42), 17, Color(0.10, 0.09, 0.08, 0.98), LIGHT, func(): _show_totals())
 	_btn("退出", Rect2(646, 88, 60, 42), 17, Color(0.10, 0.09, 0.08, 0.98), LIGHT, func(): _show_exit(true))
 
@@ -1678,6 +1683,10 @@ func _build_bottom() -> void:
 	_mate_tile = _tile(292, 1128, 124, "mate", "请神", false)
 	_mate_tile.visible = LevelState.show_button("mate")
 	_str_tile = _tile(426, 1128, 124, "skill", "强化", false)
+	# 第一关：强化要等清完第一波的教学那一刻才亮出来
+	if LevelState.current_level == 1 and not LevelState.tutorial_was_done("l1_wen"):
+		_str_tile.visible = false
+		_str_tile.hot = false
 	_draw_tile = _tile(560, 1116, 136, "draw", "抽卡", true)
 	_draw_tile.visible = LevelState.show_button("draw")
 	_refresh_level_ui()
@@ -2434,8 +2443,8 @@ func _on_core_kill(n: int) -> void:
 		_kill_lb.text = str(_kills)
 	_pulse_chip(_kill_lb)
 	_spawn_fly(_hero_screen() + Vector2(0, -26), Vector2(447, 40), Color(0.80, 0.36, 0.24), 2)
-	if _bm != null:
-		_bm.add_kill(kn)
+	if _bm != null and LevelState.show_button("market"):
+		_bm.add_kill(kn)   # 黑市没开放前不喂杀敌数，避免开局弹“黑市升到 Lv”
 	_add_exp(20 * kn)                      # v2：杀 1 只 +20 经验
 	_add_wen(int(round(float(WEN_KILL_BASE + WEN_KILL_WAVE * int(_core.wave)) * (1.0 + _kill_pct / 100.0))))
 	if LevelState.current_level == 2:
@@ -2734,6 +2743,10 @@ func _on_wave_clear(cleared_wave: int) -> void:
 	_refresh_trea_tile()
 	_toast("第 %d 波清空" % cleared_wave)
 	if cleared_wave == 1:
+		if _str_tile != null:
+			_str_tile.visible = true
+			_str_tile.hot = true
+			_str_tile.queue_redraw()
 		_l1_tutorial("l1_wen", _str_tile, "文钱可以强化自身", _on_str_tile)
 
 func _l1_tutorial(key: String, target: Control, text: String, cb: Callable) -> void:
@@ -2833,6 +2846,14 @@ func _on_str_tile() -> void:
 	_apply_str_levels(1)
 	Aud.sfx("ui_click", -6.0)
 	_str_pop("强化 +1")
+	if _str_tile != null:
+		var twp := create_tween()
+		twp.tween_property(_str_tile, "scale", Vector2(0.86, 0.86), 0.055)
+		twp.tween_property(_str_tile, "scale", Vector2(1.0, 1.0), 0.11).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		_str_tile.pivot_offset = _str_tile.size * 0.5
+		var twc := create_tween()
+		twc.tween_property(_str_tile, "modulate", Color(1.35, 1.25, 0.9), 0.05)
+		twc.tween_property(_str_tile, "modulate", Color(1, 1, 1), 0.18)
 	_l1_tutorial("l1_attr", _hero_hit_btn, "点角色查看属性", func() -> void: _open_attr_page())
 	if _str_lv % STR_EVERY == 0:
 		_str_pending = true
