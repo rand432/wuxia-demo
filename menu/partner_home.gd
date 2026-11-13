@@ -11,6 +11,7 @@ extends Control
 const AD := preload("res://kushou/ancestor_data.gd")
 const GameState := preload("res://shared/game_state.gd")
 const LevelState := preload("res://shared/level_state.gd")
+const UI := preload("res://shared/ui_kit.gd")
 # 每个技能自己的描述 + 伤害倍率（跟 battle_ui 的 SKILL_DEFS 保持一份数据）
 const SKILL_DEFS := {
 	"zl": {"name": "天雷道术", "dtype": "金系", "mul": 1.6, "cd": 10.0, "mp": 260.0, "targets": 3,
@@ -85,6 +86,7 @@ func _ready() -> void:
 	_build_carousel()
 	_build_rest()
 	_build_hot()
+	UI.dock(self, "god", _on_dock)
 
 # ---------------- 立绘卡轮播 ----------------
 func _build_carousel() -> void:
@@ -553,12 +555,17 @@ func grade_cn(q: int) -> String:
 func _build_hot() -> void:
 	_hot(Rect2(10, 6, 240, 76), func() -> void: get_tree().change_scene_to_file("res://menu/main_home.tscn"))
 	_hot(Rect2(630, 20, 82, 50), func() -> void: print("[请神页] 设置"))
-	_hot(Rect2(16, 1180, 172, 90), func() -> void: get_tree().change_scene_to_file("res://menu/main_home.tscn"))
-	_hot(Rect2(188, 1180, 172, 90), func() -> void: get_tree().change_scene_to_file("res://menu/character_home.tscn"))
-	_hot(Rect2(360, 1180, 172, 90), func() -> void: pass)
-	_hot(Rect2(532, 1180, 180, 90), func() -> void: print("[请神页] 设置"))
-	# 奇物入口：底图底栏没有这一格，先挂在右上方空白处（等重画底图再归位）
-	_hot(Rect2(600, 96, 110, 44), func() -> void: get_tree().change_scene_to_file("res://menu/curio_home.tscn"))
+
+func _on_dock(key: String) -> void:
+	match key:
+		"start":
+			LevelState.ensure_loaded()
+			LevelState.current_level = LevelState.max_unlocked
+			get_tree().change_scene_to_file("res://menu/loading.tscn")
+		"role":
+			get_tree().change_scene_to_file("res://menu/character_home.tscn")
+		"curio":
+			get_tree().change_scene_to_file("res://menu/curio_home.tscn")
 
 func _hot(rect: Rect2, cb: Callable) -> void:
 	var b := Button.new()

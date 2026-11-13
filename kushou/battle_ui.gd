@@ -307,6 +307,7 @@ var _hero_hit_btn: Button = null
 var _hero_name_lb: Label = null
 
 func _ready() -> void:
+	var _t_ready := Time.get_ticks_usec()
 	_max_wave = LevelState.waves()
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var th := Theme.new()
@@ -335,6 +336,7 @@ func _ready() -> void:
 	_bm.visible = false
 	_tut = TutorialOverlay.new()
 	add_child(_tut)
+	_build_dbg()
 	_refresh_deck()
 	_apply_level_preview()
 	_maybe_level_button_tutorial.call_deferred()
@@ -347,6 +349,9 @@ func _ready() -> void:
 	var twf := create_tween()
 	twf.tween_property(fade, "color:a", 0.0, 0.45)
 	twf.tween_callback(func() -> void: fade.queue_free())
+	var _el_ready := Time.get_ticks_usec() - _t_ready
+	if _el_ready > 50000:
+		print("[SLOW] battle_ui ready ", _el_ready / 1000.0, " ms")
 	set_process(true)
 
 # 上一关首通留下的“预习”：下一关开局生效一次
@@ -373,6 +378,51 @@ func _apply_level_preview() -> void:
 	if _coin_lb != null:
 		_coin_lb.text = str(_wen)
 	_refresh_level_ui()
+
+# ---------------- F3 调试角标 ----------------
+var _dbg_lb: Label = null
+func _build_dbg() -> void:
+	_dbg_lb = Label.new()
+	_dbg_lb.position = Vector2(10, 128)
+	_dbg_lb.size = Vector2(420, 120)
+	_dbg_lb.add_theme_font_override("font", FONT)
+	_dbg_lb.add_theme_font_size_override("font_size", 16)
+	_dbg_lb.add_theme_color_override("font_color", Color(0.15, 0.85, 0.35))
+	_dbg_lb.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
+	_dbg_lb.add_theme_constant_override("outline_size", 4)
+	_dbg_lb.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_dbg_lb.z_index = 120
+	_dbg_lb.visible = true   # 直接常开，不用按 F3
+	add_child(_dbg_lb)
+
+func _input(ev: InputEvent) -> void:
+	if ev is InputEventKey and ev.pressed and not ev.echo and ev.keycode == KEY_F3:
+		if _dbg_lb != null:
+			_dbg_lb.visible = not _dbg_lb.visible
+
+var _dbg_win := 0.0
+var _dbg_worst := 0.0
+func _dbg_update(dt: float) -> void:
+	if _dbg_lb == null or not _dbg_lb.visible:
+		return
+	_dbg_win += dt
+	_dbg_worst = maxf(_dbg_worst, dt)
+	if _dbg_win >= 2.0:
+		_dbg_win = 0.0
+	var fps := Engine.get_frames_per_second()
+	var proc := Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0
+	var phys := Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0
+	var objs := Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME)
+	var prims := Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME)
+	var foes_n := 0
+	if _core != null:
+		foes_n = _core.foes.size()
+	_dbg_lb.text = "FPS %d
+proc %.2fms
+worst %.0fms
+phys %.2fms
+draw obj %d / prim %d
+foes %d  kills %d" % [fps, proc, _dbg_worst * 1000.0, phys, objs, prims, foes_n, _kills]
 
 # ---------------- 通用 ----------------
 func _panel(rect: Rect2, bg: Color, radius := 8, border := Color(0, 0, 0, 0), bw := 0, parent: Node = null) -> Panel:
@@ -2246,6 +2296,7 @@ func _toast_card(name: String, quality: int, tail: String) -> void:
 	_toast("[color=#" + col + "]" + name + "[/color]　" + tail)
 
 func _process(_delta: float) -> void:
+	var _t_proc := Time.get_ticks_usec()
 	var t := Time.get_ticks_msec() / 1000.0
 	for i in _enemies.size():
 		var e: Control = _enemies[i]
@@ -2312,6 +2363,7 @@ func _process(_delta: float) -> void:
 			_l1_tutorial("l1_yuhu", _curio_sq, "气血不足时，玉壶会自动回血", _show_curio_detail)
 		if _hp_fill != null:
 			_hp_fill.size = Vector2(maxf(4.0, 235.0 * hpr), 20.0)
+		_dbg_update(_delta)
 		_tick_skills(_delta)
 		_tick_rare_buffs(_delta)
 		_tick_curio(_delta)
@@ -2430,6 +2482,9 @@ func _process(_delta: float) -> void:
 					if int(_core._combo) >= 5:
 						_core._shake = maxf(float(_core._shake), 2.5)
 				_foe_tokens.erase(tid)
+	var _el := Time.get_ticks_usec() - _t_proc
+	if _el > 50000:
+		print("[SLOW] battle_ui ", _el / 1000.0, " ms")
 
 func _on_core_kill(n: int) -> void:
 	_curio_on_kill(n)                        # 奇物：醉翁壶（击杀累计）

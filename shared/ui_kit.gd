@@ -122,16 +122,16 @@ static func dock(root: Control, active: String, on_pick: Callable) -> void:
 	ch.active = active
 	ch.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(ch)
-	# 左三页签：角色 / 请神 / 奇物
-	var items := [["role", "角 色", 62.0], ["god", "请 神", 178.0], ["curio", "奇 物", 294.0]]
+	# 四格图标栏：开始 / 角色 / 请神 / 奇物（最后一格用奇物图标）
+	var items := [["start", 86.0], ["role", 252.0], ["god", 418.0], ["curio", 584.0]]
 	for it in items:
 		var key := str(it[0])
-		var cx := float(it[2])
+		var cx := float(it[1])
 		var b := Button.new()
 		b.flat = true
 		b.focus_mode = Control.FOCUS_NONE
-		b.position = Vector2(cx - 52.0, 2)
-		b.size = Vector2(104, 100)
+		b.position = Vector2(cx - 60.0, 10)
+		b.size = Vector2(120, 84)
 		b.add_theme_stylebox_override("normal", StyleBoxEmpty.new())
 		b.add_theme_stylebox_override("hover", StyleBoxEmpty.new())
 		b.add_theme_stylebox_override("pressed", StyleBoxEmpty.new())
@@ -139,23 +139,6 @@ static func dock(root: Control, active: String, on_pick: Callable) -> void:
 			if on_pick.is_valid():
 				on_pick.call(key))
 		ch.add_child(b)
-		label(ch, str(it[1]), Vector2(cx - 52.0, 36), Vector2(104, 34), 21,
-			P.PAPER_HI if key == active else Color(0.86, 0.82, 0.76), HORIZONTAL_ALIGNMENT_CENTER)
-	# 右：开始游戏（底栏里最宽的一块）
-	var sb := Button.new()
-	sb.position = Vector2(372, 16)
-	sb.size = Vector2(328, 76)
-	sb.focus_mode = Control.FOCUS_NONE
-	var bsb := StyleBoxFlat.new()
-	bsb.bg_color = Color(0, 0, 0, 0)
-	sb.add_theme_stylebox_override("normal", bsb)
-	sb.add_theme_stylebox_override("hover", bsb)
-	sb.add_theme_stylebox_override("pressed", bsb)
-	sb.pressed.connect(func() -> void:
-		if on_pick.is_valid():
-			on_pick.call("start"))
-	ch.add_child(sb)
-	label(ch, "开 始 游 戏", Vector2(372, 36), Vector2(328, 36), 28, P.GOLD_HI, HORIZONTAL_ALIGNMENT_CENTER)
 
 class BarChrome extends Control:
 	const P := preload("res://shared/ui_pal.gd")
@@ -187,24 +170,39 @@ class DockChrome extends Control:
 	func _draw() -> void:
 		draw_rect(Rect2(0, 0, 720, 104), P.DARK)
 		draw_line(Vector2(0, 0), Vector2(720, 0), Color(P.GOLD.r, P.GOLD.g, P.GOLD.b, 0.35), 1.5, true)
-		# 三个页签
-		for c in [["role", 62.0], ["god", 178.0], ["curio", 294.0]]:
-			var key := str(c[0])
-			var cx := float(c[1])
+		var items := [["start", 86.0], ["role", 252.0], ["god", 418.0], ["curio", 584.0]]
+		for it in items:
+			var key := str(it[0])
+			var cx := float(it[1])
 			var on := key == active
 			var sb := StyleBoxFlat.new()
 			sb.bg_color = Color(0.157, 0.137, 0.110) if on else P.DARK2
 			sb.set_corner_radius_all(10)
 			sb.border_color = P.GOLD_HI if on else Color(0.471, 0.408, 0.322)
 			sb.set_border_width_all(2 if on else 1)
-			draw_style_box(sb, Rect2(cx - 52.0, 26, 104, 54))
-		# 开始游戏：最宽的金框
-		var hsb := StyleBoxFlat.new()
-		hsb.bg_color = Color(0.180, 0.149, 0.114)
-		hsb.set_corner_radius_all(12)
-		hsb.border_color = P.GOLD_HI
-		hsb.set_border_width_all(3)
-		draw_style_box(hsb, Rect2(372.0, 16.0, 328.0, 76.0))
+			draw_style_box(sb, Rect2(cx - 52.0, 20, 104, 64))
+			_draw_icon(cx, 52.0, key, on)
+	func _draw_icon(cx: float, cy: float, key: String, on: bool) -> void:
+		var col := P.GOLD_HI if on else Color(0.78, 0.70, 0.55)
+		match key:
+			"start":
+				draw_colored_polygon(PackedVector2Array([
+					Vector2(cx - 9, cy - 14), Vector2(cx + 14, cy), Vector2(cx - 9, cy + 14)
+				]), col)
+			"role":
+				draw_line(Vector2(cx - 13, cy + 12), Vector2(cx + 13, cy - 12), col, 3.0, true)
+				draw_line(Vector2(cx - 13, cy - 12), Vector2(cx + 13, cy + 12), col, 3.0, true)
+				draw_line(Vector2(cx - 15, cy + 8), Vector2(cx - 8, cy + 15), col, 3.0, true)
+				draw_line(Vector2(cx + 8, cy + 15), Vector2(cx + 15, cy + 8), col, 3.0, true)
+			"god":
+				draw_circle(Vector2(cx - 7, cy - 6), 5.5, col)
+				draw_circle(Vector2(cx + 7, cy - 6), 5.5, col)
+				draw_arc(Vector2(cx, cy + 8), 12.0, PI, TAU, 16, col, 2.4, true)
+			"curio":
+				# 奇物：小匣子 + 提环
+				draw_rect(Rect2(cx - 12, cy - 2, 24, 14), col, false, 2.2)
+				draw_line(Vector2(cx - 12, cy + 3), Vector2(cx + 12, cy + 3), col, 1.8, true)
+				draw_arc(Vector2(cx, cy - 5), 6.0, PI, TAU, 12, col, 2.0, true)
 
 # ---------------- 大号切关箭头（照原图的鎏金双人字纹） ----------------
 static func chevron(dir: int, rect: Rect2, cb: Callable) -> Button:

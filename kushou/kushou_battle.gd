@@ -819,6 +819,7 @@ func revive() -> void:
 	_banner_t = 2.4
 
 func _process(delta: float) -> void:
+	var _t_proc := Time.get_ticks_usec()
 	# 顿帧：命中/暴击/击杀的那一两帧把时间压慢（动感全靠这一下"咬住"）
 	var dt := delta
 	if _hitstop > 0.0:
@@ -1433,6 +1434,7 @@ func _process(delta: float) -> void:
 			_floats.remove_at(j)
 	_separate_foes()
 	queue_redraw()
+	_process_end_log(_t_proc)
 
 # 怪和怪不重合：按战斗牌半径把叠在一起的推开（每帧一次，轻推）
 func _separate_foes() -> void:
@@ -5285,7 +5287,13 @@ func hero_in_dmg(amount: float, dtype: String) -> float:
 # ============================================================
 # 画：主角在下（武器朝上）· 怪在上（武器朝下）
 # ============================================================
+func _process_end_log(_t0: int) -> void:
+	var _el := Time.get_ticks_usec() - _t0
+	if _el > 50000:
+		print("[SLOW] core process ", _el / 1000.0, " ms")
+
 func _draw() -> void:
+	var _t_draw := Time.get_ticks_usec()
 	var w := size.x
 	var h := size.y
 	# 抖屏：整幅画先按震动量偏一下（打击感的第一层）——记下偏移，画完宠物要还原回来
@@ -5629,6 +5637,9 @@ func _draw() -> void:
 		draw_rect(Rect2(w * 0.5 - bw2 * 0.5, 44.0, bw2, 44.0), Color(0.10, 0.09, 0.10, 0.86))
 		draw_string(ThemeDB.fallback_font, Vector2(w * 0.5 - bw2 * 0.5, 74.0), _banner,
 			HORIZONTAL_ALIGNMENT_CENTER, bw2, 24, Color(0.97, 0.90, 0.72))
+	var _el_draw := Time.get_ticks_usec() - _t_draw
+	if _el_draw > 50000:
+		print("[SLOW] core draw ", _el_draw / 1000.0, " ms")
 
 # ---- 各类挑战怪的长相（"不同怪不同样子"）----
 func _foe_art(f: Dictionary, sc: float, fc: Color) -> void:
