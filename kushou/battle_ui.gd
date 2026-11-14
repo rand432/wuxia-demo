@@ -2790,7 +2790,10 @@ func _on_str_tile() -> void:
 		_str_pending = true
 		_aug_reroll += 1          # 每进一轮，刷新次数 +1
 		_open_aug_pick()
-		_l1_tutorial("l1_aug", _str_layer,
+		var aug_t: Node = _str_layer
+		if _aug_cards.size() > 1:
+			aug_t = _aug_cards[1]          # 框中间那张卡，而不是整屏遮罩
+		_l1_tutorial("l1_aug", aug_t,
 			"每强化 10 级可大幅提升属性\n并可选择自己的发展方向",
 			func() -> void: pass)
 	_refresh_str_tile()
