@@ -553,8 +553,8 @@ func _spawn_foe(kind := "normal", hp_mul := 1.0, atk_mul := 1.0, big := false, t
 	if foes.size() >= MAX_FOES + 16 and kind != "boss" and kind != "champion" and kind != "elite":
 		return
 	var x := 150.0 + randf() * maxf(60.0, size.x - 320.0)
-	# 第一波前几只直接从场上半区出现，别让玩家等怪从屏幕顶走下来
-	var y0 := -40.0
+	# 所有怪都刷在战场可见范围内（y 70~170），不许从屏幕外走进来
+	var y0 := 70.0 + randf() * 100.0
 	if wave <= 1 and _wave_spawned < 5:
 		y0 = 200.0 + randf() * 120.0
 	var f := {
@@ -5152,6 +5152,7 @@ func wave_cleared() -> bool:
 func wave_reset_quota() -> void:
 	_wave_quota = _wave_quota_for(wave) + int(wave_extra)
 	_wave_spawned = 0
+	_spawn_left = 0   # 上一波没刷完的批次要清掉，否则新波会被卡住不刷怪
 	_spawn_t = 0.0   # 进关/换波立刻出第一批，不再先等 0.6 秒
 
 func live_foes() -> int:
