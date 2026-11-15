@@ -3902,13 +3902,14 @@ class AugCard extends Control:
 		draw_string(F, tp + Vector2(0, 16), QN[clampi(quality - 2, 0, 3)],
 			HORIZONTAL_ALIGNMENT_CENTER, 48, 13, Color(0.98, 0.96, 0.90))
 		draw_string(F, Vector2(0, 52), title, HORIZONTAL_ALIGNMENT_CENTER, size.x, 28 if title.length() <= 3 else 24, Color(0.14, 0.11, 0.08))
-		var c := Vector2(size.x * 0.5, 150.0)
-		draw_circle(c, 50, Color(0.93, 0.90, 0.82))
-		draw_arc(c, 50.0, 0.0, TAU, 48, QC[q], 2.0)
-		draw_string(F, c + Vector2(-15, 16), glyph, HORIZONTAL_ALIGNMENT_LEFT, -1, 44, Color(0.13, 0.12, 0.11))
-		draw_string(F, Vector2(0, 232), effect, HORIZONTAL_ALIGNMENT_CENTER, size.x, 22, Color(0.46, 0.20, 0.10))
-		draw_multiline_string(F, Vector2(10, 250), desc, HORIZONTAL_ALIGNMENT_CENTER, size.x - 20, 13, 2, Color(0.38, 0.33, 0.26))
-		draw_string(F, Vector2(0, 292), "点击选取", HORIZONTAL_ALIGNMENT_CENTER, size.x, 12, Color(0.58, 0.50, 0.36))
+		# 图标缩小，给底部说明腾出更大字号的空间
+		var c := Vector2(size.x * 0.5, 134.0)
+		draw_circle(c, 38, Color(0.93, 0.90, 0.82))
+		draw_arc(c, 38.0, 0.0, TAU, 48, QC[q], 2.0)
+		draw_string(F, c + Vector2(-11, 12), glyph, HORIZONTAL_ALIGNMENT_LEFT, -1, 34, Color(0.13, 0.12, 0.11))
+		draw_string(F, Vector2(0, 214), effect, HORIZONTAL_ALIGNMENT_CENTER, size.x, 26, Color(0.46, 0.20, 0.10))
+		draw_multiline_string(F, Vector2(10, 244), desc, HORIZONTAL_ALIGNMENT_CENTER, size.x - 20, 17, 2, Color(0.38, 0.33, 0.26))
+		draw_string(F, Vector2(0, 292), "点击选取", HORIZONTAL_ALIGNMENT_CENTER, size.x, 13, Color(0.58, 0.50, 0.36))
 	func _gui_input(ev: InputEvent) -> void:
 		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
 			picked.emit()
