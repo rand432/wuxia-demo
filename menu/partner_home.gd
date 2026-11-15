@@ -205,8 +205,8 @@ func _build_slots() -> void:
 				_show_skill_detail(i))
 		add_child(cell2)
 		var tr := TextureRect.new()
-		tr.position = Vector2(22, 16)
-		tr.size = Vector2(106, 96)
+		tr.position = Vector2(22, 10)
+		tr.size = Vector2(106, 88)
 		tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		tr.texture = load(str(a["art"]))
@@ -214,16 +214,16 @@ func _build_slots() -> void:
 		cell2.add_child(tr)
 		var nm := Label.new()
 		nm.text = str(a["skill"])
-		nm.position = Vector2(0, 116)
+		nm.position = Vector2(0, 100)
 		nm.size = Vector2(150, 22)
 		nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		nm.add_theme_font_size_override("font_size", 15)
 		nm.add_theme_color_override("font_color", Color(0.30,0.26,0.20))
 		cell2.add_child(nm)
 		var lv := Label.new()
-		lv.text = "Lv 1"
-		lv.position = Vector2(96, 134)
-		lv.size = Vector2(48, 18)
+		lv.text = "Lv %d" % int(GameState.skill_lv.get(aid, 0))
+		lv.position = Vector2(82, 124)
+		lv.size = Vector2(60, 18)
 		lv.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 		lv.add_theme_font_size_override("font_size", 13)
 		lv.add_theme_color_override("font_color", GOLD)
@@ -458,7 +458,7 @@ func _show_advance() -> void:
 	pt.size = Vector2(178, 234)
 	pt.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	pt.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	pt.texture = load(str(PORTRAIT.get(aid, "")))
+	pt.texture = load(str(PORTRAIT.get(aid, "res://assets/char/player_full_cut.png")))
 	ph.add_child(pt)
 	_push_label(box, str(a["name"]), 32, INK, Vector2(238, 40))
 	_push_label(box, "%s · %s" % [grade_cn(int(a["quality"])), str(a.get("dtype", ""))], 15, DIM, Vector2(238, 82))

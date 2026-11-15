@@ -84,10 +84,10 @@ static func gain(q: int) -> float:
 static func grade_of(plus: int) -> int:
 	return 1 + int(floor(float(plus) / 20.0))
 
-static func stat_of(it: Dictionary) -> float:
+static func stat_of(it: Dictionary, equipped_slot: String = "") -> float:
 	if it.is_empty():
 		return 0.0
-	var slot := str(it.get("slot", "weapon"))
+	var slot := equipped_slot if equipped_slot != "" else str(it.get("slot", "weapon"))
 	var base: float = SLOT_BASE.get(slot, 12.0)
 	var v := base * gain(int(it.get("quality", 1))) * (1.0 + 0.02 * float(it.get("plus", 0)))
 	return round(v)
@@ -98,7 +98,7 @@ static func totals() -> Dictionary:
 		var it: Dictionary = equipped.get(key, {})
 		if it.is_empty():
 			continue
-		var v := stat_of(it)
+		var v := stat_of(it, key)
 		match key:
 			"weapon": t["atk"] = float(t["atk"]) + v
 			"armor": t["def"] = float(t["def"]) + v
@@ -135,7 +135,7 @@ const ITEM_ICON := {
 }
 const ITEM_DESC := {
 	"龙鳞": "下一锤若「破坏」，则挡下。",
-	"悔恨法条": "撤销上一锤。",
+	"悔恨法条": "撤销上一锤，不返还材料；使用其他道具后失效。",
 	"淬火油": "这一锤成功概率提升。",
 	"星砂": "入神 +3 格。",
 }
@@ -181,8 +181,8 @@ static func odds(st: Dictionary, trait_name: String) -> Dictionary:
 		out[k] = (float(w[k]) / tot) * 100.0 if tot > 0.0 else 0.0
 	return out
 
-static func roll(it: Dictionary) -> String:
-	var key := str(it.get("slot", "weapon"))
+static func roll(it: Dictionary, equipped_slot: String = "") -> String:
+	var key := equipped_slot if equipped_slot != "" else str(it.get("slot", "weapon"))
 	var st := st_of(key)
 	var w := weights(st, str(it.get("trait", "")))
 	var tot := 0.0
@@ -199,8 +199,8 @@ static func roll(it: Dictionary) -> String:
 	return "成"
 
 # 返回 {"plus": 变化, "crack": 变化, "gauge": 变化, "trance": 是否进入, "broke": bool, "blocked": bool}
-static func apply(it: Dictionary, res: String) -> Dictionary:
-	var key := str(it.get("slot", "weapon"))
+static func apply(it: Dictionary, res: String, equipped_slot: String = "") -> Dictionary:
+	var key := equipped_slot if equipped_slot != "" else str(it.get("slot", "weapon"))
 	var st := st_of(key)
 	var out := {"plus": 0, "crack": 0, "gauge": 0, "trance": false, "broke": false, "blocked": false}
 	match res:
@@ -271,7 +271,7 @@ static func load_game() -> void:
 	if st_v is Dictionary:
 		state = st_v
 
-static func save_game() -> void:
+static func save_game() -> Error:
 	var cf := ConfigFile.new()
 	cf.set_value("res", "ores", ores)
 	cf.set_value("res", "silver", silver)
@@ -282,3 +282,97 @@ static func save_game() -> void:
 	var err := SaveFile.write(cf, SAVE_PATH)
 	if err != OK:
 		push_error("存档保存失败：%s (%s)" % [SAVE_PATH, error_string(err)])
+	return err
+
+static func sell_equipped(slot: String) -> bool:
+	load_game()
+	var item: Dictionary = equipped.get(slot, {})
+	if item.is_empty():
+		return false
+	var previous_silver := silver
+	var had_state := state.has(slot)
+	var previous_state = state.get(slot)
+	equipped[slot] = {}
+	state.erase(slot)
+	silver += 40 + int(item.get("plus", 0)) * 6
+	if save_game() == OK:
+		return true
+	equipped[slot] = item
+	silver = previous_silver
+	if had_state:
+		state[slot] = previous_state
+	return false
+
+# 一锤的材料、装备和状态只在同一次保存成功后结算。
+static func hammer(slot: String) -> Dictionary:
+	load_game()
+	var item: Dictionary = equipped.get(slot, {})
+	if item.is_empty():
+		return {"ok": false, "reason": "该部位没有装备"}
+	if int(item.get("plus", 0)) >= cap(int(item.get("quality", 1))):
+		return {"ok": false, "reason": "已达到强化上限"}
+	if ores < COST_ORE or silver < COST_SILVER:
+		return {"ok": false, "reason": "材料不够"}
+	var previous_equipped := equipped.duplicate(true)
+	var previous_state := state.duplicate(true)
+	var previous_ores := ores
+	var previous_silver := silver
+	ores -= COST_ORE
+	silver -= COST_SILVER
+	var before_item := item.duplicate(true)
+	var before_slot := st_of(slot).duplicate(true)
+	before_slot.erase("undo")
+	var result := roll(item, slot)
+	var outcome := apply(item, result, slot)
+	if not bool(outcome["broke"]):
+		st_of(slot)["undo"] = {"item": before_item, "state": before_slot}
+	if bool(outcome["broke"]):
+		equipped[slot] = {}
+		state.erase(slot)
+	if save_game() != OK:
+		equipped = previous_equipped
+		state = previous_state
+		ores = previous_ores
+		silver = previous_silver
+		return {"ok": false, "reason": "保存失败，材料与装备已恢复，请重试"}
+	return {"ok": true, "result": result, "outcome": outcome}
+
+static func use_forge_item(slot: String, name: String) -> Dictionary:
+	load_game()
+	if not ITEM_USE.has(name) or int(items.get(name, 0)) <= 0:
+		return {"ok": false, "reason": "道具不足"}
+	var item: Dictionary = equipped.get(slot, {})
+	if item.is_empty():
+		return {"ok": false, "reason": "该部位没有装备"}
+	var undo = (state.get(slot, {}) as Dictionary).get("undo", null)
+	if str(ITEM_USE[name]) == "undo":
+		if not undo is Dictionary or not undo.get("item") is Dictionary or not undo.get("state") is Dictionary:
+			return {"ok": false, "reason": "没有可撤销的上一锤"}
+	var previous_equipped := equipped.duplicate(true)
+	var previous_state := state.duplicate(true)
+	var previous_items := items.duplicate(true)
+	items[name] = int(items[name]) - 1
+	var st := st_of(slot)
+	var entered_trance := false
+	match str(ITEM_USE[name]):
+		"protect": st["protect"] = int(st.get("protect", 0)) + 1
+		"star":
+			var gauge := int(st.get("gauge", 0)) + 3
+			if gauge >= GAUGE_MAX:
+				st["gauge"] = 0
+				st["trance"] = TRANCE_HAMMERS
+				entered_trance = true
+			else:
+				st["gauge"] = gauge
+		"oil": st["oil"] = 1
+		"undo":
+			equipped[slot] = (undo["item"] as Dictionary).duplicate(true)
+			state[slot] = (undo["state"] as Dictionary).duplicate(true)
+	if str(ITEM_USE[name]) != "undo":
+		st.erase("undo")
+	if save_game() != OK:
+		equipped = previous_equipped
+		state = previous_state
+		items = previous_items
+		return {"ok": false, "reason": "保存失败，道具与装备已恢复，请重试"}
+	return {"ok": true, "trance": entered_trance}

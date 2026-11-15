@@ -53,7 +53,7 @@ func _build() -> void:
 	var stat_map := {"weapon": "攻 击", "armor": "防 御", "jade": "气 血", "cloak": "速 度"}
 	var stat_name: String = str(stat_map.get(slot_key, "攻 击"))
 	UI.label(_root, str(stat_name), Vector2(316, 458), Vector2(160, 32), 20, P.INK)
-	UI.label(_root, "+" + str(int(FD.stat_of(it))), Vector2(560, 458), Vector2(88, 32), 21, P.RED, HORIZONTAL_ALIGNMENT_RIGHT)
+	UI.label(_root, "+" + str(int(FD.stat_of(it, slot_key))), Vector2(560, 458), Vector2(88, 32), 21, P.RED, HORIZONTAL_ALIGNMENT_RIGHT)
 	UI.label(_root, "特 性", Vector2(316, 500), Vector2(160, 32), 20, P.INK)
 	var tr_name := str(it.get("trait", ""))
 	UI.label(_root, tr_name if tr_name != "" else "无", Vector2(430, 500), Vector2(218, 32), 20,
@@ -74,12 +74,10 @@ func _forge() -> void:
 	_close()
 
 func _sell() -> void:
+	if not FD.sell_equipped(slot_key):
+		return
 	Audio.sfx("ui_click", -6.0)
 	Audio.sfx("coin", -10.0)
-	var it: Dictionary = FD.equipped.get(slot_key, {})
-	FD.equipped[slot_key] = {}
-	FD.silver += 40 + int(it.get("plus", 0)) * 6
-	closed.emit()
 	_close()
 
 func _close() -> void:

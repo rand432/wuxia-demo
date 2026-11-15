@@ -11,6 +11,7 @@ var wait_draw := 0
 var wait_trea := 0
 var done := false
 var failures := 0
+var end_level := 10
 
 func _ready() -> void:
 	if not OS.get_user_data_dir().replace("\\", "/").ends_with("wuxia-regression"):
@@ -19,6 +20,11 @@ func _ready() -> void:
 		return
 	LS.ensure_loaded()
 	lv = 1
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--start-level="):
+			lv = clampi(int(arg.get_slice("=", 1)), 1, 10)
+		if arg.begins_with("--end-level="):
+			end_level = clampi(int(arg.get_slice("=", 1)), lv, 10)
 	var f := FileAccess.open(LOG_PATH, FileAccess.WRITE)
 	if f != null:
 		f.store_line("# 十关连续通关")
@@ -34,7 +40,7 @@ func _log(s: String) -> void:
 		f.seek_end(); f.store_line(s); f.close()
 
 func _start() -> void:
-	if lv > 10:
+	if lv > end_level:
 		_log("[ALL] max_unlocked=%d first_clear=%s" % [LS.max_unlocked, str(LS.first_clear)])
 		get_tree().quit(0 if failures == 0 else 1); return
 	LS.current_level = lv
@@ -87,7 +93,11 @@ func _process(dt: float) -> void:
 		for card in b._god_root.get_children():
 			b._pick_god(str(card.aid))
 			return
-	if b._mate_tile != null and b._mate_tile.visible and b._draw_charge > 0:
+	var has_unseen_god := false
+	for aid in LS.god_ids():
+		if not b._ancestors.has(str(aid)):
+			has_unseen_god = true
+	if has_unseen_god and b._mate_tile != null and b._mate_tile.visible and b._draw_charge > 0:
 		b._on_mate_tile()
 		return
 	if b._q_cur.is_empty() and not b._q_offer.is_empty():

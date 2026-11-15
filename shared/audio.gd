@@ -1,4 +1,10 @@
 extends RefCounted
+
+# 离树时先释放播放流，避免退出时混音线程仍持有 Ogg 播放资源。
+class ManagedPlayer extends AudioStreamPlayer:
+	func _exit_tree() -> void:
+		stop()
+		stream = null
 # ============================================================
 # 音频总管 v1：BGM 交叉淡入淡出 ＋ 音效一发
 #
@@ -46,7 +52,7 @@ static func play_ambient(key: String, vol_db := -26.0) -> void:
 	var root := _root()
 	if root == null:
 		return
-	_amb = AudioStreamPlayer.new()
+	_amb = ManagedPlayer.new()
 	_amb.stream = s
 	_amb.volume_db = vol_db + _vol_db(_sfx_vol)
 	root.add_child(_amb)
@@ -97,11 +103,11 @@ static func _begin_bgm(key: String, fade: float) -> void:
 	if s is AudioStreamOggVorbis:
 		(s as AudioStreamOggVorbis).loop = true
 	if _bgm_a == null:
-		_bgm_a = AudioStreamPlayer.new()
+		_bgm_a = ManagedPlayer.new()
 		_bgm_a.name = "BgmA"
 		root.add_child(_bgm_a)
 	if _bgm_b == null:
-		_bgm_b = AudioStreamPlayer.new()
+		_bgm_b = ManagedPlayer.new()
 		_bgm_b.name = "BgmB"
 		root.add_child(_bgm_b)
 	# ⚠ 三元表达式两边都是 AudioStreamPlayer，但 Godot 推不出类型（Variant）——
@@ -274,7 +280,7 @@ static func stop_bgm(fade := 0.8) -> void:
 
 # ---------------- 音效 ----------------
 
-# 音效播放器池：原来每放一声都 AudioStreamPlayer.new()（一场战斗几十个），
+# 音效播放器池：原来每放一声都 ManagedPlayer.new()（一场战斗几十个），
 # 现在复用。放完回收，池满/不在树里才真释放。
 static var _sfx_pool: Array = []
 const SFX_POOL_MAX := 16
@@ -284,7 +290,7 @@ static func _acquire_sfx_player() -> AudioStreamPlayer:
 		var q = _sfx_pool.pop_back()
 		if is_instance_valid(q):
 			return q
-	return AudioStreamPlayer.new()
+	return ManagedPlayer.new()
 
 static func _release_sfx_player(p: AudioStreamPlayer) -> void:
 	if p == null or not is_instance_valid(p):

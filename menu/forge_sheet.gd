@@ -22,7 +22,6 @@ var _item_roots: Array = []
 var _chip: Control = null
 var _toast: Label = null
 var _toast_seq := 0
-var _snapshot: Dictionary = {}
 var _done := false
 
 func open(key: String) -> void:
@@ -168,21 +167,12 @@ func _chip_refresh(st: Dictionary) -> void:
 
 # ---------------- 锤 ----------------
 func _hammer() -> void:
-	var it := _it()
-	if it.is_empty():
+	var transaction := FD.hammer(slot_key)
+	if not bool(transaction["ok"]):
+		_show_toast(str(transaction["reason"]))
 		return
-	if int(it.get("plus", 0)) >= FD.cap(int(it.get("quality", 1))):
-		return
-	if FD.ores < FD.COST_ORE or FD.silver < FD.COST_SILVER:
-		_show_toast("材料不够")
-		return
-	_snapshot = {"plus": int(it.get("plus", 0)), "st": FD.st_of(slot_key).duplicate()}
-	FD.ores -= FD.COST_ORE
-	FD.silver -= FD.COST_SILVER
-	var st := FD.st_of(slot_key)
-	var was_gauge := int(st.get("gauge", 0))
-	var res := FD.roll(it)
-	var out := FD.apply(it, res)
+	var res := str(transaction["result"])
+	var out: Dictionary = transaction["outcome"]
 	Audio.sfx("hit_heavy", -8.0)
 	match res:
 		"大":
@@ -206,14 +196,10 @@ func _hammer() -> void:
 		Audio.sfx("enlighten", -4.0)
 		_show_toast("入 神")
 	_refresh()
-	FD.save_game()
 
 func _on_broken() -> void:
 	Audio.sfx("sword_in_ground", -6.0)
 	Audio.sfx("fall_down", -10.0)
-	FD.equipped[slot_key] = {}
-	FD.state.erase(slot_key)
-	FD.save_game()
 	_done = true
 	for c in _panel.get_children():
 		c.queue_free()
@@ -298,33 +284,15 @@ func _confirm_use(nm: String, n: int, parent_ov: Control) -> void:
 			_use_item(nm), P.GOLD, 2, 10)
 
 func _use_item(nm: String) -> void:
-	if int(FD.items.get(nm, 0)) <= 0:
+	var result := FD.use_forge_item(slot_key, nm)
+	if not bool(result["ok"]):
+		_show_toast(str(result["reason"]))
 		return
-	FD.items[nm] = int(FD.items.get(nm, 0)) - 1
-	var st := FD.st_of(slot_key)
-	var it := _it()
-	match str(FD.ITEM_USE.get(nm, "")):
-		"protect":
-			st["protect"] = int(st.get("protect", 0)) + 1
-		"star":
-			var g := int(st.get("gauge", 0)) + 3
-			if g >= FD.GAUGE_MAX:
-				st["gauge"] = 0
-				st["trance"] = FD.TRANCE_HAMMERS
-				Audio.sfx("enlighten", -6.0)
-			else:
-				st["gauge"] = g
-		"oil":
-			st["oil"] = 1
-		"undo":
-			if int(it.get("plus", 0)) > 0:
-				it["plus"] = maxi(0, int(it.get("plus", 0)) - 1)
-			if st.get("last", "") != "":
-				st["last"] = ""
+	if bool(result["trance"]):
+		Audio.sfx("enlighten", -6.0)
 	if nm == "龙鳞":
 		Audio.sfx("equip", -10.0)
 	_refresh()
-	FD.save_game()
 
 func _close() -> void:
 	closed.emit()

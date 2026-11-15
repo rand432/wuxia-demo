@@ -1,32 +1,5 @@
 # 十关连续通关
-[GO] L1
-[END] L1 WIN t=54s wave=5/5 kills=39 hp=328/414 unlock=2
-[FAMILY] L1 combos=0 shiny=false
-[GO] L2
-[END] L2 WIN t=182s wave=10/10 kills=236 hp=1023/1023 unlock=3
-[FAMILY] L2 combos=0 shiny=false
-[GO] L3
-[END] L3 WIN t=137s wave=12/12 kills=149 hp=587/870 unlock=4
-[FAMILY] L3 combos=0 shiny=false
-[GO] L4
-[END] L4 WIN t=214s wave=15/15 kills=295 hp=1396/1426 unlock=5
-[FAMILY] L4 combos=0 shiny=false
 [GO] L5
-[END] L5 WIN t=190s wave=18/18 kills=233 hp=1179/1301 unlock=6
+[END] L5 LOSE t=371s wave=18/18 kills=126 hp=564/564 unlock=1
 [FAMILY] L5 combos=0 shiny=false
-[GO] L6
-[END] L6 WIN t=271s wave=20/20 kills=438 hp=900/1058 unlock=7
-[FAMILY] L6 combos=1 shiny=false
-[GO] L7
-[END] L7 WIN t=300s wave=18/18 kills=385 hp=1005/1267 unlock=8
-[FAMILY] L7 combos=0 shiny=false
-[GO] L8
-[END] L8 WIN t=299s wave=18/18 kills=385 hp=1152/1152 unlock=9
-[FAMILY] L8 combos=0 shiny=false
-[GO] L9
-[END] L9 WIN t=233s wave=18/18 kills=785 hp=1014/1014 unlock=10
-[FAMILY] L9 combos=0 shiny=false
-[GO] L10
-[END] L10 WIN t=243s wave=18/18 kills=369 hp=916/916 unlock=10
-[FAMILY] L10 combos=0 shiny=false
-[ALL] max_unlocked=10 first_clear={ "1": true, "2": true, "3": true, "4": true, "5": true, "6": true, "7": true, "8": true, "9": true, "10": true }
+[ALL] max_unlocked=1 first_clear={  }

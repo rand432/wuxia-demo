@@ -177,7 +177,7 @@ func _build_info() -> void:
 	for i in 2:
 		var y := 942.0 + float(i) * 68.0
 		UI.panel(self, Rect2(24, y, 672, 56), Color(0.969, 0.949, 0.910), 10, Color(0.804, 0.745, 0.647), 1)
-		UI.label(self, "推 荐 战 力" if i == 0 else "首 通 奖 励", Vector2(44, y), Vector2(160, 56), 20, P.DIM)
+		UI.label(self, "当 前 关 卡" if i == 0 else "解 锁 进 度", Vector2(44, y), Vector2(160, 56), 20, P.DIM)
 		_info_vals.append(UI.label(self, "—", Vector2(240, y), Vector2(420, 56), 20, Color(0.675, 0.635, 0.576)))
 
 # ---------------- 开始游戏 ----------------

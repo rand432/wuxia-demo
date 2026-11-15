@@ -4154,6 +4154,8 @@ func _activate_ancestor_set(sid: String, first: Dictionary, ids: Array) -> void:
 	if _card_db.has(nid) and _family_card_allowed(nid) and not _pool.has(nid) and not _acquired.has(nid):
 		_pool.append(nid)
 		_toast_card(str((_card_db[nid] as Dictionary)["name"]), int(first["quality"]), "下一档入口已入池")
+	elif _card_db.has(nid) and not _family_card_allowed(nid):
+		_toast("下一档家传需 %d 星，请在局外进阶" % (t + 1))
 	_page = 0
 	_refresh_deck()
 	_bond_check()
@@ -5449,6 +5451,8 @@ func _show_god_pick() -> void:
 	if _god_hand_charge != _draw_charge:
 		_god_hand_charge = _draw_charge
 		_roll_god()
+	if _god_root.get_child_count() == 0:
+		return
 	if _god_ban_lb != null:
 		_god_ban_lb.text = "请神 · 剩 %d 次" % _draw_charge
 	if _god_refresh_btn != null:
@@ -5525,8 +5529,11 @@ func _hide_god_pick() -> void:
 		_god_layer.visible = false
 
 func _pick_god(aid: String) -> void:
+	if _ancestors.has(aid) or not AncestorData.ANCESTORS.has(aid):
+		return
 	if _draw_charge <= 0:
 		return
+	_god_hand_charge = -1   # 选完后旧手牌作废，即使升级又补回相同次数也必须重掷
 	_choice_fx("god")
 	_draw_charge -= 1
 	_qc("god", 1)
