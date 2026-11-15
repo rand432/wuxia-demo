@@ -33,6 +33,8 @@ user:// 下使用 level_state.cfg、progress.cfg、forge.cfg、curio.cfg、audio
 ./tools/run_audits.ps1
 ./tools/run_playthrough.ps1
 ./tools/run_playthrough.ps1 -StartLevel 5 -EndLevel 5
+# 独立后期关卡构筑可能较慢，可延长测试观察时间（默认420秒）
+./tools/run_playthrough.ps1 -StartLevel 6 -EndLevel 6 -TimeoutSeconds 600
 ```
 
 测试入口使用隔离项目及存档。集中用例结果在 .shots/audit_results。不要并发运行会重配同一 .shots/audit_project 的测试入口。专项关卡测试不等同于正常从第一关成长过去。断言通过不等于日志无警告或所有体验已验收。

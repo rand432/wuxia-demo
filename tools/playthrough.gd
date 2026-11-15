@@ -12,6 +12,7 @@ var wait_trea := 0
 var done := false
 var failures := 0
 var end_level := 10
+var timeout_seconds := 420.0
 
 func _ready() -> void:
 	if not OS.get_user_data_dir().replace("\\", "/").ends_with("wuxia-regression"):
@@ -26,6 +27,8 @@ func _ready() -> void:
 			lv = clampi(int(arg.get_slice("=", 1)), 1, 10)
 		if arg.begins_with("--end-level="):
 			end_level = clampi(int(arg.get_slice("=", 1)), lv, 10)
+		if arg.begins_with("--timeout-seconds="):
+			timeout_seconds = clampf(float(arg.get_slice("=", 1)), 60.0, 1800.0)
 	var f := FileAccess.open(LOG_PATH, FileAccess.WRITE)
 	if f != null:
 		f.store_line("# 十关连续通关")
@@ -69,7 +72,7 @@ func _process(dt: float) -> void:
 		if not win:
 			failures += 1
 		_finish(); return
-	if t > 420.0:
+	if t > timeout_seconds:
 		done = true
 		failures += 1
 		_log("[STATE] cards=%s wen=%d crystal=%d pending=%s god=%s ancestors=%s running=%s processing=%s" % [str(b._cards), b._wen, b._crystal, str(b._str_pending), str(b._god_layer.visible), str(b._ancestors.keys()), str(b._core.running), str(b._core.is_processing())])

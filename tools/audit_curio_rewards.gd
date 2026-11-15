@@ -42,9 +42,13 @@ func _run() -> void:
 	assert(battle._life == 105)
 	battle._core._kill_foe(boss)
 	assert(battle._life == 105)
-	battle._core._spawn_foe("chal", 1.0, 1.0, true, 1, "challenge")
+	battle._core.spawn_challenge(3, 1)
+	var chest: Dictionary = battle._core.foes.back()
+	chest["hp"] = 0.0
+	battle._core._kill_foe(chest)
+	assert(battle._life == 105, "large treasure challenge is not a boss")
+	battle._core.spawn_challenge(4, 1)
 	var challenge: Dictionary = battle._core.foes.back()
-	challenge["chal"] = 4
 	challenge["hp"] = 0.0
 	battle._core._kill_foe(challenge)
 	assert(battle._life == 110)

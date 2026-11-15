@@ -742,6 +742,8 @@ func _build_field() -> void:
 	_core.delayed_land.connect(_on_delayed_land)
 	_core.boss_died.connect(_on_boss_died)
 	_core.boss_slain.connect(_curio_on_boss_slain)
+	_core.wood_expired.connect(_curio_on_wood_expired)
+	_core.cold_expired.connect(_curio_on_cold_expired)
 	_core.paper_blocked.connect(_on_paper_blocked)
 	# 教学关每波少刷几只，节奏更快（奖励不变）
 	if LevelState.current_level <= 5:
@@ -1106,8 +1108,6 @@ func _tick_curio(dt: float) -> void:
 			_curio_tick_zuiweng(dt)
 		"tiebushan":
 			_curio_tick_tiebushan(dt)
-		"hanyu":
-			_curio_tick_hanyu(dt)
 		"zhaohunfan":
 			_curio_tick_zhaohunfan()
 		"tongjing":
@@ -1186,20 +1186,27 @@ func _curio_tick_jingtangmu() -> void:
 		return
 	var dur := 2.5 if _curio_lv >= 2 else 2.0
 	var targets := 2 if _curio_lv >= 4 else 1
+	# _live_foes已有距离排序；读条目标优先，同组仍按距离选。
+	var ordered: Array = []
+	for casting in [true, false]:
+		for foe in live:
+			if not bool(foe.get("boss", false)) and _core.has_pending_cast(foe) == casting:
+				ordered.append(foe)
 	var n := 0
-	for f_v in live:
+	for f_v in ordered:
 		if n >= targets:
 			break
 		var f: Dictionary = f_v
 		if bool(f.get("boss", false)):
 			continue
 		f["para"] = maxf(float(f.get("para", 0.0)), dur)
+		f["t"] = 0.0
+		f["wood_t"] = dur
+		f["wood_vuln"] = 0.30 if _curio_lv >= 3 else 0.0
+		f["wood_boom"] = _curio_lv >= 5
+		_core.interrupt_cast(f)
 		n += 1
 		_spawn_pfx("impacts/ground-slam", _core.position + Vector2(float(f["x"]), float(f["y"]) - 20.0), 0.6, "", 1.2)
-		if _curio_lv >= 5:
-			_core._apply_dmg(f, float(_core.hero.get("atk", 12.0)) * 0.8, "物理")
-			if float(f.get("hp", 0.0)) <= 0.0:
-				_core._kill_foe(f)
 	if n <= 0:
 		return
 	_curio_cd = 35.0
@@ -1207,6 +1214,17 @@ func _curio_tick_jingtangmu() -> void:
 	_curio_flash()
 	Aud.sfx("wood_down", -8.0, 0.9)
 	_toast("惊堂木 · 定身 %d 只" % n)
+
+func _curio_on_wood_expired(foe: Dictionary) -> void:
+	var boom := bool(foe.get("wood_boom", false))
+	foe.erase("wood_vuln")
+	foe.erase("wood_boom")
+	if _run_over or not boom or float(foe.get("hp", 0.0)) <= 0.0 or float(foe.get("dying", 0.0)) > 0.0:
+		return
+	_core._apply_dmg(foe, float(_core.hero.get("atk", 12.0)) * 0.8, "物理")
+	_spawn_pfx("impacts/ground-slam", _core.position + Vector2(float(foe["x"]), float(foe["y"])), 0.8, "", 1.2)
+	if float(foe.get("hp", 0.0)) <= 0.0:
+		_core._kill_foe(foe)
 
 # 铜钱剑：每次普攻附带一枚钱镖（打到更远的怪）
 func _curio_on_attack() -> void:
@@ -1259,7 +1277,7 @@ func _curio_apply_static() -> void:
 		_god_reroll += add
 		_draw_free += add
 	elif _curio_id == "zhiren":
-		_zhiren = 1
+		_set_paper_count(0)
 
 # 万应符 Lv5：25% 概率这次刷新不消耗次数
 func _rr_free() -> bool:
@@ -1330,6 +1348,25 @@ func _curio_tick_zhiren() -> void:
 		return
 	# Lv5：纸人也能挡首领延迟技（核心读到这个数就会消耗）
 	_core.hero["paper_guard"] = _zhiren if _curio_lv >= 5 else 0
+
+func _set_paper_count(amount: int) -> void:
+	_zhiren = clampi(amount, 0, 3 if _curio_lv >= 2 else 2)
+	if _core != null:
+		_core.hero["paper_guard"] = _zhiren if _curio_id == "zhiren" and _curio_lv >= 5 else 0
+
+func _paper_shatter() -> void:
+	if _curio_lv < 3 or _core == null:
+		return
+	for foe in _core.foes.duplicate():
+		if float(foe.get("hp", 0.0)) <= 0.0 or float(foe.get("dying", 0.0)) > 0.0:
+			continue
+		if _core.hero_pos.distance_to(Vector2(float(foe["x"]), float(foe["y"]))) > 140.0:
+			continue
+		_core._apply_dmg(foe, float(_core.hero.get("atk", 12.0)), "物理")
+		if float(foe.get("hp", 0.0)) <= 0.0:
+			_core._kill_foe(foe)
+		elif not bool(foe.get("boss", false)):
+			foe["kb"] = maxf(float(foe.get("kb", 0.0)), 120.0)
 
 func _curio_tick_zhaohunfan() -> void:
 	if _curio_cd > 0.0 or _core == null:
@@ -1413,16 +1450,6 @@ func _curio_tick_tiebushan(dt: float) -> void:
 		_tie_stacks = 0
 		_core.hero["curio_cut"] = 0.0
 
-# 寒玉扳指：寒层计时衰减
-func _curio_tick_hanyu(dt: float) -> void:
-	for f_v in _core.foes:
-		var f: Dictionary = f_v
-		if float(f.get("cold_t", 0.0)) > 0.0:
-			f["cold_t"] = maxf(0.0, float(f["cold_t"]) - dt)
-			if float(f["cold_t"]) <= 0.0:
-				f["cold"] = 0
-				f["cold_dmg"] = 0.0
-
 # 铁布衫：受击叠层 + 满层反弹
 func _curio_on_hero_hurt() -> void:
 	if _curio_id != "tiebushan" or _core == null:
@@ -1453,24 +1480,30 @@ func _curio_on_crit(tgt: Dictionary) -> void:
 		return
 	if _curio_id == "zuiweng" and _curio_lv >= 5 and _curio_atk_t > 0.0:
 		_curio_extend_buff(1.0, 5.0)
-	if _curio_id != "hanyu":
+	if _curio_id != "hanyu" or _run_over or tgt.is_empty() or float(tgt.get("hp", 0.0)) <= 0.0:
 		return
-	var c := int(tgt.get("cold", 0)) + 1
+	var c := mini(3, int(tgt.get("cold", 0)) + 1)
 	tgt["cold"] = c
 	tgt["cold_t"] = 3.0
-	tgt["slow_t"] = maxf(float(tgt.get("slow_t", 0.0)), 3.0)
-	if c < 3:
+	tgt["cold_slow"] = c * (0.15 if _curio_lv >= 4 else 0.10)
+	if _curio_lv < 2 or c < 3 or bool(tgt.get("boss", false)):
 		return
 	tgt["cold"] = 0
-	tgt["para"] = maxf(float(tgt.get("para", 0.0)), 0.8)
+	tgt["cold_freeze_t"] = 0.8
+	tgt["cold_boom"] = _curio_lv >= 5
 	if _curio_lv >= 3:
 		tgt["cold_dmg"] = 0.25
 	_curio_uses += 1
 	_curio_flash()
 	_spawn_pfx("impacts/crit-hit", _core.position + Vector2(float(tgt["x"]), float(tgt["y"]) - 16.0), 0.8, "", 1.4)
 	Aud.sfx("bell", -12.0, 1.3)
-	if _curio_lv >= 5:
+
+func _curio_on_cold_expired(tgt: Dictionary) -> void:
+	var boom := bool(tgt.get("cold_boom", false))
+	tgt.erase("cold_boom")
+	if boom and not _run_over and float(tgt.get("hp", 0.0)) > 0.0:
 		var at := Vector2(float(tgt["x"]), float(tgt["y"]))
+		_spawn_pfx("impacts/crit-hit", _core.position + at, 1.0, "", 1.4)
 		for o_v in _core.foes.duplicate():
 			var o: Dictionary = o_v
 			if o == tgt or float(o.get("hp", 0.0)) <= 0.0:
@@ -1514,7 +1547,7 @@ func _curio_on_wave_clear(wave: int) -> void:
 	if _curio_id == "zhiren":
 		var cap_z := 3 if _curio_lv >= 2 else 2
 		var gain := 2 if _curio_lv >= 4 else 1
-		_zhiren = mini(cap_z, _zhiren + gain)
+		_set_paper_count(mini(cap_z, _zhiren + gain))
 		_toast("纸人替身 · 现有 %d 个" % _zhiren)
 		_curio_flash()
 	if _curio_id == "xumingdeng":
@@ -2613,20 +2646,10 @@ func _on_hero_down() -> void:
 		return
 	# 奇物·纸人替身：替你挡一次致命伤害（不扣命、不清场）
 	if _curio_id == "zhiren" and _zhiren > 0:
-		_zhiren -= 1
+		_set_paper_count(_zhiren - 1)
 		_core.hero["hp"] = float(_core.hero.get("hp_max", 1.0))
 		_core.running = true
-		if _curio_lv >= 3:
-			var at_p: Vector2 = _core.hero_pos
-			for f_v2 in _core.foes.duplicate():
-				var f2: Dictionary = f_v2
-				if float(f2.get("hp", 0.0)) <= 0.0:
-					continue
-				if at_p.distance_to(Vector2(float(f2["x"]), float(f2["y"]))) > 140.0:
-					continue
-				_core._apply_dmg(f2, float(_core.hero.get("atk", 12.0)), "物理")
-				if float(f2.get("hp", 0.0)) <= 0.0:
-					_core._kill_foe(f2)
+		_paper_shatter()
 		_curio_uses += 1
 		_curio_flash()
 		_toast("纸人替身 · 挡住致命一击（剩 %d）" % _zhiren)
@@ -2646,6 +2669,7 @@ func _on_hero_down() -> void:
 	_life = maxi(0, _life - loss)
 	_refresh_life_ui()
 	_core.foes.clear()               # 怪全清：不掉落、不给经验
+	_core.clear_enemy_attacks()       # 旧预警/地面伤害不能追到复活后的下一波
 	_chal_all_cd()                   # 挑战全部进冷却
 	_spawn_pfx("shadow/dark-explosion", _hero_screen(), 1.25, "blood", 1.7)
 	_core._shake = maxf(float(_core._shake), 12.0)
@@ -4714,7 +4738,10 @@ func _on_delayed_land(pos: Vector2, elem: String) -> void:
 # 首领倒下：白闪 + 大爆 + 金耀 + 重震，配一段很短的慢镜头
 # 纸人 Lv5：在核心那边挡下了首领延迟技
 func _on_paper_blocked(pos: Vector2) -> void:
-	_zhiren = maxi(0, _zhiren - 1)
+	if _run_over or _curio_id != "zhiren":
+		return
+	_set_paper_count(mini(_zhiren - 1, int(_core.hero.get("paper_guard", 0))))
+	_paper_shatter()
 	_curio_uses += 1
 	_curio_flash()
 	_toast("纸人替身 · 挡下首领一击（剩 %d）" % _zhiren)

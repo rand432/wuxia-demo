@@ -84,8 +84,10 @@ func _apply_dmg(f: Dictionary, amount: float, dtype: String) -> float:
 	if float(f.get("buff", 0.0)) > 0.0:
 		final *= STATUE_CUT
 	# 奇物·寒玉扳指：被冻结的目标受到伤害提高
-	if float(f.get("cold_dmg", 0.0)) > 0.0 and float(f.get("para", 0.0)) > 0.0:
+	if float(f.get("cold_dmg", 0.0)) > 0.0 and float(f.get("cold_freeze_t", 0.0)) > 0.0:
 		final *= 1.0 + float(f["cold_dmg"])
+	if float(f.get("wood_t", 0.0)) > 0.0:
+		final *= 1.0 + float(f.get("wood_vuln", 0.0))
 	f["hp"] = float(f["hp"]) - final
 	# v15w 杏林医女「回春针」：吸血窗口内，按伤害的百分比回血
 	if float(hero.get("lifesteal_t", 0.0)) > 0.0 and float(hero["hp"]) > 0.0:
@@ -117,6 +119,8 @@ signal boss_arrived(tier: int)
 signal delayed_land(pos: Vector2, elem: String)   # 延迟技落点（外壳在这里挂 pixelfx）
 signal boss_died(pos: Vector2)                    # 首领倒下（外壳做演出）
 signal boss_slain()                              # 所有首领真正死亡（含挑战，不含不死复活）
+signal wood_expired(foe: Dictionary)
+signal cold_expired(foe: Dictionary)
 signal paper_blocked(pos: Vector2)                # 奇物·纸人替身挡下延迟技
 signal hero_attack()
 signal hero_hit()
@@ -827,6 +831,7 @@ func revive() -> void:
 
 func _process(delta: float) -> void:
 	var _t_proc := Time.get_ticks_usec()
+	var frame_epoch := _enemy_attack_epoch
 	# 顿帧：命中/暴击/击杀的那一两帧把时间压慢（动感全靠这一下"咬住"）
 	var dt := delta
 	if _hitstop > 0.0:
@@ -1059,13 +1064,19 @@ func _process(delta: float) -> void:
 		f["dot"] = dots
 		if not foes.has(f):
 			continue
+		var cold_frozen := _tick_cold_control(f, dt)
+		if float(f.get("hp", 0.0)) <= 0.0:
+			continue
 		# v13d P3：石像——不移动、不出手，只挨打
 		if bool(f.get("still", false)):
 			f["flash"] = maxf(0.0, float(f.get("flash", 0.0)) - delta)
 			continue
+		_tick_wood_control(f, dt)
+		if float(f.get("hp", 0.0)) <= 0.0:
+			continue
 		# 麻痹（天雷）：这段时间**不动也不打**
-		if float(f.get("para", 0.0)) > 0.0:
-			f["para"] = maxf(0.0, float(f["para"]) - dt)
+		if float(f.get("para", 0.0)) > 0.0 or cold_frozen:
+			f["para"] = maxf(0.0, float(f.get("para", 0.0)) - dt)
 			f["flash"] = maxf(0.0, float(f.get("flash", 0.0)) - delta)
 			continue
 		# 挨打那一下的击退与闪白
@@ -1121,10 +1132,7 @@ func _process(delta: float) -> void:
 		if dh > reach:
 			# v3l（用户："boss可以正常速度"）：boss 不再走 0.7 倍——跟寻常怪一个速度
 			# v14r：boss 词缀"迅捷"——走得更快（原来 boss_spd 只存着没人读）
-			var fspd := FOE_SPD * (1.0 + float(f.get("boss_spd", 0.0)))
-			# v15w 冷月娘「寒霜」：被减速的怪走得慢
-			if float(f.get("slow_t", 0.0)) > 0.0:
-				fspd *= 0.55
+			var fspd := foe_move_speed(f)
 			var mv := to_h.normalized() * minf(fspd * delta, dh - reach)
 			# Boss 圆牌更大（半径 52），四周留出更多边距，保证整个圆牌都在战场内
 			var edge := 60.0 if bool(f.get("boss", false)) else 40.0
@@ -1182,14 +1190,14 @@ func _process(delta: float) -> void:
 					# 法师有 1/3 概率**不近身打，改成放一发小号火雨**（预警 → 砸下）
 					if randf() < 0.33:
 						self.queue_delayed(hero_pos.x, hero_pos.y - 6.0, 70.0, float(f["atk"]) * 1.7,
-							DMG_FIRE, 1.0, "法火", "circle")
+							DMG_FIRE, 1.0, "法火", "circle", Vector2.RIGHT, 0.0, 0.0, 0, 0.0, 0.0, 0.0, f)
 				elif bool(f.get("brute", false)):
 					# v6：**普通挨打不再击退**——壮汉只有那次延迟冲锋才把主角撞开
 					Audio.sfx("hit_heavy", -8.0)                 # 壮汉：闷重一记
 					if randf() < 0.35:
 						var cdir := (hero_pos - Vector2(float(f["x"]), float(f["y"]))).normalized()
 						self.queue_delayed(float(f["x"]), float(f["y"]) - 10.0, 52.0, float(f["atk"]) * 2.2,
-							DMG_PHYS, 1.15, "冲锋", "beam", cdir, 300.0, 0.0, 0, 0.0, 0.0, 110.0)
+							DMG_PHYS, 1.15, "冲锋", "beam", cdir, 300.0, 0.0, 0, 0.0, 0.0, 110.0, f)
 						# v16o（用户："背景喊杀声太多了 其实没必要有喊杀声"）：已去掉喊杀/战鼓声
 				elif bool(f.get("ranged", false)):
 					# 弓手：一支箭从它那儿射过来
@@ -1253,7 +1261,7 @@ func _process(delta: float) -> void:
 						hero_down.emit()
 						break
 	# 死亡回调可能结束本局，别再推进本帧剩余的召唤/技能伤害。
-	if not running:
+	if not running or frame_epoch != _enemy_attack_epoch:
 		queue_redraw()
 		return
 	_buffs_tick(dt)              # v15w：伙伴给主角挂的那些临时增益（吸血/减伤/酒气）
@@ -1294,6 +1302,9 @@ func _process(delta: float) -> void:
 			_push_float(hero_pos.x, hero_pos.y - 84.0, "护盾 " + str(int(sv)), Color(0.66, 0.86, 1.0))
 	_update_quake(dt)
 	_delayed_tick(dt)            # v16a：延迟技（预警 → 落下）
+	if not running or frame_epoch != _enemy_attack_epoch:
+		queue_redraw()
+		return
 	for i6 in range(_fire_lines.size() - 1, -1, -1):
 		var fl2: Dictionary = _fire_lines[i6]
 		fl2["t"] = float(fl2["t"]) + delta
@@ -1323,6 +1334,7 @@ func _process(delta: float) -> void:
 				Audio.sfx("heartbeat", -6.0)
 		fb["ult_t"] = float(fb.get("ult_t", 14.0)) - dt
 		if float(fb["ult_t"]) <= 0.0:
+			var first_cast := _delayed.size()
 			# ⚠ v14t：这里原来写死 14 秒 —— 表里每只 boss 自己的 ult_cd（9~16）全被吃掉了
 			fb["ult_t"] = float(fb.get("ult_cd", 14.0))
 			# v16a（用户："技能和大招可以做成那种延迟形…先是地上会出现逐渐变红的红圈"）：
@@ -1373,8 +1385,13 @@ func _process(delta: float) -> void:
 				"follow":
 					# 跟随型：圈追着主角跑（落下前 0.25 秒才定住）
 					self.queue_delayed(hero_pos.x, hero_pos.y - 6.0, 88.0, dmg, DMG_PHYS, 1.6, ult, "follow")
+				"combo_a", "combo_b", "combo_c":
+					pass # 上面的连招分支已经排好，不能再补一个默认圆圈。
 				_:
 					self.queue_delayed(hero_pos.x, hero_pos.y - 6.0, 96.0, dmg, DMG_PHYS, 1.2, ult, "circle")
+			for cast_index in range(first_cast, _delayed.size()):
+				_delayed[cast_index]["caster"] = fb
+				_delayed[cast_index]["boss_attack"] = not fb.has("chal") or int(fb["chal"]) == 4
 			if float(fb["hp"]) <= 0.0:
 				_kill_foe(fb)
 	# 飘字
@@ -1429,6 +1446,11 @@ func _separate_foes() -> void:
 #   shape：circle＝火雨/地裂那种圆 ／ beam＝剑气那种长条（沿 dir 方向）
 # ============================================================
 var _delayed: Array = []            # 正在预警/即将落下的延迟技
+var _enemy_attack_epoch := 0        # 清场回调使当前旧攻击批次失效
+
+func clear_enemy_attacks() -> void:
+	_enemy_attack_epoch += 1
+	_delayed.clear()
 
 # 排一招延迟技（warn 秒后落下）
 # v16d（用户："接着做"＋"预警可以有个表现形式 就是由淡转深 深后就释放"）：
@@ -1443,11 +1465,52 @@ var _delayed: Array = []            # 正在预警/即将落下的延迟技
 #   pool　＝毒圈 / 火海（持续伤害区：落下后**留在地上**每秒跳一次）
 func queue_delayed(x: float, y: float, r: float, dmg: float, elem: String, warn := 1.2,
 	kind := "火雨", shape := "circle", dir := Vector2.RIGHT, len := 0.0,
-	spread := 0.0, count := 0, gap := 0.0, life := 0.0, push := 0.0) -> void:
+	spread := 0.0, count := 0, gap := 0.0, life := 0.0, push := 0.0, caster: Dictionary = {}) -> void:
 	_delayed.append({"x": x, "y": y, "r": r, "t": 0.0, "warn": maxf(0.35, warn),
 		"dmg": dmg, "elem": elem, "kind": kind, "shape": shape, "dir": dir, "len": len,
-		"spread": spread, "count": count, "gap": gap, "life": life, "tick": 0.0, "push": push})
+		"spread": spread, "count": count, "gap": gap, "life": life, "tick": 0.0, "push": push,
+		"caster": caster, "landed": false})
 	Audio.sfx("heartbeat", -10.0)
+
+func foe_move_speed(foe: Dictionary) -> float:
+	var slow := 0.45 if float(foe.get("slow_t", 0.0)) > 0.0 else 0.0
+	if float(foe.get("cold_t", 0.0)) > 0.0:
+		slow = maxf(slow, float(foe.get("cold_slow", 0.0)))
+	return FOE_SPD * (1.0 + float(foe.get("boss_spd", 0.0))) * (1.0 - clampf(slow, 0.0, 1.0))
+
+func _tick_cold_control(foe: Dictionary, dt: float) -> bool:
+	if float(foe.get("cold_t", 0.0)) > 0.0:
+		foe["cold_t"] = maxf(0.0, float(foe["cold_t"]) - dt)
+		if float(foe["cold_t"]) <= 0.0:
+			foe["cold"] = 0
+			foe.erase("cold_slow")
+	var frozen := float(foe.get("cold_freeze_t", 0.0)) > 0.0
+	if frozen:
+		foe["cold_freeze_t"] = maxf(0.0, float(foe["cold_freeze_t"]) - dt)
+		if float(foe["cold_freeze_t"]) <= 0.0:
+			foe.erase("cold_dmg")
+			cold_expired.emit(foe)
+	return frozen
+
+func _tick_wood_control(foe: Dictionary, dt: float) -> void:
+	var left := float(foe.get("wood_t", 0.0))
+	if left <= 0.0:
+		return
+	foe["wood_t"] = maxf(0.0, left - dt)
+	if float(foe["wood_t"]) <= 0.0:
+		wood_expired.emit(foe)
+
+func has_pending_cast(foe: Dictionary) -> bool:
+	for cast in _delayed:
+		if is_same(cast.get("caster", {}), foe) and not bool(cast.get("landed", false)):
+			return true
+	return false
+
+func interrupt_cast(foe: Dictionary) -> void:
+	for i in range(_delayed.size() - 1, -1, -1):
+		var cast: Dictionary = _delayed[i]
+		if is_same(cast.get("caster", {}), foe) and not bool(cast.get("landed", false)):
+			_delayed.remove_at(i)
 
 # 多段连招：按顺序排同一只 boss 的几招（每段自带延迟，看着就是"连着来"）
 #   seq 里每项：{shape, warn, r, dmg_mul, kind, len, spread, count, step, gap}
@@ -1488,34 +1551,58 @@ func queue_chain(x: float, y: float, r: float, dmg: float, elem: String, kind: S
 
 # 每帧：推进倒计时，到点就砸
 func _delayed_tick(delta: float) -> void:
+	var epoch := _enemy_attack_epoch
 	for i in range(_delayed.size() - 1, -1, -1):
+		if not running or epoch != _enemy_attack_epoch:
+			return
 		var d: Dictionary = _delayed[i]
+		if bool(d.get("landed", false)):
+			var alive := _tick_damage_pool(d, delta, epoch)
+			if epoch != _enemy_attack_epoch or not running:
+				return
+			if not alive:
+				_delayed.remove_at(i)
+			continue
 		# v16d：跟随型 —— 落下前**一直贴在主角脚下**（追着人跑），最后 0.25 秒才定住
 		if str(d["shape"]) == "follow" and float(d["t"]) < float(d["warn"]) - 0.25:
 			d["x"] = hero_pos.x
 			d["y"] = hero_pos.y - 6.0
-		d["tick"] = float(d.get("tick", 0.0)) + delta
 		d["t"] = float(d["t"]) + delta
 		if float(d["t"]) < float(d["warn"]):
 			continue
 		# v16e：毒圈/火海这类**落下后不消失**，留在地上每秒跳一次
 		if float(d.get("life", 0.0)) > 0.0:
 			_delayed_hit(d)                       # 落点这一下（全额）
-			d["warn"] = 1.0e9                     # 不再"再落一次"
+			if epoch != _enemy_attack_epoch or not running:
+				return
+			var elapsed := maxf(0.0, float(d["t"]) - float(d["warn"]))
+			d["landed"] = true
 			d["t"] = 0.0
-			d["life"] = float(d["life"]) - 1.0
+			d["tick"] = 0.0
 			d["shape"] = "pool"                  # 接下来按持续圈画
-			if float(d["life"]) <= 0.0:
+			var alive := _tick_damage_pool(d, elapsed, epoch)
+			if epoch != _enemy_attack_epoch or not running:
+				return
+			if not alive:
 				_delayed.remove_at(i)
 			continue
-		if str(d.get("shape", "")) == "pool" and float(d.get("tick", 0.0)) >= 1.0:
-			d["tick"] = 0.0
-			if _delayed_in(d):
-				var dt2 := hero_in_dmg(float(d["dmg"]) * 0.5, str(d["elem"]))
-				hero["hp"] = maxf(0.0, float(hero["hp"]) - dt2)
-				_push_float(hero_pos.x, hero_pos.y - 96.0, str(d["kind"]) + " -" + str(int(dt2)), Color(0.66, 0.92, 0.44))
 		_delayed_hit(d)
+		if epoch != _enemy_attack_epoch or not running:
+			return
 		_delayed.remove_at(i)
+
+func _tick_damage_pool(d: Dictionary, delta: float, epoch: int) -> bool:
+	var active := minf(maxf(delta, 0.0), float(d.get("life", 0.0)))
+	d["life"] = maxf(0.0, float(d.get("life", 0.0)) - active)
+	d["t"] = float(d.get("t", 0.0)) + active
+	d["tick"] = float(d.get("tick", 0.0)) + active
+	while float(d["tick"]) + 0.000001 >= 1.0:
+		d["tick"] = maxf(0.0, float(d["tick"]) - 1.0)
+		# 落地后的持续伤害不是新一轮首领预警，不主动消耗五级纸人。
+		_delayed_hit(d, 0.5, false, false)
+		if not running or epoch != _enemy_attack_epoch:
+			return false
+	return float(d["life"]) > 0.000001
 
 # 落下结算：圈里的主角挨伤害；顺便一圈火 ＋ 震屏
 # 主角在不在这一招的作用范围里（延迟技与持续圈共用这一套判定）
@@ -1551,30 +1638,37 @@ func _delayed_in_at(d: Dictionary, c: Vector2, r: float) -> bool:
 		inr = c.distance_to(hero_pos) <= r
 	return inr
 
-func _delayed_hit(d: Dictionary) -> void:
+func _delayed_hit(d: Dictionary, damage_scale := 1.0, allow_paper := true, is_impact := true) -> void:
+	if not running:
+		return
 	var c := Vector2(float(d["x"]), float(d["y"]))
 	var r := float(d["r"])
 	var elem := str(d["elem"])
 	var inr := _delayed_in(d)
 	# 奇物·纸人替身 Lv5：优先用纸人挡下首领延迟技
-	if inr and int(hero.get("paper_guard", 0)) > 0:
+	if inr and allow_paper and bool(d.get("boss_attack", false)) and int(hero.get("paper_guard", 0)) > 0:
 		hero["paper_guard"] = int(hero["paper_guard"]) - 1
 		_push_float(hero_pos.x, hero_pos.y - 100.0, "纸人挡下", Color(0.98, 0.92, 0.76), true)
 		paper_blocked.emit(c)
 		inr = false
 	if inr:
-		var dm := hero_in_dmg(float(d["dmg"]), elem)
+		var dm := hero_in_dmg(float(d["dmg"]) * damage_scale, elem)
 		hero["hp"] = maxf(0.0, float(hero["hp"]) - dm)
 		_push_float(hero_pos.x, hero_pos.y - 100.0, str(d["kind"]) + "！ -" + str(int(dm)),
 			Color(1.0, 0.52, 0.34), true)
 		# 只有带 push 的招式（冲撞类机制）才把主角推开；普通挨打不位移
-		var psh := float(d.get("push", 0.0))
+		var psh := float(d.get("push", 0.0)) if is_impact else 0.0
 		if psh > 0.0:
 			var away := (hero_pos - c)
 			if away.length() < 1.0:
 				away = Vector2(0.0, 1.0)
 			hero_pos += away.normalized() * psh
 			_shake = maxf(_shake, 6.0)
+		if float(hero["hp"]) <= 0.0:
+			running = false
+			hero_down.emit()
+	if not is_impact:
+		return # 持续伤害不重复播放落地震屏、顿帧与冲撞。
 	_bursts.append({"x": c.x, "y": c.y, "t": 0.0, "col": Color(1.0, 0.52, 0.26), "scale": maxf(1.2, r / 60.0)})
 	delayed_land.emit(c, elem)
 	_shake = maxf(_shake, 12.0)
@@ -2029,7 +2123,8 @@ func _kill_foe(f: Dictionary) -> void:
 		return
 	# 在连锁和奖励信号之前标记，防止同帧重复调用或回调重入。
 	f["_death_settled"] = true
-	if bool(f.get("boss", false)):
+	# 挑战宝箱也借用 boss 字段表示大体型，仅挑战类别4算首领。
+	if bool(f.get("boss", false)) and (not f.has("chal") or int(f["chal"]) == 4):
 		boss_slain.emit()
 	# v18j：击杀回血（默认 0 = 不回）
 	if kill_heal > 0.0:
@@ -5403,7 +5498,7 @@ func _draw() -> void:
 			draw_circle(Vector2(float(f["x"]) + 14.0, float(f["y"]) - 50.0 * sc), 5.0 + sin(_t * 6.0) * 1.2, dc)
 			draw_circle(Vector2(float(f["x"]) + 14.0, float(f["y"]) - 50.0 * sc), 8.0, Color(dc.r, dc.g, dc.b, 0.25))
 		# 麻痹：头顶跳两下电花（一眼看出"这只动不了"）
-		if float(f.get("para", 0.0)) > 0.0:
+		if float(f.get("para", 0.0)) > 0.0 or float(f.get("cold_freeze_t", 0.0)) > 0.0:
 			var pp2 := Vector2(float(f["x"]), float(f["y"]) - 46.0 * sc)
 			for k in 2:
 				var off := Vector2(randf_range(-12.0, 12.0), randf_range(-10.0, 10.0))
