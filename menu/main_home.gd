@@ -49,6 +49,10 @@ func _ready() -> void:
 	_refresh()
 	set_process(true)
 	_unroll(0.0)
+	var SaveFile := preload("res://shared/save_file.gd")
+	if not SaveFile._read_failures.is_empty():
+		_start_btn.disabled = true
+		UI.label(self, "存档读取异常，已暂停开始游戏以保护进度。", Vector2(24, 228), Vector2(672, 44), 19, P.SEAL, HORIZONTAL_ALIGNMENT_CENTER)
 
 # ---------------- 页头：只剩关名 ----------------
 func _build_head() -> void:

@@ -48,40 +48,60 @@ static func _curio_ensure() -> void:
 		return
 	_curio_loaded = true
 	var cfg := ConfigFile.new()
-	if cfg.load(CURIO_SAVE) != OK:
+	if SaveFile.read(cfg, CURIO_SAVE, {"curio": {"lv": TYPE_DICTIONARY}}) != OK:
 		return
 	curio_id = str(cfg.get_value("curio", "id", curio_id))
 	var d = cfg.get_value("curio", "lv", {})
 	if d is Dictionary:
 		curio_lv = (d as Dictionary).duplicate()
 
-static func _curio_save() -> void:
+static func _curio_save() -> Error:
 	var cfg := ConfigFile.new()
 	cfg.set_value("curio", "id", curio_id)
 	cfg.set_value("curio", "lv", curio_lv)
-	SaveFile.write(cfg, CURIO_SAVE)
+	return SaveFile.write(cfg, CURIO_SAVE)
 
 static func curio_level(id: String) -> int:
 	_curio_ensure()
 	return clampi(int(curio_lv.get(id, 1)), 1, 5)
 
-static func curio_equip(id: String) -> void:
+static func curio_equip(id: String) -> bool:
 	_curio_ensure()
+	var CurioData := preload("res://shared/curio_data.gd")
+	if CurioData.get_curio(id).is_empty():
+		return false
+	var previous := curio_id
 	curio_id = id
-	_curio_save()
+	if _curio_save() == OK:
+		return true
+	curio_id = previous
+	return false
 
-static func curio_unequip() -> void:
+static func curio_unequip() -> bool:
 	_curio_ensure()
+	var previous := curio_id
 	curio_id = ""
-	_curio_save()
+	if _curio_save() == OK:
+		return true
+	curio_id = previous
+	return false
 
 static func curio_upgrade(id: String) -> bool:
+	var CurioData := preload("res://shared/curio_data.gd")
+	if CurioData.get_curio(id).is_empty():
+		return false
 	var lv := curio_level(id)
 	if lv >= 5:
 		return false
+	var had_level := curio_lv.has(id)
 	curio_lv[id] = lv + 1
-	_curio_save()
-	return true
+	if _curio_save() == OK:
+		return true
+	if had_level:
+		curio_lv[id] = lv
+	else:
+		curio_lv.erase(id)
+	return false
 
 # 当前接入的局外成长数据；与旧玩法存档分开保存。
 const PROGRESS_SAVE := "user://progress.cfg"
@@ -97,7 +117,7 @@ static func ensure_loaded() -> void:
 	_progress_loaded = true
 	_curio_ensure()
 	var cfg := ConfigFile.new()
-	if cfg.load(PROGRESS_SAVE) != OK:
+	if SaveFile.read(cfg, PROGRESS_SAVE, {"progress": {"coins": TYPE_DICTIONARY, "skill_lv": TYPE_DICTIONARY, "skill_books": TYPE_DICTIONARY, "shards": TYPE_DICTIONARY, "stars": TYPE_DICTIONARY}}) != OK:
 		return
 	player_name = str(cfg.get_value("progress", "player_name", player_name))
 	for key in ["coins", "skill_lv", "skill_books", "shards", "stars"]:

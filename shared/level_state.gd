@@ -102,7 +102,7 @@ static func ensure_loaded() -> void:
 		return
 	_loaded = true
 	var cfg := ConfigFile.new()
-	if cfg.load(SAVE_PATH) != OK:
+	if SaveFile.read(cfg, SAVE_PATH, {"levels": {"first_clear": TYPE_DICTIONARY, "tutorial_done": TYPE_DICTIONARY, "preview": TYPE_DICTIONARY}}) != OK:
 		return
 	current_level = clampi(int(cfg.get_value("levels", "current", 1)), 1, LEVELS.size())
 	max_unlocked = clampi(int(cfg.get_value("levels", "max", 1)), 1, LEVELS.size())

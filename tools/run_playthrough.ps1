@@ -10,6 +10,7 @@ foreach ($part in @('menu','shared','kushou','tools','assets','fonts','.godot'))
         New-Item -ItemType Junction -Path (Join-Path $auditRoot $part) -Target (Join-Path $projectRoot $part) | Out-Null
     }
 }
+Copy-Item -LiteralPath (Join-Path $projectRoot 'icon.svg') -Destination (Join-Path $auditRoot 'icon.svg') -Force
 $config = [IO.File]::ReadAllText((Join-Path $projectRoot 'project.godot')).Replace('[application]', "[application]
 config/use_custom_user_dir=true
 config/custom_user_dir_name=`"$userDirectory`"")

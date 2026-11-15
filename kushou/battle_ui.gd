@@ -2010,6 +2010,8 @@ func _update_crystal() -> void:
 		_crystal_lb.text = str(_crystal)
 
 func _show_draw(v: bool) -> void:
+	if v and _run_over:
+		return
 	if v:
 		_hide_aug_pick()                     # 进阶页开着一并收掉
 		_hide_trea()                         # 宝物页同理
@@ -2062,7 +2064,7 @@ func _on_draw_pick(card: DrawCard) -> void:
 		_zhongli_try(id))
 
 func _on_refresh() -> void:
-	if _draw_anim: return
+	if _run_over or _draw_anim: return
 	if _pool.is_empty():
 		_toast("卡池已空，没法刷新")
 		return
@@ -2085,6 +2087,9 @@ func _on_refresh() -> void:
 		tw.tween_property(card, "scale", Vector2(0.72, 0.72), 0.16)
 		tw.tween_property(card, "modulate:a", 0.0, 0.16)
 	await get_tree().create_timer(0.2).timeout
+	if _run_over:
+		_draw_anim = false
+		return
 	_roll_draw()
 	_draw_anim = false
 	_pop_draw_cards()
@@ -2157,7 +2162,7 @@ func _sync_attrs_to_hero() -> void:
 	h["aspd"] = float(_core.attr_final("aspd")) / 1.8
 	var mp_new: float = float(_core.attr_final("mp"))
 	h["mp_max"] = mp_new
-	h["mp"] = minf(mp_new, float(h.get("mp", 0.0)))
+	h["mp"] = minf(mp_new, _mp)
 	_mp_max = mp_new
 	_mp = minf(_mp_max, _mp)
 	var hp_new: float = float(_core.attr_final("hp"))
@@ -2225,6 +2230,10 @@ func _toast_card(name: String, quality: int, tail: String) -> void:
 	_toast("[color=#" + col + "]" + name + "[/color]　" + tail)
 
 func _process(_delta: float) -> void:
+	if _run_over:
+		_tick_fly(_delta)
+		_tick_pulses(_delta)
+		return
 	var _t_proc := Time.get_ticks_usec()
 	var t := Time.get_ticks_msec() / 1000.0
 	for i in _enemies.size():
@@ -2261,6 +2270,7 @@ func _process(_delta: float) -> void:
 			else:
 				_run_cleared = true
 				_end_run(true)
+				return
 		if _hp_lb != null:
 			_hp_lb.text = "%d/%d" % [int(float(_core.hero.get("hp", 0))), int(float(_core.hero.get("hp_max", 1)))]
 		var hpr := clampf(float(_core.hero.get("hp", 0.0)) / maxf(1.0, float(_core.hero.get("hp_max", 1.0))), 0.0, 1.0)
@@ -2500,7 +2510,7 @@ func _add_exp(v: int) -> void:
 			msg += " · 请神 +%d" % god
 		_toast(msg)
 
-# 升级给属性（只在本局生效）：攻击 +1 · 气血上限 +6
+# 升级给属性（只在本局生效）：攻击 +1 · 气血上限 +6 · 内力上限 +25
 func _level_bonus(n: int) -> void:
 	if _core == null or n <= 0:
 		return
@@ -2512,6 +2522,8 @@ func _level_bonus(n: int) -> void:
 	var add_hp := 6.0 * float(n)
 	_core.attr_add("atk", add_atk)
 	_core.attr_add("hp", add_hp)
+	_core.attr_add("mp", 25.0 * float(n))
+	h["mp_max"] = _core.attr_final("mp")
 	h["atk"] = float(h["atk"]) + add_atk
 	h["hp_max"] = float(h["hp_max"]) + add_hp
 	h["hp"] = float(h["hp_max"]) * ratio
@@ -3914,7 +3926,6 @@ func _apply_aug(key: String, val: float) -> void:
 			h["dmg_all"] = float(h.get("dmg_all", 0.0)) + val / 100.0
 		"mp_add":
 			_core.attr_add("mp", val)
-			_mp_bonus += val
 		"gold_pct":
 			_gold_pct += val
 		"killheal":
@@ -4564,7 +4575,6 @@ func _apply_own(s: Dictionary) -> void:
 	if float(s.get("mp", 0.0)) > 0.0:
 		if _core != null:
 			_core.attr_add("mp", float(s["mp"]))
-		_mp_bonus += float(s["mp"])          # v5：内力系卡 → 内力上限
 	_gold_pct += float(s["gold_pct"])
 	_crystal_pct += float(s["crystal_pct"])
 	# v13 群/险
@@ -4718,6 +4728,8 @@ func _choice_fx(kind: String) -> void:
 			_spawn_pfx("holy/halo", hpos, 0.80, "heal", 1.2)
 
 func _add_card(id: String) -> void:
+	if _run_over:
+		return
 	if not _card_db.has(id) or _acquired.has(id): return
 	if _cards.size() >= 10:
 		_toast("卡组已满（10 格）")
@@ -5132,9 +5144,8 @@ const SKILL_LV_STEP := {
 }
 
 var _skills: Array = []
-var _mp := 300.0
-var _mp_max := 300.0
-var _mp_bonus := 0.0        # 内力系卡牌给的内力上限加成
+var _mp := 100.0
+var _mp_max := 100.0
 var _mp_bar: Panel = null
 var _skill_slots: Array = []
 var _god_layer: Control = null
@@ -5156,10 +5167,12 @@ func _build_skill_bar() -> void:
 		_skill_slots.append(s)
 
 func _tick_skills(dt: float) -> void:
+	if _run_over:
+		return
 	if _core != null and float(_core.hero.get("aspd", 1.0)) > MAX_ASPD:
 		_core.hero["aspd"] = MAX_ASPD          # 硬顶：防攻速叠太高卡帧
 	var lv_mul := float(_lv - 1)
-	_mp_max = 300.0 + 25.0 * lv_mul + _mp_bonus
+	_mp_max = maxf(1.0, float(_core.attr_final("mp"))) if _core != null else 100.0
 	_mp = minf(_mp_max, _mp + (20.0 + 2.0 * lv_mul) * dt)
 	if _mp_bar != null:
 		_mp_bar.size = Vector2(maxf(4.0, 235.0 * clampf(_mp / _mp_max, 0.0, 1.0)), 9.0)
@@ -5218,6 +5231,9 @@ const SKILL_SFX := {
 	"真实": [["heartbeat", -10.0, 0.90], ["tension", -13.0, 1.00]],
 }
 
+	if _core != null:
+		_core.hero["mp"] = _mp
+
 func _skill_fx(dtype: String, world_pos: Vector2, big := false) -> void:
 	var e: Array = SKILL_FX.get(dtype, [])
 	if e.is_empty():
@@ -5236,6 +5252,8 @@ func _skill_level_bonus(aid: String) -> float:
 	return float(GameState.skill_lv.get(aid, 0)) * float(SKILL_LV_STEP.get(aid, 3))
 
 func _cast_skill(i: int) -> void:
+	if _run_over:
+		return
 	if i < 0 or i >= _skills.size():
 		return
 	_cast_dtype = str(_skills[i].get("dtype", ""))

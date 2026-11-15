@@ -164,10 +164,10 @@ func _build_detail() -> void:
 func _on_equip() -> void:
 	var cur := str(_ids[_sel])
 	Audio.sfx("ui_click", -8.0)
-	if GameState.curio_id == cur:
-		GameState.curio_unequip()
-	else:
-		GameState.curio_equip(cur)
+	var success := GameState.curio_unequip() if GameState.curio_id == cur else GameState.curio_equip(cur)
+	if not success:
+		_equip_btn.text = "保存失败，请重试"
+		return
 	_refresh()
 
 # ---------------- 进阶路线弹窗 ----------------
@@ -229,11 +229,16 @@ func _open_pop() -> void:
 		if not on:
 			UI.label(row, "未解锁（强化上一层后开放）", Vector2(88, 90), Vector2(436, 24), 16, P.DIM)
 	var up := UI.button(holder, "强 化", Rect2(40, 836, 520, 72), 28, P.DARK, P.GOLD_HI, Callable())
+	up.disabled = lv >= 5
+	if up.disabled:
+		up.text = "已满级"
 	up.pressed.connect(func() -> void:
 		if GameState.curio_upgrade(cur):
 			Audio.sfx("levelup", -8.0)
 			_close_pop()
-			_refresh())
+			_refresh()
+		else:
+			up.text = "保存失败，请重试")
 	var close := UI.button(holder, "×", Rect2(548, 18, 40, 40), 26, Color(0, 0, 0, 0), P.DIM, _close_pop)
 	close.add_theme_stylebox_override("normal", StyleBoxEmpty.new())
 	close.add_theme_stylebox_override("hover", StyleBoxEmpty.new())

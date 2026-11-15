@@ -248,6 +248,16 @@ static func apply(it: Dictionary, res: String, equipped_slot: String = "") -> Di
 # 存档：equipped / bag / 资源 / 每件装备的运行时状态
 # ============================================================
 const SAVE_PATH := "user://forge.cfg"
+const ITEM_SCHEMA := {"type": TYPE_DICTIONARY, "fields": {"name": TYPE_STRING, "slot": TYPE_STRING, "quality": TYPE_FLOAT, "plus": TYPE_FLOAT, "trait": TYPE_STRING}}
+const STATE_DATA_SCHEMA := {"type": TYPE_DICTIONARY, "fields": {"crack": TYPE_FLOAT, "gauge": TYPE_FLOAT, "trance": TYPE_FLOAT, "protect": TYPE_FLOAT, "oil": TYPE_FLOAT, "last": TYPE_STRING}}
+const STATE_SCHEMA := {"type": TYPE_DICTIONARY, "fields": {"crack": TYPE_FLOAT, "gauge": TYPE_FLOAT, "trance": TYPE_FLOAT, "protect": TYPE_FLOAT, "oil": TYPE_FLOAT, "last": TYPE_STRING, "undo": {"type": TYPE_DICTIONARY, "fields": {"item": ITEM_SCHEMA, "state": STATE_DATA_SCHEMA}}}}
+const SAVE_SCHEMA := {"res": {
+	"ores": TYPE_FLOAT, "silver": TYPE_FLOAT,
+	"items": {"type": TYPE_DICTIONARY, "values": TYPE_FLOAT},
+	"equipped": {"type": TYPE_DICTIONARY, "values": ITEM_SCHEMA},
+	"bag": {"type": TYPE_ARRAY, "items": ITEM_SCHEMA},
+	"state": {"type": TYPE_DICTIONARY, "values": STATE_SCHEMA}}}
+
 static var _loaded := false
 
 static func load_game() -> void:
@@ -259,7 +269,7 @@ static func load_game() -> void:
 	_loaded = true
 	ensure_bag()
 	var cf := ConfigFile.new()
-	if cf.load(SAVE_PATH) != OK:
+	if SaveFile.read(cf, SAVE_PATH, SAVE_SCHEMA) != OK:
 		return
 	ores = int(cf.get_value("res", "ores", ores))
 	silver = int(cf.get_value("res", "silver", silver))

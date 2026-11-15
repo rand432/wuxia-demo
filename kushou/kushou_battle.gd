@@ -1251,6 +1251,10 @@ func _process(delta: float) -> void:
 						running = false
 						hero_down.emit()
 						break
+	# 死亡回调可能结束本局，别再推进本帧剩余的召唤/技能伤害。
+	if not running:
+		queue_redraw()
+		return
 	_buffs_tick(dt)              # v15w：伙伴给主角挂的那些临时增益（吸血/减伤/酒气）
 	_update_card_fx(dt)          # v9i：飞羽 / 流星 / 雷霆
 	_update_qi(dt)

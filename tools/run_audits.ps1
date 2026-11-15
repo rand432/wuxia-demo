@@ -5,7 +5,7 @@ $projectRoot = Split-Path $PSScriptRoot -Parent
 $auditRoot = Join-Path $projectRoot '.shots/audit_project'
 $resultRoot = Join-Path $projectRoot '.shots/audit_results'
 New-Item -ItemType Directory -Path $resultRoot -Force | Out-Null
-$names = @('save_file','reward_save','role_advance','family_stars','family_flow','external_kill','equipment','forge_undo','forge_oil','equipment_battle','preview_reward','black_market','death_prevention','tutorial','skill_growth','god_pick','draw_claim','battle_lifecycle')
+$names = @('save_file','save_corruption','save_shapes','save_warning','reward_save','role_advance','curio_save','family_stars','family_flow','external_kill','kill_once','equipment','forge_undo','forge_oil','equipment_battle','preview_reward','black_market','death_prevention','result_freeze','tutorial','skill_growth','god_pick','draw_claim','battle_lifecycle')
 $results = @()
 foreach ($name in $names) {
     $output = & $Godot --headless --path $auditRoot --max-fps 120 --quit-after 3600 --script "res://tools/audit_$name.gd" 2>&1 | Out-String
