@@ -43,6 +43,8 @@ func _buffs_tick(delta: float) -> void:
 				f[k2] = maxf(0.0, float(f[k2]) - delta)
 
 func _apply_dmg(f: Dictionary, amount: float, dtype: String) -> float:
+	if f.is_empty() or bool(f.get("_death_settled", false)) or float(f.get("dying", 0.0)) > 0.0:
+		return 0.0
 	# v16k（用户："盾兵格挡（现在只是个长相，可以做成正面减伤）"）：
 	#   盾兵举着一面**朝下的**盾 —— 主角在它**正面（下方）**打过去，伤害 −45%；
 	#   绕到它**背后（上方）**打，就不减（等于鼓励"点走位绕后"）。
@@ -1032,6 +1034,10 @@ func _process(delta: float) -> void:
 			if float(f["dying"]) <= 0.0:
 				foes.erase(f)
 			continue
+		# 外层技能也可直接扣血；统一补结算，不能留下0血但仍占波次的敌人。
+		if float(f.get("hp", 0.0)) <= 0.0:
+			_kill_foe(f)
+			continue
 		# 持续伤害（毒/灼烧）：每秒跳一次（麻痹时照样掉血）
 		var dots: Array = f.get("dot", [])
 		for di in range(dots.size() - 1, -1, -1):
@@ -1995,6 +2001,8 @@ func _chain_blast(at: Vector2) -> void:
 	_chain_lock = false
 
 func _kill_foe(f: Dictionary) -> void:
+	if f.is_empty() or bool(f.get("_death_settled", false)):
+		return
 	# v14r：boss 词缀"不死"——濒死时**回满一半血**顶一次（整个 boss 只顶一次）
 	if int(f.get("boss_revive", 0)) > 0 and float(f.get("dying", 0.0)) <= 0.0:
 		f["boss_revive"] = 0     # ⚠ 手工塞进来的怪没有这个键，读法必须是 get（探针抓到过）
@@ -2014,6 +2022,8 @@ func _kill_foe(f: Dictionary) -> void:
 		_push_float(float(f["x"]), float(f["y"]) - 76.0, "不死之身！", Color(1.0, 0.62, 0.58), true)
 		# v16o（用户："背景喊杀声太多了 其实没必要有喊杀声"）：已去掉喊杀/战鼓声
 		return
+	# 在连锁和奖励信号之前标记，防止同帧重复调用或回调重入。
+	f["_death_settled"] = true
 	# v18j：击杀回血（默认 0 = 不回）
 	if kill_heal > 0.0:
 		hero["hp"] = minf(float(hero["hp_max"]), float(hero["hp"]) + float(hero["hp_max"]) * kill_heal)

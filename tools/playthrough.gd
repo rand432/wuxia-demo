@@ -18,6 +18,7 @@ func _ready() -> void:
 		push_error("请通过 tools/run_playthrough.ps1 运行隔离测试")
 		get_tree().quit(2)
 		return
+	seed(20261116)
 	LS.ensure_loaded()
 	lv = 1
 	for arg in OS.get_cmdline_user_args():
@@ -71,13 +72,20 @@ func _process(dt: float) -> void:
 	if t > 420.0:
 		done = true
 		failures += 1
+		_log("[STATE] cards=%s wen=%d crystal=%d pending=%s god=%s ancestors=%s running=%s processing=%s" % [str(b._cards), b._wen, b._crystal, str(b._str_pending), str(b._god_layer.visible), str(b._ancestors.keys()), str(b._core.running), str(b._core.is_processing())])
+		_log("[CORE] hero=%s pos=%s spawned=%s quota=%s live=%s cd=%s" % [str(b._core.hero), str(b._core.hero_pos), str(b._core._wave_spawned), str(b._core._wave_quota), str(b._core.live_foes()), str(b._core._hero_cd)])
+		for foe in b._core.foes:
+			if float(foe.get("hp", 0)) > 0:
+				_log("[FOE] %s" % str(foe))
+		_log("[DRAW] paid=%s visible=%s anim=%s candidates=%s" % [str(b._draw_paid), str(b._draw_layer.visible), str(b._draw_anim), str(b._draw_cards.map(func(c): return c.data.get("_id", "EMPTY")))])
 		_log("[END] L%d TIMEOUT t=%.0fs wave=%d/%d" % [lv, t, int(b._core.wave), b._max_wave])
 		_finish(); return
 	if wait_draw > 0:
 		wait_draw -= 1
 		if wait_draw == 0 and b._draw_layer != null and b._draw_layer.visible:
-			if b._draw_cards.size() > 0 and not b._draw_cards[0].data.is_empty():
-				b._on_draw_pick(b._draw_cards[0])
+			var choice = _choose_draw_card()
+			if choice != null:
+				b._on_draw_pick(choice)
 		return
 	if wait_trea > 0:
 		wait_trea -= 1
@@ -122,3 +130,26 @@ func _finish() -> void:
 		b.queue_free(); b = null
 	lv += 1
 	call_deferred("_start")
+
+func _choose_draw_card():
+	var best = null
+	var best_score := -1
+	for card in b._draw_cards:
+		if card.data.is_empty():
+			continue
+		var data: Dictionary = card.data
+		var score := 100 if data.has("ancestor") else 0
+		if bool(data.get("shiny", false)):
+			score += 10000
+		var set_id := str(data.get("set_id", ""))
+		var owned := 0
+		for id in b._cards:
+			if set_id != "" and str((b._card_db.get(str(id), {}) as Dictionary).get("set_id", "")) == set_id:
+				owned += 1
+		score += owned * 1000
+		if owned + 1 >= int(data.get("set_size", 999)):
+			score += 20000
+		if score > best_score:
+			best = card
+			best_score = score
+	return best

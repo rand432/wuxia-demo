@@ -61,7 +61,6 @@ func setup(p_core, p_ui) -> void:
 	if core != null:
 		core.hero_foe_hit.connect(_on_hero_foe_hit)
 		core.kill.connect(_on_kill)
-		core.hero_down.connect(_on_hero_down)
 	_roll_stock()
 
 func _has_equipped(nm: String) -> bool:
@@ -95,7 +94,7 @@ func _on_kill(_n: int) -> void:
 			core.attr_add_amp("aspd", 0.2)
 		_boot_t = 2.0
 
-func _on_hero_down() -> void:
+func try_prevent_death() -> bool:
 	var w := int(core.wave)
 	# 玄武甲：每波首次致命免死
 	if _has_equipped("玄武甲") and _xuanwu_wave != w:
@@ -103,13 +102,15 @@ func _on_hero_down() -> void:
 		core.hero["hp"] = maxf(1.0, core.attr_final("hp") * 0.25)
 		if ui != null:
 			ui._toast("玄武甲：免死")
-		return
+		return true
 	# 长生玉：一次免死
 	if _has_equipped("长生玉") and not _jade_used:
 		_jade_used = true
 		core.hero["hp"] = maxf(1.0, core.attr_final("hp") * 0.3)
 		if ui != null:
 			ui._toast("长生玉：免死")
+		return true
+	return false
 
 func open_panel() -> void:
 	view = "shop"

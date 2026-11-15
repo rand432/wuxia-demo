@@ -1952,7 +1952,7 @@ func _roll_draw() -> void:
 		var sids: Array = []
 		for a_v in _ancestors.keys():
 			var s := "shiny_" + str(a_v)
-			if _card_db.has(s):
+			if _card_db.has(s) and not _acquired.has(s) and not _shiny_used.has(str(a_v)):
 				sids.append(s)
 		if not sids.is_empty():
 			var sid := str(sids[randi() % sids.size()])
@@ -1960,7 +1960,7 @@ func _roll_draw() -> void:
 				_pool.append(sid)
 			cands.erase(sid)
 			cands.push_front(sid)
-			_toast("炫彩卡必出 · 极低概率（4%），千中无一")
+			_toast("炫彩卡现世")
 	# 同一手不重复出同一张卡（池里若有重复 id，这里兜住）
 	var uniq: Array = []
 	for id_u in cands:
@@ -2024,10 +2024,11 @@ func _show_draw(v: bool) -> void:
 			_update_crystal()
 			_roll_draw()
 			_draw_paid = true
-			_draw_layer.visible = true
-			_layer_in(_draw_layer)
-			_draw_layer.move_to_front()
-			_pop_draw_cards()
+		_draw_open = true
+		_draw_layer.visible = true
+		_layer_in(_draw_layer)
+		_draw_layer.move_to_front()
+		_pop_draw_cards()
 	else:
 		_draw_layer.visible = false
 		_draw_open = false
@@ -2587,6 +2588,10 @@ func _on_hero_down() -> void:
 		_toast("纸人替身 · 挡住致命一击（剩 %d）" % _zhiren)
 		Aud.sfx("paper", -6.0, 1.0)
 		_spawn_pfx("holy/heal", _hero_screen(), 1.0, "heal", 1.5)
+		return
+	# 装备免死必须在扣命和清场前处理，不能依赖死亡信号连接顺序。
+	if _bm != null and _bm.try_prevent_death():
+		_core.running = true
 		return
 	var loss := 0
 	for f_v in _core.foes:
