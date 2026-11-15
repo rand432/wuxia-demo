@@ -10,6 +10,7 @@ var cd := 0.0
 var wait_draw := 0
 var wait_trea := 0
 var done := false
+var failures := 0
 
 func _ready() -> void:
 	if not OS.get_user_data_dir().replace("\\", "/").ends_with("wuxia-regression"):
@@ -35,7 +36,7 @@ func _log(s: String) -> void:
 func _start() -> void:
 	if lv > 10:
 		_log("[ALL] max_unlocked=%d first_clear=%s" % [LS.max_unlocked, str(LS.first_clear)])
-		get_tree().quit(); return
+		get_tree().quit(0 if failures == 0 else 1); return
 	LS.current_level = lv
 	b = BATTLE.instantiate(); add_child(b)
 	t = 0.0; cd = 0.0; wait_draw = 0; wait_trea = 0; done = false
@@ -57,9 +58,13 @@ func _process(dt: float) -> void:
 		_log("[END] L%d %s t=%.0fs wave=%d/%d kills=%d hp=%d/%d unlock=%d" % [
 			lv, "WIN" if win else "LOSE", t, int(b._core.wave), b._max_wave, int(b._kills),
 			int(float(b._core.hero.get("hp", 0.0))), int(float(b._core.hero.get("hp_max", 1.0))), LS.max_unlocked])
+		_log("[FAMILY] L%d combos=%d shiny=%s" % [lv, b._ancestor_combos.size(), str(b._family_shiny_done)])
+		if not win:
+			failures += 1
 		_finish(); return
 	if t > 420.0:
 		done = true
+		failures += 1
 		_log("[END] L%d TIMEOUT t=%.0fs wave=%d/%d" % [lv, t, int(b._core.wave), b._max_wave])
 		_finish(); return
 	if wait_draw > 0:
@@ -77,6 +82,14 @@ func _process(dt: float) -> void:
 	if cd > 0.0:
 		return
 	cd = 0.3
+	# 请神按界面实际给出的选项操作，不直接注入角色。
+	if b._god_layer != null and b._god_layer.visible and b._god_root != null:
+		for card in b._god_root.get_children():
+			b._pick_god(str(card.aid))
+			return
+	if b._mate_tile != null and b._mate_tile.visible and b._draw_charge > 0:
+		b._on_mate_tile()
+		return
 	if b._q_cur.is_empty() and not b._q_offer.is_empty():
 		b._q_open_popup(); b._q_accept(); return
 	if b._str_pending and b._aug_cards.size() > 0:

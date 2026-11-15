@@ -127,3 +127,58 @@ static func save_progress() -> Error:
 	if err != OK:
 		push_error("局外进度保存失败：%s" % error_string(err))
 	return err
+
+const ROLE_STAR_MAX := 5
+const ROLE_ADVANCE_SHARDS := 60
+const ROLE_ADVANCE_WEN := 500
+
+static func can_advance_role(aid: String, initial_star: int = 0) -> bool:
+	ensure_loaded()
+	return int(stars.get(aid, initial_star)) < ROLE_STAR_MAX and int(shards.get(aid, 0)) >= ROLE_ADVANCE_SHARDS and coin("wen") >= ROLE_ADVANCE_WEN
+
+static func advance_role(aid: String, initial_star: int = 0) -> bool:
+	if not can_advance_role(aid, initial_star):
+		return false
+	var had_star := stars.has(aid)
+	var previous_star := int(stars.get(aid, initial_star))
+	var previous_shards := int(shards.get(aid, 0))
+	var previous_wen := coin("wen")
+	shards[aid] = previous_shards - ROLE_ADVANCE_SHARDS
+	coins["wen"] = previous_wen - ROLE_ADVANCE_WEN
+	stars[aid] = previous_star + 1
+	if save_progress() == OK:
+		return true
+	# 保存失败时恢复全部扣费，允许玩家重试。
+	shards[aid] = previous_shards
+	coins["wen"] = previous_wen
+	if had_star:
+		stars[aid] = previous_star
+	else:
+		stars.erase(aid)
+	return false
+
+static func upgrade_skill(aid: String, quality: String, cost_wen: int = 200) -> bool:
+	ensure_loaded()
+	var books := int(skill_books.get(quality, 0))
+	var wen := coin("wen")
+	if cost_wen < 0 or books < 1 or wen < cost_wen:
+		return false
+	var had_level := skill_lv.has(aid)
+	var previous_level := int(skill_lv.get(aid, 0))
+	skill_books[quality] = books - 1
+	coins["wen"] = wen - cost_wen
+	skill_lv[aid] = previous_level + 1
+	if save_progress() == OK:
+		return true
+	skill_books[quality] = books
+	coins["wen"] = wen
+	if had_level:
+		skill_lv[aid] = previous_level
+	else:
+		skill_lv.erase(aid)
+	return false
+
+# 六档家传：0 星可收集初档，每升一星解锁下一档。
+static func family_tier_allowed(aid: String, tier: int) -> bool:
+	ensure_loaded()
+	return tier >= 0 and tier <= clampi(int(stars.get(aid, 0)), 0, ROLE_STAR_MAX)

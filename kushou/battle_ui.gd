@@ -1894,7 +1894,10 @@ func _build_draw() -> void:
 	_btn("刷新 · 5 灵晶", Rect2(250, 540, 220, 56), 20, Color(0.09, 0.08, 0.07, 0.98), GOLD, func(): _on_refresh(), _draw_layer)
 
 func _roll_draw() -> void:
-	var cands := _pool.duplicate()
+	var cands: Array = []
+	for id_v in _pool:
+		if _family_card_allowed(str(id_v)):
+			cands.append(id_v)
 	# 第四关暗抬危途线：危险卡在抽卡池里权重 ×2，玩家更容易摸到增怪/挑战收益
 	if LevelState.current_level == 4:
 		var weighted: Array = []
@@ -1998,7 +2001,7 @@ func _roll_shiny_check(cards: Array) -> void:
 			var sid := "shiny_" + aid
 			if _card_db.has(sid) and not _pool.has(sid):
 				_pool.append(sid)
-				_toast("彩蛋！炫彩卡「%s」入池 —— 极低概率（4%），千中无一" % str((_card_db[sid] as Dictionary)["name"]))
+				_toast("彩蛋！炫彩卡「%s」已加入卡池" % str((_card_db[sid] as Dictionary)["name"]))
 				Aud.sfx("ult_ready", -4.0)
 
 func _update_crystal() -> void:
@@ -2815,10 +2818,26 @@ func _maybe_level_button_tutorial() -> void:
 			return
 	_tutorial(key, target, text, func() -> void: pass)
 
+var _tutorial_paused := false
+var _tutorial_ui_processing := true
+var _tutorial_core_processing := true
+
 func _tutorial_pause(p: bool) -> void:
-	set_process(not p)
-	if _core != null:
-		_core.set_process(not p)
+	if p:
+		if _tutorial_paused:
+			return
+		_tutorial_paused = true
+		_tutorial_ui_processing = is_processing()
+		if _core != null:
+			_tutorial_core_processing = _core.is_processing()
+		set_process(false)
+		if _core != null:
+			_core.set_process(false)
+	elif _tutorial_paused:
+		_tutorial_paused = false
+		set_process(_tutorial_ui_processing)
+		if _core != null:
+			_core.set_process(_tutorial_core_processing)
 
 
 
@@ -4082,6 +4101,14 @@ func _init_cards() -> void:
 		_grant_ancestor("zhujue")
 
 # 请到一位祖宗：把它的「初级入口卡」放进抽卡池
+func _family_card_allowed(id: String) -> bool:
+	var card: Dictionary = _card_db.get(id, {})
+	if card.is_empty():
+		return false
+	if not card.has("ancestor") or bool(card.get("shiny", false)):
+		return true
+	return GameState.family_tier_allowed(str(card["ancestor"]), int(card.get("tier", -1)))
+
 func _grant_ancestor(aid: String) -> void:
 	if aid == "mingzhu":
 		_mingzhu = true
@@ -4124,7 +4151,7 @@ func _activate_ancestor_set(sid: String, first: Dictionary, ids: Array) -> void:
 	_toast_card(str(first["combo_name"]), int(first["quality"]),
 		"%s · %s（%d 张已清空）" % [str(first["ancestor_name"]), str(first["combo_text"]), ids.size()])
 	var nid := "%s_t%d_0" % [ai, t + 1]
-	if _card_db.has(nid) and not _pool.has(nid) and not _acquired.has(nid):
+	if _card_db.has(nid) and _family_card_allowed(nid) and not _pool.has(nid) and not _acquired.has(nid):
 		_pool.append(nid)
 		_toast_card(str((_card_db[nid] as Dictionary)["name"]), int(first["quality"]), "下一档入口已入池")
 	_page = 0
@@ -4720,7 +4747,7 @@ func _add_card(id: String) -> void:
 	if bool(c.get("entry", false)):
 		for uid in c.get("unlock_ids", []):
 			var us := str(uid)
-			if not _acquired.has(us) and not _pool.has(us):
+			if _family_card_allowed(us) and not _acquired.has(us) and not _pool.has(us):
 				_pool.append(us)
 				var uc: Dictionary = _card_db[us]
 				_toast_card(str(uc["name"]), int(uc["quality"]), "已加入卡池")
@@ -5192,9 +5219,13 @@ func _skill_fx(dtype: String, world_pos: Vector2, big := false) -> void:
 func _hero_screen() -> Vector2:
 	return _core.position + _core.hero_pos
 
+func _skill_level_bonus(aid: String) -> float:
+	return float(GameState.skill_lv.get(aid, 0)) * float(SKILL_LV_STEP.get(aid, 3))
+
 func _cast_skill(i: int) -> void:
-	if i >= 0 and i < _skills.size():
-		_cast_dtype = str(_skills[i].get("dtype", ""))
+	if i < 0 or i >= _skills.size():
+		return
+	_cast_dtype = str(_skills[i].get("dtype", ""))
 	var sk: Dictionary = _skills[i]
 	var aid0 := str(sk["aid"])
 	var md0: Dictionary = _anc_mod.get(aid0, {})
@@ -5255,7 +5286,7 @@ func _cast_skill(i: int) -> void:
 	if aid0 == "cuisanniang":
 		_mp -= cost0
 		sk["cd_t"] = maxf(0.5, float(sk["cd"]) * (1.0 - clampf(float(md0.get("cd_pct", 0.0)), 0.0, 80.0) / 100.0))
-		_summon_dragon(float(md0.get("dmg_pct", 0.0)) + float(_elem_mod.get("召唤", 0.0)))
+		_summon_dragon(float(md0.get("dmg_pct", 0.0)) + float(_elem_mod.get("召唤", 0.0)) + _skill_level_bonus(aid0))
 		_skill_fx("召唤", _hero_screen())
 		return
 	var foes: Array = []
@@ -5270,7 +5301,7 @@ func _cast_skill(i: int) -> void:
 	var aid := str(sk["aid"])
 	var dtype := str(sk["dtype"])
 	var m: Dictionary = _anc_mod.get(aid, {})
-	var dmg_pct := float(m.get("dmg_pct", 0.0)) + float(_elem_mod.get(dtype, 0.0)) + float(GameState.skill_lv.get(aid, 0)) * float(SKILL_LV_STEP.get(aid, 3))
+	var dmg_pct := float(m.get("dmg_pct", 0.0)) + float(_elem_mod.get(dtype, 0.0)) + _skill_level_bonus(aid)
 	var cd_pct := float(m.get("cd_pct", 0.0))
 	var mp_flat := float(m.get("mp_flat", 0.0))
 	var para_s := float(m.get("para_s", 0.0))
@@ -5784,7 +5815,7 @@ func _tick_burn(dt: float) -> void:
 
 func _cast_fire() -> void:
 	var m: Dictionary = _anc_mod.get("jicanghai", {})
-	var dmg_pct := float(m.get("dmg_pct", 0.0)) + float(_elem_mod.get("火系", 0.0))
+	var dmg_pct := float(m.get("dmg_pct", 0.0)) + float(_elem_mod.get("火系", 0.0)) + _skill_level_bonus("jicanghai")
 	var ign := 1 + int(m.get("ignite_add", 0.0)) + _ignite_bonus
 	var stacks := 1.0 + float(m.get("burn_add", 0.0))
 	var foes := _live_foes()
@@ -6160,7 +6191,7 @@ func _ram_mods() -> Dictionary:
 
 func _ram_damage() -> float:
 	var m := _ram_mods()
-	var pct := RAM_HP_PCT * (1.0 + (float(m.get("dmg_pct", 0.0)) + float(_elem_mod.get("物理", 0.0))) / 100.0)
+	var pct := RAM_HP_PCT * (1.0 + (float(m.get("dmg_pct", 0.0)) + float(_elem_mod.get("物理", 0.0)) + _skill_level_bonus("gundilong")) / 100.0)
 	return float(_core.hero.get("hp_max", 200.0)) * pct / 100.0
 
 # 化身肉蛋：把最近的一只撞飞
@@ -6308,7 +6339,7 @@ func _cast_feiren(mul: float) -> void:
 	var foes := _live_foes()
 	if foes.is_empty():
 		return
-	var dmg_pct := float(m.get("dmg_pct", 0.0)) + float(_elem_mod.get("物理", 0.0))
+	var dmg_pct := float(m.get("dmg_pct", 0.0)) + float(_elem_mod.get("物理", 0.0)) + _skill_level_bonus("qingluan")
 	var pierce := 1 + int(m.get("pierce", 0.0))
 	if _wanren:
 		pierce += 2 + _wanren_pierce            # 炫卡：起步 +2，回程成长无上限

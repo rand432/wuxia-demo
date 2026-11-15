@@ -1,6 +1,8 @@
 param([string]$Godot = 'C:/Users/zq300/Desktop/Godot_v4.7.2-stable_win64.exe')
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path $PSScriptRoot -Parent
+$runId = [Guid]::NewGuid().ToString("N")
+$userDirectory = "wuxia-audits/$runId/wuxia-regression"
 $auditRoot = Join-Path $projectRoot '.shots/audit_project'
 New-Item -ItemType Directory -Path $auditRoot -Force | Out-Null
 foreach ($part in @('menu','shared','kushou','tools','assets','fonts','.godot')) {
@@ -10,7 +12,8 @@ foreach ($part in @('menu','shared','kushou','tools','assets','fonts','.godot'))
 }
 $config = [IO.File]::ReadAllText((Join-Path $projectRoot 'project.godot')).Replace('[application]', "[application]
 config/use_custom_user_dir=true
-config/custom_user_dir_name=`"wuxia-regression`"")
+config/custom_user_dir_name=`"$userDirectory`"")
 [IO.File]::WriteAllText((Join-Path $auditRoot 'project.godot'), $config)
-& $Godot --headless --path $auditRoot res://tools/playthrough.tscn --fixed-fps 60
+Write-Output "Isolated user directory: $userDirectory"
+& $Godot --headless --path $auditRoot res://tools/playthrough.tscn --fixed-fps 60 2>&1 | Out-String
 exit $LASTEXITCODE

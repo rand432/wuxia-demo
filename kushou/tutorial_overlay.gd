@@ -103,9 +103,18 @@ func _target_rect(t: Node) -> Rect2:
 	return Rect2()
 
 func _on_pressed() -> void:
+	if not visible:
+		return
+	# 先取出并清空本步回调，信号里打开下一步时不会串用。
+	var resume := _on_resume
+	var complete := _on_done
 	visible = false
-	if _on_resume.is_valid():
-		_on_resume.call()
+	_target = null
+	_on_done = Callable()
+	_on_pause = Callable()
+	_on_resume = Callable()
+	if resume.is_valid():
+		resume.call()
 	done.emit()
-	if _on_done.is_valid():
-		_on_done.call()
+	if complete.is_valid():
+		complete.call()

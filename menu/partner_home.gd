@@ -57,7 +57,7 @@ const PORTRAIT := {
 
 var _ids: Array = []
 var _sel := 0
-var _stars := {}          # 占位：祖宗星级（正式版要从存档读）
+var _stars := {}          # 局外存档星级
 var _cards: Array = []
 var _pop: Control = null
 var _plan := 0
@@ -72,11 +72,10 @@ func _ready() -> void:
 		_ids.append(str(aid_v))
 	if not _ids.has("zhujue"):
 		_ids.append("zhujue")
-	# 星级优先读局外存档；空存档才用占位
-	var demo := [3, 2, 1, 2]
+	# 无存档角色从 0 星开始，已有进阶记录保留。
 	for i in _ids.size():
 		var aid0 := str(_ids[i])
-		_stars[aid0] = int(GameState.stars.get(aid0, mini(5, demo[i] if i < demo.size() else 0)))
+		_stars[aid0] = clampi(int(GameState.stars.get(aid0, 0)), 0, GameState.ROLE_STAR_MAX)
 	var bg := TextureRect.new()
 	bg.texture = load("res://assets/art/ui/partner_bg.png")
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -303,9 +302,9 @@ func _show_skill_detail(i: int) -> void:
 	var dmg_lb := Label.new()
 	var lv_now := int(GameState.skill_lv.get(aid, 0))
 	var lv_step := int(SKILL_LV_STEP.get(aid, 3))
-	var cur_pct := mul_pct + lv_now * lv_step
-	var nxt_pct := cur_pct + lv_step
-	dmg_lb.text = "伤害：%d%% → %d%%（%s）" % [cur_pct, nxt_pct, str(sk.get("dtype", a.get("dtype", "")))]
+	var cur_pct := float(mul_pct) * (1.0 + float(lv_now * lv_step) / 100.0)
+	var nxt_pct := float(mul_pct) * (1.0 + float((lv_now + 1) * lv_step) / 100.0)
+	dmg_lb.text = "伤害：%.1f%% → %.1f%%（%s）" % [cur_pct, nxt_pct, str(sk.get("dtype", a.get("dtype", "")))]
 	dmg_lb.position = Vector2(30, 226)
 	dmg_lb.size = Vector2(470, 26)
 	dmg_lb.add_theme_font_size_override("font_size", 18)
@@ -361,10 +360,9 @@ func _show_skill_detail(i: int) -> void:
 			coin_lb.text = "文钱 %d / %d（不足）" % [cost_wen, GameState.coin("wen")]
 			book_lb.text = "%s技能书 1 / %d（不足）" % [qn, book]
 			return
-		GameState.skill_books[qn] = book - 1
-		GameState.coins["wen"] = int(GameState.coins.get("wen", 0)) - cost_wen
-		GameState.skill_lv[aid] = int(GameState.skill_lv.get(aid, 0)) + 1
-		GameState.save_progress()
+		if not GameState.upgrade_skill(aid, qn, cost_wen):
+			up.text = "保存失败，请重试"
+			return
 		_pop.queue_free()
 		_pop = null
 		_show_skill_detail(i)
@@ -472,7 +470,7 @@ func _show_advance() -> void:
 	_push_label(box, "每档独立：集齐 3 张 → 组合 → 清空", 14, DIM, Vector2(174, 292), 440)
 	# 角色进阶：消耗角色碎片，升 1 星
 	var shard_n := int(GameState.shards.get(aid, 0))
-	var adv_wen := 500
+	var adv_wen := GameState.ROLE_ADVANCE_WEN
 	var wen_now := GameState.coin("wen")
 	var up_btn := Button.new()
 	up_btn.text = "进阶（碎片 60 / 已有 %d　·　文钱 %d / 已有 %d）" % [shard_n, adv_wen, wen_now]
@@ -480,15 +478,14 @@ func _show_advance() -> void:
 	up_btn.size = Vector2(588, 56)
 	up_btn.add_theme_font_size_override("font_size", 19)
 	up_btn.focus_mode = Control.FOCUS_NONE
-	up_btn.disabled = shard_n < 60 or wen_now < adv_wen
+	up_btn.disabled = not GameState.can_advance_role(aid, star)
+	if star >= GameState.ROLE_STAR_MAX:
+		up_btn.text = "已满星"
 	up_btn.pressed.connect(func() -> void:
-		if int(GameState.shards.get(aid, 0)) < 60 or GameState.coin("wen") < adv_wen:
+		if not GameState.advance_role(aid, star):
+			up_btn.text = "进阶未完成，请检查资源或存储空间"
 			return
-		GameState.shards[aid] = int(GameState.shards.get(aid, 0)) - 60
-		GameState.coins["wen"] = GameState.coin("wen") - adv_wen
-		GameState.stars[aid] = mini(5, int(GameState.stars.get(aid, _stars.get(aid, 0))) + 1)
 		_stars[aid] = int(GameState.stars[aid])
-		GameState.save_progress()
 		_close_pop()
 		_show_advance()
 		_build_slots()
@@ -515,7 +512,7 @@ func _show_advance() -> void:
 		_push_label(rp, "%d★" % t, 21, lc, Vector2(14, 24))
 		_push_label(rp, "%s · 3 张" % str(AD.TIER_NAMES[t]), 18, INK if (done or cur) else Color(0.45, 0.41, 0.35), Vector2(72, 6))
 		_push_label(rp, str(tier["combo_text"]), 14, Color(0.45, 0.41, 0.35), Vector2(72, 36), 380)
-		var st := "已完成" if done else ("进行中" if cur else "未解锁")
+		var st := "已解锁" if (done or cur) else "需 %d 星" % t
 		var sc := Color(0.20, 0.50, 0.28) if done else (Color(0.66, 0.18, 0.12) if cur else Color(0.58, 0.53, 0.45))
 		var sl := Label.new()
 		sl.text = st
@@ -526,11 +523,11 @@ func _show_advance() -> void:
 		sl.add_theme_color_override("font_color", sc)
 		rp.add_child(sl)
 		y += 86.0
-	_push_label(box, "0★ 时可抽全套 18 张，每张 4% 掷「炫卡」", 14, Color(0.66, 0.18, 0.12), Vector2(26, y + 6), 580)
+	_push_label(box, "0 星解锁初档；每升 1 星解锁下一档，局内仍需逐档成组", 14, Color(0.66, 0.18, 0.12), Vector2(26, 906), 580)
 	var close := Button.new()
-	close.text = "关 闭"
-	close.position = Vector2(214, 856)
-	close.size = Vector2(200, 54)
+	close.text = "×"
+	close.position = Vector2(568, 16)
+	close.size = Vector2(48, 44)
 	close.focus_mode = Control.FOCUS_NONE
 	close.add_theme_font_size_override("font_size", 20)
 	close.pressed.connect(_close_pop)
