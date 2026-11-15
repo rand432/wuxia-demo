@@ -6,6 +6,7 @@ var _fill: ColorRect = null
 var _pct: Label = null
 var _tip: Label = null
 var _done := false
+var _recovery: HBoxContainer
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -50,8 +51,33 @@ func _ready() -> void:
 	_tip.add_theme_font_size_override("font_size", 15)
 	_tip.add_theme_color_override("font_color", Color(0.45, 0.41, 0.34))
 	add_child(_tip)
-	ResourceLoader.load_threaded_request(BATTLE, "", true)
-	set_process(true)
+	_recovery = HBoxContainer.new()
+	_recovery.position = Vector2(160, 710)
+	_recovery.add_theme_constant_override("separation", 24)
+	add_child(_recovery)
+	for caption in ["重试", "返回主页"]:
+		var button := Button.new()
+		button.text = caption
+		button.custom_minimum_size = Vector2(188, 64)
+		button.add_theme_font_override("font", FONT)
+		_recovery.add_child(button)
+		if caption == "重试":
+			button.pressed.connect(_start_loading)
+		else:
+			button.pressed.connect(func() -> void: get_tree().change_scene_to_file("res://menu/main_home.tscn"))
+	_start_loading()
+
+func _start_loading() -> void:
+	_done = false
+	_recovery.hide()
+	_tip.text = "正在踏入江湖…"
+	if ResourceLoader.load_threaded_request(BATTLE, "", true) != OK:
+		_loading_failed()
+
+func _loading_failed() -> void:
+	_done = true
+	_tip.text = "加载失败，请重试或返回主页"
+	_recovery.show()
 
 func _process(_delta: float) -> void:
 	if _done:
@@ -64,6 +90,7 @@ func _process(_delta: float) -> void:
 	if st == ResourceLoader.THREAD_LOAD_LOADED:
 		_done = true
 		var ps: PackedScene = ResourceLoader.load_threaded_get(BATTLE)
-		get_tree().change_scene_to_packed(ps)
+		if ps == null or get_tree().change_scene_to_packed(ps) != OK:
+			_loading_failed()
 	elif st == ResourceLoader.THREAD_LOAD_FAILED or st == ResourceLoader.THREAD_LOAD_INVALID_RESOURCE:
-		_tip.text = "加载失败，请重试"
+		_loading_failed()

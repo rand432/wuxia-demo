@@ -2613,12 +2613,12 @@ func _on_hero_down() -> void:
 var _result_layer: Control = null
 
 func _end_run(win: bool) -> void:
+	if _run_over:
+		return
 	if win:
 		var first := LevelState.mark_first_clear()
 		if first:
 			_grant_first_clear(LevelState.current_level)
-	if _run_over:
-		return
 	_run_over = true
 	if _core != null:
 		_core.running = false
@@ -2690,7 +2690,7 @@ func _grant_first_clear(lv: int) -> void:
 		GameState.skill_books[bk] = int(GameState.skill_books.get(bk, 0)) + int(r.get("skill_book_n", 1))
 	if r.has("equip"):
 		var FD := preload("res://shared/forge_data.gd")
-		FD.ensure_bag()
+		FD.load_game()
 		var en := {"weapon": "铁剑", "armor": "皮甲", "jade": "玉佩", "cloak": "披风"}
 		for slot_v in FD.SLOT_KEYS:
 			var slot := str(slot_v)
@@ -2706,7 +2706,7 @@ func _grant_first_clear(lv: int) -> void:
 			GameState.shards[str(k)] = int(GameState.shards.get(str(k), 0)) + int(sh[k])
 	if r.has("forge_mat"):
 		var FD2 := preload("res://shared/forge_data.gd")
-		FD2.ensure_bag()
+		FD2.load_game()
 		var ore_n := int(r["forge_mat"])
 		FD2.ores += ore_n
 		FD2.silver += ore_n * 10   # 同步给锻造用的银两，够四件 +20 还有富余
@@ -2718,6 +2718,9 @@ func _grant_first_clear(lv: int) -> void:
 		GameState.advance_tokens += int(r["advance"])
 	if r.has("curio"):
 		GameState.new_curio_unlocked = true
+	if r.has("equip") or r.has("forge_mat"):
+		var ForgeData := preload("res://shared/forge_data.gd")
+		ForgeData.save_game()
 	_toast("首通 · " + str(r.get("text", "")))
 
 func _on_wave_clear(cleared_wave: int) -> void:

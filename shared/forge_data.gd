@@ -260,7 +260,7 @@ static func load_game() -> void:
 	if eq_v is Dictionary:
 		equipped = eq_v
 	var bg_v = cf.get_value("res", "bag", null)
-	if bg_v is Array and (bg_v as Array).size() > 0:
+	if bg_v is Array:
 		bag = bg_v
 	var st_v = cf.get_value("res", "state", null)
 	if st_v is Dictionary:
