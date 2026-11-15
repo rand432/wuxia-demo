@@ -146,11 +146,11 @@ func _wave_quota_for(w: int) -> int:
 	if w <= 3:   return 16
 	if w <= 5:   return 18        # 第 4–5 波再降一档（前五关 -8 后实际 10 只）
 	if w <= 6:   return 22
-	if w <= 10:  return 26
-	if w <= 15:  return 26
-	if w <= 20:  return 24
-	if w <= 25:  return 24
-	return 22
+	if w <= 10:  return 24
+	if w <= 15:  return 24
+	if w <= 20:  return 20
+	if w <= 25:  return 18
+	return 18
 
 var SPAWN_EVERY := 1.6               # 每批之间的间隔（原来是 1.2 秒刷一只；现在成批刷）
 var SPAWN_PACK := 4                  # 一批几只（割草：一次涌出 4 只，凑成可被横扫的一团）
@@ -167,7 +167,7 @@ const FOE_STOP := 150.0             # 怪走到离主角多近就停下开打
 #   而怪的伤害是按"随时满血"那套调的 → 前期就磨死。这条是最自然的续航：
 #   砍死一只回一小口，而且它会跟着"血上限↑、击杀速度↑"自己变强。
 var kill_heal := 0.08               # 击杀回血 = 上限的 8%（v18j 定值：见交接文档 §3.6 的实测表）
-var WAVE_HP := 1.075                # 每波怪血 ×（1.10→1.075：后期不再变成砍木桩）
+var WAVE_HP := 1.068                # 每波怪血 ×（1.10→1.075→1.068：后期别拖太久）
 var WAVE_ATK := 1.06                # 每波怪攻 ×（后期压力收敛）
 const BASE_FOE_HP := 9.0            # 波1 约 7.6 血；主角 12 攻，前 6 波稳定一刀
 var BASE_FOE_ATK := 3.2              # 怪攻击（用户：整体偏难，3.8 -> 3.2）

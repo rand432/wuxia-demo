@@ -1,0 +1,97 @@
+extends Control
+const BATTLE := preload("res://kushou/battle_ui.tscn")
+const LS := preload("res://shared/level_state.gd")
+const LOG_PATH := "res://tools/playthrough.log"
+
+var b = null
+var lv := 1
+var t := 0.0
+var cd := 0.0
+var wait_draw := 0
+var wait_trea := 0
+var done := false
+
+func _ready() -> void:
+	LS.ensure_loaded()
+	lv = 1
+	var f := FileAccess.open(LOG_PATH, FileAccess.WRITE)
+	if f != null:
+		f.store_line("# 十关连续通关")
+		f.close()
+	_start()
+
+func _log(s: String) -> void:
+	print(s)
+	var f := FileAccess.open(LOG_PATH, FileAccess.READ_WRITE)
+	if f == null:
+		f = FileAccess.open(LOG_PATH, FileAccess.WRITE)
+	if f != null:
+		f.seek_end(); f.store_line(s); f.close()
+
+func _start() -> void:
+	if lv > 10:
+		_log("[ALL] max_unlocked=%d first_clear=%s" % [LS.max_unlocked, str(LS.first_clear)])
+		get_tree().quit(); return
+	LS.current_level = lv
+	b = BATTLE.instantiate(); add_child(b)
+	t = 0.0; cd = 0.0; wait_draw = 0; wait_trea = 0; done = false
+	_log("[GO] L%d" % lv)
+
+func _process(dt: float) -> void:
+	if b == null or b._core == null or done:
+		return
+	t += dt
+	cd -= dt
+	if b._tut != null and b._tut.visible:
+		var tg = b._tut._target
+		if tg == null or not is_instance_valid(tg) or not tg.is_visible_in_tree():
+			_log("[WARN] L%d 教学目标无效" % lv)
+		b._tut._on_pressed(); return
+	if b._run_over:
+		done = true
+		var win: bool = int(b._core.wave) >= b._max_wave
+		_log("[END] L%d %s t=%.0fs wave=%d/%d kills=%d hp=%d/%d unlock=%d" % [
+			lv, "WIN" if win else "LOSE", t, int(b._core.wave), b._max_wave, int(b._kills),
+			int(float(b._core.hero.get("hp", 0.0))), int(float(b._core.hero.get("hp_max", 1.0))), LS.max_unlocked])
+		_finish(); return
+	if t > 420.0:
+		done = true
+		_log("[END] L%d TIMEOUT t=%.0fs wave=%d/%d" % [lv, t, int(b._core.wave), b._max_wave])
+		_finish(); return
+	if wait_draw > 0:
+		wait_draw -= 1
+		if wait_draw == 0 and b._draw_layer != null and b._draw_layer.visible:
+			if b._draw_cards.size() > 0 and not b._draw_cards[0].data.is_empty():
+				b._on_draw_pick(b._draw_cards[0])
+		return
+	if wait_trea > 0:
+		wait_trea -= 1
+		if wait_trea == 0 and b._trea_layer != null and b._trea_layer.visible:
+			if b._trea_cards.size() > 0:
+				b._on_trea_card(b._trea_cards[0])
+		return
+	if cd > 0.0:
+		return
+	cd = 0.3
+	if b._q_cur.is_empty() and not b._q_offer.is_empty():
+		b._q_open_popup(); b._q_accept(); return
+	if b._str_pending and b._aug_cards.size() > 0:
+		b._on_aug_card(b._aug_cards[0]); return
+	if b._str_tile != null and b._str_tile.visible and b._wen >= b._str_cost():
+		b._on_str_tile(); return
+	if b._trea_tile != null and b._trea_tile.visible and b._trea_charge > 0:
+		b._on_trea_tile()
+		if b._trea_layer != null and b._trea_layer.visible:
+			wait_trea = 8
+		return
+	if b._draw_tile != null and b._draw_tile.visible and b._crystal >= 20 and not b._pool.is_empty():
+		b._show_draw(true)
+		if b._draw_layer != null and b._draw_layer.visible:
+			wait_draw = 8
+		return
+
+func _finish() -> void:
+	if b != null:
+		b.queue_free(); b = null
+	lv += 1
+	call_deferred("_start")
