@@ -736,6 +736,7 @@ func _build_field() -> void:
 	_core.champion_down.connect(func() -> void: _q_done_kind("champion"))
 	_core.hero_attack.connect(_on_hero_attack)
 	_core.hero_hit.connect(_on_hero_hit)
+	_core.hero_damaged.connect(_curio_on_hero_hurt)
 	_core.hero_foe_hit.connect(_on_hero_foe_hit)
 	_core.hero_down.connect(_on_hero_down)
 	_core.boss_arrived.connect(_on_boss_arrived)
@@ -1449,25 +1450,20 @@ func _curio_tick_tiebushan(dt: float) -> void:
 	if _tie_idle >= 5.0:
 		_tie_stacks = 0
 		_core.hero["curio_cut"] = 0.0
+		_core.hero["curio_control_immune"] = false
 
 # 铁布衫：受击叠层 + 满层反弹
-func _curio_on_hero_hurt() -> void:
-	if _curio_id != "tiebushan" or _core == null:
+func _curio_on_hero_hurt(amount: float, attacker: Dictionary) -> void:
+	if _run_over or amount <= 0.0 or _curio_id != "tiebushan" or _core == null:
 		return
 	var cap := 8 if _curio_lv >= 2 else 5
 	_tie_stacks = mini(cap, _tie_stacks + 1)
 	_tie_idle = 0.0
 	var per := 0.03 if _curio_lv >= 4 else 0.02
 	_core.hero["curio_cut"] = float(_tie_stacks) * per
+	_core.hero["curio_control_immune"] = _curio_lv >= 5 and _tie_stacks >= cap
 	if _curio_lv >= 3 and _tie_stacks >= cap:
-		var live: Array = _live_foes()
-		if live.is_empty():
-			return
-		var f: Dictionary = live[0]
-		_core._apply_dmg(f, float(_core.hero.get("atk", 12.0)) * 0.30, "物理")
-		_spawn_pfx("impacts/hit-spark", _core.position + Vector2(float(f["x"]), float(f["y"]) - 18.0), 0.72, "", 1.0)
-		if float(f.get("hp", 0.0)) <= 0.0:
-			_core._kill_foe(f)
+		_core.reflect_damage(attacker, amount * 0.30)
 
 # 寒玉扳指：暴击叠寒、3 层冻结；醉翁壶 Lv5：暴击延长醉
 func _curio_extend_buff(seconds: float, cap: float) -> void:
@@ -5152,7 +5148,6 @@ func _on_hero_attack() -> void:
 		_trigger_combos("每 10 次攻击")
 
 func _on_hero_hit() -> void:
-	_curio_on_hero_hurt()                    # 奇物：铁布衫（受击叠层）
 	_play_attack_fx(false)
 	_hit_count += 1
 	_trigger_combos("每次受击")

@@ -1,32 +1,32 @@
 # 十关连续通关
 [GO] L1
-[END] L1 WIN t=49s wave=5/5 kills=39 hp=366/420 unlock=2
+[END] L1 WIN t=49s wave=5/5 kills=39 hp=361/420 unlock=2
 [FAMILY] L1 combos=0 shiny=false
 [GO] L2
-[END] L2 WIN t=209s wave=10/10 kills=268 hp=823/823 unlock=3
+[END] L2 WIN t=215s wave=10/10 kills=268 hp=1185/1185 unlock=3
 [FAMILY] L2 combos=0 shiny=false
 [GO] L3
-[END] L3 WIN t=194s wave=12/12 kills=249 hp=1307/1319 unlock=4
+[END] L3 WIN t=199s wave=12/12 kills=249 hp=639/873 unlock=4
 [FAMILY] L3 combos=0 shiny=false
 [GO] L4
-[END] L4 WIN t=170s wave=15/15 kills=197 hp=505/742 unlock=5
+[END] L4 WIN t=266s wave=15/15 kills=345 hp=1633/1909 unlock=5
 [FAMILY] L4 combos=0 shiny=false
 [GO] L5
-[END] L5 WIN t=357s wave=18/18 kills=565 hp=3357/3357 unlock=6
-[FAMILY] L5 combos=3 shiny=true
+[END] L5 WIN t=187s wave=18/18 kills=233 hp=728/1693 unlock=6
+[FAMILY] L5 combos=0 shiny=false
 [GO] L6
-[END] L6 WIN t=293s wave=20/20 kills=457 hp=1373/1373 unlock=7
-[FAMILY] L6 combos=4 shiny=false
+[END] L6 WIN t=245s wave=20/20 kills=692 hp=1275/1417 unlock=7
+[FAMILY] L6 combos=3 shiny=false
 [GO] L7
-[END] L7 WIN t=237s wave=18/18 kills=389 hp=2270/2270 unlock=8
-[FAMILY] L7 combos=3 shiny=false
+[END] L7 WIN t=257s wave=18/18 kills=864 hp=1180/1180 unlock=8
+[FAMILY] L7 combos=1 shiny=false
 [GO] L8
-[END] L8 WIN t=284s wave=18/18 kills=1019 hp=1690/1690 unlock=9
-[FAMILY] L8 combos=1 shiny=false
+[END] L8 WIN t=185s wave=18/18 kills=789 hp=1004/1004 unlock=9
+[FAMILY] L8 combos=0 shiny=false
 [GO] L9
-[END] L9 WIN t=206s wave=18/18 kills=854 hp=1050/1050 unlock=10
+[END] L9 WIN t=349s wave=18/18 kills=585 hp=11220/11220 unlock=10
 [FAMILY] L9 combos=5 shiny=false
 [GO] L10
-[END] L10 WIN t=247s wave=18/18 kills=507 hp=1054/1054 unlock=10
-[FAMILY] L10 combos=0 shiny=false
+[END] L10 WIN t=209s wave=18/18 kills=908 hp=1275/1291 unlock=10
+[FAMILY] L10 combos=4 shiny=false
 [ALL] max_unlocked=10 first_clear={ "1": true, "2": true, "3": true, "4": true, "5": true, "6": true, "7": true, "8": true, "9": true, "10": true }

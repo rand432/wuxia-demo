@@ -124,6 +124,7 @@ signal cold_expired(foe: Dictionary)
 signal paper_blocked(pos: Vector2)                # 奇物·纸人替身挡下延迟技
 signal hero_attack()
 signal hero_hit()
+signal hero_damaged(amount: float, attacker: Dictionary)
 # 主角的剑真正打中某只怪（伤害/暴击/重击）；表现层只认这个信号出数字
 signal hero_foe_hit(tgt: Dictionary, dmg: float, crit: bool, heavy: bool)
 # v2n（用户："灵晶 宝物同理"）：掉落统一带上"死在哪儿"，好让外层演"掉地→飞向计数位"
@@ -1217,18 +1218,20 @@ func _process(delta: float) -> void:
 				if randf() < HERO_DODGE:                              # v6：闪避下线 → 永不进这个分支
 					_push_float(size.x * 0.5, size.y - HERO_LINE - 40.0, "闪", Color(0.60, 0.80, 0.90))
 				else:
-					d2 = maxf(1.0, d2 * (1.0 - float(hero["cut"]) - float(hero.get("curio_cut", 0.0))))
+					# 防御与奇物减伤已在hero_in_dmg结算，不能重复乘旧hero.cut。
 					# v4o：先扣护盾（法度·怒目金刚），盾破了才动血
 					d2 = _absorb_by_shield(d2)
 					hero["hp"] = float(hero["hp"]) - d2
+					_notify_hero_damage(d2, f)
 					hero_hit.emit()
 					_hero_hit_flash = 0.18
 					_shake = maxf(_shake, 3.5)
 					# v14r：boss 词缀"嗜血"（打中回血）与二技能"剧毒"（打中带毒）接上进行为
 					# v14t：狐火——这一巴掌带火系溅射（火尾狐妖的技能，原来只是文本）
 					if int(f.get("boss_foxfire", 0)) > 0 and d2 > 0.0:
-						var ffd := maxf(1.0, hero_in_dmg(float(f["atk"]) * 0.5, DMG_FIRE))
+						var ffd := hero_in_dmg(float(f["atk"]) * 0.5, DMG_FIRE)
 						hero["hp"] = maxf(0.0, float(hero["hp"]) - ffd)
+						_notify_hero_damage(ffd, f)
 						_bursts.append({"x": hero_pos.x, "y": hero_pos.y - 16.0, "t": 0.0,
 							"col": Color(1.0, 0.52, 0.22), "scale": 1.5})
 						_push_float(hero_pos.x + 46.0, hero_pos.y - 52.0, "狐火 " + str(int(ffd)), Color(1.0, 0.62, 0.26))
@@ -1269,6 +1272,9 @@ func _process(delta: float) -> void:
 	_update_qi(dt)
 	_update_jg(dt)
 	_update_partners(dt)
+	if not running or frame_epoch != _enemy_attack_epoch:
+		queue_redraw()
+		return
 	_update_daggers(dt)
 	_update_dagger_motion(dt)
 	_update_bolts(dt)
@@ -1654,11 +1660,12 @@ func _delayed_hit(d: Dictionary, damage_scale := 1.0, allow_paper := true, is_im
 	if inr:
 		var dm := hero_in_dmg(float(d["dmg"]) * damage_scale, elem)
 		hero["hp"] = maxf(0.0, float(hero["hp"]) - dm)
+		_notify_hero_damage(dm, d.get("caster", {}))
 		_push_float(hero_pos.x, hero_pos.y - 100.0, str(d["kind"]) + "！ -" + str(int(dm)),
 			Color(1.0, 0.52, 0.34), true)
 		# 只有带 push 的招式（冲撞类机制）才把主角推开；普通挨打不位移
 		var psh := float(d.get("push", 0.0)) if is_impact else 0.0
-		if psh > 0.0:
+		if psh > 0.0 and not bool(hero.get("curio_control_immune", false)):
 			var away := (hero_pos - c)
 			if away.length() < 1.0:
 				away = Vector2(0.0, 1.0)
@@ -4681,9 +4688,15 @@ func _update_partners(delta: float) -> void:
 		hero["poison_tick"] = float(hero.get("poison_tick", 1.0)) - delta
 		if float(hero["poison_tick"]) <= 0.0:
 			hero["poison_tick"] = 1.0
-			var pdm := maxf(1.0, hero_in_dmg(float(hero["hp_max"]) * 0.012, DMG_WOOD))
+			var pdm := hero_in_dmg(float(hero["hp_max"]) * 0.012, DMG_WOOD)
 			hero["hp"] = float(hero["hp"]) - pdm
+			_notify_hero_damage(pdm, {})
 			_push_float(hero_pos.x, hero_pos.y - 70.0, "毒 " + str(int(pdm)), Color(0.62, 0.90, 0.44))
+			if float(hero["hp"]) <= 0.0:
+				hero["hp"] = 0.0
+				running = false
+				hero_down.emit()
+				return
 	for id in partners.keys():
 		var p: Dictionary = partners[id]
 		if not bool(p["owned"]):
@@ -5329,6 +5342,7 @@ func hero_in_dmg(amount: float, dtype: String) -> float:
 		return amount
 	# v6：减免直接读新层固定减免
 	var cut := type_field(dtype, "red_f")
+	cut += float(hero.get("curio_cut", 0.0))
 	if p_active("shigandang"):
 		cut += 0.25 + 0.05 * float(partners["shigandang"].get("cut_lv", 0))
 	# v15w 铁面僧「铁面」：窗口内受伤再 −25%（并且减免量还给主角回血）
@@ -5341,6 +5355,20 @@ func hero_in_dmg(amount: float, dtype: String) -> float:
 	if dr > 0.0 and taken > 0.0:
 		hero["hp"] = minf(float(hero["hp_max"]), float(hero["hp"]) + amount * dr * 0.5)
 	return taken
+
+func _notify_hero_damage(amount: float, attacker: Dictionary) -> void:
+	if amount > 0.0:
+		hero_damaged.emit(amount, attacker)
+
+func reflect_damage(foe: Dictionary, amount: float) -> void:
+	if amount <= 0.0 or foe.is_empty() or not foes.has(foe) or float(foe.get("hp", 0.0)) <= 0.0 or bool(foe.get("_death_settled", false)):
+		return
+	foe["hp"] = float(foe["hp"]) - amount
+	dmg_done += amount
+	foe["last_dtype"] = DMG_TRUE
+	_push_float(float(foe["x"]), float(foe["y"]) - 22.0, "反 " + str(int(amount)), Color(0.88, 0.62, 0.28))
+	if float(foe["hp"]) <= 0.0:
+		_kill_foe(foe)
 
 # ============================================================
 # 画：主角在下（武器朝上）· 怪在上（武器朝下）
@@ -5369,7 +5397,7 @@ func _draw() -> void:
 	#     · 最后 0.25 秒再压一层高亮 —— "深到发亮就该跑了"
 	for dv in _delayed:
 		var d: Dictionary = dv
-		var pr := clampf(float(d["t"]) / maxf(0.01, float(d["warn"])), 0.0, 1.0)
+		var pr := 1.0 if bool(d.get("landed", false)) else clampf(float(d["t"]) / maxf(0.01, float(d["warn"])), 0.0, 1.0)
 		# 手绘预警：极淡的墨洗填充 + 断续笔触描边（不是一块实心色板）
 		var fa := 0.05 + 0.16 * pr
 		var ea := 0.30 + 0.55 * pr
