@@ -48,6 +48,25 @@ func _ready() -> void:
 	_hit.pressed.connect(_on_pressed)
 	add_child(_hit)
 
+	# 跳过：万一玩家没找准高亮目标，也能一次性退出教学，避免"游戏卡住"
+	var skip := Button.new()
+	skip.text = "跳过"
+	skip.position = Vector2(596, 16)
+	skip.size = Vector2(104, 44)
+	skip.focus_mode = Control.FOCUS_NONE
+	skip.add_theme_font_size_override("font_size", 20)
+	var ssb := StyleBoxFlat.new()
+	ssb.bg_color = Color(0.12, 0.10, 0.08, 0.92)
+	ssb.set_corner_radius_all(8)
+	ssb.border_color = Color(0.85, 0.66, 0.23, 0.9)
+	ssb.set_border_width_all(2)
+	skip.add_theme_stylebox_override("normal", ssb)
+	skip.add_theme_stylebox_override("hover", ssb)
+	skip.add_theme_stylebox_override("pressed", ssb)
+	skip.add_theme_color_override("font_color", Color(0.97, 0.90, 0.74))
+	skip.pressed.connect(_on_pressed)
+	add_child(skip)
+
 func open(target: Node, text: String, on_done: Callable, on_pause := Callable(), on_resume := Callable()) -> void:
 	_target = target
 	_on_done = on_done

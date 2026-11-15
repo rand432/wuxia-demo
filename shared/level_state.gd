@@ -25,6 +25,39 @@ const LEVELS := [
 		"show": {"strengthen": true, "curio": true, "draw": true, "crystal": true, "treasure": true, "challenge": true, "mate": true, "market": true}},
 ]
 
+# ============================================================
+# 十关新功能解锁表 —— **唯一事实来源**
+#   与 docs/困兽_十关教学关_设计原则.md 的「痛点 → 操作」表逐条对应。
+#   任何系统要判断"这个功能现在开没开"，都必须走 has_feature()，
+#   不要再在别处写 current_level >= N 的零散判断。
+# ============================================================
+const FEATURE_LEVEL := {
+	# 第 1 关：强化 / 进阶 / 玉壶
+	"strengthen": 1, "advance": 1, "curio": 1,
+	# 第 2 关：抽卡 / 成长线
+	"draw": 2, "growth": 2, "crystal": 2,
+	# 第 3 关：宝物 / 经济线
+	"treasure": 3, "economy": 3,
+	# 第 4 关：奇遇 / 挑战 / 危途
+	"encounter": 4, "challenge": 4, "peril": 4,
+	# 第 5 关：请神 / 家传卡
+	"god": 5, "ancestor": 5, "mate": 5,
+	# 第 6 关：黑市 / 高级卡
+	"market": 6, "advanced": 6,
+	# 第 7 关：特级 / 装备材料
+	"special": 7,
+	# 第 8 关：装备 / 锻造
+	"equip": 8, "forge": 8,
+	# 第 9 关：角色进阶
+	"role_advance": 9,
+	# 第 10 关：新奇物 / 新卡组
+	"new_curio": 10, "new_cards": 10,
+}
+
+static func has_feature(kind: String, level: int = -1) -> bool:
+	var lv2 := current_level if level < 0 else level
+	return lv2 >= int(FEATURE_LEVEL.get(kind, 1))
+
 # 10 系分线：成长 4 / 经济 4 / 危途 2（挑战 peril 已从经济线移过来）
 const LINE_GROWTH := ["atk", "def", "hp", "mp"]
 const LINE_ECON := ["gold", "crystal", "exp", "bounty"]
@@ -118,6 +151,9 @@ static func boss_tier(level: int = -1) -> int:
 	return 4
 
 static func show_button(kind: String, level: int = -1) -> bool:
+	# 已知功能一律走解锁表（避免 LEVELS.show 与各处零散判断打架）
+	if FEATURE_LEVEL.has(kind):
+		return has_feature(kind, level)
 	var sh: Dictionary = config(level).get("show", {})
 	return bool(sh.get(kind, false))
 

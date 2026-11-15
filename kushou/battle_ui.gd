@@ -105,6 +105,7 @@ var _str_lv := 0
 var _l1_attr_shown := false
 var _l1_aug_shown := false
 var _l1_yuhu_shown := false
+var _l5_mate_shown := false
 var _str_round := 0
 var _str_pending := false
 var _str_layer: Control = null
@@ -650,8 +651,34 @@ func _chip(x: float, kind: String, value: String, cap: String) -> Label:
 	chip.add_child(ic)
 	var vl := _lbl(value, Vector2(48, -4), Vector2(106, 36), 26, Color(0.95, 0.91, 0.83), chip, HORIZONTAL_ALIGNMENT_RIGHT)
 	_lbl(cap, Vector2(48, 32), Vector2(106, 20), 16, Color(0.80, 0.75, 0.65), chip, HORIZONTAL_ALIGNMENT_RIGHT)
+	# 点灵晶/文钱给说明（灵晶不足时直接提示无法抽卡）
+	chip.mouse_filter = Control.MOUSE_FILTER_PASS
+	var hb := Button.new()
+	hb.flat = true
+	hb.focus_mode = Control.FOCUS_NONE
+	hb.position = Vector2.ZERO
+	hb.size = Vector2(162, 64)
+	hb.add_theme_stylebox_override("normal", StyleBoxEmpty.new())
+	hb.add_theme_stylebox_override("hover", StyleBoxEmpty.new())
+	hb.add_theme_stylebox_override("pressed", StyleBoxEmpty.new())
+	hb.pressed.connect(func() -> void: _on_chip_click(cap))
+	chip.add_child(hb)
 	_chips[cap] = chip
 	return vl
+
+func _on_chip_click(cap: String) -> void:
+	match cap:
+		"灵晶":
+			if _crystal < 20:
+				_toast("灵晶不足，不足以抽卡（一次要 20）")
+			else:
+				_toast("灵晶 %d · 抽卡一次 20" % _crystal)
+		"文钱":
+			var cost := _str_cost()
+			if _wen < cost:
+				_toast("文钱不足，无法强化（需要 %d）" % cost)
+			else:
+				_toast("文钱 %d · 强化一次 %d" % [_wen, cost])
 
 func _build_hud() -> void:
 	_coin_lb = _chip(18, "coin", "0", "文钱")
@@ -846,6 +873,8 @@ class SkillIcon extends Control:
 			pressed.emit()
 
 func _toggle_challenge() -> void:
+	if not LevelState.show_button("challenge"):
+		return
 	_chal_layer.visible = not _chal_layer.visible
 	if _chal_layer.visible:
 		_refresh_chal_panel()
@@ -1984,7 +2013,7 @@ func _show_draw(v: bool) -> void:
 				_toast("本局卡池已空")
 				return
 			if _crystal < 20:
-				_toast("灵晶不够：抽卡要 20")
+				_toast("灵晶不足，不足以抽卡（一次要 20）")
 				return
 			_crystal -= 20
 			_update_crystal()
@@ -2084,6 +2113,29 @@ func _open_attr_page() -> void:
 
 
 # v6：新属性层 → 旧 hero 字段（atk / hp）。技能、召唤物、顶部血条还在读旧字段。
+# 临时诊断：英雄为什么不出手（每 2 秒一行）
+var _dbg_atk_t := 0.0
+func _dbg_hero_attack(dt: float) -> void:
+	if _core == null:
+		return
+	# 默认关闭；需要排查时设环境变量 DSH_DEBUG=1
+	if OS.get_environment("DSH_DEBUG") == "":
+		return
+	_dbg_atk_t += dt
+	if _dbg_atk_t < 2.0:
+		return
+	_dbg_atk_t = 0.0
+	var h: Dictionary = _core.hero
+	var t: Dictionary = _core._order_target()
+	var tp := Vector2(float(t.get("x", 0.0)), float(t.get("y", 0.0))) if not t.is_empty() else Vector2.ZERO
+	print("[ATK] lv=", LevelState.current_level, " wave=", _core.wave, "/", _max_wave, " kills=", _kills,
+		" running=", _core.running, " proc=", _core.is_processing(), " selfproc=", is_processing(),
+		" hp=", int(float(h.get("hp", 0.0))), "/", int(float(h.get("hp_max", 0.0))),
+		" atk=", snappedf(float(h.get("atk", 0.0)), 0.1), " aspd=", snappedf(float(h.get("aspd", 0.0)), 0.01),
+		" cd=", snappedf(float(_core._hero_cd), 0.01),
+		" tgt=", not t.is_empty(), " dist=", snappedf(_core.hero_pos.distance_to(tp), 0.1),
+		" foes=", _core.foes.size(), " live=", _core.live_foes())
+
 func _sync_attrs_to_hero() -> void:
 	if _core == null:
 		return
@@ -2173,6 +2225,7 @@ func _process(_delta: float) -> void:
 	if _core != null:
 		# v6：新属性层是结算源；每帧把攻击/气血回写到旧 hero，给技能/召唤物/顶部血条读
 		_sync_attrs_to_hero()
+		_dbg_hero_attack(_delta)
 		if int(_core.wave) != _last_wave:
 			_last_wave = int(_core.wave)
 			_trigger_combos("每波")
@@ -2424,7 +2477,8 @@ func _add_exp(v: int) -> void:
 		_level_bonus(1)               # 每级：攻击 +1 · 气血上限 +6（内力 +25 在 _tick_skills 里）
 		if _lv % 5 == 0:
 			_draw_charge += 1   # 每 5 级给一次；允许溢出，后面请神候选用完就攒着
-			if LevelState.current_level >= 5:
+			if LevelState.has_feature("mate") and not _l5_mate_shown:
+				_l5_mate_shown = true
 				_tutorial("l5_mate", _mate_tile, "升级可以选请神，带家传卡", func() -> void: pass)
 			god += 1
 		up += 1
@@ -2702,6 +2756,8 @@ func _tutorial(key: String, target: Node, text: String, cb: Callable) -> void:
 	if target == null or not is_instance_valid(target) or not target.is_visible_in_tree():
 		return
 	LevelState.mark_tutorial(key)
+	if OS.get_environment("DSH_DEBUG") != "":
+		print("[TUT] lv=", LevelState.current_level, " key=", key, " target=", target.name if target != null else "<null>", " text=", text.replace("\n", " / "))
 	_tut.open(target, text, cb, func() -> void: _tutorial_pause(true), func() -> void: _tutorial_pause(false))
 
 # 每一关新按钮的首次教学：只出一句，点目标才继续
@@ -2746,6 +2802,8 @@ func _tutorial_pause(p: bool) -> void:
 
 
 func _on_mate_tile() -> void:
+	if not LevelState.show_button("mate"):
+		return
 	if _draw_charge <= 0:
 		_toast("升级后可请神")
 		return
@@ -2770,6 +2828,8 @@ func _refresh_str_tile() -> void:
 
 # 点［强化］：扣文钱升一级；正好到 10 的倍数就开三选一
 func _open_bm() -> void:
+	if not LevelState.show_button("market"):
+		return
 	if _bm != null:
 		_bm.open_panel()
 
@@ -3185,6 +3245,8 @@ func _refresh_trea_tile() -> void:
 
 # 点［宝物］：有一手没选就接着看那一手；否则花掉一次机会、掷三张
 func _on_trea_tile() -> void:
+	if not LevelState.show_button("treasure"):
+		return
 	if _trea_pending:
 		_open_trea()
 		return
@@ -3992,8 +4054,9 @@ func _init_cards() -> void:
 	_elem_mod.clear()
 	_shiny_rolled.clear()
 	_shiny_used.clear()
-	# 主角默认解锁：开局就把他的家传入口卡放进池（他走被动，不需要请）
-	_grant_ancestor("zhujue")
+	# 主角默认解锁，但家传卡是「请神」层的东西：第 5 关才开始进池
+	if LevelState.has_feature("ancestor"):
+		_grant_ancestor("zhujue")
 
 # 请到一位祖宗：把它的「初级入口卡」放进抽卡池
 func _grant_ancestor(aid: String) -> void:
@@ -4320,7 +4383,7 @@ func _fly_to_totals(layer: Control, tex: Texture2D, from: Vector2) -> void:
 		if is_instance_valid(layer):
 			layer.queue_free()
 		# 本局第一次组合：压暗屏幕 + 高亮「总计」，引导玩家去查看
-		if not _tot_hint_shown:
+		if not _tot_hint_shown and LevelState.has_feature("draw") and not LevelState.has_feature("treasure"):
 			_tot_hint_shown = true
 			_l1_tutorial("l1_tot", _tot_btn, "合成后的卡组可以在此处查看",
 				func() -> void: _show_totals())
@@ -4738,32 +4801,6 @@ func _refresh_combined() -> void:
 		ic.pressed.connect(func() -> void: _show_combined_detail(rec))
 		_combined_icons.add_child(ic)
 		k += 1
-	# 进行中的组合（还没凑齐）：显示进度，方便玩家知道差几张
-	for sid_v in _set_cards.keys():
-		var sid := str(sid_v)
-		var ids: Array = _set_cards[sid]
-		if ids.is_empty():
-			continue
-		var firstc: Dictionary = _card_db.get(str(ids[0]), {})
-		if firstc.is_empty() or firstc.has("ancestor"):
-			continue
-		var prog := _set_progress(sid)
-		var sn := int(firstc.get("set_size", 3))
-		if prog <= 0 or prog >= sn:
-			continue
-		var icp := CombinedIcon.new()
-		icp.position = Vector2(float(k % 5) * 120.0, float(k / 5) * 130.0)
-		icp.size = Vector2(100, 100)
-		icp.quality = int(firstc.get("quality", 2))
-		var app := str(firstc.get("art", ""))
-		if app != "" and ResourceLoader.exists(app):
-			icp.art = load(app)
-		icp.size_n = 0
-		icp.mark = "进"
-		icp.progress_text = "%d/%d" % [prog, sn]
-		icp.pressed.connect(func() -> void: _show_inprogress_detail(sid, firstc, prog, sn))
-		_combined_icons.add_child(icp)
-		k += 1
 	for d_v in _devoured:
 		var d: Dictionary = d_v
 		var ic2 := CombinedIcon.new()
@@ -4827,25 +4864,6 @@ func _show_combined_detail(rec: Dictionary) -> void:
 	_lbl("源：" + " · ".join(PackedStringArray(rec["sources"])), Vector2(170, 510), Vector2(380, 60), 17, Color(0.38,0.30,0.20), _combined_detail)
 	_btn("×", Rect2(592, 302, 34, 30), 20, Color(0.97,0.93,0.85), DIM, func(): _combined_detail.visible = false, _combined_detail)
 
-# 进行中组合详情
-func _show_inprogress_detail(sid: String, firstc: Dictionary, prog: int, sn: int) -> void:
-	for ch in _combined_detail.get_children(): ch.queue_free()
-	_combined_detail.visible = true
-	var p := Panel.new()
-	p.position = Vector2(140, 320)
-	p.size = Vector2(440, 320)
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.97, 0.93, 0.85, 0.99)
-	sb.set_corner_radius_all(9)
-	sb.border_color = QUALITY_COLORS[clampi(int(firstc.get("quality", 2)) - 1, 0, 4)]
-	sb.set_border_width_all(7)
-	p.add_theme_stylebox_override("panel", sb)
-	_combined_detail.add_child(p)
-	_lbl(str(firstc.get("combo_name", "组合")), Vector2(170, 346), Vector2(360, 40), 30, INK, _combined_detail, HORIZONTAL_ALIGNMENT_CENTER)
-	_lbl("进行中　%d / %d" % [prog, sn], Vector2(170, 396), Vector2(380, 32), 22, Color(0.64,0.22,0.15), _combined_detail)
-	_lbl("效果：" + str(firstc.get("combo_text", "")), Vector2(170, 440), Vector2(380, 80), 20, INK, _combined_detail)
-	_lbl("还差 %d 张同套卡即可合成" % (sn - prog), Vector2(170, 530), Vector2(380, 30), 18, DIM, _combined_detail)
-	_btn("×", Rect2(592, 322, 34, 30), 20, Color(0.97,0.93,0.85), DIM, func(): _combined_detail.visible = false, _combined_detail)
 
 # 家传组合详情（独立一套字段，不套用普通组合的 rec）
 func _show_ancestor_combo_detail(ar: Dictionary) -> void:
@@ -4876,7 +4894,6 @@ class CombinedIcon extends Control:
 	var art: Texture2D = null
 	var size_n := 3
 	var mark := "合"
-	var progress_text := ""     # 进行中组合显示 "2/3"
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_STOP
 	func _draw() -> void:
@@ -4892,8 +4909,6 @@ class CombinedIcon extends Control:
 		draw_string(F, Vector2(size.x-30,23), mark, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(0.98,0.92,0.78))
 		if size_n > 0:
 			draw_string(F, Vector2(size.x-34,size.y-8), str(size_n), HORIZONTAL_ALIGNMENT_RIGHT, 26, 16, Color(0.38,0.30,0.20))
-		if progress_text != "":
-			draw_string(F, Vector2(8, size.y - 8), progress_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 17, Color(0.64,0.22,0.15))
 	func _gui_input(ev: InputEvent) -> void:
 		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
 			pressed.emit()
@@ -7309,6 +7324,9 @@ func _q_check(q: Dictionary) -> void:
 
 func _q_tick(dt: float) -> void:
 	if _run_over:
+		return
+	# 设计稿：奇遇是第 4 关才解锁的新功能（统一走解锁表）
+	if not LevelState.has_feature("encounter"):
 		return
 	_q_t += dt
 	if _q_t >= _q_interval():
