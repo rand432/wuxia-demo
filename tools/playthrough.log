@@ -1,22 +1,22 @@
 # 十关连续通关
 [GO] L1
-[END] L1 WIN t=55s wave=5/5 kills=39 hp=323/414 unlock=2
+[END] L1 WIN t=42s wave=5/5 kills=39 hp=401/414 unlock=2
 [GO] L2
-[END] L2 WIN t=201s wave=10/10 kills=261 hp=1263/1263 unlock=3
+[END] L2 WIN t=188s wave=10/10 kills=245 hp=853/853 unlock=3
 [GO] L3
-[END] L3 WIN t=131s wave=12/12 kills=389 hp=386/676 unlock=4
+[END] L3 WIN t=199s wave=12/12 kills=249 hp=613/718 unlock=4
 [GO] L4
-[END] L4 WIN t=146s wave=15/15 kills=437 hp=669/772 unlock=5
+[END] L4 WIN t=315s wave=15/15 kills=409 hp=766/922 unlock=5
 [GO] L5
-[END] L5 WIN t=217s wave=18/18 kills=321 hp=1031/1185 unlock=6
+[END] L5 WIN t=274s wave=18/18 kills=381 hp=910/988 unlock=6
 [GO] L6
-[END] L6 WIN t=328s wave=20/20 kills=448 hp=1305/1305 unlock=7
+[END] L6 WIN t=258s wave=20/20 kills=817 hp=971/1154 unlock=7
 [GO] L7
-[END] L7 WIN t=267s wave=18/18 kills=330 hp=871/980 unlock=8
+[END] L7 WIN t=315s wave=18/18 kills=1057 hp=2058/2198 unlock=8
 [GO] L8
-[END] L8 WIN t=254s wave=18/18 kills=357 hp=630/1016 unlock=9
+[END] L8 WIN t=221s wave=18/18 kills=425 hp=892/892 unlock=9
 [GO] L9
-[END] L9 WIN t=224s wave=18/18 kills=425 hp=915/962 unlock=10
+[END] L9 WIN t=238s wave=18/18 kills=607 hp=1051/1111 unlock=10
 [GO] L10
-[END] L10 WIN t=243s wave=18/18 kills=305 hp=701/890 unlock=10
+[END] L10 WIN t=209s wave=18/18 kills=785 hp=747/964 unlock=10
 [ALL] max_unlocked=10 first_clear={ "1": true, "2": true, "3": true, "4": true, "5": true, "6": true, "7": true, "8": true, "9": true, "10": true }

@@ -24,6 +24,7 @@ var _cats: Array = []
 var _cat := 0
 
 func _ready() -> void:
+	GameState.ensure_loaded()
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_build_all()
 

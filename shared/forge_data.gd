@@ -1,4 +1,6 @@
 extends RefCounted
+
+const SaveFile := preload("res://shared/save_file.gd")
 # ============================================================
 # shared/forge_data.gd —— 装备 / 锻造数据
 #   品质：定强化上限 + 每级增幅 + 边框色
@@ -246,6 +248,9 @@ static var _loaded := false
 static func load_game() -> void:
 	if _loaded:
 		return
+	if SaveFile.recover() != OK:
+		push_error("未完成的首通奖励恢复失败，保留恢复记录")
+		return
 	_loaded = true
 	ensure_bag()
 	var cf := ConfigFile.new()
@@ -274,4 +279,6 @@ static func save_game() -> void:
 	cf.set_value("res", "equipped", equipped)
 	cf.set_value("res", "bag", bag)
 	cf.set_value("res", "state", state)
-	cf.save(SAVE_PATH)
+	var err := SaveFile.write(cf, SAVE_PATH)
+	if err != OK:
+		push_error("存档保存失败：%s (%s)" % [SAVE_PATH, error_string(err)])

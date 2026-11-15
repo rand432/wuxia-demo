@@ -12,6 +12,10 @@ var wait_trea := 0
 var done := false
 
 func _ready() -> void:
+	if not OS.get_user_data_dir().replace("\\", "/").ends_with("wuxia-regression"):
+		push_error("请通过 tools/run_playthrough.ps1 运行隔离测试")
+		get_tree().quit(2)
+		return
 	LS.ensure_loaded()
 	lv = 1
 	var f := FileAccess.open(LOG_PATH, FileAccess.WRITE)
@@ -49,7 +53,7 @@ func _process(dt: float) -> void:
 		b._tut._on_pressed(); return
 	if b._run_over:
 		done = true
-		var win: bool = int(b._core.wave) >= b._max_wave
+		var win: bool = b._run_cleared
 		_log("[END] L%d %s t=%.0fs wave=%d/%d kills=%d hp=%d/%d unlock=%d" % [
 			lv, "WIN" if win else "LOSE", t, int(b._core.wave), b._max_wave, int(b._kills),
 			int(float(b._core.hero.get("hp", 0.0))), int(float(b._core.hero.get("hp_max", 1.0))), LS.max_unlocked])

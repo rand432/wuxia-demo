@@ -265,6 +265,7 @@ var _hero_hit_btn: Button = null
 var _hero_name_lb: Label = null
 
 func _ready() -> void:
+	GameState.ensure_loaded()
 	var _t_ready := Time.get_ticks_usec()
 	_max_wave = LevelState.waves()
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -2616,9 +2617,15 @@ func _end_run(win: bool) -> void:
 	if _run_over:
 		return
 	if win:
-		var first := LevelState.mark_first_clear()
-		if first:
-			_grant_first_clear(LevelState.current_level)
+		var SaveFile := preload("res://shared/save_file.gd")
+		if SaveFile.begin() == OK:
+			var first := LevelState.mark_first_clear()
+			if first:
+				_grant_first_clear(LevelState.current_level)
+			if SaveFile.commit() != OK:
+				_toast("首通保存失败，请勿关闭游戏")
+		else:
+			_toast("首通记录恢复失败，请检查存储空间")
 	_run_over = true
 	if _core != null:
 		_core.running = false
@@ -2672,12 +2679,23 @@ func _build_result(win: bool) -> void:
 		_lbl(str(r[1]), Vector2(210, y), Vector2(276, 30), 22, INK, holder, HORIZONTAL_ALIGNMENT_RIGHT)
 		y += 44.0
 	_btn("再来一局", Rect2(30, 380, 210, 64), 24, Color(0.86, 0.66, 0.24), Color(0.14, 0.11, 0.08),
-		func() -> void: get_tree().reload_current_scene(), holder)
+		func() -> void: _leave_result(true), holder)
 	_btn("回主界面", Rect2(300, 380, 210, 64), 24, Color(0.93, 0.89, 0.80), INK,
-		func() -> void: get_tree().change_scene_to_file("res://menu/main_home.tscn"), holder)
+		func() -> void: _leave_result(false), holder)
 	_pop_bounce(holder)
 	_breathe(holder)
 	_spawn_pfx("holy/sunburst" if win else "shadow/dark-explosion", Vector2(360, 235), 1.9, "holy" if win else "shadow", 1.8)
+
+# 结果页按钮同时作为保存重试入口，未保存完成时保留当前场景。
+func _leave_result(replay: bool) -> void:
+	var SaveFile := preload("res://shared/save_file.gd")
+	if SaveFile.recover() != OK:
+		_toast("保存未完成，请释放存储空间后再次点击")
+		return
+	if replay:
+		get_tree().reload_current_scene()
+	else:
+		get_tree().change_scene_to_file("res://menu/main_home.tscn")
 
 func _grant_first_clear(lv: int) -> void:
 	var r := LevelState.first_reward(lv)
@@ -2721,6 +2739,7 @@ func _grant_first_clear(lv: int) -> void:
 	if r.has("equip") or r.has("forge_mat"):
 		var ForgeData := preload("res://shared/forge_data.gd")
 		ForgeData.save_game()
+	GameState.save_progress()
 	_toast("首通 · " + str(r.get("text", "")))
 
 func _on_wave_clear(cleared_wave: int) -> void:

@@ -1,0 +1,16 @@
+param([string]$Godot = 'C:/Users/zq300/Desktop/Godot_v4.7.2-stable_win64.exe')
+$ErrorActionPreference = 'Stop'
+$projectRoot = Split-Path $PSScriptRoot -Parent
+$auditRoot = Join-Path $projectRoot '.shots/audit_project'
+New-Item -ItemType Directory -Path $auditRoot -Force | Out-Null
+foreach ($part in @('menu','shared','kushou','tools','assets','fonts','.godot')) {
+    if (-not (Test-Path (Join-Path $auditRoot $part))) {
+        New-Item -ItemType Junction -Path (Join-Path $auditRoot $part) -Target (Join-Path $projectRoot $part) | Out-Null
+    }
+}
+$config = [IO.File]::ReadAllText((Join-Path $projectRoot 'project.godot')).Replace('[application]', "[application]
+config/use_custom_user_dir=true
+config/custom_user_dir_name=`"wuxia-regression`"")
+[IO.File]::WriteAllText((Join-Path $auditRoot 'project.godot'), $config)
+& $Godot --headless --path $auditRoot res://tools/playthrough.tscn --fixed-fps 60
+exit $LASTEXITCODE

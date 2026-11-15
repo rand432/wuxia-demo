@@ -1,6 +1,8 @@
 class_name LevelState
 extends RefCounted
 
+const SaveFile := preload("res://shared/save_file.gd")
+
 # 十关教学关配置。波数、按钮显隐、后续卡池/掉落/教学都从这里取。
 const LEVELS := [
 	{"waves": 5,  "name": "第一关 · 教学",
@@ -95,6 +97,9 @@ static var _loaded := false
 static func ensure_loaded() -> void:
 	if _loaded:
 		return
+	if SaveFile.recover() != OK:
+		push_error("未完成的首通奖励恢复失败，保留恢复记录")
+		return
 	_loaded = true
 	var cfg := ConfigFile.new()
 	if cfg.load(SAVE_PATH) != OK:
@@ -116,7 +121,9 @@ static func save() -> void:
 	cfg.set_value("levels", "first_clear", first_clear)
 	cfg.set_value("levels", "tutorial_done", tutorial_done)
 	cfg.set_value("levels", "preview", preview)
-	cfg.save(SAVE_PATH)
+	var err := SaveFile.write(cfg, SAVE_PATH)
+	if err != OK:
+		push_error("存档保存失败：%s (%s)" % [SAVE_PATH, error_string(err)])
 
 static func config(level: int = -1) -> Dictionary:
 	ensure_loaded()

@@ -1,4 +1,6 @@
 extends Node
+
+const SaveFile := preload("res://shared/save_file.gd")
 # 新流程最小状态：只保留货币/名号，不再加载旧卡池/装备/伙伴数据
 
 static var player_name := "少侠"
@@ -21,9 +23,11 @@ static var curio_shards := 0
 static var stars := {}
 
 static func coin(k: String) -> int:
+	ensure_loaded()
 	return int(coins.get(k, 0))
 
 static func add_coin(k: String, n: int) -> void:
+	ensure_loaded()
 	coins[k] = int(coins.get(k, 0)) + n
 
 static func role_data(_rid: String) -> Dictionary:
@@ -55,7 +59,7 @@ static func _curio_save() -> void:
 	var cfg := ConfigFile.new()
 	cfg.set_value("curio", "id", curio_id)
 	cfg.set_value("curio", "lv", curio_lv)
-	cfg.save(CURIO_SAVE)
+	SaveFile.write(cfg, CURIO_SAVE)
 
 static func curio_level(id: String) -> int:
 	_curio_ensure()
@@ -78,3 +82,48 @@ static func curio_upgrade(id: String) -> bool:
 	curio_lv[id] = lv + 1
 	_curio_save()
 	return true
+
+# 当前接入的局外成长数据；与旧玩法存档分开保存。
+const PROGRESS_SAVE := "user://progress.cfg"
+const PROGRESS_KEYS := ["player_name", "coins", "skill_mat", "forge_mat", "equip_tokens", "advance_tokens", "new_cards_unlocked", "new_curio_unlocked", "skill_lv", "skill_books", "shards", "curio_shards", "stars"]
+static var _progress_loaded := false
+
+static func ensure_loaded() -> void:
+	if _progress_loaded:
+		return
+	if SaveFile.recover() != OK:
+		push_error("未完成的首通奖励恢复失败，保留恢复记录")
+		return
+	_progress_loaded = true
+	_curio_ensure()
+	var cfg := ConfigFile.new()
+	if cfg.load(PROGRESS_SAVE) != OK:
+		return
+	player_name = str(cfg.get_value("progress", "player_name", player_name))
+	for key in ["coins", "skill_lv", "skill_books", "shards", "stars"]:
+		var value = cfg.get_value("progress", key, null)
+		if value is Dictionary:
+			match key:
+				"coins": coins.merge(value, true)
+				"skill_lv": skill_lv = value.duplicate(true)
+				"skill_books": skill_books.merge(value, true)
+				"shards": shards = value.duplicate(true)
+				"stars": stars = value.duplicate(true)
+	skill_mat = int(cfg.get_value("progress", "skill_mat", skill_mat))
+	forge_mat = int(cfg.get_value("progress", "forge_mat", forge_mat))
+	equip_tokens = int(cfg.get_value("progress", "equip_tokens", equip_tokens))
+	advance_tokens = int(cfg.get_value("progress", "advance_tokens", advance_tokens))
+	curio_shards = int(cfg.get_value("progress", "curio_shards", curio_shards))
+	new_cards_unlocked = bool(cfg.get_value("progress", "new_cards_unlocked", new_cards_unlocked))
+	new_curio_unlocked = bool(cfg.get_value("progress", "new_curio_unlocked", new_curio_unlocked))
+
+static func save_progress() -> Error:
+	ensure_loaded()
+	var cfg := ConfigFile.new()
+	var values := [player_name, coins, skill_mat, forge_mat, equip_tokens, advance_tokens, new_cards_unlocked, new_curio_unlocked, skill_lv, skill_books, shards, curio_shards, stars]
+	for i in PROGRESS_KEYS.size():
+		cfg.set_value("progress", PROGRESS_KEYS[i], values[i])
+	var err := SaveFile.write(cfg, PROGRESS_SAVE)
+	if err != OK:
+		push_error("局外进度保存失败：%s" % error_string(err))
+	return err

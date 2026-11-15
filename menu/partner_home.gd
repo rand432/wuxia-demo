@@ -64,6 +64,7 @@ var _plan := 0
 var _plan_btns: Array = []
 
 func _ready() -> void:
+	GameState.ensure_loaded()
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	LevelState.ensure_loaded()
 	# 只显示当前关卡已解锁的请神角色；主角始终在列表里（基础剑法）
@@ -363,6 +364,7 @@ func _show_skill_detail(i: int) -> void:
 		GameState.skill_books[qn] = book - 1
 		GameState.coins["wen"] = int(GameState.coins.get("wen", 0)) - cost_wen
 		GameState.skill_lv[aid] = int(GameState.skill_lv.get(aid, 0)) + 1
+		GameState.save_progress()
 		_pop.queue_free()
 		_pop = null
 		_show_skill_detail(i)
@@ -486,6 +488,7 @@ func _show_advance() -> void:
 		GameState.coins["wen"] = GameState.coin("wen") - adv_wen
 		GameState.stars[aid] = mini(5, int(GameState.stars.get(aid, _stars.get(aid, 0))) + 1)
 		_stars[aid] = int(GameState.stars[aid])
+		GameState.save_progress()
 		_close_pop()
 		_show_advance()
 		_build_slots()

@@ -25,6 +25,7 @@ var _pips = null
 var _pop: Control = null
 
 func _ready() -> void:
+	GameState.ensure_loaded()
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	theme = UI.theme()
 	UI.bg(self)
