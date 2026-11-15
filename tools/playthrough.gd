@@ -43,7 +43,7 @@ func _log(s: String) -> void:
 func _start() -> void:
 	if lv > end_level:
 		_log("[ALL] max_unlocked=%d first_clear=%s" % [LS.max_unlocked, str(LS.first_clear)])
-		get_tree().quit(0 if failures == 0 else 1); return
+		preload("res://shared/audio.gd").quit_cleanly(0 if failures == 0 else 1); return
 	LS.current_level = lv
 	b = BATTLE.instantiate(); add_child(b)
 	t = 0.0; cd = 0.0; wait_draw = 0; wait_trea = 0; done = false

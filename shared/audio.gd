@@ -19,13 +19,15 @@ class ManagedPlayer extends AudioStreamPlayer:
 # 实现说明：
 #   · 不用 autoload（工程里一个 autoload 都没有，加一个要动 project.godot）；
 #     这里按需把播放器挂到 scene tree 的 root 上，跨场景不会被回收。
-#   · BGM 两路 player 交叉淡入淡出；SFX 用一次性 player，播完自己 queue_free。
+#   · BGM 两路 player 交叉淡入淡出；SFX 最多 32 路同时播放，结束后复用，闲置池最多 16 路。
 # ============================================================
 
 const DIR_BGM := "res://assets/audio/"
 const DIR_SFX := "res://assets/audio/sfx/"
 
 static var _cur_bgm := ""
+static var _shutting_down := false
+static var _quit_hook_installed := false
 static var _amb: AudioStreamPlayer = null   # v230：循环环境音（风/雨）
 static var _amb_key := ""
 static var _bgm_a: AudioStreamPlayer = null
@@ -67,8 +69,14 @@ static func stop_ambient() -> void:
 	_amb_key = ""
 
 static func _root() -> Node:
+	if _shutting_down:
+		return null
 	var ml := Engine.get_main_loop()
 	if ml is SceneTree:
+		if not _quit_hook_installed:
+			_quit_hook_installed = true
+			(ml as SceneTree).auto_accept_quit = false
+			(ml as SceneTree).root.close_requested.connect(quit_cleanly.bind(0))
 		return (ml as SceneTree).root
 	return null
 
@@ -88,6 +96,8 @@ static func _begin_bgm(key: String, fade: float) -> void:
 		_cur_bgm = ""
 		return
 	await (ml as SceneTree).process_frame
+	if _shutting_down:
+		return
 	var root := (ml as SceneTree).root
 	if root == null:
 		_cur_bgm = ""
@@ -95,6 +105,8 @@ static func _begin_bgm(key: String, fade: float) -> void:
 	var s := _stream(DIR_BGM + key + ".ogg")
 	if s == null:
 		await (ml as SceneTree).process_frame      # 再给一帧机会
+		if _shutting_down:
+			return
 		_cache.erase(DIR_BGM + key + ".ogg")       # 清掉可能缓存下来的 null
 		s = _stream(DIR_BGM + key + ".ogg")
 	if s == null:
@@ -137,10 +149,10 @@ static func _ensure_playing(p: AudioStreamPlayer) -> void:
 	if not (ml is SceneTree):
 		return
 	for i in 3:
-		if not is_instance_valid(p) or p.playing:
+		if _shutting_down or not is_instance_valid(p) or p.playing:
 			return
 		await (ml as SceneTree).process_frame
-		if is_instance_valid(p) and not p.playing:
+		if not _shutting_down and is_instance_valid(p) and not p.playing:
 			p.play()
 
 # ============================================================
@@ -283,9 +295,14 @@ static func stop_bgm(fade := 0.8) -> void:
 # 音效播放器池：原来每放一声都 ManagedPlayer.new()（一场战斗几十个），
 # 现在复用。放完回收，池满/不在树里才真释放。
 static var _sfx_pool: Array = []
+static var _sfx_active: Array = []
 const SFX_POOL_MAX := 16
+const SFX_ACTIVE_MAX := 32
 
 static func _acquire_sfx_player() -> AudioStreamPlayer:
+	_sfx_active = _sfx_active.filter(func(p): return is_instance_valid(p))
+	if _sfx_active.size() >= SFX_ACTIVE_MAX:
+		return null
 	while not _sfx_pool.is_empty():
 		var q = _sfx_pool.pop_back()
 		if is_instance_valid(q):
@@ -293,8 +310,9 @@ static func _acquire_sfx_player() -> AudioStreamPlayer:
 	return ManagedPlayer.new()
 
 static func _release_sfx_player(p: AudioStreamPlayer) -> void:
-	if p == null or not is_instance_valid(p):
+	if p == null or not is_instance_valid(p) or not _sfx_active.has(p):
 		return
+	_sfx_active.erase(p)
 	p.stop()
 	p.stream = null
 	if _sfx_pool.size() < SFX_POOL_MAX and p.is_inside_tree():
@@ -311,6 +329,9 @@ static func sfx(key: String, vol_db := -6.0, pitch := 1.0) -> void:
 		return
 	_ensure_loaded()
 	var p := _acquire_sfx_player()
+	if p == null:
+		return
+	_sfx_active.append(p)
 	p.stream = s
 	p.volume_db = vol_db + _vol_db(_sfx_vol)
 	p.pitch_scale = clampf(pitch, 0.5, 2.0)
@@ -335,6 +356,8 @@ static func sfx(key: String, vol_db := -6.0, pitch := 1.0) -> void:
 
 # v15h：延迟起播（父节点建完子节点之后再入树＋播放）
 static func _play_when_free(p: AudioStreamPlayer) -> void:
+	if _shutting_down:
+		return
 	if p == null or not is_instance_valid(p):
 		return
 	if not p.is_inside_tree():
@@ -346,3 +369,34 @@ static func _play_when_free(p: AudioStreamPlayer) -> void:
 static func ui_click() -> void:
 	# v67：换成素材包里的真·UI 音（原来用"墨滴"充数）；要回墨滴就改回 "ink_drop"
 	sfx("ui_click", -12.0, randf_range(0.96, 1.06))
+
+# 退出前让播放器和混音线程有机会释放正在使用的播放资源。
+static func shutdown() -> void:
+	_shutting_down = true
+	var seen := {}
+	for player in _sfx_active + _sfx_pool + [_bgm_a, _bgm_b, _amb]:
+		if not is_instance_valid(player) or seen.has(player.get_instance_id()):
+			continue
+		seen[player.get_instance_id()] = true
+		player.stop()
+		player.stream = null
+		player.queue_free()
+	_sfx_active.clear()
+	_sfx_pool.clear()
+	_cache.clear()
+	_bgm_a = null
+	_bgm_b = null
+	_amb = null
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree == null: return
+	var until := Time.get_ticks_msec() + 100
+	while Time.get_ticks_msec() < until:
+		await tree.process_frame
+
+static func quit_cleanly(code: int = 0) -> void:
+	if _shutting_down: return
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree == null: return
+	tree.paused = true
+	await shutdown()
+	tree.quit(code)

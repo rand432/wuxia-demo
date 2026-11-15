@@ -741,6 +741,7 @@ func _build_field() -> void:
 	_core.boss_arrived.connect(_on_boss_arrived)
 	_core.delayed_land.connect(_on_delayed_land)
 	_core.boss_died.connect(_on_boss_died)
+	_core.boss_slain.connect(_curio_on_boss_slain)
 	_core.paper_blocked.connect(_on_paper_blocked)
 	# 教学关每波少刷几只，节奏更快（奖励不变）
 	if LevelState.current_level <= 5:
@@ -1028,8 +1029,11 @@ var _curio_id := ""
 var _curio_lv := 1
 var _curio_atk_t := 0.0        # 血葫芦：剩余持续
 var _curio_atk_add := 0.0      # 血葫芦：攻击加成
+var _curio_extend_used := 0.0  # 本次增益已延长的总秒数，不随倒计时回退
 var _curio_extra_used := false # 玉壶 Lv5：濒死额外一次
 var _curio_kills := 0
+var _curio_waves := 0           # 实际成功清波次数，不包含战败跳过的波
+var _rewarded_waves := {}       # 防止清波回调重复结算
 var _tie_stacks := 0           # 铁布衫：硬气层数
 var _tie_idle := 0.0           # 铁布衫：多久没挨打
 var _zhiren := 0               # 纸人替身：剩余数量
@@ -1116,21 +1120,21 @@ func _curio_tick_yuhu(dt: float) -> void:
 		_yuhu_shield = maxf(0.0, _yuhu_shield - dt)
 		if _yuhu_shield <= 0.0 and _core != null:
 			_core.hero["curio_cut"] = 0.0
-	if _curio_cd > 0.0:
-		return
 	var h: Dictionary = _core.hero
 	var mx := maxf(1.0, float(h.get("hp_max", 1.0)))
 	var hpr := float(h.get("hp", 0.0)) / mx
 	if hpr <= 0.0:
 		return
-	if _curio_lv >= 5 and not _curio_extra_used and hpr <= 0.15:
+	if _curio_lv >= 5 and not _curio_extra_used and hpr < 0.15:
 		_curio_extra_used = true
-		_curio_use()
+		_curio_use(true)
+		return
+	if _curio_cd > 0.0:
 		return
 	if hpr <= 0.30 or (hpr <= 0.50 and _foe_near(_core.hero_pos, 220.0)):
 		_curio_use()
 
-func _curio_use() -> void:
+func _curio_use(extra := false) -> void:
 	var h: Dictionary = _core.hero
 	var mx := float(h.get("hp_max", 1.0))
 	var pct := 0.30 if _curio_lv >= 2 else 0.25
@@ -1139,7 +1143,8 @@ func _curio_use() -> void:
 	h["hp"] = minf(mx, float(h.get("hp", 0.0)) + hp_add)
 	var mp_add := _mp_max * pct
 	_mp = minf(_mp_max, _mp + mp_add)
-	_curio_cd = cd
+	if not extra:
+		_curio_cd = cd
 	if _curio_sq != null:
 		_curio_sq.cd_max = cd
 	if _curio_lv >= 3:
@@ -1165,6 +1170,7 @@ func _curio_tick_xuehulu() -> void:
 	h["hp"] = maxf(1.0, float(h.get("hp", 1.0)) - cost)
 	_curio_atk_add = 0.80 if _curio_lv >= 4 else 0.60
 	_curio_atk_t = 11.0 if _curio_lv >= 2 else 8.0
+	_curio_extend_used = 0.0
 	_curio_cd = 45.0
 	_curio_uses += 1
 	_curio_flash()
@@ -1370,7 +1376,11 @@ func _curio_tick_tongjing() -> void:
 
 # 醉翁壶：击杀累计（每 10 只进入醉）
 func _curio_on_kill(n: int) -> void:
-	if _curio_id != "zuiweng" or _core == null:
+	if _core == null or n <= 0:
+		return
+	if _curio_id == "xuehulu" and _curio_lv >= 3 and _curio_atk_t > 0.0:
+		_curio_extend_buff(0.6 * n, 4.0)
+	if _curio_id != "zuiweng":
 		return
 	_curio_kills += n
 	while _curio_kills >= 10:
@@ -1380,6 +1390,7 @@ func _curio_on_kill(n: int) -> void:
 func _curio_zui_start() -> void:
 	_curio_atk_add = 0.45 if _curio_lv >= 4 else 0.30
 	_curio_atk_t = 10.0 if _curio_lv >= 2 else 8.0
+	_curio_extend_used = 0.0
 	_core.hero["curio_aspd"] = 0.10
 	if _curio_lv >= 3:
 		_core.hero["curio_crit"] = 0.10
@@ -1432,11 +1443,16 @@ func _curio_on_hero_hurt() -> void:
 			_core._kill_foe(f)
 
 # 寒玉扳指：暴击叠寒、3 层冻结；醉翁壶 Lv5：暴击延长醉
+func _curio_extend_buff(seconds: float, cap: float) -> void:
+	var added := minf(seconds, maxf(0.0, cap - _curio_extend_used))
+	_curio_extend_used += added
+	_curio_atk_t += added
+
 func _curio_on_crit(tgt: Dictionary) -> void:
 	if _core == null:
 		return
 	if _curio_id == "zuiweng" and _curio_lv >= 5 and _curio_atk_t > 0.0:
-		_curio_atk_t = minf(_curio_atk_t + 1.0, 15.0)
+		_curio_extend_buff(1.0, 5.0)
 	if _curio_id != "hanyu":
 		return
 	var c := int(tgt.get("cold", 0)) + 1
@@ -1469,6 +1485,7 @@ func _curio_on_crit(tgt: Dictionary) -> void:
 func _curio_on_wave_clear(wave: int) -> void:
 	if _core == null:
 		return
+	_curio_waves += 1
 	if _curio_id == "jubaopen":
 		var per := 3
 		if _curio_lv >= 2:
@@ -1476,7 +1493,11 @@ func _curio_on_wave_clear(wave: int) -> void:
 		if _curio_lv >= 4:
 			per = 5
 		var amt := per * maxi(1, wave)
+		if _curio_lv >= 5 and _wen >= 1000:
+			amt += int(floor(float(_wen) * 0.02))
 		_add_wen(amt)
+		if _curio_lv >= 3 and _roll_curio_crystal():
+			_gain_crystal(1)
 		_spawn_fly(_hero_screen(), Vector2(99, 40), Color(0.90, 0.71, 0.30), 4)
 		_toast("聚宝盆 · 文钱 +%d" % amt)
 		_curio_uses += 1
@@ -1502,13 +1523,23 @@ func _curio_on_wave_clear(wave: int) -> void:
 			every = 2
 		if _curio_lv >= 5:
 			every = 1
-		if wave % every == 0:
-			var add := 3 if _curio_lv >= 4 else 2
-			_life = mini(100, _life + add)
-			_refresh_life_ui()
-			_toast("续命灯 · 命 +%d" % add)
-			_curio_uses += 1
-			_curio_flash()
+		if _curio_waves % every == 0:
+			_curio_gain_life(3 if _curio_lv == 4 else 2)
+
+func _roll_curio_crystal() -> bool:
+	return randf() < 0.10
+
+func _curio_gain_life(amount: int) -> void:
+	_life += amount
+	_refresh_life_ui()
+	_toast("续命灯 · 命 +%d" % amount)
+	_curio_uses += 1
+	_curio_flash()
+	Aud.sfx("coin", -10.0)
+
+func _curio_on_boss_slain() -> void:
+	if not _run_over and _curio_id == "xumingdeng" and _curio_lv >= 3:
+		_curio_gain_life(5)
 
 func _show_curio_detail() -> void:
 	if _curio_detail != null:
@@ -2269,6 +2300,7 @@ func _process(_delta: float) -> void:
 				_on_wave_clear(cleared_wave)
 			else:
 				_run_cleared = true
+				_on_wave_clear(cleared_wave)
 				_end_run(true)
 				return
 		if _hp_lb != null:
@@ -2492,7 +2524,7 @@ func _add_exp(v: int) -> void:
 		_exp -= _exp_need
 		_lv += 1
 		_exp_need += 50
-		_level_bonus(1)               # 每级：攻击 +1 · 气血上限 +6（内力 +25 在 _tick_skills 里）
+		_level_bonus(1)               # 每级：攻击 +1 · 气血上限 +6（内力上限同步 +25）
 		if _lv % 5 == 0:
 			_draw_charge += 1   # 每 5 级给一次；允许溢出，后面请神候选用完就攒着
 			if LevelState.has_feature("mate") and not _l5_mate_shown:
@@ -2721,6 +2753,7 @@ func _leave_result(replay: bool) -> void:
 		get_tree().change_scene_to_file("res://menu/main_home.tscn")
 
 func _grant_first_clear(lv: int) -> void:
+	var stored_equipment := 0
 	var r := LevelState.first_reward(lv)
 	if r.is_empty():
 		return
@@ -2731,11 +2764,7 @@ func _grant_first_clear(lv: int) -> void:
 		GameState.skill_books[bk] = int(GameState.skill_books.get(bk, 0)) + int(r.get("skill_book_n", 1))
 	if r.has("equip"):
 		var FD := preload("res://shared/forge_data.gd")
-		FD.load_game()
-		var en := {"weapon": "铁剑", "armor": "皮甲", "jade": "玉佩", "cloak": "披风"}
-		for slot_v in FD.SLOT_KEYS:
-			var slot := str(slot_v)
-			FD.equipped[slot] = {"name": str(en.get(slot, "装备")), "quality": 1, "plus": 0, "trait": ""}
+		stored_equipment = FD.grant_starter_equipment()
 	if r.has("curio_shards"):
 		GameState.curio_shards += int(r["curio_shards"])
 	if r.has("new_cards"):
@@ -2763,9 +2792,13 @@ func _grant_first_clear(lv: int) -> void:
 		var ForgeData := preload("res://shared/forge_data.gd")
 		ForgeData.save_game()
 	GameState.save_progress()
-	_toast("首通 · " + str(r.get("text", "")))
+	var equipment_note := " · %d 件装备入背包" % stored_equipment if stored_equipment > 0 else ""
+	_toast("首通 · " + str(r.get("text", "")) + equipment_note)
 
 func _on_wave_clear(cleared_wave: int) -> void:
+	if _run_over or _rewarded_waves.has(cleared_wave):
+		return
+	_rewarded_waves[cleared_wave] = true
 	if _skip_reward_wave:
 		_skip_reward_wave = false
 		_toast("第 %d 波没打下来 · 无奖励" % cleared_wave)
@@ -5166,6 +5199,15 @@ func _build_skill_bar() -> void:
 		add_child(s)
 		_skill_slots.append(s)
 
+var _curio_mana_regen_left := 0.0
+
+func _roll_skill_free_cast() -> bool:
+	return _curio_id == "dingfengzhu" and _curio_lv >= 5 and randf() < 0.15
+
+func _skill_mana_cost(sk: Dictionary) -> float:
+	var mods: Dictionary = _anc_mod.get(str(sk.get("aid", "")), {})
+	return maxf(0.0, float(sk.get("mp", 0.0)) - float(mods.get("mp_flat", 0.0)))
+
 func _tick_skills(dt: float) -> void:
 	if _run_over:
 		return
@@ -5173,25 +5215,27 @@ func _tick_skills(dt: float) -> void:
 		_core.hero["aspd"] = MAX_ASPD          # 硬顶：防攻速叠太高卡帧
 	var lv_mul := float(_lv - 1)
 	_mp_max = maxf(1.0, float(_core.attr_final("mp"))) if _core != null else 100.0
-	_mp = minf(_mp_max, _mp + (20.0 + 2.0 * lv_mul) * dt)
+	var boosted_seconds := minf(maxf(0.0, dt), _curio_mana_regen_left)
+	_curio_mana_regen_left = maxf(0.0, _curio_mana_regen_left - dt)
+	_mp = minf(_mp_max, _mp + (20.0 + 2.0 * lv_mul) * (dt + boosted_seconds * 0.5))
 	if _mp_bar != null:
 		_mp_bar.size = Vector2(maxf(4.0, 235.0 * clampf(_mp / _mp_max, 0.0, 1.0)), 9.0)
 	for i in _skills.size():
 		var sk: Dictionary = _skills[i]
 		if float(sk["cd_t"]) > 0.0:
 			sk["cd_t"] = maxf(0.0, float(sk["cd_t"]) - dt)
-		var free_cast := _curio_id == "dingfengzhu" and _curio_lv >= 5 and randf() < 0.15
-		if float(sk["cd_t"]) <= 0.0 and (_mp >= float(sk["mp"]) or free_cast):
+		var free_cast := _roll_skill_free_cast()
+		if float(sk["cd_t"]) <= 0.0 and (_mp >= _skill_mana_cost(sk) or free_cast):
 			var cd_before := float(sk["cd_t"])
 			var mp_before := _mp
 			if free_cast:
-				_mp = _mp_max
+				_mp = maxf(_mp_max, _skill_mana_cost(sk))
 			_cast_skill(i)
+			if free_cast:
+				_mp = mp_before
 			if float(sk["cd_t"]) > cd_before + 0.01:
-				if free_cast:
-					_mp = mp_before
-				elif _curio_id == "dingfengzhu" and _curio_lv >= 3:
-					_mp = minf(_mp_max, _mp + float(sk["mp"]) * 0.5)
+				if _curio_id == "dingfengzhu" and _curio_lv >= 3:
+					_curio_mana_regen_left = 2.0
 				if i < _skill_slots.size():
 					_skill_slots[i].flash = 1.0
 				_skill_cast_juice()
@@ -5210,6 +5254,9 @@ func _tick_skills(dt: float) -> void:
 			s.queue_redraw()
 		else:
 			s.visible = false
+
+	if _core != null:
+		_core.hero["mp"] = _mp
 
 # 请神技能特效：按技能属性挑效果 + 换色（pixelfx）
 const SKILL_FX := {
@@ -5230,9 +5277,6 @@ const SKILL_SFX := {
 	"物理": [["sword_in_ground", -7.0, 1.00], ["hit_heavy", -10.0, 0.95]],
 	"真实": [["heartbeat", -10.0, 0.90], ["tension", -13.0, 1.00]],
 }
-
-	if _core != null:
-		_core.hero["mp"] = _mp
 
 func _skill_fx(dtype: String, world_pos: Vector2, big := false) -> void:
 	var e: Array = SKILL_FX.get(dtype, [])

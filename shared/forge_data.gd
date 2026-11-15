@@ -393,3 +393,19 @@ static func use_forge_item(slot: String, name: String) -> Dictionary:
 		items = previous_items
 		return {"ok": false, "reason": "保存失败，道具与装备已恢复，请重试"}
 	return {"ok": true, "trance": entered_trance}
+
+# 首通四件套：只填空槽；不覆盖已有强化装备。
+static func grant_starter_equipment() -> int:
+	load_game()
+	ensure_bag()
+	var names := {"weapon": "铁剑", "armor": "皮甲", "jade": "玉佩", "cloak": "披风"}
+	var stored := 0
+	for slot in SLOT_KEYS:
+		var item := {"cat": "装备", "slot": slot, "name": names[slot], "quality": 1, "plus": 0, "trait": "", "icon": SLOT_ART[slot]}
+		if (equipped.get(slot, {}) as Dictionary).is_empty():
+			equipped[slot] = item
+			state.erase(slot)
+		else:
+			bag.append(item)
+			stored += 1
+	return stored

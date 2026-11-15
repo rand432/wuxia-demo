@@ -97,7 +97,7 @@ func _ready() -> void:
 	await get_tree().create_timer(15.0).timeout
 	_on = false
 	_report()
-	get_tree().quit()
+	preload("res://shared/audio.gd").quit_cleanly()
 
 func _report() -> void:
 	if _dts.is_empty():

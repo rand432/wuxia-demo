@@ -116,6 +116,7 @@ signal hero_down()
 signal boss_arrived(tier: int)
 signal delayed_land(pos: Vector2, elem: String)   # 延迟技落点（外壳在这里挂 pixelfx）
 signal boss_died(pos: Vector2)                    # 首领倒下（外壳做演出）
+signal boss_slain()                              # 所有首领真正死亡（含挑战，不含不死复活）
 signal paper_blocked(pos: Vector2)                # 奇物·纸人替身挡下延迟技
 signal hero_attack()
 signal hero_hit()
@@ -2028,6 +2029,8 @@ func _kill_foe(f: Dictionary) -> void:
 		return
 	# 在连锁和奖励信号之前标记，防止同帧重复调用或回调重入。
 	f["_death_settled"] = true
+	if bool(f.get("boss", false)):
+		boss_slain.emit()
 	# v18j：击杀回血（默认 0 = 不回）
 	if kill_heal > 0.0:
 		hero["hp"] = minf(float(hero["hp_max"]), float(hero["hp"]) + float(hero["hp_max"]) * kill_heal)
