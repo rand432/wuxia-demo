@@ -169,7 +169,7 @@ var kill_heal := 0.08               # 击杀回血 = 上限的 8%（v18j 定值�
 var WAVE_HP := 1.10                 # 每波怪血 ×（1.08→1.10：前 6 波仍一刀，20 波后开始明显要补输出）
 var WAVE_ATK := 1.08                # 每波怪攻 ×
 const BASE_FOE_HP := 9.0            # 波1 约 7.6 血；主角 12 攻，前 6 波稳定一刀
-var BASE_FOE_ATK := 3.8              # v6：删闪避后怪必中，怪攻 4.5→3.8 补偿　·　v17c（用户："调整怪伤害略微增加"）：4.0 -> 4.5　·　v18j 改 var：调参口
+var BASE_FOE_ATK := 3.2              # 怪攻击（用户：整体偏难，3.8 -> 3.2）
 const FOE_ASPD := 0.6               # 怪每秒打几下
 const FOE_SPD := 74.0               # 怪往下走的速度（像素/秒）
 #   v3i 用户"怪可以稍微再快一点"：42 → 58；v3k 用户"怪再快一点"：58 → 74
@@ -537,7 +537,8 @@ func _tutorial_hp_mul() -> float:
 	var L := preload("res://shared/level_state.gd")
 	if L.current_level != 1 or L.tutorial_l1_done():
 		return 1.0
-	var m := [1.0, 1.7, 2.5, 3.3, 4.0]
+	# 首次教学关：原来第 5 波 ×4.0 太肉，配合减量后重新配平
+	var m := [1.0, 1.25, 1.5, 1.7, 1.9]
 	return float(m[clampi(wave - 1, 0, 4)])
 
 func _foe_hp() -> float:
@@ -1100,9 +1101,10 @@ func _process(delta: float) -> void:
 			if float(f.get("slow_t", 0.0)) > 0.0:
 				fspd *= 0.55
 			var mv := to_h.normalized() * minf(fspd * delta, dh - reach)
-			f["x"] = clampf(float(f["x"]) + mv.x, 40.0, size.x - 40.0)
-			# 怪不许超过战场顶部（留 70px 给顶部 UI），保证始终在屏幕内
-			f["y"] = clampf(float(f["y"]) + mv.y, 70.0, size.y - 40.0)
+			# Boss 圆牌更大（半径 52），四周留出更多边距，保证整个圆牌都在战场内
+			var edge := 60.0 if bool(f.get("boss", false)) else 40.0
+			f["x"] = clampf(float(f["x"]) + mv.x, edge, size.x - edge)
+			f["y"] = clampf(float(f["y"]) + mv.y, 70.0 if not bool(f.get("boss", false)) else 96.0, size.y - edge)
 		else:
 			# v9i：被雷麻痹的怪，出手计时清零（麻痹 1 秒）
 			# v17g（用户："调整 boss不吃硬控"）：

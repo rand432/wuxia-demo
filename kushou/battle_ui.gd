@@ -101,6 +101,8 @@ const WEN_KILL_WAVE := 3
 const WEN_WAVE_CLEAR := 60
 var _str_lv := 0
 var _l1_attr_shown := false
+var _l1_aug_shown := false
+var _l1_yuhu_shown := false
 var _str_round := 0
 var _str_pending := false
 var _str_layer: Control = null
@@ -708,8 +710,10 @@ func _build_field() -> void:
 	_core.delayed_land.connect(_on_delayed_land)
 	_core.boss_died.connect(_on_boss_died)
 	_core.paper_blocked.connect(_on_paper_blocked)
-	# 教学关（1–10）每波少刷几只，节奏更快（用户要求）
-	if LevelState.current_level <= 10:
+	# 教学关每波少刷几只，节奏更快（奖励不变）
+	if LevelState.current_level <= 5:
+		_core.wave_extra = -8       # 前五关：大幅减量，快速推进
+	elif LevelState.current_level <= 10:
 		_core.wave_extra = -4
 	_core.start_run()
 	_hero_token = TokenActor.new()
@@ -2210,7 +2214,9 @@ func _process(_delta: float) -> void:
 		elif _equip_vuln > 0.0:
 			_core.foe_vuln = minf(0.45, _equip_vuln)
 		if int(_core.wave) >= 2 and hpr <= 0.50:
-			_l1_tutorial("l1_yuhu", _curio_sq, "气血不足时，玉壶会自动回血", _show_curio_detail)
+			if not _l1_yuhu_shown:
+				_l1_yuhu_shown = true
+				_l1_tutorial("l1_yuhu", _curio_sq, "气血不足时，玉壶会自动回血", _show_curio_detail)
 		if _hp_fill != null:
 			_hp_fill.size = Vector2(maxf(4.0, 235.0 * hpr), 20.0)
 			_tick_skills(_delta)
@@ -2793,9 +2799,11 @@ func _on_str_tile() -> void:
 		var aug_t: Node = _str_layer
 		if _aug_cards.size() > 1:
 			aug_t = _aug_cards[1]          # 框中间那张卡，而不是整屏遮罩
-		_l1_tutorial("l1_aug", aug_t,
-			"每强化 10 级可大幅提升属性\n并可选择自己的发展方向",
-			func() -> void: pass)
+		if not _l1_aug_shown:
+			_l1_aug_shown = true
+			_l1_tutorial("l1_aug", aug_t,
+				"每强化 10 级可大幅提升属性\n并可选择自己的发展方向",
+				func() -> void: pass)
 	_refresh_str_tile()
 
 # 点一下的即时反馈：［强化］钮上方冒一行字，往上飘走（不用 toast，免得连点排队）
@@ -3828,16 +3836,18 @@ class AugCard extends Control:
 func _make_foe_token(f: Dictionary):
 	var kind := str(f.get("kind", "normal"))
 	var boss := bool(f.get("boss", false))
-	var rad := 36.0 if boss else 26.0
+	var rad := 52.0 if boss else 26.0        # Boss 圆牌明显更大
 	var ring := Color(0.42, 0.36, 0.28)
 	if kind == "coin":
-		ring = Color(0.85, 0.66, 0.23)
+		ring = Color(0.95, 0.78, 0.25)        # 钱怪：亮金
 	elif kind == "crystal":
-		ring = Color(0.35, 0.55, 0.75)
+		ring = Color(0.42, 0.72, 0.95)        # 晶怪：亮蓝
+	elif kind == "chal":
+		ring = Color(0.68, 0.38, 0.88)        # 挑战怪：紫
 	elif boss:
-		ring = Color(0.68, 0.18, 0.14)
-	var mark_ch := "王" if boss else ("钱" if kind == "coin" else ("晶" if kind == "crystal" else "怪"))
-	var msize := 22 if not boss else 28
+		ring = Color(0.95, 0.62, 0.12)        # Boss：金橙
+	var mark_ch := "王" if boss else ("钱" if kind == "coin" else ("晶" if kind == "crystal" else ("挑" if kind == "chal" else "怪")))
+	var msize := 22 if not boss else 38
 	# 池里有就复用（TokenActor 每建一个都要 new Shader/ShaderMaterial，很贵）
 	if not _foe_pool.is_empty():
 		var tk0 = _foe_pool.pop_back()
