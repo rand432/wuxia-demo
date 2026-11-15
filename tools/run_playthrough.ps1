@@ -1,4 +1,4 @@
-param([string]$Godot = 'C:/Users/zq300/Desktop/Godot_v4.7.2-stable_win64.exe', [ValidateRange(1,10)][int]$StartLevel = 1, [ValidateRange(1,10)][int]$EndLevel = 10)
+param([string]$Godot = 'C:/Users/zq300/Desktop/Godot_v4.7.2-stable_win64.exe', [ValidateRange(1,10)][int]$StartLevel = 1, [ValidateRange(1,10)][int]$EndLevel = 10, [switch]$PrepareOnly)
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path $PSScriptRoot -Parent
 $runId = [Guid]::NewGuid().ToString("N")
@@ -15,5 +15,6 @@ config/use_custom_user_dir=true
 config/custom_user_dir_name=`"$userDirectory`"")
 [IO.File]::WriteAllText((Join-Path $auditRoot 'project.godot'), $config)
 Write-Output "Isolated user directory: $userDirectory"
+if ($PrepareOnly) { return }
 & $Godot --headless --path $auditRoot res://tools/playthrough.tscn --fixed-fps 60 -- "--start-level=$StartLevel" "--end-level=$EndLevel" 2>&1 | Out-String
 exit $LASTEXITCODE

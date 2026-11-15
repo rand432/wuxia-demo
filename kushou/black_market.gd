@@ -91,7 +91,8 @@ func _on_hero_foe_hit(tgt: Dictionary, dmg: float, crit: bool, heavy: bool) -> v
 func _on_kill(_n: int) -> void:
 	# 踏云靴：击杀后短暂攻速
 	if _has_equipped("踏云靴"):
-		core.attr_add_amp("aspd", 0.2)
+		if _boot_t <= 0.0:
+			core.attr_add_amp("aspd", 0.2)
 		_boot_t = 2.0
 
 func _on_hero_down() -> void:
@@ -312,34 +313,42 @@ func _apply_consumable(it: Dictionary) -> void:
 		ui._toast("用了 %s" % str(it.get("name", "")))
 
 func _apply_item(it: Dictionary) -> void:
-	if ui != null and (str(it.get("kind", "")) == "equipment" or str(it.get("kind", "")) == "artifact"):
+	if ui != null and not bool(it.get("_vuln_counted", false)) and (str(it.get("kind", "")) == "equipment" or str(it.get("kind", "")) == "artifact"):
+		it["_vuln_counted"] = true
 		ui._equip_vuln = minf(0.45, float(ui._equip_vuln) + 0.015)   # 拿到装备/神器：怪偷偷变脆
 	var st: Dictionary = it.get("stats", {})
 	if st.has("atk"):
 		core.attr_add("atk", float(st["atk"]))
 		core.hero["atk"] = float(core.hero.get("atk", 0.0)) + float(st["atk"])
 	if st.has("hp"):
-		core.attr_add("hp", float(st["hp"]))
-		core.hero["hp_max"] = float(core.hero.get("hp_max", 1.0)) + float(st["hp"])
-		core.hero["hp"] = float(core.hero.get("hp", 0.0)) + float(st["hp"])
+		_change_equipment_hp(float(st["hp"]))
 	if st.has("red"):
 		for t in core.DMG_TYPES:
 			if t != core.DMG_TRUE:
 				core.type_add(t, "red_f", float(st["red"]) / 100.0)
 
 func _remove_item(it: Dictionary) -> void:
+	if str(it.get("name", "")) == "踏云靴" and _boot_t > 0.0 and not _has_equipped("踏云靴"):
+		core.attr_add_amp("aspd", -0.2)
+		_boot_t = 0.0
 	var st: Dictionary = it.get("stats", {})
 	if st.has("atk"):
 		core.attr_add("atk", -float(st["atk"]))
 		core.hero["atk"] = maxf(1.0, float(core.hero.get("atk", 0.0)) - float(st["atk"]))
 	if st.has("hp"):
-		core.attr_add("hp", -float(st["hp"]))
-		core.hero["hp_max"] = maxf(1.0, float(core.hero.get("hp_max", 1.0)) - float(st["hp"]))
-		core.hero["hp"] = minf(float(core.hero.get("hp_max", 1.0)), float(core.hero.get("hp", 0.0)))
+		_change_equipment_hp(-float(st["hp"]))
 	if st.has("red"):
 		for t in core.DMG_TYPES:
 			if t != core.DMG_TRUE:
 				core.type_add(t, "red_f", -float(st["red"]) / 100.0)
+
+func _change_equipment_hp(amount: float) -> void:
+	var old_max := maxf(1.0, core.attr_final("hp"))
+	var ratio := clampf(float(core.hero.get("hp", 0.0)) / old_max, 0.0, 1.0)
+	core.attr_add("hp", amount)
+	var new_max := maxf(1.0, core.attr_final("hp"))
+	core.hero["hp_max"] = new_max
+	core.hero["hp"] = ratio * new_max
 
 func _empty_slot() -> int:
 	for i in slots.size():
@@ -387,9 +396,12 @@ func _use_prop(idx: int) -> void:
 			ui._devour_random()
 			ui._toast("吞噬丹：随机吞了一张卡")
 		"crystal":
-			ui._crystal += int(it.get("value", 0))
-			ui._update_crystal()
-			ui._toast("灵晶 +%d" % int(it.get("value", 0)))
+			if ui._crystal_lock:
+				ui._toast("灵晶收入已锁定，道具未消耗")
+				return
+			var before := int(ui._crystal)
+			ui._gain_crystal(int(it.get("value", 0)))
+			ui._toast("灵晶 +%d" % (int(ui._crystal) - before))
 		"wen":
 			ui._add_wen(int(it.get("value", 0)))
 			ui._toast("文钱 +%d" % int(it.get("value", 0)))
@@ -498,10 +510,15 @@ func _btn(rect: Rect2, label: String, size: int, bg: Color, fg: Color) -> void:
 	draw_rect(rect, Color(0.85, 0.66, 0.23, 0.45), false, 1.0)
 	_txt(Vector2(rect.position.x, rect.position.y + rect.size.y * 0.5 + size * 0.35), label, size, fg, HORIZONTAL_ALIGNMENT_CENTER, rect.size.x)
 
+func _experience_text() -> String:
+	if level >= 5:
+		return "已满级"
+	return "经验 %d/%d" % [exp, LEVEL_EXP[clampi(level - 1, 0, LEVEL_EXP.size() - 1)]]
+
 func _draw_shop() -> void:
 	_txt(Vector2(64, 160), "黑市", 40, Color(0.95, 0.92, 0.85))
 	_txt(Vector2(64, 196), "Lv%d" % level, 20, GOLD)
-	_txt(Vector2(120, 196), "经验 %d/%d" % [exp, LEVEL_EXP[min(level - 1, 4)]], 15, Color(0.78, 0.72, 0.62))
+	_txt(Vector2(120, 196), _experience_text(), 15, Color(0.78, 0.72, 0.62))
 	_txt(Vector2(64, 224), "杀敌 %d" % (ui._kills if ui != null else 0), 18, Color(0.85, 0.80, 0.70))
 	_btn(Rect2(600, 130, 56, 36), "×", 24, Color(0.10, 0.09, 0.08), Color(0.90, 0.86, 0.78))
 	_close_rect = Rect2(600, 130, 56, 36)

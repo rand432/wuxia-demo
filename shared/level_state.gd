@@ -216,11 +216,24 @@ static func mark_first_clear(level: int = -1) -> bool:
 
 # 进入某关时取走属于它的“预习”加成，只生效一次
 static func take_preview(level: int) -> Dictionary:
+	ensure_loaded()
 	if preview.is_empty() or int(preview.get("lv", 0)) != level:
 		return {}
 	var p: Dictionary = preview.duplicate()
-	preview = {}
-	save()
+	if p.has("forge"):
+		var ForgeData := preload("res://shared/forge_data.gd")
+		ForgeData.load_game()
+		if SaveFile.begin() != OK:
+			return {}
+		ForgeData.ores += int(p["forge"])
+		ForgeData.save_game()
+		preview = {}
+		save()
+		if SaveFile.commit() != OK:
+			push_error("开局锻造石奖励保存未完成，将在下次保存时重试")
+	else:
+		preview = {}
+		save()
 	return p
 
 static func mark_tutorial(key: String) -> void:

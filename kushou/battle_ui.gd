@@ -183,7 +183,8 @@ const SEALED := ["zl", "cuisanniang", "jicanghai"]   # 最强的三位封印；�
 var _combined: Array = []
 var _stats := {"atk": 0.0, "def": 0.0, "hp": 0.0}
 # v6：卡池「防御」换算成固定减免的系数（1 点防御 = 3%，按 100 伤等效对齐旧手感）
-const DEF_CARD_TO_RED := 0.03
+const EquipmentStats := preload("res://shared/equipment_stats.gd")
+const DEF_CARD_TO_RED := EquipmentStats.DEF_TO_RED
 var _gold_pct := 0.0
 var _crystal_pct := 0.0
 # v13 群/险 两系：每波定额加成 · 全局难度 · 怪物类型收益
@@ -330,10 +331,6 @@ func _apply_level_preview() -> void:
 		_draw_charge += int(pv["god"])
 	if pv.has("exp_pct"):
 		_exp_pct += float(pv["exp_pct"])   # 第四关预习：下一关经验加成
-	if pv.has("forge"):
-		var FDP := preload("res://shared/forge_data.gd")
-		FDP.ensure_bag()
-		FDP.ores += int(pv["forge"])
 	if pv.has("chal"):
 		for i in _chal_cd.size():
 			_chal_cd[i] = 0.0
@@ -726,6 +723,10 @@ func _build_field() -> void:
 	_core.modulate = Color(1, 1, 1, 0.25)
 	_cam.add_child(_core)
 	_core.setup({"atk": 12.0, "hp_max": 200.0, "mp_max": 100.0})
+	if LevelState.has_feature("equip"):
+		var ForgeData := preload("res://shared/forge_data.gd")
+		ForgeData.load_game()
+		EquipmentStats.apply(_core, ForgeData.totals())
 	_core.set_wave(1)
 	_core.coin.connect(_on_core_coin)
 	_core.coin_drop.connect(_on_coin_drop)   # v6：钱怪/匪首掉的真钱
@@ -2032,6 +2033,8 @@ func _show_draw(v: bool) -> void:
 		_draw_open = false
 
 func _on_draw_pick(card: DrawCard) -> void:
+	if not _draw_paid or _draw_layer == null or not _draw_layer.visible:
+		return
 	if _draw_anim or card == null or card.data.is_empty(): return
 	var id := str(card.data.get("_id", ""))
 	if id == "": return
@@ -2084,7 +2087,7 @@ func _on_refresh() -> void:
 	_roll_draw()
 	_draw_anim = false
 	_pop_draw_cards()
-	_toast("刷新：5 灵晶")
+	_toast("刷新：5 灵晶" if paid else "免费刷新")
 
 func _pop_draw_cards() -> void:
 	for i in _draw_cards.size():
@@ -4710,7 +4713,10 @@ func _choice_fx(kind: String) -> void:
 			_spawn_pfx("holy/halo", hpos, 0.80, "heal", 1.2)
 
 func _add_card(id: String) -> void:
-	if not _card_db.has(id): return
+	if not _card_db.has(id) or _acquired.has(id): return
+	if _cards.size() >= 10:
+		_toast("卡组已满（10 格）")
+		return
 	_choice_fx("draw")
 	_qc("draw", 1)
 	if str(id) == "shiny_zhongli":
@@ -4737,10 +4743,10 @@ func _add_card(id: String) -> void:
 	elif str(id) == "shiny_jicanghai":
 		_enable_fentian()
 	elif str(id).begins_with("shiny_"):
+		_acquired[id] = true
+		_draw_paid = false
+		_show_draw(false)
 		_do_devour(id)
-		return
-	if _cards.size() >= 10:
-		_toast("卡组已满（10 格）")
 		return
 	var c: Dictionary = _card_db[id]
 	_pool.erase(id)

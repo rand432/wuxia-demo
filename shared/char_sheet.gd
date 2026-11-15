@@ -11,12 +11,16 @@ extends RefCounted
 #   —— 战斗核心那边接上同一份数据之后，这个文件就可以退休。
 # ============================================================
 
+const EquipmentStats := preload("res://shared/equipment_stats.gd")
+
 const FD := preload("res://shared/forge_data.gd")
 
 const ATK_BASE := 12.0        # 与 kushou_battle.gd 的 ATTR_BASE 对齐
 const HP_BASE := 200.0
 const MP_BASE := 100.0
 const ATK_SEC := 1.8          # 攻速基础：1.8 秒/刀
+
+var _equipment: Dictionary = {}
 
 var hero := {
 	"atk": ATK_BASE, "hp": HP_BASE, "hp_max": HP_BASE,
@@ -29,13 +33,15 @@ func _init() -> void:
 
 # 从装备合计重新算一遍（穿脱装备后调一次即可）
 func refresh() -> void:
+	FD.load_game()
 	var t: Dictionary = FD.totals()
+	_equipment = EquipmentStats.bonuses(t)
 	hero["atk"] = ATK_BASE + float(t["atk"])
 	hero["hp_max"] = HP_BASE + float(t["hp"])
 	hero["hp"] = hero["hp_max"]
 	hero["mp_max"] = MP_BASE
 	hero["mp"] = MP_BASE
-	hero["aspd"] = 1.0
+	hero["aspd"] = 1.0 + float(_equipment["aspd_amp"])
 	hero["crit"] = 0.05
 	hero["crit_dmg"] = 2.0
 
@@ -43,5 +49,7 @@ func _attr_sync_from_hero() -> void:
 	refresh()
 
 # 七系面板数据暂时没有来源（穿透/减免/增幅 都是 0）
-func type_field(_t: String, _f: String) -> float:
+func type_field(t: String, f: String) -> float:
+	if t != "真实" and f == "red_f":
+		return float(_equipment.get("red", 0.0))
 	return 0.0

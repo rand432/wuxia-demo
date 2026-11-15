@@ -125,6 +125,7 @@ const TRANCE_HAMMERS := 6
 const CRACK_MAX := 5
 const COST_ORE := 1
 const COST_SILVER := 10
+const OIL_SUCCESS_WEIGHT_MULT := 1.5
 
 const ITEM_KEYS := ["龙鳞", "悔恨法条", "淬火油", "星砂"]
 const ITEM_ICON := {
@@ -136,7 +137,7 @@ const ITEM_ICON := {
 const ITEM_DESC := {
 	"龙鳞": "下一锤若「破坏」，则挡下。",
 	"悔恨法条": "撤销上一锤，不返还材料；使用其他道具后失效。",
-	"淬火油": "这一锤成功概率提升。",
+	"淬火油": "下一锤成功/大成功权重 ×1.5，不叠加。",
 	"星砂": "入神 +3 格。",
 }
 const ITEM_USE := {"龙鳞": "protect", "悔恨法条": "undo", "淬火油": "oil", "星砂": "star"}
@@ -169,6 +170,9 @@ static func weights(st: Dictionary, trait_name: String) -> Dictionary:
 		"贪狼":
 			if last == "损":
 				w["大"] = float(w["大"]) * 1.3
+	if int(st.get("oil", 0)) > 0:
+		w["成"] = float(w["成"]) * OIL_SUCCESS_WEIGHT_MULT
+		w["大"] = float(w["大"]) * OIL_SUCCESS_WEIGHT_MULT
 	return w
 
 static func odds(st: Dictionary, trait_name: String) -> Dictionary:
@@ -202,6 +206,7 @@ static func roll(it: Dictionary, equipped_slot: String = "") -> String:
 static func apply(it: Dictionary, res: String, equipped_slot: String = "") -> Dictionary:
 	var key := equipped_slot if equipped_slot != "" else str(it.get("slot", "weapon"))
 	var st := st_of(key)
+	st.erase("oil")   # 不论本锤结果如何，只作用一次
 	var out := {"plus": 0, "crack": 0, "gauge": 0, "trance": false, "broke": false, "blocked": false}
 	match res:
 		"大":
@@ -344,6 +349,8 @@ static func use_forge_item(slot: String, name: String) -> Dictionary:
 	var item: Dictionary = equipped.get(slot, {})
 	if item.is_empty():
 		return {"ok": false, "reason": "该部位没有装备"}
+	if str(ITEM_USE[name]) == "oil" and int((state.get(slot, {}) as Dictionary).get("oil", 0)) > 0:
+		return {"ok": false, "reason": "已使用淬火油，请先锻造一锤"}
 	var undo = (state.get(slot, {}) as Dictionary).get("undo", null)
 	if str(ITEM_USE[name]) == "undo":
 		if not undo is Dictionary or not undo.get("item") is Dictionary or not undo.get("state") is Dictionary:
