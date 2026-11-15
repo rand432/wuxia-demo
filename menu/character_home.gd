@@ -334,7 +334,7 @@ func _on_dock(key: String) -> void:
 		"curio":
 			get_tree().change_scene_to_file("res://menu/curio_home.tscn")
 		"start":
-			get_tree().change_scene_to_file("res://kushou/battle_ui.tscn")
+			get_tree().change_scene_to_file("res://menu/main_home.tscn")
 
 var _toast: Label = null
 var _toast_seq := 0

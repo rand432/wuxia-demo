@@ -36,10 +36,14 @@ func _ready() -> void:
 	var bars := UI.app_bar(self, GameState.player_name, "玄品", _open_settings)
 	_coin_lb = bars["coin"]
 	_crystal_lb = bars["crystal"]
+	# 默认停在当前所在关（不超过已解锁）
+	LevelState.ensure_loaded()
+	_stage = clampi(LevelState.current_level - 1, 0, clampi(LevelState.max_unlocked, 1, 10) - 1)
 	_build_head()
 	_build_tabs()
 	_build_stage_art()
 	_build_info()
+	_build_start_btn()
 	UI.dock(self, "", _on_dock)
 	_refresh()
 	set_process(true)
@@ -50,7 +54,9 @@ func _build_head() -> void:
 	_title_lb = UI.label(self, "", Vector2(72, 98), Vector2(576, 48), 30, P.INK, HORIZONTAL_ALIGNMENT_CENTER)
 
 func _change_stage(d: int) -> void:
-	_stage = wrapi(_stage + d, 0, STAGES.size())
+	LevelState.ensure_loaded()
+	var n := clampi(LevelState.max_unlocked, 1, 10)
+	_stage = wrapi(_stage + d, 0, n)
 	Audio.sfx("ui_click", -8.0)
 	_refresh()
 	_unroll(0.0)
@@ -65,12 +71,29 @@ func _build_tabs() -> void:
 		b.focus_mode = Control.FOCUS_NONE
 		b.add_theme_font_size_override("font_size", 24)
 		b.pressed.connect(func() -> void:
-			_diff = i
 			Audio.sfx("ui_click", -8.0)
+			if i == 1:
+				# 精英难度尚未开放：保持普通，提示一下，避免死按钮
+				_toast_main("精英难度敬请期待")
+				return
+			_diff = i
 			_style_tabs())
 		add_child(b)
 		_tabs.append(b)
 	_style_tabs()
+
+# 轻提示（主界面用）
+func _toast_main(t: String) -> void:
+	var l := UI.label(self, t, Vector2(60, 900), Vector2(600, 44), 22, P.INK, HORIZONTAL_ALIGNMENT_CENTER)
+	if l == null:
+		return
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	l.z_index = 120
+	var tw := create_tween()
+	tw.tween_property(l, "modulate:a", 0.0, 1.2).set_delay(0.6)
+	tw.tween_callback(func() -> void:
+		if is_instance_valid(l):
+			l.queue_free())
 
 func _style_tabs() -> void:
 	for i in _tabs.size():
@@ -156,6 +179,30 @@ func _build_info() -> void:
 		UI.label(self, "推 荐 战 力" if i == 0 else "首 通 奖 励", Vector2(44, y), Vector2(160, 56), 20, P.DIM)
 		_info_vals.append(UI.label(self, "—", Vector2(240, y), Vector2(420, 56), 20, Color(0.675, 0.635, 0.576)))
 
+# ---------------- 开始游戏 ----------------
+var _start_btn: Button = null
+
+func _build_start_btn() -> void:
+	_start_btn = UI.button(self, "开 始 游 戏", Rect2(150, 1076, 420, 82), 32,
+		P.SEAL, Color(0.980, 0.929, 0.839), _start_level, Color(P.GOLD.r, P.GOLD.g, P.GOLD.b, 0.95), 3, 12)
+	if _start_btn != null:
+		_start_btn.z_index = 20
+
+func _start_level() -> void:
+	Audio.sfx("ui_click", -6.0)
+	LevelState.ensure_loaded()
+	LevelState.current_level = _stage + 1
+	get_tree().change_scene_to_file("res://menu/loading.tscn")
+
+# 底栏「开始」在主界面只提醒：已经在关卡界面，用下方大按钮开始
+func _pulse_start_btn() -> void:
+	if _start_btn == null:
+		return
+	var tw := create_tween()
+	tw.tween_property(_start_btn, "scale", Vector2(1.06, 1.06), 0.10)
+	tw.tween_property(_start_btn, "scale", Vector2(1.0, 1.0), 0.14)
+	_start_btn.pivot_offset = _start_btn.size * 0.5
+
 # ---------------- 底栏 ----------------
 func _on_dock(key: String) -> void:
 	Audio.sfx("ui_click", -6.0)
@@ -167,20 +214,24 @@ func _on_dock(key: String) -> void:
 		"curio":
 			get_tree().change_scene_to_file("res://menu/curio_home.tscn")
 		"start":
-			LevelState.ensure_loaded()
-			LevelState.current_level = LevelState.max_unlocked
-			get_tree().change_scene_to_file("res://menu/loading.tscn")
+			# 底栏「开始」只负责来到关卡界面；真正开始用下方大按钮
+			_pulse_start_btn()
 
 # ---------------- 刷新 ----------------
+
 func _refresh() -> void:
-	var st: Dictionary = STAGES[_stage]
+	LevelState.ensure_loaded()
+	var n := clampi(LevelState.max_unlocked, 1, 10)
+	_stage = clampi(_stage, 0, n - 1)
+	LevelState.current_level = _stage + 1
+	var cfg: Dictionary = LevelState.config(_stage + 1)
 	if _title_lb != null:
-		_title_lb.text = str(st["name"])
+		_title_lb.text = str(cfg.get("name", "第 %d 关" % (_stage + 1)))
 	if _art_rect != null:
-		_art_rect.texture = st["art"]
+		_art_rect.texture = STAGES[0]["art"]
 	if _info_vals.size() == 2:
-		(_info_vals[0] as Label).text = str(st["power"])
-		(_info_vals[1] as Label).text = str(st["reward"])
+		(_info_vals[0] as Label).text = "第 %d 关" % (_stage + 1)
+		(_info_vals[1] as Label).text = "已解锁 %d/10" % n
 	_last_coin = -1
 	_last_crystal = -1
 

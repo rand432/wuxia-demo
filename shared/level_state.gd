@@ -108,11 +108,12 @@ static func god_ids(level: int = -1) -> Array:
 
 static func boss_tier(level: int = -1) -> int:
 	var lv := current_level if level < 0 else level
-	if lv <= 2:
+	# 按设计稿：1-3 关一阶，4-6 二阶，7-9 三阶，10 四阶
+	if lv <= 3:
 		return 1
-	if lv <= 4:
+	if lv <= 6:
 		return 2
-	if lv <= 7:
+	if lv <= 9:
 		return 3
 	return 4
 

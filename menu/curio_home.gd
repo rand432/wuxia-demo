@@ -28,7 +28,7 @@ func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	theme = UI.theme()
 	UI.bg(self)
-	UI.app_bar(self, GameState.player_name, GameState.role_grade_cn(""), func() -> void: print("[奇物页] 设置"))
+	UI.app_bar(self, GameState.player_name, GameState.role_grade_cn(""), func() -> void: UI.open_settings(self))
 	_ids = CurioData.order()
 	_build_head()
 	_build_cards()
@@ -253,7 +253,7 @@ func _on_dock(key: String) -> void:
 		"god":
 			get_tree().change_scene_to_file("res://menu/partner_home.tscn")
 		"start":
-			get_tree().change_scene_to_file("res://kushou/battle_ui.tscn")
+			get_tree().change_scene_to_file("res://menu/main_home.tscn")
 
 # ---------------- 子控件 ----------------
 class CurioCard extends Control:

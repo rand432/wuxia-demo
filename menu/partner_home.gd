@@ -83,6 +83,7 @@ func _ready() -> void:
 	bg.stretch_mode = TextureRect.STRETCH_SCALE
 	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(bg)
+	UI.app_bar(self, GameState.player_name, GameState.role_grade_cn(""), func() -> void: UI.open_settings(self))
 	_build_carousel()
 	_build_rest()
 	_build_hot()
@@ -559,9 +560,7 @@ func _build_hot() -> void:
 func _on_dock(key: String) -> void:
 	match key:
 		"start":
-			LevelState.ensure_loaded()
-			LevelState.current_level = LevelState.max_unlocked
-			get_tree().change_scene_to_file("res://menu/loading.tscn")
+			get_tree().change_scene_to_file("res://menu/main_home.tscn")
 		"role":
 			get_tree().change_scene_to_file("res://menu/character_home.tscn")
 		"curio":

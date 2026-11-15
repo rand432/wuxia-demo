@@ -47,7 +47,9 @@ var _deck_count_lb: Label
 # 总计页：顶部分类钮（卡组 / 宝物 / 组合）
 var _tot_tabs: Array = []
 var _tot_keys: Array = ["bond", "combo"]
-var _tot_tab := "bond"
+var _tot_tab := "combo"          # 默认先看「组合」（玩家最关心的已合成列表）
+var _tot_btn: Button = null
+var _tot_hint_shown := false     # 本局是否已经提示过「点总计看组合」
 var _devoured: Array = []          # 被吞噬的炫名单卡（组合页里也显示）
 var _combo_boost := {}             # 组合名 → 效果增幅（羁绊换来的，永久有效）
 var _combo_frac := {}              # 整数类组合的小数余额（+40% 攒两次给一次）
@@ -568,6 +570,7 @@ class DrawCard extends Control:
 	const QC := [Color(0.54,0.48,0.38), Color(0.31,0.48,0.29), Color(0.18,0.42,0.45), Color(0.42,0.29,0.48), Color(0.72,0.53,0.16)]
 	signal picked
 	var data: Dictionary = {}
+	var progress := 0          # 该卡所属组合的当前进度（由外壳写入）
 	var _art_rect: TextureRect
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_STOP
@@ -616,7 +619,7 @@ class DrawCard extends Control:
 			draw_string(F, Vector2(20, 264), "每吞一张：灵晶+20 · 文钱+150", HORIZONTAL_ALIGNMENT_LEFT, size.x - 36, 14, Color(0.2,0.16,0.12))
 			draw_string(F, Vector2(20, 284), "　　　　　技能伤害 +10%", HORIZONTAL_ALIGNMENT_LEFT, size.x - 36, 14, Color(0.2,0.16,0.12))
 		else:
-			draw_string(F, Vector2(20, 246), str(data.get("combo_name", "")) + " 0/" + str(data.get("set_size", 0)), HORIZONTAL_ALIGNMENT_LEFT, 140, 18, Color(0.42,0.30,0.12))
+			draw_string(F, Vector2(20, 246), str(data.get("combo_name", "")) + " " + str(progress) + "/" + str(data.get("set_size", 0)), HORIZONTAL_ALIGNMENT_LEFT, 140, 18, Color(0.42,0.30,0.12))
 			draw_string(F, Vector2(20, 280), str(data.get("trigger", "")) + "：" + str(data.get("combo_text", "")), HORIZONTAL_ALIGNMENT_LEFT, size.x - 36, 17, Color(0.2,0.16,0.12))
 	func _gui_input(ev: InputEvent) -> void:
 		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
@@ -676,7 +679,7 @@ func _build_hud() -> void:
 	_mp_bar = _panel(Rect2(200, 118, 235 * 0.35, 9), Color(0.30, 0.52, 0.72), 4)
 	var _boss_timer_lb := _lbl("", Vector2(450, 96), Vector2(120, 30), 17, SEAL)
 	_boss_timer_lb.visible = false   # 原来写死的“首领 00:37”是假的，改成首领真的出现时才显示
-	_btn("总计", Rect2(570, 88, 68, 42), 17, Color(0.10, 0.09, 0.08, 0.98), LIGHT, func(): _show_totals())
+	_tot_btn = _btn("总计", Rect2(570, 88, 68, 42), 17, Color(0.10, 0.09, 0.08, 0.98), LIGHT, func(): _show_totals())
 	_btn("退出", Rect2(646, 88, 60, 42), 17, Color(0.10, 0.09, 0.08, 0.98), LIGHT, func(): _show_exit(true))
 
 # ---------------- 战场 ----------------
@@ -1924,14 +1927,26 @@ func _roll_draw() -> void:
 			cands.erase(sid)
 			cands.push_front(sid)
 			_toast("炫彩卡必出 · 极低概率（4%），千中无一")
+	# 同一手不重复出同一张卡（池里若有重复 id，这里兜住）
+	var uniq: Array = []
+	for id_u in cands:
+		var su := str(id_u)
+		if uniq.has(su):
+			continue
+		uniq.append(su)
+		if uniq.size() >= _draw_cards.size():
+			break
+	cands = uniq
 	for i in _draw_cards.size():
 		var dc: DrawCard = _draw_cards[i]
 		if i < cands.size():
 			var c: Dictionary = (_card_db[str(cands[i])] as Dictionary).duplicate()
 			c["_id"] = str(cands[i])
 			dc.data = c
+			dc.progress = _set_progress(str(c.get("set_id", "")))
 		else:
 			dc.data = {}
+			dc.progress = 0
 		dc.queue_redraw()
 	# v4 彩蛋：这三张里有某位祖宗的家传卡 → 4% 掷他的炫卡
 	_roll_shiny_check(cands.slice(0, _draw_cards.size()))
@@ -2161,7 +2176,10 @@ func _process(_delta: float) -> void:
 		if int(_core.wave) != _last_wave:
 			_last_wave = int(_core.wave)
 			_trigger_combos("每波")
-		if not _boss_spawned and not _run_cleared and int(_core.wave) >= _max_wave:
+		# 最后一波：先把小怪清完，Boss 才登场（不同时出现）
+		if int(_core.wave) >= _max_wave:
+			_core.boss_required = true
+		if not _boss_spawned and not _run_cleared and int(_core.wave) >= _max_wave 				and _core._wave_spawned >= _core._wave_quota and _core.live_foes() <= 0:
 			_boss_spawned = true
 			_core.start_boss(LevelState.boss_tier(), "")
 		_run_time += _delta
@@ -2214,7 +2232,7 @@ func _process(_delta: float) -> void:
 		elif _equip_vuln > 0.0:
 			_core.foe_vuln = minf(0.45, _equip_vuln)
 		if int(_core.wave) >= 2 and hpr <= 0.50:
-			if not _l1_yuhu_shown:
+			if LevelState.current_level == 1 and not _l1_yuhu_shown:
 				_l1_yuhu_shown = true
 				_l1_tutorial("l1_yuhu", _curio_sq, "气血不足时，玉壶会自动回血", _show_curio_detail)
 		if _hp_fill != null:
@@ -2646,8 +2664,6 @@ func _grant_first_clear(lv: int) -> void:
 		GameState.advance_tokens += int(r["advance"])
 	if r.has("curio"):
 		GameState.new_curio_unlocked = true
-	if r.has("new_cards"):
-		GameState.new_cards_unlocked = true
 	_toast("首通 · " + str(r.get("text", "")))
 
 func _on_wave_clear(cleared_wave: int) -> void:
@@ -2662,17 +2678,19 @@ func _on_wave_clear(cleared_wave: int) -> void:
 	_refresh_trea_tile()
 	_toast("第 %d 波清空" % cleared_wave)
 	if cleared_wave == 1:
+		# 所有关卡：清完第 1 波亮出强化
 		if _str_tile != null:
 			_str_tile.visible = true
 			_str_tile.hot = true
 			_str_tile.queue_redraw()
-		# 两步引导：先点强化，再点文钱
-		_l1_tutorial("l1_wen", _str_tile,
-			"强化可以强化自身\n提升气血、内力和伤害（强化 Lv1）",
-			func() -> void:
-				_l1_tutorial("l1_wen2", _chips.get("文钱"),
-					"强化需要消耗文钱",
-					_on_str_tile))
+		# 只有第一关才跑强化/文钱/头像这条教学链
+		if LevelState.current_level == 1:
+			_l1_tutorial("l1_wen", _str_tile,
+				"强化可以强化自身\n提升气血、内力和伤害（强化 Lv1）",
+				func() -> void:
+					_l1_tutorial("l1_wen2", _chips.get("文钱"),
+						"强化需要消耗文钱",
+						_on_str_tile))
 
 func _l1_tutorial(key: String, target: Node, text: String, cb: Callable) -> void:
 	_tutorial(key, target, text, cb)
@@ -2788,7 +2806,7 @@ func _on_str_tile() -> void:
 		twc.tween_property(_str_tile, "modulate", Color(1.35, 1.25, 0.9), 0.05)
 		twc.tween_property(_str_tile, "modulate", Color(1, 1, 1), 0.18)
 	# 强化过一次后：引导点头像查看属性（屏幕压暗、头像亮起）
-	if not _l1_attr_shown:
+	if LevelState.current_level == 1 and not _l1_attr_shown:
 		_l1_attr_shown = true
 		var portrait: Node = _hero_token if _hero_token != null else _hero_hit_btn
 		_l1_tutorial("l1_attr", portrait, "点击人物头像可以查看当前属性", func() -> void: _open_attr_page())
@@ -2799,7 +2817,7 @@ func _on_str_tile() -> void:
 		var aug_t: Node = _str_layer
 		if _aug_cards.size() > 1:
 			aug_t = _aug_cards[1]          # 框中间那张卡，而不是整屏遮罩
-		if not _l1_aug_shown:
+		if LevelState.current_level == 1 and not _l1_aug_shown:
 			_l1_aug_shown = true
 			_l1_tutorial("l1_aug", aug_t,
 				"每强化 10 级可大幅提升属性\n并可选择自己的发展方向",
@@ -4002,8 +4020,16 @@ func _activate_ancestor_set(sid: String, first: Dictionary, ids: Array) -> void:
 		_cards.erase(cid)
 	var ai := str(first["ancestor"])
 	var t := int(first["tier"])
-	_ancestor_combos.append({"ancestor": ai, "tier": t, "sources": srcs,
-		"name": str(first["combo_name"]), "text": str(first["combo_text"])})
+	var arc := {"ancestor": ai, "tier": t, "sources": srcs,
+		"name": str(first["combo_name"]), "text": str(first["combo_text"])}
+	var cid0 := "%s_t%d_0" % [ai, t]
+	if _card_db.has(cid0):
+		var c0: Dictionary = _card_db[cid0]
+		arc["art"] = str(c0.get("art", ""))
+		arc["quality"] = int(c0.get("quality", 2))
+	_ancestor_combos.append(arc)
+	# 家传组合也播三合一动画
+	_play_merge_fx(arc)
 	if LevelState.current_level == 5 and _ancestor_combos.size() == 2 and not _family_shiny_done:
 		_family_shiny_ready = true   # 第五关是请神引导：第二组家传后必出一张炫彩
 	_add_ancestor_effects(ai, first.get("effects", {}))
@@ -4239,6 +4265,88 @@ func _check_sets() -> void:
 				changed = true
 				break
 
+# 三合一动画：三张卡向中间汇聚，淡出后再生成一张，飞向顶栏「总计」并打开
+func _play_merge_fx(rec: Dictionary) -> void:
+	var layer := Control.new()
+	layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.z_index = 150
+	add_child(layer)
+	var ap := str(rec.get("art", ""))
+	var tex: Texture2D = null
+	if ap != "" and ResourceLoader.exists(ap):
+		tex = load(ap)
+	var center := Vector2(360, 470)
+	for i in 3:
+		var t := TextureRect.new()
+		t.texture = tex
+		t.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		t.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+		t.size = Vector2(92, 124)
+		t.position = center + Vector2(-160.0 + float(i) * 160.0, 0.0) - t.size * 0.5
+		t.modulate.a = 0.0
+		layer.add_child(t)
+		var tw := create_tween()
+		tw.set_parallel(false)
+		tw.tween_property(t, "modulate:a", 1.0, 0.12).set_delay(float(i) * 0.05)
+		tw.parallel().tween_property(t, "position", center - t.size * 0.5, 0.30).set_delay(0.18 + float(i) * 0.05).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
+		tw.chain().tween_property(t, "modulate:a", 0.0, 0.10)
+	# 汇聚完成后：合成一张，飞向「总计」
+	var tw2 := create_tween()
+	tw2.tween_interval(0.62)
+	tw2.tween_callback(func() -> void: _fly_to_totals(layer, tex, center))
+
+func _fly_to_totals(layer: Control, tex: Texture2D, from: Vector2) -> void:
+	var t := TextureRect.new()
+	t.texture = tex
+	t.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	t.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	t.size = Vector2(92, 124)
+	t.position = from - t.size * 0.5
+	t.pivot_offset = t.size * 0.5
+	layer.add_child(t)
+	var twg := create_tween()
+	twg.tween_property(t, "modulate", Color(1.6, 1.35, 0.7), 0.08)
+	twg.tween_property(t, "modulate", Color(1, 1, 1), 0.12)
+	var target := Vector2(604, 109)
+	if _tot_btn != null:
+		target = _tot_btn.global_position + _tot_btn.size * 0.5
+	var tw := create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(t, "position", target - t.size * 0.5, 0.46).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
+	tw.tween_property(t, "scale", Vector2(0.28, 0.28), 0.46)
+	tw.tween_property(t, "modulate:a", 0.0, 0.14).set_delay(0.34)
+	tw.chain().tween_callback(func() -> void:
+		if is_instance_valid(layer):
+			layer.queue_free()
+		# 本局第一次组合：压暗屏幕 + 高亮「总计」，引导玩家去查看
+		if not _tot_hint_shown:
+			_tot_hint_shown = true
+			_l1_tutorial("l1_tot", _tot_btn, "合成后的卡组可以在此处查看",
+				func() -> void: _show_totals())
+		else:
+			_pulse_tot_btn())
+
+# 单卡飞向总计（炫卡被吞噬时用）
+func _fly_card_to_totals(art_path: String) -> void:
+	var tex: Texture2D = null
+	if art_path != "" and ResourceLoader.exists(art_path):
+		tex = load(art_path)
+	var lay := Control.new()
+	lay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	lay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	lay.z_index = 150
+	add_child(lay)
+	_fly_to_totals(lay, tex, Vector2(360, 470))
+
+func _pulse_tot_btn() -> void:
+	if _tot_btn == null:
+		return
+	_tot_btn.pivot_offset = _tot_btn.size * 0.5
+	var tw := create_tween()
+	tw.tween_property(_tot_btn, "scale", Vector2(1.18, 1.18), 0.08)
+	tw.tween_property(_tot_btn, "scale", Vector2.ONE, 0.16).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
 func _activate_set(sid: String) -> void:
 	var ids: Array = _set_cards[sid]
 	if ids.is_empty(): return
@@ -4274,6 +4382,8 @@ func _activate_set(sid: String) -> void:
 	if str(first["combo_key"]) in ["count_flat", "coin_count", "crystal_count", "treasure_pct", "boss_pct", "devour_n", "killnum_pct"]:
 		_apply_combo(rec)
 	_toast_card(str(rec["name"]), int(rec["quality"]), "组合激活，" + str(rec["size"]) + " 张已清空")
+	# 三合一表现：三张卡汇聚 → 合成一张 → 飞进「总计」
+	_play_merge_fx(rec)
 	# v8 成长系彩蛋：合成 攻击/防御/气血/内力 时 5% 掷「回潮」（一局一次）
 	# v13 重利：合成经济系（文钱/灵晶）时 3% 入池
 	if str(first["series"]) in ["gold", "crystal"] and not _zhongli_rolled and randf() < 0.03:
@@ -4585,7 +4695,7 @@ func _build_combined() -> void:
 	_combined_detail.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_combined_detail.visible = false
 	_combined_layer.add_child(_combined_detail)
-	_set_tot_tab("bond")
+	_set_tot_tab("combo")
 
 func _show_combined(v: bool) -> void:
 	_combined_layer.visible = v
@@ -4597,10 +4707,25 @@ func _show_combined(v: bool) -> void:
 func _refresh_combined() -> void:
 	for ch in _combined_icons.get_children(): ch.queue_free()
 	_combined_detail.visible = false
-	if _combined.is_empty() and _devoured.is_empty():
+	if _combined.is_empty() and _devoured.is_empty() and _ancestor_combos.is_empty():
 		_lbl("还没有已激活组合", Vector2(20, 20), Vector2(580, 40), 22, DIM, _combined_icons)
 		return
 	var k := 0
+	for a_v in _ancestor_combos:
+		var ar: Dictionary = a_v
+		var ica := CombinedIcon.new()
+		ica.position = Vector2(float(k % 5) * 120.0, float(k / 5) * 130.0)
+		ica.size = Vector2(100, 100)
+		ica.quality = int(ar.get("quality", 2))
+		var ap2 := str(ar.get("art", ""))
+		if ap2 != "" and ResourceLoader.exists(ap2):
+			ica.art = load(ap2)
+		ica.size_n = 3
+		ica.mark = "传"
+		ica.pressed.connect(func() -> void:
+			_show_ancestor_combo_detail(ar))
+		_combined_icons.add_child(ica)
+		k += 1
 	for i in _combined.size():
 		var rec: Dictionary = _combined[i]
 		var ic := CombinedIcon.new()
@@ -4612,6 +4737,32 @@ func _refresh_combined() -> void:
 		ic.mark = "合"
 		ic.pressed.connect(func() -> void: _show_combined_detail(rec))
 		_combined_icons.add_child(ic)
+		k += 1
+	# 进行中的组合（还没凑齐）：显示进度，方便玩家知道差几张
+	for sid_v in _set_cards.keys():
+		var sid := str(sid_v)
+		var ids: Array = _set_cards[sid]
+		if ids.is_empty():
+			continue
+		var firstc: Dictionary = _card_db.get(str(ids[0]), {})
+		if firstc.is_empty() or firstc.has("ancestor"):
+			continue
+		var prog := _set_progress(sid)
+		var sn := int(firstc.get("set_size", 3))
+		if prog <= 0 or prog >= sn:
+			continue
+		var icp := CombinedIcon.new()
+		icp.position = Vector2(float(k % 5) * 120.0, float(k / 5) * 130.0)
+		icp.size = Vector2(100, 100)
+		icp.quality = int(firstc.get("quality", 2))
+		var app := str(firstc.get("art", ""))
+		if app != "" and ResourceLoader.exists(app):
+			icp.art = load(app)
+		icp.size_n = 0
+		icp.mark = "进"
+		icp.progress_text = "%d/%d" % [prog, sn]
+		icp.pressed.connect(func() -> void: _show_inprogress_detail(sid, firstc, prog, sn))
+		_combined_icons.add_child(icp)
 		k += 1
 	for d_v in _devoured:
 		var d: Dictionary = d_v
@@ -4676,6 +4827,47 @@ func _show_combined_detail(rec: Dictionary) -> void:
 	_lbl("源：" + " · ".join(PackedStringArray(rec["sources"])), Vector2(170, 510), Vector2(380, 60), 17, Color(0.38,0.30,0.20), _combined_detail)
 	_btn("×", Rect2(592, 302, 34, 30), 20, Color(0.97,0.93,0.85), DIM, func(): _combined_detail.visible = false, _combined_detail)
 
+# 进行中组合详情
+func _show_inprogress_detail(sid: String, firstc: Dictionary, prog: int, sn: int) -> void:
+	for ch in _combined_detail.get_children(): ch.queue_free()
+	_combined_detail.visible = true
+	var p := Panel.new()
+	p.position = Vector2(140, 320)
+	p.size = Vector2(440, 320)
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.97, 0.93, 0.85, 0.99)
+	sb.set_corner_radius_all(9)
+	sb.border_color = QUALITY_COLORS[clampi(int(firstc.get("quality", 2)) - 1, 0, 4)]
+	sb.set_border_width_all(7)
+	p.add_theme_stylebox_override("panel", sb)
+	_combined_detail.add_child(p)
+	_lbl(str(firstc.get("combo_name", "组合")), Vector2(170, 346), Vector2(360, 40), 30, INK, _combined_detail, HORIZONTAL_ALIGNMENT_CENTER)
+	_lbl("进行中　%d / %d" % [prog, sn], Vector2(170, 396), Vector2(380, 32), 22, Color(0.64,0.22,0.15), _combined_detail)
+	_lbl("效果：" + str(firstc.get("combo_text", "")), Vector2(170, 440), Vector2(380, 80), 20, INK, _combined_detail)
+	_lbl("还差 %d 张同套卡即可合成" % (sn - prog), Vector2(170, 530), Vector2(380, 30), 18, DIM, _combined_detail)
+	_btn("×", Rect2(592, 322, 34, 30), 20, Color(0.97,0.93,0.85), DIM, func(): _combined_detail.visible = false, _combined_detail)
+
+# 家传组合详情（独立一套字段，不套用普通组合的 rec）
+func _show_ancestor_combo_detail(ar: Dictionary) -> void:
+	for ch in _combined_detail.get_children(): ch.queue_free()
+	_combined_detail.visible = true
+	var q := clampi(int(ar.get("quality", 2)), 1, 5)
+	var p := Panel.new()
+	p.position = Vector2(140, 320)
+	p.size = Vector2(440, 360)
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.97, 0.93, 0.85, 0.99)
+	sb.set_corner_radius_all(9)
+	sb.border_color = QUALITY_COLORS[q - 1]
+	sb.set_border_width_all(7)
+	p.add_theme_stylebox_override("panel", sb)
+	_combined_detail.add_child(p)
+	_lbl(str(ar.get("name", "家传组合")), Vector2(170, 346), Vector2(360, 40), 30, INK, _combined_detail, HORIZONTAL_ALIGNMENT_CENTER)
+	_lbl("家 传 · " + str(ar.get("tier", 1)) + " 档", Vector2(420, 350), Vector2(140, 28), 18, Color(0.64,0.22,0.15), _combined_detail)
+	_lbl("效果：" + str(ar.get("text", "")), Vector2(170, 410), Vector2(380, 80), 20, INK, _combined_detail)
+	_lbl("源：" + " · ".join(PackedStringArray(ar.get("sources", []))), Vector2(170, 500), Vector2(380, 70), 17, Color(0.38,0.30,0.20), _combined_detail)
+	_btn("×", Rect2(592, 322, 34, 30), 20, Color(0.97,0.93,0.85), DIM, func(): _combined_detail.visible = false, _combined_detail)
+
 class CombinedIcon extends Control:
 	const F := preload("res://fonts/ink.ttf")
 	const QC := [Color(0.54,0.48,0.38), Color(0.31,0.48,0.29), Color(0.18,0.42,0.45), Color(0.42,0.29,0.48), Color(0.72,0.53,0.16)]
@@ -4684,6 +4876,7 @@ class CombinedIcon extends Control:
 	var art: Texture2D = null
 	var size_n := 3
 	var mark := "合"
+	var progress_text := ""     # 进行中组合显示 "2/3"
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_STOP
 	func _draw() -> void:
@@ -4699,6 +4892,8 @@ class CombinedIcon extends Control:
 		draw_string(F, Vector2(size.x-30,23), mark, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(0.98,0.92,0.78))
 		if size_n > 0:
 			draw_string(F, Vector2(size.x-34,size.y-8), str(size_n), HORIZONTAL_ALIGNMENT_RIGHT, 26, 16, Color(0.38,0.30,0.20))
+		if progress_text != "":
+			draw_string(F, Vector2(8, size.y - 8), progress_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 17, Color(0.64,0.22,0.15))
 	func _gui_input(ev: InputEvent) -> void:
 		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
 			pressed.emit()
@@ -5121,6 +5316,7 @@ func _do_devour(shiny_id: String) -> void:
 	_anc_mod[aid]["dmg_pct"] = float(_anc_mod[aid].get("dmg_pct", 0.0)) + 10.0 * n
 	_page = 0
 	_refresh_deck()
+	_fly_card_to_totals(str(c.get("art", "")))
 	# ---- 表现：白闪 + 震屏 + 音效 ----
 	var flash := ColorRect.new()
 	flash.color = Color(1.0, 0.98, 0.90, 0.0)

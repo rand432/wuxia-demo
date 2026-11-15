@@ -144,12 +144,13 @@ func _wave_quota_for(w: int) -> int:
 	if w <= 1:   return 12
 	if w <= 2:   return 14
 	if w <= 3:   return 16
+	if w <= 5:   return 18        # 第 4–5 波再降一档（前五关 -8 后实际 10 只）
 	if w <= 6:   return 22
 	if w <= 10:  return 26
 	if w <= 15:  return 26
 	if w <= 20:  return 24
-	if w <= 25:  return 30
-	return 30
+	if w <= 25:  return 24
+	return 22
 
 var SPAWN_EVERY := 1.6               # 每批之间的间隔（原来是 1.2 秒刷一只；现在成批刷）
 var SPAWN_PACK := 4                  # 一批几只（割草：一次涌出 4 只，凑成可被横扫的一团）
@@ -166,8 +167,8 @@ const FOE_STOP := 150.0             # 怪走到离主角多近就停下开打
 #   而怪的伤害是按"随时满血"那套调的 → 前期就磨死。这条是最自然的续航：
 #   砍死一只回一小口，而且它会跟着"血上限↑、击杀速度↑"自己变强。
 var kill_heal := 0.08               # 击杀回血 = 上限的 8%（v18j 定值：见交接文档 §3.6 的实测表）
-var WAVE_HP := 1.10                 # 每波怪血 ×（1.08→1.10：前 6 波仍一刀，20 波后开始明显要补输出）
-var WAVE_ATK := 1.08                # 每波怪攻 ×
+var WAVE_HP := 1.075                # 每波怪血 ×（1.10→1.075：后期不再变成砍木桩）
+var WAVE_ATK := 1.06                # 每波怪攻 ×（后期压力收敛）
 const BASE_FOE_HP := 9.0            # 波1 约 7.6 血；主角 12 攻，前 6 波稳定一刀
 var BASE_FOE_ATK := 3.2              # 怪攻击（用户：整体偏难，3.8 -> 3.2）
 const FOE_ASPD := 0.6               # 怪每秒打几下
@@ -387,6 +388,8 @@ var running := false
 var intro_wait := 0.0               # 开场等待（站桩，不出手也不动）
 var kills_total := 0
 var boss_alive := false
+var boss_required := false       # 最后一波：小怪清完才出 Boss
+var boss_spawned_once := false   # Boss 是否已登场过（用于 wave_cleared 判定）
 var foe_vuln := 0.0                 # 隐藏易伤：抽卡组合越多，怪实际吃的伤害越高
 
 var _spawn_t := 0.6
@@ -672,8 +675,11 @@ func start_boss(tier: int, boss_name := "") -> void:
 		"poison":
 			f["boss_poison"] = true
 		"summon":
-			f["boss_summon"] = 1
-			f["boss_summon_t"] = 8.0          # 登场 8 秒后第一次号令，之后每 12 秒
+			# 第一关 Boss 不召小怪（教学关别加压力）
+			var L := preload("res://shared/level_state.gd")
+			if L.current_level > 1:
+				f["boss_summon"] = 1
+				f["boss_summon_t"] = 8.0          # 登场 8 秒后第一次号令，之后每 12 秒
 		"foxfire":
 			f["boss_foxfire"] = 1
 	# ---- 词缀（登场就吃）----
@@ -699,15 +705,27 @@ func start_boss(tier: int, boss_name := "") -> void:
 			f["boss_regen"] = float(d["affix_v"])
 		"revive":
 			f["boss_revive"] = 1
-	f["hp"] = float(d["hp"]) * hp_mul
-	f["hp_max"] = float(d["hp"]) * hp_mul
-	f["atk"] = float(d["atk"]) * atk_mul
+	# 前十关按关卡缩放的 Boss 数值：L1≈0.22，L10=1.0（后期才是满配 Boss）
+	var lv_scale := 0.22
+	var LS := preload("res://shared/level_state.gd")
+	lv_scale = lerpf(0.22, 1.0, clampf(float(LS.current_level - 1) / 9.0, 0.0, 1.0))
+	f["hp"] = float(d["hp"]) * hp_mul * lv_scale
+	f["hp_max"] = float(d["hp"]) * hp_mul * lv_scale
+	f["atk"] = float(d["atk"]) * atk_mul * lv_scale
+	# 安全阀：Boss 单下不超过主角血上限的 5%（约 20 下打死主角）；
+	#         血量不超过主角 20 秒输出（保证打得完）
+	var hero_hp := float(hero.get("hp_max", 200.0))
+	f["atk"] = minf(float(f["atk"]), hero_hp * 0.05)
+	var dps := float(hero.get("atk", 12.0)) * 1.6
+	f["hp"] = minf(float(f["hp"]), dps * 20.0)
+	f["hp_max"] = float(f["hp"])
 	f["bname"] = str(d["name"])
 	f["bskill"] = str(d.get("skill", ""))
 	f["bult"] = str(d.get("ult", ""))
 	f["baffix"] = str(d.get("affix", ""))
 	f["ult_t"] = float(d.get("ult_cd", 14.0))     # v14g：大招计时
 	boss_alive = true
+	boss_spawned_once = true
 	_banner = ["", "一阶 boss", "二阶 boss", "三阶 boss", "四阶 boss"][tt] + "　" + str(d["name"])
 	_banner_t = 2.4
 	# v226：入场一记闷鼓 + 震一下；bgm_boss_intro 随后接上
@@ -5148,7 +5166,11 @@ func boss_cleared() -> bool:
 
 # v17x：这一波的定额刷完了、场上也清空了吗？（外壳用它提前开下一波）
 func wave_cleared() -> bool:
-	return _wave_spawned >= _wave_quota and live_foes() <= 0 and not boss_alive
+	# 最后一波要求：小怪清完 + （该出 Boss 时必须先打完 Boss）
+	var boss_ok := true
+	if boss_required:
+		boss_ok = boss_spawned_once and not boss_alive
+	return _wave_spawned >= _wave_quota and live_foes() <= 0 and boss_ok
 
 # 换波时调用：重置定额与计数（新一波从头刷）
 func wave_reset_quota() -> void:
