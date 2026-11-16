@@ -124,6 +124,7 @@ signal wood_expired(foe: Dictionary)
 signal cold_expired(foe: Dictionary)
 signal paper_blocked(pos: Vector2)                # 奇物·纸人替身挡下延迟技
 signal hero_attack()
+signal hero_strike_resolved(primary: Dictionary)
 signal hero_hit()
 signal hero_damaged(amount: float, attacker: Dictionary)
 # 主角的剑真正打中某只怪（伤害/暴击/重击）；表现层只认这个信号出数字
@@ -945,6 +946,9 @@ func _process(delta: float) -> void:
 					and float(ptgt.get("hp", 0.0)) > 0.0
 					and float(ptgt.get("dying", 0.0)) <= 0.0):
 				_hero_strike(ptgt)
+				if not running or frame_epoch != _enemy_attack_epoch:
+					queue_redraw()
+					return
 	# v13b P1：点击指令计时（走位指令到点/超时自动撤销 → 回自动战斗）
 	_order_t += delta
 	var target := _order_target()
@@ -1024,6 +1028,9 @@ func _process(delta: float) -> void:
 			# 高攻速缩短起手；否则0.12秒的新一刀会反复覆盖0.18秒的待命中刀。
 			_hero_pending_t = minf(HERO_WINDUP, _hero_cd * HERO_WINDUP / HERO_ATTACK_TIME)
 			hero_attack.emit()
+			if not running or frame_epoch != _enemy_attack_epoch:
+				queue_redraw()
+				return
 	# 怪：往下走 / 贴上来打
 	# 连杀计时：1.4 秒内没有新击杀就归零
 	if _combo_t > 0.0:
@@ -1745,6 +1752,7 @@ func _hero_strike(tgt: Dictionary) -> void:
 	var heavy := _heavy % 3 == 0
 	var base := float(hero["atk"]) * (1.0 + float(hero["dmg_pct"])) * atk_mul()
 	base += float(hero.get("_kill_atk", 0.0))            # v14a 战意：本局每杀一个 +0.4 攻击
+	base *= basic_skill_multiplier() # 局外基础剑法成长，仅作用于主角普攻及其派生，不抬全局攻击。
 	base *= 1.0 + float(hero.get("curio_atk", 0.0))       # 奇物：血葫芦 / 醉翁壶的攻击加成
 	if float(hero.get("mech_laststand", 0.0)) > 0.0 \
 			and float(hero["hp"]) / maxf(1.0, float(hero["hp_max"])) <= 0.35:
@@ -1820,6 +1828,7 @@ func _hero_strike(tgt: Dictionary) -> void:
 		_spawn_qi(Vector2(float(tgt["x"]), float(tgt["y"])), tgt, base)
 	# 剑光（v3d ＋ v3e）：按几率、**朝出手方向**甩月牙
 	_try_spawn_jg(base, Vector2(float(tgt["x"]), float(tgt["y"])) - hero_pos)
+	hero_strike_resolved.emit(tgt)
 
 # v17g：取**离主角最近的 n 只**活怪（给"全场技"限人数用）
 #   原来琴痴/毒娘子这类是 `for f_v in foes` 打全场——怪一多就控一片/毒一片，
@@ -2789,6 +2798,9 @@ func skill_lv(id: String) -> int:
 
 func atk_mul() -> float:
 	return 1.0 + 0.12 * float(skill["dmg"])
+
+func basic_skill_multiplier() -> float:
+	return 1.0 + maxf(0.0, float(hero.get("basic_skill_bonus", 0.0)))
 
 # v14b：玄机子「时间停止」给的临时攻速（战场自己管，跟外壳的疾风符互不干扰）
 var _p_aspd := 0.0

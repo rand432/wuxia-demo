@@ -17,6 +17,7 @@ var end_level := 10
 var timeout_seconds := 420.0
 var audit_curio := ""
 var audit_curio_level := 1
+var audit_basic_skill_level := 0
 
 func _ready() -> void:
 	if not OS.get_user_data_dir().replace("\\", "/").ends_with("wuxia-regression"):
@@ -37,6 +38,10 @@ func _ready() -> void:
 			audit_curio = arg.get_slice("=", 1)
 		if arg.begins_with("--curio-level="):
 			audit_curio_level = clampi(int(arg.get_slice("=", 1)), 1, 5)
+		if arg.begins_with("--basic-skill-level="):
+			audit_basic_skill_level = clampi(int(arg.get_slice("=", 1)), 0, 1000)
+	GS.ensure_loaded()
+	GS.skill_lv["zhujue"] = audit_basic_skill_level # 仅隔离测试，可保存到本次隔离目录。
 	if not audit_curio.is_empty():
 		if CurioData.get_curio(audit_curio).is_empty():
 			push_error("未知测试奇物：" + audit_curio)
@@ -68,6 +73,7 @@ func _start() -> void:
 	t = 0.0; cd = 0.0; wait_draw = 0; wait_trea = 0; done = false
 	_log("[GO] L%d" % lv)
 	_log("[CURIO] L%d id=%s level=%d" % [lv, str(b._curio_id), int(b._curio_lv)])
+	_log("[BASIC_SKILL] L%d level=%d multiplier=%.2f" % [lv, audit_basic_skill_level, b._core.basic_skill_multiplier()])
 
 func _process(dt: float) -> void:
 	if b == null or b._core == null or done:
