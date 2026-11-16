@@ -39,6 +39,7 @@ func _run() -> void:
 	core.hero["hp"] = 1000.0
 	core.hero["atk"] = 100.0
 	core.hero["crit"] = 0.0
+	core.attr_set_base("crit", 0.0) # 实际暴击读取属性层，不能只改旧桥接字段。
 	core.hero["lucky"] = 0.0
 	battle._set_paper_count(2)
 	_hit(core, 10.0, false)

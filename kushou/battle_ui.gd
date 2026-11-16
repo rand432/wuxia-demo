@@ -2788,6 +2788,7 @@ func _end_run(win: bool) -> void:
 		else:
 			_toast("首通记录恢复失败，请检查存储空间")
 	_run_over = true
+	_q_close_popup()
 	if _core != null:
 		_core.running = false
 	if _cam != null:
@@ -5542,7 +5543,7 @@ func _cast_skill(i: int) -> void:
 	var aid := str(sk["aid"])
 	var dtype := str(sk["dtype"])
 	var m: Dictionary = _anc_mod.get(aid, {})
-	var shared_pct := 0.0 if dtype == "物理" else float(_elem_mod.get(dtype, 0.0))
+	var shared_pct := 0.0 if _core.DMG_TYPES.has(dtype) else float(_elem_mod.get(dtype, 0.0))
 	var dmg_pct := float(m.get("dmg_pct", 0.0)) + shared_pct + _skill_level_bonus(aid)
 	var cd_pct := float(m.get("cd_pct", 0.0))
 	var mp_flat := float(m.get("mp_flat", 0.0))
@@ -5588,11 +5589,12 @@ func _add_ancestor_effects(aid: String, eff: Dictionary) -> void:
 		if eff.has(k):
 			m[k] = float(m.get(k, 0.0)) + float(eff[k])
 	if eff.has("elem_pct"):
+		# 七种面板类型在统一伤害层结算；召唤继续沿现有独立路径。
 		var ep: Dictionary = eff["elem_pct"]
 		for e in ep.keys():
 			_elem_mod[e] = float(_elem_mod.get(e, 0.0)) + float(ep[e])
-			if e == "物理" and _core != null:
-				_core.type_add("物理", "amp_f", float(ep[e]) / 100.0)
+			if _core != null and _core.DMG_TYPES.has(str(e)):
+				_core.type_add(str(e), "amp_f", float(ep[e]) / 100.0)
 	if aid == "zhujue" and _core != null:
 		_sync_basic_family_bonus()
 
@@ -6098,7 +6100,7 @@ func _tick_burn(dt: float) -> void:
 
 func _cast_fire() -> void:
 	var m: Dictionary = _anc_mod.get("jicanghai", {})
-	var dmg_pct := float(m.get("dmg_pct", 0.0)) + float(_elem_mod.get("火系", 0.0)) + _skill_level_bonus("jicanghai")
+	var dmg_pct := float(m.get("dmg_pct", 0.0)) + _skill_level_bonus("jicanghai")
 	var ign := 1 + int(m.get("ignite_add", 0.0)) + _ignite_bonus
 	var stacks := 1.0 + float(m.get("burn_add", 0.0))
 	var foes := _live_foes()
@@ -6761,7 +6763,6 @@ func _heal_ring(rad: float) -> void:
 func _tick_poison(dt: float) -> void:
 	if _core == null:
 		return
-	var wood := _wood_pct()
 	for f_v in _core.foes:
 		var f: Dictionary = f_v
 		var st := float(f.get("poison", 0.0))
@@ -6773,7 +6774,7 @@ func _tick_poison(dt: float) -> void:
 		f["poison_acc"] = float(f.get("poison_acc", 0.0)) + dt
 		while float(f["poison_acc"]) >= 1.0:
 			f["poison_acc"] = float(f["poison_acc"]) - 1.0
-			var dmg := float(_core.hero.get("atk", 12.0)) * POISON_RATE * (1.0 + wood / 100.0) * st
+			var dmg := float(_core.hero.get("atk", 12.0)) * POISON_RATE * st # 木系共享在统一伤害层应用。
 			_core._apply_dmg(f, dmg * _vuln_mul(f), "木系")
 			_core._push_float(float(f["x"]), float(f["y"]) - 34.0, "毒", Color(0.45, 0.80, 0.40))
 			if randf() < 0.6:
@@ -6841,8 +6842,9 @@ func _aura_radius() -> float:
 	return r
 
 func _tick_aura(dt: float) -> void:
-	if not _mingzhu or _core == null:
+	if not _mingzhu or _core == null or _run_over or not _core.running or float(_core.hero.get("hp", 0.0)) <= 0.0:
 		return
+	var epoch: int = _core._enemy_attack_epoch
 	var m: Dictionary = _anc_mod.get("mingzhu", {})
 	var rad := _aura_radius()
 	var vuln := float(m.get("vuln", 0.0))
@@ -6856,8 +6858,9 @@ func _tick_aura(dt: float) -> void:
 	var do_pull := _aura_pull_acc >= 1.0
 	if do_pull:
 		_aura_pull_acc -= 1.0
-	var wood := float(_elem_mod.get("木系", 0.0))
-	for f_v in _core.foes:
+	for f_v in _core.foes.duplicate():
+		if _run_over or not _core.running or epoch != _core._enemy_attack_epoch or float(_core.hero.get("hp", 0.0)) <= 0.0:
+			return
 		var f: Dictionary = f_v
 		if float(f.get("hp", 0.0)) <= 0.0 or float(f.get("dying", 0.0)) > 0.0:
 			continue
@@ -6870,11 +6873,14 @@ func _tick_aura(dt: float) -> void:
 			f["vuln_pct"] = vuln
 		if pull and do_pull and randf() < 0.20:
 			var dir := (-d).normalized()
-			f["x"] = float(f["x"]) + dir.x * AURA_PULL_STEP
-			f["y"] = float(f["y"]) + dir.y * AURA_PULL_STEP
-			var dmg := float(_core.hero.get("atk", 12.0)) * 0.15 * (rad / AURA_R_BASE) * (1.0 + wood / 100.0)
+			var step := minf(AURA_PULL_STEP, d.length())
+			f["x"] = float(f["x"]) + dir.x * step
+			f["y"] = float(f["y"]) + dir.y * step
+			var dmg := float(_core.hero.get("atk", 12.0)) * 0.15 * (rad / AURA_R_BASE)
 			_core._apply_dmg(f, dmg * _vuln_mul(f), "木系")
 			_core._push_float(float(f["x"]), float(f["y"]) - 30.0, "聚", Color(0.95, 0.85, 0.55))
+			if float(f.get("hp", 0.0)) <= 0.0:
+				_core._kill_foe(f)
 
 # ---------------- 不灭之灯（明烛炫卡） ----------------
 func _enable_undying_lamp() -> void:
@@ -7399,6 +7405,8 @@ func _q_close_popup() -> void:
 
 # 点那一条：弹详情（掷到的：接受/放弃；已接受：只看）
 func _q_open_popup() -> void:
+	if not _q_can_act():
+		return
 	_q_close_popup()
 	var is_offer := _q_cur.is_empty() and not _q_offer.is_empty()
 	var q: Dictionary = _q_offer if is_offer else _q_cur
@@ -7449,18 +7457,24 @@ func _q_open_popup() -> void:
 		y += 50.0
 	if is_offer:
 		_btn("接 受", Rect2(32, 370, 180, 62), 26, Color(0.85, 0.66, 0.23), Color(0.13, 0.10, 0.06),
-			func() -> void: _q_accept(), holder)
+			func() -> void:
+				if _q_pop == layer and is_same(_q_offer, q): _q_accept(), holder)
 		_btn("放 弃", Rect2(268, 370, 180, 62), 26, Color(0.93, 0.89, 0.80), Color(0.35, 0.28, 0.18),
-			func() -> void: _q_decline(), holder)
+			func() -> void:
+				if _q_pop == layer and is_same(_q_offer, q): _q_decline(), holder)
 	else:
 		_btn("关 闭", Rect2(150, 370, 180, 62), 26, Color(0.93, 0.89, 0.80), Color(0.35, 0.28, 0.18),
-			func() -> void: _q_close_popup(), holder)
+			func() -> void:
+				if _q_pop == layer: _q_close_popup(), holder)
 		_lbl("接了就得打完 · 中途不能放弃", Vector2(30, 342), Vector2(420, 22), 14, Color(0.62, 0.20, 0.14), holder, HORIZONTAL_ALIGNMENT_CENTER)
 	_pop_bounce(holder)
 	_breathe(holder)
 
+func _q_can_act() -> bool:
+	return not _run_over and _core != null and _core.running and float(_core.hero.get("hp", 0.0)) > 0.0
+
 func _q_accept() -> void:
-	if _run_over or not _q_cur.is_empty() or _q_offer.is_empty():
+	if not _q_can_act() or not _q_cur.is_empty() or _q_offer.is_empty():
 		return
 	if str(_q_offer.get("id", "")) == "dj" and _wen < 100:
 		_toast("赌局 · 需要 100 文，当前不足")
@@ -7473,7 +7487,7 @@ func _q_accept() -> void:
 	_q_activate(q)
 
 func _q_decline() -> void:
-	if _q_offer.is_empty():
+	if not _q_can_act() or _q_offer.is_empty():
 		return
 	_q_giveup += 1
 	_q_offer = {}
@@ -7486,10 +7500,11 @@ func _q_notify(_text: String) -> void:
 	pass
 
 func _q_finish(why: String) -> void:
-	if _run_over or _q_cur.is_empty():
+	if not _q_can_act() or _q_cur.is_empty():
 		return
 	var q: Dictionary = _q_cur
 	_q_cur = {} # 先关闭结算入口，奖励/清理回调不能再次完成同一奇遇。
+	_q_close_popup()
 	_q_t = 0.0
 	_q_cleanup(q)
 	match why:
@@ -7569,7 +7584,7 @@ func _q_done_kind(kind: String) -> void:
 
 # 单槽：待接或进行中时不掷下一条，不积攒隐藏队列。
 func _q_roll() -> void:
-	if _run_over or _core == null or not _q_cur.is_empty() or not _q_offer.is_empty():
+	if not _q_can_act() or not _q_cur.is_empty() or not _q_offer.is_empty():
 		return
 	var wave := int(_core.wave)
 	var tw: Array = Q_TIER_W[0] if wave <= 2 else (Q_TIER_W[1] if wave == 3 else Q_TIER_W[2])
@@ -7619,7 +7634,7 @@ func _q_prepare(source: Dictionary) -> Dictionary:
 	return q
 
 func _q_activate(q: Dictionary) -> void:
-	if _run_over or not _q_cur.is_empty():
+	if not _q_can_act() or not _q_cur.is_empty():
 		return
 	q = _q_prepare(q)
 	q["prog"] = 0
@@ -7639,7 +7654,8 @@ func _q_activate(q: Dictionary) -> void:
 		"survive":
 			if str(q["id"]) == "xj":
 				var h: Dictionary = _core.hero
-				h["hp"] = maxf(1.0, float(h.get("hp", 0.0)) * 0.8)
+				var hp := float(h.get("hp", 0.0))
+				h["hp"] = minf(hp, maxf(1.0, hp * 0.8)) # 扣血不致死，也不能把不足1血的角色治疗到1。
 		"instant":
 			if str(q.get("id", "")) == "dj" and _wen < 100:
 				_toast("赌局 · 需要 100 文，当前不足")
@@ -7653,7 +7669,7 @@ func _q_activate(q: Dictionary) -> void:
 	Aud.sfx("ui_open", -10.0)
 
 func _q_instant(q: Dictionary) -> void:
-	if _run_over or not is_same(_q_cur, q) or str(q.get("id", "")) != "dj" or _wen < 100:
+	if not _q_can_act() or not is_same(_q_cur, q) or str(q.get("id", "")) != "dj" or _wen < 100:
 		return
 	_wen -= 100
 	if _coin_lb != null:
@@ -7697,7 +7713,7 @@ func _q_check(q: Dictionary) -> void:
 			q["prog"] = int(q["need"]) - alive
 
 func _q_tick(dt: float) -> void:
-	if _run_over:
+	if not _q_can_act():
 		return
 	# 设计稿：奇遇是第 4 关才解锁的新功能（统一走解锁表）
 	if not LevelState.has_feature("encounter"):
@@ -7732,6 +7748,8 @@ func _q_tick(dt: float) -> void:
 	_q_ai(dt)
 
 func _q_ai(dt: float) -> void:
+	if not _q_can_act():
+		return
 	_q_ai_t += dt
 	if _q_ai_t < 0.3:
 		return
