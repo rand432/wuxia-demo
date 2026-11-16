@@ -1752,7 +1752,7 @@ func _hero_strike(tgt: Dictionary) -> void:
 	var heavy := _heavy % 3 == 0
 	var base := float(hero["atk"]) * (1.0 + float(hero["dmg_pct"])) * atk_mul()
 	base += float(hero.get("_kill_atk", 0.0))            # v14a 战意：本局每杀一个 +0.4 攻击
-	base *= basic_skill_multiplier() # 局外基础剑法成长，仅作用于主角普攻及其派生，不抬全局攻击。
+	base *= basic_attack_multiplier() # 局外成长与本技能家传只作用于普攻及其派生。
 	base *= 1.0 + float(hero.get("curio_atk", 0.0))       # 奇物：血葫芦 / 醉翁壶的攻击加成
 	if float(hero.get("mech_laststand", 0.0)) > 0.0 \
 			and float(hero["hp"]) / maxf(1.0, float(hero["hp_max"])) <= 0.35:
@@ -2801,6 +2801,9 @@ func atk_mul() -> float:
 
 func basic_skill_multiplier() -> float:
 	return 1.0 + maxf(0.0, float(hero.get("basic_skill_bonus", 0.0)))
+
+func basic_attack_multiplier() -> float:
+	return basic_skill_multiplier() + maxf(0.0, float(hero.get("basic_family_bonus", 0.0)))
 
 # v14b：玄机子「时间停止」给的临时攻速（战场自己管，跟外壳的疾风符互不干扰）
 var _p_aspd := 0.0

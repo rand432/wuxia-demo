@@ -94,6 +94,7 @@ func _process(dt: float) -> void:
 		_log("[FAMILY] L%d combos=%d shiny=%s" % [lv, b._ancestor_combos.size(), str(b._family_shiny_done)])
 		_log("[QUEST_RESULT] L%d done=%d fail=%d giveup=%d" % [lv, b._q_done, b._q_fail, b._q_giveup])
 		_log("[CURIO_RESULT] L%d uses=%d" % [lv, b._curio_uses])
+		_log("[RARE_RESULT] L%d taken=%s" % [lv, str(b._rare_taken.keys())])
 		if not win:
 			failures += 1
 		_finish(); return

@@ -130,7 +130,7 @@ var _bonds: Array = []          # 身上的羁绊（凑齐就消耗掉，所以�
 var _bond_unlocked := {}        # 已解锁的羁绊名（只有这些会出现在三选一里）
 var _bond_taken := {}           # 已经结过的羁绊名（不重复出现）
 var _crystal_lock := false      # 「倾囊」之后：灵晶收入归零
-var _rare_buffs: Array = []     # 限时 buff：{amount, t}
+var _rare_buffs: Array = []     # 限时 buff：{raw_atk, t}，记录属性增幅前的固定攻击。
 var _bonds_done := 0            # 这一局已经成过几张
 var _trea_charge := TREA_CHARGE_START
 var _trea_reroll := 3
@@ -2285,6 +2285,7 @@ func _sync_attrs_to_hero() -> void:
 	var h: Dictionary = _core.hero
 	h["atk"] = _core.attr_final("atk")
 	h["basic_skill_bonus"] = _skill_level_bonus("zhujue") / 100.0
+	_sync_basic_family_bonus()
 	h["crit"] = _core.attr_final("crit")
 	h["crit_dmg"] = _core.attr_final("cdmg")
 	h["cut"] = _core.type_effective_field("物理", "red_f")
@@ -2302,6 +2303,10 @@ func _sync_attrs_to_hero() -> void:
 		ratio = clampf(float(h.get("hp", 0.0)) / float(h.get("hp_max", 1.0)), 0.0, 1.0)
 	h["hp_max"] = hp_new
 	h["hp"] = minf(hp_new, hp_new * ratio)
+
+func _sync_basic_family_bonus() -> void:
+	if _core != null:
+		_core.hero["basic_family_bonus"] = float((_anc_mod.get("zhujue", {}) as Dictionary).get("dmg_pct", 0.0)) / 100.0
 
 # 平加成长的即时桥也读属性层。等级成长保留血量比例，卡牌平加气血保留补新增量的规则。
 func _apply_flat_growth(atk_add: float, hp_add: float, preserve_hp_ratio := false) -> void:
@@ -2455,10 +2460,10 @@ func _process(_delta: float) -> void:
 			if LevelState.current_level == 1 and not _l1_yuhu_shown:
 				_l1_yuhu_shown = true
 				_l1_tutorial("l1_yuhu", _curio_sq, "气血不足时，玉壶会自动回血", _show_curio_detail)
+		_tick_rare_buffs(_delta) # 到期先移除，再结算本帧技能，不能多借用一帧攻击。
 		if _hp_fill != null:
 			_hp_fill.size = Vector2(maxf(4.0, 235.0 * hpr), 20.0)
 			_tick_skills(_delta)
-		_tick_rare_buffs(_delta)
 		_tick_curio(_delta)
 		_tick_fly(_delta)
 		_tick_pulses(_delta)
@@ -3668,29 +3673,28 @@ func _apply_rare(o: Dictionary) -> void:
 	_refresh_trea_tile()
 	_refresh_str_tile()
 
-# 限时 buff：先加一份固定的攻击，到点再把这同一份减掉（不吃后续变化的账）
+# 限时 buff：快照一份增幅前的固定攻击，到点只移除自身这一份。
 func _apply_rare_buff(o: Dictionary) -> void:
-	if _core == null:
+	if _run_over or _core == null:
 		return
 	var pct := float(o.get("v", 0)) / 100.0
 	var dur := float(o.get("dur", 30))
-	var h: Dictionary = _core.hero
-	var add := float(h.get("atk", 0.0)) * pct
-	h["atk"] = float(h.get("atk", 0.0)) + add
-	if _core != null:
-		_core.attr_add("atk", add)
-	_rare_buffs.append({"amount": add, "t": dur})
+	var a: Dictionary = _core.attr["atk"]
+	var add := (float(a["base"]) + float(a["temp"])) * pct
+	_core.attr_add("atk", add)
+	_core.hero["atk"] = _core.attr_final("atk")
+	_rare_buffs.append({"raw_atk": add, "t": dur})
 	_toast("稀有 · 攻击 +%d%%（%d 秒）" % [int(o.get("v", 0)), int(dur)])
 
 func _tick_rare_buffs(dt: float) -> void:
-	if _rare_buffs.is_empty() or _core == null:
+	if _run_over or _rare_buffs.is_empty() or _core == null or dt <= 0.0:
 		return
 	for i in range(_rare_buffs.size() - 1, -1, -1):
 		var rb: Dictionary = _rare_buffs[i]
 		rb["t"] = float(rb["t"]) - dt
 		if float(rb["t"]) <= 0.0:
-			_core.hero["atk"] = maxf(1.0, float(_core.hero.get("atk", 0.0)) - float(rb["amount"]))
-			_core.attr_add("atk", -float(rb["amount"]))
+			_core.attr_add("atk", -float(rb["raw_atk"]))
+			_core.hero["atk"] = _core.attr_final("atk")
 			_rare_buffs.remove_at(i)
 
 func _refresh_trea_btn() -> void:
@@ -3871,6 +3875,7 @@ func _bond_check() -> void:
 							"life_flat": 0.0, "cap_add": 0.0, "wave_evo": 0.0, "tgt_add": 0.0,
 							"ignite_add": 0.0, "burn_add": 0.0}
 					_anc_mod[aid2]["dmg_pct"] = float(_anc_mod[aid2].get("dmg_pct", 0.0)) + pct * 100.0
+					if aid2 == "zhujue": _sync_basic_family_bonus()
 				elif not b.has("line") and not b.has("need_series"):
 					_combo_boost[nm2] = float(_combo_boost.get(nm2, 0.0)) + pct
 			_bonds.remove_at(i)
@@ -5537,7 +5542,8 @@ func _cast_skill(i: int) -> void:
 	var aid := str(sk["aid"])
 	var dtype := str(sk["dtype"])
 	var m: Dictionary = _anc_mod.get(aid, {})
-	var dmg_pct := float(m.get("dmg_pct", 0.0)) + float(_elem_mod.get(dtype, 0.0)) + _skill_level_bonus(aid)
+	var shared_pct := 0.0 if dtype == "物理" else float(_elem_mod.get(dtype, 0.0))
+	var dmg_pct := float(m.get("dmg_pct", 0.0)) + shared_pct + _skill_level_bonus(aid)
 	var cd_pct := float(m.get("cd_pct", 0.0))
 	var mp_flat := float(m.get("mp_flat", 0.0))
 	var para_s := float(m.get("para_s", 0.0))
@@ -5585,6 +5591,10 @@ func _add_ancestor_effects(aid: String, eff: Dictionary) -> void:
 		var ep: Dictionary = eff["elem_pct"]
 		for e in ep.keys():
 			_elem_mod[e] = float(_elem_mod.get(e, 0.0)) + float(ep[e])
+			if e == "物理" and _core != null:
+				_core.type_add("物理", "amp_f", float(ep[e]) / 100.0)
+	if aid == "zhujue" and _core != null:
+		_sync_basic_family_bonus()
 
 # 炫卡吞噬：吞掉该祖宗全部家传卡（进度与效果保留）→ 返还资源 + 永久加伤 → 自身离场
 func _do_devour(shiny_id: String) -> void:
@@ -5619,6 +5629,7 @@ func _do_devour(shiny_id: String) -> void:
 			"life_flat": 0.0, "cap_add": 0.0, "wave_evo": 0.0, "tgt_add": 0.0,
 			"ignite_add": 0.0, "burn_add": 0.0}
 	_anc_mod[aid]["dmg_pct"] = float(_anc_mod[aid].get("dmg_pct", 0.0)) + 10.0 * n
+	if aid == "zhujue": _sync_basic_family_bonus()
 	_page = 0
 	_refresh_deck()
 	_fly_card_to_totals(str(c.get("art", "")))
@@ -6339,16 +6350,13 @@ func _ring_out() -> void:
 
 # ---------------- 主角：基础剑法（被动） ----------------
 #   主角不进技能栏，他的六档全部折成普攻加成，组合一激活就直接加在英雄身上。
-#   能落地的：伤害类（dmg_pct）、物理共享（elem_pct.物理）
+#   dmg_pct属于基础剑法；elem_pct.物理由_add_ancestor_effects登记到物理类型。
 func _apply_hero_passive(eff: Dictionary) -> void:
 	if eff.is_empty() or _core == null:
 		return
+	# dmg_pct已由_add_ancestor_effects登记到本技能，物理共享已进类型增幅。
 	var pct := float(eff.get("dmg_pct", 0.0))
-	var ep: Dictionary = eff.get("elem_pct", {})
-	pct += float(ep.get("物理", 0.0))
-	if pct != 0.0:
-		_core.attr_add_amp("atk", pct / 100.0)
-		_core.hero["atk"] = _core.attr_final("atk")
+	var physical_shared := float((eff.get("elem_pct", {}) as Dictionary).get("物理", 0.0))
 	# 攻速从属性层读取，核心按现行基础出手间隔除以倍率。
 	if eff.has("aspd_pct"):
 		_core.attr_add_amp("aspd", float(eff["aspd_pct"]) / 100.0)
@@ -6358,7 +6366,8 @@ func _apply_hero_passive(eff: Dictionary) -> void:
 		if eff.has(k):
 			_hero_passive[k] = float(_hero_passive.get(k, 0.0)) + float(eff[k])
 	var parts: Array = []
-	if pct != 0.0: parts.append("物理 +%d%%" % int(pct))
+	if pct != 0.0: parts.append("剑法伤害 +%d%%" % int(pct))
+	if physical_shared != 0.0: parts.append("物理共享 +%d%%" % int(physical_shared))
 	if eff.has("aspd_pct"): parts.append("攻速 +%d%%" % int(eff["aspd_pct"]))
 	if eff.has("tgt_add"): parts.append("目标 +%d" % int(eff["tgt_add"]))
 	if eff.has("chase"): parts.append("追击 %d%%" % int(eff["chase"]))
@@ -6391,7 +6400,7 @@ func _hero_extra_hits(primary: Dictionary = {}) -> void:
 		_core.hero["aspd"] = minf(MAX_ASPD, _core.attr_final("aspd") / float(_core.ATTR_BASE["aspd"]))
 	if _hero_passive.is_empty():
 		return
-	var base: float = float(_core.hero.get("atk", 12.0)) * 0.8 * _core.basic_skill_multiplier()
+	var base: float = float(_core.hero.get("atk", 12.0)) * 0.8 * _core.basic_attack_multiplier()
 	var extra := int(_hero_passive.get("tgt_add", 0.0))
 	var extra_hits := 0
 	for candidate in foes:
@@ -6475,7 +6484,7 @@ func _ram_mods() -> Dictionary:
 
 func _ram_damage() -> float:
 	var m := _ram_mods()
-	var pct := RAM_HP_PCT * (1.0 + (float(m.get("dmg_pct", 0.0)) + float(_elem_mod.get("物理", 0.0)) + _skill_level_bonus("gundilong")) / 100.0)
+	var pct := RAM_HP_PCT * (1.0 + (float(m.get("dmg_pct", 0.0)) + _skill_level_bonus("gundilong")) / 100.0)
 	return float(_core.hero.get("hp_max", 200.0)) * pct / 100.0
 
 # 化身肉蛋：把最近的一只撞飞
@@ -6619,7 +6628,7 @@ func _cast_feiren(mul: float) -> void:
 	var foes := _live_foes()
 	if foes.is_empty():
 		return
-	var dmg_pct := float(m.get("dmg_pct", 0.0)) + float(_elem_mod.get("物理", 0.0)) + _skill_level_bonus("qingluan")
+	var dmg_pct := float(m.get("dmg_pct", 0.0)) + _skill_level_bonus("qingluan")
 	var pierce := 1 + int(m.get("pierce", 0.0))
 	if _wanren:
 		pierce += 2 + _wanren_pierce            # 炫卡：起步 +2，回程成长无上限

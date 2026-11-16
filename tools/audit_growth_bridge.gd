@@ -22,6 +22,8 @@ func _reset(b) -> void:
 	c.hero["aspd"] = 1.5
 	b._hero_jianpo = false
 	b._hero_passive = {}
+	b._anc_mod["zhujue"] = {}
+	c.hero["basic_family_bonus"] = 0.0
 
 func _stable(b) -> void:
 	var c = b._core
@@ -38,8 +40,9 @@ func _run() -> void:
 	var c = b._core
 	c.set_process(false)
 	_reset(b)
+	b._add_ancestor_effects("zhujue", {"dmg_pct": 20, "aspd_pct": 20})
 	b._apply_hero_passive({"dmg_pct": 20, "aspd_pct": 20})
-	assert(is_equal_approx(c.hero["atk"], 170.0) and is_equal_approx(c.hero["aspd"], 1.7))
+	assert(is_equal_approx(c.hero["atk"], 150.0) and is_equal_approx(c.hero["aspd"], 1.7) and c.hero["basic_family_bonus"] == 0.2)
 	_stable(b)
 	_reset(b)
 	b._level_bonus(2)
