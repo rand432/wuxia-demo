@@ -13,10 +13,14 @@ var boss_name := "-"
 var boss_spawned_wave := -1
 
 func _ready() -> void:
+	if not OS.get_user_data_dir().replace("\\", "/").ends_with("wuxia-regression"):
+		push_error("请先用 tools/run_playthrough.ps1 -PrepareOnly 准备隔离项目")
+		get_tree().quit(2)
+		return
 	LS.ensure_loaded()
 	var s := OS.get_environment("LV")
 	if s != "":
-		lv = int(s)
+		lv = clampi(int(s), 1, 10)
 	LS.current_level = lv
 	b = BATTLE.instantiate(); add_child(b)
 
@@ -58,7 +62,10 @@ func _process(dt: float) -> void:
 	if cd <= 0.0:
 		cd = 0.3
 		if b._str_pending and b._aug_cards.size() > 0:
-			b._on_aug_card(b._aug_cards[0])
+			if not b._str_layer.visible:
+				b._open_aug_pick()
+			else:
+				b._on_aug_card(b._aug_cards[0])
 		elif b._str_tile != null and b._str_tile.visible and b._wen >= b._str_cost():
 			b._on_str_tile()
 		elif b._trea_tile != null and b._trea_tile.visible and b._trea_charge > 0:

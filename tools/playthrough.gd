@@ -121,7 +121,7 @@ func _process(dt: float) -> void:
 	# 请神按界面实际给出的选项操作，不直接注入角色。
 	if b._god_layer != null and b._god_layer.visible and b._god_root != null:
 		for card in b._god_root.get_children():
-			b._pick_god(str(card.aid))
+			b._on_god_card(card)
 			return
 	var has_unseen_god := false
 	for aid in LS.god_ids():
@@ -134,6 +134,9 @@ func _process(dt: float) -> void:
 		_log("[QUEST] L%d accept=%s" % [lv, str(b._q_offer.get("id", ""))])
 		b._q_open_popup(); b._q_accept(); return
 	if b._str_pending and b._aug_cards.size() > 0:
+		if not b._str_layer.visible:
+			b._open_aug_pick()
+			return
 		b._on_aug_card(b._aug_cards[0]); return
 	if b._str_tile != null and b._str_tile.visible and b._wen >= b._str_cost():
 		b._on_str_tile(); return

@@ -1,9 +1,9 @@
 # 十关连续通关
-[GO] L6
-[CURIO] L6 id=zhaohunfan level=5
-[QUEST] L6 accept=qdf
-[END] L6 WIN t=268s wave=20/20 kills=1217 hp=1290/1290 unlock=7
-[FAMILY] L6 combos=2 shiny=false
-[QUEST_RESULT] L6 done=1 fail=0 giveup=0
-[CURIO_RESULT] L6 uses=11
-[ALL] max_unlocked=7 first_clear={ "6": true }
+[GO] L7
+[CURIO] L7 id=yuhu level=1
+[QUEST] L7 accept=sg
+[END] L7 WIN t=355s wave=18/18 kills=857 hp=2538/2937 unlock=8
+[FAMILY] L7 combos=5 shiny=false
+[QUEST_RESULT] L7 done=1 fail=0 giveup=0
+[CURIO_RESULT] L7 uses=0
+[ALL] max_unlocked=8 first_clear={ "7": true }

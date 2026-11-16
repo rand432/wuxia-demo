@@ -2155,9 +2155,9 @@ func _show_draw(v: bool) -> void:
 		_draw_open = false
 
 func _on_draw_pick(card: DrawCard) -> void:
-	if not _draw_paid or _draw_layer == null or not _draw_layer.visible:
+	if _run_over or not _draw_paid or _draw_layer == null or not _draw_layer.visible:
 		return
-	if _draw_anim or card == null or card.data.is_empty(): return
+	if _draw_anim or card == null or not _draw_cards.has(card) or card.data.is_empty(): return
 	var id := str(card.data.get("_id", ""))
 	if id == "": return
 	if _cards.size() >= 10:
@@ -2179,6 +2179,8 @@ func _on_draw_pick(card: DrawCard) -> void:
 	tw.tween_property(card, "modulate:a", 0.42, 0.34)
 	tw.chain().tween_callback(func() -> void:
 		_draw_anim = false
+		if _run_over:
+			return
 		_add_card(id)
 		_zhongli_try(id))
 
@@ -3162,14 +3164,18 @@ func _build_str() -> void:
 		Color(0.09, 0.08, 0.07, 0.98), Color(0.80, 0.62, 0.34), func(): _on_aug_abandon(), _str_layer)
 
 func _open_aug_pick() -> void:
-	if _str_layer == null:
+	if _run_over or not _str_pending or _str_layer == null:
 		return
 	if _draw_layer != null:
 		_draw_layer.visible = false                 # 抽卡页开着一并收掉，别叠在一起
 	_hide_trea()
 	_str_round = maxi(1, _str_lv / STR_EVERY)
 	# 同一手只掷一次：点［隐藏］关了再点［强化］，看到的是同一手（不能白刷）
-	if _aug_rolled_lv != _str_lv:
+	var invalidated := false
+	for card in _aug_cards:
+		if not card.o.is_empty() and not _aug_has_effect(str(card.o.get("key", ""))):
+			invalidated = true
+	if _aug_rolled_lv != _str_lv or invalidated:
 		_aug_rolled_lv = _str_lv
 		_roll_aug()
 	if _str_ban_lb != null:
@@ -3180,11 +3186,30 @@ func _open_aug_pick() -> void:
 	Aud.sfx("ui_open", -8.0)
 
 # 掷三张：品阶随轮次升（良→玄→地→天），数值 ×(1+0.4×(轮-1))
+func _aug_has_effect(key: String) -> bool:
+	if _core == null:
+		return false
+	match key:
+		"crit_add": return _core.attr_final("crit") < 0.75 - 0.000001
+		"critdmg_add": return _core.attr_final("cdmg") < 4.0 - 0.000001
+		"aspd_pct": return _core.attr_final("aspd") / float(_core.ATTR_BASE["aspd"]) < MAX_ASPD - 0.000001
+		"cut_add": return _core.type_field("物理", "red_f") < 0.60 - 0.000001
+		"cutall_add":
+			for type in _core.DMG_TYPES:
+				if type != "真实" and _core.type_field(type, "red_f") < 0.60 - 0.000001:
+					return true
+			return false
+		"killheal": return float(_core.kill_heal) < 1.0 - 0.000001
+	return true
+
+func _eligible_aug_pool() -> Array:
+	return AUG_POOL.filter(func(option): return _aug_has_effect(str(option["key"])))
+
 func _roll_aug() -> void:
 	var r := maxi(1, _str_round)
 	var mult := 1.0 + 0.4 * float(r - 1)
 	var quality := clampi(1 + r, 2, 5)
-	var pool: Array = AUG_POOL.duplicate()
+	var pool := _eligible_aug_pool()
 	pool.shuffle()
 	for i in _aug_cards.size():
 		var ac: AugCard = _aug_cards[i]
@@ -3196,6 +3221,9 @@ func _roll_aug() -> void:
 			ac.glyph = str(o["glyph"])
 			ac.effect = str(o["text"]) % int(ac.oval)
 			ac.desc = str(o["desc"])
+			if str(o["key"]) == "crit_add": ac.desc += " · 最高75%"
+			if str(o["key"]) == "critdmg_add": ac.desc += " · 最高400%"
+			if str(o["key"]) in ["cut_add", "cutall_add"]: ac.desc += " · 各类减伤最高60%"
 			ac.quality = quality
 			ac.visible = true
 			ac.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -3223,7 +3251,7 @@ func _on_aug_refresh() -> void:
 
 # 放弃：这一轮进阶不要了，换 1 次刷新（刷新次数是攒着的，下次进阶能用）
 func _on_aug_abandon() -> void:
-	if not _str_pending:
+	if _run_over or not _str_pending or _str_layer == null or not _str_layer.visible:
 		return
 	_str_pending = false
 	_aug_reroll += 1
@@ -3254,14 +3282,20 @@ func _hide_aug_pick() -> void:
 		_str_layer.visible = false
 
 func _on_aug_card(card: AugCard) -> void:
-	if card == null or card.o.is_empty():
+	if _run_over or not _str_pending or _str_layer == null or not _str_layer.visible or card == null or not _aug_cards.has(card) or card.o.is_empty():
 		return
 	_pick_aug(card.o, int(card.oval))
 
 func _pick_aug(o: Dictionary, val: int) -> void:
+	if _run_over or not _str_pending:
+		return
+	if not _aug_has_effect(str(o.get("key", ""))):
+		_roll_aug()
+		_toast("属性已达上限，已更新进阶候选")
+		return
+	_str_pending = false
 	_choice_fx("aug")
 	_apply_aug(str(o["key"]), float(val))
-	_str_pending = false
 	_hide_aug_pick()
 	_toast("进阶 · %s（%s）" % [str(o["name"]), str(o["text"]) % val])
 	Aud.sfx("levelup", -6.0)
@@ -3858,7 +3892,7 @@ func _on_trea_refresh() -> void:
 
 # 放弃：这一手不要了，换 1 次刷新（机会已经被这次开页吃掉，不能白刷）
 func _on_trea_abandon() -> void:
-	if not _trea_pending:
+	if _run_over or not _trea_pending or _trea_layer == null or not _trea_layer.visible:
 		return
 	_trea_pending = false
 	_trea_reroll += 1
@@ -4029,17 +4063,17 @@ func _apply_aug(key: String, val: float) -> void:
 	match key:
 		"atk_pct":
 			_core.attr_add_amp("atk", val / 100.0)
-			h["atk"] = float(h["atk"]) * (1.0 + val / 100.0)
+			h["atk"] = _core.attr_final("atk")
 		"hp_pct":
 			var ratio := 1.0
 			if float(h["hp_max"]) > 0.0:
 				ratio = clampf(float(h["hp"]) / float(h["hp_max"]), 0.0, 1.0)
 			_core.attr_add_amp("hp", val / 100.0)
-			h["hp_max"] = float(h["hp_max"]) * (1.0 + val / 100.0)
+			h["hp_max"] = _core.attr_final("hp")
 			h["hp"] = float(h["hp_max"]) * ratio
 		"aspd_pct":
 			_core.attr_add_amp("aspd", val / 100.0)
-			h["aspd"] = minf(MAX_ASPD, float(h.get("aspd", 1.0)) * (1.0 + val / 100.0))
+			h["aspd"] = minf(MAX_ASPD, _core.attr_final("aspd") / float(_core.ATTR_BASE["aspd"]))
 		"crit_add":
 			_core.attr_add("crit", val / 100.0)
 			h["crit"] = _core.attr_final("crit")
@@ -4066,6 +4100,10 @@ func _apply_aug(key: String, val: float) -> void:
 			h["dmg_all"] = float(h.get("dmg_all", 0.0)) + val / 100.0
 		"mp_add":
 			_core.attr_add("mp", val)
+			_mp_max = maxf(1.0, _core.attr_final("mp"))
+			_mp = minf(_mp, _mp_max)
+			h["mp_max"] = _mp_max
+			h["mp"] = _mp
 		"gold_pct":
 			_gold_pct += val
 		"killheal":
@@ -5623,7 +5661,7 @@ func _build_god_pick() -> void:
 		Color(0.09, 0.08, 0.07, 0.98), Color(0.80, 0.62, 0.34), func(): _on_god_abandon(), _god_layer)
 
 func _show_god_pick() -> void:
-	if _god_layer == null:
+	if _run_over or _god_layer == null:
 		return
 	if _draw_charge <= 0:
 		_toast("升级后可请神")
@@ -5684,7 +5722,7 @@ func _roll_god() -> void:
 		gc.icon = load(str(a["art"]))
 		gc.position = Vector2(x0 + float(i) * 300.0, 214)
 		gc.size = Vector2(260, 390)
-		gc.picked.connect(func() -> void: _pick_god(aid))
+		gc.picked.connect(func() -> void: _on_god_card(gc))
 		_god_root.add_child(gc)
 	if _god_refresh_btn != null:
 		_god_refresh_btn.text = "刷新 · %d 次" % maxi(0, _god_reroll)
@@ -5715,8 +5753,13 @@ func _hide_god_pick() -> void:
 	if _god_layer != null:
 		_god_layer.visible = false
 
+func _on_god_card(card: GodCard) -> void:
+	if _run_over or _god_layer == null or not _god_layer.visible or not is_instance_valid(card) or card.get_parent() != _god_root:
+		return
+	_pick_god(card.aid)
+
 func _pick_god(aid: String) -> void:
-	if _ancestors.has(aid) or not AncestorData.ANCESTORS.has(aid):
+	if _run_over or _ancestors.has(aid) or not AncestorData.ANCESTORS.has(aid):
 		return
 	if _draw_charge <= 0:
 		return
@@ -7094,7 +7137,7 @@ func _enable_zhongli() -> void:
 	_shiny_present("zhongli")
 
 func _zhongli_try(id: String) -> void:
-	if _zhongli_count <= 0:
+	if _run_over or _zhongli_count <= 0:
 		return
 	var queue: Array = []
 	for i in _zhongli_count:
@@ -7113,6 +7156,8 @@ func _zhongli_try(id: String) -> void:
 
 # 复制体：不进卡组格，当场吞噬，但效果/进度保留
 func _grant_copy(id: String) -> void:
+	if _run_over:
+		return
 	var c: Dictionary = _card_db.get(id, {})
 	if c.is_empty():
 		return
