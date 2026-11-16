@@ -900,6 +900,8 @@ func _process(delta: float) -> void:
 		if float(ofx["t"]) > 0.5:
 			_order_fx.remove_at(i9)
 	_t += dt
+	if not _mirror_decoy.is_empty():
+		_mirror_decoy["taunt_t"] = maxf(0.0, float(_mirror_decoy.get("taunt_t", 0.0)) - dt)
 	intro_wait = maxf(0.0, intro_wait - delta)      # 开场等待倒计时
 	_hero_hit_flash = maxf(0.0, _hero_hit_flash - delta)
 	_banner_t = maxf(0.0, _banner_t - delta)
@@ -1109,6 +1111,11 @@ func _process(delta: float) -> void:
 				fmin = {}
 				ftgt = gp
 				hit_guard = true
+		var hit_decoy := _mirror_taunting()
+		if hit_decoy:
+			ftgt = _mirror_decoy["pos"]
+			fmin = {}
+			hit_guard = false
 		# v13d P3：石像 buff——附近有活石像 → 攻速 +30% · 少挨 20% 伤害
 		var fbuff := 0.0
 		for sp_v in live_st:
@@ -1190,19 +1197,19 @@ func _process(delta: float) -> void:
 					Audio.sfx("dart", -13.0)                    # 法师：短促一声
 					# 法师有 1/3 概率**不近身打，改成放一发小号火雨**（预警 → 砸下）
 					if randf() < 0.33:
-						self.queue_delayed(hero_pos.x, hero_pos.y - 6.0, 70.0, float(f["atk"]) * 1.7,
+						self.queue_delayed(_enemy_aim_position().x, _enemy_aim_position().y - 6.0, 70.0, float(f["atk"]) * 1.7,
 							DMG_FIRE, 1.0, "法火", "circle", Vector2.RIGHT, 0.0, 0.0, 0, 0.0, 0.0, 0.0, f)
 				elif bool(f.get("brute", false)):
 					# v6：**普通挨打不再击退**——壮汉只有那次延迟冲锋才把主角撞开
 					Audio.sfx("hit_heavy", -8.0)                 # 壮汉：闷重一记
 					if randf() < 0.35:
-						var cdir := (hero_pos - Vector2(float(f["x"]), float(f["y"]))).normalized()
+						var cdir := (_enemy_aim_position() - Vector2(float(f["x"]), float(f["y"]))).normalized()
 						self.queue_delayed(float(f["x"]), float(f["y"]) - 10.0, 52.0, float(f["atk"]) * 2.2,
 							DMG_PHYS, 1.15, "冲锋", "beam", cdir, 300.0, 0.0, 0, 0.0, 0.0, 110.0, f)
 						# v16o（用户："背景喊杀声太多了 其实没必要有喊杀声"）：已去掉喊杀/战鼓声
 				elif bool(f.get("ranged", false)):
 					# 弓手：一支箭从它那儿射过来
-					var adir := (hero_pos - Vector2(float(f["x"]), float(f["y"]))).normalized()
+					var adir := (ftgt - Vector2(float(f["x"]), float(f["y"]))).normalized()
 					_bursts.append({"x": float(f["x"]) + adir.x * 26.0, "y": float(f["y"]) - 30.0 + adir.y * 26.0,
 						"t": 0.0, "col": Color(0.92, 0.86, 0.62), "scale": 0.9})
 					Audio.sfx("bow", -11.0)                      # 弓手：弓弦一响
@@ -1210,6 +1217,10 @@ func _process(delta: float) -> void:
 					Audio.sfx("swing", -12.0)                    # 盾兵：钝器一挥
 				else:
 					Audio.sfx("melee", -14.0)                    # 普通怪：轻挥
+				if hit_decoy:
+					_mirror_decoy["hits"] = int(_mirror_decoy.get("hits", 0)) + 1
+					_push_float(ftgt.x, ftgt.y - 26.0, "镜影", Color(0.72, 0.70, 0.90))
+					continue
 				var d2 := hero_in_dmg(float(f["atk"]), dmg_elem)
 				# v15w 更夫「报更」：被致盲的怪有 35% 概率打空
 				if float(f.get("blind_t", 0.0)) > 0.0 and randf() < 0.35:
@@ -1354,7 +1365,7 @@ func _process(delta: float) -> void:
 			#   beam　＝剑气/冲撞/拖链那种"一条长柱"（从 boss 指向主角）
 			var ushape := str(fb.get("ult_shape", "circle"))
 			# v16d：从 boss 指向主角的方向（beam / sector / chain 都要它）
-			var dir2 := (hero_pos - Vector2(float(fb["x"]), float(fb["y"]))).normalized()
+			var dir2 := (_enemy_aim_position() - Vector2(float(fb["x"]), float(fb["y"]))).normalized()
 			if dir2 == Vector2.ZERO:
 				dir2 = Vector2(0.0, 1.0)
 			# v16e：(用户：多段连招) 三阶那三只走**连招**：几招按顺序连着来，一段比一段紧
@@ -1390,11 +1401,11 @@ func _process(delta: float) -> void:
 					self.queue_chain(float(fb["x"]), float(fb["y"]) - 10.0, 86.0, dmg * 0.75, DMG_PHYS, ult, dir2, 5, 110.0, 0.22, 1.15)
 				"follow":
 					# 跟随型：圈追着主角跑（落下前 0.25 秒才定住）
-					self.queue_delayed(hero_pos.x, hero_pos.y - 6.0, 88.0, dmg, DMG_PHYS, 1.6, ult, "follow")
+					self.queue_delayed(_enemy_aim_position().x, _enemy_aim_position().y - 6.0, 88.0, dmg, DMG_PHYS, 1.6, ult, "follow")
 				"combo_a", "combo_b", "combo_c":
 					pass # 上面的连招分支已经排好，不能再补一个默认圆圈。
 				_:
-					self.queue_delayed(hero_pos.x, hero_pos.y - 6.0, 96.0, dmg, DMG_PHYS, 1.2, ult, "circle")
+					self.queue_delayed(_enemy_aim_position().x, _enemy_aim_position().y - 6.0, 96.0, dmg, DMG_PHYS, 1.2, ult, "circle")
 			for cast_index in range(first_cast, _delayed.size()):
 				_delayed[cast_index]["caster"] = fb
 				_delayed[cast_index]["boss_attack"] = not fb.has("chal") or int(fb["chal"]) == 4
@@ -1453,6 +1464,31 @@ func _separate_foes() -> void:
 # ============================================================
 var _delayed: Array = []            # 正在预警/即将落下的延迟技
 var _enemy_attack_epoch := 0        # 清场回调使当前旧攻击批次失效
+var _mirror_decoy: Dictionary = {}
+
+func add_mirror_decoy(pos: Vector2) -> Dictionary:
+	if not _mirror_decoy.is_empty():
+		_mirror_decoy["active"] = false
+	_mirror_decoy = {"pos": pos, "active": true, "taunt_t": 1.5, "hits": 0}
+	return _mirror_decoy
+
+func _mirror_taunting() -> bool:
+	return bool(_mirror_decoy.get("active", false)) and float(_mirror_decoy.get("taunt_t", 0.0)) > 0.0
+
+func _enemy_aim_position() -> Vector2:
+	return _mirror_decoy["pos"] if _mirror_taunting() else hero_pos
+
+func apply_echo_damage(foe: Dictionary, amount: float) -> float:
+	if amount <= 0.0 or not foes.has(foe) or float(foe.get("hp", 0.0)) <= 0.0 or float(foe.get("dying", 0.0)) > 0.0:
+		return 0.0
+	# 已按原普攻目标减免结算过，不再次暴击、增伤或减防。
+	var dealt := minf(float(foe["hp"]), amount)
+	foe["hp"] = float(foe["hp"]) - dealt
+	dmg_done += dealt
+	foe["last_dtype"] = DMG_PHYS
+	if float(foe["hp"]) <= 0.0:
+		_kill_foe(foe)
+	return dealt
 
 func clear_enemy_attacks() -> void:
 	_enemy_attack_epoch += 1
@@ -1529,7 +1565,7 @@ func queue_combo(fx: float, fy: float, dps: float, elem: String, seq: Array) -> 
 		var rr := float(it.get("r", 96.0))
 		var dm := dps * float(it.get("dmg_mul", 1.0))
 		var kd := str(it.get("kind", "大招"))
-		var dir := (hero_pos - Vector2(fx, fy)).normalized()
+		var dir := (_enemy_aim_position() - Vector2(fx, fy)).normalized()
 		if dir == Vector2.ZERO:
 			dir = Vector2(0.0, 1.0)
 		if sh == "chain":
@@ -1540,11 +1576,11 @@ func queue_combo(fx: float, fy: float, dps: float, elem: String, seq: Array) -> 
 		elif sh == "sector":
 			queue_delayed(fx, fy - 10.0, rr, dm, elem, w, kd, "sector", dir, 0.0, float(it.get("spread", PI * 0.55)))
 		elif sh == "follow" or sh == "ring" or sh == "bolt":
-			queue_delayed(hero_pos.x, hero_pos.y - 6.0, rr, dm, elem, w, kd, sh)
+			queue_delayed(_enemy_aim_position().x, _enemy_aim_position().y - 6.0, rr, dm, elem, w, kd, sh)
 		elif sh == "pool":
-			queue_delayed(hero_pos.x, hero_pos.y - 6.0, rr, dm * 0.5, elem, w, kd, "pool", Vector2.RIGHT, 0.0, 0.0, 0, 0.0, float(it.get("life", 4.0)))
+			queue_delayed(_enemy_aim_position().x, _enemy_aim_position().y - 6.0, rr, dm * 0.5, elem, w, kd, "pool", Vector2.RIGHT, 0.0, 0.0, 0, 0.0, float(it.get("life", 4.0)))
 		else:
-			queue_delayed(hero_pos.x, hero_pos.y - 6.0, rr, dm, elem, w, kd, "circle")
+			queue_delayed(_enemy_aim_position().x, _enemy_aim_position().y - 6.0, rr, dm, elem, w, kd, "circle")
 		# 下一段往后推（"连招"的节奏）
 		acc += float(it.get("delay", 0.45))
 
@@ -1571,8 +1607,8 @@ func _delayed_tick(delta: float) -> void:
 			continue
 		# v16d：跟随型 —— 落下前**一直贴在主角脚下**（追着人跑），最后 0.25 秒才定住
 		if str(d["shape"]) == "follow" and float(d["t"]) < float(d["warn"]) - 0.25:
-			d["x"] = hero_pos.x
-			d["y"] = hero_pos.y - 6.0
+			d["x"] = _enemy_aim_position().x
+			d["y"] = _enemy_aim_position().y - 6.0
 		d["t"] = float(d["t"]) + delta
 		if float(d["t"]) < float(d["warn"]):
 			continue

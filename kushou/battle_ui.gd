@@ -250,6 +250,7 @@ var _crystal := 100
 var _crystal_lb: Label
 var _draw_paid := false
 var _draw_anim := false
+var _draw_refresh_btn: Button = null
 var _hero_token = null
 var _foe_tokens := {}
 var _no_tokens := false   # 对照测试用：不创建/不更新怪的本体
@@ -1272,17 +1273,26 @@ func _curio_apply_static() -> void:
 			add = 2
 		if _curio_lv >= 4:
 			add = 3
+		if _curio_lv >= 5:
+			add = 0 # 五级选免耗模式，不叠加次数赠送。
 		_wanying_add = add
 		_trea_reroll += add
 		_aug_reroll += add
 		_god_reroll += add
 		_draw_free += add
+		_refresh_draw_btn()
 	elif _curio_id == "zhiren":
 		_set_paper_count(0)
 
 # 万应符 Lv5：25% 概率这次刷新不消耗次数
 func _rr_free() -> bool:
-	return _curio_id == "wanyingfu" and _curio_lv >= 5 and randf() < 0.25
+	return _curio_id == "wanyingfu" and _curio_lv >= 5 and _roll_refresh_keep()
+
+func _roll_refresh_keep() -> bool:
+	return randf() < 0.25
+
+func _roll_wanying_refresh() -> int:
+	return randi() % 4
 
 # 定风珠：技能冷却缩减
 func _curio_skill_cd_mul() -> float:
@@ -1335,7 +1345,7 @@ func _curio_summon(tag: String, nm: String, col: Color, life: float, dmg_pct: fl
 	tk.add_child(mk)
 	var atk := float(_core.hero.get("atk", 12.0))
 	_minions.append({"pos": pos, "life": life, "max_life": life, "atk_cd": 0.5, "wave_cd": 999.0,
-		"dmg": atk * dmg_pct, "wave_dmg": 0.0, "tk": tk, "curio": tag, "boom": boom, "lc": lc})
+		"dmg": atk * dmg_pct, "wave_dmg": 0.0, "tk": tk, "curio": tag, "boom": boom, "lc": lc, "copy_ratio": dmg_pct})
 
 func _curio_count_minions(tag: String) -> int:
 	var n := 0
@@ -1343,6 +1353,18 @@ func _curio_count_minions(tag: String) -> int:
 		if str((m_v as Dictionary).get("curio", "")) == tag:
 			n += 1
 	return n
+
+func _curio_mirror_hit(target: Dictionary, damage: float) -> void:
+	if _run_over or _core == null or damage <= 0.0:
+		return
+	for mirror in _minions:
+		if str(mirror.get("curio", "")) != "tongjing" or float(mirror.get("life", 0.0)) <= 0.0:
+			continue
+		var dealt: float = _core.apply_echo_damage(target, damage * float(mirror.get("copy_ratio", 0.5)))
+		if dealt > 0.0:
+			_core._push_float(float(target["x"]), float(target["y"]) - 45.0, "镜 " + str(int(dealt)), Color(0.72, 0.70, 0.90))
+			if float(_core.hero.get("hp", 0.0)) > 0.0:
+				_core.hero["hp"] = minf(float(_core.hero["hp_max"]), float(_core.hero["hp"]) + dealt * float(mirror.get("lc", 0.0)))
 
 func _curio_tick_zhiren() -> void:
 	if _core == null:
@@ -1399,13 +1421,8 @@ func _curio_tick_tongjing() -> void:
 		0.70 if _curio_lv >= 4 else 0.50,
 		0.0, 0.10 if _curio_lv >= 3 else 0.0)
 	if _curio_lv >= 5:
-		var at5: Vector2 = _core.hero_pos
-		for f_v in _core.foes:
-			var f5: Dictionary = f_v
-			if float(f5.get("hp", 0.0)) <= 0.0:
-				continue
-			if at5.distance_to(Vector2(float(f5["x"]), float(f5["y"]))) <= 220.0:
-				f5["para"] = maxf(float(f5.get("para", 0.0)), 1.5)
+		var mirror: Dictionary = _minions.back()
+		mirror["decoy"] = _core.add_mirror_decoy(mirror["pos"])
 	_curio_cd = 20.0
 	_curio_uses += 1
 	_curio_flash()
@@ -1531,14 +1548,17 @@ func _curio_on_wave_clear(wave: int) -> void:
 		_toast("聚宝盆 · 文钱 +%d" % amt)
 		_curio_uses += 1
 		_curio_flash()
-	if _curio_id == "wanyingfu" and _curio_lv >= 3:
-		var which := randi() % 3
+	if _curio_id == "wanyingfu" and _curio_lv >= 3 and _curio_lv < 5:
+		var which := _roll_wanying_refresh()
 		if which == 0:
 			_trea_reroll += 1
 		elif which == 1:
 			_aug_reroll += 1
-		else:
+		elif which == 2:
 			_god_reroll += 1
+		else:
+			_draw_free += 1
+		_refresh_draw_btn()
 		_toast("万应符 · 随机刷新 +1")
 	if _curio_id == "zhiren":
 		var cap_z := 3 if _curio_lv >= 2 else 2
@@ -1952,7 +1972,7 @@ func _build_draw() -> void:
 		d.picked.connect(func() -> void: _on_draw_pick(d))
 		_draw_layer.add_child(d)
 		_draw_cards.append(d)
-	_btn("刷新 · 5 灵晶", Rect2(250, 540, 220, 56), 20, Color(0.09, 0.08, 0.07, 0.98), GOLD, func(): _on_refresh(), _draw_layer)
+	_draw_refresh_btn = _btn("刷新 · 5 灵晶", Rect2(250, 540, 220, 56), 20, Color(0.09, 0.08, 0.07, 0.98), GOLD, func(): _on_refresh(), _draw_layer)
 
 func _roll_draw() -> void:
 	var cands: Array = []
@@ -2123,8 +2143,12 @@ func _on_draw_pick(card: DrawCard) -> void:
 		_add_card(id)
 		_zhongli_try(id))
 
+func _refresh_draw_btn() -> void:
+	if _draw_refresh_btn != null:
+		_draw_refresh_btn.text = "刷新 · 免费 %d 次" % _draw_free if _draw_free > 0 else "刷新 · 5 灵晶"
+
 func _on_refresh() -> void:
-	if _run_over or _draw_anim: return
+	if _run_over or _draw_anim or not _draw_paid or _draw_layer == null or not _draw_layer.visible: return
 	if _pool.is_empty():
 		_toast("卡池已空，没法刷新")
 		return
@@ -2132,14 +2156,15 @@ func _on_refresh() -> void:
 	if _draw_free > 0:
 		_draw_free -= 1
 		paid = false
-	elif _rr_free():
-		paid = false
-	if paid:
+	else:
 		if _crystal < 5:
 			_toast("灵晶不够：刷新要 5")
 			return
+		paid = not _rr_free()
+	if paid:
 		_crystal -= 5
 		_update_crystal()
+	_refresh_draw_btn()
 	_draw_anim = true
 	for card in _draw_cards:
 		var tw := create_tween()
@@ -3146,7 +3171,7 @@ func _refresh_aug_btn() -> void:
 
 # 刷新：次数型（不花文钱，但用一次少一次）
 func _on_aug_refresh() -> void:
-	if _str_layer == null or not _str_layer.visible:
+	if _run_over or not _str_pending or _str_layer == null or not _str_layer.visible:
 		return
 	if _aug_reroll <= 0:
 		_toast("刷新次数用完了")
@@ -3781,7 +3806,7 @@ func _bond_check() -> void:
 
 # 刷新：次数型
 func _on_trea_refresh() -> void:
-	if _trea_layer == null or not _trea_layer.visible:
+	if _run_over or not _trea_pending or _trea_layer == null or not _trea_layer.visible:
 		return
 	if _trea_reroll <= 0:
 		_toast("刷新次数用完了")
@@ -5177,6 +5202,7 @@ func _on_hero_hit() -> void:
 	_stone_on_hit()
 
 func _on_hero_foe_hit(tgt: Dictionary, dmg: float, crit: bool, heavy: bool) -> void:
+	_curio_mirror_hit(tgt, dmg)
 	if crit:
 		_curio_on_crit(tgt)                  # 奇物：寒玉扳指 / 醉翁壶
 	if _fx_front == null:
@@ -5627,6 +5653,8 @@ func _roll_god() -> void:
 
 # 刷新：次数型（用一次少一次）
 func _on_god_refresh() -> void:
+	if _run_over or _god_layer == null or not _god_layer.visible or _draw_charge <= 0:
+		return
 	if _god_reroll <= 0:
 		_toast("刷新次数用完了")
 		return
@@ -5637,6 +5665,8 @@ func _on_god_refresh() -> void:
 
 # 放弃：这一手不要了，换 1 次刷新（下次请神能用）
 func _on_god_abandon() -> void:
+	if _run_over or _god_layer == null or not _god_layer.visible or _draw_charge <= 0:
+		return
 	_god_reroll += 1
 	_hide_god_pick()
 	_toast("放弃请神 · 刷新 +1（现有 %d 次）" % _god_reroll)
@@ -5794,7 +5824,7 @@ func _summon_dragon(bonus_pct: float) -> void:
 	Aud.sfx("warcry", -8.0)
 
 func _tick_minions(dt: float) -> void:
-	if _core == null:
+	if _run_over or _core == null:
 		return
 	if _swallow_sea:
 		_ss_pct += 0.4 * dt                    # 每秒 +0.4% 蛟龙属性
@@ -5810,6 +5840,8 @@ func _tick_minions(dt: float) -> void:
 			m["dmg"] = float(m["base_dmg"]) * ss2
 			m["wave_dmg"] = float(m["base_wave"]) * ss2
 		if float(m["life"]) <= 0.0:
+			if m.has("decoy"):
+				m["decoy"]["active"] = false
 			if tk != null and is_instance_valid(tk):
 				tk.play_down()
 			# 奇物·招魂幡 Lv5：鬼影消失时自爆
@@ -5828,6 +5860,15 @@ func _tick_minions(dt: float) -> void:
 					_spawn_pfx("impacts/crit-hit", _core.position + at_e, 0.9, "", 1.4)
 			_minions.erase(m)
 			continue
+		if str(m.get("curio", "")) == "tongjing":
+			m["pos"] = _core.hero_pos + Vector2(-60.0, 20.0)
+			if m.has("decoy"):
+				m["decoy"]["pos"] = m["pos"]
+			if tk != null and is_instance_valid(tk):
+				tk.position = _core.position + Vector2(m["pos"])
+				tk.hp_ratio = float(m["life"]) / float(m["max_life"])
+				tk.queue_redraw()
+			continue # 镜像复制真实普攻，不再独立按固定CD出手。
 		var mp0: Vector2 = m["pos"]
 		var best: Dictionary = {}
 		var bd := 1e9
@@ -5887,6 +5928,8 @@ func _enable_swallow_sea() -> void:
 	_ss_kills = 0
 	for m_v in _minions:
 		var m: Dictionary = m_v
+		if str(m.get("curio", "")) != "":
+			continue
 		m["max_life"] = 999999.0
 		m["life"] = 999999.0
 	_toast("吞海入卡组 · 蛟龙永久存在，每秒 +0.4%、每 10 杀 +4% 属性")
@@ -7095,7 +7138,7 @@ const QUEST_POOL := [
 
 	{"id": "dt", "n": "单挑", "tier": 3, "kind": "champion", "need": 0, "lim": 90.0, "desc": "打死拦路高手", "r": {"crystal": 180, "trea": 1}},
 	{"id": "sy", "n": "三英", "tier": 3, "kind": "elite", "need": 3, "lim": 120.0, "desc": "杀掉 3 只精英", "r": {"crystal": 200, "trea": 1}},
-	{"id": "dj", "n": "赌局", "tier": 3, "kind": "instant", "need": 0, "lim": 0.0, "desc": "押 100 文，五五开赢 400", "r": {}},
+	{"id": "dj", "n": "赌局", "tier": 3, "kind": "instant", "need": 0, "lim": 0.0, "desc": "押 100 文，50% 概率中奖", "r": {"wen": 400}},
 ]
 
 var _q_offer: Dictionary = {}     # 掷到、等玩家点开看的那一条
@@ -7260,9 +7303,9 @@ func _q_open_popup() -> void:
 	_panel(Rect2(280, 26, 120, 26), Q_TIER_COL[tier], 4, Q_TIER_COL[tier], 0, holder)
 	_lbl("奇遇 · " + str(Q_TIER_CN[tier]), Vector2(280, 28), Vector2(120, 22), 14, Color(0.99, 0.95, 0.87), holder, HORIZONTAL_ALIGNMENT_CENTER)
 	var r := _q_rewards(q)
-	var rw := "灵晶 " + str(int(r.get("crystal", 0)))
+	var rw := "灵晶 " + str(int(r["crystal"])) if r.has("crystal") else ""
 	if r.has("wen"):
-		rw += " · 文钱 " + str(int(r["wen"]))
+		rw += (" · " if not rw.is_empty() else "") + "文钱 " + str(int(r["wen"]))
 	if r.has("trea_rr"):
 		rw += " · 宝物刷新 " + str(int(r["trea_rr"]))
 	if r.has("aug_rr"):
@@ -7271,9 +7314,9 @@ func _q_open_popup() -> void:
 		rw += " · 宝物机会 " + str(int(r["trea"]))
 	var rows := [
 		["条件", str(q["desc"])],
-		["限时", ("%d 秒（接受后才开始算）" % int(q["lim"])) if float(q.get("lim", 0.0)) > 0.0 else "不限时"],
+		["限时", "接受后立即结算" if str(q.get("kind", "")) == "instant" else (("%d 秒（接受后才开始算）" % int(q["lim"])) if float(q.get("lim", 0.0)) > 0.0 else "不限时")],
 		["奖励", rw],
-		["失败", "超时自动消失，不给东西"],
+		["失败", "未中奖则损失 100 文押金" if str(q.get("id", "")) == "dj" else "超时自动消失，不给东西"],
 	]
 	var y := 90.0
 	for row in rows:
@@ -7294,6 +7337,9 @@ func _q_open_popup() -> void:
 
 func _q_accept() -> void:
 	if _run_over or not _q_cur.is_empty() or _q_offer.is_empty():
+		return
+	if str(_q_offer.get("id", "")) == "dj" and _wen < 100:
+		_toast("赌局 · 需要 100 文，当前不足")
 		return
 	var q: Dictionary = _q_offer
 	_q_offer = {}
@@ -7378,7 +7424,9 @@ func _q_reward(q: Dictionary) -> void:
 	if r.has("crystal"):
 		_gain_crystal(int(r["crystal"]))
 	if r.has("wen"):
+		var before := _wen
 		_add_wen(int(r["wen"]))
+		q["_awarded_wen"] = _wen - before
 	if r.has("trea_rr"):
 		_trea_reroll += int(r["trea_rr"])
 	if r.has("aug_rr"):
@@ -7469,6 +7517,10 @@ func _q_activate(q: Dictionary) -> void:
 				var h: Dictionary = _core.hero
 				h["hp"] = maxf(1.0, float(h.get("hp", 0.0)) * 0.8)
 		"instant":
+			if str(q.get("id", "")) == "dj" and _wen < 100:
+				_toast("赌局 · 需要 100 文，当前不足")
+				return
+			_q_cur = q
 			_q_instant(q)
 			_q_refresh()
 			return
@@ -7477,17 +7529,21 @@ func _q_activate(q: Dictionary) -> void:
 	Aud.sfx("ui_open", -10.0)
 
 func _q_instant(q: Dictionary) -> void:
-	if _wen < 100:
-		_q_notify("赌局 · 庄家不收空手客")
+	if _run_over or not is_same(_q_cur, q) or str(q.get("id", "")) != "dj" or _wen < 100:
 		return
 	_wen -= 100
 	if _coin_lb != null:
 		_coin_lb.text = str(_wen)
-	if randf() < 0.5:
-		_add_wen(400)
-		_q_notify("赌局 · 赢了 400 文")
+	_refresh_str_tile()
+	if _roll_quest_gamble():
+		_q_finish("done")
+		_toast("赌局 · 获得 %d 文，已付 100 文押金" % int(q.get("_awarded_wen", 0)))
 	else:
-		_q_notify("赌局 · 输了 100 文")
+		_q_finish("fail")
+		_toast("赌局 · 未中奖，损失 100 文押金")
+
+func _roll_quest_gamble() -> bool:
+	return randf() < 0.5
 
 func _qc(key: String, n: int) -> void:
 	if n <= 0:

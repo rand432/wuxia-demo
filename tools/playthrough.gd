@@ -51,6 +51,7 @@ func _start() -> void:
 	b = BATTLE.instantiate(); add_child(b)
 	t = 0.0; cd = 0.0; wait_draw = 0; wait_trea = 0; done = false
 	_log("[GO] L%d" % lv)
+	_log("[CURIO] L%d id=%s level=%d" % [lv, str(b._curio_id), int(b._curio_lv)])
 
 func _process(dt: float) -> void:
 	if b == null or b._core == null or done:
@@ -69,6 +70,7 @@ func _process(dt: float) -> void:
 			lv, "WIN" if win else "LOSE", t, int(b._core.wave), b._max_wave, int(b._kills),
 			int(float(b._core.hero.get("hp", 0.0))), int(float(b._core.hero.get("hp_max", 1.0))), LS.max_unlocked])
 		_log("[FAMILY] L%d combos=%d shiny=%s" % [lv, b._ancestor_combos.size(), str(b._family_shiny_done)])
+		_log("[QUEST_RESULT] L%d done=%d fail=%d giveup=%d" % [lv, b._q_done, b._q_fail, b._q_giveup])
 		if not win:
 			failures += 1
 		_finish(); return
@@ -112,6 +114,7 @@ func _process(dt: float) -> void:
 		b._on_mate_tile()
 		return
 	if b._q_cur.is_empty() and not b._q_offer.is_empty():
+		_log("[QUEST] L%d accept=%s" % [lv, str(b._q_offer.get("id", ""))])
 		b._q_open_popup(); b._q_accept(); return
 	if b._str_pending and b._aug_cards.size() > 0:
 		b._on_aug_card(b._aug_cards[0]); return
