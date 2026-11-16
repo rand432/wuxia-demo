@@ -1230,40 +1230,78 @@ func _curio_on_wood_expired(foe: Dictionary) -> void:
 
 # 铜钱剑：每次普攻附带一枚钱镖（打到更远的怪）
 func _curio_on_attack() -> void:
-	if _curio_id != "tongqianjian" or _core == null:
+	if _run_over or _curio_id != "tongqianjian" or _core == null:
 		return
 	_dart_n += 1
 	var shots := 1
 	if _curio_lv >= 3 and _dart_n % 3 == 0:
 		shots = 2
-	var reach := 194.0 + (80.0 if _curio_lv >= 4 else 0.0)
-	var hit: Array = []
-	for si in shots:
+	var reach: float = _core.HERO_REACH + (200.0 if _curio_lv >= 4 else 120.0)
+	var fired := false
+	for _shot in shots:
 		var best: Dictionary = {}
 		var bd := 1e9
 		for f_v in _core.foes:
 			var f: Dictionary = f_v
 			if float(f.get("hp", 0.0)) <= 0.0 or float(f.get("dying", 0.0)) > 0.0:
 				continue
-			if hit.has(f):
-				continue
 			var d: float = _core.hero_pos.distance_to(Vector2(float(f["x"]), float(f["y"])))
-			if d > reach or d < 60.0:
+			if d > reach:
 				continue
 			if d < bd:
 				bd = d
 				best = f
 		if best.is_empty():
 			break
-		hit.append(best)
-		var mul := 0.45 if _curio_lv >= 2 else 0.35
-		if si > 0:
-			mul *= 0.5
-		_core._apply_dmg(best, float(_core.hero.get("atk", 12.0)) * mul, "物理")
-		_spawn_pfx("impacts/crit-hit", _core.position + Vector2(float(best["x"]), float(best["y"]) - 16.0), 0.5, "gold", 1.9)
+		if not fired:
+			_curio_uses += 1
+			_curio_flash()
+			fired = true
+		var targets: Array = [best]
+		var origin: Vector2 = _core.hero_pos
+		var first := Vector2(float(best["x"]), float(best["y"]))
+		var dir := (first - origin).normalized()
+		if dir == Vector2.ZERO:
+			dir = Vector2.UP
+		if _curio_lv >= 5:
+			var next: Dictionary = {}
+			var nearest := INF
+			for foe in _core.foes:
+				if is_same(foe, best) or float(foe.get("hp", 0.0)) <= 0.0 or float(foe.get("dying", 0.0)) > 0.0:
+					continue
+				var rel := Vector2(float(foe["x"]), float(foe["y"])) - origin
+				var along := rel.dot(dir)
+				# 20px半宽沿用普通怪牌半径；仅选择第一目标后方同一路径。
+				if along < bd or rel.length() > reach or absf(rel.cross(dir)) > 20.0:
+					continue
+				if along < nearest:
+					nearest = along
+					next = foe
+			if not next.is_empty():
+				targets.append(next)
+		for i in range(targets.size()):
+			var target: Dictionary = targets[i]
+			if float(target.get("hp", 0.0)) <= 0.0 or float(target.get("dying", 0.0)) > 0.0:
+				continue
+			var mul := (0.45 if _curio_lv >= 2 else 0.35) * (0.5 if i > 0 else 1.0)
+			_core._apply_dmg(target, float(_core.hero.get("atk", 12.0)) * mul, "物理")
+			_spawn_pfx("impacts/crit-hit", _core.position + Vector2(float(target["x"]), float(target["y"]) - 16.0), 0.5, "gold", 1.9)
+			if float(target.get("hp", 0.0)) <= 0.0:
+				_core._kill_foe(target)
+		var last: Dictionary = targets.back()
+		_curio_dart_trace(origin, Vector2(float(last["x"]), float(last["y"])))
 		Aud.sfx("dart", -14.0, 1.1)
-		if float(best.get("hp", 0.0)) <= 0.0:
-			_core._kill_foe(best)
+
+func _curio_dart_trace(origin: Vector2, target: Vector2) -> void:
+	var line := Line2D.new()
+	line.points = PackedVector2Array([_core.position + origin, _core.position + target])
+	line.width = 2.0
+	line.default_color = Color(0.92, 0.72, 0.30)
+	line.z_index = 7
+	(_cam if _cam != null else self).add_child(line)
+	var tween := line.create_tween()
+	tween.tween_property(line, "modulate:a", 0.0, 0.12)
+	tween.tween_callback(line.queue_free)
 
 # 规则类：进局时一次性应用（刷新次数 / 技能冷却）
 func _curio_apply_static() -> void:
@@ -1316,10 +1354,11 @@ func _q_interval() -> float:
 
 # ---------------- 召唤类奇物 ----------------
 func _curio_summon(tag: String, nm: String, col: Color, life: float, dmg_pct: float, boom: float, lc := 0.0) -> void:
-	if _core == null:
+	if _run_over or _core == null:
 		return
-	var idx := _minions.size()
-	var pos: Vector2 = _core.hero_pos + Vector2(-60.0 + float(idx % 3) * 60.0, 20.0)
+	var idx := _curio_count_minions(tag)
+	var follow_offset := Vector2(-60.0 + float(idx % 3) * 60.0, 20.0)
+	var pos: Vector2 = _core.hero_pos + follow_offset
 	var tk = TokenActor.new()
 	tk.setup(null, 20.0, col, false)
 	tk.show_bar = true
@@ -1345,12 +1384,12 @@ func _curio_summon(tag: String, nm: String, col: Color, life: float, dmg_pct: fl
 	tk.add_child(mk)
 	var atk := float(_core.hero.get("atk", 12.0))
 	_minions.append({"pos": pos, "life": life, "max_life": life, "atk_cd": 0.5, "wave_cd": 999.0,
-		"dmg": atk * dmg_pct, "wave_dmg": 0.0, "tk": tk, "curio": tag, "boom": boom, "lc": lc, "copy_ratio": dmg_pct})
+		"dmg": atk * dmg_pct, "wave_dmg": 0.0, "tk": tk, "curio": tag, "boom": boom, "lc": lc, "copy_ratio": dmg_pct, "follow_offset": follow_offset})
 
 func _curio_count_minions(tag: String) -> int:
 	var n := 0
 	for m_v in _minions:
-		if str((m_v as Dictionary).get("curio", "")) == tag:
+		if str((m_v as Dictionary).get("curio", "")) == tag and float(m_v.get("life", 0.0)) > 0.0:
 			n += 1
 	return n
 
@@ -1392,7 +1431,7 @@ func _paper_shatter() -> void:
 			foe["kb"] = maxf(float(foe.get("kb", 0.0)), 120.0)
 
 func _curio_tick_zhaohunfan() -> void:
-	if _curio_cd > 0.0 or _core == null:
+	if _run_over or _curio_cd > 0.0 or _core == null:
 		return
 	if _live_foes().is_empty():
 		return
@@ -5797,11 +5836,12 @@ class GodCard extends Control:
 func _summon_dragon(bonus_pct: float) -> void:
 	var m: Dictionary = _anc_mod.get("cuisanniang", {})
 	var cap := 1 + int(m.get("cap_add", 0.0))
-	if _minions.size() >= cap:
+	var dragon_count := _curio_count_minions("")
+	if dragon_count >= cap:
 		return
 	var hero_atk := float(_core.hero.get("atk", 12.0))
 	var life := 30.0 + float(m.get("life_flat", 0.0))
-	var idx := _minions.size()
+	var idx := dragon_count
 	var pos := Vector2(360.0 - 80.0 + float(idx) * 160.0, 726.0)
 	var tk = TokenActor.new()
 	tk.setup(null, 20.0, Color(0.30, 0.62, 0.80), false)
@@ -5870,12 +5910,15 @@ func _tick_minions(dt: float) -> void:
 				tk.queue_redraw()
 			continue # 镜像复制真实普攻，不再独立按固定CD出手。
 		var mp0: Vector2 = m["pos"]
+		var ghost := str(m.get("curio", "")) == "zhaohunfan"
 		var best: Dictionary = {}
 		var bd := 1e9
 		for f_v in _core.foes:
 			var f: Dictionary = f_v
 			if float(f.get("hp", 0.0)) <= 0.0 or float(f.get("dying", 0.0)) > 0.0:
 				continue
+			if ghost and _core.hero_pos.distance_to(Vector2(float(f["x"]), float(f["y"]))) > 220.0:
+				continue # 鬼影只支援主角附近目标，不追出跟随范围。
 			var d := (Vector2(float(f["x"]), float(f["y"])) - mp0).length()
 			if d < bd:
 				bd = d
@@ -5884,12 +5927,14 @@ func _tick_minions(dt: float) -> void:
 			var tgt := Vector2(float(best["x"]), float(best["y"]))
 			var dv := tgt - mp0
 			if dv.length() > 48.0:
-				m["pos"] = mp0 + dv.normalized() * 150.0 * dt
+				m["pos"] = mp0 + dv.normalized() * minf(150.0 * dt, dv.length() - 48.0)
 			else:
 				m["atk_cd"] = float(m["atk_cd"]) - dt
 				if float(m["atk_cd"]) <= 0.0:
 					m["atk_cd"] = 1.1
 					var md: float = _core._apply_dmg(best, float(m["dmg"]), "召唤")
+					if float(best.get("hp", 0.0)) <= 0.0:
+						_core._kill_foe(best)
 					# 奇物·铜镜 Lv3：镜影攻击吸血
 					if float(m.get("lc", 0.0)) > 0.0 and md > 0.0 and _core != null:
 						var hh: Dictionary = _core.hero
@@ -5898,6 +5943,10 @@ func _tick_minions(dt: float) -> void:
 			if float(m["wave_cd"]) <= 0.0:
 				m["wave_cd"] = 20.0
 				_dragon_wave(m, best)
+		elif ghost:
+			var anchor: Vector2 = _core.hero_pos + Vector2(m.get("follow_offset", Vector2(-60.0, 20.0)))
+			var back := anchor - mp0
+			m["pos"] = mp0 + back.normalized() * minf(150.0 * dt, back.length())
 		if tk != null and is_instance_valid(tk):
 			tk.position = _core.position + Vector2(m["pos"])
 			tk.hp_ratio = float(m["life"]) / maxf(1.0, float(m["max_life"]))
