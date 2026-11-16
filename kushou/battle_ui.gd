@@ -2823,6 +2823,7 @@ func _on_wave_clear(cleared_wave: int) -> void:
 		_skip_reward_wave = false
 		_toast("第 %d 波没打下来 · 无奖励" % cleared_wave)
 		return
+	_qc("clearwave", 1)
 	_add_exp(50)                            # v2：清一波 +50 经验
 	_add_wen(WEN_WAVE_CLEAR * cleared_wave)  # v6：清一波给一笔文钱
 	_curio_on_wave_clear(cleared_wave)       # 奇物：聚宝盆 / 续命灯
@@ -3602,15 +3603,18 @@ func _hide_trea() -> void:
 		_trea_layer.visible = false
 
 func _on_trea_card(card: AugCard) -> void:
-	if card == null or card.o.is_empty():
+	if _run_over or not _trea_pending or _trea_layer == null or not _trea_layer.visible or card == null or card.o.is_empty():
 		return
 	_choice_fx("rare" if bool(card.o.get("rare", false)) else "trea")
 	_pick_trea(card.o, int(card.oval))
 
-func _pick_trea(o: Dictionary, val: int) -> void:
-	if bool(o.get("rare", false)):
+func _pick_trea(o: Dictionary, val: int, close_hand := true) -> void:
+	if _run_over or o.is_empty() or _rare_taken.has(str(o.get("name", ""))) or _bond_taken.has(str(o.get("name", ""))):
+		return
+	if close_hand:
 		_trea_pending = false
 		_hide_trea()
+	if bool(o.get("rare", false)):
 		_rare_taken[str(o["name"])] = true        # 稀有单卡也是唯一，拿过不再出
 		_qc("trea", 1)
 		_apply_rare(o)
@@ -3626,19 +3630,38 @@ func _pick_trea(o: Dictionary, val: int) -> void:
 		b["line"] = str(o["line"])          # 线羁绊：成后抬整条线，不只是需求里那几个
 	_bonds.append(b)
 	_bond_taken[str(o["name"])] = true
+	_qc("trea", 1)
 	if o.has("next"):
 		var nx := str(o["next"])
 		if not bool(_bond_unlocked.get(nx, false)):
 			_bond_unlocked[nx] = true
 			_toast("羁绊「%s」解锁入池" % nx)
-	_trea_pending = false
-	_hide_trea()
 	_toast("结成羁绊 · %s（%d/%d，凑齐即消耗）" % [str(o["name"]), _bond_prog(b), _bond_need_n(b)])
 	Aud.sfx("levelup", -6.0)
 	_bond_check()
 	_refresh_trea_tile()
 
 # ---- 羁绊结算 ----
+func _grant_random_treasure() -> bool:
+	var shown := {}
+	if _trea_pending:
+		for card in _trea_cards:
+			if card.visible and not card.o.is_empty():
+				shown[str(card.o.get("name", ""))] = true
+	var bonds: Array = _bond_pool().filter(func(o): return not shown.has(str(o["name"])))
+	# 自动奖励不能替玩家选择花钱兑换或永久关闭灵晶收入的代价卡。
+	var rares: Array = _rare_pool().filter(func(o):
+		return not shown.has(str(o["name"])) and str(o.get("kind", "")) not in ["convert", "crystal_burst"] and not (_crystal_lock and str(o.get("kind", "")) == "res" and str(o.get("res", "")) == "crystal"))
+	var pool: Array = rares if not rares.is_empty() and (bonds.is_empty() or randf() < RARE_CHANCE) else bonds
+	if pool.is_empty():
+		return false
+	var item: Dictionary = pool[randi() % pool.size()]
+	var multiplier: float = [1.0, 1.5, 2.0, 3.0][clampi(_trea_quality() - 2, 0, 3)]
+	var value := int(item.get("v", 0)) if bool(item.get("rare", false)) else int(round(float(item["boost"]) * multiplier))
+	_pick_trea(item, value, false)
+	_toast("镇魂铃 · 获得宝物「%s」" % str(item["name"]))
+	return true
+
 func _combo_has(nm: String) -> bool:
 	# ⚠ 回春 / 生息 这两个名字两边都有：普通卡优先，命中普通卡名单就只认 _combined
 	var sys_first: bool = _sys_combos.has(nm)
@@ -7041,13 +7064,12 @@ func _devour_keep(n: int) -> void:
 
 
 # ============================================================
-# 奇遇：每 75 秒掷一条；**血条正下方那一条就是入口**
+# 奇遇：空槽按Q_TICK间隔掷一条；**血条正下方那一条就是入口**
 #   掷到 → 那一条显示「点开看详情」→ 点开弹框［接受］［放弃］
 #   接受后才开始计时 / 布置战场；**战斗中途不能放弃**
-#   掷到的下一条只会储存（不显示），当前那条结束才顶上来
+#   待接或进行中不储存下一条，结束/放弃后重新计时。
 # ============================================================
 const Q_TICK := 180.0             # 奇遇每 180 秒一次（旧版 75s，按新节奏拉长）
-const Q_QUEUE_MAX := 3
 const Q_TIER_CN := ["简单", "普通", "困难", "特殊"]
 const Q_TIER_W := [[45.0, 55.0, 0.0, 0.0], [20.0, 50.0, 30.0, 0.0], [10.0, 35.0, 40.0, 15.0]]
 const Q_TIER_COL := [Color(0.40, 0.46, 0.34), Color(0.40, 0.36, 0.24), Color(0.52, 0.30, 0.16), Color(0.52, 0.18, 0.16)]
@@ -7078,7 +7100,6 @@ const QUEST_POOL := [
 
 var _q_offer: Dictionary = {}     # 掷到、等玩家点开看的那一条
 var _q_cur: Dictionary = {}       # 已接受、正在做的那一条（同时只有一条）
-var _q_queue: Array = []          # 储存（界面不显示）
 var _q_t := 0.0
 var _q_done := 0
 var _q_giveup := 0
@@ -7238,8 +7259,10 @@ func _q_open_popup() -> void:
 	var tier := clampi(int(q.get("tier", 0)), 0, 3)
 	_panel(Rect2(280, 26, 120, 26), Q_TIER_COL[tier], 4, Q_TIER_COL[tier], 0, holder)
 	_lbl("奇遇 · " + str(Q_TIER_CN[tier]), Vector2(280, 28), Vector2(120, 22), 14, Color(0.99, 0.95, 0.87), holder, HORIZONTAL_ALIGNMENT_CENTER)
-	var r: Dictionary = q.get("r", {})
+	var r := _q_rewards(q)
 	var rw := "灵晶 " + str(int(r.get("crystal", 0)))
+	if r.has("wen"):
+		rw += " · 文钱 " + str(int(r["wen"]))
 	if r.has("trea_rr"):
 		rw += " · 宝物刷新 " + str(int(r["trea_rr"]))
 	if r.has("aug_rr"):
@@ -7270,7 +7293,7 @@ func _q_open_popup() -> void:
 	_breathe(holder)
 
 func _q_accept() -> void:
-	if _q_offer.is_empty():
+	if _run_over or not _q_cur.is_empty() or _q_offer.is_empty():
 		return
 	var q: Dictionary = _q_offer
 	_q_offer = {}
@@ -7284,16 +7307,8 @@ func _q_decline() -> void:
 		return
 	_q_giveup += 1
 	_q_offer = {}
+	_q_t = 0.0
 	_q_close_popup()
-	_q_refresh()
-	_q_pull_queue()
-
-func _q_pull_queue() -> void:
-	if not _q_cur.is_empty() or not _q_offer.is_empty():
-		return
-	if _q_queue.is_empty():
-		return
-	_q_offer = _q_queue.pop_front()
 	_q_refresh()
 
 # 奇遇尽量不出声明：这里留空（奖励自己看数字变化）
@@ -7301,9 +7316,12 @@ func _q_notify(_text: String) -> void:
 	pass
 
 func _q_finish(why: String) -> void:
-	if _q_cur.is_empty():
+	if _run_over or _q_cur.is_empty():
 		return
 	var q: Dictionary = _q_cur
+	_q_cur = {} # 先关闭结算入口，奖励/清理回调不能再次完成同一奇遇。
+	_q_t = 0.0
+	_q_cleanup(q)
 	match why:
 		"done":
 			_q_done += 1
@@ -7313,10 +7331,9 @@ func _q_finish(why: String) -> void:
 			_screen_flash(Color(1.0, 0.92, 0.62), 0.10, 0.22)
 			_core._shake = maxf(float(_core._shake), 4.0)
 			_cam_pulse(1.05, 0.42)
-			if _curio_id == "zhenhunling" and _curio_lv >= 5 and randf() < 0.30:
-				_trea_charge += 1
-				_refresh_trea_tile()
-				_toast("镇魂铃 · 额外宝物机会 +1")
+			if _curio_id == "zhenhunling" and _curio_lv >= 5 and _roll_bell_treasure():
+				if not _grant_random_treasure():
+					_toast("镇魂铃 · 暂无可发放的宝物")
 			_q_notify("奇遇完成 · %s" % str(q["n"]))
 			Aud.sfx("levelup", -6.0)
 			Aud.sfx("bell", -8.0, 1.05)
@@ -7327,10 +7344,10 @@ func _q_finish(why: String) -> void:
 			_cam_pulse(1.03, 0.22)
 			Aud.sfx("ui_close", -8.0, 0.9)
 			_q_notify("奇遇失败 · %s" % str(q["n"]))
-	_q_cleanup(q)
-	_q_cur = {}
 	_q_refresh()
-	_q_pull_queue()
+
+func _roll_bell_treasure() -> bool:
+	return randf() < 0.30
 
 func _q_cleanup(q: Dictionary) -> void:
 	if _core == null or q.is_empty():
@@ -7347,15 +7364,21 @@ func _q_cleanup(q: Dictionary) -> void:
 		"elite":
 			_core.clear_elite()
 
-func _q_reward(q: Dictionary) -> void:
-	var r: Dictionary = q.get("r", {})
+func _q_rewards(q: Dictionary) -> Dictionary:
+	var r: Dictionary = q.get("r", {}).duplicate(true)
 	var boost := 1.0
 	if _curio_id == "zhenhunling" and _curio_lv >= 2:
 		boost = 1.3
+	for key in r:
+		r[key] = int(round(float(r[key]) * boost))
+	return r
+
+func _q_reward(q: Dictionary) -> void:
+	var r := _q_rewards(q)
 	if r.has("crystal"):
-		_gain_crystal(int(round(float(r["crystal"]) * boost)))
+		_gain_crystal(int(r["crystal"]))
 	if r.has("wen"):
-		_add_wen(int(round(float(r["wen"]) * boost)))
+		_add_wen(int(r["wen"]))
 	if r.has("trea_rr"):
 		_trea_reroll += int(r["trea_rr"])
 	if r.has("aug_rr"):
@@ -7372,9 +7395,9 @@ func _q_done_kind(kind: String) -> void:
 	if not _q_cur.is_empty() and str(_q_cur.get("kind", "")) == kind:
 		_q_finish("done")
 
-# 掷到一条：没人做也没人待接 → 直接摆出来；否则储存
+# 单槽：待接或进行中时不掷下一条，不积攒隐藏队列。
 func _q_roll() -> void:
-	if _core == null:
+	if _run_over or _core == null or not _q_cur.is_empty() or not _q_offer.is_empty():
 		return
 	var wave := int(_core.wave)
 	var tw: Array = Q_TIER_W[0] if wave <= 2 else (Q_TIER_W[1] if wave == 3 else Q_TIER_W[2])
@@ -7400,17 +7423,33 @@ func _q_roll() -> void:
 		cand.append(e)
 	if cand.is_empty():
 		return
-	var pick: Dictionary = (cand[randi() % cand.size()] as Dictionary).duplicate()
-	if _q_cur.is_empty() and _q_offer.is_empty():
-		_q_offer = pick
-		_q_refresh()
-	elif _q_queue.size() < Q_QUEUE_MAX:
-		_q_queue.append(pick)
+	var pick := _q_prepare(cand[randi() % cand.size()])
+	_q_offer = pick
+	_q_refresh()
 
 # 接受后：布置战场 + 倒计时从这里才开始
+func _q_prepare(source: Dictionary) -> Dictionary:
+	var q := source.duplicate(true)
+	if bool(q.get("_prepared", false)):
+		return q
+	q["_prepared"] = true
+	if _curio_id != "zhenhunling" or _curio_lv < 3:
+		return q
+	var need := int(q.get("need", 0))
+	if need > 0:
+		var reduced := maxi(1, int(round(need * 0.8)))
+		q["need"] = reduced
+		q["desc"] = str(q.get("desc", "")).replace(str(need), str(reduced))
+	elif str(q.get("kind", "")) in ["survive", "restrain", "guard"]:
+		var limit := float(q.get("lim", 0.0))
+		q["lim"] = limit * 0.8
+		q["desc"] = str(q.get("desc", "")).replace(str(int(limit)), str(int(q["lim"])))
+	return q
+
 func _q_activate(q: Dictionary) -> void:
-	if _curio_id == "zhenhunling" and _curio_lv >= 3:
-		q["need"] = maxi(1, int(round(float(q.get("need", 0)) * 0.8)))
+	if _run_over or not _q_cur.is_empty():
+		return
+	q = _q_prepare(q)
 	q["prog"] = 0
 	q["t"] = float(q.get("lim", 0.0))
 	q["mark"] = int(_q_stats.get(str(q.get("key", "")), 0))
@@ -7432,7 +7471,6 @@ func _q_activate(q: Dictionary) -> void:
 		"instant":
 			_q_instant(q)
 			_q_refresh()
-			_q_pull_queue()
 			return
 	_q_cur = q
 	_q_refresh()
@@ -7474,7 +7512,7 @@ func _q_check(q: Dictionary) -> void:
 		"elite":
 			var alive := 0
 			for f_v in _core.foes:
-				if str((f_v as Dictionary).get("kind", "")) == "elite":
+				if str((f_v as Dictionary).get("kind", "")) == "elite" and float(f_v.get("hp", 0.0)) > 0.0 and float(f_v.get("dying", 0.0)) <= 0.0:
 					alive += 1
 			q["prog"] = int(q["need"]) - alive
 
@@ -7484,12 +7522,14 @@ func _q_tick(dt: float) -> void:
 	# 设计稿：奇遇是第 4 关才解锁的新功能（统一走解锁表）
 	if not LevelState.has_feature("encounter"):
 		return
-	_q_t += dt
-	if _q_t >= _q_interval():
+	if _q_cur.is_empty() and _q_offer.is_empty():
+		_q_t += dt
+		if _q_t >= _q_interval():
+			_q_t = 0.0
+			_q_roll()
+	else:
 		_q_t = 0.0
-		_q_roll()
 	if _q_cur.is_empty():
-		_q_pull_queue()
 		return
 	var q: Dictionary = _q_cur
 	_q_check(q)
