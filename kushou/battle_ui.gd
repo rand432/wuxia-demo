@@ -2282,7 +2282,7 @@ func _sync_attrs_to_hero() -> void:
 	h["atk"] = _core.attr_final("atk")
 	h["crit"] = _core.attr_final("crit")
 	h["crit_dmg"] = _core.attr_final("cdmg")
-	h["cut"] = _core.type_field("物理", "red_f")
+	h["cut"] = _core.type_effective_field("物理", "red_f")
 	h["cut_all"] = 0.0
 	h["dmg_all"] = _core.type_amp("物理")
 	h["aspd"] = float(_core.attr_final("aspd")) / 1.8
@@ -3199,6 +3199,12 @@ func _aug_has_effect(key: String) -> bool:
 				if type != "真实" and _core.type_field(type, "red_f") < 0.60 - 0.000001:
 					return true
 			return false
+		"pen_flat", "dmgall_add":
+			for type in _core.DMG_TYPES:
+				if type == "真实": continue
+				if key == "pen_flat" and _core.type_effective_field(type, "pen_f") < 0.60 - 0.000001: return true
+				if key == "dmgall_add" and _core.type_amp(type) < 2.0 - 0.000001: return true
+			return false
 		"killheal": return float(_core.kill_heal) < 1.0 - 0.000001
 	return true
 
@@ -3224,6 +3230,8 @@ func _roll_aug() -> void:
 			if str(o["key"]) == "crit_add": ac.desc += " · 最高75%"
 			if str(o["key"]) == "critdmg_add": ac.desc += " · 最高400%"
 			if str(o["key"]) in ["cut_add", "cutall_add"]: ac.desc += " · 各类减伤最高60%"
+			if str(o["key"]) == "pen_flat": ac.desc += " · 各系固定穿透最高60%"
+			if str(o["key"]) == "dmgall_add": ac.desc += " · 各系最终增幅最高200%"
 			ac.quality = quality
 			ac.visible = true
 			ac.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -4082,12 +4090,13 @@ func _apply_aug(key: String, val: float) -> void:
 			h["crit_dmg"] = _core.attr_final("cdmg")
 		"cut_add":
 			_core.type_add("物理", "red_f", val / 100.0)
-			h["cut"] = float(h.get("cut", 0.0)) + val / 100.0
+			h["cut"] = _core.type_effective_field("物理", "red_f")
 		"cutall_add":
 			for t in _core.DMG_TYPES:
 				if t != "真实":
 					_core.type_add(t, "red_f", val / 100.0)
-			h["cut_all"] = float(h.get("cut_all", 0.0)) + val / 100.0
+			h["cut"] = _core.type_effective_field("物理", "red_f")
+			h["cut_all"] = 0.0 # 六系字段已包含这次增益。
 		"pen_flat":
 			# v6：七系固定穿透一起加（真实不吃穿透，跳过）
 			for t in _core.DMG_TYPES:
@@ -4097,7 +4106,7 @@ func _apply_aug(key: String, val: float) -> void:
 			for t in _core.DMG_TYPES:
 				if t != "真实":
 					_core.type_add(t, "amp_f", val / 100.0)
-			h["dmg_all"] = float(h.get("dmg_all", 0.0)) + val / 100.0
+			h["dmg_all"] = _core.type_amp("物理")
 		"mp_add":
 			_core.attr_add("mp", val)
 			_mp_max = maxf(1.0, _core.attr_final("mp"))
@@ -6952,7 +6961,7 @@ func _stone_shatter() -> void:
 	for f_v in _live_foes():
 		var f: Dictionary = f_v
 		if (Vector2(float(f["x"]), float(f["y"])) - hp0).length() <= 140.0:
-			_core._apply_dmg(f, dmg * _vuln_mul(f), "真实")
+			_core._apply_dmg(f, dmg, "真实")
 			_core._push_float(float(f["x"]), float(f["y"]) - 50.0, "碎裂", Color(0.86, 0.84, 0.76), true)
 			hit += 1
 	if hit > 0:

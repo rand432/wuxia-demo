@@ -190,7 +190,7 @@ func _build_attr() -> void:
 		["攻 击", str(int(float(h["atk"])))],
 		["气 血", str(int(float(h["hp_max"])))],
 		["内 力", str(int(float(h["mp_max"])))],
-		["攻 速", "%.2f/秒" % (float(h["aspd"]) / 1.8)],
+		["攻 速", "%.2f/秒" % (1.0 / _sheet.hero_attack_interval())],
 	]
 	for c in cells.size():
 		var x := 24.0 + float(c) * 168.0

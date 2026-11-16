@@ -41,6 +41,7 @@ var tab := 0
 var popup := -1          # 弹窗对应的行（-1＝没开）
 var popup_kind := ""     # base / type / real
 var _rows: Array = []
+var _refresh_t := 0.0
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
@@ -60,6 +61,13 @@ func close() -> void:
 	popup = -1
 	visible = false
 
+func _process(delta: float) -> void:
+	if not visible: return
+	_refresh_t += delta
+	if _refresh_t >= 0.1:
+		_refresh_t = 0.0
+		queue_redraw()
+
 # ---------------- 取值 ----------------
 func _h(key: String, dflt: float) -> float:
 	if core == null:
@@ -73,21 +81,60 @@ func _base_text(i: int) -> String:
 	match i:
 		0: return _fmt_num(_h("atk", 12.0))
 		1: return _fmt_num(_h("hp_max", 200.0))
-		2: return "%.2f 次/秒" % (_h("aspd", 1.0) / 1.8)
+		2: return "%.2f 次/秒" % _attack_rate()
 		3: return _fmt_num(_h("mp_max", 100.0))
-		4: return _fmt_num(_h("crit", 0.05) * 100.0) + "%"
+		4: return _fmt_num(_crit_rate() * 100.0) + "%"
 		5: return _fmt_num(_h("crit_dmg", 2.0) * 100.0) + "%"
 	return "—"
+
+func _attack_rate() -> float:
+	if core != null and core.has_method("hero_attack_interval"):
+		return 1.0 / float(core.hero_attack_interval())
+	return 0.0
+
+func _crit_rate() -> float:
+	if core != null and core.has_method("physical_crit_rate"):
+		return float(core.physical_crit_rate())
+	return clampf(_h("crit", 0.05), 0.0, 0.75)
+
+# 使用真实属性层拆解，不把已经乘过的增幅伪装成临时属性。
+func _base_details(i: int) -> Dictionary:
+	var key: String = BASE_ROWS[i]["key"]
+	var a: Dictionary = core.attr.get(key, {}) if core != null else {}
+	var base := float(a.get("base", 0.0))
+	var temp := float(a.get("temp", 0.0))
+	var amp := float(a.get("amp", 0.0))
+	var speed := key == "aspd"
+	var percentage := key in ["crit", "cdmg"]
+	if speed:
+		base /= 1.8
+		temp /= 1.8
+	elif percentage:
+		base *= 100.0
+		temp *= 100.0
+	var base_text := _fmt_val(base, speed)
+	var temp_text := _fmt_delta(temp, speed)
+	var equation := "%s ＋ %s" % [base_text, temp_text]
+	var note := ""
+	if not percentage:
+		equation = "(%s %s) × %.2f" % [base_text, temp_text, 1.0 + amp]
+	if speed:
+		note = "基础间隔%.2f秒 · 最终含当前攻速效果" % preload("res://shared/combat_rules.gd").BASE_ATTACK_SECONDS
+	elif key == "crit":
+		note = "含当前暴击效果 · 最高75%"
+	elif key == "cdmg":
+		note = "最高400%"
+	return {"base": base_text, "temp": temp_text, "amp": "—" if percentage else "%+.0f%%" % (amp * 100.0), "equation": equation, "note": note, "total": _base_text(i)}
 
 func _type_f(field: String) -> float:
 	if core == null:
 		return 0.0
 	var t: String = str(TYPES[clampi(tab, 0, TYPES.size() - 1)])
 	match field:
-		"pen": return float(core.type_field(t, "pen_f"))
-		"pen_p": return float(core.type_field(t, "pen_p"))
-		"red": return float(core.type_field(t, "red_f"))
-		"red_p": return float(core.type_field(t, "red_p"))
+		"pen": return float(core.type_effective_field(t, "pen_f"))
+		"pen_p": return float(core.type_effective_field(t, "pen_p"))
+		"red": return float(core.hero_fixed_reduction(t))
+		"red_p": return float(core.type_effective_field(t, "red_p"))
 		"amp": return float(core.type_field(t, "amp_f"))
 	return float(core.type_field(t, "amp_p"))
 
@@ -146,7 +193,10 @@ func _draw() -> void:
 			draw_string(f_n, Vector2(122, y2 + 42), str(TYPE_ROWS[i]["name"]), HORIZONTAL_ALIGNMENT_LEFT, -1, 28, DIM)
 			_type_pair(y2, str(TYPE_ROWS[i]["field"]), f_v, f_gold)
 			_rows.append({"rect": Rect2(64, y2, 592, 90), "kind": "type", "idx": i})
-		draw_string(f_small, Vector2(64, 1188), "点任意一行看说明", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, FAINT)
+	var amp_summary := "最终增幅 +%.0f%% · 上限200%%" % (float(core.type_amp(str(TYPES[tab]))) * 100.0) if core != null else ""
+	if tab != 6:
+		draw_string(f_small, Vector2(64, 1174), amp_summary, HORIZONTAL_ALIGNMENT_LEFT, -1, 16, GOLD)
+	draw_string(f_small, Vector2(64, 1200), "点任意一行看说明", HORIZONTAL_ALIGNMENT_LEFT, -1, 16, FAINT)
 
 	if popup >= 0:
 		_draw_popup()
@@ -174,6 +224,8 @@ func _real_rows(f_n: Font, f_v: Font, f_gold: Font, f_small: Font) -> void:
 		else:
 			_right(_font(42), 470, y2 + 40, str(defs[i]["val"]), INK, 42)
 		_rows.append({"rect": Rect2(64, y2, 592, 74), "kind": "real", "idx": i})
+	if core != null:
+		draw_string(f_small, Vector2(64, 1040), "最终增幅 +%.0f%% · 上限200%%" % (float(core.type_amp("真实")) * 100.0), HORIZONTAL_ALIGNMENT_LEFT, -1, 16, GOLD)
 
 func _type_pair(y2: float, field: String, f_v: Font, f_gold: Font) -> void:
 	_right(_font(42), 352, y2 + 44, _fmt_num(_type_f(field) * 100.0), INK, 42)
@@ -185,7 +237,6 @@ func _draw_popup() -> void:
 	var f_lab := _font(36)
 	var f_val := _font(50)
 	var f_mid := _font(34)
-	var f_eq := _font(40)
 	var f_res := _font(46)
 
 	draw_rect(Rect2(0, 0, 720, 1280), Color(0.10, 0.09, 0.08, 0.45))
@@ -205,26 +256,21 @@ func _draw_popup() -> void:
 	draw_line(Vector2(96, 300), Vector2(624, 300), FAINT, 2.0)
 
 	if is_base:
-		var i := popup
-		var total := 0.0
-		var base := 0.0
-		var is_pct := false
-		match i:
-			0: total = _h("atk", 12.0); base = 12.0
-			1: total = _h("hp_max", 200.0); base = 200.0
-			2: total = _h("aspd", 1.0) / 1.8; base = 1.0 / 1.8; is_pct = true
-			3: total = _h("mp_max", 100.0); base = 100.0
-			4: total = _h("crit", 0.05) * 100.0; base = 5.0
-			5: total = _h("crit_dmg", 2.0) * 100.0; base = 200.0
-		var temp := total - base
-		draw_string(f_lab, Vector2(96, 372), "基础", HORIZONTAL_ALIGNMENT_LEFT, -1, 36, DIM)
-		_right(f_val, 624, 366, _fmt_val(base, is_pct), INK, 50)
-		draw_string(f_lab, Vector2(96, 452), "临时", HORIZONTAL_ALIGNMENT_LEFT, -1, 36, DIM)
-		_right(f_val, 624, 446, _fmt_delta(temp, is_pct), GRN, 50)
-		draw_line(Vector2(96, 508), Vector2(624, 508), FAINT, 2.0)
-		draw_string(f_mid, Vector2(96, 552), "（基础 ＋ 临时）× 增幅", HORIZONTAL_ALIGNMENT_LEFT, -1, 34, INK)
-		draw_string(f_eq, Vector2(120, 622), _fmt_val(base, is_pct) + " ＋ " + _fmt_delta(temp, is_pct), HORIZONTAL_ALIGNMENT_LEFT, -1, 40, DIM)
-		_right(f_res, 624, 700, _fmt_val(total, is_pct), SEAL, 46)
+		var data := _base_details(popup)
+		for row in range(3):
+			var label: String = ["基础倍率" if popup == 2 else "基础", "临时倍率" if popup == 2 else "临时", "增幅"][row]
+			var value: String = data[["base", "temp", "amp"][row]]
+			var y := 372.0 + float(row) * 80.0
+			draw_string(f_lab, Vector2(96, y), label, HORIZONTAL_ALIGNMENT_LEFT, -1, 36, DIM)
+			_right(f_val, 624, y - 6, value, INK if row == 0 else (GRN if row == 1 else GOLD), 50)
+		draw_line(Vector2(96, 580), Vector2(624, 580), FAINT, 2.0)
+		var equation: String = data["equation"]
+		var eq_size := 32 if equation.length() > 22 else 38
+		draw_string(_font(eq_size), Vector2(96, 642), equation, HORIZONTAL_ALIGNMENT_LEFT, -1, eq_size, DIM)
+		_right(f_res, 624, 724, data["total"], SEAL, 46)
+		draw_string(_font(22), Vector2(96, 786), data["note"], HORIZONTAL_ALIGNMENT_LEFT, -1, 22, DIM)
+		if popup == 2:
+			draw_string(_font(22), Vector2(96, 830), "近身出手频率 · 寻敌、走位与停顿另计", HORIZONTAL_ALIGNMENT_LEFT, -1, 22, DIM)
 	elif is_real:
 		if popup == 0:
 			draw_string(f_lab, Vector2(96, 372), "真实攻击", HORIZONTAL_ALIGNMENT_LEFT, -1, 36, DIM)
@@ -242,6 +288,7 @@ func _draw_popup() -> void:
 			_right(f_val, 624, 446, _fmt_num(ap) + "%", GOLD, 50)
 			draw_line(Vector2(96, 508), Vector2(624, 508), FAINT, 2.0)
 			draw_string(f_mid, Vector2(96, 552), "唯一对真实伤害生效的加成", HORIZONTAL_ALIGNMENT_LEFT, -1, 34, INK)
+			draw_string(_font(28), Vector2(96, 626), "最终增幅 +%.0f%% · 最高200%%" % (float(core.type_amp("真实")) * 100.0), HORIZONTAL_ALIGNMENT_LEFT, -1, 28, SEAL)
 		else:
 			draw_string(f_mid, Vector2(96, 410), "真实伤害不吃它", HORIZONTAL_ALIGNMENT_LEFT, -1, 34, INK)
 			draw_string(f_mid, Vector2(96, 460), "没有抗性可穿、也不可减免", HORIZONTAL_ALIGNMENT_LEFT, -1, 34, DIM)
@@ -254,7 +301,16 @@ func _draw_popup() -> void:
 		draw_string(f_lab, Vector2(96, 452), "百分比", HORIZONTAL_ALIGNMENT_LEFT, -1, 36, DIM)
 		_right(f_val, 624, 446, _fmt_num(pct) + "%", GOLD, 50)
 		draw_line(Vector2(96, 508), Vector2(624, 508), FAINT, 2.0)
-		draw_string(f_mid, Vector2(96, 552), "两段依次作用", HORIZONTAL_ALIGNMENT_LEFT, -1, 34, INK)
+		var formula: String = ["先扣固定，再削剩余", "两段依次作用", "固定增幅 × (1＋百分比)"][j]
+		draw_string(f_mid, Vector2(96, 552), formula, HORIZONTAL_ALIGNMENT_LEFT, -1, 34, INK)
+		if j == 2:
+			draw_string(_font(28), Vector2(96, 626), "最终增幅 +%.0f%% · 最高200%%" % (float(core.type_amp(str(TYPES[tab]))) * 100.0), HORIZONTAL_ALIGNMENT_LEFT, -1, 28, SEAL)
+		elif j == 1:
+			var reduction := 1.0 - (1.0 - flat / 100.0) * (1.0 - pct / 100.0)
+			draw_string(_font(28), Vector2(96, 626), "最终减伤 %.0f%% · 两段相乘" % (reduction * 100.0), HORIZONTAL_ALIGNMENT_LEFT, -1, 28, SEAL)
+			draw_string(_font(24), Vector2(96, 680), "固定含当前效果 · 两段各最高60%", HORIZONTAL_ALIGNMENT_LEFT, -1, 24, DIM)
+		else:
+			draw_string(_font(28), Vector2(96, 626), "固定、百分比各最高60%", HORIZONTAL_ALIGNMENT_LEFT, -1, 28, DIM)
 
 # ---------------- 小工具 ----------------
 func _font(sz: int) -> Font:

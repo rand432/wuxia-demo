@@ -52,10 +52,10 @@ func _apply_dmg(f: Dictionary, amount: float, dtype: String, crit_result: int = 
 	#   ⚠ 减伤**只在扣血前那一次**做（下面 final *= 0.55）—— 别在这儿也乘一遍，
 	#     两处都乘会变成 0.55×0.55＝只剩 30%（写这版时真踩了）。
 	var blocked := false
-	if bool(f.get("shield", false)) and hero_pos.y > float(f["y"]):
+	if dtype != DMG_TRUE and bool(f.get("shield", false)) and hero_pos.y > float(f["y"]):
 		blocked = true
 	# v15w 醉太岁「酒气」：窗口内主角出伤 +25%
-	if float(hero.get("drunk_t", 0.0)) > 0.0:
+	if dtype != DMG_TRUE and float(hero.get("drunk_t", 0.0)) > 0.0:
 		amount *= 1.0 + float(hero.get("drunk_atk", 0.0))
 	var o := hero_out_dmg(amount, dtype, crit_result)
 	var amt := float(o["dmg"])
@@ -66,11 +66,10 @@ func _apply_dmg(f: Dictionary, amount: float, dtype: String, crit_result: int = 
 	#   boss 词缀「重甲」不吃这一套，它单独走下面的乘法减伤
 	if float(f.get("boss_cut", 0.0)) <= 0.0:
 		final = foe_take(amt, f, dtype)
-	# v15w 破阵刀客「破甲」：被破甲的目标护甲 −20%
-	if float(f.get("armor_break_t", 0.0)) > 0.0:
-		final *= 0.80
-	final *= 1.0 + foe_vuln
-	if float(f.get("boss_cut", 0.0)) > 0.0:
+	# 破甲在foe_red中削物理护甲；真实只吃真实增幅，不再经过全局易伤/减伤。
+	if dtype != DMG_TRUE:
+		final *= 1.0 + foe_vuln
+	if dtype != DMG_TRUE and float(f.get("boss_cut", 0.0)) > 0.0:
 		final *= 1.0 - float(f["boss_cut"])            # v14g：boss 词缀"重甲"减伤
 	# v16k：盾兵**正面格挡**——扣血前再削一刀（−45%），并飘个"挡"字
 	if blocked:
@@ -81,12 +80,12 @@ func _apply_dmg(f: Dictionary, amount: float, dtype: String, crit_result: int = 
 	_last_crit = bool(o["crit"])
 	_last_lucky = bool(o["lucky"])
 	# v13d P3：石像在，怪少挨 20%
-	if float(f.get("buff", 0.0)) > 0.0:
+	if dtype != DMG_TRUE and float(f.get("buff", 0.0)) > 0.0:
 		final *= STATUE_CUT
 	# 奇物·寒玉扳指：被冻结的目标受到伤害提高
-	if float(f.get("cold_dmg", 0.0)) > 0.0 and float(f.get("cold_freeze_t", 0.0)) > 0.0:
+	if dtype != DMG_TRUE and float(f.get("cold_dmg", 0.0)) > 0.0 and float(f.get("cold_freeze_t", 0.0)) > 0.0:
 		final *= 1.0 + float(f["cold_dmg"])
-	if float(f.get("wood_t", 0.0)) > 0.0:
+	if dtype != DMG_TRUE and float(f.get("wood_t", 0.0)) > 0.0:
 		final *= 1.0 + float(f.get("wood_vuln", 0.0))
 	f["hp"] = float(f["hp"]) - final
 	# v15w 杏林医女「回春针」：吸血窗口内，按伤害的百分比回血
@@ -341,6 +340,9 @@ func type_add(t: String, f: String, v: float) -> void:
 	if type_attr.has(t) and (type_attr[t] as Dictionary).has(f):
 		type_attr[t][f] = float(type_attr[t][f]) + v
 
+func type_effective_field(t: String, f: String) -> float:
+	return preload("res://shared/combat_rules.gd").effective_type_field(t, f, type_field(t, f))
+
 # 该系攻击值：六常规＝总攻击＋该系临时；真实＝独立值（不吃总攻击）
 func type_atk(t: String) -> float:
 	_attr_ensure()
@@ -350,21 +352,21 @@ func type_atk(t: String) -> float:
 
 # 该系最终增幅：固定 × (1 ＋ 百分比)
 func type_amp(t: String) -> float:
-	return type_field(t, "amp_f") * (1.0 + type_field(t, "amp_p"))
+	return minf(preload("res://shared/combat_rules.gd").DAMAGE_AMP_CAP, type_effective_field(t, "amp_f") * (1.0 + type_effective_field(t, "amp_p")))
 
 # 穿透两段：对手固定减免先被我固定穿透扣，剩下的再被我百分比穿透削
 func red_after_pen(target_red_f: float, t: String) -> float:
 	if t == DMG_TRUE:
 		return 0.0
-	var left := maxf(0.0, target_red_f - type_field(t, "pen_f"))
-	return left * (1.0 - clampf(type_field(t, "pen_p"), 0.0, 1.0))
+	var left := maxf(0.0, target_red_f - type_effective_field(t, "pen_f"))
+	return left * (1.0 - type_effective_field(t, "pen_p"))
 
 # 我挨打：减免两段（真实伤害不吃）
 func take_after_red(amount: float, t: String) -> float:
 	if t == DMG_TRUE:
 		return amount
-	var f := clampf(type_field(t, "red_f"), 0.0, 0.6)
-	var p := clampf(type_field(t, "red_p"), 0.0, 0.6)
+	var f := type_effective_field(t, "red_f")
+	var p := type_effective_field(t, "red_p")
 	return amount * (1.0 - f) * (1.0 - p)
 
 # ---- 目标侧：减免换算 ＋ 穿透结算 ----
@@ -374,7 +376,10 @@ func foe_red(f: Dictionary, dtype: String, amt: float) -> float:
 		return 0.0
 	if dtype == DMG_PHYS:
 		# 旧规矩：物理按「目标气血上限的 2%」折算减伤 —— 等价于这个百分比
-		return 0.02 * float(f.get("hp_max", 0.0)) / maxf(1.0, amt)
+		var armor := 0.02 * float(f.get("hp_max", 0.0))
+		if float(f.get("armor_break_t", 0.0)) > 0.0:
+			armor *= 0.80 # 护甲减少20%，再进入穿透；不是最终伤害减少20%。
+		return armor / maxf(1.0, amt)
 	match dtype:
 		DMG_METAL: return float(f.get("res_metal", 0.0))
 		DMG_WOOD:  return float(f.get("res_wood", 0.0))
@@ -405,7 +410,7 @@ var _spawn_left := 0                 # 本批还剩几只没放出来
 var _spawn_gap := 0.0                # 下一只的间隔计时
 var _hero_cd := 0.0
 # 主角出手：先起手（表现层同步挥剑），到兵器接触点才结算伤害
-const HERO_ATTACK_TIME := 0.60     # v6 原为 1.8；割草手感（可一行还原）
+const HERO_ATTACK_TIME := preload("res://shared/combat_rules.gd").BASE_ATTACK_SECONDS
 const HERO_DODGE := 0.0            # v6：闪避下线，恒 0（留个手柄，要回滚把它改回 0.05）
 const HERO_WINDUP := 0.18
 var _hero_pending: Dictionary = {}
@@ -1007,17 +1012,15 @@ func _process(delta: float) -> void:
 	#   上一步把宠物的仇恨范围也收到 90，它就只跟着主人站位、几乎不出手了（太被动）。
 	#   现在改成**跟随主角的目标**：主人打谁它打谁——主人等怪过来，它就在旁边一起咬。
 	# 出手：只在**够得着**的时候打（不再隔着半屏砍）；开场等待期间也不出手
-	if intro_wait <= 0.0 and _hero_cd <= 0.0 and not target.is_empty() and hero_pos.distance_to(tpos) <= HERO_REACH + 10.0:
+	if intro_wait <= 0.0 and _hero_cd <= 0.0 and _hero_pending_t <= 0.0 and not target.is_empty() and hero_pos.distance_to(tpos) <= HERO_REACH + 10.0:
 		var tgt := target
 		if true:
 			# 出手间隔吃"攻速提升"（技能）
 			# v14a 连杀卡：连杀每 10 层 → 攻速 +5%（上限 +50%）
-			var combo_aspd := 0.0
-			if float(hero.get("mech_comboaspd", 0.0)) > 0.0:
-				combo_aspd = minf(0.50, float(_combo) / 10.0 * float(hero["mech_comboaspd"]))
-			_hero_cd = HERO_ATTACK_TIME / maxf(0.2, float(hero["aspd"]) * aspd_mul() * (1.0 + combo_aspd) * (1.0 + float(hero.get("curio_aspd", 0.0))))
+			_hero_cd = hero_attack_interval()
 			_hero_pending = tgt
-			_hero_pending_t = HERO_WINDUP
+			# 高攻速缩短起手；否则0.12秒的新一刀会反复覆盖0.18秒的待命中刀。
+			_hero_pending_t = minf(HERO_WINDUP, _hero_cd * HERO_WINDUP / HERO_ATTACK_TIME)
 			hero_attack.emit()
 	# 怪：往下走 / 贴上来打
 	# 连杀计时：1.4 秒内没有新击杀就归零
@@ -2784,6 +2787,13 @@ func aspd_mul() -> float:
 	if _p_aspd > 0.0:
 		m *= 2.0
 	return m
+
+# 面板与实际出手共用；这是目标在攻击范围内时的出手间隔，不包含寻敌/走位/停顿。
+func hero_attack_interval() -> float:
+	var combo_aspd := 0.0
+	if float(hero.get("mech_comboaspd", 0.0)) > 0.0:
+		combo_aspd = minf(0.50, float(_combo) / 10.0 * float(hero["mech_comboaspd"]))
+	return HERO_ATTACK_TIME / maxf(0.2, float(hero.get("aspd", 1.0)) * aspd_mul() * (1.0 + combo_aspd) * (1.0 + float(hero.get("curio_aspd", 0.0))))
 
 # v3c（用户："溅射 可以改为范围吗 就是每一级范围 感觉更好一点"）：
 #   溅射从"同时打 N 个"改成"**按范围**打"——每级把横扫半径撑大，
@@ -5371,13 +5381,9 @@ func hero_out_dmg(base: float, dtype: String, crit_result: int = -1) -> Dictiona
 	return {"dmg": d, "crit": crit, "lucky": lucky}
 
 # 受伤：主角挨打时按类型减（物理吃护甲；元素吃抗性不吃护甲；真实不吃）
-func hero_in_dmg(amount: float, dtype: String) -> float:
-	if p_active("tiexinwu") and not bool(partners["tiexinwu"].get("used", false)):
-		partners["tiexinwu"]["used"] = true
-		_push_float(hero_pos.x, hero_pos.y - 76.0, "铁壁！免伤", Color(0.86, 0.88, 0.94), true)
-		return 0.0
+func hero_fixed_reduction(dtype: String) -> float:
 	if dtype == DMG_TRUE:
-		return amount
+		return 0.0
 	# v6：减免直接读新层固定减免
 	var cut := type_field(dtype, "red_f")
 	cut += float(hero.get("curio_cut", 0.0))
@@ -5388,8 +5394,18 @@ func hero_in_dmg(amount: float, dtype: String) -> float:
 	if float(hero.get("dr_t", 0.0)) > 0.0:
 		dr = float(hero.get("dr", 0.0))
 		cut += dr
-	# v6：防御/石皮已折进 red_f；不再有 hero.def 数值减伤和 cut_extra 旧口
-	var taken := maxf(0.0, amount * (1.0 - clampf(cut, 0.0, 0.60)))   # 上限 60%（设计稿）
+	return clampf(cut, 0.0, preload("res://shared/combat_rules.gd").TYPE_RATE_CAP)
+
+func hero_in_dmg(amount: float, dtype: String) -> float:
+	if p_active("tiexinwu") and not bool(partners["tiexinwu"].get("used", false)):
+		partners["tiexinwu"]["used"] = true
+		_push_float(hero_pos.x, hero_pos.y - 76.0, "铁壁！免伤", Color(0.86, 0.88, 0.94), true)
+		return 0.0
+	if dtype == DMG_TRUE:
+		return amount
+	# 两段各自封顶60%，临时效果先并入固定段，再乘百分比段。
+	var taken := maxf(0.0, amount * (1.0 - hero_fixed_reduction(dtype)) * (1.0 - type_effective_field(dtype, "red_p")))
+	var dr := float(hero.get("dr", 0.0)) if float(hero.get("dr_t", 0.0)) > 0.0 else 0.0
 	if dr > 0.0 and taken > 0.0:
 		hero["hp"] = minf(float(hero["hp_max"]), float(hero["hp"]) + amount * dr * 0.5)
 	return taken
