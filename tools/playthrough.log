@@ -46,23 +46,3 @@
 [CURIO_RESULT] L7 uses=0
 [GO] L8
 [CURIO] L8 id=yuhu level=1
-[QUEST] L8 accept=sh
-[END] L8 WIN t=211s wave=18/18 kills=427 hp=891/1052 unlock=9
-[FAMILY] L8 combos=2 shiny=false
-[QUEST_RESULT] L8 done=0 fail=0 giveup=0
-[CURIO_RESULT] L8 uses=0
-[GO] L9
-[CURIO] L9 id=yuhu level=1
-[QUEST] L9 accept=xj
-[END] L9 WIN t=259s wave=18/18 kills=997 hp=1507/1507 unlock=10
-[FAMILY] L9 combos=1 shiny=false
-[QUEST_RESULT] L9 done=1 fail=0 giveup=0
-[CURIO_RESULT] L9 uses=0
-[GO] L10
-[CURIO] L10 id=yuhu level=1
-[QUEST] L10 accept=bs
-[END] L10 WIN t=220s wave=18/18 kills=385 hp=1477/1477 unlock=10
-[FAMILY] L10 combos=1 shiny=false
-[QUEST_RESULT] L10 done=1 fail=0 giveup=0
-[CURIO_RESULT] L10 uses=0
-[ALL] max_unlocked=10 first_clear={ "1": true, "2": true, "3": true, "4": true, "5": true, "6": true, "7": true, "8": true, "9": true, "10": true }

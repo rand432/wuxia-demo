@@ -1137,12 +1137,14 @@ func _curio_tick_yuhu(dt: float) -> void:
 		_curio_use()
 
 func _curio_use(extra := false) -> void:
+	if _run_over or _core == null or float(_core.hero.get("hp", 0.0)) <= 0.0:
+		return
 	var h: Dictionary = _core.hero
 	var mx := float(h.get("hp_max", 1.0))
 	var pct := 0.30 if _curio_lv >= 2 else 0.25
 	var cd := 45.0 if _curio_lv >= 4 else 60.0
 	var hp_add := mx * pct
-	h["hp"] = minf(mx, float(h.get("hp", 0.0)) + hp_add)
+	_core.heal_hero(hp_add)
 	var mp_add := _mp_max * pct
 	_mp = minf(_mp_max, _mp + mp_add)
 	if not extra:
@@ -1164,7 +1166,7 @@ func _curio_tick_xuehulu() -> void:
 	var h: Dictionary = _core.hero
 	var mx := maxf(1.0, float(h.get("hp_max", 1.0)))
 	var hpr := float(h.get("hp", 0.0)) / mx
-	if hpr > 0.70 or not _foe_near(_core.hero_pos, 300.0):
+	if hpr <= 0.0 or hpr > 0.70 or not _foe_near(_core.hero_pos, 300.0):
 		return
 	var cost := float(h.get("hp", 0.0)) * 0.10
 	if _curio_lv >= 5:
@@ -1438,10 +1440,11 @@ func _curio_tick_zhaohunfan() -> void:
 	var cap := 2 if _curio_lv >= 3 else 1
 	if _curio_count_minions("zhaohunfan") >= cap:
 		return
-	_curio_summon("zhaohunfan", "鬼影", Color(0.55, 0.45, 0.85),
-		10.0 if _curio_lv >= 2 else 8.0,
-		0.35 if _curio_lv >= 4 else 0.25,
-		0.80 if _curio_lv >= 5 else 0.0)
+	for _i in range(cap - _curio_count_minions("zhaohunfan")):
+		_curio_summon("zhaohunfan", "鬼影", Color(0.55, 0.45, 0.85),
+			10.0 if _curio_lv >= 2 else 8.0,
+			0.35 if _curio_lv >= 4 else 0.25,
+			0.80 if _curio_lv >= 5 else 0.0)
 	_curio_cd = 25.0
 	_curio_uses += 1
 	_curio_flash()
@@ -5989,8 +5992,7 @@ func _tick_minions(dt: float) -> void:
 						_core._kill_foe(best)
 					# 奇物·铜镜 Lv3：镜影攻击吸血
 					if float(m.get("lc", 0.0)) > 0.0 and md > 0.0 and _core != null:
-						var hh: Dictionary = _core.hero
-						hh["hp"] = minf(float(hh.get("hp_max", 1.0)), float(hh.get("hp", 0.0)) + md * float(m["lc"]))
+						_core.heal_hero(md * float(m["lc"]))
 			m["wave_cd"] = float(m["wave_cd"]) - dt
 			if float(m["wave_cd"]) <= 0.0:
 				m["wave_cd"] = 20.0
@@ -6565,7 +6567,7 @@ func _tick_knock(dt: float) -> void:
 			if _ram_shiny:
 				_core.attr_add("hp", 8.0)
 				_core.hero["hp_max"] = float(_core.hero["hp_max"]) + 8.0
-				_core.hero["hp"] = float(_core.hero["hp"]) + 8.0
+				_core.heal_hero(8.0)
 			break
 
 func _ram_radius_bonus() -> float:
@@ -6593,7 +6595,7 @@ func _enable_gunshan() -> void:
 func _gunshan_grow() -> void:
 	_core.attr_add("hp", GUNSHAN_HP)
 	_core.hero["hp_max"] = float(_core.hero["hp_max"]) + GUNSHAN_HP
-	_core.hero["hp"] = float(_core.hero["hp"]) + GUNSHAN_HP
+	_core.heal_hero(GUNSHAN_HP)
 
 # ============================================================
 # 苏青鸾 · 青鸾飞刃（直线穿透 + 回程）
@@ -6830,8 +6832,7 @@ func _tick_aura(dt: float) -> void:
 	var heal_aura := float(m.get("heal_aura", 0.0)) > 0.0
 	var hp0 := Vector2(_core.hero_pos)
 	if heal_aura:
-		var h: Dictionary = _core.hero
-		h["hp"] = minf(float(h["hp_max"]), float(h["hp"]) + float(h["hp_max"]) * 0.008 * dt)
+		_core.heal_hero(float(_core.hero["hp_max"]) * 0.008 * dt)
 		_mp = minf(_mp_max, _mp + 6.0 * dt)
 	_aura_pull_acc += dt
 	var do_pull := _aura_pull_acc >= 1.0

@@ -39,7 +39,15 @@ func _run() -> void:
 		battle._curio_lv = lv
 		battle._curio_cd = 0.0
 		battle._curio_tick_zhaohunfan()
-		assert(battle._curio_count_minions("zhaohunfan") == 1 and battle._curio_cd == 25.0)
+		var count := 2 if lv >= 3 else 1
+		assert(battle._curio_count_minions("zhaohunfan") == count and battle._curio_cd == 25.0)
+		if count == 2:
+			assert(battle._minions[0]["pos"] != battle._minions[1]["pos"])
+			battle._minions[1]["atk_cd"] = 999.0
+		var uses: int = battle._curio_uses
+		battle._curio_cd = 0.0
+		battle._curio_tick_zhaohunfan()
+		assert(battle._curio_count_minions("zhaohunfan") == count and battle._curio_uses == uses and battle._curio_cd == 0.0)
 		var ghost: Dictionary = battle._minions[0]
 		assert(ghost["max_life"] == (8.0 if lv == 1 else 10.0))
 		target["x"] = ghost["pos"].x
@@ -49,12 +57,15 @@ func _run() -> void:
 		battle._tick_minions(0.1)
 		assert(target["hp"] == (9965.0 if lv >= 4 else 9975.0))
 		var before: float = target["hp"]
-		ghost["life"] = 0.05
+		for unit in battle._minions:
+			unit["life"] = 0.05
+			unit["pos"] = ghost["pos"]
 		battle._tick_minions(0.1)
-		assert(target["hp"] == before - (80.0 if lv == 5 else 0.0))
+		assert(target["hp"] == before - (80.0 * count if lv == 5 else 0.0))
 		battle._tick_minions(0.1)
-		assert(target["hp"] == before - (80.0 if lv == 5 else 0.0) and battle._minions.is_empty())
+		assert(target["hp"] == before - (80.0 * count if lv == 5 else 0.0) and battle._minions.is_empty())
 	# 鬼影回到主角身边，不追出220px支援范围，移动不越过目标。
+	battle._curio_lv = 1
 	battle._curio_cd = 0.0
 	battle._curio_tick_zhaohunfan()
 	var ghost: Dictionary = battle._minions[0]
@@ -86,17 +97,19 @@ func _run() -> void:
 	# 鬼影和蛟龙各按本类计数，吞海只永久化蛟龙。
 	core.foes.clear()
 	_foe(core, core.hero_pos)
+	battle._curio_lv = 3
 	battle._curio_cd = 0.0
 	battle._curio_tick_zhaohunfan()
 	ghost = battle._minions[0]
 	battle._summon_dragon(0.0)
-	assert(battle._minions.size() == 2 and battle._curio_count_minions("") == 1)
+	assert(battle._minions.size() == 3 and battle._curio_count_minions("") == 1)
 	battle._summon_dragon(0.0)
-	assert(battle._minions.size() == 2)
+	assert(battle._minions.size() == 3)
 	var life: float = ghost["life"]
 	battle._enable_swallow_sea()
-	assert(ghost["life"] == life and battle._minions[1]["life"] == 999999.0)
-	ghost["life"] = 0.0
+	assert(ghost["life"] == life and battle._minions[2]["life"] == 999999.0)
+	for unit in battle._minions:
+		if str(unit.get("curio", "")) == "zhaohunfan": unit["life"] = 0.0
 	assert(battle._curio_count_minions("zhaohunfan") == 0)
 	battle._tick_minions(0.0)
 	assert(battle._minions.size() == 1)
