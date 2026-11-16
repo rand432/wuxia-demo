@@ -42,7 +42,7 @@ func _buffs_tick(delta: float) -> void:
 			if float(f.get(k2, 0.0)) > 0.0:
 				f[k2] = maxf(0.0, float(f[k2]) - delta)
 
-func _apply_dmg(f: Dictionary, amount: float, dtype: String) -> float:
+func _apply_dmg(f: Dictionary, amount: float, dtype: String, crit_result: int = -1) -> float:
 	if f.is_empty() or bool(f.get("_death_settled", false)) or float(f.get("dying", 0.0)) > 0.0:
 		return 0.0
 	# v16k（用户："盾兵格挡（现在只是个长相，可以做成正面减伤）"）：
@@ -57,7 +57,7 @@ func _apply_dmg(f: Dictionary, amount: float, dtype: String) -> float:
 	# v15w 醉太岁「酒气」：窗口内主角出伤 +25%
 	if float(hero.get("drunk_t", 0.0)) > 0.0:
 		amount *= 1.0 + float(hero.get("drunk_atk", 0.0))
-	var o := hero_out_dmg(amount, dtype)
+	var o := hero_out_dmg(amount, dtype, crit_result)
 	var amt := float(o["dmg"])
 	var final := amt
 	# v6：目标减免统一成百分比，并**过一次我的穿透**（固定扣点 → 百分比削剩余）。
@@ -311,7 +311,7 @@ func attr_final(key: String) -> float:
 	_attr_ensure()
 	var a: Dictionary = attr.get(key, {})
 	if key == "crit" or key == "cdmg":
-		return float(a.get("base", 0.0)) + float(a.get("temp", 0.0))
+		return clampf(float(a.get("base", 0.0)) + float(a.get("temp", 0.0)), 0.0, 0.75 if key == "crit" else 4.0)
 	return (float(a.get("base", 0.0)) + float(a.get("temp", 0.0))) * (1.0 + float(a.get("amp", 0.0)))
 
 func attr_add(key: String, v: float) -> void:
@@ -1729,11 +1729,8 @@ func _boss_foe() -> Dictionary:
 
 # 一次出手：算伤害（含技能加成/暴击/重击）→ 打中 → 横扫（溅射）→ 命中后弹剑气 → 手感特效
 func _hero_strike(tgt: Dictionary) -> void:
-	# v14b 燕无归「鹰眼」：持续期内暴击 +25%
-	var crit_rate := float(hero["crit"]) + float(hero.get("curio_crit", 0.0))
-	if p_active("yanwugui"):
-		crit_rate += 0.25 + 0.05 * float(partners["yanwugui"].get("crit_lv", 0))
-	var crit := randf() < crit_rate
+	# 一次普攻（含本次溅射）只判一次暴击，统一伤害层只应用该结果。
+	var crit := _roll_physical_crit()
 	_heavy += 1
 	var heavy := _heavy % 3 == 0
 	var base := float(hero["atk"]) * (1.0 + float(hero["dmg_pct"])) * atk_mul()
@@ -1742,8 +1739,6 @@ func _hero_strike(tgt: Dictionary) -> void:
 	if float(hero.get("mech_laststand", 0.0)) > 0.0 \
 			and float(hero["hp"]) / maxf(1.0, float(hero["hp_max"])) <= 0.35:
 		base *= 1.0 + float(hero["mech_laststand"])      # v14a 背水：残血 +50%
-	if crit:
-		base *= 2.0
 	if heavy:
 		base *= 1.6
 	var hit_list: Array = [tgt]
@@ -1764,7 +1759,7 @@ func _hero_strike(tgt: Dictionary) -> void:
 		var h: Dictionary = h_v
 		var is_extra := h != tgt
 		var dmg := base * (splash_mul() if is_extra else 1.0)
-		dmg = _apply_dmg(h, dmg, DMG_PHYS)          # 基础剑法＝**物理伤害**
+		dmg = _apply_dmg(h, dmg, DMG_PHYS, int(crit))
 		hero_foe_hit.emit(h, dmg, crit, heavy)
 		h["hp"] = float(h["hp"])                     # 减伤已在 _apply_dmg 里算过
 		h["flash"] = (0.30 if wide else (0.22 if heavy else 0.16))
@@ -4659,14 +4654,13 @@ func _update_dagger_motion(delta: float) -> void:
 		var to_t: Vector2 = tp - (d["pos"] as Vector2)
 		var dist := to_t.length()
 		if dist <= 20.0:
-			# 命中：这一段自己掷一次（"独立伤害"），不吃防御减伤
-			var roll := randf()
-			# 飞匕＝**物理伤害**（吃防御）；弹射那一段也是物理，只是伤害独立掷
-			var dm: float = _apply_dmg(tg, float(d["dmg"]) * (1.8 if roll < float(hero["crit"]) else 1.0), DMG_PHYS)
+			# 每段物理命中交给统一管线判定一次暴击并结算目标防御。
+			var dm: float = _apply_dmg(tg, float(d["dmg"]), DMG_PHYS)
+			var crit := _last_crit
 			tg["flash"] = 0.12
 			tg["kb"] = 8.0
 			_push_float(float(tg["x"]), float(tg["y"]) - 30.0, "飞匕 " + str(int(dm)),
-				Color(0.98, 0.92, 0.66), roll < float(hero["crit"]))
+				Color(0.98, 0.92, 0.66), crit)
 			_bursts.append({"x": float(tg["x"]), "y": float(tg["y"]) - 12.0, "t": 0.0,
 				"col": Color(0.98, 0.90, 0.60), "scale": 0.9})
 			(d["hits"] as Array).append(tg)
@@ -5284,9 +5278,8 @@ func _draw_partner_fx(shk: Vector2) -> void:
 			var ad := TAU * float(i) / 6.0 - _t * 1.1
 			draw_circle(hp2 + Vector2(0, -6) + Vector2(cos(ad), sin(ad)) * 46.0, 3.0, Color(0.96, 0.94, 0.72, 0.75 * kd))
 # ============================================================
-# v5f 伤害管线（用户：暴击/暴击伤害无上限 · 元素**不吃暴击也不吃护甲减伤** ·
-#   幸运一击上限 300% · 各元素抗性与元素加成 · 全伤害增加与减免）
-#   出伤：全伤害增加 → 元素加成（仅元素）→ 暴击（**仅物理**，无上限）→ 幸运一击（上限 300%）
+# 当前伤害管线：属性/类型增幅 → 暴击（仅物理，按人物属性稿上限）→ 幸运一击（上限300%）。
+#   历史v5f的无上限口径已被人物属性稿及属性层替代，不能再据此重复手算暴击。
 #   受伤：物理吃（护甲＋全减）· 元素吃（该元素抗性＋全减，**不吃护甲**）· 真实什么都不吃
 # ============================================================
 const LUCKY_CAP := 3.0            # 幸运一击上限 300%
@@ -5350,7 +5343,16 @@ func live_foes() -> int:
 	return n
 
 # 出伤：把主角这一下的伤害算全（返回 Dictionary：{dmg, crit, lucky}）
-func hero_out_dmg(base: float, dtype: String) -> Dictionary:
+func physical_crit_rate() -> float:
+	var rate := attr_final("crit") + float(hero.get("curio_crit", 0.0))
+	if p_active("yanwugui"):
+		rate += 0.25 + 0.05 * float(partners["yanwugui"].get("crit_lv", 0))
+	return clampf(rate, 0.0, 0.75)
+
+func _roll_physical_crit() -> bool:
+	return randf() < physical_crit_rate()
+
+func hero_out_dmg(base: float, dtype: String, crit_result: int = -1) -> Dictionary:
 	# v6：直接读新属性层（attr / type_attr），不再有旧字段桥
 	if dtype == DMG_TRUE:
 		# 真实：只吃「真实伤害增幅」，攻击增幅 / 暴击 / 穿透 / 减免一概不吃
@@ -5358,7 +5360,7 @@ func hero_out_dmg(base: float, dtype: String) -> Dictionary:
 	var d := base * (1.0 + type_amp(dtype))        # 该系增幅 = 固定 ×(1＋百分比)
 	var crit := false
 	if dtype == DMG_PHYS:                                          # **元素与真实不暴击**
-		crit = randf() < attr_final("crit")
+		crit = crit_result == 1 if crit_result >= 0 else _roll_physical_crit()
 		if crit:
 			d *= attr_final("cdmg")
 	var lucky := false

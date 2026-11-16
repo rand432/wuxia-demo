@@ -4003,10 +4003,10 @@ func _apply_aug(key: String, val: float) -> void:
 			h["aspd"] = minf(MAX_ASPD, float(h.get("aspd", 1.0)) * (1.0 + val / 100.0))
 		"crit_add":
 			_core.attr_add("crit", val / 100.0)
-			h["crit"] = minf(1.0, float(h.get("crit", 0.05)) + val / 100.0)
+			h["crit"] = _core.attr_final("crit")
 		"critdmg_add":
 			_core.attr_add("cdmg", val / 100.0)
-			h["crit_dmg"] = float(h.get("crit_dmg", 2.0)) + val / 100.0
+			h["crit_dmg"] = _core.attr_final("cdmg")
 		"cut_add":
 			_core.type_add("物理", "red_f", val / 100.0)
 			h["cut"] = float(h.get("cut", 0.0)) + val / 100.0

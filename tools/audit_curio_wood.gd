@@ -21,6 +21,7 @@ func _run() -> void:
 	var core = battle._core
 	core.set_process(false)
 	core.hero["crit"] = 0.0
+	core.attr_set_base("crit", 0.0)
 	core.hero["lucky"] = 0.0
 	core.hero["atk"] = 100.0
 	core.foes.clear()

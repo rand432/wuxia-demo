@@ -1,6 +1,8 @@
 extends Control
 const BATTLE := preload("res://kushou/battle_ui.tscn")
 const LS := preload("res://shared/level_state.gd")
+const GS := preload("res://shared/game_state.gd")
+const CurioData := preload("res://shared/curio_data.gd")
 const LOG_PATH := "res://tools/playthrough.log"
 
 var b = null
@@ -13,6 +15,8 @@ var done := false
 var failures := 0
 var end_level := 10
 var timeout_seconds := 420.0
+var audit_curio := ""
+var audit_curio_level := 1
 
 func _ready() -> void:
 	if not OS.get_user_data_dir().replace("\\", "/").ends_with("wuxia-regression"):
@@ -29,6 +33,18 @@ func _ready() -> void:
 			end_level = clampi(int(arg.get_slice("=", 1)), lv, 10)
 		if arg.begins_with("--timeout-seconds="):
 			timeout_seconds = clampf(float(arg.get_slice("=", 1)), 60.0, 1800.0)
+		if arg.begins_with("--curio-id="):
+			audit_curio = arg.get_slice("=", 1)
+		if arg.begins_with("--curio-level="):
+			audit_curio_level = clampi(int(arg.get_slice("=", 1)), 1, 5)
+	if not audit_curio.is_empty():
+		if CurioData.get_curio(audit_curio).is_empty():
+			push_error("未知测试奇物：" + audit_curio)
+			get_tree().quit(2)
+			return
+		GS._curio_ensure()
+		GS.curio_id = audit_curio
+		GS.curio_lv[audit_curio] = audit_curio_level # 仅隔离测试进程内设置，不写正常玩家存档。
 	var f := FileAccess.open(LOG_PATH, FileAccess.WRITE)
 	if f != null:
 		f.store_line("# 十关连续通关")
@@ -71,6 +87,7 @@ func _process(dt: float) -> void:
 			int(float(b._core.hero.get("hp", 0.0))), int(float(b._core.hero.get("hp_max", 1.0))), LS.max_unlocked])
 		_log("[FAMILY] L%d combos=%d shiny=%s" % [lv, b._ancestor_combos.size(), str(b._family_shiny_done)])
 		_log("[QUEST_RESULT] L%d done=%d fail=%d giveup=%d" % [lv, b._q_done, b._q_fail, b._q_giveup])
+		_log("[CURIO_RESULT] L%d uses=%d" % [lv, b._curio_uses])
 		if not win:
 			failures += 1
 		_finish(); return

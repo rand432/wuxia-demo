@@ -35,6 +35,8 @@ user:// 下使用 level_state.cfg、progress.cfg、forge.cfg、curio.cfg、audio
 ./tools/run_playthrough.ps1 -StartLevel 5 -EndLevel 5
 # 独立后期关卡构筑可能较慢，可延长测试观察时间（默认420秒）
 ./tools/run_playthrough.ps1 -StartLevel 6 -EndLevel 6 -TimeoutSeconds 600
+# 指定奇物及等级（仅影响隔离测试进程）
+./tools/run_playthrough.ps1 -StartLevel 6 -EndLevel 6 -TimeoutSeconds 600 -Curio tongjing -CurioLevel 5
 ```
 
 测试入口使用隔离项目及存档。集中用例结果在 .shots/audit_results。不要并发运行会重配同一 .shots/audit_project 的测试入口。专项关卡测试不等同于正常从第一关成长过去。断言通过不等于日志无警告或所有体验已验收。
@@ -47,6 +49,6 @@ shared/ 为数据、状态、属性与保存；menu/ 为局外页面；kushou/ba
 
 [旧 README](docs/README_旧版说明_2026-11-16.md) 保留历史维护与备份资料，未重新核验，不能作为当前功能清单。
 
-正常窗口关闭与实战工具退出已接入音频清理；最近一次隔离存档十关回归全部通关，退出日志无 ERROR/WARNING（具体修改覆盖范围见审查记录）。41 项专项断言通过，部分直接退出的专项仍有资源诊断，不能据此宣称所有退出路径均已解决。
+正常窗口关闭与实战工具退出已接入音频清理；最近一次隔离存档十关回归全部通关，退出日志无 ERROR/WARNING（具体修改覆盖范围见审查记录）。43 项专项断言通过，部分直接退出的专项仍有资源诊断，不能据此宣称所有退出路径均已解决。
 
 仍需处理：绕过清理的退出路径、尚未逐项核对的技能/奇物效果、完整手动教学交互、长期运行与移动端性能。桌面短时压力结果不代表移动端或长期稳定性。

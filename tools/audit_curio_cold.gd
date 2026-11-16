@@ -27,6 +27,7 @@ func _run() -> void:
 		foe["hp_max"] = 1000.0
 		foe["shield"] = false
 	core.hero["crit"] = 0.0
+	core.attr_set_base("crit", 0.0)
 	core.hero["lucky"] = 0.0
 	core.hero["atk"] = 100.0
 	battle._curio_id = "hanyu"
