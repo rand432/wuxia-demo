@@ -39,7 +39,9 @@ func _run() -> void:
 		battle._curio_lv = lv
 		for key in ["cold", "cold_t", "cold_slow", "cold_freeze_t", "cold_dmg", "cold_boom", "para"]:
 			target.erase(key)
-		for foe in core.foes: foe["hp"] = 1000.0
+		for foe in core.foes:
+			foe["hp"] = 1000.0
+			foe["res_fire"] = 0.0
 		battle._curio_on_crit(target)
 		var per := 0.15 if lv >= 4 else 0.10
 		assert(is_equal_approx(core.foe_move_speed(target), base_speed * (1.0 - per)))
@@ -54,7 +56,9 @@ func _run() -> void:
 			assert(target["cold"] == 3 and not target.has("cold_freeze_t"))
 		else:
 			assert(target["cold"] == 0)
-			assert(is_equal_approx(core._apply_dmg(target, 100.0, "真实"), 125.0 if lv >= 3 else 100.0))
+			assert(is_equal_approx(core._apply_dmg(target, 100.0, "真实"), 100.0))
+			target["hp"] = 1000.0
+			assert(is_equal_approx(core._apply_dmg(target, 100.0, "火系"), 125.0 if lv >= 3 else 100.0))
 			core._tick_cold_control(target, 0.79)
 			assert(near["hp"] == 1000.0)
 			core._tick_cold_control(target, 0.02)
@@ -62,7 +66,7 @@ func _run() -> void:
 			assert(far["hp"] == 1000.0)
 			# 其他麻痹不能延长寒玉易伤，也不会重复冰爆。
 			target["para"] = 5.0
-			assert(is_equal_approx(core._apply_dmg(target, 100.0, "真实"), 100.0))
+			assert(is_equal_approx(core._apply_dmg(target, 100.0, "火系"), 100.0))
 		core._tick_cold_control(target, 3.0)
 		assert(target["cold"] == 0 and is_equal_approx(core.foe_move_speed(target), base_speed))
 	# 既有45%减速取更强效果，寒层到期不清掉别的减速。

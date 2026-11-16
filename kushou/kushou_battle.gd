@@ -42,8 +42,9 @@ func _buffs_tick(delta: float) -> void:
 			if float(f.get(k2, 0.0)) > 0.0:
 				f[k2] = maxf(0.0, float(f[k2]) - delta)
 
+# 返回整刀结算伤害供飘字使用；吸血和dmg_done只计实际扣血，包含致命一击时的上限。
 func _apply_dmg(f: Dictionary, amount: float, dtype: String, crit_result: int = -1) -> float:
-	if f.is_empty() or bool(f.get("_death_settled", false)) or float(f.get("dying", 0.0)) > 0.0:
+	if f.is_empty() or float(f.get("hp", 0.0)) <= 0.0 or bool(f.get("_death_settled", false)) or float(f.get("dying", 0.0)) > 0.0:
 		return 0.0
 	# v16k（用户："盾兵格挡（现在只是个长相，可以做成正面减伤）"）：
 	#   盾兵举着一面**朝下的**盾 —— 主角在它**正面（下方）**打过去，伤害 −45%；
@@ -87,12 +88,13 @@ func _apply_dmg(f: Dictionary, amount: float, dtype: String, crit_result: int = 
 		final *= 1.0 + float(f["cold_dmg"])
 	if dtype != DMG_TRUE and float(f.get("wood_t", 0.0)) > 0.0:
 		final *= 1.0 + float(f.get("wood_vuln", 0.0))
+	var dealt := minf(float(f["hp"]), maxf(0.0, final))
 	f["hp"] = float(f["hp"]) - final
 	# v15w 杏林医女「回春针」：吸血窗口内，按伤害的百分比回血
 	if float(hero.get("lifesteal_t", 0.0)) > 0.0 and float(hero["hp"]) > 0.0:
-		var ls := final * float(hero.get("lifesteal", 0.04))
-		hero["hp"] = minf(float(hero["hp_max"]), float(hero["hp"]) + ls)
-	dmg_done += final
+		var ls := dealt * float(hero.get("lifesteal", 0.04))
+		heal_hero(ls)
+	dmg_done += dealt
 	f["last_dtype"] = dtype
 	return final
 
@@ -1234,18 +1236,21 @@ func _process(delta: float) -> void:
 				else:
 					# 防御与奇物减伤已在hero_in_dmg结算，不能重复乘旧hero.cut。
 					# v4o：先扣护盾（法度·怒目金刚），盾破了才动血
-					d2 = _absorb_by_shield(d2)
-					hero["hp"] = float(hero["hp"]) - d2
-					_notify_hero_damage(d2, f)
+					d2 = _apply_hero_damage(d2, f)
+					if not running or frame_epoch != _enemy_attack_epoch:
+						break
 					hero_hit.emit()
+					if not running or frame_epoch != _enemy_attack_epoch:
+						break
 					_hero_hit_flash = 0.18
 					_shake = maxf(_shake, 3.5)
 					# v14r：boss 词缀"嗜血"（打中回血）与二技能"剧毒"（打中带毒）接上进行为
 					# v14t：狐火——这一巴掌带火系溅射（火尾狐妖的技能，原来只是文本）
-					if int(f.get("boss_foxfire", 0)) > 0 and d2 > 0.0:
+					if int(f.get("boss_foxfire", 0)) > 0 and d2 > 0.0 and float(hero["hp"]) > 0.0 and float(f.get("hp", 0.0)) > 0.0 and not bool(f.get("_death_settled", false)):
 						var ffd := hero_in_dmg(float(f["atk"]) * 0.5, DMG_FIRE)
-						hero["hp"] = maxf(0.0, float(hero["hp"]) - ffd)
-						_notify_hero_damage(ffd, f)
+						ffd = _apply_hero_damage(ffd, f)
+						if not running or frame_epoch != _enemy_attack_epoch:
+							break
 						_bursts.append({"x": hero_pos.x, "y": hero_pos.y - 16.0, "t": 0.0,
 							"col": Color(1.0, 0.52, 0.22), "scale": 1.5})
 						_push_float(hero_pos.x + 46.0, hero_pos.y - 52.0, "狐火 " + str(int(ffd)), Color(1.0, 0.62, 0.26))
@@ -1258,12 +1263,12 @@ func _process(delta: float) -> void:
 							_push_float(float(f["x"]) + 14.0, float(f["y"]) - 44.0,
 								"嗜血 +" + str(int(float(f["hp"]) - old_hp)), Color(0.86, 0.36, 0.40))
 					# v14r：二技能"剧毒"——打中给主角挂毒（每秒跳一次，木系）
-					if bool(f.get("boss_poison", false)) and d2 > 0.0:
+					if bool(f.get("boss_poison", false)) and d2 > 0.0 and float(f.get("hp", 0.0)) > 0.0 and not bool(f.get("_death_settled", false)):
 						hero["poison"] = maxf(float(hero.get("poison", 0.0)), 4.0)
 						_push_float(size.x * 0.5 - 40.0, size.y - HERO_LINE - 66.0, "中毒", Color(0.62, 0.90, 0.44))
 					# v9f（卡：荆棘 / 护心镜）——**挨打反弹一部分伤害给打你的那只怪**
 					var th := float(hero.get("thorns", 0.0))
-					if th > 0.0 and float(f.get("dying", 0.0)) <= 0.0:
+					if th > 0.0 and d2 > 0.0 and float(f.get("dying", 0.0)) <= 0.0:
 						var back := maxf(1.0, d2 * th)
 						f["hp"] = float(f["hp"]) - back
 						_push_float(float(f["x"]) + 10.0, float(f["y"]) - 22.0,
@@ -1697,9 +1702,11 @@ func _delayed_hit(d: Dictionary, damage_scale := 1.0, allow_paper := true, is_im
 		paper_blocked.emit(c)
 		inr = false
 	if inr:
+		var epoch := _enemy_attack_epoch
 		var dm := hero_in_dmg(float(d["dmg"]) * damage_scale, elem)
-		hero["hp"] = maxf(0.0, float(hero["hp"]) - dm)
-		_notify_hero_damage(dm, d.get("caster", {}))
+		dm = _apply_hero_damage(dm, d.get("caster", {}))
+		if not running or epoch != _enemy_attack_epoch:
+			return
 		_push_float(hero_pos.x, hero_pos.y - 100.0, str(d["kind"]) + "！ -" + str(int(dm)),
 			Color(1.0, 0.52, 0.34), true)
 		# 只有带 push 的招式（冲撞类机制）才把主角推开；普通挨打不位移
@@ -1760,6 +1767,9 @@ func _hero_strike(tgt: Dictionary) -> void:
 	var wide := splash_radius() > 0.0
 	for h_v in hit_list:
 		var h: Dictionary = h_v
+		if float(h.get("hp", 0.0)) <= 0.0 or bool(h.get("_death_settled", false)) or float(h.get("dying", 0.0)) > 0.0:
+			continue
+		var hp_before := float(h["hp"])
 		var is_extra := h != tgt
 		var dmg := base * (splash_mul() if is_extra else 1.0)
 		dmg = _apply_dmg(h, dmg, DMG_PHYS, int(crit))
@@ -1773,14 +1783,15 @@ func _hero_strike(tgt: Dictionary) -> void:
 		if is_extra:
 			_bursts.append({"x": float(h["x"]), "y": float(h["y"]) - 18.0, "t": 0.0,
 				"col": Color(1.0, 0.74, 0.34), "scale": 1.25})
-		dealt += dmg                                   # v14a 吸血：累计这一刀的总伤害
+		dealt += minf(hp_before, maxf(0.0, dmg)) # 吸血只累计本刀实际扣掉的气血，排除后续镜像等回调伤害。
 		if float(h["hp"]) <= 0.0:
 			_kill_foe(h)
 	# v14a 吸血：按这一刀打出的总伤害回血
-	if float(hero.get("mech_lifesteal", 0.0)) > 0.0 and dealt > 0.0:
-		var heal := dealt * float(hero["mech_lifesteal"])
-		hero["hp"] = minf(float(hero["hp_max"]), float(hero["hp"]) + heal)
-		_push_float(hero_pos.x, hero_pos.y - 74.0, "+" + str(int(heal)), Color(0.62, 0.92, 0.72))
+	if float(hero.get("hp", 0.0)) > 0.0 and float(hero.get("mech_lifesteal", 0.0)) > 0.0 and dealt > 0.0:
+		var heal := minf(maxf(0.0, float(hero["hp_max"]) - float(hero["hp"])), dealt * float(hero["mech_lifesteal"]))
+		heal = heal_hero(heal)
+		if heal > 0.0:
+			_push_float(hero_pos.x, hero_pos.y - 74.0, "%+.1f" % heal if heal < 1.0 else "+" + str(int(heal)), Color(0.62, 0.92, 0.72))
 	# 刀光：横扫时画一道大弧（动作跟单体突刺不一样）
 	if wide:
 		_slashes.append({"x": float(tgt["x"]), "y": float(tgt["y"]) - 10.0, "t": 0.0,
@@ -2167,9 +2178,9 @@ func _kill_foe(f: Dictionary) -> void:
 	# 挑战宝箱也借用 boss 字段表示大体型，仅挑战类别4算首领。
 	if bool(f.get("boss", false)) and (not f.has("chal") or int(f["chal"]) == 4):
 		boss_slain.emit()
-	# v18j：击杀回血（默认 0 = 不回）
-	if kill_heal > 0.0:
-		hero["hp"] = minf(float(hero["hp_max"]), float(hero["hp"]) + float(hero["hp_max"]) * kill_heal)
+	# 物件不算杀敌；普通回复不能取代明确的复活/保命流程。
+	if kill_heal > 0.0 and not bool(f.get("still", false)):
+		heal_hero(float(hero["hp_max"]) * kill_heal)
 	# v13f：元素/伙伴技打死的（百步任务）——普通刀砍是物理，不算
 	if str(f.get("last_dtype", "")) in ELEMS:
 		skill_kills += 1
@@ -3443,7 +3454,7 @@ func _absorb_by_shield(dmg: float) -> float:
 		# v14a 回流卡：盾破回血
 		if float(hero.get("mech_shieldheal", 0.0)) > 0.0:
 			var hl := float(hero["hp_max"]) * float(hero["mech_shieldheal"])
-			hero["hp"] = minf(float(hero["hp_max"]), float(hero["hp"]) + hl)
+			hl = heal_hero(hl)
 			_push_float(hero_pos.x, hero_pos.y - 74.0, "回流 +" + str(int(hl)), Color(0.62, 0.92, 0.86))
 	return maxf(0.0, dmg - sh)
 
@@ -3707,7 +3718,7 @@ func _update_minions(delta: float) -> void:
 				"heal":                       # 纸人：给主角回一小口
 					m["skill_cd"] = 6.0
 					var hh := float(hero["hp_max"]) * 0.03
-					hero["hp"] = minf(float(hero["hp_max"]), float(hero["hp"]) + hh)
+					hh = heal_hero(hh)
 					_push_float(hero_pos.x, hero_pos.y - 84.0, "纸人 +" + str(int(hh)), Color(0.94, 0.93, 0.86))
 				"exec":                       # 刽子手：给最近的残血敌人补一刀（真实伤害）
 					m["skill_cd"] = 9.0
@@ -3839,7 +3850,7 @@ func lq_mp() -> float:
 func _cast_spring() -> void:
 	# 治疗：回生命上限的一部分（并飘绿字＋绿色光点）
 	var heal := float(hero["hp_max"]) * lq_heal()
-	hero["hp"] = minf(float(hero["hp_max"]), float(hero["hp"]) + heal)
+	heal = heal_hero(heal)
 	_push_float(hero_pos.x - 30.0, hero_pos.y - 60.0, "回春 +" + str(int(heal)), Color(0.60, 0.94, 0.66), true)
 	for i in 5:
 		_motes.append({"x": hero_pos.x + randf_range(-30.0, 30.0), "y": hero_pos.y + randf_range(-4.0, 24.0), "t": 0.0})
@@ -4100,7 +4111,7 @@ func _cast_keshui() -> void:
 # ③ 金针：回血 + 定身最近敌人
 func _cast_jinzhen() -> void:
 	var heal := float(hero["hp_max"]) * (0.10 + 0.03 * float(partners["yaopozi"].get("heal_lv", 0))) * p_star_mul("yaopozi")
-	hero["hp"] = minf(float(hero["hp_max"]), float(hero["hp"]) + heal)
+	heal = heal_hero(heal)
 	_push_float(hero_pos.x, hero_pos.y - 86.0, "金针 +" + str(int(heal)), Color(0.66, 0.94, 0.70), true)
 	var f := _nearest()
 	if not f.is_empty():
@@ -4183,7 +4194,7 @@ func _cast_extra_shield(id: String) -> void:
 # ① 回春针：小治疗 ＋ 攻击吸血（给 hero 挂吸血窗口）
 func _cast_huichun() -> void:
 	var heal := float(hero["hp_max"]) * 0.06 * p_star_mul("xinglin")
-	hero["hp"] = minf(float(hero["hp_max"]), float(hero["hp"]) + heal)
+	heal = heal_hero(heal)
 	hero["lifesteal_t"] = 6.0 + 1.0 * float(partners["xinglin"].get("dur_lv", 0))
 	hero["lifesteal"] = 0.04 + 0.01 * float(partners["xinglin"].get("heal_lv", 0))
 	_push_float(hero_pos.x, hero_pos.y - 86.0, "回春 +" + str(int(heal)) + "　吸血 6s", Color(0.70, 0.94, 0.72), true)
@@ -4386,7 +4397,7 @@ func _cast_shieldlord() -> void:
 # 药王：回血 → 按治疗量换算伤害
 func _cast_yaowang() -> void:
 	var h := float(hero["hp_max"]) * 0.06
-	hero["hp"] = minf(float(hero["hp_max"]), float(hero["hp"]) + h)
+	heal_hero(h) # 此旧换算技能的名义治疗基数保留，不在此轮重设伤害。
 	_push_float(hero_pos.x, hero_pos.y - 80.0, "回春 +" + str(int(h)), Color(0.72, 0.94, 0.72))
 	special_hit("heal", h, int(partners["yaowang"].get("grp_lv", 0)), "回春诀", Color(0.72, 0.94, 0.72))
 
@@ -4419,7 +4430,7 @@ func _cast_heal() -> void:
 	if float(hero["hp"]) / maxf(1.0, float(hero["hp_max"])) < 0.40:
 		ratio *= 2.0
 	var heal := float(hero["hp_max"]) * ratio
-	hero["hp"] = minf(float(hero["hp_max"]), float(hero["hp"]) + heal)
+	heal = heal_hero(heal)
 	_push_float(hero_pos.x, hero_pos.y - 86.0, "续命 +" + str(int(heal)), Color(0.62, 0.94, 0.72), true)
 	_bursts.append({"x": hero_pos.x, "y": hero_pos.y - 10.0, "t": 0.0, "col": Color(0.60, 0.92, 0.70), "scale": 1.5})
 	Audio.sfx("levelup", -8.0)
@@ -4721,16 +4732,19 @@ func _update_partners(delta: float) -> void:
 	# 臂力的"生命恢复"：每秒回一点血
 	var hpr := float(hero.get("hp_regen", 0.0))
 	if hpr > 0.0:
-		hero["hp"] = minf(float(hero["hp_max"]), float(hero["hp"]) + hpr * delta)
+		heal_hero(hpr * delta)
 	# v14r：剧毒（毒牙蟒 / 血手判官那一路）——每秒跳一次木系伤害，无视护甲
 	if float(hero.get("poison", 0.0)) > 0.0:
 		hero["poison"] = maxf(0.0, float(hero.get("poison", 0.0)) - delta)
 		hero["poison_tick"] = float(hero.get("poison_tick", 1.0)) - delta
 		if float(hero["poison_tick"]) <= 0.0:
 			hero["poison_tick"] = 1.0
+			var epoch := _enemy_attack_epoch
+			var was_running := running
 			var pdm := hero_in_dmg(float(hero["hp_max"]) * 0.012, DMG_WOOD)
-			hero["hp"] = float(hero["hp"]) - pdm
-			_notify_hero_damage(pdm, {})
+			pdm = _apply_hero_damage(pdm, {})
+			if epoch != _enemy_attack_epoch or (was_running and not running):
+				return
 			_push_float(hero_pos.x, hero_pos.y - 70.0, "毒 " + str(int(pdm)), Color(0.62, 0.90, 0.44))
 			if float(hero["hp"]) <= 0.0:
 				hero["hp"] = 0.0
@@ -4970,7 +4984,7 @@ func _on_kill_partner() -> void:
 	if p_active("anying"):
 		var add := p_kill_hp()
 		hero["hp_max"] = float(hero["hp_max"]) + add
-		hero["hp"] = minf(float(hero["hp_max"]), float(hero["hp"]) + add)
+		heal_hero(add)
 		_push_float(hero_pos.x - 46.0, hero_pos.y - 52.0, "生命上限 +" + str(int(add)), Color(0.72, 0.92, 0.72))
 		for i in 3:
 			_motes.append({"x": hero_pos.x + randf_range(-26.0, 26.0), "y": hero_pos.y + randf_range(-6.0, 22.0), "t": 0.0})
@@ -5295,7 +5309,7 @@ func _draw_partner_fx(shk: Vector2) -> void:
 const LUCKY_CAP := 3.0            # 幸运一击上限 300%
 const ELEMS := ["金系", "木系", "火系", "水系", "土系"]
 # v13f：给外壳的普通档任务用的两个计数
-var dmg_done := 0.0                  # 本局累计造成伤害（以战养战）
+var dmg_done := 0.0                  # 本局累计实际扣血（不含过量伤害，以战养战）
 var skill_kills := 0                 # 元素/伙伴技击杀数（百步）
 var kill_normal := 0                # v13w：普通怪击杀数（成就「嗜杀如命」用）
 
@@ -5407,18 +5421,42 @@ func hero_in_dmg(amount: float, dtype: String) -> float:
 	var taken := maxf(0.0, amount * (1.0 - hero_fixed_reduction(dtype)) * (1.0 - type_effective_field(dtype, "red_p")))
 	var dr := float(hero.get("dr", 0.0)) if float(hero.get("dr_t", 0.0)) > 0.0 else 0.0
 	if dr > 0.0 and taken > 0.0:
-		hero["hp"] = minf(float(hero["hp_max"]), float(hero["hp"]) + amount * dr * 0.5)
+		heal_hero(amount * dr * 0.5)
 	return taken
+
+# 普通回复只作用于存活角色；复活仍由revive/外壳保命入口明确处理。
+func heal_hero(amount: float) -> float:
+	var hp := float(hero.get("hp", 0.0))
+	if hp <= 0.0 or amount <= 0.0:
+		return 0.0
+	var actual := minf(amount, maxf(0.0, float(hero.get("hp_max", hp)) - hp))
+	hero["hp"] = hp + actual
+	return actual
 
 func _notify_hero_damage(amount: float, attacker: Dictionary) -> void:
 	if amount > 0.0:
 		hero_damaged.emit(amount, attacker)
 
+# 已完成类型减免的伤害：先扣盾，再按实际气血损失通知；回调可能结束本局。
+func _apply_hero_damage(amount: float, attacker: Dictionary) -> float:
+	if amount <= 0.0 or float(hero.get("hp", 0.0)) <= 0.0:
+		return 0.0
+	var epoch := _enemy_attack_epoch
+	var was_running := running
+	var remaining := _absorb_by_shield(amount)
+	if epoch != _enemy_attack_epoch or (was_running and not running):
+		return 0.0
+	var actual := minf(float(hero["hp"]), maxf(0.0, remaining))
+	hero["hp"] = maxf(0.0, float(hero["hp"]) - remaining)
+	_notify_hero_damage(actual, attacker)
+	return actual
+
 func reflect_damage(foe: Dictionary, amount: float) -> void:
 	if amount <= 0.0 or foe.is_empty() or not foes.has(foe) or float(foe.get("hp", 0.0)) <= 0.0 or bool(foe.get("_death_settled", false)):
 		return
+	var dealt := minf(float(foe["hp"]), amount)
 	foe["hp"] = float(foe["hp"]) - amount
-	dmg_done += amount
+	dmg_done += dealt
 	foe["last_dtype"] = DMG_TRUE
 	_push_float(float(foe["x"]), float(foe["y"]) - 22.0, "反 " + str(int(amount)), Color(0.88, 0.62, 0.28))
 	if float(foe["hp"]) <= 0.0:

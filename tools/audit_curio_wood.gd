@@ -56,13 +56,16 @@ func _run() -> void:
 		for foe in core.foes:
 			for key in ["para", "wood_t", "wood_vuln", "wood_boom"]: foe.erase(key)
 			foe["hp"] = 1000.0
+			foe["res_fire"] = 0.0
 		battle._curio_cd = 0.0
 		battle._curio_lv = lv
 		battle._curio_tick_jingtangmu()
 		assert(nearest["para"] == 2.5 and nearest["hp"] == 1000.0)
 		assert(middle.has("wood_t") == (lv >= 4))
 		assert(not far.has("wood_t"))
-		var damage: float = core._apply_dmg(nearest, 100.0, "真实")
+		assert(is_equal_approx(core._apply_dmg(nearest, 100.0, "真实"), 100.0))
+		nearest["hp"] = 1000.0
+		var damage: float = core._apply_dmg(nearest, 100.0, "火系")
 		assert(is_equal_approx(damage, 130.0 if lv >= 3 else 100.0))
 		core._tick_wood_control(nearest, 2.49)
 		assert(is_equal_approx(nearest["hp"], 1000.0 - damage))

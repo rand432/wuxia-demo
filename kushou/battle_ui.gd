@@ -1403,7 +1403,7 @@ func _curio_mirror_hit(target: Dictionary, damage: float) -> void:
 		if dealt > 0.0:
 			_core._push_float(float(target["x"]), float(target["y"]) - 45.0, "镜 " + str(int(dealt)), Color(0.72, 0.70, 0.90))
 			if float(_core.hero.get("hp", 0.0)) > 0.0:
-				_core.hero["hp"] = minf(float(_core.hero["hp_max"]), float(_core.hero["hp"]) + dealt * float(mirror.get("lc", 0.0)))
+				_core.heal_hero(dealt * float(mirror.get("lc", 0.0)))
 
 func _curio_tick_zhiren() -> void:
 	if _core == null:
@@ -4520,9 +4520,9 @@ func _apply_combo(rec: Dictionary) -> void:
 			if _core != null:
 				_core.attr_add("hp", val)
 				_core.hero["hp_max"] = float(_core.hero.get("hp_max", 1.0)) + val
-				_core.hero["hp"] = float(_core.hero.get("hp", 0.0)) + val
+				_core.heal_hero(val)
 		"heal":
-			if _core != null: _core.hero["hp"] = minf(float(_core.hero.get("hp_max", 1.0)), float(_core.hero.get("hp", 0.0)) + val)
+			if _core != null: _core.heal_hero(val)
 		"gold_pct":
 			_gold_pct += val
 		"gold_flat":
@@ -4798,7 +4798,7 @@ func _apply_own(s: Dictionary) -> void:
 					_core.type_add(t, "red_f", def_red)
 		var hp_add := float(s["hp"])
 		_core.hero["hp_max"] = float(_core.hero.get("hp_max", 1.0)) + hp_add
-		_core.hero["hp"] = float(_core.hero.get("hp", 0.0)) + hp_add
+		_core.heal_hero(hp_add)
 
 # 选择类反馈：抽卡 / 进阶 / 宝物 / 请神 / 升级 各一口特效＋一声音
 # 首领登场：暗红炸开 + 重震 + 鼓
@@ -5453,7 +5453,7 @@ func _skill_level_bonus(aid: String) -> float:
 	return float(GameState.skill_lv.get(aid, 0)) * float(SKILL_LV_STEP.get(aid, 3))
 
 func _cast_skill(i: int) -> void:
-	if _run_over:
+	if _run_over or (_core != null and float(_core.hero.get("hp", 1.0)) <= 0.0):
 		return
 	if i < 0 or i >= _skills.size():
 		return
@@ -6695,12 +6695,14 @@ func _wood_pct() -> float:
 	return float(_elem_mod.get("木系", 0.0))
 
 func _cast_heal(mul: float) -> void:
+	if _run_over or _core == null or float(_core.hero.get("hp", 0.0)) <= 0.0:
+		return
 	var m: Dictionary = _anc_mod.get("liuqingqing2", {})
 	var wood := _wood_pct()
 	var heal := float(_core.hero.get("atk", 12.0)) * HEAL_RATIO * (1.0 + (float(m.get("heal_pct", 0.0)) + wood) / 100.0)
-	var h: Dictionary = _core.hero
-	h["hp"] = minf(float(h["hp_max"]), float(h["hp"]) + heal)
-	_core._push_float(_core.hero_pos.x, _core.hero_pos.y - 60.0, "+%d" % int(heal), Color(0.42, 0.85, 0.40), true)
+	heal = _core.heal_hero(heal)
+	if heal > 0.0:
+		_core._push_float(_core.hero_pos.x, _core.hero_pos.y - 60.0, "%+.1f" % heal if heal < 1.0 else "+%d" % int(heal), Color(0.42, 0.85, 0.40), true)
 	var rad := AURA_BASE_R + float(m.get("radius_add", 0.0))
 	var dur := 4.0 + float(m.get("poison_dur", 0.0))
 	var vuln := float(m.get("vuln", 0.0))
