@@ -44,7 +44,7 @@ func _run() -> void:
 	b._on_hero_attack()
 	assert(primary["hp"] == 1000.0 and nearest["hp"] == 1000.0) # 起手不提前追击。
 	c._hero_strike(primary)
-	assert(primary["hp"] == 864.0 and nearest["hp"] == 946.0) # 主刀98＋追击38；另一个多目标54。
+	assert(primary["hp"] == 854.0 and nearest["hp"] == 932.0) # 主刀98＋追击48；另一个多目标68。
 	assert(b._attack_count == 1)
 	b.queue_free()
 	await process_frame
@@ -65,7 +65,7 @@ func _run() -> void:
 	assert(primary["hp"] == 1000.0 and nearest["hp"] == 1000.0 and b._attack_count == 1)
 	c._hitstop = 0.0
 	c._process(0.20)
-	assert(primary["hp"] == 864.0 and nearest["hp"] == 946.0 and b._attack_count == 1)
+	assert(primary["hp"] == 854.0 and nearest["hp"] == 932.0 and b._attack_count == 1)
 	b.queue_free()
 	await process_frame
 	# 追击当场击杀，奖励/计数立即到账，补扫与重入不重复。
@@ -88,7 +88,7 @@ func _run() -> void:
 	var outside := _foe(c, 110.0)
 	b._hero_passive = {"qijian": 100}
 	c._hero_strike(primary)
-	assert(primary["hp"] == 808.0 and nearest["hp"] == 906.0 and outside["hp"] == 1000.0)
+	assert(primary["hp"] == 784.0 and nearest["hp"] == 882.0 and outside["hp"] == 1000.0)
 	b.queue_free()
 	await process_frame
 	# 追加目标击杀回调结束/换波，后续追击和剑气不得继续。
@@ -106,5 +106,34 @@ func _run() -> void:
 		assert(primary["hp"] == 902.0 and untouched.get("_death_settled", false) and extra["hp"] == 1.0)
 		b.queue_free()
 		await process_frame
+	# 真实六档合成：10级剑法20%＋家传40%，共享15%只经过一次物理层。
+	b = _battle(); c = b._core
+	GS.stars["zhujue"] = 5
+	GS.skill_lv["zhujue"] = 10
+	b._sync_attrs_to_hero()
+	b._grant_ancestor("zhujue")
+	for tier in range(6):
+		for index in range(3): b._add_card("zhujue_t%d_%d" % [tier, index])
+	assert(b._hero_passive["tgt_add"] == 1 and b._hero_passive["qijian"] == 20)
+	assert(is_equal_approx(c.basic_attack_multiplier(), 1.6) and is_equal_approx(c.type_amp("物理"), 0.15))
+	b._hero_passive["qijian"] = 100 # 仅固定触发概率，伤害和范围仍走实际家传实现。
+	primary = _foe(c, -40.0)
+	nearest = _foe(c, -20.0)
+	c._heavy = 0
+	c._hero_strike(primary)
+	assert(is_equal_approx(primary["hp"], 599.2) and is_equal_approx(nearest["hp"], 654.4))
+	# 剑魄250%与300px范围，不能残留原0.8基数变成200%。
+	b._enable_jianpo()
+	primary["hp"] = 1000.0
+	nearest["hp"] = 1000.0
+	outside = _foe(c, 200.0)
+	c._heavy = 0
+	c._hero_strike(primary)
+	assert(is_equal_approx(primary["hp"], 360.0) and is_equal_approx(nearest["hp"], 415.2) and is_equal_approx(outside["hp"], 542.0))
+	assert(c.hero["atk"] == 100.0)
+	GS.stars["zhujue"] = 0
+	GS.skill_lv["zhujue"] = 0
+	b.queue_free()
+	await process_frame
 	print("PASS: family attacks resolve after primary; actual focused target; immediate once-only rewards; sword center and callback boundaries")
 	Audio.quit_cleanly()

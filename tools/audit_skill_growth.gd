@@ -1,7 +1,9 @@
 extends SceneTree
 const GS := preload("res://shared/game_state.gd")
 class CoreProbe extends RefCounted:
-	var hero := {"atk": 100.0}
+	var hero := {"atk": 100.0, "hp": 100.0}
+	var running := true
+	var _enemy_attack_epoch := 0
 	var hero_pos := Vector2.ZERO
 	var foes := [{"hp": 1000.0, "x": 0.0, "y": -100.0}]
 class BattleProbe extends "res://kushou/battle_ui.gd":

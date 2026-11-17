@@ -18,6 +18,7 @@ var timeout_seconds := 420.0
 var audit_curio := ""
 var audit_curio_level := 1
 var audit_basic_skill_level := 0
+var audit_basic_family_stars := 0
 
 func _ready() -> void:
 	if not OS.get_user_data_dir().replace("\\", "/").ends_with("wuxia-regression"):
@@ -40,8 +41,11 @@ func _ready() -> void:
 			audit_curio_level = clampi(int(arg.get_slice("=", 1)), 1, 5)
 		if arg.begins_with("--basic-skill-level="):
 			audit_basic_skill_level = clampi(int(arg.get_slice("=", 1)), 0, 1000)
+		if arg.begins_with("--basic-family-stars="):
+			audit_basic_family_stars = clampi(int(arg.get_slice("=", 1)), 0, 5)
 	GS.ensure_loaded()
 	GS.skill_lv["zhujue"] = audit_basic_skill_level # 仅隔离测试，可保存到本次隔离目录。
+	GS.stars["zhujue"] = audit_basic_family_stars
 	if not audit_curio.is_empty():
 		if CurioData.get_curio(audit_curio).is_empty():
 			push_error("未知测试奇物：" + audit_curio)
@@ -92,6 +96,7 @@ func _process(dt: float) -> void:
 			lv, "WIN" if win else "LOSE", t, int(b._core.wave), b._max_wave, int(b._kills),
 			int(float(b._core.hero.get("hp", 0.0))), int(float(b._core.hero.get("hp_max", 1.0))), LS.max_unlocked])
 		_log("[FAMILY] L%d combos=%d shiny=%s" % [lv, b._ancestor_combos.size(), str(b._family_shiny_done)])
+		_log("[BASIC_FAMILY] L%d stars=%d tiers=%s" % [lv, audit_basic_family_stars, str(b._ancestor_combos.filter(func(ar): return str(ar.get("ancestor", "")) == "zhujue").map(func(ar): return int(ar["tier"])))])
 		_log("[QUEST_RESULT] L%d done=%d fail=%d giveup=%d" % [lv, b._q_done, b._q_fail, b._q_giveup])
 		_log("[CURIO_RESULT] L%d uses=%d" % [lv, b._curio_uses])
 		_log("[RARE_RESULT] L%d taken=%s" % [lv, str(b._rare_taken.keys())])

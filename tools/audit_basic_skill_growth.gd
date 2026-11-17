@@ -57,7 +57,7 @@ func _run() -> void:
 	extra["hp"] = 10000.0
 	b._hero_passive = {"tgt_add": 1, "chase": 100, "qijian": 100}
 	b._hero_extra_hits()
-	assert(is_equal_approx(f["hp"], 9876.8) and is_equal_approx(extra["hp"], 9857.6))
+	assert(is_equal_approx(f["hp"], 9836.0) and is_equal_approx(extra["hp"], 9812.0))
 	GS.skill_lv["zhujue"] = 0
 	b._sync_attrs_to_hero()
 	assert(c.basic_skill_multiplier() == 1.0 and c.hero["atk"] == 100.0)

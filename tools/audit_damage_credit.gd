@@ -13,6 +13,7 @@ func _core():
 	root.add_child(c)
 	c.set_process(false)
 	c.setup({"atk": 1000.0, "hp_max": 1000.0, "mp_max": 100.0})
+	c.start_run()
 	c.hero["hp"] = 100.0
 	c.attr_set_base("crit", 0.0)
 	c.kill_heal = 0.0

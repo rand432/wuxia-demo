@@ -1,11 +1,12 @@
 # 十关连续通关
-[GO] L6
-[CURIO] L6 id=yuhu level=1
-[BASIC_SKILL] L6 level=0 multiplier=1.00
-[QUEST] L6 accept=sg
-[END] L6 WIN t=356s wave=20/20 kills=706 hp=3601/3601 unlock=7
-[FAMILY] L6 combos=4 shiny=false
-[QUEST_RESULT] L6 done=1 fail=0 giveup=0
-[CURIO_RESULT] L6 uses=0
-[RARE_RESULT] L6 taken=["金库", "小钱袋", "丰年", "双收", "倾囊"]
-[ALL] max_unlocked=7 first_clear={ "6": true }
+[GO] L7
+[CURIO] L7 id=yuhu level=1
+[BASIC_SKILL] L7 level=0 multiplier=1.00
+[QUEST] L7 accept=qdf
+[END] L7 WIN t=320s wave=18/18 kills=610 hp=1831/1908 unlock=8
+[FAMILY] L7 combos=3 shiny=false
+[BASIC_FAMILY] L7 stars=0 tiers=[]
+[QUEST_RESULT] L7 done=1 fail=0 giveup=0
+[CURIO_RESULT] L7 uses=0
+[RARE_RESULT] L7 taken=["晶山", "小杀令"]
+[ALL] max_unlocked=8 first_clear={ "7": true }

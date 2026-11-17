@@ -5376,7 +5376,10 @@ func _skill_mana_cost(sk: Dictionary) -> float:
 	return maxf(0.0, float(sk.get("mp", 0.0)) - float(mods.get("mp_flat", 0.0)))
 
 func _tick_skills(dt: float) -> void:
-	if _run_over:
+	if _core == null:
+		return
+	var epoch: int = _core._enemy_attack_epoch
+	if not _skill_batch_active(epoch):
 		return
 	if _core != null and float(_core.hero.get("aspd", 1.0)) > MAX_ASPD:
 		_core.hero["aspd"] = MAX_ASPD          # 硬顶：防攻速叠太高卡帧
@@ -5388,6 +5391,8 @@ func _tick_skills(dt: float) -> void:
 	if _mp_bar != null:
 		_mp_bar.size = Vector2(maxf(4.0, 235.0 * clampf(_mp / _mp_max, 0.0, 1.0)), 9.0)
 	for i in _skills.size():
+		if not _skill_batch_active(epoch):
+			return
 		var sk: Dictionary = _skills[i]
 		if float(sk["cd_t"]) > 0.0:
 			sk["cd_t"] = maxf(0.0, float(sk["cd_t"]) - dt)
@@ -5400,6 +5405,8 @@ func _tick_skills(dt: float) -> void:
 			_cast_skill(i)
 			if free_cast:
 				_mp = mp_before
+			if not _skill_batch_active(epoch):
+				return
 			if float(sk["cd_t"]) > cd_before + 0.01:
 				if _curio_id == "dingfengzhu" and _curio_lv >= 3:
 					_curio_mana_regen_left = 2.0
@@ -5462,10 +5469,16 @@ func _hero_screen() -> Vector2:
 func _skill_level_bonus(aid: String) -> float:
 	return float(GameState.skill_lv.get(aid, 0)) * float(SKILL_LV_STEP.get(aid, 3))
 
+func _skill_batch_active(epoch: int) -> bool:
+	return not _run_over and _core != null and _core.running and epoch == _core._enemy_attack_epoch and float(_core.hero.get("hp", 0.0)) > 0.0
+
 func _cast_skill(i: int) -> void:
-	if _run_over or (_core != null and float(_core.hero.get("hp", 1.0)) <= 0.0):
-		return
 	if i < 0 or i >= _skills.size():
+		return
+	if _core == null:
+		return
+	var epoch: int = _core._enemy_attack_epoch
+	if not _skill_batch_active(epoch):
 		return
 	_cast_dtype = str(_skills[i].get("dtype", ""))
 	var sk: Dictionary = _skills[i]
@@ -5504,7 +5517,8 @@ func _cast_skill(i: int) -> void:
 		_mp -= cost0
 		sk["cd_t"] = maxf(0.5, float(sk["cd"]) * (1.0 - clampf(float(md0.get("cd_pct", 0.0)), 0.0, 80.0) / 100.0))
 		_cast_feiren(float(sk["mul"]))
-		_skill_fx("物理", _hero_screen())
+		if _skill_batch_active(epoch):
+			_skill_fx("物理", _hero_screen())
 		return
 	# 撞击流：按气血上限算伤害，并把目标撞飞
 	if aid0 == "gundilong":
@@ -5513,7 +5527,8 @@ func _cast_skill(i: int) -> void:
 		_mp -= cost0
 		sk["cd_t"] = maxf(0.5, float(sk["cd"]) * (1.0 - clampf(float(md0.get("cd_pct", 0.0)), 0.0, 80.0) / 100.0))
 		_charge_ram()
-		_skill_fx("物理", _hero_screen(), true)
+		if _skill_batch_active(epoch):
+			_skill_fx("物理", _hero_screen(), true)
 		return
 	# 火系：直伤 + 灼烧（引燃多名）
 	if aid0 == "jicanghai":
@@ -5562,15 +5577,23 @@ func _cast_skill(i: int) -> void:
 	var base := float(_core.hero.get("atk", 12.0)) * float(sk["mul"]) * (1.0 + dmg_pct / 100.0)
 	var n := mini(int(sk["targets"]) + int(m.get("tgt_add", 0.0)), foes.size())
 	for k in n:
+		if not _skill_batch_active(epoch):
+			return
 		var f: Dictionary = foes[k]
+		if not _core.foes.has(f) or float(f.get("hp", 0.0)) <= 0.0 or bool(f.get("_death_settled", false)) or float(f.get("dying", 0.0)) > 0.0:
+			continue
 		var extra := 1.0
 		if para_amp > 0.0 and float(f.get("para", 0.0)) > 0.0:
 			extra = 1.0 + para_amp / 100.0        # 麻痹期间吃额外伤害
 		_core._apply_dmg(f, base * extra, dtype)
-		if para_s > 0.0:
+		if para_s > 0.0 and float(f.get("hp", 0.0)) > 0.0:
 			f["para"] = maxf(float(f.get("para", 0.0)), para_s)
 		_core._push_float(float(f["x"]), float(f["y"]) - 46.0, str(sk["name"]), sk["col"], true)
 		_skill_fx(dtype, _core.position + Vector2(float(f["x"]), float(f["y"]) - 26.0), true)
+		if float(f.get("hp", 0.0)) <= 0.0:
+			_core._kill_foe(f)
+			if not _skill_batch_active(epoch):
+				return
 	Aud.sfx("skill", -10.0)
 
 func _add_ancestor_effects(aid: String, eff: Dictionary) -> void:
@@ -6402,7 +6425,7 @@ func _hero_extra_hits(primary: Dictionary = {}) -> void:
 		_core.hero["aspd"] = minf(MAX_ASPD, _core.attr_final("aspd") / float(_core.ATTR_BASE["aspd"]))
 	if _hero_passive.is_empty():
 		return
-	var base: float = float(_core.hero.get("atk", 12.0)) * 0.8 * _core.basic_attack_multiplier()
+	var base: float = float(_core.hero.get("atk", 12.0)) * _core.basic_attack_multiplier()
 	var extra := int(_hero_passive.get("tgt_add", 0.0))
 	var extra_hits := 0
 	for candidate in foes:
@@ -6477,9 +6500,20 @@ const WALL_X1 := 696.0
 const WALL_Y0 := 150.0
 const WALL_Y1 := 700.0
 
-var _ram_budget := 0             # 本次撞击还剩几次反弹
 var _ram_shiny := false          # 滚山：每个敌人各弹一次
-var _ram_dmg := 0.0              # 本次撞击的单跳伤害
+var _ram_foe_seq := 0            # 冲撞命中记录使用独立编号，不依赖尚未生成的显示token。
+
+func _ram_foe_id(f: Dictionary) -> int:
+	if not f.has("_ram_uid"):
+		_ram_foe_seq += 1
+		f["_ram_uid"] = _ram_foe_seq
+	return int(f["_ram_uid"])
+
+func _ram_stop(f: Dictionary) -> void:
+	f["_kx"] = 0.0
+	f["_ky"] = 0.0
+	f.erase("_ram_ctx")
+	f.erase("_seg_a")
 
 func _ram_mods() -> Dictionary:
 	return _anc_mod.get("gundilong", {})
@@ -6491,6 +6525,11 @@ func _ram_damage() -> float:
 
 # 化身肉蛋：把最近的一只撞飞
 func _charge_ram() -> void:
+	if _core == null:
+		return
+	var epoch: int = _core._enemy_attack_epoch
+	if not _skill_batch_active(epoch):
+		return
 	var foes := _live_foes()
 	if foes.is_empty():
 		return
@@ -6500,17 +6539,25 @@ func _charge_ram() -> void:
 	if dir.length() < 1.0:
 		dir = Vector2(0, -1)
 	dir = dir.normalized()
-	_ram_dmg = _ram_damage()
-	_ram_budget = 999 if _ram_shiny else 1
+	# 每次施法各自保存伤害、预算和命中编号；不持有敌人引用，避免循环引用。
+	var ctx := {"damage": _ram_damage(), "budget": 999 if _ram_shiny else 1,
+		"shiny": _ram_shiny, "epoch": epoch, "hits": {_ram_foe_id(f0): true}}
 	# 冲撞演出：一道土黄streak
 	_ram_streak(hp0, Vector2(float(f0["x"]), float(f0["y"])))
-	_core._apply_dmg(f0, _ram_dmg, "物理")
+	_core._apply_dmg(f0, float(ctx["damage"]), "物理")
 	_core._push_float(float(f0["x"]), float(f0["y"]) - 46.0, "肉蛋冲击", Color(0.92, 0.80, 0.42), true)
+	if float(f0.get("hp", 0.0)) <= 0.0:
+		_core._kill_foe(f0)
+	if not _skill_batch_active(epoch):
+		return
+	if not _core.foes.has(f0) or float(f0.get("hp", 0.0)) <= 0.0 or bool(f0.get("_death_settled", false)):
+		_ram_stop(f0)
+		return
 	var pm := 1.0 + float(_ram_mods().get("impact", 0.0)) * 0.15   # 冲击力：每点 +15% 击退距离
 	f0["_kx"] = dir.x * RAM_KNOCK * pm
 	f0["_ky"] = dir.y * RAM_KNOCK * pm
 	f0["_seg_a"] = Vector2(float(f0["x"]), float(f0["y"]))   # 扫掠起点
-	f0["_bounce_hit"] = true
+	f0["_ram_ctx"] = ctx
 	_core.Shake_add(7.0)
 	Aud.sfx("hit_heavy", -6.0)
 
@@ -6531,15 +6578,22 @@ func _ram_streak(a: Vector2, b: Vector2) -> void:
 func _tick_knock(dt: float) -> void:
 	if _core == null:
 		return
-	for f_v in _core.foes:
+	var epoch: int = _core._enemy_attack_epoch
+	if not _skill_batch_active(epoch):
+		return
+	for f_v in _core.foes.duplicate():
+		if not _skill_batch_active(epoch):
+			return
 		var f: Dictionary = f_v
+		if not _core.foes.has(f):
+			continue
 		var kx := float(f.get("_kx", 0.0))
 		var ky := float(f.get("_ky", 0.0))
 		if kx == 0.0 and ky == 0.0:
 			continue
-		if float(f.get("hp", 0.0)) <= 0.0:
-			f["_kx"] = 0.0
-			f["_ky"] = 0.0
+		var ctx: Dictionary = f.get("_ram_ctx", {})
+		if ctx.is_empty() or int(ctx.get("epoch", -1)) != epoch or float(f.get("hp", 0.0)) <= 0.0 or bool(f.get("_death_settled", false)) or float(f.get("dying", 0.0)) > 0.0:
+			_ram_stop(f)
 			continue
 		var px := float(f["x"]) + kx * dt
 		var py := float(f["y"]) + ky * dt
@@ -6561,34 +6615,42 @@ func _tick_knock(dt: float) -> void:
 		f["_kx"] = kx
 		f["_ky"] = ky
 		# 撞到别的怪 → 连锁
-		if _ram_budget <= 0:
+		if int(ctx["budget"]) <= 0:
 			continue
 		var seg_a: Vector2 = f.get("_seg_a", Vector2(float(f["x"]), float(f["y"])))
 		var seg_b := Vector2(px, py)
 		f["_seg_a"] = seg_b
 		var reach := RAM_HIT_R + _ram_radius_bonus()
-		for o_v in _core.foes:
+		for o_v in _core.foes.duplicate():
 			var o: Dictionary = o_v
-			if o == f or float(o.get("hp", 0.0)) <= 0.0 or bool(o.get("_bounce_hit", false)):
+			if o == f or float(o.get("hp", 0.0)) <= 0.0 or bool(o.get("_death_settled", false)) or float(o.get("dying", 0.0)) > 0.0 or (ctx["hits"] as Dictionary).has(_ram_foe_id(o)):
 				continue
 			if _dist_point_seg(Vector2(float(o["x"]), float(o["y"])), seg_a, seg_b) > reach:
 				continue
-			_ram_budget -= 1
-			o["_bounce_hit"] = true
-			_core._apply_dmg(o, _ram_dmg, "物理")
+			ctx["budget"] = int(ctx["budget"]) - 1
+			ctx["hits"][_ram_foe_id(o)] = true
+			_core._apply_dmg(o, float(ctx["damage"]), "物理")
 			_core._push_float(float(o["x"]), float(o["y"]) - 40.0, "反弹", Color(0.92, 0.80, 0.42))
+			if float(o.get("hp", 0.0)) <= 0.0:
+				_core._kill_foe(o)
+			if not _skill_batch_active(epoch):
+				return
 			var d := (Vector2(float(o["x"]), float(o["y"])) - Vector2(px, py))
 			if d.length() < 1.0:
 				d = Vector2(0, -1)
 			d = d.normalized()
 			var sp := float(_ram_mods().get("stun_s", 0.0))
-			o["para"] = maxf(float(o.get("para", 0.0)), sp if sp > 0.0 else 0.0)
-			if _ram_shiny or _ram_mods().get("stun_s", 0.0) != 0.0:
+			var alive: bool = _core.foes.has(o) and float(o.get("hp", 0.0)) > 0.0 and not bool(o.get("_death_settled", false))
+			if alive:
+				o["para"] = maxf(float(o.get("para", 0.0)), sp if sp > 0.0 else 0.0)
+			if alive and (bool(ctx["shiny"]) or _ram_mods().get("stun_s", 0.0) != 0.0):
 				var pm2 := 1.0 + float(_ram_mods().get("impact", 0.0)) * 0.15
 				o["_kx"] = d.x * RAM_KNOCK * pm2
 				o["_ky"] = d.y * RAM_KNOCK * pm2
+				o["_seg_a"] = Vector2(float(o["x"]), float(o["y"]))
+				o["_ram_ctx"] = ctx
 			# 滚山：每次反弹 → 气血上限固定 +8（占位，炫卡实装后打开）
-			if _ram_shiny:
+			if bool(ctx["shiny"]):
 				_apply_flat_growth(0.0, 8.0)
 			break
 
@@ -6626,6 +6688,11 @@ const FEIREN_HALF_W := 26.0       # 飞刃判定半宽
 const FEIREN_LEN := 780.0         # 飞刃长度
 
 func _cast_feiren(mul: float) -> void:
+	if _core == null:
+		return
+	var epoch: int = _core._enemy_attack_epoch
+	if not _skill_batch_active(epoch):
+		return
 	var m: Dictionary = _anc_mod.get("qingluan", {})
 	var foes := _live_foes()
 	if foes.is_empty():
@@ -6646,11 +6713,20 @@ func _cast_feiren(mul: float) -> void:
 		dir = Vector2(0, -1)
 	dir = dir.normalized()
 	for k in knives:
+		if not _skill_batch_active(epoch):
+			return
 		var ang := dir.angle() + (float(k) - float(knives - 1) * 0.5) * 0.16
 		_feiren_line(hp0, Vector2(cos(ang), sin(ang)), base, pierce, volley, vmul)
+		if not _skill_batch_active(epoch):
+			return
 	Aud.sfx("slash_light", -8.0)
 
 func _feiren_line(origin: Vector2, d: Vector2, base: float, pierce: int, volley: bool, vmul: float) -> void:
+	if _core == null:
+		return
+	var epoch: int = _core._enemy_attack_epoch
+	if not _skill_batch_active(epoch):
+		return
 	var hits: Array = []
 	for f_v in _core.foes:
 		var f: Dictionary = f_v
@@ -6667,8 +6743,14 @@ func _feiren_line(origin: Vector2, d: Vector2, base: float, pierce: int, volley:
 	var n := mini(pierce, hits.size())
 	for i in n:
 		var f: Dictionary = (hits[i] as Dictionary)["f"]
+		if not _core.foes.has(f) or float(f.get("hp", 0.0)) <= 0.0 or bool(f.get("_death_settled", false)) or float(f.get("dying", 0.0)) > 0.0:
+			continue
 		_core._apply_dmg(f, base, "物理")
 		_core._push_float(float(f["x"]), float(f["y"]) - 42.0, "飞刃", Color(0.55, 0.82, 0.90), i == 0)
+		if float(f.get("hp", 0.0)) <= 0.0:
+			_core._kill_foe(f)
+		if not _skill_batch_active(epoch):
+			return
 	if volley and n > 0:
 		if _wanren:
 			_wanren_volleys += 1
@@ -6677,10 +6759,14 @@ func _feiren_line(origin: Vector2, d: Vector2, base: float, pierce: int, volley:
 				_toast("万刃 · 穿透 +1（累计 %d）" % (2 + _wanren_pierce))
 		for i in range(n - 1, -1, -1):
 			var f2: Dictionary = (hits[i] as Dictionary)["f"]
-			if float(f2.get("hp", 0.0)) <= 0.0:
+			if not _core.foes.has(f2) or float(f2.get("hp", 0.0)) <= 0.0 or bool(f2.get("_death_settled", false)) or float(f2.get("dying", 0.0)) > 0.0:
 				continue
 			_core._apply_dmg(f2, base * vmul, "物理")
 			_core._push_float(float(f2["x"]), float(f2["y"]) - 62.0, "回程", Color(0.75, 0.95, 1.0), true)
+			if float(f2.get("hp", 0.0)) <= 0.0:
+				_core._kill_foe(f2)
+			if not _skill_batch_active(epoch):
+				return
 	var a: Vector2 = _core.position + origin
 	var r := ColorRect.new()
 	r.color = Color(0.70, 0.92, 1.0, 0.7)

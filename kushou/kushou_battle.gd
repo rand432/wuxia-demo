@@ -1746,6 +1746,9 @@ func _boss_foe() -> Dictionary:
 
 # 一次出手：算伤害（含技能加成/暴击/重击）→ 打中 → 横扫（溅射）→ 命中后弹剑气 → 手感特效
 func _hero_strike(tgt: Dictionary) -> void:
+	var epoch := _enemy_attack_epoch
+	if not _hero_strike_active(epoch) or tgt.is_empty() or float(tgt.get("hp", 0.0)) <= 0.0 or bool(tgt.get("_death_settled", false)) or float(tgt.get("dying", 0.0)) > 0.0:
+		return
 	# 一次普攻（含本次溅射）只判一次暴击，统一伤害层只应用该结果。
 	var crit := _roll_physical_crit()
 	_heavy += 1
@@ -1774,6 +1777,8 @@ func _hero_strike(tgt: Dictionary) -> void:
 	# 结算（v3b：被"溅"到的目标给更大的闪白/击退/炸开＋橙色"溅"字，一眼能看出是一刀多杀）
 	var wide := splash_radius() > 0.0
 	for h_v in hit_list:
+		if not _hero_strike_active(epoch):
+			return
 		var h: Dictionary = h_v
 		if float(h.get("hp", 0.0)) <= 0.0 or bool(h.get("_death_settled", false)) or float(h.get("dying", 0.0)) > 0.0:
 			continue
@@ -1782,6 +1787,8 @@ func _hero_strike(tgt: Dictionary) -> void:
 		var dmg := base * (splash_mul() if is_extra else 1.0)
 		dmg = _apply_dmg(h, dmg, DMG_PHYS, int(crit))
 		hero_foe_hit.emit(h, dmg, crit, heavy)
+		if not _hero_strike_active(epoch):
+			return
 		h["hp"] = float(h["hp"])                     # 减伤已在 _apply_dmg 里算过
 		h["flash"] = (0.30 if wide else (0.22 if heavy else 0.16))
 		h["kb"] = (14.0 if not crit else 24.0) * (1.6 if heavy else 1.0) * (1.5 if is_extra else 1.0)
@@ -1794,6 +1801,8 @@ func _hero_strike(tgt: Dictionary) -> void:
 		dealt += minf(hp_before, maxf(0.0, dmg)) # 吸血只累计本刀实际扣掉的气血，排除后续镜像等回调伤害。
 		if float(h["hp"]) <= 0.0:
 			_kill_foe(h)
+			if not _hero_strike_active(epoch):
+				return
 	# v14a 吸血：按这一刀打出的总伤害回血
 	if float(hero.get("hp", 0.0)) > 0.0 and float(hero.get("mech_lifesteal", 0.0)) > 0.0 and dealt > 0.0:
 		var heal := minf(maxf(0.0, float(hero["hp_max"]) - float(hero["hp"])), dealt * float(hero["mech_lifesteal"]))
@@ -1829,6 +1838,9 @@ func _hero_strike(tgt: Dictionary) -> void:
 	# 剑光（v3d ＋ v3e）：按几率、**朝出手方向**甩月牙
 	_try_spawn_jg(base, Vector2(float(tgt["x"]), float(tgt["y"])) - hero_pos)
 	hero_strike_resolved.emit(tgt)
+
+func _hero_strike_active(epoch: int) -> bool:
+	return running and epoch == _enemy_attack_epoch and float(hero.get("hp", 0.0)) > 0.0
 
 # v17g：取**离主角最近的 n 只**活怪（给"全场技"限人数用）
 #   原来琴痴/毒娘子这类是 `for f_v in foes` 打全场——怪一多就控一片/毒一片，

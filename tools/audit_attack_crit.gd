@@ -18,6 +18,7 @@ func _run() -> void:
 	root.add_child(core)
 	core.set_process(false)
 	core.setup({"atk": 100.0, "hp_max": 1000.0, "mp_max": 100.0})
+	core.start_run()
 	core.hero["crit"] = 1.0 # 故意保留过期桥字段，不应另外掷旧暴击。
 	core.attr_set_base("crit", 0.2)
 	core.attr_set_base("cdmg", 2.5)

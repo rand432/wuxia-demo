@@ -1,4 +1,4 @@
-param([string]$Godot = 'C:/Users/zq300/Desktop/Godot_v4.7.2-stable_win64.exe', [ValidateRange(1,10)][int]$StartLevel = 1, [ValidateRange(1,10)][int]$EndLevel = 10, [switch]$PrepareOnly, [ValidateRange(60,1800)][int]$TimeoutSeconds = 420, [string]$Curio = '', [ValidateRange(1,5)][int]$CurioLevel = 1, [ValidateRange(0,1000)][int]$BasicSkillLevel = 0)
+param([string]$Godot = 'C:/Users/zq300/Desktop/Godot_v4.7.2-stable_win64.exe', [ValidateRange(1,10)][int]$StartLevel = 1, [ValidateRange(1,10)][int]$EndLevel = 10, [switch]$PrepareOnly, [ValidateRange(60,1800)][int]$TimeoutSeconds = 420, [string]$Curio = '', [ValidateRange(1,5)][int]$CurioLevel = 1, [ValidateRange(0,1000)][int]$BasicSkillLevel = 0, [ValidateRange(0,5)][int]$BasicFamilyStars = 0)
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path $PSScriptRoot -Parent
 $runId = [Guid]::NewGuid().ToString("N")
@@ -17,5 +17,5 @@ config/custom_user_dir_name=`"$userDirectory`"")
 [IO.File]::WriteAllText((Join-Path $auditRoot 'project.godot'), $config)
 Write-Output "Isolated user directory: $userDirectory"
 if ($PrepareOnly) { return }
-& $Godot --headless --path $auditRoot res://tools/playthrough.tscn --fixed-fps 60 -- "--start-level=$StartLevel" "--end-level=$EndLevel" "--timeout-seconds=$TimeoutSeconds" "--curio-id=$Curio" "--curio-level=$CurioLevel" "--basic-skill-level=$BasicSkillLevel" 2>&1 | Out-String
+& $Godot --headless --path $auditRoot res://tools/playthrough.tscn --fixed-fps 60 -- "--start-level=$StartLevel" "--end-level=$EndLevel" "--timeout-seconds=$TimeoutSeconds" "--curio-id=$Curio" "--curio-level=$CurioLevel" "--basic-skill-level=$BasicSkillLevel" "--basic-family-stars=$BasicFamilyStars" 2>&1 | Out-String
 exit $LASTEXITCODE

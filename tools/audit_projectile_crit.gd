@@ -26,6 +26,7 @@ func _run() -> void:
 	var core := Probe.new()
 	battle.add_child(core)
 	core.setup({"atk": 100.0, "hp_max": 1000.0, "mp_max": 100.0})
+	core.start_run()
 	core.set_process(false)
 	battle._core = core
 	original.queue_free()
