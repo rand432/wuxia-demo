@@ -22,8 +22,8 @@ const SKILL_DEFS := {
 		"desc": "怒火外放，对 3 名敌人造成火系伤害"},
 	"chenshi": {"name": "刺骨", "dtype": "真实", "mul": 1.4, "cd": 8.0, "mp": 90.0, "targets": 1,
 		"desc": "直刺骨髓，对单体造成真实伤害"},
-	"liuqingqing": {"name": "回春", "dtype": "木系", "mul": 1.2, "cd": 12.0, "mp": 110.0, "targets": 3,
-		"desc": "木系回春，对 3 名敌人造成木系伤害并回复自身"},
+	"liuqingqing": {"name": "回春", "dtype": "木系", "mul": 1.0, "heal_mul": 2.0, "cd": 12.0, "mp": 80.0, "targets": 1,
+		"desc": "治疗自身；医毒家传解锁周围环毒"},
 	"xiaoqier": {"name": "顺手", "dtype": "物理", "mul": 0.9, "cd": 5.0, "mp": 60.0, "targets": 1,
 		"desc": "顺手一摸，对单体造成物理伤害"},
 	"gundilong": {"name": "肉蛋冲撞", "dtype": "物理", "mul": 1.5, "cd": 6.0, "mp": 80.0, "targets": 1,
@@ -288,7 +288,7 @@ func _show_skill_detail(i: int) -> void:
 	panel.add_child(lv_lb)
 	# 伤害倍率：当前 → 下一级（每级只 +3%，慢慢养成）
 	var sk: Dictionary = SKILL_DEFS.get(aid, {})
-	var mul_pct := int(round(float(sk.get("mul", 1.0)) * 100.0))
+	var mul_pct := int(round(float(sk.get("heal_mul", sk.get("mul", 1.0))) * 100.0))
 	var sk_desc := str(sk.get("desc", ""))
 	if sk_desc == "":
 		sk_desc = "对 %d 名敌人造成 %s 伤害" % [int(sk.get("targets", 1)), str(sk.get("dtype", a.get("dtype", "")))]
@@ -304,7 +304,7 @@ func _show_skill_detail(i: int) -> void:
 	var lv_step := int(SKILL_LV_STEP.get(aid, 3))
 	var cur_pct := float(mul_pct) * (1.0 + float(lv_now * lv_step) / 100.0)
 	var nxt_pct := float(mul_pct) * (1.0 + float((lv_now + 1) * lv_step) / 100.0)
-	dmg_lb.text = "伤害：%.1f%% → %.1f%%（%s）" % [cur_pct, nxt_pct, str(sk.get("dtype", a.get("dtype", "")))]
+	dmg_lb.text = ("治疗：%.1f%% → %.1f%%（攻击）" % [cur_pct, nxt_pct]) if sk.has("heal_mul") else ("伤害：%.1f%% → %.1f%%（%s）" % [cur_pct, nxt_pct, str(sk.get("dtype", a.get("dtype", "")))])
 	dmg_lb.position = Vector2(30, 226)
 	dmg_lb.size = Vector2(470, 26)
 	dmg_lb.add_theme_font_size_override("font_size", 18)

@@ -27,7 +27,9 @@ func _cast(b, f: Dictionary, aid: String, expected: float) -> void:
 	sk.merge({"aid": aid, "mp": 0.0, "cd_t": 0.0}, true)
 	b._skills = [sk]
 	f["hp"] = 10000.0
+	if aid == "liuqingqing": b._core.hero["hp"] = 100.0
 	b._cast_skill(0)
+	if aid == "liuqingqing": assert(b._core.hero["hp"] == 300.0)
 	assert(is_equal_approx(f["hp"], 10000.0 - expected))
 
 func _run() -> void:
@@ -55,7 +57,7 @@ func _run() -> void:
 	assert(c.hero["atk"] == 100.0 and c.attr_final("atk") == 100.0)
 	_basic(c, f, 100.0) # 本技能+20%，100×1.2−20。
 	_cast(b, f, "xiaoqier", 70.0)
-	_cast(b, f, "liuqingqing", 120.0)
+	_cast(b, f, "liuqingqing", 0.0)
 	_cast(b, f, "chenshi", 140.0)
 	var shared := {"elem_pct": {"物理": 15.0}}
 	b._add_ancestor_effects("zhujue", shared)
@@ -63,7 +65,7 @@ func _run() -> void:
 	assert(c.hero["atk"] == 100.0 and is_equal_approx(c.type_amp("物理"), 0.15))
 	_basic(c, f, 118.0)
 	_cast(b, f, "xiaoqier", 83.5) # 90×1.15−20，只应用一次物理共享。
-	_cast(b, f, "liuqingqing", 120.0)
+	_cast(b, f, "liuqingqing", 0.0)
 	_cast(b, f, "chenshi", 140.0)
 	b._add_ancestor_effects("qingluan", shared)
 	assert(is_equal_approx(c.type_amp("物理"), 0.30))
@@ -86,7 +88,7 @@ func _run() -> void:
 	b._add_ancestor_effects("gundilong", {"elem_pct": {"物理": 300.0}})
 	assert(c.type_amp("物理") == 2.0)
 	_basic(c, f, 340.0)
-	_cast(b, f, "liuqingqing", 120.0)
+	_cast(b, f, "liuqingqing", 0.0)
 	_cast(b, f, "chenshi", 140.0)
 	# 家传羁绊完成回调也要同帧同步专属倍率，不能等下一帧补回。
 	c.type_attr["物理"]["amp_f"] = 0.3

@@ -20,6 +20,15 @@ func _cast(b, f: Dictionary, aid: String, expected: float) -> void:
 	b._cast_skill(0)
 	assert(is_equal_approx(f["hp"], 10000.0 - expected))
 
+func _heal(b, f: Dictionary, expected: float) -> void:
+	var sk: Dictionary = b.SKILL_DEFS["liuqingqing"].duplicate(true)
+	sk.merge({"aid": "liuqingqing", "mp": 0.0, "cd_t": 0.0}, true)
+	b._skills = [sk]
+	b._core.hero["hp"] = 100.0
+	f["hp"] = 10000.0
+	b._cast_skill(0)
+	assert(f["hp"] == 10000.0 and is_equal_approx(b._core.hero["hp"], 100.0 + expected))
+
 func _run() -> void:
 	LS.ensure_loaded()
 	LS.current_level = 9
@@ -29,6 +38,7 @@ func _run() -> void:
 	b.set_process(false)
 	var c = b._core
 	c.set_process(false)
+	c.attr_set_base("hp", 1000.0)
 	c.attr_set_base("atk", 100.0)
 	c.attr["atk"]["temp"] = 0.0
 	c.attr["atk"]["amp"] = 0.0
@@ -41,10 +51,10 @@ func _run() -> void:
 	f.merge({"hp": 10000.0, "hp_max": 1000.0, "res_wood": 0.0, "res_fire": 0.0, "shield": false, "x": c.hero_pos.x, "y": c.hero_pos.y - 40.0}, true)
 	for aid in ["liuqingqing", "chenshi"]:
 		b._add_ancestor_effects(aid, AD.ANCESTORS[aid]["tiers"][0]["effects"])
-		b._add_ancestor_effects(aid, AD.ANCESTORS[aid]["tiers"][3]["effects"])
+		b._add_ancestor_effects(aid, AD.ANCESTORS[aid]["tiers"][4 if aid == "liuqingqing" else 3]["effects"])
 	assert(c.hero["atk"] == 100.0)
 	assert(is_equal_approx(c.type_amp("木系"), 0.15) and is_equal_approx(c.type_amp("真实"), 0.15))
-	_cast(b, f, "liuqingqing", 165.6) # 100×1.2×本技能1.2×木共享1.15。
+	_heal(b, f, 270.0) # 医疗版：100×2×(1+治疗20%+木共享15%)，不直接扣血。
 	_cast(b, f, "chenshi", 193.2) # 100×1.4×本技能1.2×真实共享1.15。
 	_cast(b, f, "xiaoqier", 70.0)
 	var panel := AttrPanel.new()
@@ -69,7 +79,7 @@ func _run() -> void:
 	seed(chosen_seed)
 	b._tick_aura(1.0)
 	assert(is_equal_approx(f["hp"], 9980.5)) # 100×15%×木共享1.3。
-	# 未入池治疗版的毒兼容入口不再预乘共享，不改变角色名单。
+	# 标量毒的兼容入口同样不再预乘共享；正常医疗版的独立层由medical_roster验证。
 	f["hp"] = 10000.0
 	f["poison"] = 1.0
 	f["poison_acc"] = 0.0
@@ -92,7 +102,7 @@ func _run() -> void:
 	assert(b._elem_mod["召唤"] == 15.0 and c.type_amp("召唤") == 0.0)
 	assert(not LS.god_ids().has("jicanghai") and not LS.god_ids().has("cuisanniang") and not LS.god_ids().has("liuqingqing2"))
 	assert(not b._ancestors.has("jicanghai") and not b._ancestors.has("liuqingqing2"))
-	_cast(b, f, "liuqingqing", 432.0)
+	_heal(b, f, 640.0)
 	_cast(b, f, "chenshi", 504.0)
 	f["hp"] = 10000.0
 	c.reflect_damage(f, 10.0)

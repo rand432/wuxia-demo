@@ -19,6 +19,9 @@ var audit_curio := ""
 var audit_curio_level := 1
 var audit_basic_skill_level := 0
 var audit_basic_family_stars := 0
+var observed_wave := 1
+var audit_backwash_final := false
+var audit_backwash_used := false
 
 func _ready() -> void:
 	if not OS.get_user_data_dir().replace("\\", "/").ends_with("wuxia-regression"):
@@ -43,6 +46,8 @@ func _ready() -> void:
 			audit_basic_skill_level = clampi(int(arg.get_slice("=", 1)), 0, 1000)
 		if arg.begins_with("--basic-family-stars="):
 			audit_basic_family_stars = clampi(int(arg.get_slice("=", 1)), 0, 5)
+		if arg.begins_with("--backwash-at-final="):
+			audit_backwash_final = arg.get_slice("=", 1).to_lower() == "true"
 	GS.ensure_loaded()
 	GS.skill_lv["zhujue"] = audit_basic_skill_level # 仅隔离测试，可保存到本次隔离目录。
 	GS.stars["zhujue"] = audit_basic_family_stars
@@ -74,6 +79,8 @@ func _start() -> void:
 		preload("res://shared/audio.gd").quit_cleanly(0 if failures == 0 else 1); return
 	LS.current_level = lv
 	b = BATTLE.instantiate(); add_child(b)
+	observed_wave = int(b._core.wave)
+	audit_backwash_used = false
 	t = 0.0; cd = 0.0; wait_draw = 0; wait_trea = 0; done = false
 	_log("[GO] L%d" % lv)
 	_log("[CURIO] L%d id=%s level=%d" % [lv, str(b._curio_id), int(b._curio_lv)])
@@ -82,6 +89,14 @@ func _start() -> void:
 func _process(dt: float) -> void:
 	if b == null or b._core == null or done:
 		return
+	if int(b._core.wave) < observed_wave:
+		_log("[REWIND] L%d wave=%d->%d boss_required=%s" % [lv, observed_wave, int(b._core.wave), str(b._core.boss_required)])
+	observed_wave = int(b._core.wave)
+	if audit_backwash_final and not audit_backwash_used and not b._run_over and int(b._core.wave) >= int(b._max_wave):
+		audit_backwash_used = true
+		b._core.boss_required = true # 重现原卡关：已进入末波首领门槛，尚未出首领。
+		_log("[SCENARIO] L%d force backwash from final wave=%d" % [lv, int(b._core.wave)])
+		b._backwash()
 	t += dt
 	cd -= dt
 	if b._tut != null and b._tut.visible:
@@ -100,6 +115,7 @@ func _process(dt: float) -> void:
 		_log("[QUEST_RESULT] L%d done=%d fail=%d giveup=%d" % [lv, b._q_done, b._q_fail, b._q_giveup])
 		_log("[CURIO_RESULT] L%d uses=%d" % [lv, b._curio_uses])
 		_log("[RARE_RESULT] L%d taken=%s" % [lv, str(b._rare_taken.keys())])
+		_log("[SKILL_RESULT] L%d roles=%s backwash=%s" % [lv, str(b._skills.map(func(sk): return str(sk["aid"]))), str(b._acquired.has("shiny_backwash"))])
 		if not win:
 			failures += 1
 		_finish(); return

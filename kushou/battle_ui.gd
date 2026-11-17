@@ -4946,7 +4946,7 @@ func _add_card(id: String) -> void:
 		_enable_qianzhi()
 	elif str(id) == "shiny_mingzhu":
 		_enable_undying_lamp()
-	elif str(id) == "shiny_liuqingqing2":
+	elif str(id) in ["shiny_liuqingqing", "shiny_liuqingqing2"]:
 		_enable_baicao()
 	elif str(id) == "shiny_qingluan":
 		_enable_wanren()
@@ -5329,8 +5329,8 @@ const SKILL_DEFS := {
 		"targets": 3, "col": Color(0.88, 0.42, 0.22)},
 	"chenshi": {"name": "刺骨", "dtype": "真实", "mul": 1.4, "cd": 8.0, "mp": 90.0,
 		"targets": 1, "col": Color(0.86, 0.55, 0.62)},
-	"liuqingqing": {"name": "回春", "dtype": "木系", "mul": 1.2, "cd": 12.0, "mp": 110.0,
-		"targets": 3, "col": Color(0.42, 0.72, 0.42)},
+	"liuqingqing": {"name": "回春", "dtype": "木系", "mul": 1.0, "heal_mul": 2.0, "cd": 12.0, "mp": 80.0,
+		"targets": 1, "col": Color(0.42, 0.72, 0.42)},
 	"xiaoqier": {"name": "顺手", "dtype": "物理", "mul": 0.9, "cd": 5.0, "mp": 60.0,
 		"targets": 1, "col": Color(0.90, 0.84, 0.66)},
 	"gundilong": {"name": "肉蛋冲撞", "dtype": "物理", "mul": 1.5, "cd": 6.0, "mp": 80.0,
@@ -5504,7 +5504,7 @@ func _cast_skill(i: int) -> void:
 		_skill_fx("召唤", _hero_screen())
 		return
 	# 治疗流：回血 + 环毒 + 易伤
-	if aid0 == "liuqingqing2":
+	if aid0 in ["liuqingqing", "liuqingqing2"]:
 		_mp -= cost0
 		sk["cd_t"] = maxf(0.5, float(sk["cd"]) * (1.0 - clampf(float(md0.get("cd_pct", 0.0)), 0.0, 80.0) / 100.0))
 		var times := 1
@@ -5512,7 +5512,8 @@ func _cast_skill(i: int) -> void:
 			times = _baicao_times()
 		_skill_fx("木系", _hero_screen())
 		for _i in times:
-			_cast_heal(float(sk["mul"]))
+			if not _skill_batch_active(epoch): return
+			_cast_heal(float(sk["mul"]), aid0)
 		if times > 1:
 			_toast("百草 · 连放 %d 次（只扣一次内力）" % times)
 		return
@@ -6193,12 +6194,26 @@ func _devour_random() -> void:
 #   合成 攻击/防御/气血/内力 任意一套时 5% 掷；一局一次
 #   进卡组：四维立刻 +4/+4/+40/+40，波数回退 5 波（当前波清空重刷）
 func _backwash() -> void:
-	if _core == null:
+	if _core == null or not _skill_batch_active(_core._enemy_attack_epoch):
 		return
 	var w := int(_core.wave)
 	var nw := maxi(1, w - 5)
+	# 回到普通波时不能沿用末波的首领门槛，也不能让旧场上的攻击追到重刷波。
+	if not _q_cur.is_empty() and str(_q_cur.get("kind", "")) in ["statue", "zone", "guard", "champion", "elite"]:
+		_q_finish("fail")
+	_rtype_seen.clear()
+	_core.foes.clear()
+	_core.clear_enemy_attacks()
+	_core._hero_pending = {}
+	_core._hero_pending_t = -1.0
+	_core.boss_required = false
+	_core.boss_spawned_once = false
+	_core.boss_alive = false
+	_boss_spawned = false
+	_chal_all_cd()
 	_core.set_wave(nw)
 	_core.wave_reset_quota()
+	_spawn_typed_foes()
 	_last_wave = nw
 	_run_cleared = false
 	if _wave_lb != null:
@@ -6858,14 +6873,15 @@ const POISON_RATE := 0.30
 const AURA_BASE_R := 110.0
 
 func _wood_pct() -> float:
-	return float(_elem_mod.get("木系", 0.0))
+	return _core.type_amp("木系") * 100.0 if _core != null else 0.0
 
-func _cast_heal(mul: float) -> void:
-	if _run_over or _core == null or float(_core.hero.get("hp", 0.0)) <= 0.0:
+func _cast_heal(mul: float, aid := "liuqingqing") -> void:
+	if _core == null or not _skill_batch_active(_core._enemy_attack_epoch):
 		return
-	var m: Dictionary = _anc_mod.get("liuqingqing2", {})
+	var m: Dictionary = _anc_mod.get(aid, {})
 	var wood := _wood_pct()
-	var heal := float(_core.hero.get("atk", 12.0)) * HEAL_RATIO * (1.0 + (float(m.get("heal_pct", 0.0)) + wood) / 100.0)
+	var bonus := _skill_level_bonus(aid)
+	var heal := float(_core.hero.get("atk", 12.0)) * HEAL_RATIO * mul * (1.0 + (float(m.get("heal_pct", 0.0)) + wood + bonus) / 100.0)
 	heal = _core.heal_hero(heal)
 	if heal > 0.0:
 		_core._push_float(_core.hero_pos.x, _core.hero_pos.y - 60.0, "%+.1f" % heal if heal < 1.0 else "+%d" % int(heal), Color(0.42, 0.85, 0.40), true)
@@ -6874,12 +6890,18 @@ func _cast_heal(mul: float) -> void:
 	var vuln := float(m.get("vuln", 0.0))
 	var hp0 := Vector2(_core.hero_pos)
 	for f_v in _core.foes:
+		if float(m.get("aura", 0.0)) <= 0.0: break
 		var f: Dictionary = f_v
 		if float(f.get("hp", 0.0)) <= 0.0 or float(f.get("dying", 0.0)) > 0.0:
 			continue
 		if (Vector2(float(f["x"]), float(f["y"])) - hp0).length() > rad:
 			continue
-		f["poison"] = float(f.get("poison", 0.0)) + 1.0
+		f["poison"] = float(f.get("poison", 0.0)) + 1.0 if _baicao else 1.0
+		f["poison_bonus"] = 1.0 + bonus / 100.0
+		var layers: Array = f.get("poison_layers", []) if _baicao and float(f["poison"]) > 1.0 else []
+		layers.append({"t": dur, "bonus": 1.0 + bonus / 100.0})
+		f["poison_layers"] = layers
+		f["poison"] = float(layers.size())
 		f["poison_t"] = maxf(float(f.get("poison_t", 0.0)), dur)
 		if vuln > 0.0:
 			f["vuln_t"] = maxf(float(f.get("vuln_t", 0.0)), dur)   # 只刷新，不叠层
@@ -6907,34 +6929,85 @@ func _heal_ring(rad: float) -> void:
 func _tick_poison(dt: float) -> void:
 	if _core == null:
 		return
-	for f_v in _core.foes:
+	var epoch: int = _core._enemy_attack_epoch
+	if not _skill_batch_active(epoch): return
+	for f_v in _core.foes.duplicate():
+		if not _skill_batch_active(epoch): return
 		var f: Dictionary = f_v
+		if not _core.foes.has(f): continue
 		var st := float(f.get("poison", 0.0))
 		if st <= 0.0:
 			continue
-		if float(f.get("hp", 0.0)) <= 0.0:
+		if float(f.get("hp", 0.0)) <= 0.0 or bool(f.get("_death_settled", false)) or float(f.get("dying", 0.0)) > 0.0:
 			f["poison"] = 0.0
 			continue
-		f["poison_acc"] = float(f.get("poison_acc", 0.0)) + dt
-		while float(f["poison_acc"]) >= 1.0:
-			f["poison_acc"] = float(f["poison_acc"]) - 1.0
-			var dmg := float(_core.hero.get("atk", 12.0)) * POISON_RATE * st # 木系共享在统一伤害层应用。
-			_core._apply_dmg(f, dmg * _vuln_mul(f), "木系")
+		if f.has("poison_layers"):
+			if not _tick_poison_layers(f, maxf(0.0, dt), epoch): return
+			continue
+		var remaining := maxf(0.0, dt)
+		var elapsed := 0.0
+		while remaining > 0.0 and float(f.get("poison", 0.0)) > 0.0:
+			var life := maxf(0.0, float(f.get("poison_t", 4.0)))
+			var step := minf(remaining, life)
+			remaining -= step
+			elapsed += step
+			f["poison_t"] = life - step
+			f["poison_acc"] = float(f.get("poison_acc", 0.0)) + step
+			while float(f["poison_acc"]) + 0.000000001 >= 1.0:
+				f["poison_acc"] = maxf(0.0, float(f["poison_acc"]) - 1.0)
+				var at_t := elapsed - float(f["poison_acc"])
+				var vuln := 1.0 + float(f.get("vuln_pct", 0.0)) / 100.0 if float(f.get("vuln_t", 0.0)) > at_t else 1.0
+				var dmg := float(_core.hero.get("atk", 12.0)) * POISON_RATE * float(f["poison"]) * float(f.get("poison_bonus", 1.0))
+				_core._apply_dmg(f, dmg, "木系", -1, vuln)
+				_core._push_float(float(f["x"]), float(f["y"]) - 34.0, "毒", Color(0.45, 0.80, 0.40))
+				if randf() < 0.6:
+					_spawn_pfx("impacts/hit-spark", _core.position + Vector2(float(f["x"]), float(f["y"]) - 18.0), 0.55, "poison", 1.2)
+				if float(f.get("hp", 0.0)) <= 0.0: _core._kill_foe(f)
+				if not _skill_batch_active(epoch): return
+				if float(f.get("hp", 0.0)) <= 0.0 or not _core.foes.has(f): break
+			if float(f.get("hp", 0.0)) <= 0.0 or not _core.foes.has(f): break
+			if float(f["poison_t"]) <= 0.000000001:
+				f["poison"] = maxf(0.0, float(f["poison"]) - 1.0)
+				f["poison_t"] = 4.0
+		if float(f.get("poison", 0.0)) <= 0.0: f.erase("poison")
+
+func _tick_poison_layers(f: Dictionary, dt: float, epoch: int) -> bool:
+	var layers: Array = f["poison_layers"]
+	var start_acc := float(f.get("poison_acc", 0.0))
+	var at_t := 1.0 - start_acc
+	var max_duration := 0.0
+	for layer in layers: max_duration = maxf(max_duration, float(layer["t"]))
+	while at_t <= minf(dt, max_duration) + 0.000000001:
+		var weight := 0.0
+		for layer in layers:
+			if float(layer["t"]) + 0.000000001 >= at_t:
+				weight += float(layer["bonus"])
+		if weight > 0.0:
+			var vuln := 1.0 + float(f.get("vuln_pct", 0.0)) / 100.0 if float(f.get("vuln_t", 0.0)) > at_t else 1.0
+			_core._apply_dmg(f, float(_core.hero.get("atk", 12.0)) * POISON_RATE * weight, "木系", -1, vuln)
 			_core._push_float(float(f["x"]), float(f["y"]) - 34.0, "毒", Color(0.45, 0.80, 0.40))
 			if randf() < 0.6:
 				_spawn_pfx("impacts/hit-spark", _core.position + Vector2(float(f["x"]), float(f["y"]) - 18.0), 0.55, "poison", 1.2)
-		f["poison_t"] = float(f.get("poison_t", 0.0)) - dt
-		if float(f["poison_t"]) <= 0.0:
-			f["poison"] = maxf(0.0, st - 1.0)
-			f["poison_t"] = 4.0
-			if float(f["poison"]) <= 0.0:
-				f.erase("poison")
-
-# 易伤倍率（柳卿卿 5★）：只刷新不叠加
-func _vuln_mul(f: Dictionary) -> float:
-	if float(f.get("vuln_t", 0.0)) > 0.0:
-		return 1.0 + float(f.get("vuln_pct", 0.0)) / 100.0
-	return 1.0
+			if float(f.get("hp", 0.0)) <= 0.0: _core._kill_foe(f)
+			if not _skill_batch_active(epoch): return false
+			if float(f.get("hp", 0.0)) <= 0.0 or not _core.foes.has(f): return true
+		at_t += 1.0
+	var alive: Array = []
+	var max_life := 0.0
+	for layer in layers:
+		layer["t"] = maxf(0.0, float(layer["t"]) - dt)
+		if float(layer["t"]) > 0.000000001:
+			alive.append(layer)
+			max_life = maxf(max_life, float(layer["t"]))
+	f["poison_acc"] = fposmod(start_acc + dt, 1.0)
+	f["poison_t"] = max_life
+	f["poison"] = float(alive.size())
+	f["poison_layers"] = alive
+	if alive.is_empty():
+		f.erase("poison")
+		f.erase("poison_layers")
+		f["poison_acc"] = 0.0
+	return true
 
 func _tick_vuln(dt: float) -> void:
 	if _core == null:
@@ -6954,7 +7027,9 @@ var _lamp_kills := 0
 var _aura_extra_radius := 0.0
 
 func _enable_baicao() -> void:
+	if _baicao: return
 	_baicao = true
+	_add_ancestor_effects("liuqingqing", {"heal_pct": 10.0})
 	_toast("百草入卡组 · 毒素可叠加，施放有几率连放（只扣一次内力）")
 	_shiny_present("baicao")
 
@@ -7021,7 +7096,7 @@ func _tick_aura(dt: float) -> void:
 			f["x"] = float(f["x"]) + dir.x * step
 			f["y"] = float(f["y"]) + dir.y * step
 			var dmg := float(_core.hero.get("atk", 12.0)) * 0.15 * (rad / AURA_R_BASE)
-			_core._apply_dmg(f, dmg * _vuln_mul(f), "木系")
+			_core._apply_dmg(f, dmg, "木系")
 			_core._push_float(float(f["x"]), float(f["y"]) - 30.0, "聚", Color(0.95, 0.85, 0.55))
 			if float(f.get("hp", 0.0)) <= 0.0:
 				_core._kill_foe(f)
@@ -7175,7 +7250,7 @@ func _tick_paper(dt: float) -> void:
 			for f_v in _live_foes():
 				var f: Dictionary = f_v
 				if (Vector2(float(f["x"]), float(f["y"])) - at).length() <= 110.0:
-					_core._apply_dmg(f, dmg * _vuln_mul(f), "召唤")
+					_core._apply_dmg(f, dmg, "召唤")
 					_core._push_float(float(f["x"]), float(f["y"]) - 36.0, "爆散", Color(0.94, 0.92, 0.86))
 			_paper_puff(at)
 			Aud.sfx("paper", -10.0)
@@ -7960,7 +8035,7 @@ const SHINY_VIDEO := {
 	"gunshan": "gundilong",
 	"qianzhi": "zhiyuan",
 	"wanren": "qingluan",
-	"baicao": "liuqingqing2",
+	"baicao": "liuqingqing",
 	"undying": "mingzhu",
 	"shiyun": "chenshi2",
 	"zhongli": "zhongli",

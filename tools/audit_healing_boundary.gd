@@ -63,6 +63,8 @@ func _run() -> void:
 	b._core.hero["atk"] = 100.0
 	b._core.hero["hp_max"] = 1000.0
 	b._core.hero["hp"] = 990.0
+	b._anc_mod["liuqingqing"] = {"aura": 1.0}
+	b._baicao = true # 百草解锁叠毒；满血施法仍可刷新/叠加医毒。
 	b._core._floats.clear()
 	b._cast_heal(1.0)
 	assert(b._core.hero["hp"] == 1000.0 and b._core._floats.back()["txt"] == "+10")

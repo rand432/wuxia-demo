@@ -43,7 +43,7 @@ func _buffs_tick(delta: float) -> void:
 				f[k2] = maxf(0.0, float(f[k2]) - delta)
 
 # 返回整刀结算伤害供飘字使用；吸血和dmg_done只计实际扣血，包含致命一击时的上限。
-func _apply_dmg(f: Dictionary, amount: float, dtype: String, crit_result: int = -1) -> float:
+func _apply_dmg(f: Dictionary, amount: float, dtype: String, crit_result: int = -1, vuln_multiplier: float = -1.0) -> float:
 	if f.is_empty() or float(f.get("hp", 0.0)) <= 0.0 or bool(f.get("_death_settled", false)) or float(f.get("dying", 0.0)) > 0.0:
 		return 0.0
 	# v16k（用户："盾兵格挡（现在只是个长相，可以做成正面减伤）"）：
@@ -88,6 +88,10 @@ func _apply_dmg(f: Dictionary, amount: float, dtype: String, crit_result: int = 
 		final *= 1.0 + float(f["cold_dmg"])
 	if dtype != DMG_TRUE and float(f.get("wood_t", 0.0)) > 0.0:
 		final *= 1.0 + float(f.get("wood_vuln", 0.0))
+	# 医毒/灯照的受伤加深统一作用于非真实伤害；持续伤害可传入本跳时刻的倍率。
+	if dtype != DMG_TRUE:
+		var vuln := vuln_multiplier if vuln_multiplier >= 0.0 else (1.0 + float(f.get("vuln_pct", 0.0)) / 100.0 if float(f.get("vuln_t", 0.0)) > 0.0 else 1.0)
+		final *= vuln
 	var dealt := minf(float(f["hp"]), maxf(0.0, final))
 	f["hp"] = float(f["hp"]) - final
 	# v15w 杏林医女「回春针」：吸血窗口内，按伤害的百分比回血

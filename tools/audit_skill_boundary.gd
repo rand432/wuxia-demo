@@ -41,7 +41,7 @@ func _skill(b, aid: String) -> Dictionary:
 	return sk
 
 func _run() -> void:
-	for aid in ["chenshi", "xiaoqier", "liuqingqing"]:
+	for aid in ["chenshi", "xiaoqier"]:
 		for mode in ["normal", "result", "epoch", "dead", "stopped", "removed"]:
 			var b = _battle()
 			var c = b._core
@@ -68,7 +68,7 @@ func _run() -> void:
 			assert(primary.get("_death_settled", false) and b._kills == kills + 1 and b._wen > money)
 			assert(b._mp == 1000.0 - sk["mp"] and sk["cd_t"] > 0.0)
 			if mode == "normal":
-				var damage := 140.0 if aid == "chenshi" else (70.0 if aid == "xiaoqier" else 120.0)
+				var damage := 140.0 if aid == "chenshi" else 70.0
 				assert(is_equal_approx(other["hp"], 1000.0 - damage) and other["para"] == 1.0)
 			else:
 				assert(other["hp"] == 1000.0 and float(other.get("para", 0.0)) == 0.0)
@@ -107,5 +107,5 @@ func _run() -> void:
 		assert(b._curio_mana_regen_left == 0.0) # 中止后不再启动后续回蓝特效，免费施法临时内力已还原。
 		b.queue_free()
 		await process_frame
-	print("PASS: three live direct skills settle kills once; normal damage/cost preserved; result/death/stop/clear halt old targets and automatic cast batch")
+	print("PASS: two current direct skills settle kills once; normal damage/cost preserved; result/death/stop/clear halt old targets and automatic cast batch")
 	Audio.quit_cleanly()
