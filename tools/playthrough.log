@@ -1,12 +1,12 @@
 # 十关连续通关
-[GO] L7
-[CURIO] L7 id=yuhu level=1
-[BASIC_SKILL] L7 level=0 multiplier=1.00
-[QUEST] L7 accept=qdf
-[END] L7 WIN t=320s wave=18/18 kills=610 hp=1831/1908 unlock=8
-[FAMILY] L7 combos=3 shiny=false
-[BASIC_FAMILY] L7 stars=0 tiers=[]
-[QUEST_RESULT] L7 done=1 fail=0 giveup=0
-[CURIO_RESULT] L7 uses=0
-[RARE_RESULT] L7 taken=["晶山", "小杀令"]
-[ALL] max_unlocked=8 first_clear={ "7": true }
+[GO] L6
+[CURIO] L6 id=zhaohunfan level=5
+[BASIC_SKILL] L6 level=0 multiplier=1.00
+[QUEST] L6 accept=zd
+[QUEST] L6 accept=tu
+[STATE] cards=["hp_0_0", "swarm_1_0", "hp_0_2", "shiny_backwash"] wen=712 crystal=10 pending=false god=false ancestors=["zhujue", "chenshi", "liuqingqing", "qingluan"] running=true processing=true
+[CORE] hero={ "atk": 134.0, "hp": 1569.6, "hp_max": 1569.6, "mp": 1296.0, "mp_max": 1296.0, "aspd": 1.0, "crit": 0.16, "cut": 0.6, "dmg_pct": 0.0, "basic_skill_bonus": 0.0, "basic_family_bonus": 1.4, "crit_dmg": 2.75, "cut_all": 0.0, "dmg_all": 0.22, "curio_atk": 0.0 } pos=(349.8854, 355.4126) spawned=29 quota=29 live=0 cd=-139.214333333336
+[WAVE_STATE] clear=false required=true boss_alive=false boss_once=false ui_boss=false run_cleared=false ui_processing=true tutorial=false
+[DRAW] paid=false visible=false anim=false candidates=["shiny_backwash", "exp_2_0", "swarm_1_3"]
+[END] L6 TIMEOUT t=420s wave=15/20
+[ALL] max_unlocked=1 first_clear={  }

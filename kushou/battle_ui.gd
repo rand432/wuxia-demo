@@ -1359,6 +1359,8 @@ func _q_interval() -> float:
 func _curio_summon(tag: String, nm: String, col: Color, life: float, dmg_pct: float, boom: float, lc := 0.0) -> void:
 	if _run_over or _core == null:
 		return
+	if not _skill_batch_active(_core._enemy_attack_epoch):
+		return
 	var idx := _curio_count_minions(tag)
 	var follow_offset := Vector2(-60.0 + float(idx % 3) * 60.0, 20.0)
 	var pos: Vector2 = _core.hero_pos + follow_offset
@@ -1436,6 +1438,8 @@ func _paper_shatter() -> void:
 func _curio_tick_zhaohunfan() -> void:
 	if _run_over or _curio_cd > 0.0 or _core == null:
 		return
+	if not _skill_batch_active(_core._enemy_attack_epoch):
+		return
 	if _live_foes().is_empty():
 		return
 	var cap := 2 if _curio_lv >= 3 else 1
@@ -1454,6 +1458,8 @@ func _curio_tick_zhaohunfan() -> void:
 
 func _curio_tick_tongjing() -> void:
 	if _curio_cd > 0.0 or _core == null:
+		return
+	if not _skill_batch_active(_core._enemy_attack_epoch):
 		return
 	if _live_foes().is_empty():
 		return
@@ -5955,15 +5961,31 @@ func _summon_dragon(bonus_pct: float) -> void:
 	_toast("蛟龙现世 · 存在 %d 秒" % int(life))
 	Aud.sfx("warcry", -8.0)
 
+var _minions_ticking := false
+
 func _tick_minions(dt: float) -> void:
-	if _run_over or _core == null:
+	if _minions_ticking:
+		return
+	_minions_ticking = true
+	_step_minions(dt)
+	_minions_ticking = false
+
+func _step_minions(dt: float) -> void:
+	if _core == null:
+		return
+	var epoch: int = _core._enemy_attack_epoch
+	if not _skill_batch_active(epoch):
 		return
 	if _swallow_sea:
 		_ss_pct += 0.4 * dt                    # 每秒 +0.4% 蛟龙属性
 	if _minions.is_empty():
 		return
 	for m_v in _minions.duplicate():
+		if not _skill_batch_active(epoch):
+			return
 		var m: Dictionary = m_v
+		if not _minions.has(m):
+			continue
 		m["life"] = float(m["life"]) - dt
 		var tk = m["tk"]
 		if _swallow_sea and m.has("base_dmg"):
@@ -5972,6 +5994,7 @@ func _tick_minions(dt: float) -> void:
 			m["dmg"] = float(m["base_dmg"]) * ss2
 			m["wave_dmg"] = float(m["base_wave"]) * ss2
 		if float(m["life"]) <= 0.0:
+			_minions.erase(m) # 先退场，击杀回调不能再次触发同一只的到期效果。
 			if m.has("decoy"):
 				m["decoy"]["active"] = false
 			if tk != null and is_instance_valid(tk):
@@ -5980,17 +6003,20 @@ func _tick_minions(dt: float) -> void:
 			if float(m.get("boom", 0.0)) > 0.0 and _core != null:
 				var at_e: Vector2 = m["pos"]
 				for f_v2 in _core.foes.duplicate():
+					if not _skill_batch_active(epoch):
+						return
 					var f2: Dictionary = f_v2
-					if float(f2.get("hp", 0.0)) <= 0.0:
+					if not _core.foes.has(f2) or float(f2.get("hp", 0.0)) <= 0.0 or bool(f2.get("_death_settled", false)) or float(f2.get("dying", 0.0)) > 0.0:
 						continue
 					if at_e.distance_to(Vector2(float(f2["x"]), float(f2["y"]))) > 90.0:
 						continue
 					_core._apply_dmg(f2, float(_core.hero.get("atk", 12.0)) * float(m["boom"]), "召唤")
 					if float(f2.get("hp", 0.0)) <= 0.0:
 						_core._kill_foe(f2)
+					if not _skill_batch_active(epoch):
+						return
 				if _core != null:
 					_spawn_pfx("impacts/crit-hit", _core.position + at_e, 0.9, "", 1.4)
-			_minions.erase(m)
 			continue
 		if str(m.get("curio", "")) == "tongjing":
 			m["pos"] = _core.hero_pos + Vector2(-60.0, 20.0)
@@ -6027,6 +6053,10 @@ func _tick_minions(dt: float) -> void:
 					var md: float = _core._apply_dmg(best, float(m["dmg"]), "召唤")
 					if float(best.get("hp", 0.0)) <= 0.0:
 						_core._kill_foe(best)
+					if not _skill_batch_active(epoch):
+						return
+					if not _minions.has(m):
+						continue
 					# 奇物·铜镜 Lv3：镜影攻击吸血
 					if float(m.get("lc", 0.0)) > 0.0 and md > 0.0 and _core != null:
 						_core.heal_hero(md * float(m["lc"]))
@@ -6034,6 +6064,8 @@ func _tick_minions(dt: float) -> void:
 			if float(m["wave_cd"]) <= 0.0:
 				m["wave_cd"] = 20.0
 				_dragon_wave(m, best)
+				if not _skill_batch_active(epoch):
+					return
 		elif ghost:
 			var anchor: Vector2 = _core.hero_pos + Vector2(m.get("follow_offset", Vector2(-60.0, 20.0)))
 			var back := anchor - mp0
@@ -6502,6 +6534,9 @@ const WALL_Y1 := 700.0
 
 var _ram_shiny := false          # 滚山：每个敌人各弹一次
 var _ram_foe_seq := 0            # 冲撞命中记录使用独立编号，不依赖尚未生成的显示token。
+var _ram_step_accum := 0.0
+var _ram_step_epoch := -1
+const RAM_STEP := 1.0 / 60.0
 
 func _ram_foe_id(f: Dictionary) -> int:
 	if not f.has("_ram_uid"):
@@ -6541,7 +6576,8 @@ func _charge_ram() -> void:
 	dir = dir.normalized()
 	# 每次施法各自保存伤害、预算和命中编号；不持有敌人引用，避免循环引用。
 	var ctx := {"damage": _ram_damage(), "budget": 999 if _ram_shiny else 1,
-		"shiny": _ram_shiny, "epoch": epoch, "hits": {_ram_foe_id(f0): true}}
+		"shiny": _ram_shiny, "epoch": epoch, "hits": {_ram_foe_id(f0): true}, "bounced": {}}
+	ctx["chain_damage"] = float(ctx["damage"]) * (1.0 + float(_ram_mods().get("chain_dmg", 0.0)) / 100.0)
 	# 冲撞演出：一道土黄streak
 	_ram_streak(hp0, Vector2(float(f0["x"]), float(f0["y"])))
 	_core._apply_dmg(f0, float(ctx["damage"]), "物理")
@@ -6581,6 +6617,27 @@ func _tick_knock(dt: float) -> void:
 	var epoch: int = _core._enemy_attack_epoch
 	if not _skill_batch_active(epoch):
 		return
+	if _ram_step_epoch != epoch:
+		_ram_step_epoch = epoch
+		_ram_step_accum = 0.0
+	var moving := false
+	for f in _core.foes:
+		if float(f.get("_kx", 0.0)) != 0.0 or float(f.get("_ky", 0.0)) != 0.0:
+			moving = true
+			break
+	if not moving:
+		_ram_step_accum = 0.0
+		return
+	# 保留原60帧下的运动/墙面/碰撞顺序；渲染帧率只决定本帧补几个固定步。
+	_ram_step_accum += maxf(0.0, dt)
+	while _ram_step_accum + 0.000000001 >= RAM_STEP:
+		_ram_step_accum = maxf(0.0, _ram_step_accum - RAM_STEP)
+		_step_knock(RAM_STEP, epoch)
+		if not _skill_batch_active(epoch):
+			_ram_step_accum = 0.0
+			return
+
+func _step_knock(dt: float, epoch: int) -> void:
 	for f_v in _core.foes.duplicate():
 		if not _skill_batch_active(epoch):
 			return
@@ -6615,7 +6672,7 @@ func _tick_knock(dt: float) -> void:
 		f["_kx"] = kx
 		f["_ky"] = ky
 		# 撞到别的怪 → 连锁
-		if int(ctx["budget"]) <= 0:
+		if int(ctx["budget"]) <= 0 or (ctx["bounced"] as Dictionary).has(_ram_foe_id(f)):
 			continue
 		var seg_a: Vector2 = f.get("_seg_a", Vector2(float(f["x"]), float(f["y"])))
 		var seg_b := Vector2(px, py)
@@ -6628,8 +6685,9 @@ func _tick_knock(dt: float) -> void:
 			if _dist_point_seg(Vector2(float(o["x"]), float(o["y"])), seg_a, seg_b) > reach:
 				continue
 			ctx["budget"] = int(ctx["budget"]) - 1
+			ctx["bounced"][_ram_foe_id(f)] = true
 			ctx["hits"][_ram_foe_id(o)] = true
-			_core._apply_dmg(o, float(ctx["damage"]), "物理")
+			_core._apply_dmg(o, float(ctx["chain_damage"]), "物理")
 			_core._push_float(float(o["x"]), float(o["y"]) - 40.0, "反弹", Color(0.92, 0.80, 0.42))
 			if float(o.get("hp", 0.0)) <= 0.0:
 				_core._kill_foe(o)

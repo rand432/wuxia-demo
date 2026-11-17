@@ -173,7 +173,7 @@ const ANCESTORS := {
 		"tiers": [
 			{"combo_name": "冲撞", "combo_text": "撞击伤害 +20%", "effects": {"dmg_pct": 20},
 			 "cards": [["起势", "撞击伤害 +8%"], ["蓄力", "撞击伤害 +8%"], ["顶牛", "撞击伤害 +5%"]]},
-			{"combo_name": "击退连锁", "combo_text": "撞飞的目标撞到别人再吃一次", "effects": {"chain_dmg": 30},
+			{"combo_name": "击退连锁", "combo_text": "撞飞目标的连锁伤害 +30%", "effects": {"chain_dmg": 30},
 			 "cards": [["撞飞", "击退 +30%"], ["抛飞", "连锁伤害 +15%"], ["压顶", "连锁伤害 +10%"]]},
 			{"combo_name": "滚稳", "combo_text": "冷却 −12% · 内力 −20", "effects": {"cd_pct": 12, "mp_flat": 20},
 			 "cards": [["滚稳", "冷却 −6%"], ["收势", "内力 −12"], ["稳住", "冷却 −6%"]]},

@@ -108,6 +108,7 @@ func _process(dt: float) -> void:
 		failures += 1
 		_log("[STATE] cards=%s wen=%d crystal=%d pending=%s god=%s ancestors=%s running=%s processing=%s" % [str(b._cards), b._wen, b._crystal, str(b._str_pending), str(b._god_layer.visible), str(b._ancestors.keys()), str(b._core.running), str(b._core.is_processing())])
 		_log("[CORE] hero=%s pos=%s spawned=%s quota=%s live=%s cd=%s" % [str(b._core.hero), str(b._core.hero_pos), str(b._core._wave_spawned), str(b._core._wave_quota), str(b._core.live_foes()), str(b._core._hero_cd)])
+		_log("[WAVE_STATE] clear=%s required=%s boss_alive=%s boss_once=%s ui_boss=%s run_cleared=%s ui_processing=%s tutorial=%s" % [str(b._core.wave_cleared()), str(b._core.boss_required), str(b._core.boss_alive), str(b._core.boss_spawned_once), str(b._boss_spawned), str(b._run_cleared), str(b.is_processing()), str(b._tut != null and b._tut.visible)])
 		for foe in b._core.foes:
 			if float(foe.get("hp", 0)) > 0:
 				_log("[FOE] %s" % str(foe))
