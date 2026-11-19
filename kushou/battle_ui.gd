@@ -999,7 +999,7 @@ func _tick_chal(dt: float) -> void:
 
 # 挑战怪死亡：按类型结算（钱怪走 coin_drop，这里不重复给）
 func _on_chal_drop(kind: int, _pos: Vector2) -> void:
-	if _core == null:
+	if _run_over or _core == null:
 		return
 	match kind:
 		1:
@@ -2630,6 +2630,8 @@ func _process(_delta: float) -> void:
 		print("[SLOW] battle_ui ", _el / 1000.0, " ms")
 
 func _on_core_kill(n: int) -> void:
+	if _run_over or _core == null or n <= 0:
+		return
 	_curio_on_kill(n)                        # 奇物：醉翁壶（击杀累计）
 	# v15 经验线：杀 1 只按 1+x% 只算（经验与所有按击杀成长的机制一起吃）
 	var kn := int(round(float(n) * (1.0 + _killnum_pct / 100.0)))
@@ -2828,6 +2830,8 @@ func _end_run(win: bool) -> void:
 			_toast("首通记录恢复失败，请检查存储空间")
 	_run_over = true
 	_q_close_popup()
+	if _bm != null:
+		_bm.close_panel()
 	if _core != null:
 		_core.running = false
 	if _cam != null:
@@ -4431,6 +4435,8 @@ func _set_progress(set_id: String) -> int:
 	return n
 
 func _on_core_coin(n: int) -> void:
+	if _run_over:
+		return
 	_add_wen(n)
 
 # v6：一切文钱收入都走这里（好让［强化］的价钱灯跟着亮/灭）
@@ -4448,6 +4454,8 @@ func _add_wen(raw: int) -> void:
 
 # core 的 coin_drop：钱怪 / 匪首 / boss 掉的真钱（带落点，先只记账）
 func _on_coin_drop(amount: int, pos: Vector2) -> void:
+	if _run_over or _core == null or amount <= 0:
+		return
 	_add_wen(amount)
 	_spawn_fly(_core.position + pos + Vector2(0, -18), Vector2(99, 40), Color(0.90, 0.71, 0.30), 3)
 

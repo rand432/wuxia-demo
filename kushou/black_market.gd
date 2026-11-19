@@ -48,6 +48,25 @@ var _back_rect := Rect2()
 var _take_rect := Rect2()
 var _store_rect := Rect2()
 var _use_rect := Rect2()
+var _using_prop := false
+var _item_icons: Dictionary = {}
+
+func _item_icon(it: Dictionary) -> Texture2D:
+	var path := str(it.get("icon", ""))
+	if path == "":
+		return null
+	if not _item_icons.has(path):
+		_item_icons[path] = load(path)
+	return _item_icons[path]
+
+func _is_equipment(it: Dictionary) -> bool:
+	var item_type := str(it.get("type", ""))
+	if item_type != "":
+		return item_type == "装备"
+	return str(it.get("kind", "")) in ["normal", "equipment", "artifact"]
+
+func _can_use_prop(it: Dictionary) -> bool:
+	return str(it.get("type", "")) == "道具" and str(it.get("effect", "")) in ["aug_reroll", "devour", "crystal", "wen", "kills", "bm_exp"]
 
 func setup(p_core, p_ui) -> void:
 	core = p_core
@@ -104,6 +123,8 @@ func _on_hero_foe_hit(tgt: Dictionary, dmg: float, crit: bool, heavy: bool) -> v
 		ui._apply_burn(tgt, 1.0, 4.0)
 
 func _on_kill(_n: int) -> void:
+	if ui != null and ui._run_over:
+		return
 	# 踏云靴：击杀后短暂攻速
 	if _has_equipped("踏云靴"):
 		if _boot_t <= 0.0:
@@ -129,6 +150,8 @@ func try_prevent_death() -> bool:
 	return false
 
 func open_panel() -> void:
+	if ui != null and ui._run_over:
+		return
 	view = "shop"
 	visible = true
 	move_to_front()
@@ -141,6 +164,8 @@ func close_panel() -> void:
 	queue_redraw()
 
 func add_kill(n: int) -> void:
+	if ui != null and ui._run_over:
+		return
 	exp += maxi(1, n) * 4   # 黑市经验大幅提升：一场战斗能滚出更多黑市等级
 	while level < 5:
 		var need: int = LEVEL_EXP[level - 1]
@@ -236,7 +261,7 @@ func _refresh_cost() -> int:
 	return 10 + 10 * refresh_n
 
 func _spend_kills(n: int) -> bool:
-	if ui == null:
+	if ui == null or ui._run_over:
 		return false
 	if ui._kills < n:
 		ui._toast("杀敌数不够")
@@ -290,25 +315,33 @@ func _give_equipment(it: Dictionary) -> void:
 	queue_redraw()
 
 func _buy(i: int) -> void:
+	if ui != null and ui._run_over:
+		return
 	if i < 0 or i >= stock.size():
 		return
 	var offer: Dictionary = stock[i]
 	if bool(offer.get("sold", false)):
 		return
+	var it: Dictionary = offer["item"]
+	if bool(it.get("unique", false)) and _has_item(str(it.get("name", ""))):
+		if ui != null:
+			ui._toast("已拥有 " + str(it.get("name", "")))
+		return
 	var price := _offer_price(i)
 	if not _spend_kills(price):
 		return
-	var it: Dictionary = offer["item"]
+	offer["sold"] = true # 先占用货位，再执行可能触发回调的物品效果。
 	match str(it.get("kind", "")):
 		"consumable":
 			_apply_consumable(it)
 		_:
 			_add_item_to_warehouse(it)
-	offer["sold"] = true
 	selected_kind = ""
 	queue_redraw()
 
 func _refresh_stock() -> void:
+	if ui != null and ui._run_over:
+		return
 	var cost := _refresh_cost()
 	if not _spend_kills(cost):
 		return
@@ -316,18 +349,21 @@ func _refresh_stock() -> void:
 	_roll_stock()
 
 func _apply_consumable(it: Dictionary) -> void:
+	if core == null or (ui != null and ui._run_over):
+		return
 	var st: Dictionary = it.get("stats", {})
 	if st.has("hp"):
-		core.attr_add("hp", float(st["hp"]))
-		core.hero["hp_max"] = float(core.hero.get("hp_max", 1.0)) + float(st["hp"])
-		core.hero["hp"] = minf(float(core.hero.get("hp_max", 1.0)), float(core.hero.get("hp", 0.0)) + float(st["hp"]))
+		core.heal_hero(float(st["hp"]))
 	if st.has("atk"):
-		core.attr_add("atk", float(st["atk"]))
-		core.hero["atk"] = float(core.hero.get("atk", 0.0)) + float(st["atk"])
+		_add_attack(float(st["atk"]))
 	if st.has("periodic"):
 		periodic_atk += float(st["periodic"])
 	if ui != null:
 		ui._toast("用了 %s" % str(it.get("name", "")))
+
+func _add_attack(amount: float) -> void:
+	core.attr_add("atk", amount)
+	core.hero["atk"] = core.attr_final("atk")
 
 func _apply_item(it: Dictionary) -> void:
 	if ui != null and not bool(it.get("_vuln_counted", false)) and (str(it.get("kind", "")) == "equipment" or str(it.get("kind", "")) == "artifact"):
@@ -335,8 +371,7 @@ func _apply_item(it: Dictionary) -> void:
 		ui._equip_vuln = minf(0.45, float(ui._equip_vuln) + 0.015)   # 拿到装备/神器：怪偷偷变脆
 	var st: Dictionary = it.get("stats", {})
 	if st.has("atk"):
-		core.attr_add("atk", float(st["atk"]))
-		core.hero["atk"] = float(core.hero.get("atk", 0.0)) + float(st["atk"])
+		_add_attack(float(st["atk"]))
 	if st.has("hp"):
 		_change_equipment_hp(float(st["hp"]))
 	if st.has("red"):
@@ -350,8 +385,7 @@ func _remove_item(it: Dictionary) -> void:
 		_boot_t = 0.0
 	var st: Dictionary = it.get("stats", {})
 	if st.has("atk"):
-		core.attr_add("atk", -float(st["atk"]))
-		core.hero["atk"] = maxf(1.0, float(core.hero.get("atk", 0.0)) - float(st["atk"]))
+		_add_attack(-float(st["atk"]))
 	if st.has("hp"):
 		_change_equipment_hp(-float(st["hp"]))
 	if st.has("red"):
@@ -374,13 +408,17 @@ func _empty_slot() -> int:
 	return -1
 
 func _take_out(idx: int) -> void:
+	if ui != null and ui._run_over:
+		return
 	if idx < 0 or idx >= warehouse.size():
+		return
+	var it: Dictionary = warehouse[idx]
+	if not _is_equipment(it):
 		return
 	var empty := _empty_slot()
 	if empty < 0:
 		ui._toast("装备格已满，取不出来")
 		return
-	var it: Dictionary = warehouse[idx]
 	slots[empty] = it
 	warehouse.remove_at(idx)
 	_apply_item(it)
@@ -389,6 +427,8 @@ func _take_out(idx: int) -> void:
 	queue_redraw()
 
 func _store(i: int) -> void:
+	if ui != null and ui._run_over:
+		return
 	if i < 0 or i >= slots.size() or slots[i] == null:
 		return
 	var it: Dictionary = slots[i]
@@ -400,11 +440,20 @@ func _store(i: int) -> void:
 	queue_redraw()
 
 func _use_prop(idx: int) -> void:
+	if _using_prop or (ui != null and ui._run_over):
+		return
 	if idx < 0 or idx >= warehouse.size():
 		return
 	var it: Dictionary = warehouse[idx]
-	if str(it.get("type", "")) != "道具":
+	if not _can_use_prop(it):
 		return
+	if str(it.get("effect", "")) == "crystal" and ui._crystal_lock:
+		ui._toast("灵晶收入已锁定，道具未消耗")
+		return
+	_using_prop = true
+	warehouse.remove_at(idx)
+	selected_kind = ""
+	selected_i = -1
 	match str(it.get("effect", "")):
 		"aug_reroll":
 			ui._aug_reroll += 1
@@ -413,9 +462,6 @@ func _use_prop(idx: int) -> void:
 			ui._devour_random()
 			ui._toast("吞噬丹：随机吞了一张卡")
 		"crystal":
-			if ui._crystal_lock:
-				ui._toast("灵晶收入已锁定，道具未消耗")
-				return
 			var before := int(ui._crystal)
 			ui._gain_crystal(int(it.get("value", 0)))
 			ui._toast("灵晶 +%d" % (int(ui._crystal) - before))
@@ -430,12 +476,12 @@ func _use_prop(idx: int) -> void:
 		"bm_exp":
 			add_kill(int(it.get("value", 0)))
 			ui._toast("黑市经验 +%d" % int(it.get("value", 0)))
-	warehouse.remove_at(idx)
-	selected_kind = ""
-	selected_i = -1
+	_using_prop = false
 	queue_redraw()
 
 func _process(delta: float) -> void:
+	if ui != null and ui._run_over:
+		return
 	if _boot_t > 0.0:
 		_boot_t -= delta
 		if _boot_t <= 0.0:
@@ -443,11 +489,10 @@ func _process(delta: float) -> void:
 	if periodic_atk <= 0.0:
 		return
 	periodic_t += delta
-	while periodic_t >= 10.0:
-		periodic_t -= 10.0
+	while periodic_t + 0.000000001 >= 10.0:
+		periodic_t = maxf(0.0, periodic_t - 10.0)
 		if core != null:
-			core.attr_add("atk", periodic_atk)
-			core.hero["atk"] = float(core.hero.get("atk", 0.0)) + periodic_atk
+			_add_attack(periodic_atk)
 
 func _gui_input(event: InputEvent) -> void:
 	if not visible:
@@ -553,7 +598,7 @@ func _draw_shop() -> void:
 		var tcol: Color = TYPECOL.get(str(it.get("type", "消耗")), DIM)
 		draw_rect(Rect2(r.position.x + 10, r.position.y + 8, 52, 22), tcol, true)
 		_txt(Vector2(r.position.x + 36, r.position.y + 23), str(it.get("type", "消耗")), 12, Color(0.97, 0.95, 0.89), HORIZONTAL_ALIGNMENT_CENTER, 52)
-		var icon: Texture2D = load(str(it.get("icon", "")))
+		var icon: Texture2D = _item_icon(it)
 		if icon != null:
 			draw_texture_rect(icon, Rect2(r.position.x + 18, r.position.y + 42, 40, 40), false)
 		_txt(Vector2(r.position.x + 68, r.position.y + 66), str(it.get("name", "")), 21, INK)
@@ -568,11 +613,14 @@ func _draw_shop() -> void:
 		else:
 			_txt(Vector2(r.position.x + 12, r.position.y + 196), "%d 杀敌" % price, 16, Color(0.24, 0.21, 0.18))
 		var br := Rect2(r.position.x + r.size.x - 84, r.position.y + r.size.y - 40, 72, 30)
+		_buy_rects.append(Rect2()) # 始终与stock保持同一索引，售罄货位也占位。
 		if bool(offer.get("sold", false)):
 			_btn(br, "已售罄", 14, Color(0.55, 0.50, 0.42), Color(0.95, 0.92, 0.85))
+		elif bool(it.get("unique", false)) and _has_item(str(it.get("name", ""))):
+			_btn(br, "已拥有", 14, Color(0.55, 0.50, 0.42), Color(0.95, 0.92, 0.85))
 		else:
 			_btn(br, "买", 17, SEAL, Color(0.97, 0.95, 0.89))
-			_buy_rects.append(br)
+			_buy_rects[i] = br
 	# 底栏
 	_btn(Rect2(60, 1010, 250, 54), "刷新 · %d 杀敌" % _refresh_cost(), 18, SEAL, Color(0.97, 0.95, 0.89))
 	_refresh_rect = Rect2(60, 1010, 250, 54)
@@ -582,6 +630,9 @@ func _draw_shop() -> void:
 	_txt(Vector2(60, 1092), "30% 概率一件 7/5/3 折；买掉即空，刷新补货。", 12, Color(0.62, 0.57, 0.48))
 
 func _draw_warehouse() -> void:
+	_take_rect = Rect2()
+	_store_rect = Rect2()
+	_use_rect = Rect2()
 	_txt(Vector2(64, 160), "仓库/装备", 38, Color(0.95, 0.92, 0.85))
 	_txt(Vector2(64, 196), "装备格 %d/6　不能卖 · 可替换" % _filled_slots(), 15, Color(0.78, 0.72, 0.62))
 	_btn(Rect2(600, 130, 56, 36), "×", 24, Color(0.10, 0.09, 0.08), Color(0.90, 0.86, 0.78))
@@ -631,15 +682,15 @@ func _draw_warehouse() -> void:
 		for j in parts.size():
 			_txt(Vector2(80, 832 + j * 21), str(parts[j]), 15, Color(0.78, 0.72, 0.62))
 		_txt(Vector2(80, 860), "不可出售", 13, SEAL)
-		_take_rect = Rect2(80, 900, 150, 50)
-		_store_rect = Rect2(250, 900, 150, 50)
-		_use_rect = Rect2(420, 900, 150, 50)
-		if str(sel.get("type", "")) == "道具":
-			_btn(_take_rect, "取出", 18, Color(0.18, 0.16, 0.14), Color(0.90, 0.86, 0.78))
-			_btn(_use_rect, "使用", 18, SEAL, Color(0.97, 0.95, 0.89))
-		else:
-			_btn(_take_rect, "取出", 18, Color(0.18, 0.16, 0.14), Color(0.90, 0.86, 0.78))
+		if selected_kind == "slot":
+			_store_rect = Rect2(250, 900, 150, 50)
 			_btn(_store_rect, "存入", 18, Color(0.18, 0.16, 0.14), Color(0.90, 0.86, 0.78))
+		elif _can_use_prop(sel):
+			_use_rect = Rect2(420, 900, 150, 50)
+			_btn(_use_rect, "使用", 18, SEAL, Color(0.97, 0.95, 0.89))
+		elif _is_equipment(sel):
+			_take_rect = Rect2(80, 900, 150, 50)
+			_btn(_take_rect, "取出", 18, Color(0.18, 0.16, 0.14), Color(0.90, 0.86, 0.78))
 
 func _filled_slots() -> int:
 	var n := 0
@@ -652,7 +703,7 @@ func _draw_item_cell(r: Rect2, it: Dictionary, selected: bool) -> void:
 	var q: Color = QUAL[clampi(int(it.get("q", 2)), 0, 4)]
 	draw_rect(r, Color(0.97, 0.95, 0.89, 0.98) if selected else Color(0.24, 0.21, 0.18), true)
 	draw_rect(r, GOLD if selected else q, false, 3.0 if selected else 2.0)
-	var icon: Texture2D = load(str(it.get("icon", "")))
+	var icon: Texture2D = _item_icon(it)
 	if icon != null:
 		draw_texture_rect(icon, Rect2(r.position.x + 45, r.position.y + 12, 36, 36), false)
 	_txt(Vector2(r.position.x, r.position.y + 78), str(it.get("name", "")), 17, INK if selected else Color(0.93, 0.90, 0.82), HORIZONTAL_ALIGNMENT_CENTER, r.size.x)

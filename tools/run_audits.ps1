@@ -10,6 +10,8 @@ $names += 'control_boundary'
 $names += 'hit_chain'
 $names += 'burn'
 $names += 'typed_rewards'
+$names += 'market_growth'
+$names += 'market_inventory'
 $results = @()
 foreach ($name in $names) {
     $output = & $Godot --headless --path $auditRoot --max-fps 120 --quit-after 3600 --script "res://tools/audit_$name.gd" 2>&1 | Out-String
