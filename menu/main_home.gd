@@ -17,8 +17,6 @@ const STAGES := [
 
 var _stage := 0
 var _diff := 0
-var _coin_lb: Label = null
-var _crystal_lb: Label = null
 var _title_lb: Label = null
 var _art_rect: TextureRect = null
 var _art_clip: Control = null
@@ -26,17 +24,13 @@ var _arrow_l: Control = null
 var _arrow_r: Control = null
 var _tabs: Array = []
 var _settings: Control = null
-var _last_coin := -1
-var _last_crystal := -1
 
 func _ready() -> void:
 	GameState.ensure_loaded()
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	theme = UI.theme()
 	UI.bg(self)
-	var bars := UI.app_bar(self, GameState.player_name, "玄品", _open_settings)
-	_coin_lb = bars["coin"]
-	_crystal_lb = bars["crystal"]
+	UI.app_bar(self, GameState.player_name, "玄品", _open_settings)
 	# 默认停在当前所在关（不超过已解锁）
 	LevelState.ensure_loaded()
 	_stage = clampi(LevelState.current_level - 1, 0, clampi(LevelState.max_unlocked, 1, 10) - 1)
@@ -47,7 +41,6 @@ func _ready() -> void:
 	_build_start_btn()
 	UI.dock(self, "", _on_dock)
 	_refresh()
-	set_process(true)
 	_unroll(0.0)
 	var SaveFile := preload("res://shared/save_file.gd")
 	if not SaveFile._read_failures.is_empty():
@@ -237,18 +230,6 @@ func _refresh() -> void:
 	if _info_vals.size() == 2:
 		(_info_vals[0] as Label).text = "第 %d 关" % (_stage + 1)
 		(_info_vals[1] as Label).text = "已解锁 %d/10" % n
-	_last_coin = -1
-	_last_crystal = -1
-
-func _process(_d: float) -> void:
-	var w := GameState.coin("wen")
-	var y := GameState.coin("yuanbao")
-	if w != _last_coin and _coin_lb != null:
-		_last_coin = w
-		_coin_lb.text = str(w)
-	if y != _last_crystal and _crystal_lb != null:
-		_last_crystal = y
-		_crystal_lb.text = str(y)
 
 # ---------------- 设置 ----------------
 func _open_settings() -> void:

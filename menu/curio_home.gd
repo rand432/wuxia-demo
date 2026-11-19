@@ -174,6 +174,7 @@ func _on_equip() -> void:
 func _open_pop() -> void:
 	_close_pop()
 	_pop = Control.new()
+	var popup := _pop
 	_pop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_pop.mouse_filter = Control.MOUSE_FILTER_STOP
 	_pop.z_index = 40
@@ -233,19 +234,29 @@ func _open_pop() -> void:
 	if up.disabled:
 		up.text = "已满级"
 	up.pressed.connect(func() -> void:
+		if not _popup_current(popup) or up.disabled:
+			return
+		up.disabled = true
 		if GameState.curio_upgrade(cur):
 			Audio.sfx("levelup", -8.0)
 			_close_pop()
 			_refresh()
 		else:
+			up.disabled = false
 			up.text = "保存失败，请重试")
-	var close := UI.button(holder, "×", Rect2(548, 18, 40, 40), 26, Color(0, 0, 0, 0), P.DIM, _close_pop)
+	var close := UI.button(holder, "×", Rect2(548, 18, 40, 40), 26, Color(0, 0, 0, 0), P.DIM, _close_pop.bind(popup))
 	close.add_theme_stylebox_override("normal", StyleBoxEmpty.new())
 	close.add_theme_stylebox_override("hover", StyleBoxEmpty.new())
 	close.add_theme_stylebox_override("pressed", StyleBoxEmpty.new())
 
-func _close_pop() -> void:
+func _popup_current(popup: Control) -> bool:
+	return is_inside_tree() and not is_queued_for_deletion() and is_instance_valid(popup) and _pop == popup and not popup.is_queued_for_deletion()
+
+func _close_pop(expected: Control = null) -> void:
+	if expected != null and not _popup_current(expected):
+		return
 	if _pop != null and is_instance_valid(_pop):
+		_pop.hide()
 		_pop.queue_free()
 	_pop = null
 

@@ -23,6 +23,7 @@ var _chip: Control = null
 var _toast: Label = null
 var _toast_seq := 0
 var _done := false
+var _closed := false
 
 func open(key: String) -> void:
 	FD.load_game()
@@ -118,11 +119,14 @@ func _build() -> void:
 	_hammer_btn = _panel.get_child(_panel.get_child_count() - 1) as Button
 	UI.button(_panel, "收 下", Rect2(494, 1130, 170, 74), 26, Color(0.22, 0.18, 0.14), Color(0.94, 0.91, 0.85),
 		func() -> void:
+			if _closed: return
 			Audio.sfx("ui_close", -10.0)
 			FD.save_game()
 			_close(), Color(0.47, 0.40, 0.31), 1, 12)
 
 func _refresh() -> void:
+	if _closed:
+		return
 	var it := _it()
 	if it.is_empty():
 		_close()
@@ -167,6 +171,8 @@ func _chip_refresh(st: Dictionary) -> void:
 
 # ---------------- 锤 ----------------
 func _hammer() -> void:
+	if _closed or _done:
+		return
 	var transaction := FD.hammer(slot_key)
 	if not bool(transaction["ok"]):
 		_show_toast(str(transaction["reason"]))
@@ -231,6 +237,8 @@ func _show_toast(t: String) -> void:
 
 # ---------------- 道具 ----------------
 func _open_item(nm: String) -> void:
+	if _closed or _done:
+		return
 	if _done:
 		return
 	Audio.sfx("ui_click", -8.0)
@@ -264,6 +272,8 @@ func _open_item(nm: String) -> void:
 			func() -> void: _confirm_use(nm, n, ov), Color(0.588, 0.412, 0.102), 2, 10)
 
 func _confirm_use(nm: String, n: int, parent_ov: Control) -> void:
+	if _closed or _done or not is_instance_valid(parent_ov) or parent_ov.is_queued_for_deletion():
+		return
 	var cf := Control.new()
 	cf.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	cf.z_index = 90
@@ -275,15 +285,23 @@ func _confirm_use(nm: String, n: int, parent_ov: Control) -> void:
 	UI.panel(cf, Rect2(140, 540, 440, 220), Color(0.965, 0.941, 0.894), 10, P.LINE, 2)
 	UI.label(cf, "使用 " + nm + " ×1 ？", Vector2(0, 576), Vector2(720, 40), 28, P.INK, HORIZONTAL_ALIGNMENT_CENTER)
 	UI.label(cf, "用掉后剩 " + str(n - 1) + " 个", Vector2(0, 618), Vector2(720, 28), 17, P.DIM, HORIZONTAL_ALIGNMENT_CENTER)
+	var finished := [false]
 	UI.button(cf, "取 消", Rect2(168, 668, 176, 60), 23, Color(0.22, 0.18, 0.14), Color(0.94, 0.91, 0.85),
-		func() -> void: cf.queue_free(), Color(0.47, 0.40, 0.31), 1, 10)
+		func() -> void:
+			if finished[0]: return
+			finished[0] = true
+			cf.queue_free(), Color(0.47, 0.40, 0.31), 1, 10)
 	UI.button(cf, "确 定", Rect2(376, 668, 176, 60), 24, P.SEAL, Color(0.988, 0.941, 0.839),
 		func() -> void:
+			if finished[0] or _closed or _done or cf.is_queued_for_deletion() or parent_ov.is_queued_for_deletion(): return
+			finished[0] = true
 			cf.queue_free()
 			parent_ov.queue_free()
 			_use_item(nm), P.GOLD, 2, 10)
 
 func _use_item(nm: String) -> void:
+	if _closed or _done:
+		return
 	var result := FD.use_forge_item(slot_key, nm)
 	if not bool(result["ok"]):
 		_show_toast(str(result["reason"]))
@@ -295,6 +313,10 @@ func _use_item(nm: String) -> void:
 	_refresh()
 
 func _close() -> void:
+	if _closed:
+		return
+	_closed = true
+	hide()
 	closed.emit()
 	queue_free()
 

@@ -99,6 +99,7 @@ static func app_bar(root: Control, role_name: String, grade: String, on_settings
 	label(root, grade, Vector2(92, 52), Vector2(62, 26), 15, P.GOLD_HI, HORIZONTAL_ALIGNMENT_CENTER)
 	var coin_lb := label(root, "0", Vector2(282, 22), Vector2(112, 44), 24, P.PAPER_HI, HORIZONTAL_ALIGNMENT_RIGHT)
 	var crystal_lb := label(root, "0", Vector2(432, 22), Vector2(112, 44), 24, P.PAPER_HI, HORIZONTAL_ALIGNMENT_RIGHT)
+	ch.bind_currencies(coin_lb, crystal_lb)
 	button(root, "设置", Rect2(578, 24, 86, 42), 18, Color(0, 0, 0, 0), P.PAPER_HI, on_settings,
 		Color(P.GOLD.r, P.GOLD.g, P.GOLD.b, 0.45), 1, 6)
 	return {"coin": coin_lb, "crystal": crystal_lb}
@@ -142,6 +143,26 @@ static func dock(root: Control, active: String, on_pick: Callable) -> void:
 
 class BarChrome extends Control:
 	const P := preload("res://shared/ui_pal.gd")
+	const GS := preload("res://shared/game_state.gd")
+	var _coin_label: Label
+	var _crystal_label: Label
+	var _last_coin := -1
+	var _last_crystal := -1
+	func bind_currencies(coin_label: Label, crystal_label: Label) -> void:
+		_coin_label = coin_label
+		_crystal_label = crystal_label
+		_refresh_currencies()
+	func _process(_dt: float) -> void:
+		_refresh_currencies()
+	func _refresh_currencies() -> void:
+		var wen := GS.coin("wen")
+		var crystal := GS.coin("yuanbao")
+		if is_instance_valid(_coin_label) and wen != _last_coin:
+			_last_coin = wen
+			_coin_label.text = str(wen)
+		if is_instance_valid(_crystal_label) and crystal != _last_crystal:
+			_last_crystal = crystal
+			_crystal_label.text = str(crystal)
 	func _draw() -> void:
 		draw_rect(Rect2(0, 0, 720, 90), P.DARK)
 		draw_line(Vector2(0, 90), Vector2(720, 90), Color(P.GOLD.r, P.GOLD.g, P.GOLD.b, 0.5), 1.5, true)

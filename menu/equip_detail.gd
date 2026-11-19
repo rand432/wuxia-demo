@@ -10,6 +10,7 @@ const Audio := preload("res://shared/audio.gd")
 
 var slot_key := "weapon"
 var _root: Control = null
+var _closed := false
 
 func open(key: String) -> void:
 	slot_key = key
@@ -69,11 +70,17 @@ func _build() -> void:
 		func() -> void: _close(), Color(0.47, 0.40, 0.31), 1, 8)
 
 func _forge() -> void:
+	if _closed:
+		return
+	_closed = true
+	hide()
 	Audio.sfx("ui_click", -6.0)
 	forge_requested.emit(slot_key)
-	_close()
+	_finish_close()
 
 func _sell() -> void:
+	if _closed:
+		return
 	if not FD.sell_equipped(slot_key):
 		return
 	Audio.sfx("ui_click", -6.0)
@@ -81,5 +88,12 @@ func _sell() -> void:
 	_close()
 
 func _close() -> void:
+	if _closed:
+		return
+	_closed = true
+	hide()
+	_finish_close()
+
+func _finish_close() -> void:
 	closed.emit()
 	queue_free()

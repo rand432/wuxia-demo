@@ -235,10 +235,9 @@ func _show_skill_detail(i: int) -> void:
 		return
 	var aid := str(_ids[i])
 	var a: Dictionary = AD.ANCESTORS[aid]
-	if _pop != null and is_instance_valid(_pop):
-		_pop.queue_free()
-		_pop = null
+	_close_pop()
 	_pop = Control.new()
+	var popup := _pop
 	_pop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_pop.mouse_filter = Control.MOUSE_FILTER_STOP
 	_pop.z_index = 80
@@ -355,16 +354,19 @@ func _show_skill_detail(i: int) -> void:
 	up.add_theme_font_size_override("font_size", 22)
 	up.focus_mode = Control.FOCUS_NONE
 	up.pressed.connect(func() -> void:
+		if not _popup_current(popup) or up.disabled:
+			return
 		var book := int(GameState.skill_books.get(qn, 0))
 		if book <= 0 or GameState.coin("wen") < cost_wen:
 			coin_lb.text = "文钱 %d / %d（不足）" % [cost_wen, GameState.coin("wen")]
 			book_lb.text = "%s技能书 1 / %d（不足）" % [qn, book]
 			return
+		up.disabled = true
 		if not GameState.upgrade_skill(aid, qn, cost_wen):
+			up.disabled = false
 			up.text = "保存失败，请重试"
 			return
-		_pop.queue_free()
-		_pop = null
+		_close_pop(popup)
 		_show_skill_detail(i)
 		_build_slots()
 	)
@@ -376,8 +378,7 @@ func _show_skill_detail(i: int) -> void:
 	close.add_theme_font_size_override("font_size", 22)
 	close.focus_mode = Control.FOCUS_NONE
 	close.pressed.connect(func() -> void:
-		_pop.queue_free()
-		_pop = null
+		_close_pop(popup)
 	)
 	panel.add_child(close)
 
@@ -412,13 +413,12 @@ func _on_plan(i: int) -> void:
 
 # ---------------- 进阶路线弹窗 ----------------
 func _show_advance() -> void:
-	if _pop != null and is_instance_valid(_pop):
-		_pop.queue_free()
-		_pop = null
+	_close_pop()
 	var aid := str(_ids[_sel])
 	var a: Dictionary = AD.ANCESTORS[aid]
 	var star := int(_stars.get(aid, 0))
 	_pop = Control.new()
+	var popup := _pop
 	_pop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_pop.mouse_filter = Control.MOUSE_FILTER_STOP
 	_pop.z_index = 80
@@ -429,7 +429,7 @@ func _show_advance() -> void:
 	dim.mouse_filter = Control.MOUSE_FILTER_STOP
 	dim.gui_input.connect(func(ev: InputEvent) -> void:
 		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
-			_close_pop())
+			_close_pop(popup))
 	_pop.add_child(dim)
 	var b := Rect2(Vector2(40, 150), Vector2(640, 930))
 	var box := Panel.new()
@@ -482,11 +482,15 @@ func _show_advance() -> void:
 	if star >= GameState.ROLE_STAR_MAX:
 		up_btn.text = "已满星"
 	up_btn.pressed.connect(func() -> void:
+		if not _popup_current(popup) or up_btn.disabled:
+			return
+		up_btn.disabled = true
 		if not GameState.advance_role(aid, star):
+			up_btn.disabled = false
 			up_btn.text = "进阶未完成，请检查资源或存储空间"
 			return
 		_stars[aid] = int(GameState.stars[aid])
-		_close_pop()
+		_close_pop(popup)
 		_show_advance()
 		_build_slots()
 	)
@@ -530,11 +534,17 @@ func _show_advance() -> void:
 	close.size = Vector2(48, 44)
 	close.focus_mode = Control.FOCUS_NONE
 	close.add_theme_font_size_override("font_size", 20)
-	close.pressed.connect(_close_pop)
+	close.pressed.connect(_close_pop.bind(popup))
 	box.add_child(close)
 
-func _close_pop() -> void:
+func _popup_current(popup: Control) -> bool:
+	return is_inside_tree() and not is_queued_for_deletion() and is_instance_valid(popup) and _pop == popup and not popup.is_queued_for_deletion()
+
+func _close_pop(expected: Control = null) -> void:
+	if expected != null and not _popup_current(expected):
+		return
 	if _pop != null and is_instance_valid(_pop):
+		_pop.hide()
 		_pop.queue_free()
 		_pop = null
 
@@ -555,7 +565,6 @@ func grade_cn(q: int) -> String:
 # ---------------- 热区（顶栏 / 底栏） ----------------
 func _build_hot() -> void:
 	_hot(Rect2(10, 6, 240, 76), func() -> void: get_tree().change_scene_to_file("res://menu/main_home.tscn"))
-	_hot(Rect2(630, 20, 82, 50), func() -> void: print("[请神页] 设置"))
 
 func _on_dock(key: String) -> void:
 	match key:

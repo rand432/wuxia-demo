@@ -150,8 +150,13 @@ func _on_slot(key: String) -> void:
 		return
 	var dlg: Control = (load("res://menu/equip_detail.tscn") as PackedScene).instantiate()
 	add_child(dlg)
-	dlg.forge_requested.connect(_open_forge)
-	dlg.closed.connect(_rebuild)
+	var forging := [false]
+	dlg.forge_requested.connect(func(key: String) -> void:
+		forging[0] = true
+		_open_forge(key))
+	dlg.closed.connect(func() -> void:
+		# 锻造页关闭后才重建，不能把刚打开的锻造页一起删掉。
+		if not forging[0]: _rebuild())
 	dlg.open(key)
 
 func _open_forge(key: String) -> Node:
