@@ -115,5 +115,78 @@ func _run() -> void:
 	assert(battle._run_over and not core.running and deaths[0] == 1)
 	battle.queue_free()
 	await process_frame
-	print("PASS: paper gains/caps, immediate count sync, boss-only guard, lethal protection, backlash and native combo tags")
+	await _check_boundaries()
+	print("PASS: paper gains/caps/count sync/boss guard/lethal protection/backlash/combo tags; both shatter paths stop at kill callback boundaries")
 	Audio.quit_cleanly()
+
+func _check_boundaries() -> void:
+	for lethal in [false, true]:
+		for mode in ["normal", "result", "epoch", "dead", "stopped", "removed"]:
+			var b = Battle.instantiate()
+			root.add_child(b)
+			b.set_process(false)
+			var c = b._core
+			c.set_process(false)
+			c.foes.clear()
+			c.kill.disconnect(b._on_core_kill)
+			c.kill_heal = 0.0
+			c.hero["atk"] = 100.0
+			c.hero["hp_max"] = 1000.0
+			c.hero["hp"] = 1000.0
+			b._curio_id = "zhiren"
+			b._curio_lv = 5
+			b._set_paper_count(1)
+			var targets: Array = []
+			for i in range(2):
+				c._spawn_foe()
+				var f: Dictionary = c.foes.back()
+				f.merge({"hp": 1.0 if i == 0 else 1000.0, "hp_max": 1000.0, "shield": false,
+					"x": c.hero_pos.x + 30.0 + i * 20.0, "y": c.hero_pos.y, "kb": 0.0}, true)
+				targets.append(f)
+			var uses: int = b._curio_uses
+			var kills: int = c.kills_total
+			var callback_uses: Array = []
+			var lands := [0]
+			c.delayed_land.connect(func(_p, _e): lands[0] += 1)
+			c.kill.connect(func(_n):
+				callback_uses.append(b._curio_uses)
+				if mode == "result": b._end_run(false)
+				elif mode == "epoch":
+					c.clear_enemy_attacks()
+					c.foes.clear()
+				elif mode == "dead": c.hero["hp"] = 0.0
+				elif mode == "stopped": c.running = false
+				elif mode == "removed": c.foes.erase(targets[1]))
+			_hit(c, 2000.0 if lethal else 10.0, not lethal)
+			assert(b._zhiren == 0 and c.hero["paper_guard"] == 0 and b._curio_uses == uses + 1)
+			assert(c.kills_total == kills + 1 and callback_uses == [uses + 1])
+			if mode == "normal":
+				assert(targets[1]["hp"] == 920.0 and targets[1]["kb"] == 120.0)
+			else:
+				assert(targets[1]["hp"] == 1000.0 and targets[1]["kb"] == 0.0)
+			assert(lands[0] == (1 if mode in ["normal", "removed"] else 0))
+			assert(c.hero["hp"] == (0.0 if mode == "dead" else 1000.0))
+			b.queue_free()
+			await process_frame
+	# 失效战斗入口不能直接触发碎裂或消耗挡招次数。
+	for dead in [false, true]:
+		var b = Battle.instantiate()
+		root.add_child(b)
+		b.set_process(false)
+		var c = b._core
+		c.set_process(false)
+		c.foes.clear()
+		c._spawn_foe()
+		var f: Dictionary = c.foes.back()
+		f.merge({"hp": 1000.0, "x": c.hero_pos.x, "y": c.hero_pos.y}, true)
+		b._curio_id = "zhiren"
+		b._curio_lv = 5
+		b._set_paper_count(1)
+		if dead: c.hero["hp"] = 0.0
+		else: c.running = false
+		var uses: int = b._curio_uses
+		b._paper_shatter()
+		b._on_paper_blocked(c.hero_pos)
+		assert(f["hp"] == 1000.0 and b._zhiren == 1 and b._curio_uses == uses)
+		b.queue_free()
+		await process_frame

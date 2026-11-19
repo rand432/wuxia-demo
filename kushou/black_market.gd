@@ -69,8 +69,14 @@ func _has_equipped(nm: String) -> bool:
 			return true
 	return false
 
+func _hit_active(epoch: int) -> bool:
+	return core != null and core.running and float(core.hero.get("hp", 0.0)) > 0.0 and epoch == core._enemy_attack_epoch and (ui == null or not ui._run_over)
+
 func _on_hero_foe_hit(tgt: Dictionary, dmg: float, crit: bool, heavy: bool) -> void:
-	if tgt.is_empty():
+	if core == null or tgt.is_empty():
+		return
+	var epoch: int = core._hero_hit_epoch if core._hero_hit_epoch >= 0 else core._enemy_attack_epoch
+	if not _hit_active(epoch) or not core.foes.has(tgt):
 		return
 	# 赤霄剑：每波首次普攻追加剑气
 	if _has_equipped("赤霄剑"):
@@ -78,13 +84,23 @@ func _on_hero_foe_hit(tgt: Dictionary, dmg: float, crit: bool, heavy: bool) -> v
 		if _sword_wave != w:
 			_sword_wave = w
 			core._apply_dmg(tgt, dmg * 0.5, core.DMG_PHYS)
+			if float(tgt.get("hp", 0.0)) <= 0.0 and not bool(tgt.get("_death_settled", false)):
+				core._kill_foe(tgt)
+			if not _hit_active(epoch):
+				return
 	# 断岳刀：普攻溅射
 	if _has_equipped("断岳刀"):
-		for f in core.foes:
-			if f != tgt and float(f.get("dying", 0.0)) <= 0.0:
+		for f in core.foes.duplicate():
+			if not _hit_active(epoch):
+				return
+			if core.foes.has(f) and f != tgt and float(f.get("hp", 0.0)) > 0.0 and not bool(f.get("_death_settled", false)) and float(f.get("dying", 0.0)) <= 0.0:
 				core._apply_dmg(f, dmg * 0.3, core.DMG_PHYS)
+				if float(f.get("hp", 0.0)) <= 0.0:
+					core._kill_foe(f)
+				if not _hit_active(epoch):
+					return
 	# 朱雀羽：暴击灼烧
-	if _has_equipped("朱雀羽") and crit and ui != null:
+	if _hit_active(epoch) and core.foes.has(tgt) and float(tgt.get("hp", 0.0)) > 0.0 and _has_equipped("朱雀羽") and crit and ui != null:
 		ui._apply_burn(tgt, 1.0, 4.0)
 
 func _on_kill(_n: int) -> void:

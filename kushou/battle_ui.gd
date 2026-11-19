@@ -1226,6 +1226,8 @@ func _curio_on_wood_expired(foe: Dictionary) -> void:
 	foe.erase("wood_boom")
 	if _run_over or not boom or float(foe.get("hp", 0.0)) <= 0.0 or float(foe.get("dying", 0.0)) > 0.0:
 		return
+	if _core == null or not _skill_batch_active(_core._enemy_attack_epoch) or not _core.foes.has(foe):
+		return
 	_core._apply_dmg(foe, float(_core.hero.get("atk", 12.0)) * 0.8, "物理")
 	_spawn_pfx("impacts/ground-slam", _core.position + Vector2(float(foe["x"]), float(foe["y"])), 0.8, "", 1.2)
 	if float(foe.get("hp", 0.0)) <= 0.0:
@@ -1401,10 +1403,20 @@ func _curio_count_minions(tag: String) -> int:
 func _curio_mirror_hit(target: Dictionary, damage: float) -> void:
 	if _run_over or _core == null or damage <= 0.0:
 		return
-	for mirror in _minions:
+	var epoch: int = _core._enemy_attack_epoch
+	if not _skill_batch_active(epoch):
+		return
+	for mirror in _minions.duplicate():
+		if not _skill_batch_active(epoch):
+			return
+		if not _minions.has(mirror):
+			continue
 		if str(mirror.get("curio", "")) != "tongjing" or float(mirror.get("life", 0.0)) <= 0.0:
 			continue
 		var dealt: float = _core.apply_echo_damage(target, damage * float(mirror.get("copy_ratio", 0.5)))
+		# 击杀回调可结束战斗或回潮，旧镜像不能在新阶段继续演出/吸血。
+		if not _skill_batch_active(epoch):
+			return
 		if dealt > 0.0:
 			_core._push_float(float(target["x"]), float(target["y"]) - 45.0, "镜 " + str(int(dealt)), Color(0.72, 0.70, 0.90))
 			if float(_core.hero.get("hp", 0.0)) > 0.0:
@@ -1424,14 +1436,21 @@ func _set_paper_count(amount: int) -> void:
 func _paper_shatter() -> void:
 	if _curio_lv < 3 or _core == null:
 		return
+	var epoch: int = _core._enemy_attack_epoch
+	if not _skill_batch_active(epoch):
+		return
 	for foe in _core.foes.duplicate():
-		if float(foe.get("hp", 0.0)) <= 0.0 or float(foe.get("dying", 0.0)) > 0.0:
+		if not _skill_batch_active(epoch):
+			return
+		if not _core.foes.has(foe) or bool(foe.get("_death_settled", false)) or float(foe.get("hp", 0.0)) <= 0.0 or float(foe.get("dying", 0.0)) > 0.0:
 			continue
 		if _core.hero_pos.distance_to(Vector2(float(foe["x"]), float(foe["y"]))) > 140.0:
 			continue
 		_core._apply_dmg(foe, float(_core.hero.get("atk", 12.0)), "物理")
 		if float(foe.get("hp", 0.0)) <= 0.0:
 			_core._kill_foe(foe)
+			if not _skill_batch_active(epoch):
+				return
 		elif not bool(foe.get("boss", false)):
 			foe["kb"] = maxf(float(foe.get("kb", 0.0)), 120.0)
 
@@ -1540,9 +1559,11 @@ func _curio_extend_buff(seconds: float, cap: float) -> void:
 func _curio_on_crit(tgt: Dictionary) -> void:
 	if _core == null:
 		return
+	if not _skill_batch_active(_core._enemy_attack_epoch):
+		return
 	if _curio_id == "zuiweng" and _curio_lv >= 5 and _curio_atk_t > 0.0:
 		_curio_extend_buff(1.0, 5.0)
-	if _curio_id != "hanyu" or _run_over or tgt.is_empty() or float(tgt.get("hp", 0.0)) <= 0.0:
+	if _curio_id != "hanyu" or not _core.foes.has(tgt) or tgt.is_empty() or float(tgt.get("hp", 0.0)) <= 0.0:
 		return
 	var c := mini(3, int(tgt.get("cold", 0)) + 1)
 	tgt["cold"] = c
@@ -1563,12 +1584,19 @@ func _curio_on_crit(tgt: Dictionary) -> void:
 func _curio_on_cold_expired(tgt: Dictionary) -> void:
 	var boom := bool(tgt.get("cold_boom", false))
 	tgt.erase("cold_boom")
-	if boom and not _run_over and float(tgt.get("hp", 0.0)) > 0.0:
+	if _core == null:
+		return
+	var epoch: int = _core._enemy_attack_epoch
+	if not _skill_batch_active(epoch) or not _core.foes.has(tgt):
+		return
+	if boom and float(tgt.get("hp", 0.0)) > 0.0 and float(tgt.get("dying", 0.0)) <= 0.0:
 		var at := Vector2(float(tgt["x"]), float(tgt["y"]))
 		_spawn_pfx("impacts/crit-hit", _core.position + at, 1.0, "", 1.4)
 		for o_v in _core.foes.duplicate():
+			if not _skill_batch_active(epoch):
+				return
 			var o: Dictionary = o_v
-			if o == tgt or float(o.get("hp", 0.0)) <= 0.0:
+			if not _core.foes.has(o) or o == tgt or bool(o.get("_death_settled", false)) or float(o.get("dying", 0.0)) > 0.0 or float(o.get("hp", 0.0)) <= 0.0:
 				continue
 			if at.distance_to(Vector2(float(o["x"]), float(o["y"]))) > 70.0:
 				continue
@@ -2737,8 +2765,11 @@ func _on_hero_down() -> void:
 		_set_paper_count(_zhiren - 1)
 		_core.hero["hp"] = float(_core.hero.get("hp_max", 1.0))
 		_core.running = true
-		_paper_shatter()
 		_curio_uses += 1
+		var epoch: int = _core._enemy_attack_epoch
+		_paper_shatter()
+		if not _skill_batch_active(epoch):
+			return
 		_curio_flash()
 		_toast("纸人替身 · 挡住致命一击（剩 %d）" % _zhiren)
 		Aud.sfx("paper", -6.0, 1.0)
@@ -4880,11 +4911,16 @@ func _on_delayed_land(pos: Vector2, elem: String) -> void:
 # 首领倒下：白闪 + 大爆 + 金耀 + 重震，配一段很短的慢镜头
 # 纸人 Lv5：在核心那边挡下了首领延迟技
 func _on_paper_blocked(pos: Vector2) -> void:
-	if _run_over or _curio_id != "zhiren":
+	if _run_over or _core == null or _curio_id != "zhiren":
+		return
+	var epoch: int = _core._enemy_attack_epoch
+	if not _skill_batch_active(epoch):
 		return
 	_set_paper_count(mini(_zhiren - 1, int(_core.hero.get("paper_guard", 0))))
-	_paper_shatter()
 	_curio_uses += 1
+	_paper_shatter()
+	if not _skill_batch_active(epoch):
+		return
 	_curio_flash()
 	_toast("纸人替身 · 挡下首领一击（剩 %d）" % _zhiren)
 	Aud.sfx("paper", -8.0, 1.0)
@@ -5304,7 +5340,14 @@ func _on_hero_hit() -> void:
 	_stone_on_hit()
 
 func _on_hero_foe_hit(tgt: Dictionary, dmg: float, crit: bool, heavy: bool) -> void:
+	if _core == null:
+		return
+	var epoch: int = _core._hero_hit_epoch if _core._hero_hit_epoch >= 0 else _core._enemy_attack_epoch
+	if not _skill_batch_active(epoch) or not _core.foes.has(tgt):
+		return
 	_curio_mirror_hit(tgt, dmg)
+	if not _skill_batch_active(epoch) or not _core.foes.has(tgt):
+		return
 	if crit:
 		_curio_on_crit(tgt)                  # 奇物：寒玉扳指 / 醉翁壶
 	if _fx_front == null:

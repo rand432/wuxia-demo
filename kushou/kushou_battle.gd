@@ -1049,8 +1049,16 @@ func _process(delta: float) -> void:
 		var fst: Dictionary = fst_v
 		if bool(fst.get("still", false)) and float(fst.get("dying", 0.0)) <= 0.0:
 			live_st.append(Vector2(float(fst["x"]), float(fst["y"])))
-	for i in range(foes.size() - 1, -1, -1):
-		var f: Dictionary = foes[i]
+	# 到期爆发与补击杀回调可能撤场，快照保留原倒序但不再索引已变动数组。
+	var foe_frame := foes.duplicate()
+	foe_frame.reverse()
+	for f_v in foe_frame:
+		if not running or frame_epoch != _enemy_attack_epoch or float(hero.get("hp", 0.0)) <= 0.0:
+			queue_redraw()
+			return
+		var f: Dictionary = f_v
+		if not foes.has(f):
+			continue
 		# 正在"被打飞"的那半秒：不再走位、不再打人，只上飘淡出
 		if float(f.get("dying", 0.0)) > 0.0:
 			f["dying"] = float(f["dying"]) - dt
@@ -1081,17 +1089,26 @@ func _process(delta: float) -> void:
 			if float(dd["t"]) <= 0.0:
 				dots.remove_at(di)
 		f["dot"] = dots
+		if not running or frame_epoch != _enemy_attack_epoch or float(hero.get("hp", 0.0)) <= 0.0:
+			queue_redraw()
+			return
 		if not foes.has(f):
 			continue
 		var cold_frozen := _tick_cold_control(f, dt)
-		if float(f.get("hp", 0.0)) <= 0.0:
+		if not running or frame_epoch != _enemy_attack_epoch or float(hero.get("hp", 0.0)) <= 0.0:
+			queue_redraw()
+			return
+		if not foes.has(f) or float(f.get("hp", 0.0)) <= 0.0:
 			continue
 		# v13d P3：石像——不移动、不出手，只挨打
 		if bool(f.get("still", false)):
 			f["flash"] = maxf(0.0, float(f.get("flash", 0.0)) - delta)
 			continue
 		_tick_wood_control(f, dt)
-		if float(f.get("hp", 0.0)) <= 0.0:
+		if not running or frame_epoch != _enemy_attack_epoch or float(hero.get("hp", 0.0)) <= 0.0:
+			queue_redraw()
+			return
+		if not foes.has(f) or float(f.get("hp", 0.0)) <= 0.0:
 			continue
 		# 麻痹（天雷）：这段时间**不动也不打**
 		if float(f.get("para", 0.0)) > 0.0 or cold_frozen:
@@ -1509,6 +1526,8 @@ func apply_echo_damage(foe: Dictionary, amount: float) -> float:
 		_kill_foe(foe)
 	return dealt
 
+var _hero_hit_epoch := -1 # 同次命中监听共用原批次，嵌套命中后恢复。
+
 func clear_enemy_attacks() -> void:
 	_enemy_attack_epoch += 1
 	_delayed.clear()
@@ -1700,8 +1719,9 @@ func _delayed_in_at(d: Dictionary, c: Vector2, r: float) -> bool:
 	return inr
 
 func _delayed_hit(d: Dictionary, damage_scale := 1.0, allow_paper := true, is_impact := true) -> void:
-	if not running:
+	if not running or float(hero.get("hp", 0.0)) <= 0.0:
 		return
+	var epoch := _enemy_attack_epoch
 	var c := Vector2(float(d["x"]), float(d["y"]))
 	var r := float(d["r"])
 	var elem := str(d["elem"])
@@ -1711,9 +1731,10 @@ func _delayed_hit(d: Dictionary, damage_scale := 1.0, allow_paper := true, is_im
 		hero["paper_guard"] = int(hero["paper_guard"]) - 1
 		_push_float(hero_pos.x, hero_pos.y - 100.0, "纸人挡下", Color(0.98, 0.92, 0.76), true)
 		paper_blocked.emit(c)
+		if not running or epoch != _enemy_attack_epoch or float(hero.get("hp", 0.0)) <= 0.0:
+			return
 		inr = false
 	if inr:
-		var epoch := _enemy_attack_epoch
 		var dm := hero_in_dmg(float(d["dmg"]) * damage_scale, elem)
 		dm = _apply_hero_damage(dm, d.get("caster", {}))
 		if not running or epoch != _enemy_attack_epoch:
@@ -1731,10 +1752,14 @@ func _delayed_hit(d: Dictionary, damage_scale := 1.0, allow_paper := true, is_im
 		if float(hero["hp"]) <= 0.0:
 			running = false
 			hero_down.emit()
+			if not running or epoch != _enemy_attack_epoch or float(hero.get("hp", 0.0)) <= 0.0:
+				return
 	if not is_impact:
 		return # 持续伤害不重复播放落地震屏、顿帧与冲撞。
 	_bursts.append({"x": c.x, "y": c.y, "t": 0.0, "col": Color(1.0, 0.52, 0.26), "scale": maxf(1.2, r / 60.0)})
 	delayed_land.emit(c, elem)
+	if not running or epoch != _enemy_attack_epoch or float(hero.get("hp", 0.0)) <= 0.0:
+		return
 	_shake = maxf(_shake, 12.0)
 	# v16o（用户："背景喊杀声太多了 其实没必要有喊杀声"）：已去掉喊杀/战鼓声
 	if _hitstop < 0.10:
@@ -1790,7 +1815,10 @@ func _hero_strike(tgt: Dictionary) -> void:
 		var is_extra := h != tgt
 		var dmg := base * (splash_mul() if is_extra else 1.0)
 		dmg = _apply_dmg(h, dmg, DMG_PHYS, int(crit))
+		var previous_hit_epoch := _hero_hit_epoch
+		_hero_hit_epoch = epoch
 		hero_foe_hit.emit(h, dmg, crit, heavy)
+		_hero_hit_epoch = previous_hit_epoch
 		if not _hero_strike_active(epoch):
 			return
 		h["hp"] = float(h["hp"])                     # 减伤已在 _apply_dmg 里算过

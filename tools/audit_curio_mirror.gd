@@ -116,5 +116,49 @@ func _run() -> void:
 	assert(boss["hp"] == hp)
 	battle.queue_free()
 	await process_frame
-	print("PASS: mirror five tiers/native attack copy/actual lifesteal/lifetime/real aggro and boss aim/result")
+	await _check_boundaries()
+	print("PASS: mirror five tiers/native attack copy/actual lifesteal/lifetime/real aggro and boss aim; stopped/dead entry and kill callback boundaries")
 	Audio.quit_cleanly()
+
+func _check_boundaries() -> void:
+	for mode in ["normal", "result", "epoch", "dead", "stopped", "dead_entry", "stopped_entry"]:
+		var b = Battle.instantiate()
+		root.add_child(b)
+		b.set_process(false)
+		var c = b._core
+		c.set_process(false)
+		c.foes.clear()
+		c.kill.disconnect(b._on_core_kill) # 排除升级回复，只测镜像吸血。
+		c.kill_heal = 0.0
+		c.hero["hp_max"] = 1000.0
+		c.hero["hp"] = 100.0
+		c._spawn_foe()
+		var f: Dictionary = c.foes.back()
+		f.merge({"hp": 10.0, "hp_max": 1000.0, "shield": false}, true)
+		b._curio_id = "tongjing"
+		b._curio_lv = 5
+		b._curio_cd = 0.0
+		b._curio_tick_tongjing()
+		assert(b._minions.size() == 1)
+		var kills: int = c.kills_total
+		var callback_floats: Array = []
+		c.kill.connect(func(_n):
+			if mode == "result": b._end_run(false)
+			elif mode == "epoch": c.clear_enemy_attacks()
+			elif mode == "dead": c.hero["hp"] = 0.0
+			elif mode == "stopped": c.running = false
+			callback_floats.append(c._floats.size()))
+		if mode == "dead_entry": c.hero["hp"] = 0.0
+		elif mode == "stopped_entry": c.running = false
+		b._curio_mirror_hit(f, 100.0)
+		if mode.ends_with("_entry"):
+			assert(f["hp"] == 10.0 and c.kills_total == kills and callback_floats.is_empty())
+		else:
+			assert(f["hp"] == 0.0 and c.kills_total == kills + 1 and callback_floats.size() == 1)
+			if mode == "normal":
+				assert(c.hero["hp"] == 101.0 and c._floats.size() > callback_floats[0])
+			else:
+				assert(c.hero["hp"] == (0.0 if mode == "dead" else 100.0))
+				assert(c._floats.size() == callback_floats[0])
+		b.queue_free()
+		await process_frame
