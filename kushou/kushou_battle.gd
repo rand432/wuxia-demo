@@ -119,6 +119,7 @@ signal coin(n: int)
 #   因为战场的 clip_contents 把画面裁在框里，钱要飞出框到 HUD 上，只能在框外画。
 signal coin_drop(amount: int, pos: Vector2)
 signal kill(n: int)
+signal foe_defeated(foe: Dictionary) # 确认死亡后的单次事件，不含撤场和不死复活。
 signal hero_down()
 signal boss_arrived(tier: int)
 signal delayed_land(pos: Vector2, elem: String)   # 延迟技落点（外壳在这里挂 pixelfx）
@@ -2228,6 +2229,7 @@ func _kill_foe(f: Dictionary) -> void:
 		return
 	# 在连锁和奖励信号之前标记，防止同帧重复调用或回调重入。
 	f["_death_settled"] = true
+	foe_defeated.emit(f)
 	# 挑战宝箱也借用 boss 字段表示大体型，仅挑战类别4算首领。
 	if bool(f.get("boss", false)) and (not f.has("chal") or int(f["chal"]) == 4):
 		boss_slain.emit()

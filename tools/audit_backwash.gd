@@ -30,7 +30,7 @@ func _run() -> void:
 		c._hero_pending = old
 		c._hero_pending_t = 0.1
 		c.queue_delayed(c.hero_pos.x, c.hero_pos.y, 100, 1000, "真实")
-		b._rtype_seen = {123: "coin"}
+		old["rtype"] = "coin"
 		b._q_activate(b.QUEST_POOL.filter(func(q): return q["kind"] == "statue")[0])
 		var kills: int = b._kills
 		var money: int = b._wen
@@ -38,7 +38,7 @@ func _run() -> void:
 		b._backwash()
 		assert(c.wave == 15 and c._enemy_attack_epoch == epoch + 1 and c.foes.is_empty() and c._delayed.is_empty())
 		assert(not c.boss_required and not c.boss_alive and not c.boss_spawned_once and not b._boss_spawned)
-		assert(c._hero_pending.is_empty() and c._hero_pending_t == -1.0 and b._rtype_seen.is_empty())
+		assert(c._hero_pending.is_empty() and c._hero_pending_t == -1.0)
 		assert(b._q_cur.is_empty() and b._q_fail == 1 and b._kills == kills and b._wen == money and not old.get("_death_settled", false))
 		c._wave_spawned = c._wave_quota
 		assert(c.wave_cleared())

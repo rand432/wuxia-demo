@@ -732,6 +732,7 @@ func _build_field() -> void:
 	_core.coin.connect(_on_core_coin)
 	_core.coin_drop.connect(_on_coin_drop)   # v6：钱怪/匪首掉的真钱
 	_core.kill.connect(_on_core_kill)
+	_core.foe_defeated.connect(_on_foe_defeated)
 	_core.chal_drop.connect(_on_chal_drop)
 	_core.guard_broken.connect(func() -> void: _q_fail_kind("guard"))
 	_core.champion_down.connect(func() -> void: _q_done_kind("champion"))
@@ -1237,6 +1238,9 @@ func _curio_on_wood_expired(foe: Dictionary) -> void:
 func _curio_on_attack() -> void:
 	if _run_over or _curio_id != "tongqianjian" or _core == null:
 		return
+	var epoch: int = _core._enemy_attack_epoch
+	if not _skill_batch_active(epoch):
+		return
 	_dart_n += 1
 	var shots := 1
 	if _curio_lv >= 3 and _dart_n % 3 == 0:
@@ -1244,6 +1248,8 @@ func _curio_on_attack() -> void:
 	var reach: float = _core.HERO_REACH + (200.0 if _curio_lv >= 4 else 120.0)
 	var fired := false
 	for _shot in shots:
+		if not _skill_batch_active(epoch):
+			return
 		var best: Dictionary = {}
 		var bd := 1e9
 		for f_v in _core.foes:
@@ -1284,18 +1290,24 @@ func _curio_on_attack() -> void:
 					next = foe
 			if not next.is_empty():
 				targets.append(next)
+		var last_hit: Dictionary = {}
 		for i in range(targets.size()):
+			if not _skill_batch_active(epoch):
+				return
 			var target: Dictionary = targets[i]
-			if float(target.get("hp", 0.0)) <= 0.0 or float(target.get("dying", 0.0)) > 0.0:
+			if not _core.foes.has(target) or bool(target.get("_death_settled", false)) or float(target.get("hp", 0.0)) <= 0.0 or float(target.get("dying", 0.0)) > 0.0:
 				continue
 			var mul := (0.45 if _curio_lv >= 2 else 0.35) * (0.5 if i > 0 else 1.0)
 			_core._apply_dmg(target, float(_core.hero.get("atk", 12.0)) * mul, "物理")
+			last_hit = target
 			_spawn_pfx("impacts/crit-hit", _core.position + Vector2(float(target["x"]), float(target["y"]) - 16.0), 0.5, "gold", 1.9)
 			if float(target.get("hp", 0.0)) <= 0.0:
 				_core._kill_foe(target)
-		var last: Dictionary = targets.back()
-		_curio_dart_trace(origin, Vector2(float(last["x"]), float(last["y"])))
-		Aud.sfx("dart", -14.0, 1.1)
+				if not _skill_batch_active(epoch):
+					return
+		if not last_hit.is_empty():
+			_curio_dart_trace(origin, Vector2(float(last_hit["x"]), float(last_hit["y"])))
+			Aud.sfx("dart", -14.0, 1.1)
 
 func _curio_dart_trace(origin: Vector2, target: Vector2) -> void:
 	var line := Line2D.new()
@@ -2552,18 +2564,8 @@ func _process(_delta: float) -> void:
 					_spawn_pfx("holy/sunburst", _hero_screen(), 1.05, "gold", 1.9)
 					_core._shake = maxf(float(_core._shake), 7.0)
 				_last_combo = cb
-		_tick_chal(_delta)
-		_q_tick(_delta)
-		_tick_minions(_delta)
-		_tick_burn(_delta)
-		_tick_poison(_delta)
-		_tick_vuln(_delta)
-		_tick_aura(_delta)
-		_tick_stone(_delta)
-		_tick_paper(_delta)
-		_tick_rtype()
-		_tick_shards(_delta)
-		_tick_knock(_delta)
+		if not _tick_battle_effects(_delta):
+			return
 		if _hero_token != null:
 			_hero_token.position = _core.position + _core.hero_pos
 			var hpr_tok := float(_core.hero.get("hp", 0.0)) / maxf(1.0, float(_core.hero.get("hp_max", 1.0)))
@@ -5321,11 +5323,14 @@ func _spawn_pfx(effect: String, pos: Vector2, s := 1.0, pal := "", lig := 1.0, s
 func _on_hero_attack() -> void:
 	if _run_over or _core == null or not _core.running:
 		return
+	var epoch: int = _core._enemy_attack_epoch
+	if not _skill_batch_active(epoch):
+		return
 	_play_attack_fx(true)
 	_attack_count += 1
 	# 家传追加攻击由hero_strike_resolved在主刀命中后结算，起手仅计攻击事件。
 	_curio_on_attack()                       # 奇物：铜钱剑（普攻附带钱镖）
-	if _run_over or not _core.running:
+	if not _skill_batch_active(epoch):
 		return
 	_trigger_combos("每次攻击")
 	if _attack_count % 5 == 0:
@@ -6166,7 +6171,25 @@ func _live_foes() -> Array:
 		return da < db)
 	return out
 
+const BATTLE_EFFECT_TICKS := [&"_tick_chal", &"_q_tick", &"_tick_minions", &"_tick_burn", &"_tick_poison", &"_tick_vuln", &"_tick_aura", &"_tick_stone", &"_tick_paper", &"_tick_shards", &"_tick_knock"]
+
+func _tick_battle_effects(dt: float) -> bool:
+	if _core == null:
+		return false
+	var epoch: int = _core._enemy_attack_epoch
+	for tick in BATTLE_EFFECT_TICKS:
+		if not _skill_batch_active(epoch):
+			return false
+		call(tick, dt)
+	return _skill_batch_active(epoch)
+
 func _apply_burn(f: Dictionary, stacks: float, dur: float) -> void:
+	if _core == null or stacks <= 0.0 or dur <= 0.0:
+		return
+	if not _skill_batch_active(_core._enemy_attack_epoch) or not _core.foes.has(f) or float(f.get("hp", 0.0)) <= 0.0 or float(f.get("dying", 0.0)) > 0.0 or bool(f.get("_death_settled", false)):
+		return
+	if float(f.get("burn", 0.0)) <= 0.0:
+		f["burn_acc"] = 0.0
 	f["burn"] = float(f.get("burn", 0.0)) + stacks
 	f["burn_t"] = maxf(float(f.get("burn_t", 0.0)), dur)
 
@@ -6176,26 +6199,48 @@ func _burn_dps() -> float:
 func _tick_burn(dt: float) -> void:
 	if _core == null:
 		return
-	for f_v in _core.foes:
+	var epoch: int = _core._enemy_attack_epoch
+	if not _skill_batch_active(epoch) or dt <= 0.0:
+		return
+	for f_v in _core.foes.duplicate():
+		if not _skill_batch_active(epoch):
+			return
 		var f: Dictionary = f_v
-		var st := float(f.get("burn", 0.0))
-		if st <= 0.0:
+		if not _core.foes.has(f) or float(f.get("burn", 0.0)) <= 0.0 or float(f.get("hp", 0.0)) <= 0.0 or float(f.get("dying", 0.0)) > 0.0 or bool(f.get("_death_settled", false)):
 			continue
-		if float(f.get("hp", 0.0)) <= 0.0:
-			continue
-		f["burn_acc"] = float(f.get("burn_acc", 0.0)) + dt
-		while float(f["burn_acc"]) >= 1.0:
-			f["burn_acc"] = float(f["burn_acc"]) - 1.0
-			_core._apply_dmg(f, _burn_dps() * st, "火系")
-			_core._push_float(float(f["x"]), float(f["y"]) - 30.0, "烧", Color(0.88, 0.45, 0.20))
-			if randf() < 0.6:
-				_spawn_pfx("impacts/hit-spark", _core.position + Vector2(float(f["x"]), float(f["y"]) - 18.0), 0.55, "fire", 1.2)
-		f["burn_t"] = float(f.get("burn_t", 0.0)) - dt
-		if float(f["burn_t"]) <= 0.0 and not _burn_unlimited:
-			f["burn"] = maxf(0.0, st - 1.0)
-			f["burn_t"] = 4.0
-			if float(f["burn"]) <= 0.0:
-				f.erase("burn")
+		var remaining := dt
+		var elapsed := 0.0
+		while remaining > 0.0 and float(f.get("burn", 0.0)) > 0.0:
+			var life := remaining if _burn_unlimited else maxf(0.0, float(f.get("burn_t", 4.0)))
+			var step := minf(remaining, life)
+			remaining -= step
+			elapsed += step
+			if not _burn_unlimited:
+				f["burn_t"] = life - step
+			f["burn_acc"] = float(f.get("burn_acc", 0.0)) + step
+			while float(f["burn_acc"]) + 0.000000001 >= 1.0:
+				f["burn_acc"] = maxf(0.0, float(f["burn_acc"]) - 1.0)
+				var at_t := elapsed - float(f["burn_acc"])
+				var vuln := 1.0 + float(f.get("vuln_pct", 0.0)) / 100.0 if float(f.get("vuln_t", 0.0)) > at_t else 1.0
+				_core._apply_dmg(f, _burn_dps() * float(f["burn"]), "火系", -1, vuln)
+				_core._push_float(float(f["x"]), float(f["y"]) - 30.0, "烧", Color(0.88, 0.45, 0.20))
+				if randf() < 0.6:
+					_spawn_pfx("impacts/hit-spark", _core.position + Vector2(float(f["x"]), float(f["y"]) - 18.0), 0.55, "fire", 1.2)
+				if float(f.get("hp", 0.0)) <= 0.0:
+					_core._kill_foe(f)
+				if not _skill_batch_active(epoch):
+					return
+				if float(f.get("hp", 0.0)) <= 0.0 or not _core.foes.has(f):
+					break
+			if float(f.get("hp", 0.0)) <= 0.0 or not _core.foes.has(f):
+				break
+			if not _burn_unlimited and float(f["burn_t"]) <= 0.000000001:
+				f["burn"] = maxf(0.0, float(f["burn"]) - 1.0)
+				f["burn_t"] = 4.0
+		if float(f.get("burn", 0.0)) <= 0.0:
+			f.erase("burn")
+			f.erase("burn_t")
+			f.erase("burn_acc")
 
 func _cast_fire() -> void:
 	var m: Dictionary = _anc_mod.get("jicanghai", {})
@@ -6244,7 +6289,6 @@ func _backwash() -> void:
 	# 回到普通波时不能沿用末波的首领门槛，也不能让旧场上的攻击追到重刷波。
 	if not _q_cur.is_empty() and str(_q_cur.get("kind", "")) in ["statue", "zone", "guard", "champion", "elite"]:
 		_q_finish("fail")
-	_rtype_seen.clear()
 	_core.foes.clear()
 	_core.clear_enemy_attacks()
 	_core._hero_pending = {}
@@ -7373,10 +7417,8 @@ func _push_run_mods() -> void:
 
 # ============================================================
 # 险系：怪物类型（文钱怪 / 灵晶怪）+ 宝物·首领奖励加成
-#   额外刷出来的怪打 rtype 标签；死了按类型给奖励（用 _tid 消失来判定）
+#   额外刷出来的怪打 rtype 标签；只在核心确认死亡时结算。
 # ============================================================
-var _rtype_seen: Dictionary = {}
-
 func _spawn_typed_foes() -> void:
 	if _core == null:
 		return
@@ -7393,23 +7435,12 @@ func _tag_last(rt: String) -> void:
 	var f: Dictionary = _core.foes[_core.foes.size() - 1]
 	f["rtype"] = rt
 
-func _tick_rtype() -> void:
-	if _core == null:
+func _on_foe_defeated(foe: Dictionary) -> void:
+	if _run_over or _core == null or not _core.foes.has(foe) or not bool(foe.get("_death_settled", false)) or bool(foe.get("_rtype_rewarded", false)):
 		return
-	var alive := {}
-	for f_v in _core.foes:
-		var f: Dictionary = f_v
-		var rt := str(f.get("rtype", ""))
-		if rt == "":
-			continue
-		var tid := int(f.get("_tid", 0))
-		alive[tid] = rt
-		if not _rtype_seen.has(tid):
-			_rtype_seen[tid] = rt
-	for tid in _rtype_seen.keys():
-		if not alive.has(tid):
-			_grant_rtype(str(_rtype_seen[tid]))
-			_rtype_seen.erase(tid)
+	# 在发放前记账，避免奖励/击杀信号重入重复发放；不依赖视觉_tid或尸体消失。
+	foe["_rtype_rewarded"] = true
+	_grant_rtype(str(foe.get("rtype", "")))
 
 func _grant_rtype(rt: String) -> void:
 	match rt:
