@@ -36,7 +36,7 @@ func _build_all() -> void:
 	UI.bg(self)
 	UI.app_bar(self, GameState.player_name, "玄品", func() -> void: UI.open_settings(self))
 	UI.page_head(self, "角 色", func() -> void:
-		get_tree().change_scene_to_file("res://menu/main_home.tscn"))
+		UI.navigate(self, "res://menu/main_home.tscn"))
 	_build_figure()
 	_build_attr()
 	_build_bag()
@@ -143,6 +143,7 @@ func _build_slot(key: String, rect: Rect2) -> void:
 	root.add_child(hit)
 
 func _on_slot(key: String) -> void:
+	if not UI.navigation_available(self): return
 	Audio.sfx("ui_click", -8.0)
 	var it: Dictionary = FD.equipped.get(key, {})
 	if it.is_empty():
@@ -331,16 +332,17 @@ func _bag_cell(it: Dictionary) -> Control:
 
 # ---------------- 底栏 / 提示 ----------------
 func _on_dock(key: String) -> void:
+	if not UI.navigation_available(self): return
 	Audio.sfx("ui_click", -6.0)
 	match key:
 		"role":
 			pass
 		"god":
-			get_tree().change_scene_to_file("res://menu/partner_home.tscn")
+			UI.navigate(self, "res://menu/partner_home.tscn")
 		"curio":
-			get_tree().change_scene_to_file("res://menu/curio_home.tscn")
+			UI.navigate(self, "res://menu/curio_home.tscn")
 		"start":
-			get_tree().change_scene_to_file("res://menu/main_home.tscn")
+			UI.navigate(self, "res://menu/main_home.tscn")
 
 var _toast: Label = null
 var _toast_seq := 0

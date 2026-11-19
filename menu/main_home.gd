@@ -52,6 +52,7 @@ func _build_head() -> void:
 	_title_lb = UI.label(self, "", Vector2(72, 98), Vector2(576, 48), 30, P.INK, HORIZONTAL_ALIGNMENT_CENTER)
 
 func _change_stage(d: int) -> void:
+	if not UI.navigation_available(self): return
 	LevelState.ensure_loaded()
 	var n := clampi(LevelState.max_unlocked, 1, 10)
 	_stage = wrapi(_stage + d, 0, n)
@@ -69,6 +70,7 @@ func _build_tabs() -> void:
 		b.focus_mode = Control.FOCUS_NONE
 		b.add_theme_font_size_override("font_size", 24)
 		b.pressed.connect(func() -> void:
+			if not UI.navigation_available(self): return
 			Audio.sfx("ui_click", -8.0)
 			if i == 1:
 				# 精英难度尚未开放：保持普通，提示一下，避免死按钮
@@ -162,10 +164,13 @@ func _unroll(delay: float) -> void:
 	if delay > 0.0:
 		tw.tween_interval(delay)
 	tw.tween_property(_art_clip, "size:y", ART_RECT.size.y, 0.85).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-	tw.tween_callback(func() -> void:
-		var tw2 := create_tween().set_parallel(true)
-		tw2.tween_property(_arrow_l, "modulate:a", 1.0, 0.25)
-		tw2.tween_property(_arrow_r, "modulate:a", 1.0, 0.25))
+	tw.tween_callback(_reveal_arrows)
+
+func _reveal_arrows() -> void:
+	if not UI.navigation_available(self): return
+	var tw := create_tween().set_parallel(true)
+	tw.tween_property(_arrow_l, "modulate:a", 1.0, 0.25)
+	tw.tween_property(_arrow_r, "modulate:a", 1.0, 0.25)
 
 # ---------------- 关卡信息 ----------------
 var _info_vals: Array = []
@@ -187,10 +192,11 @@ func _build_start_btn() -> void:
 		_start_btn.z_index = 20
 
 func _start_level() -> void:
+	if not UI.navigation_available(self): return
 	Audio.sfx("ui_click", -6.0)
 	LevelState.ensure_loaded()
 	LevelState.current_level = _stage + 1
-	get_tree().change_scene_to_file("res://menu/loading.tscn")
+	UI.navigate(self, "res://menu/loading.tscn")
 
 # 底栏「开始」在主界面只提醒：已经在关卡界面，用下方大按钮开始
 func _pulse_start_btn() -> void:
@@ -203,14 +209,15 @@ func _pulse_start_btn() -> void:
 
 # ---------------- 底栏 ----------------
 func _on_dock(key: String) -> void:
+	if not UI.navigation_available(self): return
 	Audio.sfx("ui_click", -6.0)
 	match key:
 		"role":
-			get_tree().change_scene_to_file("res://menu/character_home.tscn")
+			UI.navigate(self, "res://menu/character_home.tscn")
 		"god":
-			get_tree().change_scene_to_file("res://menu/partner_home.tscn")
+			UI.navigate(self, "res://menu/partner_home.tscn")
 		"curio":
-			get_tree().change_scene_to_file("res://menu/curio_home.tscn")
+			UI.navigate(self, "res://menu/curio_home.tscn")
 		"start":
 			# 底栏「开始」只负责来到关卡界面；真正开始用下方大按钮
 			_pulse_start_btn()

@@ -5,6 +5,25 @@ extends RefCounted
 #   三页（主界面 / 装备 / 请神）共用；只画形状，文字一律用 Label。
 # ============================================================
 const P := preload("res://shared/ui_pal.gd")
+
+static func navigation_available(page: Control) -> bool:
+	return is_instance_valid(page) and page.is_inside_tree() and not page.is_queued_for_deletion() and not bool(page.get_meta("scene_changing", false))
+
+static func navigate(page: Control, path: String) -> Error:
+	if not navigation_available(page): return ERR_BUSY
+	if not ResourceLoader.exists(path): return ERR_FILE_NOT_FOUND
+	page.set_meta("scene_changing", true)
+	var err := page.get_tree().change_scene_to_file(path)
+	if err != OK: page.set_meta("scene_changing", false)
+	return err
+
+static func navigate_packed(page: Control, scene: PackedScene) -> Error:
+	if not navigation_available(page): return ERR_BUSY
+	if scene == null: return ERR_INVALID_PARAMETER
+	page.set_meta("scene_changing", true)
+	var err := page.get_tree().change_scene_to_packed(scene)
+	if err != OK: page.set_meta("scene_changing", false)
+	return err
 const TEX_PAPER := preload("res://assets/art/ui/tile_paper.png")
 
 const W := 720.0
@@ -286,6 +305,7 @@ class Chevron extends Control:
 		]), Color(1.0, 0.88, 0.56, 0.75 + 0.25 * pulse))
 # ---------------- 设置弹窗（三页共用） ----------------
 static func open_settings(root: Control) -> void:
+	if not navigation_available(root): return
 	var old := root.get_node_or_null("SettingsOv")
 	if old != null:
 		return
@@ -315,16 +335,26 @@ static func open_settings(root: Control) -> void:
 	var bv := label(p, str(int(AudioRef.bgm_volume() * 100)) + "%", Vector2(250, 100), Vector2(90, 36), 20, P.INK, HORIZONTAL_ALIGNMENT_CENTER, p)
 	var sv := label(p, str(int(AudioRef.sfx_volume() * 100)) + "%", Vector2(250, 170), Vector2(90, 36), 20, P.INK, HORIZONTAL_ALIGNMENT_CENTER, p)
 	button(p, "－", Rect2(356, 96, 56, 44), 22, P.PAPER_HI, P.INK, func() -> void:
+		if not _settings_current(root, ov): return
 		AudioRef.set_bgm_volume(clampf(AudioRef.bgm_volume() - 0.1, 0.0, 1.0))
 		bv.text = str(int(AudioRef.bgm_volume() * 100)) + "%", P.LINE, 1, 18, p)
 	button(p, "＋", Rect2(422, 96, 56, 44), 22, P.PAPER_HI, P.INK, func() -> void:
+		if not _settings_current(root, ov): return
 		AudioRef.set_bgm_volume(clampf(AudioRef.bgm_volume() + 0.1, 0.0, 1.0))
 		bv.text = str(int(AudioRef.bgm_volume() * 100)) + "%", P.LINE, 1, 18, p)
 	button(p, "－", Rect2(356, 166, 56, 44), 22, P.PAPER_HI, P.INK, func() -> void:
+		if not _settings_current(root, ov): return
 		AudioRef.set_sfx_volume(clampf(AudioRef.sfx_volume() - 0.1, 0.0, 1.0))
 		sv.text = str(int(AudioRef.sfx_volume() * 100)) + "%", P.LINE, 1, 18, p)
 	button(p, "＋", Rect2(422, 166, 56, 44), 22, P.PAPER_HI, P.INK, func() -> void:
+		if not _settings_current(root, ov): return
 		AudioRef.set_sfx_volume(clampf(AudioRef.sfx_volume() + 0.1, 0.0, 1.0))
 		sv.text = str(int(AudioRef.sfx_volume() * 100)) + "%", P.LINE, 1, 18, p)
 	button(p, "关 闭", Rect2(180, 282, 180, 52), 20, P.PAPER_HI, P.INK,
-		func() -> void: ov.queue_free(), P.LINE, 1, 20, p)
+		func() -> void:
+			if not _settings_current(root, ov): return
+			ov.hide()
+			ov.queue_free(), P.LINE, 1, 20, p)
+
+static func _settings_current(page: Control, overlay: Control) -> bool:
+	return navigation_available(page) and is_instance_valid(overlay) and not overlay.is_queued_for_deletion() and page.get_node_or_null("SettingsOv") == overlay

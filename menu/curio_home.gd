@@ -162,6 +162,7 @@ func _build_detail() -> void:
 	UI.label(self, "点中间卡片 → 进阶路线 · 点两侧卡片 → 切换奇物", Vector2(0, 1112), Vector2(720, 26), 17, P.DIM, HORIZONTAL_ALIGNMENT_CENTER)
 
 func _on_equip() -> void:
+	if not UI.navigation_available(self): return
 	var cur := str(_ids[_sel])
 	Audio.sfx("ui_click", -8.0)
 	var success := GameState.curio_unequip() if GameState.curio_id == cur else GameState.curio_equip(cur)
@@ -261,16 +262,17 @@ func _close_pop(expected: Control = null) -> void:
 	_pop = null
 
 func _on_dock(key: String) -> void:
+	if not UI.navigation_available(self): return
 	if key == "curio":
 		return
 	Audio.sfx("ui_click", -6.0)
 	match key:
 		"role":
-			get_tree().change_scene_to_file("res://menu/character_home.tscn")
+			UI.navigate(self, "res://menu/character_home.tscn")
 		"god":
-			get_tree().change_scene_to_file("res://menu/partner_home.tscn")
+			UI.navigate(self, "res://menu/partner_home.tscn")
 		"start":
-			get_tree().change_scene_to_file("res://menu/main_home.tscn")
+			UI.navigate(self, "res://menu/main_home.tscn")
 
 # ---------------- 子控件 ----------------
 class CurioCard extends Control:

@@ -564,16 +564,17 @@ func grade_cn(q: int) -> String:
 
 # ---------------- 热区（顶栏 / 底栏） ----------------
 func _build_hot() -> void:
-	_hot(Rect2(10, 6, 240, 76), func() -> void: get_tree().change_scene_to_file("res://menu/main_home.tscn"))
+	_hot(Rect2(10, 6, 240, 76), func() -> void: UI.navigate(self, "res://menu/main_home.tscn"))
 
 func _on_dock(key: String) -> void:
+	if not UI.navigation_available(self): return
 	match key:
 		"start":
-			get_tree().change_scene_to_file("res://menu/main_home.tscn")
+			UI.navigate(self, "res://menu/main_home.tscn")
 		"role":
-			get_tree().change_scene_to_file("res://menu/character_home.tscn")
+			UI.navigate(self, "res://menu/character_home.tscn")
 		"curio":
-			get_tree().change_scene_to_file("res://menu/curio_home.tscn")
+			UI.navigate(self, "res://menu/curio_home.tscn")
 
 func _hot(rect: Rect2, cb: Callable) -> void:
 	var b := Button.new()

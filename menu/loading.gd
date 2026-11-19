@@ -2,10 +2,12 @@ extends Control
 # 战斗加载页：线程加载 battle_ui，加载完直接切（稳定版，不再自己挂战斗）
 const BATTLE := "res://kushou/battle_ui.tscn"
 const FONT := preload("res://fonts/ink.ttf")
+const UI := preload("res://shared/ui_kit.gd")
 var _fill: ColorRect = null
 var _pct: Label = null
 var _tip: Label = null
 var _done := false
+var _requesting := false
 var _recovery: HBoxContainer
 
 func _ready() -> void:
@@ -64,23 +66,35 @@ func _ready() -> void:
 		if caption == "重试":
 			button.pressed.connect(_start_loading)
 		else:
-			button.pressed.connect(func() -> void: get_tree().change_scene_to_file("res://menu/main_home.tscn"))
+			button.pressed.connect(_return_home)
 	_start_loading()
 
 func _start_loading() -> void:
+	if not UI.navigation_available(self) or _requesting: return
 	_done = false
+	_requesting = true
 	_recovery.hide()
+	_fill.size.x = 0.0
+	_pct.text = "0%"
 	_tip.text = "正在踏入江湖…"
-	if ResourceLoader.load_threaded_request(BATTLE, "", true) != OK:
+	if _request_battle() != OK:
 		_loading_failed()
+
+func _request_battle() -> Error:
+	return ResourceLoader.load_threaded_request(BATTLE, "", true)
+
+func _return_home() -> void:
+	if not _done or not _recovery.visible: return
+	UI.navigate(self, "res://menu/main_home.tscn")
 
 func _loading_failed() -> void:
 	_done = true
+	_requesting = false
 	_tip.text = "加载失败，请重试或返回主页"
 	_recovery.show()
 
 func _process(_delta: float) -> void:
-	if _done:
+	if _done or not UI.navigation_available(self):
 		return
 	var prog: Array = []
 	var st := ResourceLoader.load_threaded_get_status(BATTLE, prog)
@@ -89,8 +103,9 @@ func _process(_delta: float) -> void:
 	_pct.text = "%d%%" % int(clampf(v, 0.0, 1.0) * 100.0)
 	if st == ResourceLoader.THREAD_LOAD_LOADED:
 		_done = true
+		_requesting = false
 		var ps: PackedScene = ResourceLoader.load_threaded_get(BATTLE)
-		if ps == null or get_tree().change_scene_to_packed(ps) != OK:
+		if ps == null or UI.navigate_packed(self, ps) != OK:
 			_loading_failed()
 	elif st == ResourceLoader.THREAD_LOAD_FAILED or st == ResourceLoader.THREAD_LOAD_INVALID_RESOURCE:
 		_loading_failed()

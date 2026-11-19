@@ -24,6 +24,7 @@ func _battle():
 	c.hero["hp"] = 1000.0
 	c.hero["hp_max"] = 1000.0
 	c.hero["lucky"] = 0.0
+	c.attr_set_base("crit", 0.0) # 本专项断言非暴击伤害，不能保留默认5%随机暴击。
 	c._last_quota_wave = c.wave
 	c._wave_spawned = c._wave_quota
 	c._spawn_left = 0

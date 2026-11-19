@@ -119,13 +119,13 @@ func _build() -> void:
 	_hammer_btn = _panel.get_child(_panel.get_child_count() - 1) as Button
 	UI.button(_panel, "收 下", Rect2(494, 1130, 170, 74), 26, Color(0.22, 0.18, 0.14), Color(0.94, 0.91, 0.85),
 		func() -> void:
-			if _closed: return
+			if _closed or not is_inside_tree() or is_queued_for_deletion(): return
 			Audio.sfx("ui_close", -10.0)
 			FD.save_game()
 			_close(), Color(0.47, 0.40, 0.31), 1, 12)
 
 func _refresh() -> void:
-	if _closed:
+	if _closed or not is_inside_tree() or is_queued_for_deletion():
 		return
 	var it := _it()
 	if it.is_empty():
@@ -171,7 +171,7 @@ func _chip_refresh(st: Dictionary) -> void:
 
 # ---------------- 锤 ----------------
 func _hammer() -> void:
-	if _closed or _done:
+	if _closed or _done or not is_inside_tree() or is_queued_for_deletion():
 		return
 	var transaction := FD.hammer(slot_key)
 	if not bool(transaction["ok"]):
@@ -237,7 +237,7 @@ func _show_toast(t: String) -> void:
 
 # ---------------- 道具 ----------------
 func _open_item(nm: String) -> void:
-	if _closed or _done:
+	if _closed or _done or not is_inside_tree() or is_queued_for_deletion():
 		return
 	if _done:
 		return
@@ -272,7 +272,7 @@ func _open_item(nm: String) -> void:
 			func() -> void: _confirm_use(nm, n, ov), Color(0.588, 0.412, 0.102), 2, 10)
 
 func _confirm_use(nm: String, n: int, parent_ov: Control) -> void:
-	if _closed or _done or not is_instance_valid(parent_ov) or parent_ov.is_queued_for_deletion():
+	if _closed or _done or not is_inside_tree() or is_queued_for_deletion() or not is_instance_valid(parent_ov) or parent_ov.is_queued_for_deletion():
 		return
 	var cf := Control.new()
 	cf.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -300,7 +300,7 @@ func _confirm_use(nm: String, n: int, parent_ov: Control) -> void:
 			_use_item(nm), P.GOLD, 2, 10)
 
 func _use_item(nm: String) -> void:
-	if _closed or _done:
+	if _closed or _done or not is_inside_tree() or is_queued_for_deletion():
 		return
 	var result := FD.use_forge_item(slot_key, nm)
 	if not bool(result["ok"]):
@@ -313,7 +313,7 @@ func _use_item(nm: String) -> void:
 	_refresh()
 
 func _close() -> void:
-	if _closed:
+	if _closed or not is_inside_tree() or is_queued_for_deletion():
 		return
 	_closed = true
 	hide()

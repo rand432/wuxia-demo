@@ -70,7 +70,7 @@ func _build() -> void:
 		func() -> void: _close(), Color(0.47, 0.40, 0.31), 1, 8)
 
 func _forge() -> void:
-	if _closed:
+	if _closed or not is_inside_tree() or is_queued_for_deletion():
 		return
 	_closed = true
 	hide()
@@ -79,7 +79,7 @@ func _forge() -> void:
 	_finish_close()
 
 func _sell() -> void:
-	if _closed:
+	if _closed or not is_inside_tree() or is_queued_for_deletion():
 		return
 	if not FD.sell_equipped(slot_key):
 		return
@@ -88,7 +88,7 @@ func _sell() -> void:
 	_close()
 
 func _close() -> void:
-	if _closed:
+	if _closed or not is_inside_tree() or is_queued_for_deletion():
 		return
 	_closed = true
 	hide()
