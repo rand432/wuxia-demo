@@ -18,6 +18,7 @@ const TutorialOverlay := preload("res://kushou/tutorial_overlay.gd")
 const AncestorData := preload("res://kushou/ancestor_data.gd")
 const AttackFx := preload("res://kushou/attack_fx.gd")
 const BlackMarket := preload("res://kushou/black_market.gd")
+const MenuUI := preload("res://shared/ui_kit.gd")
 
 const INK := Color(0.13, 0.12, 0.11)
 const PAPER := Color(0.93, 0.90, 0.82)
@@ -2406,7 +2407,12 @@ func _show_exit(v: bool) -> void:
 		_exit_layer.move_to_front()
 
 func _quit() -> void:
-	get_tree().change_scene_to_file("res://menu/main_home.tscn")
+	if _run_over or not MenuUI.navigation_available(self): return
+	if MenuUI.navigate(self, "res://menu/main_home.tscn") == OK:
+		# 场景会延迟释放；离树后立即拒绝旧奖励和结算回调。
+		_run_over = true
+		if _core != null:
+			_core.running = false
 
 # ---------------- 提示/动画 ----------------
 func _build_toast() -> void:
@@ -2893,14 +2899,15 @@ func _build_result(win: bool) -> void:
 
 # 结果页按钮同时作为保存重试入口，未保存完成时保留当前场景。
 func _leave_result(replay: bool) -> void:
+	if not _run_over or _result_layer == null or not MenuUI.navigation_available(self): return
 	var SaveFile := preload("res://shared/save_file.gd")
 	if SaveFile.recover() != OK:
 		_toast("保存未完成，请释放存储空间后再次点击")
 		return
 	if replay:
-		get_tree().reload_current_scene()
+		MenuUI.navigate(self, scene_file_path)
 	else:
-		get_tree().change_scene_to_file("res://menu/main_home.tscn")
+		MenuUI.navigate(self, "res://menu/main_home.tscn")
 
 func _grant_first_clear(lv: int) -> void:
 	var stored_equipment := 0
