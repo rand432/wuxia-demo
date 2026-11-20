@@ -2332,8 +2332,8 @@ func _kill_foe(f: Dictionary) -> void:
 	if f.has("chal"):
 		var ci := int(f["chal"])
 		if bool(f.get("boss", false)):
-			# v15o：挑战的钱随波次涨
-			coins = int(float([0, 0, 0, 220, 320][clampi(ci, 0, 4)]) * chal_money_mul())
+			# 宝箱无额外文钱；匪首由外壳chal_drop统一结算220及首领/波次倍率。
+			coins = 0
 		else:
 			coins = int(float([24 + randi() % 17, 0, 0, 0, 0][clampi(ci, 0, 4)]) * chal_money_mul())
 		chal_drop.emit(ci, Vector2(float(f["x"]), float(f["y"])))
