@@ -31,6 +31,9 @@ var _peak_foes := 0
 var _peak_nodes := 0
 var _peak_minions := 0
 var _initial_casts := 0
+var _motion_t := 0.0
+var _motion_step := 0
+var _peak_tweens := 0
 
 func _process(delta: float) -> void:
 	if _ui != null and _ui._tut != null and _ui._tut.visible:
@@ -43,6 +46,25 @@ func _process(delta: float) -> void:
 	if not _on:
 		return
 	_t += delta
+	if _flags.has("spring"):
+		_motion_t -= delta
+		if _motion_t <= 0.0:
+			_motion_t = 0.42
+			match _motion_step % 6:
+				0: _ui._show_draw(true)
+				1: _ui._show_draw(false)
+				2:
+					_ui._str_pending = true
+					_ui._str_lv = 5
+					_ui._open_aug_pick()
+				3: _ui._hide_aug_pick()
+				4:
+					_ui._trea_pending = true
+					_ui._roll_trea()
+					_ui._open_trea()
+				5: _ui._hide_trea()
+			_motion_step += 1
+		_peak_tweens = maxi(_peak_tweens, get_tree().get_processed_tweens().size())
 	var now := Time.get_ticks_usec()
 	var frame_ms := float(now - _last_frame_usec) / 1000.0
 	_last_frame_usec = now
@@ -78,6 +100,7 @@ func _ready() -> void:
 		_ui._pick_god("jicanghai")
 		_ui._hide_god_pick()
 	if _flags.has("stress"):
+		_ui._crystal = 100000
 		_ui._core.attr_set_base("hp", 1000000.0)
 		_ui._core.hero["hp_max"] = 1000000.0
 		_ui._core.hero["hp"] = 1000000.0
@@ -122,6 +145,7 @@ func _report() -> void:
 	line += " process_p95_ms=%.2f peak_foes=%d" % [float(_cpu_ms[clampi(int(_cpu_ms.size() * 0.95), 0, _cpu_ms.size() - 1)]), _peak_foes]
 	line += " peak_nodes=%d peak_minions=%d skills=%d" % [_peak_nodes, _peak_minions, _ui._skills.size()]
 	line += " casts=%d" % (_ui.successful_casts - _initial_casts)
+	if _flags.has("spring"): line += " motion_steps=%d peak_tweens=%d" % [_motion_step, _peak_tweens]
 	print("[BENCH] " + line + " at=" + str(_spike_at.slice(0, 40)))
 	var f := FileAccess.open("res://.shots/bench_runs.txt", FileAccess.READ_WRITE if FileAccess.file_exists("res://.shots/bench_runs.txt") else FileAccess.WRITE)
 	if f != null:

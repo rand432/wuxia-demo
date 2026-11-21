@@ -381,6 +381,7 @@ func _show_skill_detail(i: int) -> void:
 		_close_pop(popup)
 	)
 	panel.add_child(close)
+	UI.Motion.present(popup, panel)
 
 func _lbl(t: String, fs: int, col: Color, pos: Vector2) -> Label:
 	var l := Label.new()
@@ -536,6 +537,7 @@ func _show_advance() -> void:
 	close.add_theme_font_size_override("font_size", 20)
 	close.pressed.connect(_close_pop.bind(popup))
 	box.add_child(close)
+	UI.Motion.present(popup, box)
 
 func _popup_current(popup: Control) -> bool:
 	return is_inside_tree() and not is_queued_for_deletion() and is_instance_valid(popup) and _pop == popup and not popup.is_queued_for_deletion()

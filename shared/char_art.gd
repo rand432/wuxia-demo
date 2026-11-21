@@ -35,6 +35,9 @@ static func face(role_id: String) -> Texture2D:
 	return _tex(role_id + "_face")
 
 static func full(role_id: String) -> Texture2D:
+	if role_id == "player":
+		var ink_art := _tex("player_full_ink_v1")
+		if ink_art != null: return ink_art
 	var t := _tex(role_id + "_full_cut")
 	if t != null:
 		return t

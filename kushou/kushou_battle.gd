@@ -273,6 +273,8 @@ func _boss_pick(tier: int) -> Dictionary:
 const FOE_NAMES := ["狱狼", "疯牛", "毒蝎", "牢鼠"]
 
 var hide_units := true
+var show_combo_counter := true # 接入战斗外壳时使用外壳的清晰连斩读数。
+var show_basic_hit_numbers := true # 外壳已有普攻飘字时不重复绘制。
 # v6：闪避下线（设计稿）—— 怪打人必中；命中率补偿见 BASE_FOE_ATK
 var hero := {"atk": 12.0, "hp": 200.0, "hp_max": 200.0, "mp": 100.0, "mp_max": 100.0,
 	"aspd": 1.0, "crit": 0.05, "cut": 0.0, "dmg_pct": 0.0}
@@ -1825,9 +1827,10 @@ func _hero_strike(tgt: Dictionary) -> void:
 		h["hp"] = float(h["hp"])                     # 减伤已在 _apply_dmg 里算过
 		h["flash"] = (0.30 if wide else (0.22 if heavy else 0.16))
 		h["kb"] = (14.0 if not crit else 24.0) * (1.6 if heavy else 1.0) * (1.5 if is_extra else 1.0)
-		_push_float(float(h["x"]), float(h["y"]) - 26.0, str(int(dmg)),
-			(Color(1.0, 0.72, 0.30) if is_extra else (GOLD if crit else Color(0.96, 0.95, 0.92))),
-			crit or heavy or is_extra)
+		if show_basic_hit_numbers:
+			_push_float(float(h["x"]), float(h["y"]) - 26.0, str(int(dmg)),
+				(Color(1.0, 0.72, 0.30) if is_extra else (GOLD if crit else Color(0.96, 0.95, 0.92))),
+				crit or heavy or is_extra)
 		if is_extra:
 			_bursts.append({"x": float(h["x"]), "y": float(h["y"]) - 18.0, "t": 0.0,
 				"col": Color(1.0, 0.74, 0.34), "scale": 1.25})
@@ -5843,7 +5846,7 @@ func _draw() -> void:
 		draw_string(ThemeDB.fallback_font, Vector2(float(fl["x"]) - 60.0, float(fl["y"])), str(fl["txt"]),
 			HORIZONTAL_ALIGNMENT_CENTER, 120.0, fs, Color(c.r, c.g, c.b, a))
 	# 连杀：屏幕中上那行大字（3 连以上才喊）
-	if _combo >= 3 and _combo_t > 0.0:
+	if show_combo_counter and _combo >= 3 and _combo_t > 0.0:
 		var k := clampf(_combo_t / 1.4, 0.0, 1.0)
 		var cs := int(round(30.0 + 16.0 * k))
 		draw_string(ThemeDB.fallback_font, Vector2(w * 0.5 - 160.0, 168.0), "连杀 ×" + str(_combo),

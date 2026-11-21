@@ -46,6 +46,8 @@ user:// 下使用 level_state.cfg、progress.cfg、forge.cfg、curio.cfg、audio
 
 **当前优先级已调整为视觉与手感**：先做点击、弹窗、战斗表现与美术，数据类问题后置。参考方向与首批实机动效记录见[视觉与交互方向](docs/视觉与交互方向_2026-11-22.md)，首段无声演示位于`.shots/ui_motion_preview.mp4`。
 
+战斗动效第二批已接入敌人入场、整体受击回弹、死亡墨色消散、伤害字与连斩反馈；10秒受控构筑实机演示位于`.shots/combat_motion_preview.mp4`。人物立绘仍沿用现有素材，后续按新方向制作。
+
 shared/ 为数据、状态、属性与保存；menu/ 为局外页面；kushou/battle_ui.gd 为战斗界面与构筑流程；kushou/kushou_battle.gd 为战斗核心。
 
 [审查记录](docs/当前版本_审查进度.md) 保存修复和证据，按时间先后理解追加记录。

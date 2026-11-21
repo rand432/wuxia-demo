@@ -39,6 +39,7 @@ func open(key: String) -> void:
 	add_child(_panel)
 	_build()
 	_refresh()
+	UI.Motion.present(self, _panel)
 
 func _it() -> Dictionary:
 	return FD.equipped.get(slot_key, {})

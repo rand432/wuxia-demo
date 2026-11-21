@@ -236,6 +236,7 @@ var _boss_veil: ColorRect = null   # 首领登场：压暗
 var _boss_spot: Sprite2D = null    # 首领登场：聚光
 var _boss_name_lb: Label = null    # 首领登场：名字大字
 var _last_combo := 0            # 连杀里程碑用（每 10 连炸一口）
+var _combo_readout: Control
 const PFX_MAX_LIVE := 26          # 同屏特效上限（实测 60fps 有余量，放回 26）
 var _curio_sq = null             # 奇物方块（战场右下，与挑战对称）
 var _curio_cd := 0.0             # 奇物冷却剩余
@@ -723,6 +724,8 @@ func _build_field() -> void:
 	_core.size = Vector2(704, 720)
 	_core.mouse_filter = Control.MOUSE_FILTER_IGNORE   # 战斗没有手动：点击穿透
 	_core.modulate = Color(1, 1, 1, 0.25)
+	_core.show_combo_counter = false
+	_core.show_basic_hit_numbers = false
 	_cam.add_child(_core)
 	_core.setup({"atk": 12.0, "hp_max": 200.0, "mp_max": 100.0})
 	_core.hero["basic_skill_bonus"] = _skill_level_bonus("zhujue") / 100.0
@@ -767,6 +770,11 @@ func _build_field() -> void:
 	_hero_token.position = _core.position + _core.hero_pos
 	_hero_token.z_index = 6
 	_cam.add_child(_hero_token)
+	_combo_readout = ComboReadout.new()
+	_combo_readout.position = Vector2(542, 190)
+	_combo_readout.size = Vector2(160, 58)
+	_combo_readout.z_index = 12
+	add_child(_combo_readout)
 	var hit := Button.new()
 	hit.position = Vector2(312, 710)
 	hit.size = Vector2(96, 96)
@@ -2218,6 +2226,7 @@ func _on_draw_pick(card: DrawCard) -> void:
 	_draw_anim = true
 	var target := Vector2(46 + float(_cards.size() % 5) * 132.0, 870)
 	for other in _draw_cards:
+		MenuUI.Motion.stop(other)
 		if other != card:
 			other.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			var tw0 := create_tween()
@@ -2260,6 +2269,7 @@ func _on_refresh() -> void:
 	_refresh_draw_btn()
 	_draw_anim = true
 	for card in _draw_cards:
+		MenuUI.Motion.stop(card)
 		var tw := create_tween()
 		tw.set_parallel(true)
 		tw.tween_property(card, "scale", Vector2(0.72, 0.72), 0.16)
@@ -2278,15 +2288,8 @@ func _pop_draw_cards() -> void:
 		var card: DrawCard = _draw_cards[i]
 		var base: Vector2 = card.get_meta("base", Vector2(30 + i * 220, 220))
 		card.visible = true
-		card.position = base + Vector2(0, 70)
-		card.scale = Vector2(0.82, 0.82)
-		card.modulate.a = 0.0
 		card.mouse_filter = Control.MOUSE_FILTER_STOP
-		var tw := create_tween()
-		tw.set_parallel(true)
-		tw.tween_property(card, "position", base, 0.24).set_delay(i * 0.055).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-		tw.tween_property(card, "scale", Vector2.ONE, 0.24).set_delay(i * 0.055)
-		tw.tween_property(card, "modulate:a", 1.0, 0.18).set_delay(i * 0.055)
+		MenuUI.Motion.pop(card, true, i * 0.055, base, (i - 1) * 0.025)
 
 # ---------------- 属性 ----------------
 # v6：详细属性页（kushou/attr_panel.gd），懒加载一次，之后复用
@@ -2568,6 +2571,8 @@ func _process(_delta: float) -> void:
 					_boss_bar.queue_redraw()
 		if _core != null:
 			var cb := int(_core._combo)
+			if _combo_readout != null:
+				_combo_readout.update_combo(cb, float(_core._combo_t))
 			if cb != _last_combo:
 				if cb > _last_combo and cb % 10 == 0:
 					_spawn_pfx("holy/sunburst", _hero_screen(), 1.05, "gold", 1.9)
@@ -3346,15 +3351,8 @@ func _pop_aug_cards() -> void:
 		var card: AugCard = _aug_cards[i]
 		var base: Vector2 = card.get_meta("base", Vector2(30 + i * 220, 220))
 		card.visible = true
-		card.position = base + Vector2(0, 70)
-		card.scale = Vector2(0.82, 0.82)
-		card.modulate.a = 0.0
 		card.mouse_filter = Control.MOUSE_FILTER_STOP
-		var tw := create_tween()
-		tw.set_parallel(true)
-		tw.tween_property(card, "position", base, 0.24).set_delay(i * 0.055).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-		tw.tween_property(card, "scale", Vector2.ONE, 0.24).set_delay(i * 0.055)
-		tw.tween_property(card, "modulate:a", 1.0, 0.18).set_delay(i * 0.055)
+		MenuUI.Motion.pop(card, true, i * 0.055, base, (i - 1) * 0.025)
 
 func _hide_aug_pick() -> void:
 	if _str_layer != null:
@@ -3764,15 +3762,8 @@ func _pop_trea_cards() -> void:
 		var card: AugCard = _trea_cards[i]
 		var base: Vector2 = card.get_meta("base", Vector2(30 + i * 220, 220))
 		card.visible = true
-		card.position = base + Vector2(0, 70)
-		card.scale = Vector2(0.82, 0.82)
-		card.modulate.a = 0.0
 		card.mouse_filter = Control.MOUSE_FILTER_STOP
-		var tw := create_tween()
-		tw.set_parallel(true)
-		tw.tween_property(card, "position", base, 0.24).set_delay(i * 0.055).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-		tw.tween_property(card, "scale", Vector2.ONE, 0.24).set_delay(i * 0.055)
-		tw.tween_property(card, "modulate:a", 1.0, 0.18).set_delay(i * 0.055)
+		MenuUI.Motion.pop(card, true, i * 0.055, base, (i - 1) * 0.025)
 
 func _hide_trea() -> void:
 	if _trea_layer != null:
@@ -3986,13 +3977,7 @@ func _on_trea_abandon() -> void:
 func _layer_in(c) -> void:
 	if c == null:
 		return
-	c.pivot_offset = Vector2(360, 640)
-	c.scale = Vector2(0.965, 0.965)
-	c.modulate.a = 0.0
-	var tw := create_tween().bind_node(c)
-	tw.set_parallel(true)
-	tw.tween_property(c, "modulate:a", 1.0, 0.15)
-	tw.tween_property(c, "scale", Vector2.ONE, 0.24).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	MenuUI.Motion.fade_in(c)
 
 func _show_totals() -> void:
 	if _combined_layer == null:
@@ -5288,6 +5273,32 @@ func _spawn_hit_fx(global_pos: Vector2, radius: float, dmg: int, hero_hit: bool,
 		# 横扫一次打好几只时，普通命中不每只都放（保丝滑，观感也够）；首领战再降一档
 		_spawn_pfx("impacts/hit-spark", impact, 0.72, "", 1.0)
 
+class ComboReadout extends Control:
+	var count := 0
+	var _pulse := 0.0
+	var _remaining := 0.0
+	func _ready() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		visible = false
+	func update_combo(value: int, remaining: float) -> void:
+		_remaining = remaining
+		visible = value >= 3 and remaining > 0.0
+		if count != value:
+			count = value
+			_pulse = 1.0
+			queue_redraw()
+	func _process(dt: float) -> void:
+		if not visible: return
+		_pulse = maxf(0.0, _pulse - dt * 5.5)
+		modulate.a = clampf(_remaining / 0.3, 0.0, 1.0)
+		queue_redraw()
+	func _draw() -> void:
+		var pop := 1.0 + 0.12 * sin(_pulse * PI)
+		draw_set_transform(size * 0.5 * (1.0 - pop), 0.0, Vector2.ONE * pop)
+		draw_line(Vector2(10, 52), Vector2(148, 52), Color(0.66, 0.47, 0.19, 0.65), 1.5, true)
+		draw_string(FONT, Vector2(10, 37), "连斩", HORIZONTAL_ALIGNMENT_LEFT, -1, 23, Color(0.42, 0.30, 0.16))
+		draw_string(FONT, Vector2(72, 39), str(count), HORIZONTAL_ALIGNMENT_LEFT, -1, 42, Color(0.58, 0.22, 0.10))
+
 # 轻量命中火花：程序化放射线，不预烘、不用 pixelfx，0.18 秒自毁
 class ImpactSpark extends Control:
 	var col := Color.WHITE
@@ -5812,6 +5823,13 @@ func _show_god_pick() -> void:
 	_god_layer.visible = true
 	_layer_in(_god_layer)
 	_god_layer.move_to_front()
+	_pop_god_cards()
+
+func _pop_god_cards() -> void:
+	var i := 0
+	for card in _god_root.get_children():
+		MenuUI.Motion.pop(card, true, i * 0.055, card.get_meta("motion_rest_position", card.position), (i - 0.5) * 0.025)
+		i += 1
 
 # 掷这一手（二选一）
 func _roll_god() -> void:
@@ -5869,6 +5887,7 @@ func _on_god_refresh() -> void:
 		_god_reroll -= 1
 	_roll_god()
 	Aud.sfx("ui_click", -10.0)
+	_pop_god_cards()
 
 # 放弃：这一手不要了，换 1 次刷新（下次请神能用）
 func _on_god_abandon() -> void:
@@ -7690,24 +7709,12 @@ func _q_set_pulse(on: bool) -> void:
 func _pop_bounce(c: Control, delay := 0.0) -> void:
 	if c == null:
 		return
-	c.pivot_offset = c.size * 0.5
-	c.scale = Vector2(0.88, 0.88)
-	c.modulate.a = 0.0
-	var tw := create_tween().bind_node(c)   # 节点被 free 时自动收回，避免空转
-	tw.set_parallel(true)
-	tw.tween_property(c, "scale", Vector2.ONE, 0.28).set_delay(delay) \
-		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	tw.tween_property(c, "modulate:a", 1.0, 0.16).set_delay(delay)
+	MenuUI.Motion.pop(c, false, delay)
 
 func _breathe(c: Control) -> void:
 	if c == null:
 		return
-	c.pivot_offset = c.size * 0.5
-	var tw := create_tween().bind_node(c).set_loops()
-	tw.tween_property(c, "scale", Vector2(1.015, 1.015), 1.2) \
-		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	tw.tween_property(c, "scale", Vector2.ONE, 1.2) \
-		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	MenuUI.Motion.breathe(c)
 
 func _q_style(border: Color, w: int) -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()

@@ -7,6 +7,7 @@ extends Control
 # ============================================================
 
 const FONT := preload("res://fonts/ink.ttf")
+const SWORD_ART := preload("res://assets/char/jian_ink_v1.png")
 const INK := Color(0.13, 0.12, 0.11)
 const PAPER := Color(0.93, 0.90, 0.82)
 const GOLD := Color(0.85, 0.66, 0.23)
@@ -16,8 +17,12 @@ var front := false
 var swings: Array = []
 var hits: Array = []
 var nums: Array = []
+var _sword: AtlasTexture
 
 func _ready() -> void:
+	_sword = AtlasTexture.new()
+	_sword.atlas = SWORD_ART
+	_sword.region = Rect2(424, 16, 176, 1508)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	set_process(true)
 
@@ -102,8 +107,10 @@ func _draw_num(n: Dictionary) -> void:
 	if bool(n.get("gold", false)):
 		draw_string(FONT, base + Vector2(2.0, 2.0), txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fsz,
 			Color(INK.r, INK.g, INK.b, 0.75 * a))
+		for offset in [Vector2(-1.5, 0), Vector2(1.5, 0), Vector2(0, -1.5), Vector2(0, 1.5)]:
+			draw_string(FONT, base + offset, txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fsz, Color(1.0, 0.86, 0.47, a))
 		draw_string(FONT, base, txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fsz,
-			Color(col.r, col.g, col.b, a))
+			Color(0.43, 0.22, 0.08, a))
 	else:
 		for ox in [-2.0, 0.0, 2.0]:
 			for oy in [-2.0, 0.0, 2.0]:
@@ -147,24 +154,10 @@ func _draw_swing(s: Dictionary) -> void:
 	draw_arc(a, ar - 4.0, a0, a1, 24, Color(INK.r, INK.g, INK.b, alpha * 0.35), 3.0, true)
 
 func _draw_sword(hilt: Vector2, angle: float, length: float, alpha: float, _hero: bool) -> void:
-	var dir := Vector2(sin(deg_to_rad(angle)), -cos(deg_to_rad(angle)))
-	var perp := Vector2(-dir.y, dir.x)
-	var g := hilt + dir * 9.0
-	var tip := hilt + dir * (length + 9.0)
-	var dark := Color(0.13, 0.12, 0.11, alpha)
-	var steel := Color(0.41, 0.41, 0.45, alpha)
-	var edge := Color(0.90, 0.90, 0.92, alpha)
-	draw_colored_polygon(PackedVector2Array([
-		g + perp * 8.6, tip + perp * 2.2, tip - perp * 2.2, g - perp * 8.6
-	]), dark)
-	draw_colored_polygon(PackedVector2Array([
-		g + perp * 7.0, tip + perp * 1.2, tip - perp * 1.2, g - perp * 7.0
-	]), steel)
-	draw_line(g + perp * 1.6, tip + perp * 0.4, edge, 2.0, true)
-	draw_line(hilt + perp * 12.0, hilt - perp * 12.0, dark, 9.0, true)
-	draw_line(hilt + perp * 11.0, hilt - perp * 11.0, Color(GOLD.r, GOLD.g, GOLD.b, alpha), 6.0, true)
-	draw_line(hilt - dir * 2.0, hilt - dir * 18.0, dark, 9.0, true)
-	draw_line(hilt - dir * 4.0, hilt - dir * 16.0, Color(0.23, 0.19, 0.16, alpha), 5.0, true)
-	draw_circle(hilt - dir * 20.0, 5.0, Color(GOLD.r, GOLD.g, GOLD.b, alpha))
-	draw_line(hilt - dir * 18.0, hilt - dir * 26.0 + perp * 9.0,
-		Color(SEAL.r, SEAL.g, SEAL.b, alpha), 3.0, true)
+	if _sword == null: return
+	var height := (length + 9.0) / 0.745
+	# 小尺寸战斗图加宽剑身与护手，保留Q版轮廓可读性。
+	var width := height * 176.0 / 1508.0 * 2.4
+	draw_set_transform(hilt, deg_to_rad(angle))
+	draw_texture_rect(_sword, Rect2(-width * 0.5, -height * 0.745, width, height), false, Color(1, 1, 1, alpha))
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)

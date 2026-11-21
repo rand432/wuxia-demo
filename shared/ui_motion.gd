@@ -77,12 +77,55 @@ static func bind_button(button: Button) -> void:
 	button.add_child(feedback)
 
 static func present(overlay: Control, panel: Control) -> void:
-	var destination := panel.position
-	panel.pivot_offset = panel.size * 0.5
-	panel.scale = Vector2.ONE * 0.94
-	panel.position.y += 18.0
+	pop(panel)
+	fade_in(overlay)
+
+static func fade_in(overlay: Control) -> void:
+	stop(overlay)
 	overlay.modulate.a = 0.0
-	var tween := panel.create_tween().set_parallel(true)
+	overlay.scale = Vector2.ONE
+	var tween := overlay.create_tween()
+	overlay.set_meta("motion_entry", tween)
 	tween.tween_property(overlay, "modulate:a", 1.0, 0.14)
-	tween.tween_property(panel, "position", destination, 0.25).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-	tween.tween_property(panel, "scale", Vector2.ONE, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+static func stop(control: Control) -> void:
+	for key in ["motion_entry", "motion_idle"]:
+		var old = control.get_meta(key) if control.has_meta(key) else null
+		if old is Tween and old.is_valid(): old.kill()
+		if control.has_meta(key): control.remove_meta(key)
+
+static func pop(control: Control, card := false, delay := 0.0, origin := Vector2.INF, tilt := 0.0) -> Tween:
+	stop(control)
+	var destination: Vector2 = control.get_meta("motion_rest_position", control.position) if origin == Vector2.INF else origin
+	control.set_meta("motion_rest_position", destination)
+	control.pivot_offset = control.size * 0.5
+	control.position = destination + Vector2(0, 46.0 if card else 18.0)
+	control.scale = Vector2(0.80, 0.86) if card else Vector2(0.91, 0.94)
+	control.rotation = tilt
+	control.modulate.a = 0.0
+	var tween := control.create_tween().set_parallel(true)
+	control.set_meta("motion_entry", tween)
+	tween.tween_property(control, "position", destination, 0.31).set_delay(delay).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tween.tween_property(control, "rotation", 0.0, 0.30).set_delay(delay).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tween.tween_property(control, "modulate:a", 1.0, 0.12).set_delay(delay)
+	tween.tween_property(control, "scale", Vector2(1.055, 1.025) if card else Vector2(1.025, 1.012), 0.18).set_delay(delay).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tween.tween_property(control, "scale", Vector2(0.99, 0.985), 0.085).set_delay(delay + 0.18).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	tween.tween_property(control, "scale", Vector2.ONE, 0.095).set_delay(delay + 0.265).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	return tween
+
+static func breathe(control: Control) -> void:
+	var entry = control.get_meta("motion_entry") if control.has_meta("motion_entry") else null
+	var begin := _begin_breathe.bind(control)
+	if entry is Tween and entry.is_running():
+		if not entry.finished.is_connected(begin): entry.finished.connect(begin, CONNECT_ONE_SHOT)
+	else:
+		_begin_breathe(control)
+
+static func _begin_breathe(control: Control) -> void:
+	if not is_instance_valid(control) or not control.is_inside_tree() or not control.is_visible_in_tree(): return
+	var old = control.get_meta("motion_idle") if control.has_meta("motion_idle") else null
+	if old is Tween and old.is_valid(): old.kill()
+	var tween := control.create_tween().set_loops()
+	control.set_meta("motion_idle", tween)
+	tween.tween_property(control, "scale", Vector2.ONE * 1.007, 1.2).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	tween.tween_property(control, "scale", Vector2.ONE, 1.2).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)

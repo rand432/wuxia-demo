@@ -27,6 +27,7 @@ func open(key: String) -> void:
 	_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(_root)
 	_build()
+	UI.Motion.present(self, _root)
 
 func _build() -> void:
 	var it: Dictionary = FD.equipped.get(slot_key, {})

@@ -249,6 +249,7 @@ func _open_pop() -> void:
 	close.add_theme_stylebox_override("normal", StyleBoxEmpty.new())
 	close.add_theme_stylebox_override("hover", StyleBoxEmpty.new())
 	close.add_theme_stylebox_override("pressed", StyleBoxEmpty.new())
+	UI.Motion.present(popup, holder)
 
 func _popup_current(popup: Control) -> bool:
 	return is_inside_tree() and not is_queued_for_deletion() and is_instance_valid(popup) and _pop == popup and not popup.is_queued_for_deletion()
