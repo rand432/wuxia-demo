@@ -35,6 +35,11 @@ var _flash := 0.0
 var _death_t := -1.0
 var _sink := 0.0
 var _dir := 1.0
+var _spawn_t := 0.26
+var _hit_t := 0.0
+var _hit_dir := Vector2.RIGHT
+var _hit_strength := 1.0
+const DEATH_DURATION := 0.38
 
 
 func setup(tex: Texture2D, r: float, ring: Color, crop: bool) -> void:
@@ -87,41 +92,44 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	if _death_t >= 0.0:
-		# 死亡：闪两下 → 圆牌与头像一起暗淡、下沉、落幕
 		_death_t += delta
-		var t := _death_t
-		var a := 1.0
-		if t < 0.14:
-			a = 0.12
-		elif t < 0.30:
-			a = 1.0
-		elif t < 0.44:
-			a = 0.12
-		elif t < 0.60:
-			a = 1.0
-		else:
-			var p := clampf((t - 0.60) / 0.45, 0.0, 1.0)
-			a = 1.0 - p
-			_sink = 12.0 * p
-		modulate = Color(0.82, 0.78, 0.72, a)
-		if is_instance_valid(_sprite):
-			_sprite.position = Vector2(0.0, -radius + _sink)
-		if t >= 1.05:
-			visible = false
+		var p := clampf(_death_t / DEATH_DURATION, 0.0, 1.0)
+		modulate = Color(0.68, 0.64, 0.57, pow(1.0 - p, 1.3))
+		_apply_visual_pose(Vector2.ONE * (1.0 + 0.08 * sin(p * PI) - 0.24 * p), _hit_dir * 10.0 * p + Vector2(0, 8.0 * p), 0.12 * p * signf(_hit_dir.x))
+		visible = p < 1.0
 		queue_redraw()
 		return
-	if _pulse > 0.0:
-		_pulse = maxf(0.0, _pulse - delta * 3.6)
-	if _flash > 0.0:
-		_flash = maxf(0.0, _flash - delta * 4.0)
+	_spawn_t = minf(0.26, _spawn_t + delta)
+	_pulse = maxf(0.0, _pulse - delta * 4.5)
+	_flash = maxf(0.0, _flash - delta * 7.0)
+	_hit_t = maxf(0.0, _hit_t - delta / 0.16)
+	var enter := clampf(_spawn_t / 0.26, 0.0, 1.0)
+	var ease := 1.0 + 2.70158 * pow(enter - 1.0, 3.0) + 1.70158 * pow(enter - 1.0, 2.0)
+	var pop := lerpf(0.68, 1.0, ease)
+	var recoil := sin(_hit_t * PI) * _hit_strength
+	var attack := sin(_pulse * PI) * 0.035
+	_apply_visual_pose(Vector2(pop * (1.0 + recoil * 0.08 + attack), pop * (1.0 - recoil * 0.08 + attack)), Vector2(0, 18.0 * (1.0 - enter)) + _hit_dir * recoil * 7.0)
+	modulate = Color(1, 1, 1, lerpf(0.35, 1.0, enter))
 	if is_instance_valid(_sprite):
-		var bump := 1.0 + 0.035 * sin(_pulse * PI)
-		_sprite.scale = Vector2(_base_scale, _base_scale) * bump
-		_sprite.position.x = 0.0
-		var col := Color(1.0, 1.0, 1.0, 1.0)
-		if _flash > 0.0:
-			col = Color(1.0, 0.58, 0.52, 1.0)
-		_sprite.modulate = col
+		_sprite.modulate = Color(1.0, 1.0 - 0.35 * _flash, 1.0 - 0.42 * _flash)
+	if enter < 1.0 or _flash > 0.0 or _hit_t > 0.0 or _pulse > 0.0:
+		queue_redraw()
+
+func _apply_visual_pose(visual_scale: Vector2, offset: Vector2, angle := 0.0) -> void:
+	var center := Vector2(0, -radius)
+	var pose := Transform2D(angle, Vector2.ZERO).scaled(visual_scale)
+	pose.origin = center + offset - pose * center
+	# 显示层变换，脚底坐标、碰撞和目标距离仍由核心管理。
+	RenderingServer.canvas_item_set_transform(get_canvas_item(), get_transform() * pose)
+
+func play_spawn(delay := 0.0) -> void:
+	_spawn_t = -clampf(delay, 0.0, 0.08)
+	modulate.a = 0.35
+	_apply_visual_pose(Vector2.ONE * 0.68, Vector2(0, 18))
+	queue_redraw()
+
+func death_finished() -> bool:
+	return _death_t >= DEATH_DURATION
 
 
 func play_move(_move_id: String = "", _speed := 1.0) -> void:
@@ -129,8 +137,12 @@ func play_move(_move_id: String = "", _speed := 1.0) -> void:
 	_flash = 0.0
 
 
-func play_hit() -> void:
+func play_hit(direction := Vector2.RIGHT, strong := false) -> void:
+	if _death_t >= 0.0: return
 	_flash = 1.0
+	_hit_t = 1.0
+	_hit_dir = direction.normalized() if direction.length_squared() > 0.001 else Vector2.RIGHT
+	_hit_strength = 1.5 if strong else 1.0
 
 
 func play_dodge() -> void:
@@ -138,6 +150,7 @@ func play_dodge() -> void:
 
 
 func play_down() -> void:
+	if _death_t >= 0.0: return
 	_death_t = 0.0
 	_sink = 0.0
 	_pulse = 0.0
@@ -149,12 +162,17 @@ func reset_pose() -> void:
 	_sink = 0.0
 	_flash = 0.0
 	_pulse = 0.0
+	_spawn_t = 0.26
+	_hit_t = 0.0
+	_hit_dir = Vector2.RIGHT
+	_hit_strength = 1.0
 	visible = true
 	modulate = Color(1, 1, 1, 1)
 	if is_instance_valid(_sprite):
 		_sprite.rotation = 0.0
 		_sprite.position = Vector2(0.0, -radius)
 		_sprite.modulate = Color(1, 1, 1, 1)
+	_apply_visual_pose(Vector2.ONE, Vector2.ZERO)
 
 
 func _draw() -> void:
@@ -168,6 +186,17 @@ func _draw() -> void:
 	draw_circle(c, radius, Color(0.93, 0.90, 0.83, 1.0))
 	draw_arc(c, radius, 0.0, TAU, 64, Color(0.42, 0.35, 0.25, 0.55), 2.0, true)
 	draw_arc(c, radius - 4.0, 0.0, TAU, 64, Color(ring_col.r, ring_col.g, ring_col.b, 0.85), 2.0, true)
+	if _flash > 0.0:
+		draw_arc(c, radius + 1.5, 0.0, TAU, 40, Color(1.0, 0.94, 0.72, _flash), 4.0, true)
+	if _spawn_t < 0.26 and _death_t < 0.0:
+		var enter := clampf(_spawn_t / 0.26, 0.0, 1.0)
+		draw_arc(c, radius + 12.0 * (1.0 - enter), -PI * 0.9, PI * 0.8, 32, Color(0.24, 0.22, 0.19, 0.3 * (1.0 - enter)), 2.0, true)
+	if _death_t >= 0.0:
+		var p := clampf(_death_t / DEATH_DURATION, 0.0, 1.0)
+		for i in range(7):
+			var direction := Vector2.from_angle(TAU * float(i) / 7.0 + 0.2)
+			var start := c + direction * radius * (0.7 + p * 0.7)
+			draw_line(start, start + direction * (4.0 + 14.0 * p), Color(0.16, 0.15, 0.13, 0.8 * (1.0 - p)), 2.5 * (1.0 - p) + 0.5, true)
 	# 头顶血条（照困兽那只怪：厚一点、带深色描边、绿→黄→红）
 	if show_bar:
 		var bw := bar_w

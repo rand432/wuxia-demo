@@ -131,6 +131,8 @@ func _check_boundaries() -> void:
 			c.kill.disconnect(b._on_core_kill)
 			c.kill_heal = 0.0
 			c.hero["atk"] = 100.0
+			c.attr_set_base("crit", 0.0) # 此段断言固定非暴击伤害，每个新核心都要关闭默认5%暴击。
+			c.hero["lucky"] = 0.0
 			c.hero["hp_max"] = 1000.0
 			c.hero["hp"] = 1000.0
 			b._curio_id = "zhiren"

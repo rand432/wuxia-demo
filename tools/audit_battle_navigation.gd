@@ -53,9 +53,23 @@ func _run() -> void:
 	_freeze_process(b)
 	b._leave_result(false) # 未出结算时，旧入口不能跳走。
 	assert(b.is_inside_tree() and current_scene == b)
+	var tutorial_actions := [0]
+	b._tutorial("audit_exit", b._market_tile, "审查教学取消", func(): tutorial_actions[0] += 1)
+	assert(b._tut.visible and b._tutorial_paused)
 	b._end_run(false)
+	assert(not b._tut.visible and not b._tutorial_paused)
+	b._tut._hit.pressed.emit()
+	assert(tutorial_actions[0] == 0)
+	await process_frame
+	await process_frame
+	b._maybe_level_button_tutorial()
+	assert(not b._tut.visible and not b._tutorial_paused, "late tutorial must not cover result buttons")
 	var replay := _button(b._result_layer, "再来一局")
 	var home := _button(b._result_layer, "回主界面")
+	if DisplayServer.get_name() != "headless":
+		await create_timer(0.6).timeout
+		await RenderingServer.frame_post_draw
+		assert(root.get_texture().get_image().save_png("res://battle_result_navigation.png") == OK)
 	# 损坏的待恢复日志必须阻止离开，并允许修复后重新点击。
 	var journal := ConfigFile.new()
 	journal.set_value("transaction", "files", {})
@@ -72,6 +86,9 @@ func _run() -> void:
 	_freeze_process(b)
 	assert(LS.current_level == 6 and not b._run_over and b._core.running)
 	b._end_run(false)
+	await process_frame
+	await process_frame
+	assert(not b._tut.visible and not b._tutorial_paused)
 	home = _button(b._result_layer, "回主界面")
 	replay = _button(b._result_layer, "再来一局")
 	home.pressed.emit()

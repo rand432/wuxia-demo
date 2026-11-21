@@ -394,6 +394,7 @@ func _btn(t: String, rect: Rect2, fs: int, bg: Color, fg: Color, cb: Callable, p
 	if cb.is_valid():
 		b.pressed.connect(cb)
 	(parent if parent != null else self).add_child(b)
+	MenuUI.Motion.bind_button(b)
 	return b
 
 func _toast(t: String) -> void:
@@ -2413,6 +2414,8 @@ func _quit() -> void:
 		_run_over = true
 		if _core != null:
 			_core.running = false
+		if _tut != null:
+			_tut.cancel()
 
 # ---------------- 提示/动画 ----------------
 func _build_toast() -> void:
@@ -2616,13 +2619,15 @@ func _process(_delta: float) -> void:
 				if uname != tk.unit_name:
 					tk.unit_name = uname
 					tk.queue_redraw()
-				tk.visible = float(f.get("y", 0.0)) >= 90.0
+				if bool(f.get("_death_settled", false)):
+					tk.play_down()
+				tk.visible = float(f.get("y", 0.0)) >= 90.0 and not tk.death_finished()
 		for tid in _foe_tokens.keys():
 			if not active.has(tid):
 				var tk = _foe_tokens[tid]
 				if tk != null:
 					tk.play_down()
-					_recycle_q.append([tk, 1.10])
+					_recycle_q.append([tk, TokenActor.DEATH_DURATION + 0.04])
 					# 阵亡小爆点（割草感：每杀一只都有一口）
 					if randf() < (0.40 if _boss_on else 0.60):
 						_spawn_pfx("impacts/blunt-hit", tk.position + Vector2(0, -8), 0.60, "dust", 1.1, 1.15)
@@ -2835,6 +2840,8 @@ func _end_run(win: bool) -> void:
 		else:
 			_toast("首通记录恢复失败，请检查存储空间")
 	_run_over = true
+	if _tut != null:
+		_tut.cancel()
 	_q_close_popup()
 	if _bm != null:
 		_bm.close_panel()
@@ -2986,7 +2993,7 @@ func _l1_tutorial(key: String, target: Node, text: String, cb: Callable) -> void
 	_tutorial(key, target, text, cb)
 
 func _tutorial(key: String, target: Node, text: String, cb: Callable) -> void:
-	if _tut == null:
+	if _run_over or _tut == null or not MenuUI.navigation_available(self):
 		return
 	# 每局都提示一次强化引导（原来只播一次，重玩时不出现）
 	if target == null or not is_instance_valid(target) or not target.is_visible_in_tree():
@@ -4259,6 +4266,7 @@ func _make_foe_token(f: Dictionary):
 			mk.size = Vector2(rad * 2.0, rad * 1.5)
 			mk.add_theme_font_size_override("font_size", msize)
 		tk0.queue_redraw()
+		tk0.play_spawn(float(int(f.get("_tid", 0)) % 4) * 0.02)
 		return tk0
 	var tk = TokenActor.new()
 	tk.setup(null, rad, ring, false)
@@ -4280,6 +4288,7 @@ func _make_foe_token(f: Dictionary):
 	tk.add_child(mark)
 	tk.set_meta("mark", mark)
 	_cam.add_child(tk)
+	tk.play_spawn(float(int(f.get("_tid", 0)) % 4) * 0.02)
 	return tk
 
 # ---------------- 卡池 / 组合 ----------------
@@ -5252,6 +5261,7 @@ func _play_attack_fx(hero_attacks: bool) -> void:
 	if tgt.is_empty():
 		return
 	if hero_attacks:
+		_hero_token.play_move()
 		var to: Vector2 = _core.position + Vector2(float(tgt["x"]), float(tgt["y"]))
 		_fx_back.spawn_swing(_hero_token.position - FIELD_POS, to - FIELD_POS, _hero_token.radius, true)
 	else:
@@ -5264,18 +5274,19 @@ func _spawn_hit_fx(global_pos: Vector2, radius: float, dmg: int, hero_hit: bool,
 	if _fx_front == null:
 		return
 	_fx_front.spawn_hit(global_pos - FIELD_POS, radius, dmg, hero_hit, crit or heavy, heavy)
+	var impact := global_pos - Vector2(0, radius * 0.85)
 	# 像素命中特效（pixelfx，MIT）：普通小、暴击金亮、挨打偏血
 	if hero_hit:
-		_spawn_pfx("impacts/blunt-hit", global_pos + Vector2(0, -14), 0.70, "blood", 1.2)
+		_spawn_pfx("impacts/blunt-hit", impact, 0.70, "blood", 1.2)
 	elif crit:
-		_spawn_pfx("impacts/crit-hit", global_pos + Vector2(0, -8), 0.95, "gold", 1.9)
+		_spawn_pfx("impacts/crit-hit", impact, 0.95, "gold", 1.9)
 		# 暴击再叠一口小的错位金爆（同一个已烘变体，只改缩放/位置）
-		_spawn_pfx("impacts/crit-hit", global_pos + Vector2(randf_range(-14.0, 14.0), -8.0 + randf_range(-10.0, 6.0)), 0.58, "gold", 1.9)
+		_spawn_pfx("impacts/crit-hit", impact + Vector2(randf_range(-14.0, 14.0), randf_range(-10.0, 6.0)), 0.58, "gold", 1.9)
 	elif heavy:
-		_spawn_pfx("impacts/crit-hit", global_pos + Vector2(0, -8), 0.80, "", 1.4)
+		_spawn_pfx("impacts/crit-hit", impact, 0.80, "", 1.4)
 	elif randf() < (0.40 if _boss_on else 0.70):
 		# 横扫一次打好几只时，普通命中不每只都放（保丝滑，观感也够）；首领战再降一档
-		_spawn_pfx("impacts/hit-spark", global_pos + Vector2(0, -6), 0.72, "", 1.0)
+		_spawn_pfx("impacts/hit-spark", impact, 0.72, "", 1.0)
 
 # 轻量命中火花：程序化放射线，不预烘、不用 pixelfx，0.18 秒自毁
 class ImpactSpark extends Control:
@@ -5376,7 +5387,7 @@ func _on_hero_foe_hit(tgt: Dictionary, dmg: float, crit: bool, heavy: bool) -> v
 	if tk == null:
 		return
 	_spawn_hit_fx(tk.position, tk.radius, int(round(dmg)), false, crit, heavy)
-	tk.play_hit()
+	tk.play_hit(tk.position - _hero_token.position, crit or heavy)
 
 # ============================================================
 # v3 请神 + 技能栏（祖宗技能：各自 CD + 内力）

@@ -108,13 +108,23 @@ func _on_pressed() -> void:
 	# 先取出并清空本步回调，信号里打开下一步时不会串用。
 	var resume := _on_resume
 	var complete := _on_done
-	visible = false
-	_target = null
-	_on_done = Callable()
-	_on_pause = Callable()
-	_on_resume = Callable()
+	_clear_step()
 	if resume.is_valid():
 		resume.call()
 	done.emit()
 	if complete.is_valid():
 		complete.call()
+
+# 结算/离场只撤掉教学并恢复处理状态，不执行目标动作或开启下一步。
+func cancel() -> void:
+	var resume := _on_resume
+	_clear_step()
+	if resume.is_valid():
+		resume.call()
+
+func _clear_step() -> void:
+	visible = false
+	_target = null
+	_on_done = Callable()
+	_on_pause = Callable()
+	_on_resume = Callable()

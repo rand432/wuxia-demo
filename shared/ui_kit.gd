@@ -5,6 +5,7 @@ extends RefCounted
 #   三页（主界面 / 装备 / 请神）共用；只画形状，文字一律用 Label。
 # ============================================================
 const P := preload("res://shared/ui_pal.gd")
+const Motion := preload("res://shared/ui_motion.gd")
 
 static func navigation_available(page: Control) -> bool:
 	return is_instance_valid(page) and page.is_inside_tree() and not page.is_queued_for_deletion() and not bool(page.get_meta("scene_changing", false))
@@ -104,6 +105,7 @@ static func button(root: Control, txt: String, rect: Rect2, fs: int, bg_col: Col
 	if cb.is_valid():
 		b.pressed.connect(cb)
 	(parent if parent != null else root).add_child(b)
+	Motion.bind_button(b)
 	return b
 
 # ---------------- 顶栏 ----------------
@@ -261,6 +263,7 @@ static func chevron(dir: int, rect: Rect2, cb: Callable) -> Button:
 	b.add_child(ch)
 	if cb.is_valid():
 		b.pressed.connect(cb)
+	Motion.bind_button(b)
 	return b
 
 class Chevron extends Control:
@@ -355,6 +358,7 @@ static func open_settings(root: Control) -> void:
 			if not _settings_current(root, ov): return
 			ov.hide()
 			ov.queue_free(), P.LINE, 1, 20, p)
+	Motion.present(ov, p)
 
 static func _settings_current(page: Control, overlay: Control) -> bool:
 	return navigation_available(page) and is_instance_valid(overlay) and not overlay.is_queued_for_deletion() and page.get_node_or_null("SettingsOv") == overlay

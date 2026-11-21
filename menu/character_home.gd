@@ -22,6 +22,7 @@ const CATS := ["全 部", "装 备", "材 料", "丹 药"]
 var _bag_roots: Array = []
 var _cats: Array = []
 var _cat := 0
+var _rebuild_pending := false
 
 func _ready() -> void:
 	GameState.ensure_loaded()
@@ -43,7 +44,12 @@ func _build_all() -> void:
 	UI.dock(self, "role", _on_dock)
 
 func _rebuild() -> void:
+	if _rebuild_pending or not UI.navigation_available(self): return
+	_rebuild_pending = true
 	await get_tree().process_frame
+	_rebuild_pending = false
+	if not UI.navigation_available(self): return
+	_detail = null
 	for c in get_children():
 		remove_child(c)
 		c.queue_free()
@@ -143,7 +149,7 @@ func _build_slot(key: String, rect: Rect2) -> void:
 	root.add_child(hit)
 
 func _on_slot(key: String) -> void:
-	if not UI.navigation_available(self): return
+	if _rebuild_pending or not UI.navigation_available(self): return
 	Audio.sfx("ui_click", -8.0)
 	var it: Dictionary = FD.equipped.get(key, {})
 	if it.is_empty():
@@ -161,6 +167,7 @@ func _on_slot(key: String) -> void:
 	dlg.open(key)
 
 func _open_forge(key: String) -> Node:
+	if _rebuild_pending or not UI.navigation_available(self): return null
 	var fs: Control = (load("res://menu/forge_sheet.tscn") as PackedScene).instantiate()
 	add_child(fs)
 	fs.closed.connect(_rebuild)
@@ -219,9 +226,9 @@ func _build_attr() -> void:
 	add_child(hit)
 
 func _open_detail() -> void:
-	if _sheet == null:
+	if _sheet == null or _rebuild_pending or not UI.navigation_available(self):
 		return
-	if _detail == null:
+	if not is_instance_valid(_detail):
 		_detail = load("res://kushou/attr_panel.gd").new()
 		add_child(_detail)
 		_detail.z_index = 60

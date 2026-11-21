@@ -17,6 +17,8 @@ $names += 'menu_popups'
 $names += 'menu_wallet'
 $names += 'menu_navigation'
 $names += 'challenge_rewards'
+$names += 'battle_navigation'
+$names += 'equipment_refresh'
 $results = @()
 foreach ($name in $names) {
     $output = & $Godot --headless --path $auditRoot --max-fps 120 --quit-after 3600 --script "res://tools/audit_$name.gd" 2>&1 | Out-String

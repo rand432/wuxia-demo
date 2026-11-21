@@ -31,10 +31,10 @@ func spawn_swing(attacker: Vector2, target: Vector2, radius: float, hero: bool, 
 	queue_redraw()
 
 func spawn_hit(pos: Vector2, radius: float, dmg: int, hero_hit: bool, gold := false, big := false) -> void:
-	hits.append({"p": pos, "r": radius, "t": 0.0, "dur": 0.14})
+	hits.append({"p": pos - Vector2(0, radius), "r": radius * 0.7, "t": 0.0, "dur": 0.22 if gold or big else 0.16, "strong": gold or big})
 	nums.append({
-		"p": pos + Vector2(38.0, -24.0), "txt": "-" + str(maxi(1, dmg)),
-		"t": 0.0, "dur": 0.55,
+		"p": pos + Vector2(32.0, -radius - 8.0), "txt": "-" + str(maxi(1, dmg)),
+		"t": 0.0, "dur": 0.62,
 		"col": SEAL if hero_hit else (GOLD if gold else INK),
 		"size": 36 if hero_hit else (34 if big else 28),
 		"hero": hero_hit, "gold": gold,
@@ -78,18 +78,24 @@ func _draw_hit(h: Dictionary) -> void:
 		return
 	var c: Vector2 = h["p"]
 	var r := float(h["r"])
-	draw_circle(c, r + 2.0, Color(0.77, 0.25, 0.20, 0.20 * a))
-	draw_arc(c, r + 6.0, 0.0, TAU, 48, Color(1.0, 1.0, 1.0, 0.22 * a), 8.0, true)
-	draw_arc(c, r + 1.0, 0.0, TAU, 48, Color(1.0, 1.0, 1.0, 0.95 * a), 4.0, true)
+	var strong := bool(h.get("strong", false))
+	var accent := GOLD if strong else INK
+	var spread := r * (0.45 + p * 1.3)
+	draw_circle(c, 7.0 * a, Color(1.0, 0.96, 0.84, 0.8 * a))
+	draw_arc(c, spread, -PI * 0.85, PI * 0.6, 28, Color(accent.r, accent.g, accent.b, a * 0.7), (3.0 if strong else 1.8) * a + 0.6, true)
+	for i in range(4 if strong else 2):
+		var direction := Vector2.from_angle(-0.65 + float(i) * 1.55)
+		draw_line(c + direction * (3.0 + p * 9.0), c + direction * (12.0 + spread), Color(accent.r, accent.g, accent.b, a), 2.5 * a + 0.5, true)
 
 func _draw_num(n: Dictionary) -> void:
 	var p := float(n["t"]) / maxf(0.001, float(n["dur"]))
 	var a := 1.0 - clampf((p - 0.62) / 0.38, 0.0, 1.0)
 	if a <= 0.0:
 		return
-	var pos: Vector2 = n["p"] + Vector2(0.0, -38.0 * p)
+	var pos: Vector2 = n["p"] + Vector2(14.0 * p, -46.0 * (1.0 - pow(1.0 - p, 2.0)))
 	var txt: String = str(n["txt"])
-	var fsz := int(n["size"])
+	var pop := lerpf(0.72, 1.12, minf(1.0, p / 0.16)) if p < 0.16 else lerpf(1.12, 1.0, minf(1.0, (p - 0.16) / 0.18))
+	var fsz := int(round(float(n["size"]) * pop))
 	var w := FONT.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fsz).x
 	var base := Vector2(pos.x - w * 0.5, pos.y)
 	var col: Color = n["col"]
