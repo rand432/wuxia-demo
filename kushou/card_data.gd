@@ -82,8 +82,11 @@ static func build() -> Dictionary:
 	return {"cards": cards, "sets": sets, "entries": entries}
 
 
-# 卡图：优先生成图（assets/art/cards/gen/<id>.png）；没有就退回该系的物品图
+# 卡图：优先生成图（assets/art/cards/gen/<series>.png 十系统一图标）；再退到单卡图 gen/<id>.png；最后退该系物品图
 static func _art_of(id: String, s: Dictionary, idx: int) -> String:
+	var series := "res://assets/art/cards/gen/" + str(s["key"]) + ".png"
+	if ResourceLoader.exists(series):
+		return series
 	var gen := "res://assets/art/cards/gen/" + id + ".png"
 	if ResourceLoader.exists(gen):
 		return gen

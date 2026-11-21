@@ -15,10 +15,10 @@ const SLOT_KEYS := ["weapon", "armor", "jade", "cloak"]
 const SLOT_LABEL := {"weapon": "兵 器", "armor": "护 甲", "jade": "玉 佩", "cloak": "披 风"}
 const SLOT_BASE := {"weapon": 12.0, "armor": 6.0, "jade": 60.0, "cloak": 4.0}
 const SLOT_ART := {
-	"weapon": "res://assets/items/it_sword.png",
-	"armor": "res://assets/items/it_armor.png",
-	"jade": "res://assets/items/art_stone.png",
-	"cloak": "res://assets/gen/char/qing_cogflash.png",
+	"weapon": "res://assets/gen/icons/weapon_iron_sword.png",
+	"armor": "res://assets/gen/icons/armor_leather.png",
+	"jade": "res://assets/gen/icons/jade_yupei.png",
+	"cloak": "res://assets/gen/icons/cloak_grey.png",
 }
 
 const TRAITS := {
@@ -42,6 +42,52 @@ const _WPN := ["铁剑", "长刀", "短刀", "重剑", "柳叶刀", "飞匕", "�
 const _ARM := ["皮甲", "铁甲", "锁子甲", "软甲", "战袍", "护心镜"]
 const _JADE := ["玉佩", "玉环", "玉坠"]
 const _CLOAK := ["披风", "斗篷", "披帛"]
+
+# 逐件图标（MiniMax 生成，1024→抠透明）：按名字对到 assets/gen/icons/
+const EQUIP_ICON := {
+	"铁剑": "res://assets/gen/icons/weapon_iron_sword.png",
+	"长刀": "res://assets/gen/icons/weapon_long_saber.png",
+	"短刀": "res://assets/gen/icons/weapon_short_blade.png",
+	"重剑": "res://assets/gen/icons/weapon_heavy_sword.png",
+	"柳叶刀": "res://assets/gen/icons/weapon_willow_blade.png",
+	"飞匕": "res://assets/gen/icons/weapon_flying_dagger.png",
+	"青锋": "res://assets/gen/icons/weapon_qingfeng.png",
+	"赤霄": "res://assets/gen/icons/weapon_chixiao.png",
+	"皮甲": "res://assets/gen/icons/armor_leather.png",
+	"铁甲": "res://assets/gen/icons/armor_iron.png",
+	"锁子甲": "res://assets/gen/icons/armor_chainmail.png",
+	"软甲": "res://assets/gen/icons/armor_soft.png",
+	"战袍": "res://assets/gen/icons/armor_war_robe.png",
+	"护心镜": "res://assets/gen/icons/armor_heart_mirror.png",
+	"玉佩": "res://assets/gen/icons/jade_yupei.png",
+	"披风": "res://assets/gen/icons/cloak_grey.png",
+}
+
+# 材料 / 道具图标（同上：Seedream 1024→抠透明）
+const MAT_ICON := {
+	"朱果": "res://assets/gen/icons/mat_zhuguo.png",
+	"兽骨": "res://assets/gen/icons/mat_shougu.png",
+	"灵米": "res://assets/gen/icons/mat_lingmi.png",
+	"紫芝": "res://assets/gen/icons/mat_zizhi.png",
+	"雪参": "res://assets/gen/icons/mat_xueshen.png",
+	"金髓": "res://assets/gen/icons/mat_jinsui.png",
+	"赤铜": "res://assets/gen/icons/mat_chitong.png",
+	"玄铁": "res://assets/gen/icons/mat_xuantie.png",
+	"寒晶": "res://assets/gen/icons/mat_hanjing.png",
+	"火髓": "res://assets/gen/icons/mat_huosui.png",
+	"风灵": "res://assets/gen/icons/mat_fengling.png",
+	"雷精": "res://assets/gen/icons/mat_leijing.png",
+}
+const TOOL_ICON := {
+	"龙鳞": "res://assets/gen/icons/tool_longlin.png",
+	"淬火油": "res://assets/gen/icons/tool_cuihuoyou.png",
+	"星砂": "res://assets/gen/icons/tool_xingsha.png",
+	"悔恨法条": "res://assets/gen/icons/tool_huihenfadiao.png",
+	"锻造石": "res://assets/gen/icons/tool_duanzaoshi.png",
+	"银两袋": "res://assets/gen/icons/tool_yinliangdai.png",
+	"定神香": "res://assets/gen/icons/tool_dingshenxiang.png",
+	"炉心病": "res://assets/gen/icons/tool_luxinbing.png",
+}
 const _MAT := ["朱果", "兽骨", "灵米", "紫芝", "雪参", "金髓", "赤铜", "玄铁", "寒晶", "火髓", "风灵", "雷精"]
 const _TOOL := ["龙鳞", "淬火油", "星砂", "悔恨法条", "锻造石", "银两袋", "定神香", "炉心病"]
 
@@ -52,15 +98,17 @@ static func ensure_bag() -> void:
 	for i in 18:
 		var nm := str(_WPN[i % _WPN.size()]) if i < 8 else (str(_ARM[i % _ARM.size()]) if i < 14 else str(_JADE[i % _JADE.size()]))
 		var slot := "weapon" if i < 8 else ("armor" if i < 14 else "jade")
-		var icon: String = str(SLOT_ART.get(slot, "res://assets/items/it_sword.png"))
+		var icon: String = str(EQUIP_ICON.get(nm, SLOT_ART.get(slot, "res://assets/items/it_sword.png")))
 		bag.append({"cat": "装备", "slot": slot, "name": nm, "quality": 1 + (i % 5),
 			"plus": (i * 3) % 20, "icon": icon})
 	for i in 16:
-		bag.append({"cat": "材料", "slot": "", "name": str(_MAT[i % _MAT.size()]),
-			"quality": 1 + (i % 5), "plus": 0, "icon": "res://assets/items/art_spring.png" if i % 3 == 0 else ("res://assets/items/art_stone.png" if i % 3 == 1 else "res://assets/items/it_ingot.png")})
+		var mnm := str(_MAT[i % _MAT.size()])
+		bag.append({"cat": "材料", "slot": "", "name": mnm,
+			"quality": 1 + (i % 5), "plus": 0, "icon": str(MAT_ICON.get(mnm, "res://assets/items/art_spring.png"))})
 	for i in 12:
-		bag.append({"cat": "道具", "slot": "", "name": str(_TOOL[i % _TOOL.size()]),
-			"quality": 1 + (i % 5), "plus": 0, "icon": "res://assets/items/chest_gold.png" if i % 2 == 0 else "res://assets/items/art_stone.png"})
+		var tnm := str(_TOOL[i % _TOOL.size()])
+		bag.append({"cat": "道具", "slot": "", "name": tnm,
+			"quality": 1 + (i % 5), "plus": 0, "icon": str(TOOL_ICON.get(tnm, "res://assets/items/chest_gold.png"))})
 
 static func bag_of(cat: String) -> Array:
 	ensure_bag()
@@ -285,6 +333,25 @@ static func load_game() -> void:
 	var st_v = cf.get_value("res", "state", null)
 	if st_v is Dictionary:
 		state = st_v
+	refresh_icons()
+
+# 旧存档里的装备图标还是旧素材；按名字重新对一遍新图标。
+static func refresh_icons() -> void:
+	for slot in SLOT_KEYS:
+		var it_v = equipped.get(slot, null)
+		if it_v is Dictionary:
+			var nm := str((it_v as Dictionary).get("name", ""))
+			if EQUIP_ICON.has(nm):
+				(it_v as Dictionary)["icon"] = EQUIP_ICON[nm]
+	for it_v in bag:
+		if it_v is Dictionary and (it_v as Dictionary).has("slot"):
+			var nm2 := str((it_v as Dictionary).get("name", ""))
+			if EQUIP_ICON.has(nm2):
+				(it_v as Dictionary)["icon"] = EQUIP_ICON[nm2]
+			elif MAT_ICON.has(nm2):
+				(it_v as Dictionary)["icon"] = MAT_ICON[nm2]
+			elif TOOL_ICON.has(nm2):
+				(it_v as Dictionary)["icon"] = TOOL_ICON[nm2]
 
 static func save_game() -> Error:
 	var cf := ConfigFile.new()
@@ -401,7 +468,8 @@ static func grant_starter_equipment() -> int:
 	var names := {"weapon": "铁剑", "armor": "皮甲", "jade": "玉佩", "cloak": "披风"}
 	var stored := 0
 	for slot in SLOT_KEYS:
-		var item := {"cat": "装备", "slot": slot, "name": names[slot], "quality": 1, "plus": 0, "trait": "", "icon": SLOT_ART[slot]}
+		var item := {"cat": "装备", "slot": slot, "name": names[slot], "quality": 1, "plus": 0, "trait": "",
+			"icon": str(EQUIP_ICON.get(names[slot], SLOT_ART[slot]))}
 		if (equipped.get(slot, {}) as Dictionary).is_empty():
 			equipped[slot] = item
 			state.erase(slot)

@@ -5428,6 +5428,9 @@ const SKILL_DEFS := {
 		"targets": 1, "col": Color(0.94, 0.92, 0.84)},
 }
 
+# 技能图标：同一技能的重复条目共用一张图
+const SKILL_ICON_ALIAS := {"liuqingqing2": "liuqingqing"}
+
 # 每级伤害成长：高频技能小、低频/高倍率技能大；请神页与战斗共用同一套
 const SKILL_LV_STEP := {
 	"zl": 3, "cuisanniang": 5, "jicanghai": 3, "chenshi": 3, "liuqingqing": 3,
@@ -5510,6 +5513,7 @@ func _tick_skills(dt: float) -> void:
 			var sk2: Dictionary = _skills[i]
 			s.visible = true
 			s.skill_name = str(sk2["name"])
+			s.skill_icon = str(sk2.get("icon", ""))
 			s.quality = int(sk2.get("quality", 4))
 			s.cd_left = float(sk2["cd_t"])
 			s.cd_max = maxf(0.01, float(sk2["cd"]))
@@ -5924,6 +5928,9 @@ func _pick_god(aid: String) -> void:
 		sk["aid"] = aid
 		sk["cd_t"] = 0.0
 		sk["quality"] = int((AncestorData.ANCESTORS[aid] as Dictionary)["quality"])
+		var icon_key := str(SKILL_ICON_ALIAS.get(aid, aid))
+		var icon_path := "res://assets/gen/icons/skill_%s.png" % icon_key
+		sk["icon"] = icon_path if ResourceLoader.exists(icon_path) else ""
 		_skills.append(sk)
 	_hide_god_pick()
 	_refresh_level_ui()
@@ -5941,11 +5948,13 @@ class SkillSlot extends Control:
 	const F := preload("res://fonts/ink.ttf")
 	const QC := [Color(0.54,0.48,0.38), Color(0.31,0.48,0.29), Color(0.18,0.42,0.45), Color(0.42,0.29,0.48), Color(0.72,0.53,0.16)]
 	var skill_name := ""
+	var skill_icon := ""
 	var quality := 4
 	var cd_left := 0.0
 	var cd_max := 1.0
 	var mp_cost := 0
 	var flash := 0.0          # 刚放完技能：一圈金色扩散
+	var _tex: Texture2D = null
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
 	func _draw() -> void:
@@ -5957,10 +5966,17 @@ class SkillSlot extends Control:
 		sb.set_border_width_all(3)
 		draw_style_box(sb, Rect2(Vector2.ZERO, size))
 		var c := size * 0.5
-		var ch := "技"
-		if skill_name.length() > 0:
-			ch = skill_name.substr(1 if skill_name.length() > 1 else 0, 1)
-		draw_string(F, Vector2(0, c.y + 8), ch, HORIZONTAL_ALIGNMENT_CENTER, size.x, 22, Color(0.20, 0.16, 0.11))
+		if skill_icon != "":
+			if _tex == null:
+				_tex = load(skill_icon) as Texture2D
+			if _tex != null:
+				var inset := size * 0.10
+				draw_texture_rect(_tex, Rect2(inset, size - inset * 2.0), false)
+		if _tex == null:
+			var ch := "技"
+			if skill_name.length() > 0:
+				ch = skill_name.substr(1 if skill_name.length() > 1 else 0, 1)
+			draw_string(F, Vector2(0, c.y + 8), ch, HORIZONTAL_ALIGNMENT_CENTER, size.x, 22, Color(0.20, 0.16, 0.11))
 		if flash > 0.0:
 			var k := 1.0 - flash
 			var rr := size.x * (0.5 + 0.45 * k)

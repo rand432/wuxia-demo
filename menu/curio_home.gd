@@ -78,6 +78,8 @@ func _refresh() -> void:
 		var c: CurioCard = _cards[i]
 		c.curio_id = cid
 		c.glyph = str(cd.get("glyph", "?"))
+		var icon_path := "res://assets/gen/icons/curio_%s.png" % cid
+		c.icon = icon_path if ResourceLoader.exists(icon_path) else ""
 		c.equipped = GameState.curio_id == cid
 		c.queue_redraw()
 	var cur := str(_ids[_sel])
@@ -279,10 +281,12 @@ func _on_dock(key: String) -> void:
 class CurioCard extends Control:
 	signal pressed
 	var glyph := "?"
+	var icon := ""
 	var curio_id := ""
 	var equipped := false
 	var big := false
 	var faded := false
+	var _tex: Texture2D = null
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_STOP
 	func _gui_input(e: InputEvent) -> void:
@@ -303,9 +307,17 @@ class CurioCard extends Control:
 		draw_circle(c, r, Color(0.941, 0.906, 0.827))
 		draw_arc(c, r, 0.0, TAU, 40, Color(0.721, 0.659, 0.533), 2.0)
 		var f := preload("res://fonts/ink.ttf")
-		var fs := int(r * 0.95)
-		var tw := f.get_string_size(glyph, HORIZONTAL_ALIGNMENT_LEFT, -1, fs)
-		draw_string(f, c + Vector2(-tw.x * 0.5, tw.y * 0.32), glyph, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(0.227, 0.180, 0.125))
+		# 有图标就画图标，没有就回退到字形
+		if icon != "":
+			if _tex == null:
+				_tex = load(icon) as Texture2D
+			if _tex != null:
+				var side := r * 2.3
+				draw_texture_rect(_tex, Rect2(c - Vector2(side, side) * 0.5, Vector2(side, side)), false)
+		if _tex == null:
+			var fs := int(r * 0.95)
+			var tw := f.get_string_size(glyph, HORIZONTAL_ALIGNMENT_LEFT, -1, fs)
+			draw_string(f, c + Vector2(-tw.x * 0.5, tw.y * 0.32), glyph, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(0.227, 0.180, 0.125))
 		if big and equipped:
 			var tag := Rect2(size.x - 80, 10, 72, 34)
 			draw_rect(tag, Color(0.549, 0.196, 0.149))

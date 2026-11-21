@@ -47,12 +47,19 @@ const GOLD := Color(0.78, 0.58, 0.22)
 const DIM := Color(0.42, 0.38, 0.32)
 const QC := [Color(0.54,0.48,0.38), Color(0.31,0.48,0.29), Color(0.18,0.42,0.45), Color(0.42,0.29,0.48), Color(0.72,0.53,0.16)]
 
-# 立绘（真正的图后面做，先用现有三张脸/立绘顶着）
+# 立绘：11 位请神角色（assets/gen/qingshen/portrait_*.jpg，Seedream 5.0 半身版）
 const PORTRAIT := {
-	"zl": "res://assets/char/chen_shi_full_cut.png",
-	"cuisanniang": "res://assets/char/qingluan_full_cut.png",
-	"jicanghai": "res://assets/char/player_full_cut.png",
-	"zhujue": "res://assets/char/player_full_cut.png",
+	"zl": "res://assets/gen/qingshen/portrait_zl.jpg",
+	"cuisanniang": "res://assets/gen/qingshen/portrait_cuisanniang.jpg",
+	"jicanghai": "res://assets/gen/qingshen/portrait_jicanghai.jpg",
+	"zhujue": "res://assets/gen/qingshen/portrait_zhujue.jpg",
+	"chenshi": "res://assets/gen/qingshen/portrait_chenshi.jpg",
+	"liuqingqing": "res://assets/gen/qingshen/portrait_liuqingqing.jpg",
+	"xiaoqier": "res://assets/gen/qingshen/portrait_xiaoqier.jpg",
+	"gundilong": "res://assets/gen/qingshen/portrait_gundilong.jpg",
+	"qingluan": "res://assets/gen/qingshen/portrait_qingluan.jpg",
+	"mingzhu": "res://assets/gen/qingshen/portrait_mingzhu.jpg",
+	"zhiyuan": "res://assets/gen/qingshen/portrait_zhiyuan.jpg",
 }
 
 var _ids: Array = []
@@ -209,7 +216,9 @@ func _build_slots() -> void:
 		tr.size = Vector2(106, 88)
 		tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		tr.texture = load(str(a["art"]))
+		# 技能图标优先；没有就回退该祖宗的立绘
+		var skill_icon := "res://assets/gen/icons/skill_%s.png" % aid
+		tr.texture = load(skill_icon if ResourceLoader.exists(skill_icon) else str(a["art"]))
 		tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		cell2.add_child(tr)
 		var nm := Label.new()
