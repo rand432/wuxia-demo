@@ -108,6 +108,7 @@ var _draw_charge := 0          # 累积的请神次数（升级 +1）
 var _run_cleared := false
 var _lv_lb: Label = null
 var _exp_lb: Label = null
+var _exp_track: Panel = null
 var _exp_bar: Panel = null
 var _mate_tile = null
 
@@ -271,6 +272,10 @@ var _curio_uses := 0             # 本局喝了几次（详情页显示）
 var _curio_detail: Control = null
 var _rare_taken: Dictionary = {}   # 抽到过的稀有单卡（全部唯一）
 var _wave_lb: Label
+var _wave_fill: Panel
+var _mp_lb: Label
+const VITAL_TRACK_WIDTH := 166.0
+const WAVE_TRACK_WIDTH := 140.0
 var _hp_lb: Label
 var _wen := 0
 var _kills := 0
@@ -293,6 +298,7 @@ var _prev_hero_hp := -1.0
 var _hp_fill: Panel = null
 var _hero_hit_btn: Button = null
 var _hero_name_lb: Label = null
+const HERO_NAME_OFFSET := Vector2(-60, 9)
 
 func _ready() -> void:
 	GameState.ensure_loaded()
@@ -310,7 +316,8 @@ func _ready() -> void:
 		_build_hud()
 	_build_field()
 	if not _no_ui:
-		_build_deck()
+		if LevelState.show_button("draw"):
+			_build_deck()
 		_build_bottom()
 		_q_init()
 		_build_draw()
@@ -333,6 +340,7 @@ func _ready() -> void:
 		add_child(_tut)
 	_refresh_deck()
 	_apply_level_preview()
+	_refresh_vitals_hud()
 	_maybe_level_button_tutorial.call_deferred()
 	var fade := ColorRect.new()
 	fade.color = Color(0.03, 0.03, 0.04, 1.0)
@@ -455,6 +463,7 @@ func _toast_next() -> void:
 
 class BgArt extends Control:
 	# 关卡 → 背景轮换；文件不存在时回退到程序画的纸面
+	const VILLAGE_YARD := "res://assets/art/bg/bg_village_yard_v1.webp"
 	const BG_LIST := [
 		"res://assets/art/bg/bg_village.jpg",
 		"res://assets/art/bg/bg_bamboo.jpg",
@@ -466,15 +475,31 @@ class BgArt extends Control:
 		"res://assets/art/bg/bg_dungeon.jpg",
 	]
 	var tex: Texture2D = null
+	var village_yard := false
 	var courtyard := false
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
 	func setup(idx: int) -> void:
 		var p: String = BG_LIST[wrapi(idx, 0, BG_LIST.size())]
+		village_yard = idx == 0 and ResourceLoader.exists(VILLAGE_YARD)
 		courtyard = idx == 5
+		if village_yard:
+			p = VILLAGE_YARD
 		if ResourceLoader.exists(p):
 			tex = load(p) as Texture2D
 	func _draw() -> void:
+		if village_yard and tex != null:
+			var surround := Color(0.15, 0.12, 0.09)
+			var clear := Color(surround, 0.0)
+			var field := Rect2(0, 102, 720, 1090)
+			var source_size := tex.get_size()
+			var scale_to_cover := maxf(field.size.x / source_size.x, field.size.y / source_size.y)
+			var crop_size := field.size / scale_to_cover
+			draw_rect(Rect2(Vector2.ZERO, size), surround)
+			draw_texture_rect_region(tex, field, Rect2((source_size - crop_size) * 0.5, crop_size))
+			_fade_band(102, 190, surround, clear)
+			_fade_band(1010, 1192, clear, surround)
+			return
 		draw_rect(Rect2(0, 0, 720, 1280), Color(0.93, 0.90, 0.82))
 		if courtyard and tex != null:
 			draw_texture_rect(tex, Rect2(0, 140, 720, 750), false)
@@ -747,38 +772,36 @@ func _build_bg() -> void:
 	bg.setup(int(LevelState.current_level) - 1)
 	add_child(bg)
 
-func _chip(x: float, kind: String, value: String, cap: String) -> Label:
-	var box := Control.new()
-	box.size = Vector2(720, 80)
-	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(box)
-	# 可视区块单独一个 Control（162×64），教学高亮框只框这一块，不会拉满整行
+func _chip(x: float, width: float, kind: String, value: String, cap: String) -> Label:
 	var chip := Control.new()
-	chip.position = Vector2(x, 8)
-	chip.size = Vector2(162, 64)
+	chip.position = Vector2(x, 12)
+	chip.size = Vector2(width, 52)
 	chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	box.add_child(chip)
-	_panel(Rect2(0, 0, 162, 64), Color(0.075, 0.068, 0.060, 0.98), 8, Color(0.85, 0.66, 0.23, 0.45), 1, chip)
+	add_child(chip)
+	_panel(Rect2(Vector2.ZERO, chip.size), Color(0.125, 0.102, 0.082), 8, Color(0.54, 0.42, 0.29), 1, chip)
 	var ic := Ico.new()
 	ic.kind = kind
-	ic.position = Vector2(10, 14)
-	ic.size = Vector2(34, 34)
+	ic.position = Vector2(10, 11)
+	ic.size = Vector2(28, 28)
 	chip.add_child(ic)
-	var vl := _lbl(value, Vector2(48, -4), Vector2(106, 36), 26, Color(0.95, 0.91, 0.83), chip, HORIZONTAL_ALIGNMENT_RIGHT)
-	_lbl(cap, Vector2(48, 32), Vector2(106, 20), 16, Color(0.80, 0.75, 0.65), chip, HORIZONTAL_ALIGNMENT_RIGHT)
+	var vl := _lbl(value, Vector2(78, 9), Vector2(width - 88, 34), 24, LIGHT, chip, HORIZONTAL_ALIGNMENT_RIGHT)
+	_lbl(cap, Vector2(43, 15), Vector2(42, 24), 16, Color(0.81, 0.73, 0.59), chip)
+	_chips[cap] = chip
+	if kind != "coin" and kind != "crystal":
+		return vl
 	# 点灵晶/文钱给说明（灵晶不足时直接提示无法抽卡）
 	chip.mouse_filter = Control.MOUSE_FILTER_PASS
 	var hb := Button.new()
 	hb.flat = true
 	hb.focus_mode = Control.FOCUS_NONE
 	hb.position = Vector2.ZERO
-	hb.size = Vector2(162, 64)
+	hb.size = chip.size
 	hb.add_theme_stylebox_override("normal", StyleBoxEmpty.new())
 	hb.add_theme_stylebox_override("hover", StyleBoxEmpty.new())
 	hb.add_theme_stylebox_override("pressed", StyleBoxEmpty.new())
 	hb.pressed.connect(func() -> void: _on_chip_click(cap))
 	chip.add_child(hb)
-	_chips[cap] = chip
+	MenuUI.Motion.bind_button(hb)
 	return vl
 
 func _on_chip_click(cap: String) -> void:
@@ -796,33 +819,55 @@ func _on_chip_click(cap: String) -> void:
 				_toast("文钱 %d · 强化一次 %d" % [_wen, cost])
 
 func _build_hud() -> void:
-	_coin_lb = _chip(18, "coin", "0", "文钱")
-	_crystal_lb = _chip(192, "crystal", "100", "灵晶")
-	_chips["灵晶"].visible = LevelState.show_button("crystal")
-	_kill_lb = _chip(366, "kill", "0", "杀敌")
-	_life_lb = _chip(540, "heart", "100", "命")
-	_wave_lb = _lbl("波 1/%d" % _max_wave, Vector2(22, 92), Vector2(100, 48), 26, INK)
-	for i in 5:
-		var d := Color(0.85, 0.66, 0.23) if i == 0 else Color(0.38, 0.33, 0.26, 0.55)
-		var c := Control.new()
-		c.position = Vector2(112 + i * 18 - 6, 117 - 6)
-		c.size = Vector2(12, 12)
-		var ci := Ico.new()
-		ci.kind = "dot"
-		ci.position = Vector2.ZERO
-		ci.size = Vector2(12, 12)
-		ci.modulate = Color(1, 1, 1, 1) if i == 0 else Color(0.52, 0.47, 0.40, 1)
-		c.add_child(ci)
-		add_child(c)
-	_panel(Rect2(200, 92, 235, 20), Color(0.10, 0.09, 0.08, 0.35), 3)
-	_hp_fill = _panel(Rect2(200, 92, 235 * 0.70, 20), Color(0.61, 0.16, 0.13), 3)
-	_hp_lb = _lbl("200/200", Vector2(208, 88), Vector2(120, 28), 17, Color(0.98, 0.95, 0.88))
-	_panel(Rect2(200, 118, 235, 9), Color(0.10, 0.09, 0.08, 0.22), 4)
-	_mp_bar = _panel(Rect2(200, 118, 235 * 0.35, 9), Color(0.30, 0.52, 0.72), 4)
-	var _boss_timer_lb := _lbl("", Vector2(450, 96), Vector2(120, 30), 17, SEAL)
-	_boss_timer_lb.visible = false   # 原来写死的“首领 00:37”是假的，改成首领真的出现时才显示
-	_tot_btn = _btn("总计", Rect2(570, 88, 68, 42), 17, Color(0.10, 0.09, 0.08, 0.98), LIGHT, func(): _show_totals())
-	_btn("退出", Rect2(646, 88, 60, 42), 17, Color(0.10, 0.09, 0.08, 0.98), LIGHT, func(): _show_exit(true))
+	_panel(Rect2(8, 4, 704, 132), Color(0.20, 0.157, 0.115), 12, Color(0.64, 0.48, 0.29), 2)
+	var show_crystal := LevelState.show_button("crystal")
+	var width := 162.0 if show_crystal else 220.0
+	var step := width + 12.0
+	_coin_lb = _chip(18, width, "coin", "0", "文钱")
+	_crystal_lb = _chip(18 + step, width, "crystal", "100", "灵晶")
+	_chips["灵晶"].visible = show_crystal
+	_kill_lb = _chip(18 + step * (2 if show_crystal else 1), width, "kill", "0", "杀敌")
+	_life_lb = _chip(18 + step * (3 if show_crystal else 2), width, "heart", "100", "命")
+	var well := Color(0.096, 0.078, 0.063)
+	_wave_lb = _lbl("", Vector2(22, 75), Vector2(143, 29), 22, LIGHT)
+	_panel(Rect2(23, 111, WAVE_TRACK_WIDTH, 6), well, 3)
+	_wave_fill = _panel(Rect2(23, 111, 0, 6), GOLD, 3)
+	_refresh_wave_hud(1)
+	_lbl("气血", Vector2(182, 75), Vector2(56, 24), 17, LIGHT)
+	_lbl("内力", Vector2(182, 102), Vector2(56, 24), 17, LIGHT)
+	_panel(Rect2(234, 83, VITAL_TRACK_WIDTH, 10), well, 4)
+	_panel(Rect2(234, 110, VITAL_TRACK_WIDTH, 10), well, 4)
+	_hp_fill = _panel(Rect2(234, 83, VITAL_TRACK_WIDTH, 10), Color(0.76, 0.30, 0.24), 4)
+	_mp_bar = _panel(Rect2(234, 110, VITAL_TRACK_WIDTH, 10), Color(0.32, 0.63, 0.65), 4)
+	_hp_lb = _lbl("200/200", Vector2(407, 75), Vector2(128, 24), 16, LIGHT)
+	_mp_lb = _lbl("100/100", Vector2(407, 102), Vector2(128, 24), 16, LIGHT)
+	_tot_btn = _btn("总计", Rect2(542, 79, 73, 44), 17, Color(0.13, 0.106, 0.081), LIGHT, func(): _show_totals())
+	_btn("退出", Rect2(625, 79, 73, 44), 17, Color(0.13, 0.106, 0.081), LIGHT, func(): _show_exit(true))
+
+func _refresh_wave_hud(wave: int, complete := false) -> void:
+	if _wave_lb == null:
+		return
+	var caption := "波 %d/%d" % [wave, _max_wave]
+	if _wave_lb.text != caption:
+		_wave_lb.text = caption
+	var fraction := clampf(float(wave if complete else wave - 1) / maxf(1.0, float(_max_wave)), 0.0, 1.0)
+	_wave_fill.visible = fraction > 0.0
+	_wave_fill.size.x = WAVE_TRACK_WIDTH * fraction
+
+func _refresh_vitals_hud() -> void:
+	if _hp_fill == null or _core == null:
+		return
+	var hp := float(_core.hero.get("hp", 0.0))
+	var hp_max := maxf(1.0, float(_core.hero.get("hp_max", 1.0)))
+	_set_vital_hud(_hp_fill, _hp_lb, hp, hp_max)
+	_set_vital_hud(_mp_bar, _mp_lb, _mp, maxf(1.0, _mp_max))
+
+func _set_vital_hud(fill: Panel, caption: Label, value: float, maximum: float) -> void:
+	var text := "%d/%d" % [int(maxf(0.0, value)), int(maximum)]
+	if caption.text != text:
+		caption.text = text
+	fill.visible = value > 0.0
+	fill.size.x = VITAL_TRACK_WIDTH * clampf(value / maximum, 0.0, 1.0)
 
 # ---------------- 战场 ----------------
 # 镜头容器：战场内容都挂在它下面，做推进（zoom）时整体一起缩放
@@ -892,7 +937,6 @@ func _build_field() -> void:
 	_combo_readout.z_index = 12
 	add_child(_combo_readout)
 	var hit := Button.new()
-	hit.position = Vector2(312, 710)
 	hit.size = Vector2(96, 96)
 	hit.flat = true
 	hit.focus_mode = Control.FOCUS_NONE
@@ -902,7 +946,7 @@ func _build_field() -> void:
 	hit.pressed.connect(func(): _open_attr_page())
 	_cam.add_child(hit)
 	_hero_hit_btn = hit
-	_hero_hit_btn.position = _hero_token.position - Vector2(48, 48)
+	_hero_hit_btn.position = _hero_token.position - Vector2(48, 48 + _hero_token.radius)
 	# 挑战方形
 	_chal_btn = _btn("挑战", Rect2(0, 760, 96, 96), 20, Color(0.075, 0.068, 0.060, 0.98), Color(0.91, 0.78, 0.42), func(): _toggle_challenge())
 	_chal_btn.visible = LevelState.show_button("challenge")
@@ -983,8 +1027,10 @@ func _build_field() -> void:
 	_fx_front.z_index = 7
 	_fx_front.clip_contents = true
 	add_child(_fx_front)
-	_hero_name_lb = _lbl("少侠", _hero_token.position + Vector2(-60, 52), Vector2(120, 24),
-		18, Color(0.30, 0.24, 0.16, 0.9), self, HORIZONTAL_ALIGNMENT_CENTER)
+	_hero_name_lb = _lbl("少侠", _hero_token.position + HERO_NAME_OFFSET, Vector2(120, 24),
+		17, LIGHT, _cam, HORIZONTAL_ALIGNMENT_CENTER)
+	_hero_name_lb.add_theme_color_override("font_outline_color", Color(0.10, 0.08, 0.06, 0.85))
+	_hero_name_lb.add_theme_constant_override("outline_size", 4)
 	_hero_name_lb.z_index = 9
 
 class SkillIcon extends Control:
@@ -1759,7 +1805,7 @@ func _curio_on_wave_clear(wave: int) -> void:
 		_add_wen(amt)
 		if _curio_lv >= 3 and _roll_curio_crystal():
 			_gain_crystal(1)
-		_spawn_fly(_hero_screen(), Vector2(99, 40), Color(0.90, 0.71, 0.30), 4)
+		_spawn_fly(_hero_screen(), _chip_target("文钱"), Color(0.90, 0.71, 0.30), 4)
 		_toast("聚宝盆 · 文钱 +%d" % amt)
 		_curio_uses += 1
 		_curio_flash()
@@ -1992,19 +2038,25 @@ func _pick_card(id: String) -> void:
 
 # ---------------- 底栏 ----------------
 func _build_bottom() -> void:
-	_panel(Rect2(8, 1071, 704, 209), Color(0.20, 0.157, 0.115), 12, Color(0.64, 0.48, 0.29), 2)
-	_panel(Rect2(16, 1114, 688, 154), Color(0.13, 0.106, 0.081), 8, Color(0.39, 0.28, 0.18), 1)
-	_lv_lb = _lbl("Lv 1", Vector2(22, 1088), Vector2(70, 28), 18, GOLD)
-	_panel(Rect2(96, 1090, 600, 16), Color(0.93, 0.90, 0.82, 0.16), 8)
-	_exp_bar = _panel(Rect2(96, 1090, 4, 16), Color(0.85, 0.66, 0.23), 8)
-	_exp_lb = _lbl("0/100", Vector2(600, 1088), Vector2(92, 20), 15, Color(0.88, 0.82, 0.70), self, HORIZONTAL_ALIGNMENT_RIGHT)
+	var village := LevelState.current_level == 1
+	var base_rect := Rect2(8, 1144, 704, 128) if village else Rect2(8, 1071, 704, 209)
+	_panel(base_rect, Color(0.20, 0.157, 0.115), 12, Color(0.64, 0.48, 0.29), 2)
+	if not village:
+		_panel(Rect2(16, 1114, 688, 154), Color(0.13, 0.106, 0.081), 8, Color(0.39, 0.28, 0.18), 1)
+	var track := Rect2(24, 1218, 672, 16) if village else Rect2(96, 1090, 600, 16)
+	var level_pos := Vector2(24, 1181) if village else Vector2(22, 1088)
+	var exp_pos := Vector2(604, 1184) if village else Vector2(600, 1088)
+	_lv_lb = _lbl("Lv 1", level_pos, Vector2(70, 28), 18, GOLD)
+	_exp_track = _panel(track, Color(0.93, 0.90, 0.82, 0.16), 8)
+	_exp_bar = _panel(Rect2(track.position, Vector2(4, track.size.y)), Color(0.85, 0.66, 0.23), 8)
+	_exp_lb = _lbl("0/100", exp_pos, Vector2(92, 20), 15, Color(0.88, 0.82, 0.70), self, HORIZONTAL_ALIGNMENT_RIGHT)
 	_market_tile = _tile(24, 1128, 124, "market", "黑市", false)
 	_market_tile.visible = LevelState.show_button("market")
 	_trea_tile = _tile(158, 1128, 124, "treasure", "宝物", false)
 	_trea_tile.visible = LevelState.show_button("treasure")
 	_mate_tile = _tile(292, 1128, 124, "mate", "请神", false)
 	_mate_tile.visible = LevelState.show_button("mate")
-	_str_tile = _tile(426, 1128, 124, "skill", "强化", false)
+	_str_tile = _tile(590, 1152, 112, "skill", "强化", false) if village else _tile(426, 1128, 124, "skill", "强化", false)
 	# 强化固定隐藏：清完第一波的教学那一刻才亮出来（不因重玩而提前显示）
 	_str_tile.visible = false
 	_str_tile.hot = false
@@ -2662,8 +2714,6 @@ func _process(_delta: float) -> void:
 		if _combo_t >= 6.0:
 			_combo_t -= 6.0
 			_trigger_combos("每 6 秒")
-		if _wave_lb != null:
-			_wave_lb.text = "波 %d/%d" % [int(_core.wave), _max_wave]
 		# v2 波次推进：本波定额刷完 + 场上清空 → 进下一波；满 MAX_WAVE 收工
 		if not _run_cleared and _core.wave_cleared():
 			var cleared_wave := int(_core.wave)
@@ -2677,8 +2727,7 @@ func _process(_delta: float) -> void:
 				_on_wave_clear(cleared_wave)
 				_end_run(true)
 				return
-		if _hp_lb != null:
-			_hp_lb.text = "%d/%d" % [int(float(_core.hero.get("hp", 0))), int(float(_core.hero.get("hp_max", 1)))]
+		_refresh_wave_hud(int(_core.wave))
 		var hpr := clampf(float(_core.hero.get("hp", 0.0)) / maxf(1.0, float(_core.hero.get("hp_max", 1.0))), 0.0, 1.0)
 		if LevelState.current_level >= 2 and LevelState.current_level <= 4:
 			# 不改怪面板，只偷偷加易伤：成长/家传组合给足，经济/危途给少一点
@@ -2714,9 +2763,9 @@ func _process(_delta: float) -> void:
 				_l1_tutorial("l1_yuhu", _curio_sq, "气血不足时，玉壶会自动回血", _show_curio_detail)
 		_tick_rare_buffs(_delta) # 到期先移除，再结算本帧技能，不能多借用一帧攻击。
 		if _hp_fill != null:
-			_hp_fill.size = Vector2(maxf(4.0, 235.0 * hpr), 20.0)
 			_tick_skills(_delta)
 		_tick_curio(_delta)
+		_refresh_vitals_hud()
 		_tick_fly(_delta)
 		_tick_pulses(_delta)
 		if not _recycle_q.is_empty():
@@ -2781,9 +2830,9 @@ func _process(_delta: float) -> void:
 				_hero_token.hp_ratio = hpr_tok
 				_hero_token.queue_redraw()
 			if _hero_hit_btn != null:
-				_hero_hit_btn.position = _hero_token.position - Vector2(48, 48)
+				_hero_hit_btn.position = _hero_token.position - Vector2(48, 48 + _hero_token.radius)
 			if _hero_name_lb != null:
-				_hero_name_lb.position = _hero_token.position + Vector2(-60, 52)
+				_hero_name_lb.position = _hero_token.position + HERO_NAME_OFFSET
 			var hhp := float(_core.hero.get("hp", 0.0))
 			if _prev_hero_hp >= 0.0 and hhp < _prev_hero_hp - 0.05:
 				_spawn_hit_fx(_hero_token.position, _hero_token.radius,
@@ -2849,7 +2898,7 @@ func _on_core_kill(n: int) -> void:
 	if _kill_lb != null:
 		_kill_lb.text = str(_kills)
 	_pulse_chip(_kill_lb)
-	_spawn_fly(_hero_screen() + Vector2(0, -26), Vector2(447, 40), Color(0.80, 0.36, 0.24), 2)
+	_spawn_fly(_hero_screen() + Vector2(0, -26), _chip_target("杀敌"), Color(0.80, 0.36, 0.24), 2)
 	if _bm != null and LevelState.show_button("market"):
 		_bm.add_kill(kn)   # 黑市没开放前不喂杀敌数，避免开局弹“黑市升到 Lv”
 	_add_exp(20 * kn)                      # v2：杀 1 只 +20 经验
@@ -2929,7 +2978,7 @@ func _refresh_level_ui() -> void:
 		_exp_lb.text = "%d/%d" % [_exp, _exp_need]
 	if _exp_bar != null:
 		var r := clampf(float(_exp) / maxf(1.0, float(_exp_need)), 0.0, 1.0)
-		_exp_bar.size = Vector2(maxf(4.0, 600.0 * r), 16.0)
+		_exp_bar.size.x = maxf(4.0, _exp_track.size.x * r)
 	if _mate_tile != null:
 		var lit := _draw_charge > 0
 		if _mate_tile.hot != lit or _mate_tile.badge != _draw_charge:
@@ -3027,6 +3076,9 @@ var _result_layer: Control = null
 func _end_run(win: bool) -> void:
 	if _run_over:
 		return
+	if _core != null:
+		_refresh_wave_hud(int(_core.wave), win)
+		_refresh_vitals_hud()
 	if win:
 		var SaveFile := preload("res://shared/save_file.gd")
 		if SaveFile.begin() == OK:
@@ -3053,7 +3105,7 @@ func _end_run(win: bool) -> void:
 		_core._hitstop = maxf(float(_core._hitstop), 0.30)
 	if win:
 		for i in 10:
-			_spawn_fly(Vector2(360, 470), Vector2(99, 40), Color(0.92, 0.74, 0.32), 1)
+			_spawn_fly(Vector2(360, 470), _chip_target("文钱"), Color(0.92, 0.74, 0.32), 1)
 	_build_result(win)
 	Aud.sfx("levelup" if win else "ui_back", -3.0)
 
@@ -3219,6 +3271,11 @@ func _on_wave_clear(cleared_wave: int) -> void:
 			_str_tile.queue_redraw()
 		# 只有第一关才跑强化/文钱/头像这条教学链
 		if LevelState.current_level == 1:
+			if _str_tile != null:
+				var track_end: float = _str_tile.position.x - 16.0
+				_exp_track.size.x = track_end - _exp_track.position.x
+				_exp_lb.position.x = track_end - _exp_lb.size.x
+				_refresh_level_ui()
 			_l1_tutorial("l1_wen", _str_tile,
 				"强化可以强化自身\n提升气血、内力和伤害（强化 Lv1）",
 				func() -> void:
@@ -3384,8 +3441,8 @@ func _on_str_tile() -> void:
 func _str_pop(txt: String) -> void:
 	var l := Label.new()
 	l.text = txt
-	l.position = Vector2(426, 998)
-	l.size = Vector2(124, 26)
+	l.position = _str_tile.position - Vector2(0, 60) if _str_tile != null else Vector2(426, 1068)
+	l.size = Vector2(_str_tile.size.x if _str_tile != null else 124.0, 26)
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	l.add_theme_font_override("font", FONT)
 	l.add_theme_font_size_override("font_size", 20)
@@ -3905,7 +3962,7 @@ func _gain_crystal(n: int) -> void:
 	_crystal += n
 	_update_crystal()
 	_pulse_chip(_crystal_lb)
-	_spawn_fly(_hero_screen() + Vector2(0, -30), Vector2(273, 40), Color(0.52, 0.78, 0.88), 2)
+	_spawn_fly(_hero_screen() + Vector2(0, -30), _chip_target("灵晶"), Color(0.52, 0.78, 0.88), 2)
 
 # 稀有单卡：拿到当场结算，不进羁绊
 func _apply_rare(o: Dictionary) -> void:
@@ -4700,10 +4757,18 @@ func _on_coin_drop(amount: int, pos: Vector2) -> void:
 	if _run_over or _core == null or amount <= 0:
 		return
 	_add_wen(amount)
-	_spawn_fly(_core.position + pos + Vector2(0, -18), Vector2(99, 40), Color(0.90, 0.71, 0.30), 3)
+	_spawn_fly(_core.position + pos + Vector2(0, -18), _chip_target("文钱"), Color(0.90, 0.71, 0.30), 3)
+
+func _chip_target(key: String) -> Vector2:
+	var chip := _chips.get(key) as Control
+	if chip == null or not chip.is_visible_in_tree():
+		return Vector2.INF
+	return chip.position + Vector2(24, 25)
 
 # 撒一把飞向資源条的小点（金币金、灵晶蓝）
 func _spawn_fly(from: Vector2, to: Vector2, col: Color, n: int) -> void:
+	if to == Vector2.INF:
+		return
 	for i in n:
 		if _fly.size() > 60:
 			break
@@ -5746,8 +5811,6 @@ func _tick_skills(dt: float) -> void:
 	var boosted_seconds := minf(maxf(0.0, dt), _curio_mana_regen_left)
 	_curio_mana_regen_left = maxf(0.0, _curio_mana_regen_left - dt)
 	_mp = minf(_mp_max, _mp + (20.0 + 2.0 * lv_mul) * (dt + boosted_seconds * 0.5))
-	if _mp_bar != null:
-		_mp_bar.size = Vector2(maxf(4.0, 235.0 * clampf(_mp / _mp_max, 0.0, 1.0)), 9.0)
 	for i in _skills.size():
 		if not _skill_batch_active(epoch):
 			return
@@ -6632,8 +6695,7 @@ func _backwash() -> void:
 	_spawn_typed_foes()
 	_last_wave = nw
 	_run_cleared = false
-	if _wave_lb != null:
-		_wave_lb.text = "波 %d/%d" % [nw, _max_wave]
+	_refresh_wave_hud(nw)
 	_toast("回潮 · 波数 %d → %d，重头再刷" % [w, nw])
 	_shiny_present("backwash")
 
