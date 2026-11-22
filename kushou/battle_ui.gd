@@ -569,7 +569,8 @@ class CardSlot extends Control:
 
 class DrawCard extends Control:
 	const F := preload("res://fonts/ink.ttf")
-	const QC := [Color(0.54,0.48,0.38), Color(0.31,0.48,0.29), Color(0.18,0.42,0.45), Color(0.42,0.29,0.48), Color(0.72,0.53,0.16)]
+	var QC := [Color(0.54,0.48,0.38), Color(0.31,0.48,0.29), Color(0.18,0.42,0.45), Color(0.42,0.29,0.48), Color(0.72,0.53,0.16)]
+	const CF := preload("res://kushou/card_frame.gd")
 	signal picked
 	var data: Dictionary = {}
 	var progress := 0          # 该卡所属组合的当前进度（由外壳写入）
@@ -591,12 +592,16 @@ class DrawCard extends Control:
 		if _art_rect != null:
 			_art_rect.visible = true
 		var q := clampi(int(data.get("quality", 3)) - 1, 0, 4)
-		var sb := StyleBoxFlat.new()
-		sb.bg_color = Color(0.96, 0.93, 0.86, 0.99)
-		sb.set_corner_radius_all(9)
-		sb.border_color = QC[q]
-		sb.set_border_width_all(6)
-		draw_style_box(sb, Rect2(Vector2.ZERO, size))
+		var framed := CF.draw_on(self, int(data.get("quality", 3)), size)
+		if framed:
+			CF.content_panel(self, Rect2(18, 40, size.x - 36, size.y - 58))
+		else:
+			var sb := StyleBoxFlat.new()
+			sb.bg_color = Color(0.96, 0.93, 0.86, 0.99)
+			sb.set_corner_radius_all(9)
+			sb.border_color = QC[q]
+			sb.set_border_width_all(6)
+			draw_style_box(sb, Rect2(Vector2.ZERO, size))
 		if bool(data.get("shiny", false)):
 			# 炫卡：七彩描边由外向内
 			var cols := [Color(0.85,0.28,0.30), Color(0.93,0.58,0.22), Color(0.90,0.80,0.28),
@@ -609,6 +614,7 @@ class DrawCard extends Control:
 				sp.set_border_width_all(2)
 				draw_style_box(sp, Rect2(Vector2(-2.0 - float(i) * 2.0, -2.0 - float(i) * 2.0),
 					size + Vector2(4.0 + float(i) * 4.0, 4.0 + float(i) * 4.0)))
+		CF.title_band(self, Rect2(6, 6, size.x - 12, 30))
 		draw_string(F, Vector2(0, 34), str(data.get("name", "")), HORIZONTAL_ALIGNMENT_CENTER, size.x, 24, Color(0.14,0.11,0.08))
 		var tex := load(str(data.get("art", "")))
 		if _art_rect != null:
@@ -4181,6 +4187,7 @@ class AugCard extends Control:
 	const F := preload("res://fonts/ink.ttf")
 	const QC := [Color(0.54,0.48,0.38), Color(0.31,0.48,0.29), Color(0.18,0.42,0.45), Color(0.42,0.29,0.48), Color(0.72,0.53,0.16)]
 	const QN := ["良品", "玄品", "地品", "天品"]
+	const CF := preload("res://kushou/card_frame.gd")
 	signal picked
 	var title := ""
 	var glyph := "攻"
@@ -4193,12 +4200,16 @@ class AugCard extends Control:
 		mouse_filter = Control.MOUSE_FILTER_STOP
 	func _draw() -> void:
 		var q := clampi(quality - 1, 0, 4)
-		var sb := StyleBoxFlat.new()
-		sb.bg_color = Color(0.96, 0.93, 0.86, 0.99)
-		sb.set_corner_radius_all(9)
-		sb.border_color = QC[q]
-		sb.set_border_width_all(6)
-		draw_style_box(sb, Rect2(Vector2.ZERO, size))
+		var framed := CF.draw_on(self, quality, size)
+		if framed:
+			CF.content_panel(self, Rect2(16, 34, size.x - 32, size.y - 52))
+		else:
+			var sb := StyleBoxFlat.new()
+			sb.bg_color = Color(0.96, 0.93, 0.86, 0.99)
+			sb.set_corner_radius_all(9)
+			sb.border_color = QC[q]
+			sb.set_border_width_all(6)
+			draw_style_box(sb, Rect2(Vector2.ZERO, size))
 		# 右上角品阶印（和抽卡卡面的"标题在最上"对齐，不抢标题的位置）
 		var tp := Vector2(size.x - 62, 14)
 		draw_rect(Rect2(tp, Vector2(48, 22)), QC[q])
@@ -5998,6 +6009,7 @@ class SkillSlot extends Control:
 class GodCard extends Control:
 	const F := preload("res://fonts/ink.ttf")
 	const QC := [Color(0.54,0.48,0.38), Color(0.31,0.48,0.29), Color(0.18,0.42,0.45), Color(0.42,0.29,0.48), Color(0.72,0.53,0.16)]
+	const CF := preload("res://kushou/card_frame.gd")
 	signal picked
 	var aid := ""
 	var god_name := ""
@@ -6012,12 +6024,15 @@ class GodCard extends Control:
 		var qc: Color = QC[clampi(quality - 1, 0, 4)]
 		var w := size.x
 		var h := size.y
-		var sb := StyleBoxFlat.new()
-		sb.bg_color = Color(0.965, 0.945, 0.90, 1.0)
-		sb.set_corner_radius_all(int(11.0 * w / 260.0))
-		sb.border_color = qc
-		sb.set_border_width_all(int(7.0 * w / 260.0))
-		draw_style_box(sb, Rect2(Vector2.ZERO, size))
+		if not CF.draw_on(self, quality, size):
+			var sb := StyleBoxFlat.new()
+			sb.bg_color = Color(0.965, 0.945, 0.90, 1.0)
+			sb.set_corner_radius_all(int(11.0 * w / 260.0))
+			sb.border_color = qc
+			sb.set_border_width_all(int(7.0 * w / 260.0))
+			draw_style_box(sb, Rect2(Vector2.ZERO, size))
+		else:
+			CF.content_panel(self, Rect2(0.07 * w, 0.06 * h, 0.86 * w, 0.88 * h))
 		draw_string(F, Vector2(0, h * 0.108), god_name, HORIZONTAL_ALIGNMENT_CENTER, w, int(w * 0.130), Color(0.14, 0.11, 0.08))
 		var side := w * 0.56
 		var pr := Rect2(Vector2((w - side) * 0.5, h * 0.145), Vector2(side, side))
