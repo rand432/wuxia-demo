@@ -35,7 +35,7 @@ func _run() -> void:
 	var aid: String = card.aid
 	card.picked.emit()
 	assert(b._ancestors.has(aid) and b._draw_charge == 2)
-	assert(not b._god_layer.visible and b._skill_slots[0].visible)
+	assert(not b._god_layer.visible and b._skill_slots[0].visible and b._skill_slots[0].arriving)
 	assert(b._skill_slots[0].skill_icon == b._god_skill_icon(aid))
 	assert(b.get_node_or_null("GodSkillSeal") != null)
 	state = _snapshot(b)
@@ -60,6 +60,21 @@ func _run() -> void:
 	b._on_trea_abandon()
 	assert(b._aug_reroll == aug + 1 and b._trea_reroll == trea + 1)
 	assert(not b._str_pending and not b._trea_pending)
+	# 刷新后只剩一张宝物时，旧卡数据和领取入口都要清掉。
+	b._roll_trea()
+	for bond in b.BOND_POOL:
+		b._bond_taken[bond["name"]] = true
+	for rare in b.RARE_POOL:
+		if rare["name"] != "中晶囊":
+			b._rare_taken[rare["name"]] = true
+	b._roll_trea()
+	b._trea_pending = true
+	b._open_trea()
+	assert(b._trea_cards[0].visible and b._trea_cards[0].o["name"] == "中晶囊")
+	for i in [1, 2]:
+		assert(not b._trea_cards[i].visible and b._trea_cards[i].o.is_empty())
+		b._on_trea_card(b._trea_cards[i])
+		assert(b._trea_pending)
 	# 正常复制仍授予属性；抽卡飞行动画中结束本局则不领取、不复制。
 	var atk: float = b._core.attr_final("atk")
 	b._grant_copy("atk_0_0")
@@ -94,6 +109,7 @@ func _run() -> void:
 	assert(randi() == next_random)
 	await create_timer(0.5).timeout
 	assert(not b._draw_anim and _snapshot(b) == state)
+	assert(not b._skill_slots[0].arriving and b.get_node_or_null("GodSkillSeal") == null)
 	b.queue_free()
 	await process_frame
 	print("PASS: current god hand only, skill arrival, paid draw resumes across choices, abandonment once, result blocks claims")

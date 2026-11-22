@@ -2664,11 +2664,11 @@ func _build_toast() -> void:
 	_toast_lb.bbcode_enabled = true
 	_toast_lb.fit_content = false
 	_toast_lb.scroll_active = false
-	_toast_lb.position = Vector2(74, 620)
-	_toast_lb.size = Vector2(572, 48)
+	_toast_lb.position = Vector2(100, 812)
+	_toast_lb.size = Vector2(520, 48)
 	_toast_lb.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_toast_lb.add_theme_font_override("normal_font", FONT)
-	_toast_lb.add_theme_font_size_override("normal_font_size", 26)
+	_toast_lb.add_theme_font_size_override("normal_font_size", 22)
 	_toast_lb.add_theme_color_override("default_color", INK)
 	var paper := StyleBoxFlat.new()
 	paper.bg_color = Color(0.97, 0.93, 0.84, 0.94)
@@ -3494,47 +3494,37 @@ const AUG_POOL := [
 	{"key": "killheal", "name": "血战", "glyph": "血", "v": 3, "text": "击杀回血 +%d%%", "desc": "越杀越精神"},
 ]
 
-# 进阶页：**照抽卡的排版**——三张卡直接浮在战场上（不遮暗、不暂停），
-#   按钮只有两个：［刷新 · N 次］（次数型，用一次少一次）和［隐藏］。
+const AUG_ART := {
+	"atk_pct": "it_sword", "hp_pct": "mat_bone", "aspd_pct": "it_dart",
+	"crit_add": "it_spear", "critdmg_add": "it_blade", "cut_add": "it_armor",
+	"cutall_add": "armor2", "pen_flat": "it_sword2", "dmgall_add": "fate_sharpen",
+	"mp_add": "it_jar", "gold_pct": "it_ingot", "killheal": "it_herb",
+}
+
 func _build_str() -> void:
+	for art in AUG_ART.values():
+		_choice_item(str(art))
 	_str_layer = Control.new()
 	_str_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_str_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE     # 空白处放行给战场
 	_str_layer.visible = false
 	_str_layer.z_index = 21
 	add_child(_str_layer)
-	var ban := Panel.new()
-	ban.position = Vector2(230, 162)
-	ban.size = Vector2(260, 42)
-	var bsb := StyleBoxFlat.new()
-	bsb.bg_color = Color(0.54, 0.23, 0.10)
-	bsb.set_corner_radius_all(4)
-	bsb.border_color = Color(0.95, 0.76, 0.36, 0.9)
-	bsb.set_border_width_all(2)
-	ban.add_theme_stylebox_override("panel", bsb)
-	_str_layer.add_child(ban)
-	_breathe(ban)
-	_str_ban_lb = _lbl("进阶", Vector2(0, 0), Vector2(260, 42), 20, Color(0.97, 0.90, 0.74), ban, HORIZONTAL_ALIGNMENT_CENTER)
-	_btn("隐藏", Rect2(620, 162, 72, 32), 17, Color(0.09, 0.08, 0.07, 0.98), GOLD, func(): _hide_aug_pick(), _str_layer)
+	var chrome := _build_choice_chrome(_str_layer, "进阶", _hide_aug_pick, _on_aug_refresh, _on_aug_abandon)
+	_str_ban_lb = chrome[0]
+	_aug_refresh_btn = chrome[1]
 	for i in 3:
-		var d := AugCard.new()
-		d.position = Vector2(30 + i * 220, 220)
-		d.set_meta("base", d.position)
-		d.pivot_offset = Vector2(100, 150)
-		d.size = Vector2(200, 300)
-		d.picked.connect(func() -> void: _on_aug_card(d))
-		_str_layer.add_child(d)
-		_aug_cards.append(d)
-	_aug_refresh_btn = _btn("刷新 · 0 次", Rect2(140, 540, 200, 54), 19,
-		Color(0.09, 0.08, 0.07, 0.98), GOLD, func(): _on_aug_refresh(), _str_layer)
-	_btn("放弃 +1 刷新", Rect2(360, 540, 200, 54), 19,
-		Color(0.09, 0.08, 0.07, 0.98), Color(0.80, 0.62, 0.34), func(): _on_aug_abandon(), _str_layer)
+		var card := AugCard.new()
+		card.size = Vector2(176, 335)
+		card.picked.connect(func(): _on_aug_card(card))
+		_str_layer.add_child(card)
+		_aug_cards.append(card)
 
 func _open_aug_pick() -> void:
 	if _run_over or not _str_pending or _str_layer == null:
 		return
 	if _draw_layer != null:
-		_draw_layer.visible = false                 # 抽卡页开着一并收掉，别叠在一起
+		_show_draw(false)
 	_hide_trea()
 	_hide_god_pick()
 	_str_round = maxi(1, _str_lv / STR_EVERY)
@@ -3547,8 +3537,9 @@ func _open_aug_pick() -> void:
 		_aug_rolled_lv = _str_lv
 		_roll_aug()
 	if _str_ban_lb != null:
-		_str_ban_lb.text = "进阶 · 第 %d 级" % _str_lv
+		_str_ban_lb.text = "强化 %d 级" % _str_lv
 	_str_layer.visible = true
+	_layer_in(_str_layer)
 	_str_layer.move_to_front()
 	_pop_aug_cards()
 	Aud.sfx("ui_open", -8.0)
@@ -3587,6 +3578,7 @@ func _roll_aug() -> void:
 	pool.shuffle()
 	for i in _aug_cards.size():
 		var ac: AugCard = _aug_cards[i]
+		ac.o = {}
 		if i < pool.size():
 			var o: Dictionary = (pool[i] as Dictionary).duplicate()
 			ac.o = o
@@ -3601,16 +3593,18 @@ func _roll_aug() -> void:
 			if str(o["key"]) == "pen_flat": ac.desc += " · 各系固定穿透最高60%"
 			if str(o["key"]) == "dmgall_add": ac.desc += " · 各系最终增幅最高200%"
 			ac.quality = quality
+			ac.artwork = _choice_item(str(AUG_ART.get(str(o["key"]), "")))
 			ac.visible = true
 			ac.mouse_filter = Control.MOUSE_FILTER_STOP
 		else:
 			ac.visible = false
-		ac.queue_redraw()
+		ac.refresh_face()
 	_refresh_aug_btn()
 
 func _refresh_aug_btn() -> void:
 	if _aug_refresh_btn != null:
 		_aug_refresh_btn.text = "刷新 · %d 次" % maxi(0, _aug_reroll)
+		_aug_refresh_btn.disabled = _aug_reroll <= 0
 
 # 刷新：次数型（不花文钱，但用一次少一次）
 func _on_aug_refresh() -> void:
@@ -3639,12 +3633,7 @@ func _on_aug_abandon() -> void:
 
 # 三张卡一起弹出来（跟抽卡一样的手感）
 func _pop_aug_cards() -> void:
-	for i in _aug_cards.size():
-		var card: AugCard = _aug_cards[i]
-		var base: Vector2 = card.get_meta("base", Vector2(30 + i * 220, 220))
-		card.visible = true
-		card.mouse_filter = Control.MOUSE_FILTER_STOP
-		MenuUI.Motion.pop(card, true, i * 0.055, base, (i - 1) * 0.025)
+	_pop_option_cards(_aug_cards)
 
 func _hide_aug_pick() -> void:
 	if _str_layer != null:
@@ -3660,6 +3649,7 @@ func _pick_aug(o: Dictionary, val: int) -> void:
 		return
 	if not _aug_has_effect(str(o.get("key", ""))):
 		_roll_aug()
+		_pop_aug_cards()
 		_toast("属性已达上限，已更新进阶候选")
 		return
 	_str_pending = false
@@ -3766,40 +3756,26 @@ const RARE_POOL := [
 # 稀有单卡出现概率（每一手三张里）
 const RARE_CHANCE := 0.30
 
-# 宝物页：和抽卡/进阶同一套排版，按钮三个：刷新 · N 次 / 隐藏 / 放弃 +1 刷新
 func _build_trea() -> void:
+	if LevelState.show_button("treasure"):
+		for pool in [BOND_POOL, RARE_POOL]:
+			for option in pool:
+				_choice_item(_treasure_art_key(option))
 	_trea_layer = Control.new()
 	_trea_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_trea_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_trea_layer.visible = false
 	_trea_layer.z_index = 22
 	add_child(_trea_layer)
-	var ban := Panel.new()
-	ban.position = Vector2(230, 162)
-	ban.size = Vector2(260, 42)
-	var bsb := StyleBoxFlat.new()
-	bsb.bg_color = Color(0.54, 0.23, 0.10)
-	bsb.set_corner_radius_all(4)
-	bsb.border_color = Color(0.95, 0.76, 0.36, 0.9)
-	bsb.set_border_width_all(2)
-	ban.add_theme_stylebox_override("panel", bsb)
-	_trea_layer.add_child(ban)
-	_breathe(ban)
-	_lbl("宝物 · 择一羁绊", Vector2(0, 0), Vector2(260, 42), 20, Color(0.97, 0.90, 0.74), ban, HORIZONTAL_ALIGNMENT_CENTER)
-	_btn("隐藏", Rect2(620, 162, 72, 32), 17, Color(0.09, 0.08, 0.07, 0.98), GOLD, func(): _hide_trea(), _trea_layer)
+	var chrome := _build_choice_chrome(_trea_layer, "宝物", _hide_trea, _on_trea_refresh, _on_trea_abandon)
+	chrome[0].text = "选择一件"
+	_trea_refresh_btn = chrome[1]
 	for i in 3:
-		var d := AugCard.new()
-		d.position = Vector2(30 + i * 220, 220)
-		d.set_meta("base", d.position)
-		d.pivot_offset = Vector2(100, 150)
-		d.size = Vector2(200, 300)
-		d.picked.connect(func() -> void: _on_trea_card(d))
-		_trea_layer.add_child(d)
-		_trea_cards.append(d)
-	_trea_refresh_btn = _btn("刷新 · 0 次", Rect2(140, 540, 200, 54), 19,
-		Color(0.09, 0.08, 0.07, 0.98), GOLD, func(): _on_trea_refresh(), _trea_layer)
-	_btn("放弃 +1 刷新", Rect2(360, 540, 200, 54), 19,
-		Color(0.09, 0.08, 0.07, 0.98), Color(0.80, 0.62, 0.34), func(): _on_trea_abandon(), _trea_layer)
+		var card := AugCard.new()
+		card.size = Vector2(176, 335)
+		card.picked.connect(func(): _on_trea_card(card))
+		_trea_layer.add_child(card)
+		_trea_cards.append(card)
 
 # 品质随波数升：1-2 良 · 3 玄 · 4-5 地 · 6+ 天
 func _trea_quality() -> int:
@@ -3849,9 +3825,8 @@ func _open_trea() -> void:
 	if _trea_layer == null:
 		return
 	if _draw_layer != null:
-		_draw_layer.visible = false
-	if _str_layer != null:
-		_str_layer.visible = false
+		_show_draw(false)
+	_hide_aug_pick()
 	_hide_god_pick()
 	_trea_layer.visible = true
 	_layer_in(_trea_layer)
@@ -3932,11 +3907,10 @@ func _roll_trea() -> void:
 	for i in _trea_cards.size():
 		var c: AugCard = _trea_cards[i]
 		var o: Dictionary = picks[i] if i < picks.size() else {}
+		c.o = o
 		if o.is_empty():
 			c.visible = false
-			c.queue_redraw()
 			continue
-		c.o = o
 		c.title = str(o["name"])
 		c.glyph = str(o["glyph"])
 		if bool(o.get("rare", false)):
@@ -3954,9 +3928,10 @@ func _roll_trea() -> void:
 				c.effect = str(o.get("lbl", "组合效果 +%d%%")) % int(c.oval)
 				c.desc = "需合成 " + "·".join(PackedStringArray(o["need"]))
 			c.quality = q
+		c.artwork = _choice_item(_treasure_art_key(o))
 		c.visible = true
 		c.mouse_filter = Control.MOUSE_FILTER_STOP
-		c.queue_redraw()
+		c.refresh_face()
 	_refresh_trea_btn()
 
 # 灵晶一切收入的唯一入口（「倾囊」把 _crystal_lock 打开后，这里就再也不给）
@@ -4050,21 +4025,17 @@ func _tick_rare_buffs(dt: float) -> void:
 func _refresh_trea_btn() -> void:
 	if _trea_refresh_btn != null:
 		_trea_refresh_btn.text = "刷新 · %d 次" % maxi(0, _trea_reroll)
+		_trea_refresh_btn.disabled = _trea_reroll <= 0
 
 func _pop_trea_cards() -> void:
-	for i in _trea_cards.size():
-		var card: AugCard = _trea_cards[i]
-		var base: Vector2 = card.get_meta("base", Vector2(30 + i * 220, 220))
-		card.visible = true
-		card.mouse_filter = Control.MOUSE_FILTER_STOP
-		MenuUI.Motion.pop(card, true, i * 0.055, base, (i - 1) * 0.025)
+	_pop_option_cards(_trea_cards)
 
 func _hide_trea() -> void:
 	if _trea_layer != null:
 		_trea_layer.visible = false
 
 func _on_trea_card(card: AugCard) -> void:
-	if _run_over or not _trea_pending or _trea_layer == null or not _trea_layer.visible or card == null or card.o.is_empty():
+	if _run_over or not _trea_pending or _trea_layer == null or not _trea_layer.visible or card == null or not _trea_cards.has(card) or card.o.is_empty():
 		return
 	_choice_fx("rare" if bool(card.o.get("rare", false)) else "trea")
 	_pick_trea(card.o, int(card.oval))
@@ -4471,50 +4442,98 @@ func _apply_aug(key: String, val: float) -> void:
 			_exp_pct += val
 
 # 进阶卡：三选一的卡面（200×300）
-class AugCard extends Control:
+class AugCard extends Button:
 	const F := preload("res://fonts/ink.ttf")
-	const QC := [Color(0.54,0.48,0.38), Color(0.31,0.48,0.29), Color(0.18,0.42,0.45), Color(0.42,0.29,0.48), Color(0.72,0.53,0.16)]
-	const QN := ["良品", "玄品", "地品", "天品"]
-	const CF := preload("res://kushou/card_frame.gd")
+	const P := preload("res://shared/ui_pal.gd")
+	const Motion := preload("res://shared/ui_motion.gd")
 	signal picked
 	var title := ""
-	var glyph := "攻"
+	var glyph := ""
 	var effect := ""
 	var desc := ""
 	var quality := 2
-	var o: Dictionary = {}      # 这一张掷到哪条进阶
-	var oval := 0               # 放大后的数值
+	var o: Dictionary = {}
+	var oval := 0
+	var artwork: Texture2D
+	var _effect_ink: Label
+	var _desc_ink: Label
+
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_STOP
+		focus_mode = Control.FOCUS_NONE
+		var blank := StyleBoxEmpty.new()
+		for state in ["normal", "hover", "pressed", "focus"]:
+			add_theme_stylebox_override(state, blank)
+		_effect_ink = _text_block(Rect2(10, 178, 156, 51), 18, Color(0.98, 0.87, 0.65))
+		_desc_ink = _text_block(Rect2(13, 231, 150, 61), 16, Color(0.88, 0.82, 0.70))
+		resized.connect(func():
+			_effect_ink.size.x = size.x - 20
+			_desc_ink.size.x = size.x - 26)
+		pressed.connect(func(): picked.emit())
+		mouse_entered.connect(queue_redraw)
+		mouse_exited.connect(queue_redraw)
+		Motion.bind_button(self)
+
+	func _text_block(rect: Rect2, font_size: int, color: Color) -> Label:
+		var block := Label.new()
+		block.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		block.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		block.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		block.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		block.max_lines_visible = 3
+		block.add_theme_font_override("font", F)
+		block.add_theme_font_size_override("font_size", font_size)
+		block.add_theme_color_override("font_color", color)
+		block.position = rect.position
+		block.size = rect.size
+		add_child(block)
+		return block
+
+	func refresh_face() -> void:
+		_effect_ink.text = effect
+		_desc_ink.text = desc
+		tooltip_text = effect + "\n" + desc
+		queue_redraw()
+
 	func _draw() -> void:
-		var q := clampi(quality - 1, 0, 4)
-		var framed := CF.draw_on(self, quality, size)
-		if framed:
-			CF.content_panel(self, Rect2(16, 34, size.x - 32, size.y - 52))
+		if o.is_empty():
+			return
+		var tone := P.quality(quality)
+		var rim := tone.lerp(Color(0.91, 0.76, 0.48), 0.65)
+		if is_hovered():
+			rim = rim.lightened(0.18)
+		var frame := StyleBoxFlat.new()
+		frame.bg_color = Color(0.195, 0.155, 0.109)
+		frame.set_corner_radius_all(10)
+		frame.border_color = rim
+		frame.set_border_width_all(2)
+		frame.shadow_color = Color(0.02, 0.015, 0.01, 0.7)
+		frame.shadow_size = 5
+		frame.shadow_offset = Vector2(0, 3)
+		draw_style_box(frame, Rect2(Vector2.ZERO, size))
+		var paper := StyleBoxFlat.new()
+		paper.bg_color = Color(0.88, 0.83, 0.70).lerp(tone, 0.16)
+		paper.set_corner_radius_all(7)
+		paper.border_color = rim
+		paper.set_border_width_all(1)
+		draw_style_box(paper, Rect2(8, 48, size.x - 16, 126))
+		var c := Vector2(size.x * 0.5, 111)
+		draw_circle(c, 48, Color(0.96, 0.91, 0.77, 0.80), true, -1.0, true)
+		draw_arc(c, 48, 0, TAU, 42, Color(tone, 0.48), 1.3, true)
+		if artwork == null:
+			draw_string(F, Vector2(10, 124), glyph, HORIZONTAL_ALIGNMENT_CENTER, size.x - 20, 38, P.INK)
 		else:
-			var sb := StyleBoxFlat.new()
-			sb.bg_color = Color(0.96, 0.93, 0.86, 0.99)
-			sb.set_corner_radius_all(9)
-			sb.border_color = QC[q]
-			sb.set_border_width_all(6)
-			draw_style_box(sb, Rect2(Vector2.ZERO, size))
-		# 右上角品阶印（和抽卡卡面的"标题在最上"对齐，不抢标题的位置）
-		var tp := Vector2(size.x - 62, 14)
-		draw_rect(Rect2(tp, Vector2(48, 22)), QC[q])
-		draw_string(F, tp + Vector2(0, 16), QN[clampi(quality - 2, 0, 3)],
-			HORIZONTAL_ALIGNMENT_CENTER, 48, 13, Color(0.98, 0.96, 0.90))
-		draw_string(F, Vector2(0, 52), title, HORIZONTAL_ALIGNMENT_CENTER, size.x, 28 if title.length() <= 3 else 24, Color(0.14, 0.11, 0.08))
-		# 图标缩小，给底部说明腾出更大字号的空间
-		var c := Vector2(size.x * 0.5, 134.0)
-		draw_circle(c, 38, Color(0.93, 0.90, 0.82))
-		draw_arc(c, 38.0, 0.0, TAU, 48, QC[q], 2.0)
-		draw_string(F, c + Vector2(-11, 12), glyph, HORIZONTAL_ALIGNMENT_LEFT, -1, 34, Color(0.13, 0.12, 0.11))
-		draw_string(F, Vector2(0, 214), effect, HORIZONTAL_ALIGNMENT_CENTER, size.x, 26, Color(0.46, 0.20, 0.10))
-		draw_multiline_string(F, Vector2(10, 244), desc, HORIZONTAL_ALIGNMENT_CENTER, size.x - 20, 17, 2, Color(0.38, 0.33, 0.26))
-		draw_string(F, Vector2(0, 292), "点击选取", HORIZONTAL_ALIGNMENT_CENTER, size.x, 13, Color(0.58, 0.50, 0.36))
-	func _gui_input(ev: InputEvent) -> void:
-		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
-			picked.emit()
+			var source := artwork.get_size()
+			var fit := source * (92.0 / maxf(source.x, source.y))
+			draw_texture_rect(artwork, Rect2(c - fit * 0.5, fit), false)
+		var rare := bool(o.get("rare", false))
+		var grade: String = "稀有" if rare else ["凡品", "良品", "玄品", "地品", "天品"][clampi(quality - 1, 0, 4)]
+		draw_string(F, Vector2(10, 33), title, HORIZONTAL_ALIGNMENT_LEFT, size.x - 62, 22, P.PAPER_HI)
+		draw_string(F, Vector2(size.x - 49, 32), grade, HORIZONTAL_ALIGNMENT_RIGHT, 38, 14, rim.lightened(0.22))
+		draw_line(Vector2(12, 298), Vector2(size.x - 12, 298), Color(rim, 0.57), 1.0, true)
+		draw_string(F, Vector2(8, 321), "选取", HORIZONTAL_ALIGNMENT_CENTER, size.x - 16, 18, rim.lightened(0.25))
+
+
 
 func _make_foe_token(f: Dictionary):
 	var kind := str(f.get("kind", "normal"))
@@ -5779,6 +5798,7 @@ var _god_layer: Control = null
 var _god_root: Control = null
 var _god_ban_lb: Label = null
 var _god_refresh_btn: Button = null
+var _god_art := {}
 var _god_reroll := 0            # 请神刷新次数（放弃 +1，刷新 -1）
 var _god_hand_charge := -1      # 记住这一手是几次请神时掷的（隐藏再开不重掷）
 
@@ -6109,12 +6129,65 @@ func _label_skill(aid: String) -> String:
 
 # ---------------- 请神选卡 ----------------
 func _build_god_pick() -> void:
+	for aid in LevelState.god_ids():
+		if AncestorData.ANCESTORS.has(aid):
+			_god_skill_art(str(aid), str(AncestorData.ANCESTORS[aid]["art"]))
 	_god_layer = Control.new()
 	_god_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_god_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE      # 空白处放行给战场
 	_god_layer.visible = false
 	_god_layer.z_index = 40
 	add_child(_god_layer)
+	var chrome := _build_choice_chrome(_god_layer, "请神", _hide_god_pick, _on_god_refresh, _on_god_abandon)
+	_god_ban_lb = chrome[0]
+	_god_refresh_btn = chrome[1]
+	_god_root = Control.new()
+	_god_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_god_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_god_layer.add_child(_god_root)
+
+func _pop_option_cards(cards: Array) -> void:
+	var offered := 0
+	for card in cards:
+		if not card.o.is_empty():
+			offered += 1
+	var width := 250.0 if offered < 3 else 176.0
+	var left := (W - (width * offered + 16.0 * maxi(0, offered - 1))) * 0.5
+	var i := 0
+	for card in cards:
+		card.visible = not card.o.is_empty()
+		if not card.visible:
+			MenuUI.Motion.stop(card)
+			continue
+		card.size.x = width
+		var goal := Vector2(left + i * (width + 16.0), 242)
+		MenuUI.Motion.pop(card, true, i * 0.05, goal, (i - (offered - 1) * 0.5) * 0.018)
+		i += 1
+
+var _choice_item_art := {}
+
+func _choice_item(key: String) -> Texture2D:
+	if not _choice_item_art.has(key):
+		var path := "res://assets/items/%s.png" % key
+		_choice_item_art[key] = load(path) as Texture2D if ResourceLoader.exists(path) else null
+	return _choice_item_art[key] as Texture2D
+
+func _treasure_art_key(option: Dictionary) -> String:
+	if not bool(option.get("rare", false)):
+		var line := str(option.get("line", ""))
+		var series: Array = option.get("need_series", [])
+		if line == "危途线" or series.has("swarm"):
+			return "it_blade"
+		if line == "经济线" or series.has("gold") or series.has("crystal"):
+			return "chest_gold"
+		return "it_book" if line == "成长线" or not series.is_empty() else "it_scroll"
+	match str(option.get("kind", "")):
+		"buff": return "fate_bloodpath"
+		"convert", "mix": return "it_ingot"
+		"crystal_burst": return "fate_allin"
+	return str({"wen": "loot_silver", "kill": "it_token", "crystal": "mat_jin"}.get(option.get("res", ""), "it_scroll"))
+
+func _build_choice_chrome(layer: Control, title: String, hide: Callable, refresh: Callable, abandon: Callable) -> Array:
 	var ink_wash := Gradient.new()
 	var shade_color := Color(0.10, 0.08, 0.06)
 	ink_wash.offsets = PackedFloat32Array([0.0, 0.11, 0.70, 1.0])
@@ -6130,25 +6203,22 @@ func _build_god_pick() -> void:
 	shade.position = Vector2(0, 136)
 	shade.size = Vector2(W, 720)
 	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_god_layer.add_child(shade)
+	layer.add_child(shade)
 	var ink := Color(0.13, 0.106, 0.081)
 	var rim := Color(0.64, 0.48, 0.29)
 	var brass := Color(0.87, 0.73, 0.49)
-	_panel(Rect2(52, 166, 616, 498), Color(0.19, 0.15, 0.11, 0.98), 14, rim, 2, _god_layer)
-	_panel(Rect2(65, 228, 590, 365), ink, 10, Color(0.39, 0.28, 0.18), 1, _god_layer)
-	_lbl("请神", Vector2(75, 179), Vector2(152, 43), 32, LIGHT, _god_layer)
-	_god_ban_lb = _lbl("", Vector2(223, 182), Vector2(274, 40), 22, brass, _god_layer, HORIZONTAL_ALIGNMENT_CENTER)
-	_btn("隐藏", Rect2(562, 180, 84, 40), 19, ink, LIGHT, _hide_god_pick, _god_layer, rim, 1)
-	_god_root = Control.new()
-	_god_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_god_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_god_layer.add_child(_god_root)
-	_god_refresh_btn = _btn("刷新 · 0 次", Rect2(106, 602, 240, 47), 20,
-		Color(0.30, 0.22, 0.14), LIGHT, _on_god_refresh, _god_layer, rim, 1)
-	_god_refresh_btn.add_theme_stylebox_override("disabled", _god_refresh_btn.get_theme_stylebox("normal").duplicate())
-	_god_refresh_btn.add_theme_color_override("font_disabled_color", Color(0.63, 0.54, 0.43))
+	_panel(Rect2(52, 166, 616, 498), Color(0.19, 0.15, 0.11, 0.98), 14, rim, 2, layer)
+	_panel(Rect2(65, 228, 590, 365), ink, 10, Color(0.39, 0.28, 0.18), 1, layer)
+	_lbl(title, Vector2(75, 179), Vector2(152, 43), 32, LIGHT, layer)
+	var caption := _lbl("", Vector2(223, 182), Vector2(274, 40), 22, brass, layer, HORIZONTAL_ALIGNMENT_CENTER)
+	_btn("隐藏", Rect2(562, 180, 84, 40), 19, ink, LIGHT, hide, layer, rim, 1)
+	var refresh_button := _btn("刷新 · 0 次", Rect2(106, 602, 240, 47), 20,
+		Color(0.30, 0.22, 0.14), LIGHT, refresh, layer, rim, 1)
+	refresh_button.add_theme_stylebox_override("disabled", refresh_button.get_theme_stylebox("normal").duplicate())
+	refresh_button.add_theme_color_override("font_disabled_color", Color(0.63, 0.54, 0.43))
 	_btn("放弃 · +1 刷新", Rect2(374, 602, 240, 47), 20,
-		ink, LIGHT, _on_god_abandon, _god_layer, rim, 1)
+		ink, LIGHT, abandon, layer, rim, 1)
+	return [caption, refresh_button]
 
 func _show_god_pick() -> void:
 	if _run_over or _god_layer == null:
@@ -6218,13 +6288,13 @@ func _roll_god() -> void:
 		gc.skill_name = str(a["skill"])
 		gc.element = str(a.get("dtype", ""))
 		gc.quality = int(a["quality"])
-		var icon_path := _god_skill_icon(aid)
-		gc.skill_art = load(icon_path if icon_path != "" else str(a["art"])) as Texture2D
+		gc.skill_art = _god_skill_art(aid, str(a["art"]))
 		var skill: Dictionary = SKILL_DEFS.get(aid, {})
 		if skill.is_empty():
 			gc.skill_meta = "被动光环" if aid == "mingzhu" else "家传入口入池"
 		else:
-			var cool := String.num(float(skill["cd"]) * _curio_skill_cd_mul(), 1)
+			var seconds := snappedf(float(skill["cd"]) * _curio_skill_cd_mul(), 0.1)
+			var cool := str(int(seconds)) if is_equal_approx(seconds, roundf(seconds)) else String.num(seconds, 1)
 			gc.skill_meta = "内力 %d  ·  冷却 %s 秒" % [int(skill["mp"]), cool]
 		gc.position = Vector2(x0 + float(i) * 274.0, 242)
 		gc.size = Vector2(250, 335)
@@ -6278,9 +6348,18 @@ func _god_skill_icon(aid: String) -> String:
 	var path := "res://assets/gen/icons/skill_%s.png" % icon_key
 	return path if ResourceLoader.exists(path) else ""
 
+func _god_skill_art(aid: String, fallback: String) -> Texture2D:
+	if not _god_art.has(aid):
+		var path := _god_skill_icon(aid)
+		_god_art[aid] = load(fallback if path.is_empty() else path) as Texture2D
+	return _god_art[aid] as Texture2D
+
 func _fly_god_seal(tex: Texture2D, from: Vector2, slot: SkillSlot) -> void:
 	if tex == null:
 		return
+	if slot != null:
+		slot.arriving = true
+		slot.queue_redraw()
 	var edge := Color(0.86, 0.68, 0.38)
 	var seal := _panel(Rect2(from - Vector2(42, 42), Vector2(84, 84)), Color(0.90, 0.85, 0.72), 14, edge, 2)
 	seal.name = "GodSkillSeal"
@@ -6300,8 +6379,10 @@ func _fly_god_seal(tex: Texture2D, from: Vector2, slot: SkillSlot) -> void:
 	fly.tween_property(seal, "position", dest - seal.pivot_offset, 0.25).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
 	fly.parallel().tween_property(seal, "scale", Vector2.ONE * 0.58, 0.25).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	fly.tween_callback(func():
-		if is_instance_valid(slot) and not _run_over:
-			slot.flash = 1.0
+		if is_instance_valid(slot):
+			slot.arriving = false
+			if not _run_over:
+				slot.flash = 1.0
 			slot.queue_redraw()
 		seal.queue_free())
 
@@ -6348,6 +6429,7 @@ class SkillSlot extends Control:
 	var cd_left := 0.0
 	var cd_max := 1.0
 	var mp_cost := 0
+	var arriving := false
 	var flash := 0.0          # 刚放完技能：一圈金色扩散
 	var _tex: Texture2D = null
 	func _ready() -> void:
@@ -6360,12 +6442,15 @@ class SkillSlot extends Control:
 	func _draw() -> void:
 		var qc: Color = QC[clampi(quality - 1, 0, 4)]
 		var sb := StyleBoxFlat.new()
-		sb.bg_color = Color(0.96, 0.93, 0.86, 0.98)
+		sb.bg_color = Color(0.16, 0.13, 0.10, 0.80) if arriving else Color(0.96, 0.93, 0.86, 0.98)
 		sb.set_corner_radius_all(9)
 		sb.border_color = qc
 		sb.set_border_width_all(3)
 		draw_style_box(sb, Rect2(Vector2.ZERO, size))
 		var c := size * 0.5
+		if arriving:
+			draw_arc(c, 15, 0.0, TAU, 32, Color(0.89, 0.73, 0.42, 0.56), 1.5, true)
+			return
 		if _tex != null:
 			var inset := size * 0.10
 			draw_texture_rect(_tex, Rect2(inset, size - inset * 2.0), false)
