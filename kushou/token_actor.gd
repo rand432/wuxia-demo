@@ -16,6 +16,7 @@ const UI_FONT := preload("res://fonts/ink.ttf")
 
 var role := "player"
 var art_tex: Texture2D = null
+var round_mask := true      # false = 画完整立绘（怪物用），不裁成圆牌
 var radius := 62.0
 var ring_col := Color(0.86, 0.68, 0.26)
 var crop_top := false
@@ -39,6 +40,7 @@ var _spawn_t := 0.26
 var _hit_t := 0.0
 var _hit_dir := Vector2.RIGHT
 var _hit_strength := 1.0
+var _anim_t := 0.0
 const DEATH_DURATION := 0.38
 
 
@@ -79,13 +81,14 @@ func _ready() -> void:
 			_sprite.region_enabled = true
 			_sprite.region_rect = Rect2(0.0, 0.0, w, h * 0.62)
 			h = h * 0.62
-		_base_scale = (radius * 1.86) / maxf(w, h)
+		_base_scale = (radius * (1.86 if round_mask else 4.1)) / maxf(w, h)
 		_sprite.scale = Vector2(_base_scale, _base_scale)
 	var sh := Shader.new()
 	sh.code = "shader_type canvas_item;\nvoid fragment(){ vec2 uv = UV - vec2(0.5); if (dot(uv, uv) > 0.25) { discard; } COLOR = texture(TEXTURE, UV); }"
 	var mat := ShaderMaterial.new()
 	mat.shader = sh
-	_sprite.material = mat
+	if round_mask:
+		_sprite.material = mat
 	add_child(_sprite)
 	queue_redraw()
 
@@ -95,7 +98,9 @@ func _process(delta: float) -> void:
 		_death_t += delta
 		var p := clampf(_death_t / DEATH_DURATION, 0.0, 1.0)
 		modulate = Color(0.68, 0.64, 0.57, pow(1.0 - p, 1.3))
-		_apply_visual_pose(Vector2.ONE * (1.0 + 0.08 * sin(p * PI) - 0.24 * p), _hit_dir * 10.0 * p + Vector2(0, 8.0 * p), 0.12 * p * signf(_hit_dir.x))
+		# 击败：先狠狠压扁，再散开（q 弹）
+		var sq := Vector2(1.0 + 0.55 * p, maxf(0.12, 1.0 - 0.78 * p))
+		_apply_visual_pose(sq, _hit_dir * 10.0 * p + Vector2(0, 10.0 * p), 0.16 * p * signf(_hit_dir.x))
 		visible = p < 1.0
 		queue_redraw()
 		return
@@ -107,8 +112,13 @@ func _process(delta: float) -> void:
 	var ease := 1.0 + 2.70158 * pow(enter - 1.0, 3.0) + 1.70158 * pow(enter - 1.0, 2.0)
 	var pop := lerpf(0.68, 1.0, ease)
 	var recoil := sin(_hit_t * PI) * _hit_strength
-	var attack := sin(_pulse * PI) * 0.035
-	_apply_visual_pose(Vector2(pop * (1.0 + recoil * 0.08 + attack), pop * (1.0 - recoil * 0.08 + attack)), Vector2(0, 18.0 * (1.0 - enter)) + _hit_dir * recoil * 7.0)
+	_anim_t += delta
+	var breathe := 1.0 + 0.030 * sin(_anim_t * 3.1)
+	var atk := sin(_pulse * PI)
+	var beat := sin(_anim_t * 3.1 + 0.6) * 1.4
+	var sx := pop * breathe * (1.0 + recoil * 0.08) * (1.0 + 0.16 * atk)
+	var sy := pop / breathe * (1.0 - recoil * 0.08) * (1.0 - 0.14 * atk)
+	_apply_visual_pose(Vector2(sx, sy), Vector2(0, 18.0 * (1.0 - enter) + beat) + _hit_dir * recoil * 7.0, 0.05 * atk * signf(_hit_dir.x))
 	modulate = Color(1, 1, 1, lerpf(0.35, 1.0, enter))
 	if is_instance_valid(_sprite):
 		_sprite.modulate = Color(1.0, 1.0 - 0.35 * _flash, 1.0 - 0.42 * _flash)
@@ -181,13 +191,15 @@ func _draw() -> void:
 	draw_set_transform(off + Vector2(0.0, -4.0), 0.0, Vector2(1.0, 0.34))
 	draw_circle(Vector2.ZERO, radius * 0.62, Color(0.18, 0.14, 0.10, 0.16))
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-	# 圆牌底 + 金边
+	# 圆牌底 + 金边（怪物：有立绘时省掉圆牌，直接站人）
 	var c := Vector2(0.0, -radius) + off
-	draw_circle(c, radius, Color(0.93, 0.90, 0.83, 1.0))
-	draw_arc(c, radius, 0.0, TAU, 64, Color(0.42, 0.35, 0.25, 0.55), 2.0, true)
-	draw_arc(c, radius - 4.0, 0.0, TAU, 64, Color(ring_col.r, ring_col.g, ring_col.b, 0.85), 2.0, true)
-	if _flash > 0.0:
-		draw_arc(c, radius + 1.5, 0.0, TAU, 40, Color(1.0, 0.94, 0.72, _flash), 4.0, true)
+	var show_plate := art_tex == null or round_mask
+	if show_plate:
+		draw_circle(c, radius, Color(0.93, 0.90, 0.83, 1.0))
+		draw_arc(c, radius, 0.0, TAU, 64, Color(0.42, 0.35, 0.25, 0.55), 2.0, true)
+		draw_arc(c, radius - 4.0, 0.0, TAU, 64, Color(ring_col.r, ring_col.g, ring_col.b, 0.85), 2.0, true)
+		if _flash > 0.0:
+			draw_arc(c, radius + 1.5, 0.0, TAU, 40, Color(1.0, 0.94, 0.72, _flash), 4.0, true)
 	if _spawn_t < 0.26 and _death_t < 0.0:
 		var enter := clampf(_spawn_t / 0.26, 0.0, 1.0)
 		draw_arc(c, radius + 12.0 * (1.0 - enter), -PI * 0.9, PI * 0.8, 32, Color(0.24, 0.22, 0.19, 0.3 * (1.0 - enter)), 2.0, true)
