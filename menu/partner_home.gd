@@ -54,7 +54,7 @@ const PORTRAIT := {
 	"jicanghai": "res://assets/gen/qingshen/portrait_jicanghai.jpg",
 	"zhujue": "res://assets/gen/qingshen/portrait_zhujue.jpg",
 	"chenshi": "res://assets/gen/qingshen/portrait_chenshi.jpg",
-	"liuqingqing": "res://assets/gen/qingshen/portrait_liuqingqing.jpg",
+	"liuqingqing": "res://assets/gen/qingshen/portrait_liuqingqing_ink_v1.png",
 	"xiaoqier": "res://assets/gen/qingshen/portrait_xiaoqier.jpg",
 	"gundilong": "res://assets/gen/qingshen/portrait_gundilong.jpg",
 	"qingluan": "res://assets/gen/qingshen/portrait_qingluan.jpg",
@@ -619,33 +619,30 @@ class GodArt extends Control:
 	func _draw() -> void:
 		var qc: Color = QC[clampi(quality - 1, 0, 4)]
 		var sb := StyleBoxFlat.new()
-		sb.bg_color = Color(0.972, 0.958, 0.930, 1.0)
+		sb.bg_color = Color(0.12, 0.14, 0.13)
 		sb.set_corner_radius_all(12 if focus else 9)
-		sb.border_color = qc
-		sb.set_border_width_all(4 if focus else 2)
+		sb.border_color = qc.lerp(Color(0.88, 0.75, 0.49), 0.55)
+		sb.set_border_width_all(3 if focus else 2)
+		sb.shadow_color = Color(0.16, 0.11, 0.06, 0.38)
+		sb.shadow_size = 12 if focus else 5
+		sb.shadow_offset = Vector2(0, 5)
 		draw_style_box(sb, Rect2(Vector2.ZERO, size))
 		if art != null:
-			var pad := 10.0 if focus else 8.0
-			var ar := Rect2(Vector2(pad, pad), size - Vector2(pad * 2.0, pad * 2.0 - 26.0))
+			var pad := 5.0
+			var ar := Rect2(Vector2(pad, pad), size - Vector2.ONE * pad * 2.0)
 			var ts := art.get_size()
-			var sc: float = minf(ar.size.x / ts.x, ar.size.y / ts.y)
-			draw_texture_rect(art, Rect2(ar.position + Vector2((ar.size.x - ts.x * sc) * 0.5, 0), Vector2(ts.x * sc, ts.y * sc)), false)
-		# 竖排名牌
-		var pw := 28.0 if focus else 22.0
-		var phh := 26.0 * float(maxi(1, god_name.length())) + 10.0
-		var pp := Rect2(Vector2(14, 14), Vector2(pw, phh))
-		var psb := StyleBoxFlat.new()
-		psb.bg_color = Color(0.98, 0.96, 0.92, 0.92)
-		psb.set_corner_radius_all(4)
-		psb.border_color = Color(0.70, 0.60, 0.42, 0.8)
-		psb.set_border_width_all(1)
-		draw_style_box(psb, pp)
-		for i in god_name.length():
-			draw_string(F, pp.position + Vector2(4, 24.0 + float(i) * 26.0), god_name.substr(i, 1),
-				HORIZONTAL_ALIGNMENT_LEFT, -1, 18 if focus else 15, Color(0.14, 0.13, 0.15))
+			var source_size := ar.size / maxf(ar.size.x / ts.x, ar.size.y / ts.y)
+			var source := Rect2((ts - source_size) * Vector2(0.5, 0.32), source_size)
+			draw_texture_rect_region(art, ar, source)
+		var foot := size.y - (106.0 if focus else 68.0)
+		var ink_clear := Color(0.055, 0.071, 0.062, 0.0)
+		var ink_dark := Color(0.055, 0.071, 0.062, 0.97)
+		draw_polygon(PackedVector2Array([Vector2(5, foot), Vector2(size.x - 5, foot), Vector2(size.x - 5, size.y - 5), Vector2(5, size.y - 5)]), PackedColorArray([ink_clear, ink_clear, ink_dark, ink_dark]))
+		draw_string(F, Vector2(18, size.y - (49.0 if focus else 23.0)), god_name,
+			HORIZONTAL_ALIGNMENT_LEFT, size.x - 60.0, 31 if focus else 24, Color(0.99, 0.94, 0.81))
 		# 品质章
 		var qs := 34.0 if focus else 26.0
-		var qp := Rect2(Vector2(size.x - qs - 12, size.y - qs - 40), Vector2(qs, qs))
+		var qp := Rect2(Vector2(size.x - qs - 14, size.y - qs - (40 if focus else 12)), Vector2(qs, qs))
 		var qsb := StyleBoxFlat.new()
 		qsb.bg_color = qc
 		qsb.set_corner_radius_all(4)
@@ -655,6 +652,7 @@ class GodArt extends Control:
 		# 星级（画在图上）
 		if focus:
 			var cy := size.y - 22.0
+			draw_line(Vector2(16, cy - 14), Vector2(size.x - 16, cy - 14), Color(0.85, 0.70, 0.43, 0.52), 1.0, true)
 			for i in 5:
 				_star(Vector2(size.x * 0.5 - 40.0 + float(i) * 20.0, cy), 7.0, i < stars)
 	func _star(c: Vector2, r: float, filled: bool) -> void:

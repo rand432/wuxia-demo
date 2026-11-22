@@ -27,11 +27,15 @@ var show_bar := false
 var hp_ratio := 1.0
 var unit_name := ""
 var bar_w := 72.0
-var name_col := Color(0.18, 0.15, 0.12, 0.85)
+var name_col := Color(0.99, 0.94, 0.81)
 
 var _sprite: Sprite2D
 var _base_scale := 1.0
-var _pulse := 0.0
+var _art_height := 0.0
+var _attack_time := 0.0
+var _windup := 0.0
+var _attack_direction := Vector2.RIGHT
+var _recover_after_down := false
 var _flash := 0.0
 var _death_t := -1.0
 var _sink := 0.0
@@ -41,6 +45,8 @@ var _hit_t := 0.0
 var _hit_dir := Vector2.RIGHT
 var _hit_strength := 1.0
 var _anim_t := 0.0
+var _last_feet := Vector2.ZERO
+var _walk_blend := 0.0
 const DEATH_DURATION := 0.38
 
 
@@ -49,6 +55,8 @@ func setup(tex: Texture2D, r: float, ring: Color, crop: bool) -> void:
 	radius = maxf(20.0, r)
 	ring_col = ring
 	crop_top = crop
+	if is_instance_valid(_sprite):
+		_refresh_sprite()
 
 
 func set_role(r: String) -> void:
@@ -72,61 +80,85 @@ func face(dir: int) -> void:
 func _ready() -> void:
 	_sprite = Sprite2D.new()
 	_sprite.centered = true
+	add_child(_sprite)
+	_refresh_sprite()
+	_last_feet = position
+	queue_redraw()
+
+func _refresh_sprite() -> void:
 	_sprite.position = Vector2(0.0, -radius)
+	_art_height = 0.0
 	_sprite.texture = art_tex
+	_sprite.region_enabled = crop_top and art_tex != null
 	if art_tex != null:
 		var w := float(art_tex.get_width())
 		var h := float(art_tex.get_height())
 		if crop_top:
-			_sprite.region_enabled = true
 			_sprite.region_rect = Rect2(0.0, 0.0, w, h * 0.62)
 			h = h * 0.62
-		_base_scale = (radius * (1.86 if round_mask else 4.1)) / maxf(w, h)
+		_base_scale = (radius * (1.86 if round_mask else 3.15)) / maxf(w, h)
 		_sprite.scale = Vector2(_base_scale, _base_scale)
-	var sh := Shader.new()
-	sh.code = "shader_type canvas_item;\nvoid fragment(){ vec2 uv = UV - vec2(0.5); if (dot(uv, uv) > 0.25) { discard; } COLOR = texture(TEXTURE, UV); }"
-	var mat := ShaderMaterial.new()
-	mat.shader = sh
-	if round_mask:
-		_sprite.material = mat
-	add_child(_sprite)
-	queue_redraw()
+		if not round_mask:
+			_art_height = h * _base_scale
+			_sprite.position.y = -_art_height * 0.5
+	if round_mask and art_tex != null:
+		if _sprite.material == null:
+			var shader := Shader.new()
+			shader.code = "shader_type canvas_item;\nvoid fragment(){ if (distance(UV, vec2(0.5)) > 0.5) discard; }"
+			var material := ShaderMaterial.new()
+			material.shader = shader
+			_sprite.material = material
+	else:
+		_sprite.material = null
 
 
 func _process(delta: float) -> void:
 	if _death_t >= 0.0:
 		_death_t += delta
 		var p := clampf(_death_t / DEATH_DURATION, 0.0, 1.0)
+		if p >= 1.0 and _recover_after_down:
+			reset_pose()
+			play_spawn()
+			return
 		modulate = Color(0.68, 0.64, 0.57, pow(1.0 - p, 1.3))
 		# 击败：先狠狠压扁，再散开（q 弹）
-		var sq := Vector2(1.0 + 0.55 * p, maxf(0.12, 1.0 - 0.78 * p))
-		_apply_visual_pose(sq, _hit_dir * 10.0 * p + Vector2(0, 10.0 * p), 0.16 * p * signf(_hit_dir.x))
+		var fall := smoothstep(0.08, 0.8, p)
+		var sq := Vector2(1.0 + 0.25 * sin(p * PI), 1.0 - 0.81 * fall)
+		_apply_visual_pose(sq, _hit_dir * 22.0 * fall + Vector2(0, 6.0 * fall), 0.42 * fall * signf(_hit_dir.x))
 		visible = p < 1.0
 		queue_redraw()
 		return
 	_spawn_t = minf(0.26, _spawn_t + delta)
-	_pulse = maxf(0.0, _pulse - delta * 4.5)
+	_attack_time = maxf(0.0, _attack_time - delta)
 	_flash = maxf(0.0, _flash - delta * 7.0)
 	_hit_t = maxf(0.0, _hit_t - delta / 0.16)
 	var enter := clampf(_spawn_t / 0.26, 0.0, 1.0)
 	var ease := 1.0 + 2.70158 * pow(enter - 1.0, 3.0) + 1.70158 * pow(enter - 1.0, 2.0)
 	var pop := lerpf(0.68, 1.0, ease)
 	var recoil := sin(_hit_t * PI) * _hit_strength
-	_anim_t += delta
-	var breathe := 1.0 + 0.030 * sin(_anim_t * 3.1)
-	var atk := sin(_pulse * PI)
-	var beat := sin(_anim_t * 3.1 + 0.6) * 1.4
+	var travel := position - _last_feet
+	_last_feet = position
+	var moving := travel.length_squared() > 0.04 and travel.length_squared() < 400.0
+	_walk_blend = move_toward(_walk_blend, 1.0 if moving else 0.0, delta * 8.0)
+	_anim_t += delta * lerpf(3.1, 16.0, _walk_blend)
+	var breathe := 1.0 + lerpf(0.03, 0.085, _walk_blend) * sin(_anim_t)
+	var atk := 0.0
+	if _attack_time > 0.14:
+		atk = -0.55 * smoothstep(0.0, 1.0, 1.0 - (_attack_time - 0.14) / maxf(_windup, 0.001))
+	elif _attack_time > 0.0:
+		atk = sin(PI * pow(1.0 - _attack_time / 0.14, 0.48))
+	var beat := lerpf(sin(_anim_t + 0.6) * 1.4, -absf(sin(_anim_t)) * 6.0, _walk_blend)
 	var sx := pop * breathe * (1.0 + recoil * 0.08) * (1.0 + 0.16 * atk)
 	var sy := pop / breathe * (1.0 - recoil * 0.08) * (1.0 - 0.14 * atk)
-	_apply_visual_pose(Vector2(sx, sy), Vector2(0, 18.0 * (1.0 - enter) + beat) + _hit_dir * recoil * 7.0, 0.05 * atk * signf(_hit_dir.x))
+	_apply_visual_pose(Vector2(sx, sy), Vector2(0, 18.0 * (1.0 - enter) + beat) + _hit_dir * recoil * 7.0 + _attack_direction * atk * 13.0, 0.12 * atk * _attack_direction.x)
 	modulate = Color(1, 1, 1, lerpf(0.35, 1.0, enter))
 	if is_instance_valid(_sprite):
-		_sprite.modulate = Color(1.0, 1.0 - 0.35 * _flash, 1.0 - 0.42 * _flash)
-	if enter < 1.0 or _flash > 0.0 or _hit_t > 0.0 or _pulse > 0.0:
+		_sprite.modulate = Color(1.0 + 0.40 * _flash, 1.0 - 0.38 * _flash, 1.0 - 0.47 * _flash)
+	if enter < 1.0 or _flash > 0.0 or _hit_t > 0.0 or _attack_time > 0.0:
 		queue_redraw()
 
 func _apply_visual_pose(visual_scale: Vector2, offset: Vector2, angle := 0.0) -> void:
-	var center := Vector2(0, -radius)
+	var center := Vector2(0, 0 if _art_height > 0.0 else -radius)
 	var pose := Transform2D(angle, Vector2.ZERO).scaled(visual_scale)
 	pose.origin = center + offset - pose * center
 	# 显示层变换，脚底坐标、碰撞和目标距离仍由核心管理。
@@ -134,6 +166,9 @@ func _apply_visual_pose(visual_scale: Vector2, offset: Vector2, angle := 0.0) ->
 
 func play_spawn(delay := 0.0) -> void:
 	_spawn_t = -clampf(delay, 0.0, 0.08)
+	_anim_t = delay * 48.0
+	_last_feet = position
+	_walk_blend = 0.0
 	modulate.a = 0.35
 	_apply_visual_pose(Vector2.ONE * 0.68, Vector2(0, 18))
 	queue_redraw()
@@ -143,8 +178,13 @@ func death_finished() -> bool:
 
 
 func play_move(_move_id: String = "", _speed := 1.0) -> void:
-	_pulse = 1.0
-	_flash = 0.0
+	play_attack(Vector2.RIGHT)
+
+func play_attack(direction: Vector2, windup := 0.0) -> void:
+	if _death_t >= 0.0: return
+	_attack_direction = direction.normalized()
+	_windup = clampf(windup, 0.0, 0.22)
+	_attack_time = _windup + 0.14
 
 
 func play_hit(direction := Vector2.RIGHT, strong := false) -> void:
@@ -156,14 +196,17 @@ func play_hit(direction := Vector2.RIGHT, strong := false) -> void:
 
 
 func play_dodge() -> void:
-	_pulse = 0.8
+	play_attack(Vector2.UP)
 
 
-func play_down() -> void:
-	if _death_t >= 0.0: return
+func play_down(recover := false) -> void:
+	if _death_t >= 0.0:
+		if not recover: _recover_after_down = false
+		return
 	_death_t = 0.0
 	_sink = 0.0
-	_pulse = 0.0
+	_attack_time = 0.0
+	_recover_after_down = recover
 	_flash = 0.0
 
 
@@ -171,7 +214,11 @@ func reset_pose() -> void:
 	_death_t = -1.0
 	_sink = 0.0
 	_flash = 0.0
-	_pulse = 0.0
+	_attack_time = 0.0
+	_recover_after_down = false
+	_anim_t = 0.0
+	_walk_blend = 0.0
+	_last_feet = position
 	_spawn_t = 0.26
 	_hit_t = 0.0
 	_hit_dir = Vector2.RIGHT
@@ -180,7 +227,7 @@ func reset_pose() -> void:
 	modulate = Color(1, 1, 1, 1)
 	if is_instance_valid(_sprite):
 		_sprite.rotation = 0.0
-		_sprite.position = Vector2(0.0, -radius)
+		_sprite.position = Vector2(0.0, -_art_height * 0.5 if _art_height > 0.0 else -radius)
 		_sprite.modulate = Color(1, 1, 1, 1)
 	_apply_visual_pose(Vector2.ONE, Vector2.ZERO)
 
@@ -189,7 +236,8 @@ func _draw() -> void:
 	var off := Vector2(0.0, _sink)
 	# 脚下影子
 	draw_set_transform(off + Vector2(0.0, -4.0), 0.0, Vector2(1.0, 0.34))
-	draw_circle(Vector2.ZERO, radius * 0.62, Color(0.18, 0.14, 0.10, 0.16))
+	draw_circle(Vector2.ZERO, radius * 0.76, Color(0.10, 0.09, 0.08, 0.30))
+	draw_circle(Vector2.ZERO, radius * 0.44, Color(0.07, 0.06, 0.05, 0.22))
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	# 圆牌底 + 金边（怪物：有立绘时省掉圆牌，直接站人）
 	var c := Vector2(0.0, -radius) + off
@@ -210,11 +258,11 @@ func _draw() -> void:
 			var start := c + direction * radius * (0.7 + p * 0.7)
 			draw_line(start, start + direction * (4.0 + 14.0 * p), Color(0.16, 0.15, 0.13, 0.8 * (1.0 - p)), 2.5 * (1.0 - p) + 0.5, true)
 	# 头顶血条（照困兽那只怪：厚一点、带深色描边、绿→黄→红）
-	if show_bar:
+	if show_bar and _death_t < 0.0:
 		var bw := bar_w
 		var bh := 10.0
 		var bx := -bw * 0.5
-		var by := -radius * 2.0 - 18.0 + _sink
+		var by := -maxf(_art_height, radius * 2.0) - 14.0 + _sink
 		draw_rect(Rect2(bx, by, bw, bh), Color(0.20, 0.18, 0.20))
 		draw_rect(Rect2(bx, by, bw, bh), Color(0.06, 0.05, 0.06), false, 1.5)
 		var rr := clampf(hp_ratio, 0.0, 1.0)
@@ -222,7 +270,9 @@ func _draw() -> void:
 		if unit_name != "":
 			var fs := 16
 			var tw := UI_FONT.get_string_size(unit_name, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
-			draw_string(UI_FONT, Vector2(-tw * 0.5, by - 6.0), unit_name, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, name_col)
+			var label_position := Vector2(-tw * 0.5, by - 6.0)
+			draw_string_outline(UI_FONT, label_position, unit_name, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 4, Color(0.10, 0.08, 0.06, 0.9))
+			draw_string(UI_FONT, label_position, unit_name, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, name_col)
 
 
 func _hp_color(r: float) -> Color:

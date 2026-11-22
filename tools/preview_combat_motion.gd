@@ -51,10 +51,12 @@ func _run() -> void:
 				var angle := -PI * 0.82 + float(i) * PI * 0.16
 				f.merge({"x": c.hero_pos.x + cos(angle) * 110.0, "y": c.hero_pos.y + sin(angle) * 110.0,
 					"hp": 140.0, "hp_max": 140.0, "atk": 3.0, "ranged": false, "mage": false, "brute": false, "shield": false, "stop": 58.0,
-					"name": "山匪"}, true)
+					"name": ["狱狼", "疯牛", "毒蝎", "牢鼠", "山匪"][i]}, true)
 		await RenderingServer.frame_post_draw
 		if frame % 2 == 0:
-			assert(root.get_texture().get_image().save_png("res://combat_motion_frames/frame_%04d.png" % (frame / 2)) == OK)
+			var capture := root.get_texture().get_image()
+			capture.resize(450, 800, Image.INTERPOLATE_BILINEAR)
+			assert(capture.save_png("res://combat_motion_frames/frame_%04d.png" % (frame / 2)) == OK)
 	assert(c.kills_total > 5)
 	assert(b._foe_tokens.size() <= c.foes.size())
 	print("PASS: rendered controlled combat, real automatic hits and kills=", c.kills_total, "; 300 frames recorded")

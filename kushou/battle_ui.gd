@@ -19,6 +19,8 @@ const AncestorData := preload("res://kushou/ancestor_data.gd")
 const AttackFx := preload("res://kushou/attack_fx.gd")
 const BlackMarket := preload("res://kushou/black_market.gd")
 const MenuUI := preload("res://shared/ui_kit.gd")
+const CardFrame := preload("res://kushou/card_frame.gd")
+var _draw_art_cache: Dictionary = {}
 
 # 怪物立绘：名字 → assets/gen/enemies/foe_<key>.png；没有就回退旧的圆牌 + 一个字
 const FOE_ART := {
@@ -312,6 +314,7 @@ func _ready() -> void:
 		_build_bottom()
 		_q_init()
 		_build_draw()
+		_warm_initial_draw_art()
 	# v6：角色属性统一走详细属性页（attr_panel），旧 8 行窗不再创建
 	if not _no_ui:
 		_build_exit()
@@ -458,19 +461,28 @@ class BgArt extends Control:
 		"res://assets/art/bg/bg_rain.jpg",
 		"res://assets/art/bg/bg_cave.jpg",
 		"res://assets/art/bg/bg_snow.jpg",
-		"res://assets/art/bg/bg_night_market.jpg",
+		"res://assets/art/bg/bg_night_courtyard_v1.png",
 		"res://assets/art/bg/bg_cliff.jpg",
 		"res://assets/art/bg/bg_dungeon.jpg",
 	]
 	var tex: Texture2D = null
+	var courtyard := false
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
 	func setup(idx: int) -> void:
 		var p: String = BG_LIST[wrapi(idx, 0, BG_LIST.size())]
+		courtyard = idx == 5
 		if ResourceLoader.exists(p):
 			tex = load(p) as Texture2D
 	func _draw() -> void:
 		draw_rect(Rect2(0, 0, 720, 1280), Color(0.93, 0.90, 0.82))
+		if courtyard and tex != null:
+			draw_texture_rect(tex, Rect2(0, 140, 720, 750), false)
+			var paper := Color(0.93, 0.90, 0.82)
+			var clear := Color(paper, 0.0)
+			_fade_band(140, 209, paper, clear)
+			_fade_band(808, 890, clear, paper)
+			return
 		if tex != null:
 			var s := maxf(size.x / float(tex.get_width()), size.y / float(tex.get_height()))
 			var w := float(tex.get_width()) * s
@@ -492,6 +504,8 @@ class BgArt extends Control:
 		# 淡墨点
 		for i in 6:
 			draw_circle(Vector2(60 + i * 118, 200 + (i % 3) * 150), 46.0, Color(0.45, 0.38, 0.30, 0.025))
+	func _fade_band(top: float, bottom: float, start: Color, end: Color) -> void:
+		draw_polygon(PackedVector2Array([Vector2(0, top), Vector2(720, top), Vector2(720, bottom), Vector2(0, bottom)]), PackedColorArray([start, start, end, end]))
 
 # ---------------- 图标 ----------------
 class ArtRect extends Control:
@@ -652,6 +666,8 @@ class DrawCard extends Control:
 	var data: Dictionary = {}
 	var progress := 0          # 该卡所属组合的当前进度（由外壳写入）
 	var _art_rect: TextureRect
+	func set_art(texture: Texture2D) -> void:
+		_art_rect.texture = texture
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_STOP
 		_art_rect = TextureRect.new()
@@ -693,9 +709,6 @@ class DrawCard extends Control:
 					size + Vector2(4.0 + float(i) * 4.0, 4.0 + float(i) * 4.0)))
 		CF.title_band(self, Rect2(6, 6, size.x - 12, 30))
 		draw_string(F, Vector2(0, 34), str(data.get("name", "")), HORIZONTAL_ALIGNMENT_CENTER, size.x, 24, Color(0.14,0.11,0.08))
-		var tex := load(str(data.get("art", "")))
-		if _art_rect != null:
-			_art_rect.texture = tex
 		draw_string(F, Vector2(20, 204), str(data.get("own_text", "")), HORIZONTAL_ALIGNMENT_LEFT, size.x - 40, 21, Color(0.14,0.11,0.08))
 		draw_line(Vector2(20, 220), Vector2(size.x - 20, 220), Color(0.5,0.4,0.25,0.35), 1.5)
 		if bool(data.get("shiny", false)):
@@ -826,6 +839,7 @@ func _build_field() -> void:
 	_core.guard_broken.connect(func() -> void: _q_fail_kind("guard"))
 	_core.champion_down.connect(func() -> void: _q_done_kind("champion"))
 	_core.hero_attack.connect(_on_hero_attack)
+	_core.foe_attack.connect(_on_foe_attack)
 	_core.hero_strike_resolved.connect(_hero_extra_hits)
 	_core.hero_hit.connect(_on_hero_hit)
 	_core.hero_damaged.connect(_curio_on_hero_hurt)
@@ -2173,6 +2187,18 @@ func _build_draw() -> void:
 		_draw_cards.append(d)
 	_draw_refresh_btn = _btn("刷新 · 5 灵晶", Rect2(250, 540, 220, 56), 20, Color(0.09, 0.08, 0.07, 0.98), GOLD, func(): _on_refresh(), _draw_layer)
 
+func _warm_initial_draw_art() -> void:
+	# 只预热开局能抽到的卡，避免给家传、炫卡或未解锁卡占内存。
+	for id in _pool:
+		var card: Dictionary = _card_db.get(id, {})
+		CardFrame.tex_of(int(card.get("quality", 3)))
+		_draw_art(str(card.get("art", "")))
+
+func _draw_art(path: String) -> Texture2D:
+	if not _draw_art_cache.has(path):
+		_draw_art_cache[path] = load(path) as Texture2D if not path.is_empty() and ResourceLoader.exists(path) else null
+	return _draw_art_cache[path]
+
 func _roll_draw() -> void:
 	var cands: Array = []
 	for id_v in _pool:
@@ -2256,9 +2282,11 @@ func _roll_draw() -> void:
 			var c: Dictionary = (_card_db[str(cands[i])] as Dictionary).duplicate()
 			c["_id"] = str(cands[i])
 			dc.data = c
+			dc.set_art(_draw_art(str(c.get("art", ""))))
 			dc.progress = _set_progress(str(c.get("set_id", "")))
 		else:
 			dc.data = {}
+			dc.set_art(null)
 			dc.progress = 0
 		dc.queue_redraw()
 	# v4 彩蛋：这三张里有某位祖宗的家传卡 → 4% 掷他的炫卡
@@ -2526,12 +2554,21 @@ func _build_toast() -> void:
 	_toast_lb.bbcode_enabled = true
 	_toast_lb.fit_content = false
 	_toast_lb.scroll_active = false
-	_toast_lb.position = Vector2(0, 620)
-	_toast_lb.size = Vector2(720, 48)
+	_toast_lb.position = Vector2(74, 620)
+	_toast_lb.size = Vector2(572, 48)
 	_toast_lb.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_toast_lb.add_theme_font_override("normal_font", FONT)
 	_toast_lb.add_theme_font_size_override("normal_font_size", 26)
 	_toast_lb.add_theme_color_override("default_color", INK)
+	var paper := StyleBoxFlat.new()
+	paper.bg_color = Color(0.97, 0.93, 0.84, 0.94)
+	paper.border_color = Color(0.71, 0.53, 0.29, 0.75)
+	paper.set_border_width_all(1)
+	paper.set_corner_radius_all(7)
+	paper.content_margin_top = 7.0
+	paper.content_margin_left = 12.0
+	paper.content_margin_right = 12.0
+	_toast_lb.add_theme_stylebox_override("normal", paper)
 	_toast_lb.visible = false
 	_toast_lb.z_index = 40
 	add_child(_toast_lb)
@@ -2717,6 +2754,8 @@ func _process(_delta: float) -> void:
 			if tk != null:
 				tk.position = _core.position + Vector2(float(f["x"]), float(f["y"]))
 				var hr := float(f["hp"]) / maxf(1.0, float(f["hp_max"]))
+				if hr > 0.0 and hr < float(tk.hp_ratio) - 0.0015 and tk._hit_t <= 0.0:
+					tk.play_hit(tk.position - _hero_token.position)
 				if absf(hr - float(tk.hp_ratio)) > 0.0015:
 					tk.hp_ratio = hr
 					tk.queue_redraw()
@@ -2725,6 +2764,8 @@ func _process(_delta: float) -> void:
 					tk.unit_name = uname
 					tk.queue_redraw()
 				if bool(f.get("_death_settled", false)):
+					if tk._death_t < 0.0:
+						_spawn_pfx("impacts/blunt-hit", tk.position - Vector2(0, 5), 0.70, "dust", 1.1)
 					tk.play_down()
 				tk.visible = float(f.get("y", 0.0)) >= 90.0 and not tk.death_finished()
 		for tid in _foe_tokens.keys():
@@ -2733,13 +2774,6 @@ func _process(_delta: float) -> void:
 				if tk != null:
 					tk.play_down()
 					_recycle_q.append([tk, TokenActor.DEATH_DURATION + 0.04])
-					# 阵亡小爆点（割草感：每杀一只都有一口）
-					if randf() < (0.40 if _boss_on else 0.60):
-						_spawn_pfx("impacts/blunt-hit", tk.position + Vector2(0, -8), 0.60, "dust", 1.1, 1.15)
-					# 微顿帧＋连杀轻震：每杀一只都"顿一下"
-					_core._hitstop = maxf(float(_core._hitstop), 0.030)
-					if int(_core._combo) >= 5:
-						_core._shake = maxf(float(_core._shake), 2.5)
 				_foe_tokens.erase(tid)
 	var _el := Time.get_ticks_usec() - _t_proc
 	if _el > 50000:
@@ -2906,6 +2940,8 @@ func _on_hero_down() -> void:
 			loss += _foe_life_weight(f)
 	loss = maxi(1, loss)
 	_life = maxi(0, _life - loss)
+	if _hero_token != null:
+		_hero_token.play_down(_life > 0 and int(_core.wave) < _max_wave)
 	_refresh_life_ui()
 	_core.foes.clear()               # 怪全清：不掉落、不给经验
 	_core.clear_enemy_attacks()       # 旧预警/地面伤害不能追到复活后的下一波
@@ -4376,13 +4412,14 @@ func _make_foe_token(f: Dictionary):
 		ring = Color(0.95, 0.62, 0.12)        # Boss：金橙
 	var mark_ch := "王" if boss else ("钱" if kind == "coin" else ("晶" if kind == "crystal" else ("挑" if kind == "chal" else "怪")))
 	var msize := 22 if not boss else 38
+	var foe_tex := _foe_art(str(f.get("name", "")))
 	# 池里有就复用（TokenActor 每建一个都要 new Shader/ShaderMaterial，很贵）
 	if not _foe_pool.is_empty():
 		var tk0 = _foe_pool.pop_back()
 		tk0.reset_pose()
-		tk0.setup(null, rad, ring, false)
-		if is_instance_valid(tk0._sprite):
-			tk0._sprite.position = Vector2(0.0, -rad)
+		tk0.round_mask = foe_tex == null
+		tk0.setup(foe_tex, rad, ring, false)
+		tk0.hp_ratio = 1.0
 		tk0.show_bar = true
 		tk0.bar_w = 84.0 if boss else 54.0
 		tk0.unit_name = str(f.get("name", ""))
@@ -4390,6 +4427,7 @@ func _make_foe_token(f: Dictionary):
 		tk0.visible = true
 		var mk: Label = tk0.get_meta("mark", null)
 		if mk != null:
+			mk.visible = foe_tex == null
 			mk.text = mark_ch
 			mk.position = Vector2(-rad, -rad * 2.0 + 6.0)
 			mk.size = Vector2(rad * 2.0, rad * 1.5)
@@ -4397,7 +4435,6 @@ func _make_foe_token(f: Dictionary):
 		tk0.queue_redraw()
 		tk0.play_spawn(float(int(f.get("_tid", 0)) % 4) * 0.02)
 		return tk0
-	var foe_tex := _foe_art(str(f.get("name", "")))
 	var tk = TokenActor.new()
 	tk.round_mask = foe_tex == null
 	tk.setup(foe_tex, rad, ring, false)
@@ -5384,23 +5421,18 @@ class CombinedIcon extends Control:
 		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
 			pressed.emit()
 
-func _play_attack_fx(hero_attacks: bool) -> void:
+func _play_attack_fx() -> void:
 	if _core == null or _fx_back == null or _hero_token == null:
 		return
 	var tgt: Dictionary = _core._hero_pending
-	if not hero_attacks or tgt.is_empty():
+	if tgt.is_empty():
 		tgt = _core._nearest()
 	if tgt.is_empty():
 		return
-	if hero_attacks:
-		_hero_token.play_move()
-		var to: Vector2 = _core.position + Vector2(float(tgt["x"]), float(tgt["y"]))
-		_fx_back.spawn_swing(_hero_token.position - FIELD_POS, to - FIELD_POS, _hero_token.radius, true)
-	else:
-		var tk = _foe_tokens.get(int(tgt.get("_tid", 0)))
-		if tk == null:
-			return
-		_fx_back.spawn_swing(tk.position - FIELD_POS, _hero_token.position - FIELD_POS, tk.radius, false, false, true)
+	var destination: Vector2 = _core.position + Vector2(float(tgt["x"]), float(tgt["y"]))
+	var windup: float = _core._hero_pending_t
+	_hero_token.play_attack(destination - _hero_token.position, windup)
+	_fx_back.spawn_swing(_hero_token.position - FIELD_POS, destination - FIELD_POS, _hero_token.radius, windup)
 
 func _spawn_hit_fx(global_pos: Vector2, radius: float, dmg: int, hero_hit: bool, crit: bool, heavy: bool) -> void:
 	if _fx_front == null:
@@ -5443,8 +5475,11 @@ class ComboReadout extends Control:
 		var pop := 1.0 + 0.12 * sin(_pulse * PI)
 		draw_set_transform(size * 0.5 * (1.0 - pop), 0.0, Vector2.ONE * pop)
 		draw_line(Vector2(10, 52), Vector2(148, 52), Color(0.66, 0.47, 0.19, 0.65), 1.5, true)
-		draw_string(FONT, Vector2(10, 37), "连斩", HORIZONTAL_ALIGNMENT_LEFT, -1, 23, Color(0.42, 0.30, 0.16))
-		draw_string(FONT, Vector2(72, 39), str(count), HORIZONTAL_ALIGNMENT_LEFT, -1, 42, Color(0.58, 0.22, 0.10))
+		var outline := Color(0.14, 0.09, 0.06, 0.90)
+		draw_string_outline(FONT, Vector2(10, 37), "连斩", HORIZONTAL_ALIGNMENT_LEFT, -1, 23, 5, outline)
+		draw_string_outline(FONT, Vector2(72, 39), str(count), HORIZONTAL_ALIGNMENT_LEFT, -1, 42, 6, outline)
+		draw_string(FONT, Vector2(10, 37), "连斩", HORIZONTAL_ALIGNMENT_LEFT, -1, 23, Color(0.98, 0.91, 0.74))
+		draw_string(FONT, Vector2(72, 39), str(count), HORIZONTAL_ALIGNMENT_LEFT, -1, 42, Color(1.0, 0.74, 0.31))
 
 # 轻量命中火花：程序化放射线，不预烘、不用 pixelfx，0.18 秒自毁
 class ImpactSpark extends Control:
@@ -5510,7 +5545,7 @@ func _on_hero_attack() -> void:
 	var epoch: int = _core._enemy_attack_epoch
 	if not _skill_batch_active(epoch):
 		return
-	_play_attack_fx(true)
+	_play_attack_fx()
 	_attack_count += 1
 	# 家传追加攻击由hero_strike_resolved在主刀命中后结算，起手仅计攻击事件。
 	_curio_on_attack()                       # 奇物：铜钱剑（普攻附带钱镖）
@@ -5523,10 +5558,27 @@ func _on_hero_attack() -> void:
 		_trigger_combos("每 10 次攻击")
 
 func _on_hero_hit() -> void:
-	_play_attack_fx(false)
 	_hit_count += 1
 	_trigger_combos("每次受击")
 	_stone_on_hit()
+
+func _on_foe_attack(foe: Dictionary, target: Vector2) -> void:
+	var token = _foe_tokens.get(int(foe.get("_tid", 0)))
+	if _run_over or token == null: return
+	var destination: Vector2 = _core.position + target
+	var kind := "melee"
+	if bool(foe.get("mage", false)):
+		kind = "mage"
+	elif bool(foe.get("ranged", false)):
+		kind = "bow"
+	var direction: Vector2 = destination - token.position
+	match kind:
+		"bow": token.play_attack(-direction * 0.55)
+		"mage": token.play_attack(Vector2.UP)
+		_: token.play_attack(direction)
+	if _fx_front != null:
+		var origin: Vector2 = token.position - Vector2(0, token.radius * 1.2) - FIELD_POS
+		_fx_front.spawn_enemy_attack(origin, destination - Vector2(0, 26) - FIELD_POS, kind)
 
 func _on_hero_foe_hit(tgt: Dictionary, dmg: float, crit: bool, heavy: bool) -> void:
 	if _core == null:

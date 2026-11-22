@@ -129,6 +129,7 @@ signal wood_expired(foe: Dictionary)
 signal cold_expired(foe: Dictionary)
 signal paper_blocked(pos: Vector2)                # 奇物·纸人替身挡下延迟技
 signal hero_attack()
+signal foe_attack(foe: Dictionary, target: Vector2)
 signal hero_strike_resolved(primary: Dictionary)
 signal hero_hit()
 signal hero_damaged(amount: float, attacker: Dictionary)
@@ -1198,6 +1199,7 @@ func _process(delta: float) -> void:
 			if float(f["t"]) >= 1.0 / (faspd * (STATUE_ASPD if float(f.get("buff", 0.0)) > 0.0 else 1.0)):
 				f["t"] = 0.0
 				f["lunge"] = 1.0                 # 怪扑下来那一下
+				foe_attack.emit(f, ftgt)
 				# 打的是蛟龙：扣它的血（蛟龙没有防御，挨多少掉多少）
 				if not fmin.is_empty():
 					fmin["hp"] = float(fmin["hp"]) - float(f["atk"])
