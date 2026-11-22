@@ -1,7 +1,10 @@
-﻿extends Control
+extends Control
 # ============================================================
-# kushou/battle_ui.gd 鈥斺€?鏂版垬鏂楃晫闈紙鎸?v31 鑽夊浘锛?#   鐙珛鍦烘櫙锛氬厛璺戦€氬竷灞€/浜や簰锛屽啀鎺ヨ繘鍏冲崱娴佺▼銆?#   720脳1280锛氶《鏍?0..80 / 鎴樺満 150..870 / 鍗＄粍 880..1050 / 搴曟爮 1076..1280
-#   鎶藉崱椤垫棤澶栨銆佷笉鏆傚仠锛涗笁寮犲崱妗嗘诞鍦ㄦ垬鍦轰笂銆?# ============================================================
+# kushou/battle_ui.gd —— 新战斗界面（按 v31 草图）
+#   独立场景：先跑通布局/交互，再接进关卡流程。
+#   720×1280：顶栏 0..80 / 战场 150..870 / 卡组 880..1050 / 底栏 1076..1280
+#   抽卡页无外框、不暂停；三张卡框浮在战场上。
+# ============================================================
 
 const W := 720.0
 const H := 1280.0
@@ -17,15 +20,15 @@ const AttackFx := preload("res://kushou/attack_fx.gd")
 const BlackMarket := preload("res://kushou/black_market.gd")
 const MenuUI := preload("res://shared/ui_kit.gd")
 
-# 鎬墿绔嬬粯锛氬悕瀛?鈫?assets/gen/enemies/foe_<key>.png锛涙病鏈夊氨鍥為€€鏃х殑鍦嗙墝 + 涓€涓瓧
+# 怪物立绘：名字 → assets/gen/enemies/foe_<key>.png；没有就回退旧的圆牌 + 一个字
 const FOE_ART := {
-	"鐙辩嫾": "yulang", "鐤墰": "fengniu", "姣掕潕": "duxie", "鐗㈤紶": "laoshu",
-	"閽辨€?: "qian", "鏅舵€?: "jing", "涔︽€?: "shu", "瀹濈澶ф€?: "baoxiang", "鎸戞垬 boss": "boss",
-	"鐪嬮棬鎭剁姮": "kanmen_quan", "閾佽儗鑻嶇嫾": "tiebei_lang", "姣掔墮锜?: "duya_mang", "鐭崇敳宸ㄧ尶": "shijia_yuan",
-	"鍙屽ご鐙?: "shuangtou_shi", "鐙溂鐙卞崚": "duyan_yuzu", "鐏熬鐙愬": "huowei_hu", "璧ょ劙铔?: "chiyan_jiao",
-	"鍦轰富浜插吇路鐙寸姶": "bian", "琛€鎵嬪垽瀹?: "xueshou_panguan", "鍥板吔涔嬩富": "kunshou_zhu",
-	"骞藉啣鍒ゅ畼": "youming_panguan", "涔濆菇榄斿悰": "jiuyou_mojun", "琛€娴风綏鍒?: "xuehai_luocha",
-	"涓囪泭铏瘝": "wanqu_chongmu", "鍥板吔路缁堢剦": "kunshou_zhongyan",
+	"狱狼": "yulang", "疯牛": "fengniu", "毒蝎": "duxie", "牢鼠": "laoshu",
+	"钱怪": "qian", "晶怪": "jing", "书怪": "shu", "宝箱大怪": "baoxiang", "挑战 boss": "boss",
+	"看门恶犬": "kanmen_quan", "铁背苍狼": "tiebei_lang", "毒牙蟒": "duya_mang", "石甲巨猿": "shijia_yuan",
+	"双头狮": "shuangtou_shi", "独眼狱卒": "duyan_yuzu", "火尾狐妖": "huowei_hu", "赤焰蛟": "chiyan_jiao",
+	"场主亲养·狴犴": "bian", "血手判官": "xueshou_panguan", "困兽之主": "kunshou_zhu",
+	"幽冥判官": "youming_panguan", "九幽魔君": "jiuyou_mojun", "血海罗刹": "xuehai_luocha",
+	"万蛊虫母": "wanqu_chongmu", "困兽·终焉": "kunshou_zhongyan",
 }
 var _foe_tex_cache := {}
 
@@ -67,12 +70,16 @@ var _detail_combo: Label
 var _detail_combo_text: Label
 var _detail_pips: Array = []
 var _deck_count_lb: Label
-# 鎬昏椤碉細椤堕儴鍒嗙被閽紙鍗＄粍 / 瀹濈墿 / 缁勫悎锛?var _tot_tabs: Array = []
+# 总计页：顶部分类钮（卡组 / 宝物 / 组合）
+var _tot_tabs: Array = []
 var _tot_keys: Array = ["bond", "combo"]
-var _tot_tab := "combo"          # 榛樿鍏堢湅銆岀粍鍚堛€嶏紙鐜╁鏈€鍏冲績鐨勫凡鍚堟垚鍒楄〃锛?var _tot_btn: Button = null
-var _tot_hint_shown := false     # 鏈眬鏄惁宸茬粡鎻愮ず杩囥€岀偣鎬昏鐪嬬粍鍚堛€?var _devoured: Array = []          # 琚悶鍣殑鐐悕鍗曞崱锛堢粍鍚堥〉閲屼篃鏄剧ず锛?var _combo_boost := {}             # 缁勫悎鍚?鈫?鏁堟灉澧炲箙锛堢緛缁婃崲鏉ョ殑锛屾案涔呮湁鏁堬級
-var _combo_frac := {}              # 鏁存暟绫荤粍鍚堢殑灏忔暟浣欓锛?40% 鏀掍袱娆＄粰涓€娆★級
-var _sys_combos := {}              # 鏅€氬崱缁勫悎鍚嶉泦鍚堬紙璺熷浼犵粍鍚堥噸鍚嶆椂锛屾寜鏅€氬崱绠楋級
+var _tot_tab := "combo"          # 默认先看「组合」（玩家最关心的已合成列表）
+var _tot_btn: Button = null
+var _tot_hint_shown := false     # 本局是否已经提示过「点总计看组合」
+var _devoured: Array = []          # 被吞噬的炫名单卡（组合页里也显示）
+var _combo_boost := {}             # 组合名 → 效果增幅（羁绊换来的，永久有效）
+var _combo_frac := {}              # 整数类组合的小数余额（+40% 攒两次给一次）
+var _sys_combos := {}              # 普通卡组合名集合（跟家传组合重名时，按普通卡算）
 var _tot_deck_root: Control = null
 var _tot_bond_root: Control = null
 var _exit_layer: Control
@@ -83,7 +90,8 @@ var _card_db := {}
 var _set_cards := {}
 var _pool: Array = []
 var _acquired := {}
-# v2 娉㈡ / 缁忛獙 / 鍗囩骇锛堟尝娆℃帹杩?+ 鍗囩骇鐐逛寒璇风锛?const MAX_WAVE := 5
+# v2 波次 / 经验 / 升级（波次推进 + 升级点亮请神）
+const MAX_WAVE := 5
 var _max_wave := 5
 var _chips := {}
 var _chal_btn = null
@@ -94,24 +102,29 @@ var _draw_tile = null
 var _lv := 1
 var _exp := 0
 var _exp_need := 100
-var _draw_charge := 0          # 绱Н鐨勮绁炴鏁帮紙鍗囩骇 +1锛?var _run_cleared := false
+var _draw_charge := 0          # 累积的请神次数（升级 +1）
+var _run_cleared := false
 var _lv_lb: Label = null
 var _exp_lb: Label = null
 var _exp_bar: Panel = null
 var _mate_tile = null
 
 # ============================================================
-# ---------------- 寮哄寲锛坴6锛?---------------
-#   鐢ㄦ埛锛?寮哄寲寰堢畝鍗?娑堣€楁枃閽?瀵硅嚜韬繘琛屽己鍖?姣忓己鍖栧崄绾?鍗＄墝涓夐€変竴 鑾峰緱杩涢樁鐨勬暟鍊煎鍔?
-#   路 鐐逛竴娆★蓟寮哄寲锛斤細鎵ｆ枃閽?鈫?鑷韩 锛嬫敾鍑?/ 锛嬫皵琛€涓婇檺 / 锛嬫姢鐢?#     鈿?姘旇鎸?*姣斾緥**璺熸定锛堣€佸潙锛氬己鍖栦竴涓嬪氨婊¤ 鈫?瑙?kushou_battle.setup 鐨勬敞閲婏級
-#   路 绗?10 / 20 / 30鈥?绾э細寮逛笁閫変竴锛堝搧闃堕殢杞鍗囷細鑹啋鐜勨啋鍦扳啋澶╋級锛岄€変竴寮狅紝姘镐箙鏁板€艰繘闃?#   路 鍏充簡娌￠€変笉瑕佺揣锛氬啀鐐癸蓟寮哄寲锛戒細鎶婇偅涓€鎵嬮噸鏂版墦寮€锛堜笉閲嶅鎵ｉ挶锛?# ============================================================
-const STR_COST_BASE := 30          # 绗竴娆″己鍖栫殑浠烽挶
-const STR_COST_STEP := 12          # 姣忓崌涓€绾ц吹 12锛堝崄绾у悎璁?840 鏂囬挶 鈮?涓夊垎閽燂級
-const STR_PER_ATK := 1.0           # 姣忕骇锛氭敾鍑?+1
-const STR_PER_HP := 10.0           # 姣忕骇锛氭皵琛€涓婇檺 +10
-const STR_PER_CUT := 0.003         # 姣忕骇锛氭姢鐢?+0.3%
-const STR_EVERY := 10              # 姣?10 绾х粰涓€娆′笁閫変竴
-# 鏂囬挶鏉ヨ矾锛氭潃鎬簳钖?+ 姣忔尝鍔犳垚 + 娓呮尝濂栧姳锛堜笉璧?core 鐨?coin_drop 涔熻兘鏀掗挶锛?const WEN_KILL_BASE := 12
+# ---------------- 强化（v6）----------------
+#   用户："强化很简单 消耗文钱 对自身进行强化 每强化十级 卡牌三选一 获得进阶的数值奖励"
+#   · 点一次［强化］：扣文钱 → 自身 ＋攻击 / ＋气血上限 / ＋护甲
+#     ⚠ 气血按**比例**跟涨（老坑：强化一下就满血 → 见 kushou_battle.setup 的注释）
+#   · 第 10 / 20 / 30… 级：弹三选一（品阶随轮次升：良→玄→地→天），选一张，永久数值进阶
+#   · 关了没选不要紧：再点［强化］会把那一手重新打开（不重复扣钱）
+# ============================================================
+const STR_COST_BASE := 30          # 第一次强化的价钱
+const STR_COST_STEP := 12          # 每升一级贵 12（十级合计 840 文钱 ≈ 三分钟）
+const STR_PER_ATK := 1.0           # 每级：攻击 +1
+const STR_PER_HP := 10.0           # 每级：气血上限 +10
+const STR_PER_CUT := 0.003         # 每级：护甲 +0.3%
+const STR_EVERY := 10              # 每 10 级给一次三选一
+# 文钱来路：杀怪底薪 + 每波加成 + 清波奖励（不走 core 的 coin_drop 也能攒钱）
+const WEN_KILL_BASE := 12
 const WEN_KILL_WAVE := 3
 const WEN_WAVE_CLEAR := 60
 var _str_lv := 0
@@ -123,21 +136,28 @@ var _str_round := 0
 var _str_pending := false
 var _str_layer: Control = null
 var _str_tile = null
-# 杩涢樁椤碉紙鍜屾娊鍗″悓涓€濂楋細涓夊紶鍗℃诞鍦ㄦ垬鍦猴紝涓嶉伄涓嶆殏鍋滐紱鍙湁锛诲埛鏂?路 娆℃暟锛藉拰锛婚殣钘忥冀锛?var _aug_cards: Array = []
-var _aug_reroll := 3          # 鍒锋柊娆℃暟锛堝紑灞€ 3 娆★紝姣忚繘闃朵竴杞?+1锛?var _aug_rolled_lv := -1      # 杩欎竴鎵嬫槸涓虹鍑犵骇鎺风殑锛堝叧浜嗗啀鐐逛笉鐧藉埛锛?var _aug_refresh_btn: Button = null
+# 进阶页（和抽卡同一套：三张卡浮在战场，不遮不暂停；只有［刷新 · 次数］和［隐藏］）
+var _aug_cards: Array = []
+var _aug_reroll := 3          # 刷新次数（开局 3 次，每进阶一轮 +1）
+var _aug_rolled_lv := -1      # 这一手是为第几级掷的（关了再点不白刷）
+var _aug_refresh_btn: Button = null
 var _str_ban_lb: Label = null
 
 # ============================================================
-# ---------------- 瀹濈墿锛坴8锛?---------------
-#   鐢ㄦ埛锛?瀹濈墿鐨勬娊鍙栫晫闈篃鍜屾娊鍗′竴鑷?銆愬埛鏂版鏁?闅愯棌/鏀惧純銆愬鍔犱竴娆″埛鏂?瀵?杩欎釜杩涢樁涔熻銆戙€?
-#   路 姣忔竻涓€娉?+1 娆″疂鐗╂満浼氾紱寮€涓€娆′笁寮狅紝鎸戜竴寮犲甫璧?#   路 鏈€澶氬甫 3 浠讹紱鍝佽川闅忔尝鏁板崌锛?-2 鑹?/ 3 鐜?/ 4 鍦?/ 6+ 澶╋級
-#   路 涓変釜鎸夐挳锛氬埛鏂?路 N 娆★紙娆℃暟鍨嬶級/ 闅愯棌锛堟敹璧锋潵锛岃繖涓€鎵嬭繕鍦級/ 鏀惧純锛?1 鍒锋柊锛岃繖鎵嬩綔搴燂級
-#   路 锛绘斁寮冿冀杩涢樁椤典篃鏈夛細鏀惧純杩欎竴杞繘闃讹紝鎹?1 娆″埛鏂?# ============================================================
+# ---------------- 宝物（v8）----------------
+#   用户："宝物的抽取界面也和抽卡一致 【刷新次数/隐藏/放弃【增加一次刷新 对 这个进阶也要】】"
+#   · 每清一波 +1 次宝物机会；开一次三张，挑一张带走
+#   · 最多带 3 件；品质随波数升（1-2 良 / 3 玄 / 4 地 / 6+ 天）
+#   · 三个按钮：刷新 · N 次（次数型）/ 隐藏（收起来，这一手还在）/ 放弃（+1 刷新，这手作废）
+#   · ［放弃］进阶页也有：放弃这一轮进阶，换 1 次刷新
+# ============================================================
 const TREA_CHARGE_START := 1
-var _bonds: Array = []          # 韬笂鐨勭緛缁婏紙鍑戦綈灏辨秷鑰楁帀锛屾墍浠ヤ笉璁句笂闄愶級
-var _bond_unlocked := {}        # 宸茶В閿佺殑缇佺粖鍚嶏紙鍙湁杩欎簺浼氬嚭鐜板湪涓夐€変竴閲岋級
-var _bond_taken := {}           # 宸茬粡缁撹繃鐨勭緛缁婂悕锛堜笉閲嶅鍑虹幇锛?var _crystal_lock := false      # 銆屽€惧泭銆嶄箣鍚庯細鐏垫櫠鏀跺叆褰掗浂
-var _rare_buffs: Array = []     # 闄愭椂 buff锛歿raw_atk, t}锛岃褰曞睘鎬у骞呭墠鐨勫浐瀹氭敾鍑汇€?var _bonds_done := 0            # 杩欎竴灞€宸茬粡鎴愯繃鍑犲紶
+var _bonds: Array = []          # 身上的羁绊（凑齐就消耗掉，所以不设上限）
+var _bond_unlocked := {}        # 已解锁的羁绊名（只有这些会出现在三选一里）
+var _bond_taken := {}           # 已经结过的羁绊名（不重复出现）
+var _crystal_lock := false      # 「倾囊」之后：灵晶收入归零
+var _rare_buffs: Array = []     # 限时 buff：{raw_atk, t}，记录属性增幅前的固定攻击。
+var _bonds_done := 0            # 这一局已经成过几张
 var _trea_charge := TREA_CHARGE_START
 var _trea_reroll := 3
 var _trea_pending := false
@@ -146,54 +166,63 @@ var _trea_cards: Array = []
 var _trea_refresh_btn: Button = null
 var _trea_tile = null
 var _exp_pct := 0.0
-# v1 璇风路瀹朵紶鍗★細宸茶鍒扮殑绁栧畻锛坅id -> 褰撳墠鍙敹闆嗘。锛夛紡宸叉縺娲荤殑瀹朵紶缁勫悎
+# v1 请神·家传卡：已请到的祖宗（aid -> 当前可收集档）／已激活的家传组合
 var _ancestors := {}
 var _ancestor_combos: Array = []
-# v4 缁勫悎鍔犳垚钀藉湴锛歛id -> {dmg_pct, cd_pct, mp_flat, para_s, para_amp}锛涘厓绱犲叡浜崟鐙
+# v4 组合加成落地：aid -> {dmg_pct, cd_pct, mp_flat, para_s, para_amp}；元素共享单独记
 var _anc_mod := {}
 var _elem_mod := {}
-# v4 鐐崱锛氭幏涓紙杩涙睜锛夛紡宸插悶锛堜竴灞€涓€娆★級
+# v4 炫卡：掷中（进池）／已吞（一局一次）
 var _shiny_rolled := {}
 var _shiny_used := {}
-var _equip_vuln := 0.0               # 榛戝競鎷垮埌瑁呭/绁炲櫒鍚庯紝鍋峰伔缁欐€殑鏄撲激
-var _family_shiny_ready := false     # 绗簲鍏筹細绗簩缁勫浼犲悎鎴愬悗锛屼笅涓€鎵嬪繀鍑虹偒褰?var _family_shiny_done := false
-# v5 鍙敜鐗?var _minions: Array = []
-# v6 鍚炴捣锛堝磾涓夊鐐崱锛夛細铔熼緳姘镐箙 + 姣忕/鍑绘潃 鍙犲睘鎬?var _swallow_sea := false
+var _equip_vuln := 0.0               # 黑市拿到装备/神器后，偷偷给怪的易伤
+var _family_shiny_ready := false     # 第五关：第二组家传合成后，下一手必出炫彩
+var _family_shiny_done := false
+# v5 召唤物
+var _minions: Array = []
+# v6 吞海（崔三娘炫卡）：蛟龙永久 + 每秒/击杀 叠属性
+var _swallow_sea := false
 var _ss_pct := 0.0
 var _ss_kills := 0
-# v7 鐏肩儳 / 寮曠噧 / 鐒氬ぉ
-var _burn_unlimited := false     # 鐒氬ぉ锛氱伡鐑у眰鏁颁笉琛板噺
-var _ignite_bonus := 0           # 寮曠噧鐩爣鍔犳垚锛堜笁妗?/ 鐒氬ぉ鍚炲櫖锛?var _fentian := false
+# v7 灼烧 / 引燃 / 焚天
+var _burn_unlimited := false     # 焚天：灼烧层数不衰减
+var _ignite_bonus := 0           # 引燃目标加成（三档 / 焚天吞噬）
+var _fentian := false
 var _ft_kills := 0
-# v8 鍥炴疆锛堟垚闀跨郴褰╄泲锛夛細涓€灞€涓€娆★紝娉㈡暟鍥為€€ 5
+# v8 回潮（成长系彩蛋）：一局一次，波数回退 5
 var _backwash_done := false
-# 涓昏琚姩锛氬鐩爣 / 杩藉嚮 / 鍓戞皵
+# 主角被动：多目标 / 追击 / 剑气
 var _hero_passive := {}
-# v11 涓囧垉锛堣嫃闈掗妇鐐崱锛夛細绌块€忔棤涓婇檺 路 姣忕偣绌块€?+1 鍒€ 路 姣?3 娆″洖绋?+1 绌块€?var _wanren := false
+# v11 万刃（苏青鸾炫卡）：穿透无上限 · 每点穿透 +1 刀 · 每 3 次回程 +1 穿透
+var _wanren := false
 var _wanren_pierce := 0
 var _wanren_volleys := 0
-# v9 鍓戦瓌锛堜富瑙掔偒鍗★級锛氳繛鍑诲悓涓€鐩爣娑ㄦ敾閫燂紙鎹㈢洰鏍囬噸缃級+ 鍓戞皵杩涘寲涓囧墤褰掑畻
+# v9 剑魄（主角炫卡）：连击同一目标涨攻速（换目标重置）+ 剑气进化万剑归宗
 var _hero_jianpo := false
 var _jpo_tid := -1
 var _jpo_stacks := 0
-# 鏀婚€熺‖涓婇檺锛氬彧闃插崱锛?/aspd 绉掍竴涓嬶級锛涙暟鍊间笂銆屽墤榄勩€嶆湰韬笉灏侀《
+# 攻速硬上限：只防卡（1/aspd 秒一下）；数值上「剑魄」本身不封顶
 const MAX_ASPD := 5.0
-# v10 鎶藉彇鍔熻兘鏈仛 鈫?澶╁搧绁栧畻鏆傛椂灏佸嵃锛堜笉杩涗笁閫変竴锛?const SEALED := ["zl", "cuisanniang", "jicanghai"]   # 鏈€寮虹殑涓変綅灏佸嵃锛涘叾浣欏叚浣嶅彲鎸夊叧瑙ｉ攣
+# v10 抽取功能未做 → 天品祖宗暂时封印（不进三选一）
+const SEALED := ["zl", "cuisanniang", "jicanghai"]   # 最强的三位封印；其余六位可按关解锁
 var _combined: Array = []
 var _stats := {"atk": 0.0, "def": 0.0, "hp": 0.0}
-# v6锛氬崱姹犮€岄槻寰°€嶆崲绠楁垚鍥哄畾鍑忓厤鐨勭郴鏁帮紙1 鐐归槻寰?= 3%锛屾寜 100 浼ょ瓑鏁堝榻愭棫鎵嬫劅锛?const EquipmentStats := preload("res://shared/equipment_stats.gd")
+# v6：卡池「防御」换算成固定减免的系数（1 点防御 = 3%，按 100 伤等效对齐旧手感）
+const EquipmentStats := preload("res://shared/equipment_stats.gd")
 const DEF_CARD_TO_RED := EquipmentStats.DEF_TO_RED
 var _gold_pct := 0.0
 var _crystal_pct := 0.0
-# v13 缇?闄?涓ょ郴锛氭瘡娉㈠畾棰濆姞鎴?路 鍏ㄥ眬闅惧害 路 鎬墿绫诲瀷鏀剁泭
+# v13 群/险 两系：每波定额加成 · 全局难度 · 怪物类型收益
 var _wave_extra := 0
 var _diff_pct := 0.0
 var _coin_count_extra := 0
 var _crystal_count_extra := 0
 var _treasure_pct := 0.0
 var _boss_pct := 0.0
-# v14 璐紙缁忔祹绾匡級锛氬嚮鏉€鏀剁泭鍔犳垚 + 琚悶鍣崱锛堟晥鏋?杩涘害淇濈暀锛?var _kill_pct := 0.0
-# v15 缁忛獙绾匡細鏉€鎬暟鎸夌櫨鍒嗘瘮鏀惧ぇ锛堢粡楠?+ 鎵€鏈夋寜鍑绘潃鎴愰暱鐨勬満鍒朵竴璧峰悆锛?var _killnum_pct := 0.0
+# v14 财（经济线）：击杀收益加成 + 被吞噬卡（效果/进度保留）
+var _kill_pct := 0.0
+# v15 经验线：杀怪数按百分比放大（经验 + 所有按击杀成长的机制一起吃）
+var _killnum_pct := 0.0
 var _virtual_cards: Array = []
 var _last_wave := 1
 var _attack_count := 0
@@ -213,18 +242,33 @@ var _bm = null
 var _coin_lb: Label
 var _kill_lb: Label
 var _life_lb: Label
-var _life := 100          # 褰撳眬鐢熷懡锛氫富瑙掑€掍笅涓嶅啀鐩存帴缁撴潫锛屾寜鍓╀綑鎬墸鍛?var _run_over := false            # 鏈眬宸茬粨绠楋紙鍛藉敖 / 閫氬叧锛?var _skip_reward_wave := false    # 杩欎竴娉㈡墦杈撲簡锛氳繃娉絾涓嶇粰濂栧姳
-var _run_time := 0.0              # 鏈眬瀛樻椿鏃堕棿
-var _chal_cd: Array = [0.0, 0.0, 0.0, 0.0, 0.0]   # 浜旂鎸戞垬鐨勫喎鍗村墿浣?var _fly_layer = null           # 璧勬簮椋炶灞?var _fly: Array = []
-var _pulses: Dictionary = {}   # 璧勬簮鏍艰鍔犻挶鏃剁殑缂╂斁鑴夊啿
-var _boss_bar = null           # 棣栭琛€鏉?var _foe_pool: Array = []      # 鎬墿鐗屽璞℃睜锛堢渷鎺夋瘡鍙兘寤?Shader/鑺傜偣鐨勫紑閿€锛?var _recycle_q: Array = []     # 闃典骸鍔ㄧ敾鎾畬鍐嶅洖鏀?var _boss_bar_t := 0.0
-var _boss_on := false          # 棣栭鍦ㄥ満鏃剁壒鏁堥檷妗ｏ紙棣栭鎴樺満鏅湰鏉ュ氨閲嶏級
-var _flash_rect: ColorRect = null  # 鎶€鑳介噴鏀炬椂鐨勬暣灞忓井闂?var _cast_dtype := ""              # 鏈€杩戜竴娆￠噴鏀剧殑鎶€鑳藉睘鎬э紙鍐冲畾闂厜棰滆壊锛?var _boss_veil: ColorRect = null   # 棣栭鐧诲満锛氬帇鏆?var _boss_spot: Sprite2D = null    # 棣栭鐧诲満锛氳仛鍏?var _boss_name_lb: Label = null    # 棣栭鐧诲満锛氬悕瀛楀ぇ瀛?var _last_combo := 0            # 杩炴潃閲岀▼纰戠敤锛堟瘡 10 杩炵偢涓€鍙ｏ級
+var _life := 100          # 当局生命：主角倒下不再直接结束，按剩余怪扣命
+var _run_over := false            # 本局已结算（命尽 / 通关）
+var _skip_reward_wave := false    # 这一波打输了：过波但不给奖励
+var _run_time := 0.0              # 本局存活时间
+var _chal_cd: Array = [0.0, 0.0, 0.0, 0.0, 0.0]   # 五种挑战的冷却剩余
+var _fly_layer = null           # 资源飞行层
+var _fly: Array = []
+var _pulses: Dictionary = {}   # 资源格被加钱时的缩放脉冲
+var _boss_bar = null           # 首领血条
+var _foe_pool: Array = []      # 怪物牌对象池（省掉每只都建 Shader/节点的开销）
+var _recycle_q: Array = []     # 阵亡动画播完再回收
+var _boss_bar_t := 0.0
+var _boss_on := false          # 首领在场时特效降档（首领战场景本来就重）
+var _flash_rect: ColorRect = null  # 技能释放时的整屏微闪
+var _cast_dtype := ""              # 最近一次释放的技能属性（决定闪光颜色）
+var _boss_veil: ColorRect = null   # 首领登场：压暗
+var _boss_spot: Sprite2D = null    # 首领登场：聚光
+var _boss_name_lb: Label = null    # 首领登场：名字大字
+var _last_combo := 0            # 连杀里程碑用（每 10 连炸一口）
 var _combo_readout: Control
-const PFX_MAX_LIVE := 26          # 鍚屽睆鐗规晥涓婇檺锛堝疄娴?60fps 鏈変綑閲忥紝鏀惧洖 26锛?var _curio_sq = null             # 濂囩墿鏂瑰潡锛堟垬鍦哄彸涓嬶紝涓庢寫鎴樺绉帮級
-var _curio_cd := 0.0             # 濂囩墿鍐峰嵈鍓╀綑
-var _curio_uses := 0             # 鏈眬鍠濅簡鍑犳锛堣鎯呴〉鏄剧ず锛?var _curio_detail: Control = null
-var _rare_taken: Dictionary = {}   # 鎶藉埌杩囩殑绋€鏈夊崟鍗★紙鍏ㄩ儴鍞竴锛?var _wave_lb: Label
+const PFX_MAX_LIVE := 26          # 同屏特效上限（实测 60fps 有余量，放回 26）
+var _curio_sq = null             # 奇物方块（战场右下，与挑战对称）
+var _curio_cd := 0.0             # 奇物冷却剩余
+var _curio_uses := 0             # 本局喝了几次（详情页显示）
+var _curio_detail: Control = null
+var _rare_taken: Dictionary = {}   # 抽到过的稀有单卡（全部唯一）
+var _wave_lb: Label
 var _hp_lb: Label
 var _wen := 0
 var _kills := 0
@@ -235,10 +279,12 @@ var _draw_anim := false
 var _draw_refresh_btn: Button = null
 var _hero_token = null
 var _foe_tokens := {}
-var _no_tokens := false   # 瀵圭収娴嬭瘯鐢細涓嶅垱寤?涓嶆洿鏂版€殑鏈綋
-var _no_ui := false       # 瀵圭収娴嬭瘯鐢細涓嶅垱寤?UI 闈㈡澘
-var _no_ui2 := false      # 瀵圭収娴嬭瘯鐢細杩炶儗鏅?榛戝競/鏁欏/鍗＄墝鏁版嵁閮戒笉寤?var _foe_seq := 0
-# 鏀诲嚮琛ㄧ幇锛圥0锛夛細鍚庡眰鍓?寮э紝鍓嶅眰鐧借竟娣＄孩/浼ゅ瀛楋紱椤堕儴琛€鏉℃槸涓昏鍞竴琛€鏉?const FIELD_POS := Vector2(8, 150)
+var _no_tokens := false   # 对照测试用：不创建/不更新怪的本体
+var _no_ui := false       # 对照测试用：不创建 UI 面板
+var _no_ui2 := false      # 对照测试用：连背景/黑市/教学/卡牌数据都不建
+var _foe_seq := 0
+# 攻击表现（P0）：后层剑/弧，前层白边淡红/伤害字；顶部血条是主角唯一血条
+const FIELD_POS := Vector2(8, 150)
 var _fx_back: Control = null
 var _fx_front: Control = null
 var _prev_hero_hp := -1.0
@@ -266,7 +312,7 @@ func _ready() -> void:
 		_build_bottom()
 		_q_init()
 		_build_draw()
-	# v6锛氳鑹插睘鎬х粺涓€璧拌缁嗗睘鎬ч〉锛坅ttr_panel锛夛紝鏃?8 琛岀獥涓嶅啀鍒涘缓
+	# v6：角色属性统一走详细属性页（attr_panel），旧 8 行窗不再创建
 	if not _no_ui:
 		_build_exit()
 		_build_toast()
@@ -299,7 +345,8 @@ func _ready() -> void:
 		print("[SLOW] battle_ui ready ", _el_ready / 1000.0, " ms")
 	set_process(true)
 
-# 涓婁竴鍏抽閫氱暀涓嬬殑鈥滈涔犫€濓細涓嬩竴鍏冲紑灞€鐢熸晥涓€娆?func _apply_level_preview() -> void:
+# 上一关首通留下的“预习”：下一关开局生效一次
+func _apply_level_preview() -> void:
 	var pv := LevelState.take_preview(LevelState.current_level)
 	if pv.is_empty():
 		return
@@ -310,7 +357,8 @@ func _ready() -> void:
 	if pv.has("god"):
 		_draw_charge += int(pv["god"])
 	if pv.has("exp_pct"):
-		_exp_pct += float(pv["exp_pct"])   # 绗洓鍏抽涔狅細涓嬩竴鍏崇粡楠屽姞鎴?	if pv.has("chal"):
+		_exp_pct += float(pv["exp_pct"])   # 第四关预习：下一关经验加成
+	if pv.has("chal"):
 		for i in _chal_cd.size():
 			_chal_cd[i] = 0.0
 	_update_crystal()
@@ -319,7 +367,7 @@ func _ready() -> void:
 	_refresh_level_ui()
 
 
-# ---------------- 閫氱敤 ----------------
+# ---------------- 通用 ----------------
 func _panel(rect: Rect2, bg: Color, radius := 8, border := Color(0, 0, 0, 0), bw := 0, parent: Node = null) -> Panel:
 	var p := Panel.new()
 	p.position = rect.position
@@ -403,7 +451,8 @@ func _toast_next() -> void:
 		_toast_next())
 
 class BgArt extends Control:
-	# 鍏冲崱 鈫?鑳屾櫙杞崲锛涙枃浠朵笉瀛樺湪鏃跺洖閫€鍒扮▼搴忕敾鐨勭焊闈?	const BG_LIST := [
+	# 关卡 → 背景轮换；文件不存在时回退到程序画的纸面
+	const BG_LIST := [
 		"res://assets/art/bg/bg_village.jpg",
 		"res://assets/art/bg/bg_bamboo.jpg",
 		"res://assets/art/bg/bg_rain.jpg",
@@ -427,21 +476,44 @@ class BgArt extends Control:
 			var w := float(tex.get_width()) * s
 			var h := float(tex.get_height()) * s
 			draw_texture_rect(tex, Rect2((size.x - w) * 0.5, (size.y - h) * 0.5, w, h), false)
-			# 鍘嬬焊鑹诧細涓儴鎴樻枟鍖鸿交銆佷笂涓?UI 鍖洪噸锛屼繚璇佹枃瀛楀彲璇?			draw_rect(Rect2(0, 0, 720, 1280), Color(0.965, 0.945, 0.90, 0.26))
+			# 压纸色：中部战斗区轻、上下 UI 区重，保证文字可读
+			draw_rect(Rect2(0, 0, 720, 1280), Color(0.965, 0.945, 0.90, 0.26))
 			draw_rect(Rect2(0, 0, 720, 160), Color(0.965, 0.945, 0.90, 0.72))
 			draw_rect(Rect2(0, 850, 720, 430), Color(0.965, 0.945, 0.90, 0.80))
 			return
-		# 绾哥汗/灞?		var pts := [
+		# 纸纹/山
+		var pts := [
 			Vector2(0, 870), Vector2(90, 730), Vector2(170, 830), Vector2(260, 700),
 			Vector2(360, 840), Vector2(470, 710), Vector2(580, 830), Vector2(700, 740),
 			Vector2(720, 870)
 		]
 		draw_polyline(PackedVector2Array(pts), Color(0.52, 0.46, 0.38, 0.30), 2.0, true)
 		draw_line(Vector2(0, 870), Vector2(720, 870), Color(0.38, 0.32, 0.24, 0.55), 2.0)
-		# 娣″ⅷ鐐?		for i in 6:
+		# 淡墨点
+		for i in 6:
 			draw_circle(Vector2(60 + i * 118, 200 + (i % 3) * 150), 46.0, Color(0.45, 0.38, 0.30, 0.025))
 
-# ---------------- 鍥炬爣 ----------------
+# ---------------- 图标 ----------------
+class ArtRect extends Control:
+	# 把贴图铺到节点矩形：默认拉伸；cover=true 时按比例裁切填满（全屏 CG 用）
+	var tex: Texture2D = null
+	var cover := false
+	func _ready() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+	func _draw() -> void:
+		if tex == null:
+			return
+		if cover:
+			var tw := float(tex.get_width())
+			var th := float(tex.get_height())
+			var s := maxf(size.x / tw, size.y / th)
+			var w := tw * s
+			var h := th * s
+			draw_texture_rect(tex, Rect2((size.x - w) * 0.5, (size.y - h) * 0.5, w, h), false)
+		else:
+			draw_texture_rect(tex, Rect2(Vector2.ZERO, size), false)
+
+
 class Ico extends Control:
 	var kind := "coin"
 	func _ready() -> void:
@@ -458,7 +530,8 @@ class Ico extends Control:
 			draw_circle(c, r * 0.30, Color(0.10, 0.09, 0.08))
 			draw_rect(Rect2(c - Vector2(r * 0.20, r * 0.20), Vector2(r * 0.40, r * 0.40)), Color(0.10, 0.09, 0.08), false, 3.0)
 		elif kind == "heart":
-			# 绾㈠績锛堝綋灞€鐢熷懡锛夛細鍙傛暟鏂圭▼鎻忕偣锛屽渾蹇冭惤鍦ㄥ浘鏍囦腑蹇?			var hp := PackedVector2Array()
+			# 红心（当局生命）：参数方程描点，圆心落在图标中心
+			var hp := PackedVector2Array()
 			for i in 40:
 				var t := TAU * float(i) / 40.0
 				var hx := 16.0 * pow(sin(t), 3.0)
@@ -546,7 +619,7 @@ class CardSlot extends Control:
 			draw_dashed_line(Vector2(size.x-2,2), Vector2(size.x-2,size.y-2), c, 2.0, 6.0)
 			draw_dashed_line(Vector2(size.x-2,size.y-2), Vector2(2,size.y-2), c, 2.0, 6.0)
 			draw_dashed_line(Vector2(2,size.y-2), Vector2(2,2), c, 2.0, 6.0)
-			draw_string(F, size * 0.5 + Vector2(-10, 7), "绌?, HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color(0.42,0.36,0.28,0.55))
+			draw_string(F, size * 0.5 + Vector2(-10, 7), "空", HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color(0.42,0.36,0.28,0.55))
 			return
 		var sb := StyleBoxFlat.new()
 		sb.bg_color = Color(0.96, 0.93, 0.86, 0.98)
@@ -577,7 +650,8 @@ class DrawCard extends Control:
 	const CF := preload("res://kushou/card_frame.gd")
 	signal picked
 	var data: Dictionary = {}
-	var progress := 0          # 璇ュ崱鎵€灞炵粍鍚堢殑褰撳墠杩涘害锛堢敱澶栧３鍐欏叆锛?	var _art_rect: TextureRect
+	var progress := 0          # 该卡所属组合的当前进度（由外壳写入）
+	var _art_rect: TextureRect
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_STOP
 		_art_rect = TextureRect.new()
@@ -606,7 +680,8 @@ class DrawCard extends Control:
 			sb.set_border_width_all(6)
 			draw_style_box(sb, Rect2(Vector2.ZERO, size))
 		if bool(data.get("shiny", false)):
-			# 鐐崱锛氫竷褰╂弿杈圭敱澶栧悜鍐?			var cols := [Color(0.85,0.28,0.30), Color(0.93,0.58,0.22), Color(0.90,0.80,0.28),
+			# 炫卡：七彩描边由外向内
+			var cols := [Color(0.85,0.28,0.30), Color(0.93,0.58,0.22), Color(0.90,0.80,0.28),
 				Color(0.38,0.70,0.42), Color(0.32,0.62,0.85), Color(0.62,0.42,0.82)]
 			for i in 6:
 				var sp := StyleBoxFlat.new()
@@ -624,12 +699,13 @@ class DrawCard extends Control:
 		draw_string(F, Vector2(20, 204), str(data.get("own_text", "")), HORIZONTAL_ALIGNMENT_LEFT, size.x - 40, 21, Color(0.14,0.11,0.08))
 		draw_line(Vector2(20, 220), Vector2(size.x - 20, 220), Color(0.5,0.4,0.25,0.35), 1.5)
 		if bool(data.get("shiny", false)):
-			# 鐐崱锛氫笉鏄剧ず缁勫悎杩涘害锛屾敼鎴愬悶鍣鏄?			draw_string(F, Vector2(20, 240), "杩涘崱缁勫嵆鍚炲敖鍏ㄩ儴瀹朵紶鍗?, HORIZONTAL_ALIGNMENT_LEFT, size.x - 36, 16, Color(0.42,0.30,0.12))
-			draw_string(F, Vector2(20, 264), "姣忓悶涓€寮狅細鐏垫櫠+20 路 鏂囬挶+150", HORIZONTAL_ALIGNMENT_LEFT, size.x - 36, 14, Color(0.2,0.16,0.12))
-			draw_string(F, Vector2(20, 284), "銆€銆€銆€銆€銆€鎶€鑳戒激瀹?+10%", HORIZONTAL_ALIGNMENT_LEFT, size.x - 36, 14, Color(0.2,0.16,0.12))
+			# 炫卡：不显示组合进度，改成吞噬说明
+			draw_string(F, Vector2(20, 240), "进卡组即吞尽全部家传卡", HORIZONTAL_ALIGNMENT_LEFT, size.x - 36, 16, Color(0.42,0.30,0.12))
+			draw_string(F, Vector2(20, 264), "每吞一张：灵晶+20 · 文钱+150", HORIZONTAL_ALIGNMENT_LEFT, size.x - 36, 14, Color(0.2,0.16,0.12))
+			draw_string(F, Vector2(20, 284), "　　　　　技能伤害 +10%", HORIZONTAL_ALIGNMENT_LEFT, size.x - 36, 14, Color(0.2,0.16,0.12))
 		else:
 			draw_string(F, Vector2(20, 246), str(data.get("combo_name", "")) + " " + str(progress) + "/" + str(data.get("set_size", 0)), HORIZONTAL_ALIGNMENT_LEFT, 140, 18, Color(0.42,0.30,0.12))
-			draw_string(F, Vector2(20, 280), str(data.get("trigger", "")) + "锛? + str(data.get("combo_text", "")), HORIZONTAL_ALIGNMENT_LEFT, size.x - 36, 17, Color(0.2,0.16,0.12))
+			draw_string(F, Vector2(20, 280), str(data.get("trigger", "")) + "：" + str(data.get("combo_text", "")), HORIZONTAL_ALIGNMENT_LEFT, size.x - 36, 17, Color(0.2,0.16,0.12))
 	func _gui_input(ev: InputEvent) -> void:
 		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
 			picked.emit()
@@ -646,7 +722,7 @@ func _chip(x: float, kind: String, value: String, cap: String) -> Label:
 	box.size = Vector2(720, 80)
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(box)
-	# 鍙鍖哄潡鍗曠嫭涓€涓?Control锛?62脳64锛夛紝鏁欏楂樹寒妗嗗彧妗嗚繖涓€鍧楋紝涓嶄細鎷夋弧鏁磋
+	# 可视区块单独一个 Control（162×64），教学高亮框只框这一块，不会拉满整行
 	var chip := Control.new()
 	chip.position = Vector2(x, 8)
 	chip.size = Vector2(162, 64)
@@ -660,7 +736,7 @@ func _chip(x: float, kind: String, value: String, cap: String) -> Label:
 	chip.add_child(ic)
 	var vl := _lbl(value, Vector2(48, -4), Vector2(106, 36), 26, Color(0.95, 0.91, 0.83), chip, HORIZONTAL_ALIGNMENT_RIGHT)
 	_lbl(cap, Vector2(48, 32), Vector2(106, 20), 16, Color(0.80, 0.75, 0.65), chip, HORIZONTAL_ALIGNMENT_RIGHT)
-	# 鐐圭伒鏅?鏂囬挶缁欒鏄庯紙鐏垫櫠涓嶈冻鏃剁洿鎺ユ彁绀烘棤娉曟娊鍗★級
+	# 点灵晶/文钱给说明（灵晶不足时直接提示无法抽卡）
 	chip.mouse_filter = Control.MOUSE_FILTER_PASS
 	var hb := Button.new()
 	hb.flat = true
@@ -677,25 +753,25 @@ func _chip(x: float, kind: String, value: String, cap: String) -> Label:
 
 func _on_chip_click(cap: String) -> void:
 	match cap:
-		"鐏垫櫠":
+		"灵晶":
 			if _crystal < 20:
-				_toast("鐏垫櫠涓嶈冻锛屼笉瓒充互鎶藉崱锛堜竴娆¤ 20锛?)
+				_toast("灵晶不足，不足以抽卡（一次要 20）")
 			else:
-				_toast("鐏垫櫠 %d 路 鎶藉崱涓€娆?20" % _crystal)
-		"鏂囬挶":
+				_toast("灵晶 %d · 抽卡一次 20" % _crystal)
+		"文钱":
 			var cost := _str_cost()
 			if _wen < cost:
-				_toast("鏂囬挶涓嶈冻锛屾棤娉曞己鍖栵紙闇€瑕?%d锛? % cost)
+				_toast("文钱不足，无法强化（需要 %d）" % cost)
 			else:
-				_toast("鏂囬挶 %d 路 寮哄寲涓€娆?%d" % [_wen, cost])
+				_toast("文钱 %d · 强化一次 %d" % [_wen, cost])
 
 func _build_hud() -> void:
-	_coin_lb = _chip(18, "coin", "0", "鏂囬挶")
-	_crystal_lb = _chip(192, "crystal", "100", "鐏垫櫠")
-	_chips["鐏垫櫠"].visible = LevelState.show_button("crystal")
-	_kill_lb = _chip(366, "kill", "0", "鏉€鏁?)
-	_life_lb = _chip(540, "heart", "100", "鍛?)
-	_wave_lb = _lbl("娉?1/%d" % _max_wave, Vector2(22, 92), Vector2(100, 48), 26, INK)
+	_coin_lb = _chip(18, "coin", "0", "文钱")
+	_crystal_lb = _chip(192, "crystal", "100", "灵晶")
+	_chips["灵晶"].visible = LevelState.show_button("crystal")
+	_kill_lb = _chip(366, "kill", "0", "杀敌")
+	_life_lb = _chip(540, "heart", "100", "命")
+	_wave_lb = _lbl("波 1/%d" % _max_wave, Vector2(22, 92), Vector2(100, 48), 26, INK)
 	for i in 5:
 		var d := Color(0.85, 0.66, 0.23) if i == 0 else Color(0.38, 0.33, 0.26, 0.55)
 		var c := Control.new()
@@ -714,21 +790,24 @@ func _build_hud() -> void:
 	_panel(Rect2(200, 118, 235, 9), Color(0.10, 0.09, 0.08, 0.22), 4)
 	_mp_bar = _panel(Rect2(200, 118, 235 * 0.35, 9), Color(0.30, 0.52, 0.72), 4)
 	var _boss_timer_lb := _lbl("", Vector2(450, 96), Vector2(120, 30), 17, SEAL)
-	_boss_timer_lb.visible = false   # 鍘熸潵鍐欐鐨勨€滈棰?00:37鈥濇槸鍋囩殑锛屾敼鎴愰棰嗙湡鐨勫嚭鐜版椂鎵嶆樉绀?	_tot_btn = _btn("鎬昏", Rect2(570, 88, 68, 42), 17, Color(0.10, 0.09, 0.08, 0.98), LIGHT, func(): _show_totals())
-	_btn("閫€鍑?, Rect2(646, 88, 60, 42), 17, Color(0.10, 0.09, 0.08, 0.98), LIGHT, func(): _show_exit(true))
+	_boss_timer_lb.visible = false   # 原来写死的“首领 00:37”是假的，改成首领真的出现时才显示
+	_tot_btn = _btn("总计", Rect2(570, 88, 68, 42), 17, Color(0.10, 0.09, 0.08, 0.98), LIGHT, func(): _show_totals())
+	_btn("退出", Rect2(646, 88, 60, 42), 17, Color(0.10, 0.09, 0.08, 0.98), LIGHT, func(): _show_exit(true))
 
-# ---------------- 鎴樺満 ----------------
-# 闀滃ご瀹瑰櫒锛氭垬鍦哄唴瀹归兘鎸傚湪瀹冧笅闈紝鍋氭帹杩涳紙zoom锛夋椂鏁翠綋涓€璧风缉鏀?var _cam: Control = null
+# ---------------- 战场 ----------------
+# 镜头容器：战场内容都挂在它下面，做推进（zoom）时整体一起缩放
+var _cam: Control = null
 func _build_field() -> void:
 	_cam = Control.new()
 	_cam.size = Vector2(720, 1280)
 	_cam.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_cam.pivot_offset = Vector2(360, 510)   # 浠ユ垬鍦轰腑蹇冧负缂╂斁涓績
+	_cam.pivot_offset = Vector2(360, 510)   # 以战场中心为缩放中心
 	add_child(_cam)
 	_core = BattleCore.new()
 	_core.position = Vector2(8, 150)
 	_core.size = Vector2(704, 720)
-	_core.mouse_filter = Control.MOUSE_FILTER_IGNORE   # 鎴樻枟娌℃湁鎵嬪姩锛氱偣鍑荤┛閫?	_core.modulate = Color(1, 1, 1, 0.25)
+	_core.mouse_filter = Control.MOUSE_FILTER_IGNORE   # 战斗没有手动：点击穿透
+	_core.modulate = Color(1, 1, 1, 0.25)
 	_core.show_combo_counter = false
 	_core.show_basic_hit_numbers = false
 	_cam.add_child(_core)
@@ -740,7 +819,7 @@ func _build_field() -> void:
 		EquipmentStats.apply(_core, ForgeData.totals())
 	_core.set_wave(1)
 	_core.coin.connect(_on_core_coin)
-	_core.coin_drop.connect(_on_coin_drop)   # v6锛氶挶鎬?鍖鎺夌殑鐪熼挶
+	_core.coin_drop.connect(_on_coin_drop)   # v6：钱怪/匪首掉的真钱
 	_core.kill.connect(_on_core_kill)
 	_core.foe_defeated.connect(_on_foe_defeated)
 	_core.chal_drop.connect(_on_chal_drop)
@@ -759,16 +838,18 @@ func _build_field() -> void:
 	_core.wood_expired.connect(_curio_on_wood_expired)
 	_core.cold_expired.connect(_curio_on_cold_expired)
 	_core.paper_blocked.connect(_on_paper_blocked)
-	# 鏁欏鍏虫瘡娉㈠皯鍒峰嚑鍙紝鑺傚鏇村揩锛堝鍔变笉鍙橈級
+	# 教学关每波少刷几只，节奏更快（奖励不变）
 	if LevelState.current_level <= 5:
-		_core.wave_extra = -8       # 鍓嶄簲鍏筹細澶у箙鍑忛噺锛屽揩閫熸帹杩?	elif LevelState.current_level <= 10:
+		_core.wave_extra = -8       # 前五关：大幅减量，快速推进
+	elif LevelState.current_level <= 10:
 		_core.wave_extra = -4
 	_core.start_run()
 	_hero_token = TokenActor.new()
 	_hero_token.setup(PLAYER_TEX, 44.0, Color(0.85, 0.66, 0.23), true)
 	_hero_token.set_role("player")
 	_hero_token.set_weapon("sword")
-	_hero_token.show_bar = false          # 涓昏琛€鏉″彧鐪嬮《閮?HUD锛屼笉鍐嶆寕婕傛诞琛€鏉?	_hero_token.bar_w = 0.0
+	_hero_token.show_bar = false          # 主角血条只看顶部 HUD，不再挂漂浮血条
+	_hero_token.bar_w = 0.0
 	_hero_token.unit_name = ""
 	_hero_token.position = _core.position + _core.hero_pos
 	_hero_token.z_index = 6
@@ -790,13 +871,14 @@ func _build_field() -> void:
 	_cam.add_child(hit)
 	_hero_hit_btn = hit
 	_hero_hit_btn.position = _hero_token.position - Vector2(48, 48)
-	# 鎸戞垬鏂瑰舰
-	_chal_btn = _btn("鎸戞垬", Rect2(0, 760, 96, 96), 20, Color(0.075, 0.068, 0.060, 0.98), Color(0.91, 0.78, 0.42), func(): _toggle_challenge())
+	# 挑战方形
+	_chal_btn = _btn("挑战", Rect2(0, 760, 96, 96), 20, Color(0.075, 0.068, 0.060, 0.98), Color(0.91, 0.78, 0.42), func(): _toggle_challenge())
 	_chal_btn.visible = LevelState.show_button("challenge")
 	_build_challenge()
 	_build_curio()
-	# pixelfx 鐗规晥灞傦細鐩栧湪鎴樺満鍜岃鑹蹭箣涓娿€乁I 涔嬩笅
-	# 棣栭鐧诲満婕斿嚭涓変欢濂楋紙骞虫椂闅愯棌锛?	_boss_veil = ColorRect.new()
+	# pixelfx 特效层：盖在战场和角色之上、UI 之下
+	# 首领登场演出三件套（平时隐藏）
+	_boss_veil = ColorRect.new()
 	_boss_veil.color = Color(0.08, 0.06, 0.05, 0.0)
 	_boss_veil.position = Vector2(0, 150)
 	_boss_veil.size = Vector2(720, 720)
@@ -836,7 +918,7 @@ func _build_field() -> void:
 	_flash_rect = ColorRect.new()
 	_flash_rect.color = Color(1.0, 0.96, 0.85, 0.0)
 	_flash_rect.position = Vector2(0, 150)
-	_flash_rect.size = Vector2(720, 720)   # 鍙棯鎴樺満锛屼笉鏌?HUD
+	_flash_rect.size = Vector2(720, 720)   # 只闪战场，不染 HUD
 	_flash_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_flash_rect.z_index = 20
 	add_child(_flash_rect)
@@ -852,9 +934,10 @@ func _build_field() -> void:
 	add_child(_fly_layer)
 	_fly = _fly_layer.dots
 	_build_card_detail()
-	# v3 鎶€鑳芥爮锛堝彸缂樼珫鎺掞紝6 鏍煎彲瑙嗭級
+	# v3 技能栏（右缘竖排，6 格可视）
 	_build_skill_bar()
-	# 鏀诲嚮琛ㄧ幇灞傦細鍚庡眰鍦ㄧ墝涓嬮潰锛堝墤/寮ц鐗屾尅浣忥級锛屽墠灞傚湪鐗屼笂闈紙鐧借竟/娣＄孩/鏁板瓧锛?	_fx_back = AttackFx.new()
+	# 攻击表现层：后层在牌下面（剑/弧被牌挡住），前层在牌上面（白边/淡红/数字）
+	_fx_back = AttackFx.new()
 	_fx_back.front = false
 	_fx_back.position = FIELD_POS
 	_fx_back.size = Vector2(704, 720)
@@ -868,7 +951,7 @@ func _build_field() -> void:
 	_fx_front.z_index = 7
 	_fx_front.clip_contents = true
 	add_child(_fx_front)
-	_hero_name_lb = _lbl("灏戜緺", _hero_token.position + Vector2(-60, 52), Vector2(120, 24),
+	_hero_name_lb = _lbl("少侠", _hero_token.position + Vector2(-60, 52), Vector2(120, 24),
 		18, Color(0.30, 0.24, 0.16, 0.9), self, HORIZONTAL_ALIGNMENT_CENTER)
 	_hero_name_lb.z_index = 9
 
@@ -904,9 +987,9 @@ func _toggle_challenge() -> void:
 			_breathe(_chal_holder)
 
 # ============================================================
-# 鎸戞垬锛氬喎鍗村埗 + 鎸夋尝瑙ｉ攣锛屾墦瀹岀粰璧勬簮
+# 挑战：冷却制 + 按波解锁，打完给资源
 # ============================================================
-const CHAL_NAMES := ["閽辨€?, "鏅舵€?, "涔︽€?, "瀹濈", "鍖"]
+const CHAL_NAMES := ["钱怪", "晶怪", "书怪", "宝箱", "匪首"]
 const CHAL_GROUP := [6, 3, 4, 1, 1]
 
 var _chal_btns: Array = []
@@ -936,13 +1019,13 @@ func _build_challenge() -> void:
 		var b := _btn(str(CHAL_NAMES[i]), Rect2(x, y, 132, 72), 17, Color(0.09, 0.08, 0.07, 0.98),
 			Color(0.91, 0.78, 0.42), func() -> void: _chal_press(idx), _chal_holder)
 		_chal_btns.append(b)
-	_chal_auto_btn = _btn("鑷姩鎸戞垬锛氬叧", Rect2(16, 276, 288, 48), 18, Color(0.13, 0.11, 0.09),
+	_chal_auto_btn = _btn("自动挑战：关", Rect2(16, 276, 288, 48), 18, Color(0.13, 0.11, 0.09),
 		Color(0.91, 0.78, 0.42), func() -> void: _toggle_auto_chal(), _chal_holder)
 
 func _toggle_auto_chal() -> void:
 	_auto_chal = not _auto_chal
 	if _chal_auto_btn != null:
-		_chal_auto_btn.text = "鑷姩鎸戞垬锛? + ("寮€" if _auto_chal else "鍏?)
+		_chal_auto_btn.text = "自动挑战：" + ("开" if _auto_chal else "关")
 	_refresh_chal_panel()
 
 func _chal_unlocked(i: int) -> bool:
@@ -954,19 +1037,20 @@ func _chal_press(i: int) -> void:
 	if _run_over or _core == null:
 		return
 	if not _chal_unlocked(i):
-		_toast("銆?s銆嶇 %d 娉㈡墠瑙ｉ攣" % [str(CHAL_NAMES[i]), int(CHAL_MIN_WAVE[i])])
+		_toast("「%s」第 %d 波才解锁" % [str(CHAL_NAMES[i]), int(CHAL_MIN_WAVE[i])])
 		return
 	if float(_chal_cd[i]) > 0.0:
-		_toast("銆?s銆嶅喎鍗翠腑 %.0f 绉? % [str(CHAL_NAMES[i]), ceil(float(_chal_cd[i]))])
+		_toast("「%s」冷却中 %.0f 秒" % [str(CHAL_NAMES[i]), ceil(float(_chal_cd[i]))])
 		return
 	_chal_cd[i] = _chal_base_cd(i)
 	_chal_count += 1
 	_qc("chal", 1)
 	var grp := int(CHAL_GROUP[i])
 	_core.spawn_challenge(i, grp)
-	# 鎸戞垬寮€鎵擄細鎴樺満涓婃柟涓€鍙ｈ惤鍦板啿鍑?+ 榧擄紝缁?搴旀垬"鐨勫垎閲?	_spawn_pfx("impacts/ground-slam", Vector2(360, 235), 0.95, "shadow", 1.5)
+	# 挑战开打：战场上方一口落地冲击 + 鼓，给"应战"的分量
+	_spawn_pfx("impacts/ground-slam", Vector2(360, 235), 0.95, "shadow", 1.5)
 	Aud.sfx("drum", -12.0, 1.10)
-	_toast("鎸戞垬 路 " + str(CHAL_NAMES[i]))
+	_toast("挑战 · " + str(CHAL_NAMES[i]))
 	Aud.sfx("ui_open", -8.0)
 	_refresh_chal_panel()
 
@@ -977,13 +1061,13 @@ func _refresh_chal_panel() -> void:
 			continue
 		var cd := float(_chal_cd[i])
 		if not _chal_unlocked(i):
-			b.text = "%s\n绗?%d 娉㈣В閿? % [str(CHAL_NAMES[i]), int(CHAL_MIN_WAVE[i])]
+			b.text = "%s\n第 %d 波解锁" % [str(CHAL_NAMES[i]), int(CHAL_MIN_WAVE[i])]
 			b.disabled = true
 		elif cd > 0.0:
-			b.text = "%s\n%.0f 绉? % [str(CHAL_NAMES[i]), ceil(cd)]
+			b.text = "%s\n%.0f 秒" % [str(CHAL_NAMES[i]), ceil(cd)]
 			b.disabled = true
 		else:
-			b.text = "%s\n脳%d" % [str(CHAL_NAMES[i]), int(CHAL_GROUP[i])]
+			b.text = "%s\n×%d" % [str(CHAL_NAMES[i]), int(CHAL_GROUP[i])]
 			b.disabled = false
 		b.add_theme_font_size_override("font_size", 17)
 
@@ -1007,7 +1091,7 @@ func _tick_chal(dt: float) -> void:
 		_refresh_chal_panel()
 	_chal_auto_try()
 
-# 鎸戞垬鎬浜★細鎸夌被鍨嬬粨绠楋紙閽辨€蛋 coin_drop锛岃繖閲屼笉閲嶅缁欙級
+# 挑战怪死亡：按类型结算（钱怪走 coin_drop，这里不重复给）
 func _on_chal_drop(kind: int, _pos: Vector2) -> void:
 	if _run_over or _core == null:
 		return
@@ -1015,13 +1099,14 @@ func _on_chal_drop(kind: int, _pos: Vector2) -> void:
 		1:
 			_gain_crystal(int(float(4 + randi() % 4) * _core.chal_crystal_mul()))
 		2:
-			_add_exp(80)                      # 涔︽€細棰濆缁忛獙锛屽揩閫熺粌绾?		3:
+			_add_exp(80)                      # 书怪：额外经验，快速练级
+		3:
 			_trea_charge += 1
 			_trea_reroll += 1
 			if randf() < float(_treasure_pct) / 100.0:
 				_trea_reroll += 1
 			_refresh_trea_tile()
-			_toast("瀹濈 路 瀹濈墿鏈轰細 +1 路 鍒锋柊 +1")
+			_toast("宝箱 · 宝物机会 +1 · 刷新 +1")
 		4:
 			_add_wen(int(220.0 * _core.chal_money_mul() * (1.0 + _boss_pct / 100.0)))
 			_gain_crystal(int(round(30.0 * _core.chal_crystal_mul() * (1.0 + _boss_pct / 100.0))))
@@ -1029,25 +1114,33 @@ func _on_chal_drop(kind: int, _pos: Vector2) -> void:
 			_trea_reroll += 1
 			_aug_reroll += 1
 			_refresh_trea_tile()
-			_toast("鍖 路 鏂囬挶/鐏垫櫠 + 瀹濈墿鏈轰細 + 鍒锋柊")
+			_toast("匪首 · 文钱/灵晶 + 宝物机会 + 刷新")
 
 # ============================================================
-# 濂囩墿锛堝眬澶栦竴浠?路 灞€鍐呭叏鑷姩锛屼笉鐢ㄧ帺瀹剁偣锛?#   棣栦欢 鐜茬彂鐜夊６锛氭皵琛€浣庝簬 30% 绔嬪埢鍠濓紱浣庝簬 50% 涓旇韩杈规湁鏁屼篃鍠?#   鍥炴皵琛€ 25% / 鍐呭姏 25%锛屽喎鍗?60 绉?# ============================================================
-# ---------------- 濂囩墿锛堝崟妲?路 鍏ㄨ嚜鍔級 ----------------
+# 奇物（局外一件 · 局内全自动，不用玩家点）
+#   首件 玲珑玉壶：气血低于 30% 立刻喝；低于 50% 且身边有敌也喝
+#   回气血 25% / 内力 25%，冷却 60 秒
+# ============================================================
+# ---------------- 奇物（单槽 · 全自动） ----------------
 const CurioData := preload("res://shared/curio_data.gd")
 const GameState := preload("res://shared/game_state.gd")
 
 var _curio_id := ""
 var _curio_lv := 1
-var _curio_atk_t := 0.0        # 琛€钁姦锛氬墿浣欐寔缁?var _curio_atk_add := 0.0      # 琛€钁姦锛氭敾鍑诲姞鎴?var _curio_extend_used := 0.0  # 鏈澧炵泭宸插欢闀跨殑鎬荤鏁帮紝涓嶉殢鍊掕鏃跺洖閫€
-var _curio_extra_used := false # 鐜夊６ Lv5锛氭繏姝婚澶栦竴娆?var _curio_kills := 0
-var _curio_waves := 0           # 瀹為檯鎴愬姛娓呮尝娆℃暟锛屼笉鍖呭惈鎴樿触璺宠繃鐨勬尝
-var _rewarded_waves := {}       # 闃叉娓呮尝鍥炶皟閲嶅缁撶畻
-var _tie_stacks := 0           # 閾佸竷琛細纭皵灞傛暟
-var _tie_idle := 0.0           # 閾佸竷琛細澶氫箙娌℃尐鎵?var _zhiren := 0               # 绾镐汉鏇胯韩锛氬墿浣欐暟閲?var _draw_free := 0            # 涓囧簲绗︼細鍏嶈垂鎶藉崱鍒锋柊娆℃暟
-var _wanying_add := 0          # 涓囧簲绗︼細姣忕鍒锋柊 +N
-var _yuhu_shield := 0.0        # 鐜夊６ Lv3锛氬枬瀹屽悗鍑忎激鍓╀綑绉掓暟
-var _dart_n := 0               # 閾滈挶鍓戯細鏅敾璁℃暟锛圠v3 姣?3 娆″涓€鏋氾級
+var _curio_atk_t := 0.0        # 血葫芦：剩余持续
+var _curio_atk_add := 0.0      # 血葫芦：攻击加成
+var _curio_extend_used := 0.0  # 本次增益已延长的总秒数，不随倒计时回退
+var _curio_extra_used := false # 玉壶 Lv5：濒死额外一次
+var _curio_kills := 0
+var _curio_waves := 0           # 实际成功清波次数，不包含战败跳过的波
+var _rewarded_waves := {}       # 防止清波回调重复结算
+var _tie_stacks := 0           # 铁布衫：硬气层数
+var _tie_idle := 0.0           # 铁布衫：多久没挨打
+var _zhiren := 0               # 纸人替身：剩余数量
+var _draw_free := 0            # 万应符：免费抽卡刷新次数
+var _wanying_add := 0          # 万应符：每种刷新 +N
+var _yuhu_shield := 0.0        # 玉壶 Lv3：喝完后减伤剩余秒数
+var _dart_n := 0               # 铜钱剑：普攻计数（Lv3 每 3 次多一枚）
 
 func _curio_init_data() -> void:
 	_curio_id = GameState.curio_id
@@ -1070,8 +1163,8 @@ func _build_curio() -> void:
 	_curio_sq = CurioSquare.new()
 	_curio_sq.position = Vector2(624, 760)
 	_curio_sq.size = Vector2(96, 96)
-	_curio_sq.glyph = str(info.get("glyph", "濂?)) if not info.is_empty() else "濂?
-	_curio_sq.label = "濂囩墿"
+	_curio_sq.glyph = str(info.get("glyph", "奇")) if not info.is_empty() else "奇"
+	_curio_sq.label = "奇物"
 	_curio_sq.cd_max = maxf(1.0, float(info.get("cd", 1.0)))
 	_curio_sq.pressed.connect(_show_curio_detail)
 	add_child(_curio_sq)
@@ -1082,7 +1175,7 @@ func _curio_flash() -> void:
 		_curio_sq.flash = 1.0
 		_curio_sq.queue_redraw()
 
-# 姣忓抚锛氬喎鍗?+ 鎸佺画 buff + 鍚勫鐗╃殑鑷姩瑙﹀彂
+# 每帧：冷却 + 持续 buff + 各奇物的自动触发
 func _tick_curio(dt: float) -> void:
 	if _curio_sq == null:
 		return
@@ -1159,7 +1252,7 @@ func _curio_use(extra := false) -> void:
 		_core.hero["curio_cut"] = 0.20
 	_curio_uses += 1
 	_curio_flash()
-	_toast("鐜夊６ 路 姘旇 +%d 路 鍐呭姏 +%d" % [int(hp_add), int(mp_add)])
+	_toast("玉壶 · 气血 +%d · 内力 +%d" % [int(hp_add), int(mp_add)])
 	Aud.sfx("drink", -10.0, 1.05)
 	_spawn_pfx("holy/heal", _hero_screen(), 0.85, "heal", 1.5)
 
@@ -1181,7 +1274,7 @@ func _curio_tick_xuehulu() -> void:
 	_curio_cd = 45.0
 	_curio_uses += 1
 	_curio_flash()
-	_toast("琛€钁姦 路 鏀诲嚮 +%d%%" % int(_curio_atk_add * 100.0))
+	_toast("血葫芦 · 攻击 +%d%%" % int(_curio_atk_add * 100.0))
 	Aud.sfx("drum", -9.0, 0.9)
 	_spawn_pfx("impacts/crit-hit", _hero_screen(), 0.9, "", 1.5)
 
@@ -1193,7 +1286,8 @@ func _curio_tick_jingtangmu() -> void:
 		return
 	var dur := 2.5 if _curio_lv >= 2 else 2.0
 	var targets := 2 if _curio_lv >= 4 else 1
-	# _live_foes宸叉湁璺濈鎺掑簭锛涜鏉＄洰鏍囦紭鍏堬紝鍚岀粍浠嶆寜璺濈閫夈€?	var ordered: Array = []
+	# _live_foes已有距离排序；读条目标优先，同组仍按距离选。
+	var ordered: Array = []
 	for casting in [true, false]:
 		for foe in live:
 			if not bool(foe.get("boss", false)) and _core.has_pending_cast(foe) == casting:
@@ -1219,7 +1313,7 @@ func _curio_tick_jingtangmu() -> void:
 	_curio_uses += 1
 	_curio_flash()
 	Aud.sfx("wood_down", -8.0, 0.9)
-	_toast("鎯婂爞鏈?路 瀹氳韩 %d 鍙? % n)
+	_toast("惊堂木 · 定身 %d 只" % n)
 
 func _curio_on_wood_expired(foe: Dictionary) -> void:
 	var boom := bool(foe.get("wood_boom", false))
@@ -1229,12 +1323,12 @@ func _curio_on_wood_expired(foe: Dictionary) -> void:
 		return
 	if _core == null or not _skill_batch_active(_core._enemy_attack_epoch) or not _core.foes.has(foe):
 		return
-	_core._apply_dmg(foe, float(_core.hero.get("atk", 12.0)) * 0.8, "鐗╃悊")
+	_core._apply_dmg(foe, float(_core.hero.get("atk", 12.0)) * 0.8, "物理")
 	_spawn_pfx("impacts/ground-slam", _core.position + Vector2(float(foe["x"]), float(foe["y"])), 0.8, "", 1.2)
 	if float(foe.get("hp", 0.0)) <= 0.0:
 		_core._kill_foe(foe)
 
-# 閾滈挶鍓戯細姣忔鏅敾闄勫甫涓€鏋氶挶闀栵紙鎵撳埌鏇磋繙鐨勬€級
+# 铜钱剑：每次普攻附带一枚钱镖（打到更远的怪）
 func _curio_on_attack() -> void:
 	if _run_over or _curio_id != "tongqianjian" or _core == null:
 		return
@@ -1282,7 +1376,8 @@ func _curio_on_attack() -> void:
 					continue
 				var rel := Vector2(float(foe["x"]), float(foe["y"])) - origin
 				var along := rel.dot(dir)
-				# 20px鍗婂娌跨敤鏅€氭€墝鍗婂緞锛涗粎閫夋嫨绗竴鐩爣鍚庢柟鍚屼竴璺緞銆?				if along < bd or rel.length() > reach or absf(rel.cross(dir)) > 20.0:
+				# 20px半宽沿用普通怪牌半径；仅选择第一目标后方同一路径。
+				if along < bd or rel.length() > reach or absf(rel.cross(dir)) > 20.0:
 					continue
 				if along < nearest:
 					nearest = along
@@ -1297,7 +1392,7 @@ func _curio_on_attack() -> void:
 			if not _core.foes.has(target) or bool(target.get("_death_settled", false)) or float(target.get("hp", 0.0)) <= 0.0 or float(target.get("dying", 0.0)) > 0.0:
 				continue
 			var mul := (0.45 if _curio_lv >= 2 else 0.35) * (0.5 if i > 0 else 1.0)
-			_core._apply_dmg(target, float(_core.hero.get("atk", 12.0)) * mul, "鐗╃悊")
+			_core._apply_dmg(target, float(_core.hero.get("atk", 12.0)) * mul, "物理")
 			last_hit = target
 			_spawn_pfx("impacts/crit-hit", _core.position + Vector2(float(target["x"]), float(target["y"]) - 16.0), 0.5, "gold", 1.9)
 			if float(target.get("hp", 0.0)) <= 0.0:
@@ -1319,7 +1414,7 @@ func _curio_dart_trace(origin: Vector2, target: Vector2) -> void:
 	tween.tween_property(line, "modulate:a", 0.0, 0.12)
 	tween.tween_callback(line.queue_free)
 
-# 瑙勫垯绫伙細杩涘眬鏃朵竴娆℃€у簲鐢紙鍒锋柊娆℃暟 / 鎶€鑳藉喎鍗达級
+# 规则类：进局时一次性应用（刷新次数 / 技能冷却）
 func _curio_apply_static() -> void:
 	if _curio_id == "wanyingfu":
 		var add := 1
@@ -1328,7 +1423,8 @@ func _curio_apply_static() -> void:
 		if _curio_lv >= 4:
 			add = 3
 		if _curio_lv >= 5:
-			add = 0 # 浜旂骇閫夊厤鑰楁ā寮忥紝涓嶅彔鍔犳鏁拌禒閫併€?		_wanying_add = add
+			add = 0 # 五级选免耗模式，不叠加次数赠送。
+		_wanying_add = add
 		_trea_reroll += add
 		_aug_reroll += add
 		_god_reroll += add
@@ -1337,7 +1433,8 @@ func _curio_apply_static() -> void:
 	elif _curio_id == "zhiren":
 		_set_paper_count(0)
 
-# 涓囧簲绗?Lv5锛?5% 姒傜巼杩欐鍒锋柊涓嶆秷鑰楁鏁?func _rr_free() -> bool:
+# 万应符 Lv5：25% 概率这次刷新不消耗次数
+func _rr_free() -> bool:
 	return _curio_id == "wanyingfu" and _curio_lv >= 5 and _roll_refresh_keep()
 
 func _roll_refresh_keep() -> bool:
@@ -1346,7 +1443,8 @@ func _roll_refresh_keep() -> bool:
 func _roll_wanying_refresh() -> int:
 	return randi() % 4
 
-# 瀹氶鐝狅細鎶€鑳藉喎鍗寸缉鍑?func _curio_skill_cd_mul() -> float:
+# 定风珠：技能冷却缩减
+func _curio_skill_cd_mul() -> float:
 	if _curio_id != "dingfengzhu":
 		return 1.0
 	if _curio_lv >= 4:
@@ -1355,7 +1453,7 @@ func _roll_wanying_refresh() -> int:
 		return 0.80
 	return 0.85
 
-# 闀囬瓊閾冿細濂囬亣鍒锋柊闂撮殧
+# 镇魂铃：奇遇刷新间隔
 func _q_interval() -> float:
 	var base := Q_TICK
 	if _curio_id == "zhenhunling":
@@ -1365,7 +1463,7 @@ func _q_interval() -> float:
 			base = Q_TICK / 1.25
 	return base
 
-# ---------------- 鍙敜绫诲鐗?----------------
+# ---------------- 召唤类奇物 ----------------
 func _curio_summon(tag: String, nm: String, col: Color, life: float, dmg_pct: float, boom: float, lc := 0.0) -> void:
 	if _run_over or _core == null:
 		return
@@ -1385,7 +1483,8 @@ func _curio_summon(tag: String, nm: String, col: Color, life: float, dmg_pct: fl
 		_cam.add_child(tk)
 	else:
 		add_child(tk)
-	# 鍙敜鐗╁浘鏍囷紙娌℃湁绔嬬粯锛岀敤涓€涓瓧鏍囧嚭韬唤锛?	var mk := Label.new()
+	# 召唤物图标（没有立绘，用一个字标出身份）
+	var mk := Label.new()
 	mk.text = nm.substr(0, 1)
 	mk.position = Vector2(-22, -44)
 	mk.size = Vector2(44, 44)
@@ -1421,17 +1520,18 @@ func _curio_mirror_hit(target: Dictionary, damage: float) -> void:
 		if str(mirror.get("curio", "")) != "tongjing" or float(mirror.get("life", 0.0)) <= 0.0:
 			continue
 		var dealt: float = _core.apply_echo_damage(target, damage * float(mirror.get("copy_ratio", 0.5)))
-		# 鍑绘潃鍥炶皟鍙粨鏉熸垬鏂楁垨鍥炴疆锛屾棫闀滃儚涓嶈兘鍦ㄦ柊闃舵缁х画婕斿嚭/鍚歌銆?		if not _skill_batch_active(epoch):
+		# 击杀回调可结束战斗或回潮，旧镜像不能在新阶段继续演出/吸血。
+		if not _skill_batch_active(epoch):
 			return
 		if dealt > 0.0:
-			_core._push_float(float(target["x"]), float(target["y"]) - 45.0, "闀?" + str(int(dealt)), Color(0.72, 0.70, 0.90))
+			_core._push_float(float(target["x"]), float(target["y"]) - 45.0, "镜 " + str(int(dealt)), Color(0.72, 0.70, 0.90))
 			if float(_core.hero.get("hp", 0.0)) > 0.0:
 				_core.heal_hero(dealt * float(mirror.get("lc", 0.0)))
 
 func _curio_tick_zhiren() -> void:
 	if _core == null:
 		return
-	# Lv5锛氱焊浜轰篃鑳芥尅棣栭寤惰繜鎶€锛堟牳蹇冭鍒拌繖涓暟灏变細娑堣€楋級
+	# Lv5：纸人也能挡首领延迟技（核心读到这个数就会消耗）
 	_core.hero["paper_guard"] = _zhiren if _curio_lv >= 5 else 0
 
 func _set_paper_count(amount: int) -> void:
@@ -1452,7 +1552,7 @@ func _paper_shatter() -> void:
 			continue
 		if _core.hero_pos.distance_to(Vector2(float(foe["x"]), float(foe["y"]))) > 140.0:
 			continue
-		_core._apply_dmg(foe, float(_core.hero.get("atk", 12.0)), "鐗╃悊")
+		_core._apply_dmg(foe, float(_core.hero.get("atk", 12.0)), "物理")
 		if float(foe.get("hp", 0.0)) <= 0.0:
 			_core._kill_foe(foe)
 			if not _skill_batch_active(epoch):
@@ -1471,14 +1571,14 @@ func _curio_tick_zhaohunfan() -> void:
 	if _curio_count_minions("zhaohunfan") >= cap:
 		return
 	for _i in range(cap - _curio_count_minions("zhaohunfan")):
-		_curio_summon("zhaohunfan", "楝煎奖", Color(0.55, 0.45, 0.85),
+		_curio_summon("zhaohunfan", "鬼影", Color(0.55, 0.45, 0.85),
 			10.0 if _curio_lv >= 2 else 8.0,
 			0.35 if _curio_lv >= 4 else 0.25,
 			0.80 if _curio_lv >= 5 else 0.0)
 	_curio_cd = 25.0
 	_curio_uses += 1
 	_curio_flash()
-	_toast("鎷涢瓊骞?路 楝煎奖鐜板舰")
+	_toast("招魂幡 · 鬼影现形")
 	Aud.sfx("enlighten", -10.0, 0.9)
 
 func _curio_tick_tongjing() -> void:
@@ -1490,7 +1590,7 @@ func _curio_tick_tongjing() -> void:
 		return
 	if _curio_count_minions("tongjing") > 0:
 		return
-	_curio_summon("tongjing", "闀滃奖", Color(0.72, 0.70, 0.78),
+	_curio_summon("tongjing", "镜影", Color(0.72, 0.70, 0.78),
 		7.0 if _curio_lv >= 2 else 5.0,
 		0.70 if _curio_lv >= 4 else 0.50,
 		0.0, 0.10 if _curio_lv >= 3 else 0.0)
@@ -1500,10 +1600,11 @@ func _curio_tick_tongjing() -> void:
 	_curio_cd = 20.0
 	_curio_uses += 1
 	_curio_flash()
-	_toast("閾滈暅 路 闀滃奖绂讳綋")
+	_toast("铜镜 · 镜影离体")
 	Aud.sfx("bell", -12.0, 1.2)
 
-# 閱夌縼澹讹細鍑绘潃绱锛堟瘡 10 鍙繘鍏ラ唹锛?func _curio_on_kill(n: int) -> void:
+# 醉翁壶：击杀累计（每 10 只进入醉）
+func _curio_on_kill(n: int) -> void:
 	if _core == null or n <= 0:
 		return
 	if _curio_id == "xuehulu" and _curio_lv >= 3 and _curio_atk_t > 0.0:
@@ -1524,15 +1625,15 @@ func _curio_zui_start() -> void:
 		_core.hero["curio_crit"] = 0.10
 	_curio_uses += 1
 	_curio_flash()
-	_toast("閱夌縼澹?路 閱夋剰涓婃秾")
+	_toast("醉翁壶 · 醉意上涌")
 	Aud.sfx("drink", -10.0, 0.95)
 	_spawn_pfx("impacts/crit-hit", _hero_screen(), 0.8, "", 1.4)
 
-# 閱夌縼澹讹細杩欓噷鍙 buff 鍒版湡娓呯┖
+# 醉翁壶：这里只管 buff 到期清空
 func _curio_tick_zuiweng(_dt: float) -> void:
 	pass
 
-# 閾佸竷琛細5 绉掍笉鎸ㄦ墦娓呯┖灞傛暟
+# 铁布衫：5 秒不挨打清空层数
 func _curio_tick_tiebushan(dt: float) -> void:
 	if _tie_stacks <= 0:
 		return
@@ -1542,7 +1643,7 @@ func _curio_tick_tiebushan(dt: float) -> void:
 		_core.hero["curio_cut"] = 0.0
 		_core.hero["curio_control_immune"] = false
 
-# 閾佸竷琛細鍙楀嚮鍙犲眰 + 婊″眰鍙嶅脊
+# 铁布衫：受击叠层 + 满层反弹
 func _curio_on_hero_hurt(amount: float, attacker: Dictionary) -> void:
 	if _run_over or amount <= 0.0 or _curio_id != "tiebushan" or _core == null:
 		return
@@ -1555,7 +1656,7 @@ func _curio_on_hero_hurt(amount: float, attacker: Dictionary) -> void:
 	if _curio_lv >= 3 and _tie_stacks >= cap:
 		_core.reflect_damage(attacker, amount * 0.30)
 
-# 瀵掔帀鎵虫寚锛氭毚鍑诲彔瀵掋€? 灞傚喕缁擄紱閱夌縼澹?Lv5锛氭毚鍑诲欢闀块唹
+# 寒玉扳指：暴击叠寒、3 层冻结；醉翁壶 Lv5：暴击延长醉
 func _curio_extend_buff(seconds: float, cap: float) -> void:
 	var added := minf(seconds, maxf(0.0, cap - _curio_extend_used))
 	_curio_extend_used += added
@@ -1605,11 +1706,12 @@ func _curio_on_cold_expired(tgt: Dictionary) -> void:
 				continue
 			if at.distance_to(Vector2(float(o["x"]), float(o["y"]))) > 70.0:
 				continue
-			_core._apply_dmg(o, float(_core.hero.get("atk", 12.0)) * 0.6, "鐗╃悊")
+			_core._apply_dmg(o, float(_core.hero.get("atk", 12.0)) * 0.6, "物理")
 			if float(o.get("hp", 0.0)) <= 0.0:
 				_core._kill_foe(o)
 
-# 娓呮尝缁撶畻锛氳仛瀹濈泦 / 缁懡鐏?func _curio_on_wave_clear(wave: int) -> void:
+# 清波结算：聚宝盆 / 续命灯
+func _curio_on_wave_clear(wave: int) -> void:
 	if _core == null:
 		return
 	_curio_waves += 1
@@ -1626,7 +1728,7 @@ func _curio_on_cold_expired(tgt: Dictionary) -> void:
 		if _curio_lv >= 3 and _roll_curio_crystal():
 			_gain_crystal(1)
 		_spawn_fly(_hero_screen(), Vector2(99, 40), Color(0.90, 0.71, 0.30), 4)
-		_toast("鑱氬疂鐩?路 鏂囬挶 +%d" % amt)
+		_toast("聚宝盆 · 文钱 +%d" % amt)
 		_curio_uses += 1
 		_curio_flash()
 	if _curio_id == "wanyingfu" and _curio_lv >= 3 and _curio_lv < 5:
@@ -1640,12 +1742,12 @@ func _curio_on_cold_expired(tgt: Dictionary) -> void:
 		else:
 			_draw_free += 1
 		_refresh_draw_btn()
-		_toast("涓囧簲绗?路 闅忔満鍒锋柊 +1")
+		_toast("万应符 · 随机刷新 +1")
 	if _curio_id == "zhiren":
 		var cap_z := 3 if _curio_lv >= 2 else 2
 		var gain := 2 if _curio_lv >= 4 else 1
 		_set_paper_count(mini(cap_z, _zhiren + gain))
-		_toast("绾镐汉鏇胯韩 路 鐜版湁 %d 涓? % _zhiren)
+		_toast("纸人替身 · 现有 %d 个" % _zhiren)
 		_curio_flash()
 	if _curio_id == "xumingdeng":
 		var every := 3
@@ -1662,7 +1764,7 @@ func _roll_curio_crystal() -> bool:
 func _curio_gain_life(amount: int) -> void:
 	_life += amount
 	_refresh_life_ui()
-	_toast("缁懡鐏?路 鍛?+%d" % amount)
+	_toast("续命灯 · 命 +%d" % amount)
 	_curio_uses += 1
 	_curio_flash()
 	Aud.sfx("coin", -10.0)
@@ -1692,35 +1794,51 @@ func _show_curio_detail() -> void:
 	holder.size = Vector2(480, 470)
 	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layer.add_child(holder)
-	_panel(Rect2(0, 0, 480, 470), Color(0.97, 0.93, 0.85, 0.99), 10, Color(0.85, 0.66, 0.23), 3, holder)
+	var frame_art := "res://assets/ui/detail_frame.png"
+	var has_frame := has and ResourceLoader.exists(frame_art)
+	if has_frame:
+		var fr := ArtRect.new()
+		fr.tex = load(frame_art) as Texture2D
+		fr.position = Vector2.ZERO
+		fr.size = Vector2(480, 470)
+		holder.add_child(fr)
+	_panel(Rect2(0, 0, 480, 470), Color(0.97, 0.93, 0.85, 0.20) if has_frame else Color(0.97, 0.93, 0.85, 0.99), 10,
+		Color(0.85, 0.66, 0.23, 0.0) if has_frame else Color(0.85, 0.66, 0.23), 0 if has_frame else 3, holder)
 	if not has:
-		_lbl("鏈眬娌℃湁鎼哄甫濂囩墿", Vector2(0, 40), Vector2(480, 44), 28, INK, holder, HORIZONTAL_ALIGNMENT_CENTER)
-		_lbl("鍦ㄥ眬澶栥€屽鐗┿€嶉〉閫夋嫨涓€浠跺啀鍑哄嚮", Vector2(0, 96), Vector2(480, 30), 18, DIM, holder, HORIZONTAL_ALIGNMENT_CENTER)
-		_btn("脳", Rect2(436, 12, 34, 30), 20, Color(0.97, 0.93, 0.85), DIM,
+		_lbl("本局没有携带奇物", Vector2(0, 40), Vector2(480, 44), 28, INK, holder, HORIZONTAL_ALIGNMENT_CENTER)
+		_lbl("在局外「奇物」页选择一件再出击", Vector2(0, 96), Vector2(480, 30), 18, DIM, holder, HORIZONTAL_ALIGNMENT_CENTER)
+		_btn("×", Rect2(436, 12, 34, 30), 20, Color(0.97, 0.93, 0.85), DIM,
 			func() -> void: _curio_detail.visible = false, holder)
 		_pop_bounce(holder)
 		return
-	_lbl(str(info.get("name", "")), Vector2(0, 16), Vector2(480, 42), 32, INK, holder, HORIZONTAL_ALIGNMENT_CENTER)
-	_panel(Rect2(148, 60, 184, 28), Color(0.62, 0.44, 0.12, 0.92), 5, Color(0.62, 0.44, 0.12), 0, holder)
-	_lbl("濂囩墿 路 Lv %d" % _curio_lv, Vector2(148, 62), Vector2(184, 24), 15, Color(0.99, 0.95, 0.87), holder, HORIZONTAL_ALIGNMENT_CENTER)
-	_lbl(str(info.get("glyph", "?")), Vector2(0, 96), Vector2(480, 70), 46, Color(0.36, 0.28, 0.12), holder, HORIZONTAL_ALIGNMENT_CENTER)
+	# 圆徽里放物件图标（1024 原图，缩到 110 仍清晰）
+	var icon_path := "res://assets/gen/icons/curio_%s.png" % _curio_id
+	if ResourceLoader.exists(icon_path):
+		var ic := ArtRect.new()
+		ic.tex = load(icon_path) as Texture2D
+		ic.position = Vector2(185, 52)
+		ic.size = Vector2(110, 110)
+		holder.add_child(ic)
+	_lbl(str(info.get("name", "")), Vector2(0, 176), Vector2(480, 40), 30, INK, holder, HORIZONTAL_ALIGNMENT_CENTER)
+	_panel(Rect2(148, 220, 184, 26), Color(0.62, 0.44, 0.12, 0.92), 5, Color(0.62, 0.44, 0.12), 0, holder)
+	_lbl("奇物 · Lv %d" % _curio_lv, Vector2(148, 222), Vector2(184, 22), 14, Color(0.99, 0.95, 0.87), holder, HORIZONTAL_ALIGNMENT_CENTER)
 	var cdv := float(info.get("cd", 0.0))
 	var rows := [
-		["褰撳墠", CurioData.level_text(_curio_id, _curio_lv)],
-		["瑙﹀彂", str(info.get("trig", ""))],
-		["鍐峰嵈", ("%d 绉掞紙鑷姩浣跨敤锛屼笉鐢ㄦ搷浣滐級" % int(cdv)) if cdv > 0.0 else "琚姩 路 甯搁┗"],
-		["鏈眬", "宸茶Е鍙?%d 娆? % _curio_uses],
+		["当前", CurioData.level_text(_curio_id, _curio_lv)],
+		["触发", str(info.get("trig", ""))],
+		["冷却", ("%d 秒（自动使用，不用操作）" % int(cdv)) if cdv > 0.0 else "被动 · 常驻"],
+		["本局", "已触发 %d 次" % _curio_uses],
 	]
-	var y := 186.0
+	var y := 262.0
 	for r in rows:
-		_lbl(str(r[0]), Vector2(26, y), Vector2(70, 24), 15, Color(0.47, 0.41, 0.33), holder)
-		_lbl(str(r[1]), Vector2(92, y - 3), Vector2(360, 26), 18, INK, holder)
-		y += 52.0
+		_lbl(str(r[0]), Vector2(26, y), Vector2(70, 22), 14, Color(0.47, 0.41, 0.33), holder)
+		_lbl(str(r[1]), Vector2(92, y - 3), Vector2(360, 24), 17, INK, holder)
+		y += 38.0
 	if _curio_lv < 5:
-		_lbl("涓嬩竴妗ｏ細%s" % CurioData.level_text(_curio_id, _curio_lv + 1),
-			Vector2(26, 388), Vector2(430, 24), 16, Color(0.47, 0.41, 0.33), holder)
-	_lbl("鍏ㄨ嚜鍔ㄤ娇鐢紝鐜╁涓嶉渶瑕佺偣瀹冿紱鐐硅繖閲屽彧鏄湅璇︽儏", Vector2(26, 424), Vector2(430, 22), 15, Color(0.47, 0.41, 0.33), holder)
-	_btn("脳", Rect2(436, 12, 34, 30), 20, Color(0.97, 0.93, 0.85), DIM,
+		_lbl("下一档：%s" % CurioData.level_text(_curio_id, _curio_lv + 1),
+			Vector2(26, 406), Vector2(430, 22), 15, Color(0.47, 0.41, 0.33), holder)
+	_lbl("全自动使用，玩家不需要点它；点这里只是看详情", Vector2(26, 436), Vector2(430, 22), 14, Color(0.47, 0.41, 0.33), holder)
+	_btn("×", Rect2(436, 12, 34, 30), 20, Color(0.97, 0.93, 0.85), DIM,
 		func() -> void: _curio_detail.visible = false, holder)
 	_pop_bounce(holder)
 	_breathe(holder)
@@ -1745,7 +1863,7 @@ func _build_card_detail() -> void:
 	_detail_card.size = Vector2(300, 420)
 	_detail_card.mouse_filter = Control.MOUSE_FILTER_STOP
 	_detail_layer.add_child(_detail_card)
-	_detail_name = _lbl("闈掗攱", Vector2(230, 438), Vector2(260, 40), 30, INK, _detail_layer, HORIZONTAL_ALIGNMENT_CENTER)
+	_detail_name = _lbl("青锋", Vector2(230, 438), Vector2(260, 40), 30, INK, _detail_layer, HORIZONTAL_ALIGNMENT_CENTER)
 	_detail_art = TextureRect.new()
 	_detail_art.position = Vector2(230, 486)
 	_detail_art.size = Vector2(260, 150)
@@ -1753,10 +1871,10 @@ func _build_card_detail() -> void:
 	_detail_art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	_detail_art.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_detail_layer.add_child(_detail_art)
-	_lbl("鏁?鏋?, Vector2(230, 650), Vector2(120, 26), 18, DIM, _detail_layer)
-	_detail_effect = _lbl("鏀诲嚮 +6", Vector2(230, 678), Vector2(260, 36), 26, INK, _detail_layer)
-	_lbl("缁?鍚?, Vector2(230, 728), Vector2(120, 26), 18, DIM, _detail_layer)
-	_detail_combo = _lbl("鎴愰暱 1/3", Vector2(300, 728), Vector2(120, 28), 22, Color(0.54, 0.35, 0.12), _detail_layer)
+	_lbl("效 果", Vector2(230, 650), Vector2(120, 26), 18, DIM, _detail_layer)
+	_detail_effect = _lbl("攻击 +6", Vector2(230, 678), Vector2(260, 36), 26, INK, _detail_layer)
+	_lbl("组 合", Vector2(230, 728), Vector2(120, 26), 18, DIM, _detail_layer)
+	_detail_combo = _lbl("成长 1/3", Vector2(300, 728), Vector2(120, 28), 22, Color(0.54, 0.35, 0.12), _detail_layer)
 	for i in 6:
 		var pip := ColorRect.new()
 		pip.position = Vector2(424 + i * 14, 734)
@@ -1765,12 +1883,12 @@ func _build_card_detail() -> void:
 		pip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_detail_layer.add_child(pip)
 		_detail_pips.append(pip)
-	_detail_combo_text = _lbl("鎴愰暱锛氭潃鏁屾彁鍗?1 鐐规敾鍑?, Vector2(230, 768), Vector2(260, 44), 17, INK, _detail_layer)
-	_btn("脳", Rect2(574, 430, 40, 34), 22, Color(0.95, 0.91, 0.83), DIM, func(): _detail_layer.visible = false, _detail_layer)
+	_detail_combo_text = _lbl("成长：杀敌提升 1 点攻击", Vector2(230, 768), Vector2(260, 44), 17, INK, _detail_layer)
+	_btn("×", Rect2(574, 430, 40, 34), 22, Color(0.95, 0.91, 0.83), DIM, func(): _detail_layer.visible = false, _detail_layer)
 
-# ---------------- 鍗＄粍 ----------------
+# ---------------- 卡组 ----------------
 func _build_deck() -> void:
-	_deck_count_lb = _lbl("鍗＄粍 0/10", Vector2(22, 910), Vector2(160, 30), 20, INK)
+	_deck_count_lb = _lbl("卡组 0/10", Vector2(22, 910), Vector2(160, 30), 20, INK)
 	_page_lb = _lbl("1/2", Vector2(330, 910), Vector2(60, 30), 17, DIM, self, HORIZONTAL_ALIGNMENT_CENTER)
 	_btn("<", Rect2(8, 960, 56, 60), 28, Color(0.09, 0.08, 0.07, 0.98), GOLD, func(): _flip(-1))
 	_btn(">", Rect2(656, 960, 56, 60), 28, Color(0.09, 0.08, 0.07, 0.98), GOLD, func(): _flip(1))
@@ -1791,7 +1909,7 @@ func _refresh_deck() -> void:
 	if _page_lb:
 		_page_lb.text = str(_page + 1) + "/2"
 	if _deck_count_lb:
-		_deck_count_lb.text = "鍗＄粍 " + str(_cards.size()) + "/10"
+		_deck_count_lb.text = "卡组 " + str(_cards.size()) + "/10"
 	for i in _slots.size():
 		var s: CardSlot = _slots[i]
 		var at := _page * 5 + i
@@ -1817,7 +1935,7 @@ func _pick_card(id: String) -> void:
 	_detail_effect.text = str(c["own_text"])
 	var prog := _set_progress(str(c["set_id"]))
 	_detail_combo.text = str(c["combo_name"]) + " " + str(prog) + "/" + str(c["set_size"])
-	_detail_combo_text.text = str(c["trigger"]) + "锛? + str(c["combo_text"])
+	_detail_combo_text.text = str(c["trigger"]) + "：" + str(c["combo_text"])
 	var q := clampi(int(c["quality"]) - 1, 0, 4)
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(0.96, 0.93, 0.86, 0.99)
@@ -1833,24 +1951,24 @@ func _pick_card(id: String) -> void:
 	_detail_layer.visible = true
 	_detail_layer.move_to_front()
 
-# ---------------- 搴曟爮 ----------------
+# ---------------- 底栏 ----------------
 func _build_bottom() -> void:
 	_panel(Rect2(8, 1076, 704, 204), Color(0.075, 0.068, 0.060, 0.98), 10, Color(0.85, 0.66, 0.23, 0.45), 2)
 	_lv_lb = _lbl("Lv 1", Vector2(22, 1088), Vector2(70, 28), 18, GOLD)
 	_panel(Rect2(96, 1090, 600, 16), Color(0.93, 0.90, 0.82, 0.16), 8)
 	_exp_bar = _panel(Rect2(96, 1090, 4, 16), Color(0.85, 0.66, 0.23), 8)
 	_exp_lb = _lbl("0/100", Vector2(600, 1088), Vector2(92, 20), 15, Color(0.88, 0.82, 0.70), self, HORIZONTAL_ALIGNMENT_RIGHT)
-	_market_tile = _tile(24, 1128, 124, "market", "榛戝競", false)
+	_market_tile = _tile(24, 1128, 124, "market", "黑市", false)
 	_market_tile.visible = LevelState.show_button("market")
-	_trea_tile = _tile(158, 1128, 124, "treasure", "瀹濈墿", false)
+	_trea_tile = _tile(158, 1128, 124, "treasure", "宝物", false)
 	_trea_tile.visible = LevelState.show_button("treasure")
-	_mate_tile = _tile(292, 1128, 124, "mate", "璇风", false)
+	_mate_tile = _tile(292, 1128, 124, "mate", "请神", false)
 	_mate_tile.visible = LevelState.show_button("mate")
-	_str_tile = _tile(426, 1128, 124, "skill", "寮哄寲", false)
-	# 寮哄寲鍥哄畾闅愯棌锛氭竻瀹岀涓€娉㈢殑鏁欏閭ｄ竴鍒绘墠浜嚭鏉ワ紙涓嶅洜閲嶇帺鑰屾彁鍓嶆樉绀猴級
+	_str_tile = _tile(426, 1128, 124, "skill", "强化", false)
+	# 强化固定隐藏：清完第一波的教学那一刻才亮出来（不因重玩而提前显示）
 	_str_tile.visible = false
 	_str_tile.hot = false
-	_draw_tile = _tile(560, 1116, 136, "draw", "鎶藉崱", true)
+	_draw_tile = _tile(560, 1116, 136, "draw", "抽卡", true)
 	_draw_tile.visible = LevelState.show_button("draw")
 	_refresh_level_ui()
 	_refresh_str_tile()
@@ -1875,8 +1993,8 @@ func _tile(x: float, y: float, s: float, kind: String, label: String, hot: bool)
 	add_child(t)
 	return t
 
-# 濂囩墿鏂瑰潡锛氳窡銆屾寫鎴樸€嶄竴鏍?96脳96锛屽喎鍗存椂鍘嬫殫 + 鏄剧ず绉掓暟
-# 棣栭琛€鏉★細椤堕儴妯潯锛屽甫"鎺夎娈嬪奖"锛坓host 鎱㈡參杩戒笂鏉ワ級
+# 奇物方块：跟「挑战」一样 96×96，冷却时压暗 + 显示秒数
+# 首领血条：顶部横条，带"掉血残影"（ghost 慢慢追上来）
 class BossBar extends Control:
 	const F := preload("res://fonts/ink.ttf")
 	var ratio := 1.0
@@ -1892,23 +2010,24 @@ class BossBar extends Control:
 		sb.set_border_width_all(2)
 		draw_style_box(sb, Rect2(Vector2.ZERO, size))
 		var inner := Rect2(3, 3, size.x - 6, size.y - 6)
-		# 娈嬪奖锛堟帀涓嬪幓鐨勯偅涓€鎴紝鎱㈡參缂╋級
+		# 残影（掉下去的那一截，慢慢缩）
 		draw_rect(Rect2(inner.position, Vector2(inner.size.x * clampf(ghost, 0.0, 1.0), inner.size.y)),
 			Color(0.88, 0.66, 0.36, 0.38))
-		# 褰撳墠琛€閲?		draw_rect(Rect2(inner.position, Vector2(inner.size.x * clampf(ratio, 0.0, 1.0), inner.size.y)),
+		# 当前血量
+		draw_rect(Rect2(inner.position, Vector2(inner.size.x * clampf(ratio, 0.0, 1.0), inner.size.y)),
 			Color(0.70, 0.15, 0.11, 0.98))
-		# 鍥涚瓑鍒嗗埢搴︼紙鐪嬪緱鍑鸿繕鍓╁嚑娈碉級
+		# 四等分刻度（看得出还剩几段）
 		for i in range(1, 4):
 			var tx := inner.position.x + inner.size.x * float(i) / 4.0
 			draw_line(Vector2(tx, inner.position.y), Vector2(tx, inner.position.y + inner.size.y),
 				Color(0.10, 0.08, 0.06, 0.35), 1.0)
-		# 鍚嶅瓧锛堝厛鎻忎竴灞傛殫褰憋紝绾㈠簳/閲戝簳涓婇兘鐪嬪緱娓咃級
+		# 名字（先描一层暗影，红底/金底上都看得清）
 		draw_string(F, Vector2(1, size.y * 0.5 + 6), bname,
 			HORIZONTAL_ALIGNMENT_CENTER, size.x, 14, Color(0.0, 0.0, 0.0, 0.55))
 		draw_string(F, Vector2(0, size.y * 0.5 + 5), bname,
 			HORIZONTAL_ALIGNMENT_CENTER, size.x, 14, Color(0.98, 0.94, 0.85))
 
-# 璧勬簮椋炶灞傦細鍑绘潃鎺夌殑閲戝竵/鏅剁煶椋炲悜鍙充笂瑙掕祫婧愭潯锛堝壊鑽夌殑姝ｅ弽棣堬級
+# 资源飞行层：击杀掉的金币/晶石飞向右上角资源条（割草的正反馈）
 class FlyLayer extends Control:
 	var dots: Array = []
 	func _ready() -> void:
@@ -1921,11 +2040,12 @@ class FlyLayer extends Control:
 class CurioSquare extends Control:
 	const F := preload("res://fonts/ink.ttf")
 	signal pressed
-	var glyph := "澹?
-	var label := "濂囩墿"
+	var glyph := "壶"
+	var label := "奇物"
 	var cd_left := 0.0
 	var cd_max := 60.0
-	var flash := 0.0            # 瑙﹀彂鏃堕棯涓€鍦堥噾鐜?	func _ready() -> void:
+	var flash := 0.0            # 触发时闪一圈金环
+	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_STOP
 	func _gui_input(ev: InputEvent) -> void:
 		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
@@ -1945,7 +2065,8 @@ class CurioSquare extends Control:
 			draw_arc(size * 0.5, size.x * (0.5 + 0.30 * k), 0.0, TAU, 32,
 				Color(0.98, 0.82, 0.36, flash * 0.9), 3.0)
 
-# 濂囬亣鍦嗛挳锛氬彧鍦ㄦ柊濂囬亣鎺峰埌鏃跺嚭鐜帮紝闈犲湪涓昏宸︿晶锛涗笂闈㈡诞鐫€澶х孩瀛椼€屽閬囷紒銆?class QuestOrb extends Control:
+# 奇遇圆钮：只在新奇遇掷到时出现，靠在主角左侧；上面浮着大红字「奇遇！」
+class QuestOrb extends Control:
 	const F := preload("res://fonts/ink.ttf")
 	signal pressed
 	func _ready() -> void:
@@ -1959,7 +2080,7 @@ class CurioSquare extends Control:
 		draw_circle(c, r, Color(0.12, 0.09, 0.07, 0.96))
 		draw_arc(c, r, 0.0, TAU, 48, Color(0.80, 0.24, 0.18), 3.0)
 		draw_arc(c, r - 6.0, 0.0, TAU, 48, Color(0.85, 0.66, 0.23, 0.55), 1.5)
-		# 鍗疯酱鍥炬爣
+		# 卷轴图标
 		var w := r * 1.0
 		var h := r * 0.66
 		var box := Rect2(c - Vector2(w * 0.5, h * 0.5), Vector2(w, h))
@@ -1976,7 +2097,8 @@ class Tile extends Control:
 	var label := ""
 	var hot := false
 	var badge := 1
-	var sub := ""          # 灏忓瓧锛堝己鍖栵細Lv 路 浠烽挶锛?	func _ready() -> void:
+	var sub := ""          # 小字（强化：Lv · 价钱）
+	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_STOP
 	func _draw() -> void:
 		var sb := StyleBoxFlat.new()
@@ -2019,7 +2141,7 @@ class Tile extends Control:
 		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
 			pressed.emit()
 
-# ---------------- 鎶藉崱灞?----------------
+# ---------------- 抽卡层 ----------------
 func _build_draw() -> void:
 	_draw_layer = Control.new()
 	_draw_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -2038,8 +2160,8 @@ func _build_draw() -> void:
 	banner.add_theme_stylebox_override("panel", sb)
 	_draw_layer.add_child(banner)
 	_breathe(banner)
-	_lbl("鎶藉崱 路 20 鐏垫櫠", Vector2(0, 0), Vector2(260, 42), 20, Color(0.97, 0.90, 0.74), banner, HORIZONTAL_ALIGNMENT_CENTER)
-	_btn("闅愯棌", Rect2(620, 162, 72, 32), 17, Color(0.09, 0.08, 0.07, 0.98), GOLD, func(): _show_draw(false), _draw_layer)
+	_lbl("抽卡 · 20 灵晶", Vector2(0, 0), Vector2(260, 42), 20, Color(0.97, 0.90, 0.74), banner, HORIZONTAL_ALIGNMENT_CENTER)
+	_btn("隐藏", Rect2(620, 162, 72, 32), 17, Color(0.09, 0.08, 0.07, 0.98), GOLD, func(): _show_draw(false), _draw_layer)
 	for i in 3:
 		var d := DrawCard.new()
 		d.position = Vector2(30 + i * 220, 220)
@@ -2049,14 +2171,14 @@ func _build_draw() -> void:
 		d.picked.connect(func() -> void: _on_draw_pick(d))
 		_draw_layer.add_child(d)
 		_draw_cards.append(d)
-	_draw_refresh_btn = _btn("鍒锋柊 路 5 鐏垫櫠", Rect2(250, 540, 220, 56), 20, Color(0.09, 0.08, 0.07, 0.98), GOLD, func(): _on_refresh(), _draw_layer)
+	_draw_refresh_btn = _btn("刷新 · 5 灵晶", Rect2(250, 540, 220, 56), 20, Color(0.09, 0.08, 0.07, 0.98), GOLD, func(): _on_refresh(), _draw_layer)
 
 func _roll_draw() -> void:
 	var cands: Array = []
 	for id_v in _pool:
 		if _family_card_allowed(str(id_v)):
 			cands.append(id_v)
-	# 绗洓鍏虫殫鎶嵄閫旂嚎锛氬嵄闄╁崱鍦ㄦ娊鍗℃睜閲屾潈閲?脳2锛岀帺瀹舵洿瀹规槗鎽稿埌澧炴€?鎸戞垬鏀剁泭
+	# 第四关暗抬危途线：危险卡在抽卡池里权重 ×2，玩家更容易摸到增怪/挑战收益
 	if LevelState.current_level == 4:
 		var weighted: Array = []
 		for id_v in cands:
@@ -2065,7 +2187,7 @@ func _roll_draw() -> void:
 			if sid.begins_with("swarm_") or sid.begins_with("peril_"):
 				weighted.append(id_v)
 		cands = weighted
-	# 鏉€鏁岀浉鍏冲崱锛堢粡楠岀郴锛夋潈閲?脳2
+	# 杀敌相关卡（经验系）权重 ×2
 	var killw: Array = []
 	for id_v in cands:
 		killw.append(id_v)
@@ -2073,7 +2195,8 @@ func _roll_draw() -> void:
 		if str(kc.get("series", "")) == "exp":
 			killw.append(id_v)
 	cands = killw
-	# 璇风鍚庯細璇ョ瀹楃殑瀹朵紶鍗℃潈閲嶅彉澶?	if not _ancestors.is_empty():
+	# 请神后：该祖宗的家传卡权重变大
+	if not _ancestors.is_empty():
 		var fam: Array = []
 		for id_v in cands:
 			fam.append(id_v)
@@ -2081,7 +2204,8 @@ func _roll_draw() -> void:
 			if str(cc.get("ancestor", "")) != "":
 				fam.append(id_v)
 		cands = fam
-	# 绗節鍏筹細涓昏瀹朵紶鏉冮噸鍐嶆姮涓€妗?	if LevelState.current_level == 9:
+	# 第九关：主角家传权重再抬一档
+	if LevelState.current_level == 9:
 		var zj: Array = []
 		for id_v in cands:
 			zj.append(id_v)
@@ -2090,7 +2214,8 @@ func _roll_draw() -> void:
 				zj.append(id_v)
 		cands = zj
 	cands.shuffle()
-	# v4 鐐崱楂樻潈閲嶏細姹犻噷鏈夌偒鍗℃椂 80% 鐩存帴鎺掑埌绗竴寮?	var shiny_id := ""
+	# v4 炫卡高权重：池里有炫卡时 80% 直接排到第一张
+	var shiny_id := ""
 	for pid_v in _pool:
 		var pid := str(pid_v)
 		if pid.begins_with("shiny_"):
@@ -2099,7 +2224,8 @@ func _roll_draw() -> void:
 	if shiny_id != "" and randf() < 0.80:
 		cands.erase(shiny_id)
 		cands.push_front(shiny_id)
-	# 绗簲鍏筹細绗簩缁勫浼犲悗锛屼笅涓€鎵嬪繀鍑哄叾涓竴浣嶈绁炵殑鐐僵鍗?	if _family_shiny_ready:
+	# 第五关：第二组家传后，下一手必出其中一位请神的炫彩卡
+	if _family_shiny_ready:
 		_family_shiny_ready = false
 		_family_shiny_done = true
 		var sids: Array = []
@@ -2113,8 +2239,8 @@ func _roll_draw() -> void:
 				_pool.append(sid)
 			cands.erase(sid)
 			cands.push_front(sid)
-			_toast("鐐僵鍗＄幇涓?)
-	# 鍚屼竴鎵嬩笉閲嶅鍑哄悓涓€寮犲崱锛堟睜閲岃嫢鏈夐噸澶?id锛岃繖閲屽厹浣忥級
+			_toast("炫彩卡现世")
+	# 同一手不重复出同一张卡（池里若有重复 id，这里兜住）
 	var uniq: Array = []
 	for id_u in cands:
 		var su := str(id_u)
@@ -2135,9 +2261,11 @@ func _roll_draw() -> void:
 			dc.data = {}
 			dc.progress = 0
 		dc.queue_redraw()
-	# v4 褰╄泲锛氳繖涓夊紶閲屾湁鏌愪綅绁栧畻鐨勫浼犲崱 鈫?4% 鎺蜂粬鐨勭偒鍗?	_roll_shiny_check(cands.slice(0, _draw_cards.size()))
+	# v4 彩蛋：这三张里有某位祖宗的家传卡 → 4% 掷他的炫卡
+	_roll_shiny_check(cands.slice(0, _draw_cards.size()))
 
-# 褰╄泲鍒ゅ畾锛氬彧鍦ㄣ€屾娊鍒拌绁栧畻鐨勫浼犲崱銆嶆椂鎺凤紝涓€灞€姣忎綅涓€娆?func _roll_shiny_check(cards: Array) -> void:
+# 彩蛋判定：只在「抽到该祖宗的家传卡」时掷，一局每位一次
+func _roll_shiny_check(cards: Array) -> void:
 	for cid_v in cards:
 		var c: Dictionary = _card_db.get(str(cid_v), {})
 		if not c.has("ancestor") or bool(c.get("shiny", false)):
@@ -2147,13 +2275,13 @@ func _roll_draw() -> void:
 			continue
 		var shiny_p := 0.04
 		if LevelState.current_level == 9 and aid == "zhujue":
-			shiny_p = 0.20   # 绗節鍏冲彧瀵逛富瑙掔偒褰╁崱澶у箙鎻愬崌
+			shiny_p = 0.20   # 第九关只对主角炫彩卡大幅提升
 		if randf() < shiny_p:
 			_shiny_rolled[aid] = true
 			var sid := "shiny_" + aid
 			if _card_db.has(sid) and not _pool.has(sid):
 				_pool.append(sid)
-				_toast("褰╄泲锛佺偒褰╁崱銆?s銆嶅凡鍔犲叆鍗℃睜" % str((_card_db[sid] as Dictionary)["name"]))
+				_toast("彩蛋！炫彩卡「%s」已加入卡池" % str((_card_db[sid] as Dictionary)["name"]))
 				Aud.sfx("ult_ready", -4.0)
 
 func _update_crystal() -> void:
@@ -2164,12 +2292,14 @@ func _show_draw(v: bool) -> void:
 	if v and _run_over:
 		return
 	if v:
-		_hide_aug_pick()                     # 杩涢樁椤靛紑鐫€涓€骞舵敹鎺?		_hide_trea()                         # 瀹濈墿椤靛悓鐞?		if not _draw_paid:
+		_hide_aug_pick()                     # 进阶页开着一并收掉
+		_hide_trea()                         # 宝物页同理
+		if not _draw_paid:
 			if _pool.is_empty():
-				_toast("鏈眬鍗℃睜宸茬┖")
+				_toast("本局卡池已空")
 				return
 			if _crystal < 20:
-				_toast("鐏垫櫠涓嶈冻锛屼笉瓒充互鎶藉崱锛堜竴娆¤ 20锛?)
+				_toast("灵晶不足，不足以抽卡（一次要 20）")
 				return
 			_crystal -= 20
 			_update_crystal()
@@ -2191,7 +2321,7 @@ func _on_draw_pick(card: DrawCard) -> void:
 	var id := str(card.data.get("_id", ""))
 	if id == "": return
 	if _cards.size() >= 10:
-		_toast("鍗＄粍宸叉弧锛?0 鏍硷級")
+		_toast("卡组已满（10 格）")
 		return
 	_draw_anim = true
 	var target := Vector2(46 + float(_cards.size() % 5) * 132.0, 870)
@@ -2217,12 +2347,12 @@ func _on_draw_pick(card: DrawCard) -> void:
 
 func _refresh_draw_btn() -> void:
 	if _draw_refresh_btn != null:
-		_draw_refresh_btn.text = "鍒锋柊 路 鍏嶈垂 %d 娆? % _draw_free if _draw_free > 0 else "鍒锋柊 路 5 鐏垫櫠"
+		_draw_refresh_btn.text = "刷新 · 免费 %d 次" % _draw_free if _draw_free > 0 else "刷新 · 5 灵晶"
 
 func _on_refresh() -> void:
 	if _run_over or _draw_anim or not _draw_paid or _draw_layer == null or not _draw_layer.visible: return
 	if _pool.is_empty():
-		_toast("鍗℃睜宸茬┖锛屾病娉曞埛鏂?)
+		_toast("卡池已空，没法刷新")
 		return
 	var paid := true
 	if _draw_free > 0:
@@ -2230,7 +2360,7 @@ func _on_refresh() -> void:
 		paid = false
 	else:
 		if _crystal < 5:
-			_toast("鐏垫櫠涓嶅锛氬埛鏂拌 5")
+			_toast("灵晶不够：刷新要 5")
 			return
 		paid = not _rr_free()
 	if paid:
@@ -2251,7 +2381,7 @@ func _on_refresh() -> void:
 	_roll_draw()
 	_draw_anim = false
 	_pop_draw_cards()
-	_toast("鍒锋柊锛? 鐏垫櫠" if paid else "鍏嶈垂鍒锋柊")
+	_toast("刷新：5 灵晶" if paid else "免费刷新")
 
 func _pop_draw_cards() -> void:
 	for i in _draw_cards.size():
@@ -2261,8 +2391,8 @@ func _pop_draw_cards() -> void:
 		card.mouse_filter = Control.MOUSE_FILTER_STOP
 		MenuUI.Motion.pop(card, true, i * 0.055, base, (i - 1) * 0.025)
 
-# ---------------- 灞炴€?----------------
-# v6锛氳缁嗗睘鎬ч〉锛坘ushou/attr_panel.gd锛夛紝鎳掑姞杞戒竴娆★紝涔嬪悗澶嶇敤
+# ---------------- 属性 ----------------
+# v6：详细属性页（kushou/attr_panel.gd），懒加载一次，之后复用
 var _attr_page = null
 
 func _open_attr_page() -> void:
@@ -2276,12 +2406,13 @@ func _open_attr_page() -> void:
 	_attr_page.open()
 
 
-# v6锛氭柊灞炴€у眰 鈫?鏃?hero 瀛楁锛坅tk / hp锛夈€傛妧鑳姐€佸彫鍞ょ墿銆侀《閮ㄨ鏉¤繕鍦ㄨ鏃у瓧娈点€?# 涓存椂璇婃柇锛氳嫳闆勪负浠€涔堜笉鍑烘墜锛堟瘡 2 绉掍竴琛岋級
+# v6：新属性层 → 旧 hero 字段（atk / hp）。技能、召唤物、顶部血条还在读旧字段。
+# 临时诊断：英雄为什么不出手（每 2 秒一行）
 var _dbg_atk_t := 0.0
 func _dbg_hero_attack(dt: float) -> void:
 	if _core == null:
 		return
-	# 榛樿鍏抽棴锛涢渶瑕佹帓鏌ユ椂璁剧幆澧冨彉閲?DSH_DEBUG=1
+	# 默认关闭；需要排查时设环境变量 DSH_DEBUG=1
 	if OS.get_environment("DSH_DEBUG") == "":
 		return
 	_dbg_atk_t += dt
@@ -2308,9 +2439,9 @@ func _sync_attrs_to_hero() -> void:
 	_sync_basic_family_bonus()
 	h["crit"] = _core.attr_final("crit")
 	h["crit_dmg"] = _core.attr_final("cdmg")
-	h["cut"] = _core.type_effective_field("鐗╃悊", "red_f")
+	h["cut"] = _core.type_effective_field("物理", "red_f")
 	h["cut_all"] = 0.0
-	h["dmg_all"] = _core.type_amp("鐗╃悊")
+	h["dmg_all"] = _core.type_amp("物理")
 	h["aspd"] = minf(MAX_ASPD, _core.attr_final("aspd") / float(_core.ATTR_BASE["aspd"]))
 	var mp_new: float = float(_core.attr_final("mp"))
 	h["mp_max"] = mp_new
@@ -2328,7 +2459,8 @@ func _sync_basic_family_bonus() -> void:
 	if _core != null:
 		_core.hero["basic_family_bonus"] = float((_anc_mod.get("zhujue", {}) as Dictionary).get("dmg_pct", 0.0)) / 100.0
 
-# 骞冲姞鎴愰暱鐨勫嵆鏃舵ˉ涔熻灞炴€у眰銆傜瓑绾ф垚闀夸繚鐣欒閲忔瘮渚嬶紝鍗＄墝骞冲姞姘旇淇濈暀琛ユ柊澧為噺鐨勮鍒欍€?func _apply_flat_growth(atk_add: float, hp_add: float, preserve_hp_ratio := false) -> void:
+# 平加成长的即时桥也读属性层。等级成长保留血量比例，卡牌平加气血保留补新增量的规则。
+func _apply_flat_growth(atk_add: float, hp_add: float, preserve_hp_ratio := false) -> void:
 	if _core == null: return
 	var h: Dictionary = _core.hero
 	var old_max := float(h.get("hp_max", 0.0))
@@ -2345,7 +2477,7 @@ func _sync_basic_family_bonus() -> void:
 		_core.heal_hero(maxf(0.0, float(h["hp_max"]) - old_max))
 
 
-# ---------------- 閫€鍑?----------------
+# ---------------- 退出 ----------------
 func _build_exit() -> void:
 	_exit_layer = Control.new()
 	_exit_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -2367,10 +2499,10 @@ func _build_exit() -> void:
 	sb.set_border_width_all(2)
 	p.add_theme_stylebox_override("panel", sb)
 	_exit_layer.add_child(p)
-	_lbl("鏄惁閫€鍑猴紵", Vector2(0, 34), Vector2(420, 40), 26, INK, p, HORIZONTAL_ALIGNMENT_CENTER)
-	_lbl("閫€鍑哄悗鏈眬浣滃簾锛屽鍔变笉淇濈暀", Vector2(0, 78), Vector2(420, 30), 17, SEAL, p, HORIZONTAL_ALIGNMENT_CENTER)
-	_btn("缁х画鎴樻枟", Rect2(60, 130, 150, 48), 18, Color(0.09, 0.08, 0.07, 0.98), LIGHT, func(): _show_exit(false), p)
-	_btn("閫€鍑?, Rect2(220, 130, 140, 48), 18, Color(0.48, 0.14, 0.10), Color(0.97, 0.90, 0.74), func(): _quit(), p)
+	_lbl("是否退出？", Vector2(0, 34), Vector2(420, 40), 26, INK, p, HORIZONTAL_ALIGNMENT_CENTER)
+	_lbl("退出后本局作废，奖励不保留", Vector2(0, 78), Vector2(420, 30), 17, SEAL, p, HORIZONTAL_ALIGNMENT_CENTER)
+	_btn("继续战斗", Rect2(60, 130, 150, 48), 18, Color(0.09, 0.08, 0.07, 0.98), LIGHT, func(): _show_exit(false), p)
+	_btn("退出", Rect2(220, 130, 140, 48), 18, Color(0.48, 0.14, 0.10), Color(0.97, 0.90, 0.74), func(): _quit(), p)
 
 func _show_exit(v: bool) -> void:
 	_exit_open = v
@@ -2381,13 +2513,14 @@ func _show_exit(v: bool) -> void:
 func _quit() -> void:
 	if _run_over or not MenuUI.navigation_available(self): return
 	if MenuUI.navigate(self, "res://menu/main_home.tscn") == OK:
-		# 鍦烘櫙浼氬欢杩熼噴鏀撅紱绂绘爲鍚庣珛鍗虫嫆缁濇棫濂栧姳鍜岀粨绠楀洖璋冦€?		_run_over = true
+		# 场景会延迟释放；离树后立即拒绝旧奖励和结算回调。
+		_run_over = true
 		if _core != null:
 			_core.running = false
 		if _tut != null:
 			_tut.cancel()
 
-# ---------------- 鎻愮ず/鍔ㄧ敾 ----------------
+# ---------------- 提示/动画 ----------------
 func _build_toast() -> void:
 	_toast_lb = RichTextLabel.new()
 	_toast_lb.bbcode_enabled = true
@@ -2405,7 +2538,7 @@ func _build_toast() -> void:
 
 func _toast_card(name: String, quality: int, tail: String) -> void:
 	var col: String = QUALITY_COLORS[clampi(quality - 1, 0, 4)].to_html(false)
-	_toast("[color=#" + col + "]" + name + "[/color]銆€" + tail)
+	_toast("[color=#" + col + "]" + name + "[/color]　" + tail)
 
 func _process(_delta: float) -> void:
 	if _run_over:
@@ -2418,13 +2551,13 @@ func _process(_delta: float) -> void:
 		var e: Control = _enemies[i]
 		e.position.y = float(e.get_meta("base_y", e.position.y)) + sin(t * 1.6 + i) * 2.0
 	if _core != null:
-		# v6锛氭柊灞炴€у眰鏄粨绠楁簮锛涙瘡甯ф妸鏀诲嚮/姘旇鍥炲啓鍒版棫 hero锛岀粰鎶€鑳?鍙敜鐗?椤堕儴琛€鏉¤
+		# v6：新属性层是结算源；每帧把攻击/气血回写到旧 hero，给技能/召唤物/顶部血条读
 		_sync_attrs_to_hero()
 		_dbg_hero_attack(_delta)
 		if int(_core.wave) != _last_wave:
 			_last_wave = int(_core.wave)
-			_trigger_combos("姣忔尝")
-		# 鏈€鍚庝竴娉細鍏堟妸灏忔€竻瀹岋紝Boss 鎵嶇櫥鍦猴紙涓嶅悓鏃跺嚭鐜帮級
+			_trigger_combos("每波")
+		# 最后一波：先把小怪清完，Boss 才登场（不同时出现）
 		if int(_core.wave) >= _max_wave:
 			_core.boss_required = true
 		if not _boss_spawned and not _run_cleared and int(_core.wave) >= _max_wave 				and _core._wave_spawned >= _core._wave_quota and _core.live_foes() <= 0:
@@ -2434,10 +2567,10 @@ func _process(_delta: float) -> void:
 		_combo_t += _delta
 		if _combo_t >= 6.0:
 			_combo_t -= 6.0
-			_trigger_combos("姣?6 绉?)
+			_trigger_combos("每 6 秒")
 		if _wave_lb != null:
-			_wave_lb.text = "娉?%d/%d" % [int(_core.wave), _max_wave]
-		# v2 娉㈡鎺ㄨ繘锛氭湰娉㈠畾棰濆埛瀹?+ 鍦轰笂娓呯┖ 鈫?杩涗笅涓€娉紱婊?MAX_WAVE 鏀跺伐
+			_wave_lb.text = "波 %d/%d" % [int(_core.wave), _max_wave]
+		# v2 波次推进：本波定额刷完 + 场上清空 → 进下一波；满 MAX_WAVE 收工
 		if not _run_cleared and _core.wave_cleared():
 			var cleared_wave := int(_core.wave)
 			if cleared_wave < _max_wave:
@@ -2454,7 +2587,8 @@ func _process(_delta: float) -> void:
 			_hp_lb.text = "%d/%d" % [int(float(_core.hero.get("hp", 0))), int(float(_core.hero.get("hp_max", 1)))]
 		var hpr := clampf(float(_core.hero.get("hp", 0.0)) / maxf(1.0, float(_core.hero.get("hp_max", 1.0))), 0.0, 1.0)
 		if LevelState.current_level >= 2 and LevelState.current_level <= 4:
-			# 涓嶆敼鎬潰鏉匡紝鍙伔鍋峰姞鏄撲激锛氭垚闀?瀹朵紶缁勫悎缁欒冻锛岀粡娴?鍗遍€旂粰灏戜竴鐐?			var vuln := _equip_vuln
+			# 不改怪面板，只偷偷加易伤：成长/家传组合给足，经济/危途给少一点
+			var vuln := _equip_vuln
 			for rec in _combined:
 				var s := str(rec.get("series", ""))
 				if s in ["gold", "crystal", "exp", "bounty"]:
@@ -2466,13 +2600,13 @@ func _process(_delta: float) -> void:
 			vuln += float(_ancestor_combos.size()) * 0.15
 			_core.foe_vuln = minf(0.45, vuln)
 		elif LevelState.current_level == 7:
-			# 绗竷鍏筹細鎶€鑳藉崌绾ц繃锛屾€伔鍋峰悆鏇村浼ゅ锛涙病鍗囩骇涔熻兘杩囷紝鍙槸鍚冨姏
+			# 第七关：技能升级过，怪偷偷吃更多伤害；没升级也能过，只是吃力
 			var skill_total := 0
 			for v in GameState.skill_lv.values():
 				skill_total += int(v)
 			_core.foe_vuln = minf(0.30, float(skill_total) * 0.015 + _equip_vuln)
 		elif LevelState.current_level == 8:
-			# 绗叓鍏筹細灞€澶栬澶囧己鍖栬秺楂橈紝鎬伔鍋疯秺鑴嗭紱鍥涗欢 +20 鍏?80 绾?鈫?20% 鏄撲激
+			# 第八关：局外装备强化越高，怪偷偷越脆；四件 +20 共 80 级 → 20% 易伤
 			var FD8 := preload("res://shared/forge_data.gd")
 			var plus_total := 0
 			for slot_v in FD8.SLOT_KEYS:
@@ -2483,8 +2617,9 @@ func _process(_delta: float) -> void:
 		if int(_core.wave) >= 2 and hpr <= 0.50:
 			if LevelState.current_level == 1 and not _l1_yuhu_shown:
 				_l1_yuhu_shown = true
-				_l1_tutorial("l1_yuhu", _curio_sq, "姘旇涓嶈冻鏃讹紝鐜夊６浼氳嚜鍔ㄥ洖琛€", _show_curio_detail)
-		_tick_rare_buffs(_delta) # 鍒版湡鍏堢Щ闄わ紝鍐嶇粨绠楁湰甯ф妧鑳斤紝涓嶈兘澶氬€熺敤涓€甯ф敾鍑汇€?		if _hp_fill != null:
+				_l1_tutorial("l1_yuhu", _curio_sq, "气血不足时，玉壶会自动回血", _show_curio_detail)
+		_tick_rare_buffs(_delta) # 到期先移除，再结算本帧技能，不能多借用一帧攻击。
+		if _hp_fill != null:
 			_hp_fill.size = Vector2(maxf(4.0, 235.0 * hpr), 20.0)
 			_tick_skills(_delta)
 		_tick_curio(_delta)
@@ -2528,7 +2663,7 @@ func _process(_delta: float) -> void:
 				elif not is_equal_approx(float(_boss_bar.ghost), rr):
 					_boss_bar.ghost = rr
 					need = true
-				var nm := str(bf.get("name", "棣栭"))
+				var nm := str(bf.get("name", "首领"))
 				if nm != _boss_bar.bname:
 					_boss_bar.bname = nm
 					need = true
@@ -2598,10 +2733,10 @@ func _process(_delta: float) -> void:
 				if tk != null:
 					tk.play_down()
 					_recycle_q.append([tk, TokenActor.DEATH_DURATION + 0.04])
-					# 闃典骸灏忕垎鐐癸紙鍓茶崏鎰燂細姣忔潃涓€鍙兘鏈変竴鍙ｏ級
+					# 阵亡小爆点（割草感：每杀一只都有一口）
 					if randf() < (0.40 if _boss_on else 0.60):
 						_spawn_pfx("impacts/blunt-hit", tk.position + Vector2(0, -8), 0.60, "dust", 1.1, 1.15)
-					# 寰】甯э紜杩炴潃杞婚渿锛氭瘡鏉€涓€鍙兘"椤夸竴涓?
+					# 微顿帧＋连杀轻震：每杀一只都"顿一下"
 					_core._hitstop = maxf(float(_core._hitstop), 0.030)
 					if int(_core._combo) >= 5:
 						_core._shake = maxf(float(_core._shake), 2.5)
@@ -2613,7 +2748,9 @@ func _process(_delta: float) -> void:
 func _on_core_kill(n: int) -> void:
 	if _run_over or _core == null or n <= 0:
 		return
-	_curio_on_kill(n)                        # 濂囩墿锛氶唹缈佸６锛堝嚮鏉€绱锛?	# v15 缁忛獙绾匡細鏉€ 1 鍙寜 1+x% 鍙畻锛堢粡楠屼笌鎵€鏈夋寜鍑绘潃鎴愰暱鐨勬満鍒朵竴璧峰悆锛?	var kn := int(round(float(n) * (1.0 + _killnum_pct / 100.0)))
+	_curio_on_kill(n)                        # 奇物：醉翁壶（击杀累计）
+	# v15 经验线：杀 1 只按 1+x% 只算（经验与所有按击杀成长的机制一起吃）
+	var kn := int(round(float(n) * (1.0 + _killnum_pct / 100.0)))
 	if kn < n:
 		kn = n
 	_kills += kn
@@ -2623,13 +2760,14 @@ func _on_core_kill(n: int) -> void:
 	_pulse_chip(_kill_lb)
 	_spawn_fly(_hero_screen() + Vector2(0, -26), Vector2(447, 40), Color(0.80, 0.36, 0.24), 2)
 	if _bm != null and LevelState.show_button("market"):
-		_bm.add_kill(kn)   # 榛戝競娌″紑鏀惧墠涓嶅杺鏉€鏁屾暟锛岄伩鍏嶅紑灞€寮光€滈粦甯傚崌鍒?Lv鈥?	_add_exp(20 * kn)                      # v2锛氭潃 1 鍙?+20 缁忛獙
+		_bm.add_kill(kn)   # 黑市没开放前不喂杀敌数，避免开局弹“黑市升到 Lv”
+	_add_exp(20 * kn)                      # v2：杀 1 只 +20 经验
 	_add_wen(int(round(float(WEN_KILL_BASE + WEN_KILL_WAVE * int(_core.wave)) * (1.0 + _kill_pct / 100.0))))
 	if LevelState.current_level == 2:
-		_gain_crystal(1)   # 鍙湁绗簩鍏抽潬鏅€氬嚮鏉€琛ョ伒鏅讹紱绗笁鍏宠捣璁╃粡娴庣嚎璇磋瘽
+		_gain_crystal(1)   # 只有第二关靠普通击杀补灵晶；第三关起让经济线说话
 	if _qianzhi:
 		for i in kn:
-			_core.summon_minion("绾镐汉", Color(0.95, 0.93, 0.86), 0.72, 0.5, 8.0 / 30.0, 1.0, 0.0, 99, "", "paper")
+			_core.summon_minion("纸人", Color(0.95, 0.93, 0.86), 0.72, 0.5, 8.0 / 30.0, 1.0, 0.0, 99, "", "paper")
 	if _undying_lamp:
 		_lamp_kills += kn
 		while _lamp_kills >= 5:
@@ -2645,27 +2783,29 @@ func _on_core_kill(n: int) -> void:
 		while _ss_kills >= 10:
 			_ss_kills -= 10
 			_ss_pct += 4.0
-			_toast("鍚炴捣 路 铔熼緳灞炴€?+4%%锛堢疮璁?%d%%锛? % int(_ss_pct))
-	_trigger_combos("姣忔鍑绘潃")
+			_toast("吞海 · 蛟龙属性 +4%%（累计 %d%%）" % int(_ss_pct))
+	_trigger_combos("每次击杀")
 
-# ---------------- 缁忛獙 / 绛夌骇 / 璇风娆℃暟 ----------------
-#   鏉€ 1 鍙?+20 路 娓呬竴娉?+50 路 鍗囩骇闇€姹?100 + 50脳(绾?1)
-#   姣忓崌 1 绾?鈫?璇风娆℃暟 +1 鈫?搴曟爮銆岃绁炪€嶉挳浜捣
+# ---------------- 经验 / 等级 / 请神次数 ----------------
+#   杀 1 只 +20 · 清一波 +50 · 升级需求 100 + 50×(级-1)
+#   每升 1 级 → 请神次数 +1 → 底栏「请神」钮亮起
 func _add_exp(v: int) -> void:
 	if v <= 0:
 		return
 	_exp += int(round(float(v) * (1.0 + _exp_pct / 100.0)))
 	var up := 0
 	var god := 0
-	# 绛夌骇涓嶈纭笂闄愶細姝ｅ父缁忛獙鍒伴€氬叧澶х害 20 绾э紱璇风娆℃暟鍙︽湁 god_cap 绠?	while _exp >= _exp_need:
+	# 等级不设硬上限：正常经验到通关大约 20 级；请神次数另有 god_cap 管
+	while _exp >= _exp_need:
 		_exp -= _exp_need
 		_lv += 1
 		_exp_need += 50
-		_level_bonus(1)               # 姣忕骇锛氭敾鍑?+1 路 姘旇涓婇檺 +6锛堝唴鍔涗笂闄愬悓姝?+25锛?		if _lv % 5 == 0:
-			_draw_charge += 1   # 姣?5 绾х粰涓€娆★紱鍏佽婧㈠嚭锛屽悗闈㈣绁炲€欓€夌敤瀹屽氨鏀掔潃
+		_level_bonus(1)               # 每级：攻击 +1 · 气血上限 +6（内力上限同步 +25）
+		if _lv % 5 == 0:
+			_draw_charge += 1   # 每 5 级给一次；允许溢出，后面请神候选用完就攒着
 			if LevelState.has_feature("mate") and not _l5_mate_shown:
 				_l5_mate_shown = true
-				_tutorial("l5_mate", _mate_tile, "鍗囩骇鍙互閫夎绁烇紝甯﹀浼犲崱", func() -> void: pass)
+				_tutorial("l5_mate", _mate_tile, "升级可以选请神，带家传卡", func() -> void: pass)
 			god += 1
 		up += 1
 	_qc("lv", up)
@@ -2673,12 +2813,12 @@ func _add_exp(v: int) -> void:
 		_choice_fx("lv")
 	_refresh_level_ui()
 	if up > 0:
-		var msg := "鍗囧埌 Lv %d 路 鏀?%d 路 琛€+%d" % [_lv, up, up * 6]
+		var msg := "升到 Lv %d · 攻+%d · 血+%d" % [_lv, up, up * 6]
 		if god > 0:
-			msg += " 路 璇风 +%d" % god
+			msg += " · 请神 +%d" % god
 		_toast(msg)
 
-# 鍗囩骇缁欏睘鎬э紙鍙湪鏈眬鐢熸晥锛夛細鏀诲嚮 +1 路 姘旇涓婇檺 +6 路 鍐呭姏涓婇檺 +25
+# 升级给属性（只在本局生效）：攻击 +1 · 气血上限 +6 · 内力上限 +25
 func _level_bonus(n: int) -> void:
 	if _core == null or n <= 0:
 		return
@@ -2707,21 +2847,22 @@ func _refresh_level_ui() -> void:
 		_mate_tile.badge = _draw_charge
 
 # ============================================================
-# 褰撳眬鐢熷懡锛氫富瑙掑€掍笅 = 杩欎竴娉㈡病鎵撲笅鏉ワ紝涓嶆槸鐩存帴缁撴潫
-#   鎵ｅ懡锛堟寜鍓╀綑鎬潈閲嶏級鈫?鎬叏娓咃紙鏃犳帀钀?鏃犵粡楠岋級鈫?杩囨尝涓旀棤濂栧姳
-#   鈫?鎸戞垬鍏ㄩ儴杩涘喎鍗?鈫?涓昏婊¤绔欒捣鏉?鈫?鍛?<= 0 鎵嶇粨绠?# ============================================================
+# 当局生命：主角倒下 = 这一波没打下来，不是直接结束
+#   扣命（按剩余怪权重）→ 怪全清（无掉落/无经验）→ 过波且无奖励
+#   → 挑战全部进冷却 → 主角满血站起来 → 命 <= 0 才结算
+# ============================================================
 const CHAL_BASE_CD := [25.0, 30.0, 30.0, 90.0, 150.0]
 const CHAL_MIN_WAVE := [1, 1, 2, 3, 5]
 
 func _chal_base_cd(i: int) -> float:
 	return float(CHAL_BASE_CD[clampi(i, 0, CHAL_BASE_CD.size() - 1)])
 
-# 鎸戞垬鍏ㄩ儴杩涘喎鍗达紙澶辫触鎯╃綒 + 鏈眬缁撴潫鏃朵篃椤烘墜璋冿級
+# 挑战全部进冷却（失败惩罚 + 本局结束时也顺手调）
 func _chal_all_cd() -> void:
 	for i in _chal_cd.size():
 		_chal_cd[i] = maxf(float(_chal_cd[i]), _chal_base_cd(i))
 
-# 涓€鍙€姌绠楀灏?鍛?锛氬皬鎬?1 路 鎸戞垬缇ゆ€?2 路 鎸戞垬澶ф€?5 路 棣栭 10
+# 一只怪折算多少"命"：小怪 1 · 挑战群怪 2 · 挑战大怪 5 · 首领 10
 func _foe_life_weight(f: Dictionary) -> int:
 	if f.has("chal"):
 		return 5 if int(f["chal"]) >= 3 else 2
@@ -2739,7 +2880,8 @@ func _refresh_life_ui() -> void:
 func _on_hero_down() -> void:
 	if _run_over:
 		return
-	# 濂囩墿路绾镐汉鏇胯韩锛氭浛浣犳尅涓€娆¤嚧鍛戒激瀹筹紙涓嶆墸鍛姐€佷笉娓呭満锛?	if _curio_id == "zhiren" and _zhiren > 0:
+	# 奇物·纸人替身：替你挡一次致命伤害（不扣命、不清场）
+	if _curio_id == "zhiren" and _zhiren > 0:
 		_set_paper_count(_zhiren - 1)
 		_core.hero["hp"] = float(_core.hero.get("hp_max", 1.0))
 		_core.running = true
@@ -2749,11 +2891,12 @@ func _on_hero_down() -> void:
 		if not _skill_batch_active(epoch):
 			return
 		_curio_flash()
-		_toast("绾镐汉鏇胯韩 路 鎸′綇鑷村懡涓€鍑伙紙鍓?%d锛? % _zhiren)
+		_toast("纸人替身 · 挡住致命一击（剩 %d）" % _zhiren)
 		Aud.sfx("paper", -6.0, 1.0)
 		_spawn_pfx("holy/heal", _hero_screen(), 1.0, "heal", 1.5)
 		return
-	# 瑁呭鍏嶆蹇呴』鍦ㄦ墸鍛藉拰娓呭満鍓嶅鐞嗭紝涓嶈兘渚濊禆姝讳骸淇″彿杩炴帴椤哄簭銆?	if _bm != null and _bm.try_prevent_death():
+	# 装备免死必须在扣命和清场前处理，不能依赖死亡信号连接顺序。
+	if _bm != null and _bm.try_prevent_death():
 		_core.running = true
 		return
 	var loss := 0
@@ -2764,23 +2907,28 @@ func _on_hero_down() -> void:
 	loss = maxi(1, loss)
 	_life = maxi(0, _life - loss)
 	_refresh_life_ui()
-	_core.foes.clear()               # 鎬叏娓咃細涓嶆帀钀姐€佷笉缁欑粡楠?	_core.clear_enemy_attacks()       # 鏃ч璀?鍦伴潰浼ゅ涓嶈兘杩藉埌澶嶆椿鍚庣殑涓嬩竴娉?	_chal_all_cd()                   # 鎸戞垬鍏ㄩ儴杩涘喎鍗?	_spawn_pfx("shadow/dark-explosion", _hero_screen(), 1.25, "blood", 1.7)
+	_core.foes.clear()               # 怪全清：不掉落、不给经验
+	_core.clear_enemy_attacks()       # 旧预警/地面伤害不能追到复活后的下一波
+	_chal_all_cd()                   # 挑战全部进冷却
+	_spawn_pfx("shadow/dark-explosion", _hero_screen(), 1.25, "blood", 1.7)
 	_core._shake = maxf(float(_core._shake), 12.0)
-	_core.hero["hp"] = float(_core.hero.get("hp_max", 1.0))   # 婊¤绔欒捣鏉ワ紙涓嶅仛娴磋锛?	_core.running = true
+	_core.hero["hp"] = float(_core.hero.get("hp_max", 1.0))   # 满血站起来（不做浴血）
+	_core.running = true
 	Aud.sfx("ui_back", -4.0)
-	# 杩欎竴娉㈢洿鎺ュ垽璐燂細涓嶇粰濂栧姳锛岀珛鍒昏繘涓嬩竴娉紙鏈€鍚庝竴娉㈡墦杈?= 鏈眬缁撴潫锛?	var cleared_wave := int(_core.wave)
+	# 这一波直接判负：不给奖励，立刻进下一波（最后一波打输 = 本局结束）
+	var cleared_wave := int(_core.wave)
 	if cleared_wave < _max_wave:
-		_toast("绗?%d 娉㈡病鎵撲笅鏉?路 鍛?-%d" % [cleared_wave, loss])
+		_toast("第 %d 波没打下来 · 命 -%d" % [cleared_wave, loss])
 		_core.set_wave(cleared_wave + 1)
 		_core.wave_reset_quota()
 		_spawn_typed_foes()
 	else:
-		_toast("绗?%d 娉㈡病鎵撲笅鏉?路 鍛?-%d" % [cleared_wave, loss])
+		_toast("第 %d 波没打下来 · 命 -%d" % [cleared_wave, loss])
 		_end_run(false)
 	if _life <= 0:
 		_end_run(false)
 
-# ---- 鏈眬缁撴潫锛氬懡灏斤紙杈擄級 / 閫氬叧锛堣耽锛?----
+# ---- 本局结束：命尽（输） / 通关（赢） ----
 var _result_layer: Control = null
 
 func _end_run(win: bool) -> void:
@@ -2793,9 +2941,9 @@ func _end_run(win: bool) -> void:
 			if first:
 				_grant_first_clear(LevelState.current_level)
 			if SaveFile.commit() != OK:
-				_toast("棣栭€氫繚瀛樺け璐ワ紝璇峰嬁鍏抽棴娓告垙")
+				_toast("首通保存失败，请勿关闭游戏")
 		else:
-			_toast("棣栭€氳褰曟仮澶嶅け璐ワ紝璇锋鏌ュ瓨鍌ㄧ┖闂?)
+			_toast("首通记录恢复失败，请检查存储空间")
 	_run_over = true
 	if _tut != null:
 		_tut.cancel()
@@ -2806,7 +2954,7 @@ func _end_run(win: bool) -> void:
 		_core.running = false
 	if _cam != null:
 		_cam.scale = Vector2.ONE
-	# 缁撶畻鍓嶇殑"瀹氭牸寮?鍙嶉锛氫竴闂?+ 闀块】甯э紝鐒跺悗鎵嶅脊闈㈡澘
+	# 结算前的"定格式"反馈：一闪 + 长顿帧，然后才弹面板
 	_screen_flash(Color(1.0, 0.96, 0.82) if win else Color(0.52, 0.17, 0.13), 0.34 if win else 0.28, 0.5)
 	if _core != null:
 		_core._hitstop = maxf(float(_core._hitstop), 0.30)
@@ -2823,8 +2971,18 @@ func _build_result(win: bool) -> void:
 	layer.z_index = 40
 	add_child(layer)
 	_result_layer = layer
+	# 结局 CG 当全屏背景（有图才加，缺图保持原来的纯色压暗）
+	var cg_path := "res://assets/art/cg/ending_win.png" if win else "res://assets/art/cg/ending_lose.png"
+	var has_cg := ResourceLoader.exists(cg_path)
+	if has_cg:
+		var cg := ArtRect.new()
+		cg.tex = load(cg_path) as Texture2D
+		cg.cover = true
+		cg.position = Vector2.ZERO
+		cg.size = Vector2(720, 1280)
+		layer.add_child(cg)
 	var dim := ColorRect.new()
-	dim.color = Color(0.05, 0.04, 0.03, 0.62)
+	dim.color = Color(0.05, 0.04, 0.03, 0.42 if has_cg else 0.62)
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	dim.mouse_filter = Control.MOUSE_FILTER_STOP
 	layer.add_child(dim)
@@ -2833,7 +2991,7 @@ func _build_result(win: bool) -> void:
 	holder.size = Vector2(540, 480)
 	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layer.add_child(holder)
-	# 缁撶畻闈㈡澘搴曞浘锛堟湁鍥惧氨鐢ㄥ浘锛屾病鏈夊洖閫€鍘熸潵鐨勭函鑹查潰鏉匡級
+	# 结算面板底图（有图就用图，没有回退原来的纯色面板）
 	var panel_art := "res://assets/ui/panel_win.png" if win else "res://assets/ui/panel_lose.png"
 	var has_art := ResourceLoader.exists(panel_art)
 	if has_art:
@@ -2848,37 +3006,54 @@ func _build_result(win: bool) -> void:
 	_panel(Rect2(0, 0, 540, 480), Color(0.97, 0.93, 0.85, 0.28) if has_art else Color(0.97, 0.93, 0.85, 0.99), 12,
 		Color(0.85, 0.66, 0.23, 0.0) if has_art else (Color(0.85, 0.66, 0.23) if win else Color(0.64, 0.22, 0.15)),
 		0 if has_art else 3, holder)
-	_lbl("閫氥€€鍏? if win else "鍛姐€€灏?, Vector2(0, 26), Vector2(540, 58), 42,
+	if has_art:
+		# 内容区压一层纸色，压住框内花边，保证文字清楚
+		var content_bg := ColorRect.new()
+		content_bg.position = Vector2(48, 112)
+		content_bg.size = Vector2(444, 232)
+		content_bg.color = Color(0.972, 0.948, 0.896, 0.90)
+		content_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		holder.add_child(content_bg)
+		var title_bg := ColorRect.new()
+		title_bg.position = Vector2(0, 56)
+		title_bg.size = Vector2(540, 60)
+		title_bg.color = Color(0.972, 0.948, 0.896, 0.88)
+		title_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		holder.add_child(title_bg)
+	_lbl("通　关" if win else "命　尽", Vector2(0, 66), Vector2(540, 58), 42,
 		Color(0.62, 0.44, 0.12) if win else Color(0.62, 0.20, 0.14), holder, HORIZONTAL_ALIGNMENT_CENTER)
+	if has_art:
+		MenuUI.deco(holder, "divider", Rect2(140, 106, 260, 14), 0.9)
 	var mins := int(_run_time) / 60
 	var secs := int(_run_time) % 60
 	var total_bonds := _bonds.size() + _bonds_done
 	var rows := [
-		["鍒拌揪娉㈡暟", "%d / %d" % [mini(int(_core.wave), _max_wave), _max_wave]],
-		["鍑绘潃", str(_kills)],
-		["鏂囬挶", str(_wen)],
-		["鐏垫櫠", str(_crystal)],
-		["缇佺粖", "%d 鏉★紙宸叉垚 %d锛? % [total_bonds, _bonds_done]],
-		["瀛樻椿", "%d 鍒?%02d 绉? % [mins, secs]],
+		["到达波数", "%d / %d" % [mini(int(_core.wave), _max_wave), _max_wave]],
+		["击杀", str(_kills)],
+		["文钱", str(_wen)],
+		["灵晶", str(_crystal)],
+		["羁绊", "%d 条（已成 %d）" % [total_bonds, _bonds_done]],
+		["存活", "%d 分 %02d 秒" % [mins, secs]],
 	]
 	var y := 126.0
 	for r in rows:
 		_lbl(str(r[0]), Vector2(56, y), Vector2(150, 30), 20, DIM, holder)
 		_lbl(str(r[1]), Vector2(210, y), Vector2(276, 30), 22, INK, holder, HORIZONTAL_ALIGNMENT_RIGHT)
 		y += 40.0
-	_btn("鍐嶆潵涓€灞€", Rect2(30, 380, 210, 64), 24, Color(0.86, 0.66, 0.24), Color(0.14, 0.11, 0.08),
+	_btn("再来一局", Rect2(30, 380, 210, 64), 24, Color(0.86, 0.66, 0.24), Color(0.14, 0.11, 0.08),
 		func() -> void: _leave_result(true), holder)
-	_btn("鍥炰富鐣岄潰", Rect2(300, 380, 210, 64), 24, Color(0.93, 0.89, 0.80), INK,
+	_btn("回主界面", Rect2(300, 380, 210, 64), 24, Color(0.93, 0.89, 0.80), INK,
 		func() -> void: _leave_result(false), holder)
 	_pop_bounce(holder)
 	_breathe(holder)
 	_spawn_pfx("holy/sunburst" if win else "shadow/dark-explosion", Vector2(360, 235), 1.9, "holy" if win else "shadow", 1.8)
 
-# 缁撴灉椤垫寜閽悓鏃朵綔涓轰繚瀛橀噸璇曞叆鍙ｏ紝鏈繚瀛樺畬鎴愭椂淇濈暀褰撳墠鍦烘櫙銆?func _leave_result(replay: bool) -> void:
+# 结果页按钮同时作为保存重试入口，未保存完成时保留当前场景。
+func _leave_result(replay: bool) -> void:
 	if not _run_over or _result_layer == null or not MenuUI.navigation_available(self): return
 	var SaveFile := preload("res://shared/save_file.gd")
 	if SaveFile.recover() != OK:
-		_toast("淇濆瓨鏈畬鎴愶紝璇烽噴鏀惧瓨鍌ㄧ┖闂村悗鍐嶆鐐瑰嚮")
+		_toast("保存未完成，请释放存储空间后再次点击")
 		return
 	if replay:
 		MenuUI.navigate(self, scene_file_path)
@@ -2902,7 +3077,7 @@ func _grant_first_clear(lv: int) -> void:
 		GameState.curio_shards += int(r["curio_shards"])
 	if r.has("new_cards"):
 		GameState.new_cards_unlocked = true
-		_toast("鏂板崱缁勫凡瑙ｉ攣 路 鏁鏈熷緟绗崄涓€鍏?)
+		_toast("新卡组已解锁 · 敬请期待第十一关")
 	if r.has("shards"):
 		var sh: Dictionary = r["shards"]
 		for k in sh.keys():
@@ -2912,7 +3087,7 @@ func _grant_first_clear(lv: int) -> void:
 		FD2.load_game()
 		var ore_n := int(r["forge_mat"])
 		FD2.ores += ore_n
-		FD2.silver += ore_n * 10   # 鍚屾缁欓敾閫犵敤鐨勯摱涓わ紝澶熷洓浠?+20 杩樻湁瀵屼綑
+		FD2.silver += ore_n * 10   # 同步给锻造用的银两，够四件 +20 还有富余
 	if r.has("forge_mat"):
 		GameState.forge_mat += int(r["forge_mat"])
 	if r.has("equip"):
@@ -2925,8 +3100,8 @@ func _grant_first_clear(lv: int) -> void:
 		var ForgeData := preload("res://shared/forge_data.gd")
 		ForgeData.save_game()
 	GameState.save_progress()
-	var equipment_note := " 路 %d 浠惰澶囧叆鑳屽寘" % stored_equipment if stored_equipment > 0 else ""
-	_toast("棣栭€?路 " + str(r.get("text", "")) + equipment_note)
+	var equipment_note := " · %d 件装备入背包" % stored_equipment if stored_equipment > 0 else ""
+	_toast("首通 · " + str(r.get("text", "")) + equipment_note)
 
 func _on_wave_clear(cleared_wave: int) -> void:
 	if _run_over or _rewarded_waves.has(cleared_wave):
@@ -2934,23 +3109,28 @@ func _on_wave_clear(cleared_wave: int) -> void:
 	_rewarded_waves[cleared_wave] = true
 	if _skip_reward_wave:
 		_skip_reward_wave = false
-		_toast("绗?%d 娉㈡病鎵撲笅鏉?路 鏃犲鍔? % cleared_wave)
+		_toast("第 %d 波没打下来 · 无奖励" % cleared_wave)
 		return
 	_qc("clearwave", 1)
-	_add_exp(50)                            # v2锛氭竻涓€娉?+50 缁忛獙
-	_add_wen(WEN_WAVE_CLEAR * cleared_wave)  # v6锛氭竻涓€娉㈢粰涓€绗旀枃閽?	_curio_on_wave_clear(cleared_wave)       # 濂囩墿锛氳仛瀹濈泦 / 缁懡鐏?	_trea_charge += 1                      # v8锛氭竻涓€娉㈢粰涓€娆″疂鐗╂満浼?	_refresh_trea_tile()
-	_toast("绗?%d 娉㈡竻绌? % cleared_wave)
+	_add_exp(50)                            # v2：清一波 +50 经验
+	_add_wen(WEN_WAVE_CLEAR * cleared_wave)  # v6：清一波给一笔文钱
+	_curio_on_wave_clear(cleared_wave)       # 奇物：聚宝盆 / 续命灯
+	_trea_charge += 1                      # v8：清一波给一次宝物机会
+	_refresh_trea_tile()
+	_toast("第 %d 波清空" % cleared_wave)
 	if cleared_wave == 1:
-		# 鎵€鏈夊叧鍗★細娓呭畬绗?1 娉寒鍑哄己鍖?		if _str_tile != null:
+		# 所有关卡：清完第 1 波亮出强化
+		if _str_tile != null:
 			_str_tile.visible = true
 			_str_tile.hot = true
 			_str_tile.queue_redraw()
-		# 鍙湁绗竴鍏虫墠璺戝己鍖?鏂囬挶/澶村儚杩欐潯鏁欏閾?		if LevelState.current_level == 1:
+		# 只有第一关才跑强化/文钱/头像这条教学链
+		if LevelState.current_level == 1:
 			_l1_tutorial("l1_wen", _str_tile,
-				"寮哄寲鍙互寮哄寲鑷韩\n鎻愬崌姘旇銆佸唴鍔涘拰浼ゅ锛堝己鍖?Lv1锛?,
+				"强化可以强化自身\n提升气血、内力和伤害（强化 Lv1）",
 				func() -> void:
-					_l1_tutorial("l1_wen2", _chips.get("鏂囬挶"),
-						"寮哄寲闇€瑕佹秷鑰楁枃閽?,
+					_l1_tutorial("l1_wen2", _chips.get("文钱"),
+						"强化需要消耗文钱",
 						_on_str_tile))
 
 func _l1_tutorial(key: String, target: Node, text: String, cb: Callable) -> void:
@@ -2959,14 +3139,15 @@ func _l1_tutorial(key: String, target: Node, text: String, cb: Callable) -> void
 func _tutorial(key: String, target: Node, text: String, cb: Callable) -> void:
 	if _run_over or _tut == null or not MenuUI.navigation_available(self):
 		return
-	# 姣忓眬閮芥彁绀轰竴娆″己鍖栧紩瀵硷紙鍘熸潵鍙挱涓€娆★紝閲嶇帺鏃朵笉鍑虹幇锛?	if target == null or not is_instance_valid(target) or not target.is_visible_in_tree():
+	# 每局都提示一次强化引导（原来只播一次，重玩时不出现）
+	if target == null or not is_instance_valid(target) or not target.is_visible_in_tree():
 		return
 	LevelState.mark_tutorial(key)
 	if OS.get_environment("DSH_DEBUG") != "":
 		print("[TUT] lv=", LevelState.current_level, " key=", key, " target=", target.name if target != null else "<null>", " text=", text.replace("\n", " / "))
 	_tut.open(target, text, cb, func() -> void: _tutorial_pause(true), func() -> void: _tutorial_pause(false))
 
-# 姣忎竴鍏虫柊鎸夐挳鐨勯娆℃暀瀛︼細鍙嚭涓€鍙ワ紝鐐圭洰鏍囨墠缁х画
+# 每一关新按钮的首次教学：只出一句，点目标才继续
 func _maybe_level_button_tutorial() -> void:
 	var lv := LevelState.current_level
 	var key := ""
@@ -2976,25 +3157,25 @@ func _maybe_level_button_tutorial() -> void:
 		2:
 			key = "l2_draw"
 			target = _draw_tile
-			text = "鐏垫櫠鍙互鎶藉崱锛岀粍鎴愬崱缁?
+			text = "灵晶可以抽卡，组成卡组"
 		3:
 			key = "l3_trea"
 			target = _trea_tile
-			text = "瀹濈墿鍙互寮€鍑鸿祫婧愬拰瑁呭"
+			text = "宝物可以开出资源和装备"
 		4:
 			key = "l4_chal"
 			target = _chal_btn
-			text = "鎸戞垬浼氬埛鍑洪澶栨€紝鏀剁泭鏇撮珮"
+			text = "挑战会刷出额外怪，收益更高"
 		5:
-			return   # 绗簲鍏崇殑璇风鏁欏鏀瑰埌绗竴娆℃敀鍒拌绁炴鏁版椂鍐嶅嚭
+			return   # 第五关的请神教学改到第一次攒到请神次数时再出
 		6:
 			key = "l6_market"
 			target = _market_tile
-			text = "榛戝競鍙互涔拌澶囥€佸瓨浠撳簱"
+			text = "黑市可以买装备、存仓库"
 		7:
 			key = "l7_skill"
 			target = _mate_tile
-			text = "璇风椤靛彲浠ョ敤鎶€鑳戒功鍗囩骇鎶€鑳?
+			text = "请神页可以用技能书升级技能"
 		_:
 			return
 	_tutorial(key, target, text, func() -> void: pass)
@@ -3027,12 +3208,12 @@ func _on_mate_tile() -> void:
 	if not LevelState.show_button("mate"):
 		return
 	if _draw_charge <= 0:
-		_toast("鍗囩骇鍚庡彲璇风")
+		_toast("升级后可请神")
 		return
 	_show_god_pick()
 
 # ============================================================
-# ---------------- 寮哄寲锛坴6锛?---------------
+# ---------------- 强化（v6）----------------
 # ============================================================
 func _str_cost() -> int:
 	return STR_COST_BASE + STR_COST_STEP * _str_lv
@@ -3041,13 +3222,14 @@ func _refresh_str_tile() -> void:
 	if _str_tile == null:
 		return
 	var cost := _str_cost()
-	var s := "寰呴€夎繘闃? if _str_pending else "Lv %d" % _str_lv   # 鍙樉绀虹瓑绾э紝娑堣€楀湪鐐瑰嚮鏃舵彁绀?	var hot := _str_pending or _wen >= cost
+	var s := "待选进阶" if _str_pending else "Lv %d" % _str_lv   # 只显示等级，消耗在点击时提示
+	var hot := _str_pending or _wen >= cost
 	if _str_tile.sub != s or _str_tile.hot != hot:
 		_str_tile.sub = s
 		_str_tile.hot = hot
 		_str_tile.queue_redraw()
 
-# 鐐癸蓟寮哄寲锛斤細鎵ｆ枃閽卞崌涓€绾э紱姝ｅソ鍒?10 鐨勫€嶆暟灏卞紑涓夐€変竴
+# 点［强化］：扣文钱升一级；正好到 10 的倍数就开三选一
 func _open_bm() -> void:
 	if not LevelState.show_button("market"):
 		return
@@ -3056,12 +3238,14 @@ func _open_bm() -> void:
 
 func _on_str_tile() -> void:
 	if _str_pending:
-		_open_aug_pick()                     # 涓婁竴鎵嬭繕娌￠€?鈫?閲嶆柊鎵撳紑锛堜笉閲嶅鎵ｉ挶锛?		return
+		_open_aug_pick()                     # 上一手还没选 → 重新打开（不重复扣钱）
+		return
 	var cost := _str_cost()
 	if _wen < cost:
-		# 璺熷崌绾ф彁绀轰竴鏍凤紝鍦ㄤ富瑙掑ご椤堕涓€琛岀孩瀛?		if _core != null:
+		# 跟升级提示一样，在主角头顶飘一行红字
+		if _core != null:
 			_core._push_float(_core.hero_pos.x, _core.hero_pos.y - 70.0,
-				"鏃犳硶寮哄寲 路 闇€瑕?%d 鏂囬挶" % cost, Color(0.94, 0.42, 0.32), true)
+				"无法强化 · 需要 %d 文钱" % cost, Color(0.94, 0.42, 0.32), true)
 		return
 	_wen -= cost
 	if _coin_lb != null:
@@ -3069,12 +3253,12 @@ func _on_str_tile() -> void:
 	_str_lv += 1
 	_apply_str_levels(1)
 	Aud.sfx("ui_click", -6.0)
-	_str_pop("寮哄寲 +1")
-	# 涓昏澶撮《涔熼涓€琛岋紙璺熷崌绾ф彁绀轰竴鑷达級
+	_str_pop("强化 +1")
+	# 主角头顶也飘一行（跟升级提示一致）
 	if _core != null:
 		var hh: Dictionary = _core.hero
 		_core._push_float(_core.hero_pos.x, _core.hero_pos.y - 70.0,
-			"寮哄寲 +1 路 姘旇 %d 路 鏀诲嚮 %d" % [int(float(hh.get("hp_max", 0))), int(float(hh.get("atk", 0)))],
+			"强化 +1 · 气血 %d · 攻击 %d" % [int(float(hh.get("hp_max", 0))), int(float(hh.get("atk", 0)))],
 			Color(0.98, 0.86, 0.45), true)
 	if _str_tile != null:
 		var twp := create_tween()
@@ -3084,25 +3268,26 @@ func _on_str_tile() -> void:
 		var twc := create_tween()
 		twc.tween_property(_str_tile, "modulate", Color(1.35, 1.25, 0.9), 0.05)
 		twc.tween_property(_str_tile, "modulate", Color(1, 1, 1), 0.18)
-	# 寮哄寲杩囦竴娆″悗锛氬紩瀵肩偣澶村儚鏌ョ湅灞炴€э紙灞忓箷鍘嬫殫銆佸ご鍍忎寒璧凤級
+	# 强化过一次后：引导点头像查看属性（屏幕压暗、头像亮起）
 	if LevelState.current_level == 1 and not _l1_attr_shown:
 		_l1_attr_shown = true
 		var portrait: Node = _hero_token if _hero_token != null else _hero_hit_btn
-		_l1_tutorial("l1_attr", portrait, "鐐瑰嚮浜虹墿澶村儚鍙互鏌ョ湅褰撳墠灞炴€?, func() -> void: _open_attr_page())
+		_l1_tutorial("l1_attr", portrait, "点击人物头像可以查看当前属性", func() -> void: _open_attr_page())
 	if _str_lv % STR_EVERY == 0:
 		_str_pending = true
-		_aug_reroll += 1          # 姣忚繘涓€杞紝鍒锋柊娆℃暟 +1
+		_aug_reroll += 1          # 每进一轮，刷新次数 +1
 		_open_aug_pick()
 		var aug_t: Node = _str_layer
 		if _aug_cards.size() > 1:
-			aug_t = _aug_cards[1]          # 妗嗕腑闂撮偅寮犲崱锛岃€屼笉鏄暣灞忛伄缃?		if LevelState.current_level == 1 and not _l1_aug_shown:
+			aug_t = _aug_cards[1]          # 框中间那张卡，而不是整屏遮罩
+		if LevelState.current_level == 1 and not _l1_aug_shown:
 			_l1_aug_shown = true
 			_l1_tutorial("l1_aug", aug_t,
-				"姣忓己鍖?10 绾у彲澶у箙鎻愬崌灞炴€n骞跺彲閫夋嫨鑷繁鐨勫彂灞曟柟鍚?,
+				"每强化 10 级可大幅提升属性\n并可选择自己的发展方向",
 				func() -> void: pass)
 	_refresh_str_tile()
 
-# 鐐逛竴涓嬬殑鍗虫椂鍙嶉锛氾蓟寮哄寲锛介挳涓婃柟鍐掍竴琛屽瓧锛屽線涓婇璧帮紙涓嶇敤 toast锛屽厤寰楄繛鐐规帓闃燂級
+# 点一下的即时反馈：［强化］钮上方冒一行字，往上飘走（不用 toast，免得连点排队）
 func _str_pop(txt: String) -> void:
 	var l := Label.new()
 	l.text = txt
@@ -3123,7 +3308,8 @@ func _str_pop(txt: String) -> void:
 		if is_instance_valid(l):
 			l.queue_free())
 
-# 姣忕骇鐨勫熀纭€寮哄寲锛氱洿鎺ュ啓杩?core.hero锛堣鎸夋瘮渚嬫定锛屼笉鐧介€佹弧琛€锛?func _apply_str_levels(n: int) -> void:
+# 每级的基础强化：直接写进 core.hero（血按比例涨，不白送满血）
+func _apply_str_levels(n: int) -> void:
 	if _core == null:
 		return
 	var h: Dictionary = _core.hero
@@ -3133,34 +3319,35 @@ func _str_pop(txt: String) -> void:
 	_apply_flat_growth(add_atk, add_hp, true)
 	var cut_add := STR_PER_CUT * float(n)
 	for t in _core.DMG_TYPES:
-		if t != "鐪熷疄":
+		if t != "真实":
 			_core.type_add(t, "red_f", cut_add)
-	h["cut"] = _core.type_effective_field("鐗╃悊", "red_f")
+	h["cut"] = _core.type_effective_field("物理", "red_f")
 	_stats["atk"] = float(_stats["atk"]) + add_atk
 	_stats["hp"] = float(_stats["hp"]) + add_hp
 
-# ---- 杩涢樁涓夐€変竴 ----
-#   鍝侀樁闅忚疆娆℃定锛氱 1 杞壇 路 绗?2 杞巹 路 绗?3 杞湴 路 绗?4 杞捣澶╋紱鏁板€兼寜 1 + 0.4脳(杞?1) 鏀惧ぇ
+# ---- 进阶三选一 ----
+#   品阶随轮次涨：第 1 轮良 · 第 2 轮玄 · 第 3 轮地 · 第 4 轮起天；数值按 1 + 0.4×(轮-1) 放大
 const AUG_POOL := [
-	{"key": "atk_pct", "name": "鐮村啗", "glyph": "鏀?, "v": 15, "text": "鏀诲嚮 +%d%%", "desc": "鍒€閿嬫洿鍒╋紝鍑烘墜瑙佽"},
-	{"key": "hp_pct", "name": "閾侀", "glyph": "楠?, "v": 20, "text": "姘旇涓婇檺 +%d%%", "desc": "鐨硻鑲夊帤锛屾墰寰椾綇"},
-	{"key": "aspd_pct", "name": "鐤鹃", "glyph": "鐤?, "v": 12, "text": "鏀婚€?+%d%%", "desc": "鎶㈠湪鍗婃嫑涔嬪墠"},
-	{"key": "crit_add", "name": "浼氬績", "glyph": "浼?, "v": 8, "text": "鏆村嚮 +%d%%", "desc": "涓撴寫瑕佸鎷涘懠"},
-	{"key": "critdmg_add", "name": "閿愭剰", "glyph": "閿?, "v": 25, "text": "鏆村嚮浼ゅ +%d%%", "desc": "鏆村嚮鏃舵洿鐤?},
-	{"key": "cut_add", "name": "鐜勭敳", "glyph": "鐢?, "v": 8, "text": "鎶ょ敳 +%d%%", "desc": "鍙尅鍒€鍓戯紝涓嶆尅娉曟湳"},
-	{"key": "cutall_add", "name": "閲戝垰", "glyph": "鍒?, "v": 6, "text": "鍏ㄤ激瀹冲噺鍏?+%d%%", "desc": "閲戞湪姘寸伀鍦熶竴姒傜‖鎵?},
-	{"key": "pen_flat", "name": "璐煶", "glyph": "璐?, "v": 6, "text": "鍏ㄧ郴绌块€?+%d", "desc": "绠′綘浠€涔堟姢浣擄紝鍏堝嚳涓礊"},
-	{"key": "dmgall_add", "name": "鍓戞剰", "glyph": "鎰?, "v": 10, "text": "鍏ㄧ郴澧炲箙 +%d%%", "desc": "涓冪浼ゅ涓€璧锋定"},
-	{"key": "mp_add", "name": "钘忔皵", "glyph": "姘?, "v": 60, "text": "鍐呭姏涓婇檺 +%d", "desc": "鍔熸硶鏀惧緱鏇村嫟"},
-	{"key": "gold_pct", "name": "鑱氳储", "glyph": "璐?, "v": 20, "text": "鏂囬挶 +%d%%", "desc": "鏉€寰楄秺澶氾紝鏉ュ緱瓒婂"},
-	{"key": "killheal", "name": "琛€鎴?, "glyph": "琛€", "v": 3, "text": "鍑绘潃鍥炶 +%d%%", "desc": "瓒婃潃瓒婄簿绁?},
+	{"key": "atk_pct", "name": "破军", "glyph": "攻", "v": 15, "text": "攻击 +%d%%", "desc": "刀锋更利，出手见血"},
+	{"key": "hp_pct", "name": "铁骨", "glyph": "骨", "v": 20, "text": "气血上限 +%d%%", "desc": "皮糙肉厚，扛得住"},
+	{"key": "aspd_pct", "name": "疾风", "glyph": "疾", "v": 12, "text": "攻速 +%d%%", "desc": "抢在半招之前"},
+	{"key": "crit_add", "name": "会心", "glyph": "会", "v": 8, "text": "暴击 +%d%%", "desc": "专挑要害招呼"},
+	{"key": "critdmg_add", "name": "锐意", "glyph": "锐", "v": 25, "text": "暴击伤害 +%d%%", "desc": "暴击时更疼"},
+	{"key": "cut_add", "name": "玄甲", "glyph": "甲", "v": 8, "text": "护甲 +%d%%", "desc": "只挡刀剑，不挡法术"},
+	{"key": "cutall_add", "name": "金刚", "glyph": "刚", "v": 6, "text": "全伤害减免 +%d%%", "desc": "金木水火土一概硬扛"},
+	{"key": "pen_flat", "name": "贯石", "glyph": "贯", "v": 6, "text": "全系穿透 +%d", "desc": "管你什么护体，先凿个洞"},
+	{"key": "dmgall_add", "name": "剑意", "glyph": "意", "v": 10, "text": "全系增幅 +%d%%", "desc": "七种伤害一起涨"},
+	{"key": "mp_add", "name": "藏气", "glyph": "气", "v": 60, "text": "内力上限 +%d", "desc": "功法放得更勤"},
+	{"key": "gold_pct", "name": "聚财", "glyph": "财", "v": 20, "text": "文钱 +%d%%", "desc": "杀得越多，来得越多"},
+	{"key": "killheal", "name": "血战", "glyph": "血", "v": 3, "text": "击杀回血 +%d%%", "desc": "越杀越精神"},
 ]
 
-# 杩涢樁椤碉細**鐓ф娊鍗＄殑鎺掔増**鈥斺€斾笁寮犲崱鐩存帴娴湪鎴樺満涓婏紙涓嶉伄鏆椼€佷笉鏆傚仠锛夛紝
-#   鎸夐挳鍙湁涓や釜锛氾蓟鍒锋柊 路 N 娆★冀锛堟鏁板瀷锛岀敤涓€娆″皯涓€娆★級鍜岋蓟闅愯棌锛姐€?func _build_str() -> void:
+# 进阶页：**照抽卡的排版**——三张卡直接浮在战场上（不遮暗、不暂停），
+#   按钮只有两个：［刷新 · N 次］（次数型，用一次少一次）和［隐藏］。
+func _build_str() -> void:
 	_str_layer = Control.new()
 	_str_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_str_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE     # 绌虹櫧澶勬斁琛岀粰鎴樺満
+	_str_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE     # 空白处放行给战场
 	_str_layer.visible = false
 	_str_layer.z_index = 21
 	add_child(_str_layer)
@@ -3175,8 +3362,8 @@ const AUG_POOL := [
 	ban.add_theme_stylebox_override("panel", bsb)
 	_str_layer.add_child(ban)
 	_breathe(ban)
-	_str_ban_lb = _lbl("杩涢樁", Vector2(0, 0), Vector2(260, 42), 20, Color(0.97, 0.90, 0.74), ban, HORIZONTAL_ALIGNMENT_CENTER)
-	_btn("闅愯棌", Rect2(620, 162, 72, 32), 17, Color(0.09, 0.08, 0.07, 0.98), GOLD, func(): _hide_aug_pick(), _str_layer)
+	_str_ban_lb = _lbl("进阶", Vector2(0, 0), Vector2(260, 42), 20, Color(0.97, 0.90, 0.74), ban, HORIZONTAL_ALIGNMENT_CENTER)
+	_btn("隐藏", Rect2(620, 162, 72, 32), 17, Color(0.09, 0.08, 0.07, 0.98), GOLD, func(): _hide_aug_pick(), _str_layer)
 	for i in 3:
 		var d := AugCard.new()
 		d.position = Vector2(30 + i * 220, 220)
@@ -3186,18 +3373,20 @@ const AUG_POOL := [
 		d.picked.connect(func() -> void: _on_aug_card(d))
 		_str_layer.add_child(d)
 		_aug_cards.append(d)
-	_aug_refresh_btn = _btn("鍒锋柊 路 0 娆?, Rect2(140, 540, 200, 54), 19,
+	_aug_refresh_btn = _btn("刷新 · 0 次", Rect2(140, 540, 200, 54), 19,
 		Color(0.09, 0.08, 0.07, 0.98), GOLD, func(): _on_aug_refresh(), _str_layer)
-	_btn("鏀惧純 +1 鍒锋柊", Rect2(360, 540, 200, 54), 19,
+	_btn("放弃 +1 刷新", Rect2(360, 540, 200, 54), 19,
 		Color(0.09, 0.08, 0.07, 0.98), Color(0.80, 0.62, 0.34), func(): _on_aug_abandon(), _str_layer)
 
 func _open_aug_pick() -> void:
 	if _run_over or not _str_pending or _str_layer == null:
 		return
 	if _draw_layer != null:
-		_draw_layer.visible = false                 # 鎶藉崱椤靛紑鐫€涓€骞舵敹鎺夛紝鍒彔鍦ㄤ竴璧?	_hide_trea()
+		_draw_layer.visible = false                 # 抽卡页开着一并收掉，别叠在一起
+	_hide_trea()
 	_str_round = maxi(1, _str_lv / STR_EVERY)
-	# 鍚屼竴鎵嬪彧鎺蜂竴娆★細鐐癸蓟闅愯棌锛藉叧浜嗗啀鐐癸蓟寮哄寲锛斤紝鐪嬪埌鐨勬槸鍚屼竴鎵嬶紙涓嶈兘鐧藉埛锛?	var invalidated := false
+	# 同一手只掷一次：点［隐藏］关了再点［强化］，看到的是同一手（不能白刷）
+	var invalidated := false
 	for card in _aug_cards:
 		if not card.o.is_empty() and not _aug_has_effect(str(card.o.get("key", ""))):
 			invalidated = true
@@ -3205,13 +3394,13 @@ func _open_aug_pick() -> void:
 		_aug_rolled_lv = _str_lv
 		_roll_aug()
 	if _str_ban_lb != null:
-		_str_ban_lb.text = "杩涢樁 路 绗?%d 绾? % _str_lv
+		_str_ban_lb.text = "进阶 · 第 %d 级" % _str_lv
 	_str_layer.visible = true
 	_str_layer.move_to_front()
 	_pop_aug_cards()
 	Aud.sfx("ui_open", -8.0)
 
-# 鎺蜂笁寮狅細鍝侀樁闅忚疆娆″崌锛堣壇鈫掔巹鈫掑湴鈫掑ぉ锛夛紝鏁板€?脳(1+0.4脳(杞?1))
+# 掷三张：品阶随轮次升（良→玄→地→天），数值 ×(1+0.4×(轮-1))
 func _aug_has_effect(key: String) -> bool:
 	if _core == null:
 		return false
@@ -3219,15 +3408,15 @@ func _aug_has_effect(key: String) -> bool:
 		"crit_add": return _core.attr_final("crit") < 0.75 - 0.000001
 		"critdmg_add": return _core.attr_final("cdmg") < 4.0 - 0.000001
 		"aspd_pct": return _core.attr_final("aspd") / float(_core.ATTR_BASE["aspd"]) < MAX_ASPD - 0.000001
-		"cut_add": return _core.type_field("鐗╃悊", "red_f") < 0.60 - 0.000001
+		"cut_add": return _core.type_field("物理", "red_f") < 0.60 - 0.000001
 		"cutall_add":
 			for type in _core.DMG_TYPES:
-				if type != "鐪熷疄" and _core.type_field(type, "red_f") < 0.60 - 0.000001:
+				if type != "真实" and _core.type_field(type, "red_f") < 0.60 - 0.000001:
 					return true
 			return false
 		"pen_flat", "dmgall_add":
 			for type in _core.DMG_TYPES:
-				if type == "鐪熷疄": continue
+				if type == "真实": continue
 				if key == "pen_flat" and _core.type_effective_field(type, "pen_f") < 0.60 - 0.000001: return true
 				if key == "dmgall_add" and _core.type_amp(type) < 2.0 - 0.000001: return true
 			return false
@@ -3253,11 +3442,11 @@ func _roll_aug() -> void:
 			ac.glyph = str(o["glyph"])
 			ac.effect = str(o["text"]) % int(ac.oval)
 			ac.desc = str(o["desc"])
-			if str(o["key"]) == "crit_add": ac.desc += " 路 鏈€楂?5%"
-			if str(o["key"]) == "critdmg_add": ac.desc += " 路 鏈€楂?00%"
-			if str(o["key"]) in ["cut_add", "cutall_add"]: ac.desc += " 路 鍚勭被鍑忎激鏈€楂?0%"
-			if str(o["key"]) == "pen_flat": ac.desc += " 路 鍚勭郴鍥哄畾绌块€忔渶楂?0%"
-			if str(o["key"]) == "dmgall_add": ac.desc += " 路 鍚勭郴鏈€缁堝骞呮渶楂?00%"
+			if str(o["key"]) == "crit_add": ac.desc += " · 最高75%"
+			if str(o["key"]) == "critdmg_add": ac.desc += " · 最高400%"
+			if str(o["key"]) in ["cut_add", "cutall_add"]: ac.desc += " · 各类减伤最高60%"
+			if str(o["key"]) == "pen_flat": ac.desc += " · 各系固定穿透最高60%"
+			if str(o["key"]) == "dmgall_add": ac.desc += " · 各系最终增幅最高200%"
 			ac.quality = quality
 			ac.visible = true
 			ac.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -3268,14 +3457,14 @@ func _roll_aug() -> void:
 
 func _refresh_aug_btn() -> void:
 	if _aug_refresh_btn != null:
-		_aug_refresh_btn.text = "鍒锋柊 路 %d 娆? % maxi(0, _aug_reroll)
+		_aug_refresh_btn.text = "刷新 · %d 次" % maxi(0, _aug_reroll)
 
-# 鍒锋柊锛氭鏁板瀷锛堜笉鑺辨枃閽憋紝浣嗙敤涓€娆″皯涓€娆★級
+# 刷新：次数型（不花文钱，但用一次少一次）
 func _on_aug_refresh() -> void:
 	if _run_over or not _str_pending or _str_layer == null or not _str_layer.visible:
 		return
 	if _aug_reroll <= 0:
-		_toast("鍒锋柊娆℃暟鐢ㄥ畬浜?)
+		_toast("刷新次数用完了")
 		return
 	if not _rr_free():
 		_aug_reroll -= 1
@@ -3283,7 +3472,8 @@ func _on_aug_refresh() -> void:
 	_pop_aug_cards()
 	Aud.sfx("ui_click", -8.0)
 
-# 鏀惧純锛氳繖涓€杞繘闃朵笉瑕佷簡锛屾崲 1 娆″埛鏂帮紙鍒锋柊娆℃暟鏄敀鐫€鐨勶紝涓嬫杩涢樁鑳界敤锛?func _on_aug_abandon() -> void:
+# 放弃：这一轮进阶不要了，换 1 次刷新（刷新次数是攒着的，下次进阶能用）
+func _on_aug_abandon() -> void:
 	if _run_over or not _str_pending or _str_layer == null or not _str_layer.visible:
 		return
 	_str_pending = false
@@ -3291,10 +3481,11 @@ func _on_aug_refresh() -> void:
 	_hide_aug_pick()
 	_refresh_str_tile()
 	_refresh_aug_btn()
-	_toast("鏀惧純杩涢樁 路 鍒锋柊 +1锛堢幇鏈?%d 娆★級" % _aug_reroll)
+	_toast("放弃进阶 · 刷新 +1（现有 %d 次）" % _aug_reroll)
 	Aud.sfx("ui_back", -8.0)
 
-# 涓夊紶鍗′竴璧峰脊鍑烘潵锛堣窡鎶藉崱涓€鏍风殑鎵嬫劅锛?func _pop_aug_cards() -> void:
+# 三张卡一起弹出来（跟抽卡一样的手感）
+func _pop_aug_cards() -> void:
 	for i in _aug_cards.size():
 		var card: AugCard = _aug_cards[i]
 		var base: Vector2 = card.get_meta("base", Vector2(30 + i * 220, 220))
@@ -3316,105 +3507,113 @@ func _pick_aug(o: Dictionary, val: int) -> void:
 		return
 	if not _aug_has_effect(str(o.get("key", ""))):
 		_roll_aug()
-		_toast("灞炴€у凡杈句笂闄愶紝宸叉洿鏂拌繘闃跺€欓€?)
+		_toast("属性已达上限，已更新进阶候选")
 		return
 	_str_pending = false
 	_choice_fx("aug")
 	_apply_aug(str(o["key"]), float(val))
 	_hide_aug_pick()
-	_toast("杩涢樁 路 %s锛?s锛? % [str(o["name"]), str(o["text"]) % val])
+	_toast("进阶 · %s（%s）" % [str(o["name"]), str(o["text"]) % val])
 	Aud.sfx("levelup", -6.0)
 	_refresh_str_tile()
 
 # ============================================================
-# ---------------- 瀹濈墿锛坴8锛?---------------
+# ---------------- 宝物（v8）----------------
 # ============================================================
-# 瀹濈墿 = 鍗＄粍缇佺粖锛坴9锛岀敤鎴凤細"瀹濈墿鏆傚畾涓哄崱缁勭緛缁婏紝鏈夎繘搴︼紱鍑戦綈 xx 鍜?xx 缁勫悎鍗★紝鏁堟灉澧炲箙锛涘疂鐗╃畻娑堣€楋紝涓嶉檺浠舵暟"锛?#   路 涓€寮犵緛缁?= 瑕?3 涓粍鍚堬紙濡?涓夐攱 / 閾佸 / 鐢熸満锛夛紝鍑戦綈 3/3 鈫?鏁堟灉姘镐箙鐢熸晥
-#   路 杩涘害鎸?杩欎竴灞€宸茬粡婵€娲昏繃鐨勭粍鍚?绠楋紙_combined + _ancestor_combos锛屾縺娲昏繃鐨勪笉浼氬け鏁堬級
-#   路 **鎴愮殑閭ｄ竴鍒荤緛缁婂氨娑堣€楁帀**锛堜粠韬笂鍒犳帀锛夆啋 鎵€浠ヤ笉鍗犳牸瀛愩€佷篃娌℃湁鎼哄甫涓婇檺
-#   路 鍝佽川闅忔尝鏁板崌锛堣壇/鐜?鍦?澶╋級锛屽彧鏄妸鏁堟灉鏁板€兼斁澶?脳1 / 1.5 / 2 / 3
-#   缇佺粖鐨勬晥鏋?*鍙兘鏄?瀵瑰簲缁勫悎鐨勬晥鏋滃骞?**锛堢敤鎴峰彛寰勶級锛?#   鍑戦綈 3 涓粍鍚?鈫?杩欎笁濂楃粍鍚堜互鍚庢瘡娆¤Е鍙戠殑鏁堟灉 脳(1+boost%)
-#   锛堟瘮濡傘€屽紑闂ㄤ笁寮忋€嶆垚 鈫?涓夐攱 姣忔尝鏀诲嚮+1 鍙?+1.4銆侀搧澹?闃插尽+1 鍙?+1.4銆佺敓鏈?姘旇+10 鍙?+14锛?# 鍗＄粍鐨?*涓夊ぇ绾?*锛堣璁＄銆婂洶鍏絖璇风涓庡浼犲崱缁刜璁捐绋裤€嬄у叓路鍏紝2026-11-09 瀹氾級
+# 宝物 = 卡组羁绊（v9，用户："宝物暂定为卡组羁绊，有进度；凑齐 xx 和 xx 组合卡，效果增幅；宝物算消耗，不限件数"）
+#   · 一张羁绊 = 要 3 个组合（如 三锋 / 铁壁 / 生机），凑齐 3/3 → 效果永久生效
+#   · 进度按"这一局已经激活过的组合"算（_combined + _ancestor_combos，激活过的不会失效）
+#   · **成的那一刻羁绊就消耗掉**（从身上删掉）→ 所以不占格子、也没有携带上限
+#   · 品质随波数升（良/玄/地/天），只是把效果数值放大 ×1 / 1.5 / 2 / 3
+#   羁绊的效果**只能是"对应组合的效果增幅"**（用户口径）：
+#   凑齐 3 个组合 → 这三套组合以后每次触发的效果 ×(1+boost%)
+#   （比如「开门三式」成 → 三锋 每波攻击+1 变 +1.4、铁壁 防御+1 变 +1.4、生机 气血+10 变 +14）
+# 卡组的**三大线**（设计稿《困兽_请神与家传卡组_设计稿》§八·八，2026-11-09 定）
 const CARD_LINES := {
-	"鎴愰暱绾?: ["atk", "def", "hp", "mp"],
-	"缁忔祹绾?: ["gold", "crystal", "exp", "peril", "bounty"],
-	"鍗遍€旂嚎": ["swarm"],
+	"成长线": ["atk", "def", "hp", "mp"],
+	"经济线": ["gold", "crystal", "exp", "peril", "bounty"],
+	"危途线": ["swarm"],
 }
 
-# 绯?鈫?涓枃鍚嶏紙灏忕緛缁婄殑鍗￠潰/璇︽儏瑕佺敤锛?const SERIES_CN := {
-	"atk": "鏀诲嚮", "def": "闃插尽", "hp": "姘旇", "mp": "鍐呭姏",
-	"gold": "鏂囬挶", "crystal": "鐏垫櫠", "exp": "鏉€鏁屾暟", "peril": "鎸戞垬",
-	"bounty": "鏀剁泭", "swarm": "澧炴€?,
+# 系 → 中文名（小羁绊的卡面/详情要用）
+const SERIES_CN := {
+	"atk": "攻击", "def": "防御", "hp": "气血", "mp": "内力",
+	"gold": "文钱", "crystal": "灵晶", "exp": "杀敌数", "peril": "挑战",
+	"bounty": "收益", "swarm": "增怪",
 }
 
 const BOND_POOL := [
-	# ============ 鍥涙潯缇佺粖閾?============
-	#   姣忔鍙粠銆屽凡瑙ｉ攣銆嶇殑缇佺粖閲屾娊涓夊紶锛涚粨鎴愪竴鏉?鈫?瀹冪殑涓嬩竴鏉″叆姹狅紙璺熷崱鐗岀殑鍏ュ彛鍗′竴涓璺級
-	#   鈶?鎴愰暱閾?鈶?缁忔祹閾?鈶?鍗遍€旈摼 鈶?瀹朵紶閾?	{"name": "鏀婚槻", "glyph": "鏀?, "need_series": ["atk", "def"], "boost": 30, "desc": "鎴愰暱閾?路 1", "next": "鍐呰"},
-	{"name": "鍐呰", "glyph": "鍐?, "need_series": ["hp", "mp"], "boost": 30, "desc": "鎴愰暱閾?路 2", "next": "琛€鍕?},
-	{"name": "琛€鍕?, "glyph": "鍕?, "need_series": ["atk", "hp"], "boost": 30, "desc": "鎴愰暱閾?路 3", "next": "瀹堜腑"},
-	{"name": "瀹堜腑", "glyph": "瀹?, "need_series": ["def", "mp"], "boost": 30, "desc": "鎴愰暱閾?路 4", "next": "鏍瑰熀"},
-	{"name": "鏍瑰熀", "glyph": "鏍?, "line": "鎴愰暱绾?, "need": ["涓夐攱", "閾佸", "鐢熸満", "鍑濇伅"], "boost": 50,
-		"lbl": "鎴愰暱绾?+%d%%", "desc": "鎴愰暱閾?路 缁?路 鏀?闃?琛€/鍐?鍥涚郴鍒濋樁"},
+	# ============ 四条羁绊链 ============
+	#   每次只从「已解锁」的羁绊里抽三张；结成一条 → 它的下一条入池（跟卡牌的入口卡一个套路）
+	#   ① 成长链 ② 经济链 ③ 危途链 ④ 家传链
+	{"name": "攻防", "glyph": "攻", "need_series": ["atk", "def"], "boost": 30, "desc": "成长链 · 1", "next": "内视"},
+	{"name": "内视", "glyph": "内", "need_series": ["hp", "mp"], "boost": 30, "desc": "成长链 · 2", "next": "血勇"},
+	{"name": "血勇", "glyph": "勇", "need_series": ["atk", "hp"], "boost": 30, "desc": "成长链 · 3", "next": "守中"},
+	{"name": "守中", "glyph": "守", "need_series": ["def", "mp"], "boost": 30, "desc": "成长链 · 4", "next": "根基"},
+	{"name": "根基", "glyph": "根", "line": "成长线", "need": ["三锋", "铁壁", "生机", "凝息"], "boost": 50,
+		"lbl": "成长线 +%d%%", "desc": "成长链 · 终 · 攻/防/血/内 四系初阶"},
 
-	{"name": "閲戦摱", "glyph": "閲?, "need_series": ["gold", "crystal"], "boost": 30, "desc": "缁忔祹閾?路 1", "next": "鎮祻"},
-	{"name": "鎮祻", "glyph": "璧?, "need_series": ["exp", "peril"], "boost": 30, "desc": "缁忔祹閾?路 2", "next": "鐢熻储"},
-	{"name": "鐢熻储", "glyph": "鐢?, "need_series": ["bounty", "gold"], "boost": 30, "desc": "缁忔祹閾?路 3", "next": "璐㈤櫓"},
-	{"name": "璐㈤櫓", "glyph": "闄?, "need_series": ["peril", "crystal"], "boost": 30, "desc": "缁忔祹閾?路 4", "next": "鍚嶅埄"},
-	{"name": "鍚嶅埄", "glyph": "鍚?, "need_series": ["atk", "gold"], "boost": 30, "desc": "缁忔祹閾?路 5", "next": "寮€婧?},
-	{"name": "寮€婧?, "glyph": "婧?, "line": "缁忔祹绾?, "need": ["鑱氳储", "鐏垫秾", "濂嬭捣", "璧忛噾", "杩涜处"], "boost": 50,
-		"lbl": "缁忔祹绾?+%d%%", "desc": "缁忔祹閾?路 缁?路 鏂囬挶/鐏垫櫠/鏉€鏁?鎸戞垬/鏀剁泭 鍒濋樁"},
+	{"name": "金银", "glyph": "金", "need_series": ["gold", "crystal"], "boost": 30, "desc": "经济链 · 1", "next": "悬赏"},
+	{"name": "悬赏", "glyph": "赏", "need_series": ["exp", "peril"], "boost": 30, "desc": "经济链 · 2", "next": "生财"},
+	{"name": "生财", "glyph": "生", "need_series": ["bounty", "gold"], "boost": 30, "desc": "经济链 · 3", "next": "财险"},
+	{"name": "财险", "glyph": "险", "need_series": ["peril", "crystal"], "boost": 30, "desc": "经济链 · 4", "next": "名利"},
+	{"name": "名利", "glyph": "名", "need_series": ["atk", "gold"], "boost": 30, "desc": "经济链 · 5", "next": "开源"},
+	{"name": "开源", "glyph": "源", "line": "经济线", "need": ["聚财", "灵涌", "奋起", "赏金", "进账"], "boost": 50,
+		"lbl": "经济线 +%d%%", "desc": "经济链 · 终 · 文钱/灵晶/杀敌/挑战/收益 初阶"},
 
-	{"name": "鍏绘垬", "glyph": "鎴?, "need_series": ["hp", "swarm"], "boost": 30, "desc": "鍗遍€旈摼 路 1", "next": "鍗遍€?},
-	{"name": "鍗遍€?, "glyph": "鍗?, "line": "鍗遍€旂嚎", "need": ["铚傛嫢", "娼秾", "铚傝捣", "鍊惧发"], "boost": 50,
-		"lbl": "鍗遍€旂嚎 +%d%%", "desc": "鍗遍€旈摼 路 缁?路 澧炴€洓闃跺叏閫?},
+	{"name": "养战", "glyph": "战", "need_series": ["hp", "swarm"], "boost": 30, "desc": "危途链 · 1", "next": "危途"},
+	{"name": "危途", "glyph": "危", "line": "危途线", "need": ["蜂拥", "潮涌", "蜂起", "倾巢"], "boost": 50,
+		"lbl": "危途线 +%d%%", "desc": "危途链 · 终 · 增怪四阶全通"},
 
-	{"name": "鍓戞鍚屾簮", "glyph": "鍓?, "need": ["鍓戝娍", "鍐叉挒"], "boost": 40, "lbl": "瀹朵紶鎶€鑳?+%d%%",
-		"desc": "瀹朵紶閾?路 1 路 涓昏锛嬫粴鍦伴緳", "next": "鍚屾皵杩炴灊"},
-	{"name": "鍚屾皵杩炴灊", "glyph": "楦?, "need": ["鍓戝娍", "椋炲垉"], "boost": 40, "lbl": "瀹朵紶鎶€鑳?+%d%%",
-		"desc": "瀹朵紶閾?路 2 路 涓昏锛嬭嫃闈掗妇", "next": "甯備簳涓変緺"},
-	{"name": "甯備簳涓変緺", "glyph": "渚?, "need": ["鎵嬪揩", "鍐叉挒", "椋炲垉"], "boost": 30, "lbl": "瀹朵紶鎶€鑳?+%d%%",
-		"desc": "瀹朵紶閾?路 3 路 灏忎篂鍎匡紜婊氬湴榫欙紜鑻忛潚楦?},
+	{"name": "剑棍同源", "glyph": "剑", "need": ["剑势", "冲撞"], "boost": 40, "lbl": "家传技能 +%d%%",
+		"desc": "家传链 · 1 · 主角＋滚地龙", "next": "同气连枝"},
+	{"name": "同气连枝", "glyph": "鸾", "need": ["剑势", "飞刃"], "boost": 40, "lbl": "家传技能 +%d%%",
+		"desc": "家传链 · 2 · 主角＋苏青鸾", "next": "市井三侠"},
+	{"name": "市井三侠", "glyph": "侠", "need": ["手快", "冲撞", "飞刃"], "boost": 30, "lbl": "家传技能 +%d%%",
+		"desc": "家传链 · 3 · 小乞儿＋滚地龙＋苏青鸾"},
 ]
 
-# 姣忔潯閾剧殑绗竴鏉★紙寮€灞€灏卞湪姹犲瓙閲岋級
-const BOND_ENTRIES := ["鏀婚槻", "閲戦摱", "鍏绘垬", "鍓戞鍚屾簮"]
+# 每条链的第一条（开局就在池子里）
+const BOND_ENTRIES := ["攻防", "金银", "养战", "剑棍同源"]
 
 # ============================================================
-# 绋€鏈夊崟鍗★紙涓嶆垚濂椼€佷笉鍗犵緛缁婇摼銆佹嬁鍒板嵆鐢紝鏁堟灉鍙仛鏁板€硷級
-#   鍥涚被锛氣憼 宸ㄩ鐏垫櫠涓€娆℃€э紙涔嬪悗鐏垫櫠鏀跺叆褰掗浂锛夆憽 鏂囬挶鎹㈢伒鏅?#        鈶?闄愭椂 buff 鈶?鐩存帴缁欒祫婧愶紙鏂囬挶 / 鐏垫櫠 / 鏉€鏁岋紝灏忎腑澶э級
+# 稀有单卡（不成套、不占羁绊链、拿到即用，效果只做数值）
+#   四类：① 巨额灵晶一次性（之后灵晶收入归零）② 文钱换灵晶
+#        ③ 限时 buff ④ 直接给资源（文钱 / 灵晶 / 杀敌，小中大）
 # ============================================================
 const RARE_POOL := [
-	# 鐗规畩 3
-	{"name": "鍊惧泭", "glyph": "鏅?, "rare": true, "kind": "crystal_burst", "v": 2000,
-		"effect": "鐏垫櫠 +2000", "desc": "绋€鏈?路 涔嬪悗鐏垫櫠鏀跺叆褰掗浂"},
-	{"name": "鎶橀挶", "glyph": "鎹?, "rare": true, "kind": "convert", "v": 10, "cap": 50,
-		"effect": "鏂囬挶 10:1 鎹㈢伒鏅?, "desc": "绋€鏈?路 鏈€澶氭崲 50 鐏垫櫠"},
-	{"name": "鐙傝", "glyph": "鐙?, "rare": true, "kind": "buff", "stat": "atk_pct", "v": 60, "dur": 30,
-		"effect": "30 绉?鏀诲嚮 +60%", "desc": "绋€鏈?路 鍗冲緱鍗崇敤"},
-	# 璧勬簮 12锛堜笁绫?脳 鍥涙。锛?	{"name": "灏忔櫠鍥?, "glyph": "灏?, "rare": true, "kind": "res", "res": "crystal", "v": 40, "effect": "鐏垫櫠 +40", "desc": "绋€鏈?路 鐏垫櫠"},
-	{"name": "涓櫠鍥?, "glyph": "涓?, "rare": true, "kind": "res", "res": "crystal", "v": 80, "effect": "鐏垫櫠 +80", "desc": "绋€鏈?路 鐏垫櫠"},
-	{"name": "澶ф櫠鍥?, "glyph": "澶?, "rare": true, "kind": "res", "res": "crystal", "v": 160, "effect": "鐏垫櫠 +160", "desc": "绋€鏈?路 鐏垫櫠"},
-	{"name": "鏅跺北", "glyph": "灞?, "rare": true, "kind": "res", "res": "crystal", "v": 320, "effect": "鐏垫櫠 +320", "desc": "绋€鏈?路 鐏垫櫠"},
-	{"name": "灏忛挶琚?, "glyph": "灏?, "rare": true, "kind": "res", "res": "wen", "v": 500, "effect": "鏂囬挶 +500", "desc": "绋€鏈?路 鏂囬挶"},
-	{"name": "涓挶琚?, "glyph": "涓?, "rare": true, "kind": "res", "res": "wen", "v": 1000, "effect": "鏂囬挶 +1000", "desc": "绋€鏈?路 鏂囬挶"},
-	{"name": "澶ч挶琚?, "glyph": "澶?, "rare": true, "kind": "res", "res": "wen", "v": 2000, "effect": "鏂囬挶 +2000", "desc": "绋€鏈?路 鏂囬挶"},
-	{"name": "閲戝簱", "glyph": "搴?, "rare": true, "kind": "res", "res": "wen", "v": 4000, "effect": "鏂囬挶 +4000", "desc": "绋€鏈?路 鏂囬挶"},
-	{"name": "灏忔潃浠?, "glyph": "灏?, "rare": true, "kind": "res", "res": "kill", "v": 60, "effect": "鏉€鏁?+60", "desc": "绋€鏈?路 鏉€鏁?},
-	{"name": "涓潃浠?, "glyph": "涓?, "rare": true, "kind": "res", "res": "kill", "v": 120, "effect": "鏉€鏁?+120", "desc": "绋€鏈?路 鏉€鏁?},
-	{"name": "澶ф潃浠?, "glyph": "澶?, "rare": true, "kind": "res", "res": "kill", "v": 240, "effect": "鏉€鏁?+240", "desc": "绋€鏈?路 鏉€鏁?},
-	{"name": "灞犳埉浠?, "glyph": "灞?, "rare": true, "kind": "res", "res": "kill", "v": 480, "effect": "鏉€鏁?+480", "desc": "绋€鏈?路 鏉€鏁?},
-	# 娣峰悎 2
-	{"name": "鍙屾敹", "glyph": "鍙?, "rare": true, "kind": "mix", "wen": 1000, "crystal": 80,
-		"effect": "鏂囬挶 +1000 路 鐏垫櫠 +80", "desc": "绋€鏈?路 娣峰悎"},
-	{"name": "涓板勾", "glyph": "涓?, "rare": true, "kind": "mix", "wen": 1500, "crystal": 120, "kill": 120,
-		"effect": "閽?1500 路 鏅?120 路 鏉€+120", "desc": "绋€鏈?路 娣峰悎"},
+	# 特殊 3
+	{"name": "倾囊", "glyph": "晶", "rare": true, "kind": "crystal_burst", "v": 2000,
+		"effect": "灵晶 +2000", "desc": "稀有 · 之后灵晶收入归零"},
+	{"name": "折钱", "glyph": "换", "rare": true, "kind": "convert", "v": 10, "cap": 50,
+		"effect": "文钱 10:1 换灵晶", "desc": "稀有 · 最多换 50 灵晶"},
+	{"name": "狂血", "glyph": "狂", "rare": true, "kind": "buff", "stat": "atk_pct", "v": 60, "dur": 30,
+		"effect": "30 秒 攻击 +60%", "desc": "稀有 · 即得即用"},
+	# 资源 12（三类 × 四档）
+	{"name": "小晶囊", "glyph": "小", "rare": true, "kind": "res", "res": "crystal", "v": 40, "effect": "灵晶 +40", "desc": "稀有 · 灵晶"},
+	{"name": "中晶囊", "glyph": "中", "rare": true, "kind": "res", "res": "crystal", "v": 80, "effect": "灵晶 +80", "desc": "稀有 · 灵晶"},
+	{"name": "大晶囊", "glyph": "大", "rare": true, "kind": "res", "res": "crystal", "v": 160, "effect": "灵晶 +160", "desc": "稀有 · 灵晶"},
+	{"name": "晶山", "glyph": "山", "rare": true, "kind": "res", "res": "crystal", "v": 320, "effect": "灵晶 +320", "desc": "稀有 · 灵晶"},
+	{"name": "小钱袋", "glyph": "小", "rare": true, "kind": "res", "res": "wen", "v": 500, "effect": "文钱 +500", "desc": "稀有 · 文钱"},
+	{"name": "中钱袋", "glyph": "中", "rare": true, "kind": "res", "res": "wen", "v": 1000, "effect": "文钱 +1000", "desc": "稀有 · 文钱"},
+	{"name": "大钱袋", "glyph": "大", "rare": true, "kind": "res", "res": "wen", "v": 2000, "effect": "文钱 +2000", "desc": "稀有 · 文钱"},
+	{"name": "金库", "glyph": "库", "rare": true, "kind": "res", "res": "wen", "v": 4000, "effect": "文钱 +4000", "desc": "稀有 · 文钱"},
+	{"name": "小杀令", "glyph": "小", "rare": true, "kind": "res", "res": "kill", "v": 60, "effect": "杀敌 +60", "desc": "稀有 · 杀敌"},
+	{"name": "中杀令", "glyph": "中", "rare": true, "kind": "res", "res": "kill", "v": 120, "effect": "杀敌 +120", "desc": "稀有 · 杀敌"},
+	{"name": "大杀令", "glyph": "大", "rare": true, "kind": "res", "res": "kill", "v": 240, "effect": "杀敌 +240", "desc": "稀有 · 杀敌"},
+	{"name": "屠戮令", "glyph": "屠", "rare": true, "kind": "res", "res": "kill", "v": 480, "effect": "杀敌 +480", "desc": "稀有 · 杀敌"},
+	# 混合 2
+	{"name": "双收", "glyph": "双", "rare": true, "kind": "mix", "wen": 1000, "crystal": 80,
+		"effect": "文钱 +1000 · 灵晶 +80", "desc": "稀有 · 混合"},
+	{"name": "丰年", "glyph": "丰", "rare": true, "kind": "mix", "wen": 1500, "crystal": 120, "kill": 120,
+		"effect": "钱+1500 · 晶+120 · 杀+120", "desc": "稀有 · 混合"},
 ]
 
 
-# 绋€鏈夊崟鍗″嚭鐜版鐜囷紙姣忎竴鎵嬩笁寮犻噷锛?const RARE_CHANCE := 0.30
+# 稀有单卡出现概率（每一手三张里）
+const RARE_CHANCE := 0.30
 
-# 瀹濈墿椤碉細鍜屾娊鍗?杩涢樁鍚屼竴濂楁帓鐗堬紝鎸夐挳涓変釜锛氬埛鏂?路 N 娆?/ 闅愯棌 / 鏀惧純 +1 鍒锋柊
+# 宝物页：和抽卡/进阶同一套排版，按钮三个：刷新 · N 次 / 隐藏 / 放弃 +1 刷新
 func _build_trea() -> void:
 	_trea_layer = Control.new()
 	_trea_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -3433,8 +3632,8 @@ func _build_trea() -> void:
 	ban.add_theme_stylebox_override("panel", bsb)
 	_trea_layer.add_child(ban)
 	_breathe(ban)
-	_lbl("瀹濈墿 路 鎷╀竴缇佺粖", Vector2(0, 0), Vector2(260, 42), 20, Color(0.97, 0.90, 0.74), ban, HORIZONTAL_ALIGNMENT_CENTER)
-	_btn("闅愯棌", Rect2(620, 162, 72, 32), 17, Color(0.09, 0.08, 0.07, 0.98), GOLD, func(): _hide_trea(), _trea_layer)
+	_lbl("宝物 · 择一羁绊", Vector2(0, 0), Vector2(260, 42), 20, Color(0.97, 0.90, 0.74), ban, HORIZONTAL_ALIGNMENT_CENTER)
+	_btn("隐藏", Rect2(620, 162, 72, 32), 17, Color(0.09, 0.08, 0.07, 0.98), GOLD, func(): _hide_trea(), _trea_layer)
 	for i in 3:
 		var d := AugCard.new()
 		d.position = Vector2(30 + i * 220, 220)
@@ -3444,12 +3643,13 @@ func _build_trea() -> void:
 		d.picked.connect(func() -> void: _on_trea_card(d))
 		_trea_layer.add_child(d)
 		_trea_cards.append(d)
-	_trea_refresh_btn = _btn("鍒锋柊 路 0 娆?, Rect2(140, 540, 200, 54), 19,
+	_trea_refresh_btn = _btn("刷新 · 0 次", Rect2(140, 540, 200, 54), 19,
 		Color(0.09, 0.08, 0.07, 0.98), GOLD, func(): _on_trea_refresh(), _trea_layer)
-	_btn("鏀惧純 +1 鍒锋柊", Rect2(360, 540, 200, 54), 19,
+	_btn("放弃 +1 刷新", Rect2(360, 540, 200, 54), 19,
 		Color(0.09, 0.08, 0.07, 0.98), Color(0.80, 0.62, 0.34), func(): _on_trea_abandon(), _trea_layer)
 
-# 鍝佽川闅忔尝鏁板崌锛?-2 鑹?路 3 鐜?路 4-5 鍦?路 6+ 澶?func _trea_quality() -> int:
+# 品质随波数升：1-2 良 · 3 玄 · 4-5 地 · 6+ 天
+func _trea_quality() -> int:
 	var w := 1
 	if _core != null:
 		w = int(_core.wave)
@@ -3464,7 +3664,7 @@ func _build_trea() -> void:
 func _refresh_trea_tile() -> void:
 	if _trea_tile == null:
 		return
-	var s := "寰呴€夌緛缁? if _trea_pending else "缇佺粖 %d" % _bonds.size()
+	var s := "待选羁绊" if _trea_pending else "羁绊 %d" % _bonds.size()
 	var hot := _trea_pending or _trea_charge > 0
 	if _trea_tile.sub != s or _trea_tile.hot != hot:
 		_trea_tile.sub = s
@@ -3472,7 +3672,7 @@ func _refresh_trea_tile() -> void:
 		_trea_tile.queue_redraw()
 	_trea_tile.badge = 1 if _trea_pending else maxi(0, _trea_charge)
 
-# 鐐癸蓟瀹濈墿锛斤細鏈変竴鎵嬫病閫夊氨鎺ョ潃鐪嬮偅涓€鎵嬶紱鍚﹀垯鑺辨帀涓€娆℃満浼氥€佹幏涓夊紶
+# 点［宝物］：有一手没选就接着看那一手；否则花掉一次机会、掷三张
 func _on_trea_tile() -> void:
 	if not LevelState.show_button("treasure"):
 		return
@@ -3480,10 +3680,10 @@ func _on_trea_tile() -> void:
 		_open_trea()
 		return
 	if _trea_charge <= 0:
-		_toast("杩樻病鏀掑埌瀹濈墿鏈轰細锛堟瘡娓呬竴娉?+1锛?)
+		_toast("还没攒到宝物机会（每清一波 +1）")
 		return
 	if _bond_pool().is_empty() and _rare_pool().is_empty():
-		_toast("鏈眬瀹濈墿宸叉娊绌?)
+		_toast("本局宝物已抽空")
 		return
 	_trea_charge -= 1
 	_trea_pending = true
@@ -3504,7 +3704,7 @@ func _open_trea() -> void:
 	_pop_trea_cards()
 	Aud.sfx("ui_open", -8.0)
 
-# 鐜板湪鑳芥娊鍒扮殑缇佺粖锛氬凡瑙ｉ攣 涓?杩樻病缁撹繃
+# 现在能抽到的羁绊：已解锁 且 还没结过
 func _bond_pool() -> Array:
 	var out: Array = []
 	for e_v in BOND_POOL:
@@ -3514,7 +3714,8 @@ func _bond_pool() -> Array:
 			out.append(e)
 	return out
 
-# 绋€鏈夊崟鍗℃睜锛氭娊鍒拌繃鐨勶紙鍞竴锛変笉鍐嶅嚭鐜?func _rare_pool() -> Array:
+# 稀有单卡池：抽到过的（唯一）不再出现
+func _rare_pool() -> Array:
 	var out: Array = []
 	for e_v in RARE_POOL:
 		var e: Dictionary = e_v
@@ -3527,7 +3728,7 @@ func _roll_trea() -> void:
 	var mult: float = [1.0, 1.5, 2.0, 3.0][clampi(q - 2, 0, 3)]
 	var bp: Array = _bond_pool()
 	var rp: Array = _rare_pool()
-	# 鏉€鏁?缁忛獙鐩稿叧缇佺粖浼樺厛锛氭偓璧忋€佸紑婧愶紙缁忔祹閾剧粓锛変互鍙婃弿杩伴噷甯︽潃鏁岀殑
+	# 杀敌/经验相关羁绊优先：悬赏、开源（经济链终）以及描述里带杀敌的
 	var kill_bonds: Array = []
 	var other_bonds: Array = []
 	for b_v in bp:
@@ -3537,7 +3738,7 @@ func _roll_trea() -> void:
 			if str(s_v) == "exp":
 				is_kill = true
 		var bn := str(b.get("name", ""))
-		if bn in ["鎮祻", "寮€婧?] or str(b.get("desc", "")).contains("鏉€鏁?):
+		if bn in ["悬赏", "开源"] or str(b.get("desc", "")).contains("杀敌"):
 			is_kill = true
 		if is_kill:
 			kill_bonds.append(b)
@@ -3556,7 +3757,7 @@ func _roll_trea() -> void:
 			continue
 		used[str(e["name"])] = true
 		picks.append(e)
-	# 绋€鏈夊崟鍗★細30% 姒傜巼濉炰竴寮狅紙鏈夌┖浣嶅氨琛ヤ綅锛屾病绌轰綅灏遍殢鏈洪《鎺変竴寮狅級
+	# 稀有单卡：30% 概率塞一张（有空位就补位，没空位就随机顶掉一张）
 	if not rp.is_empty() and randf() < RARE_CHANCE:
 		var r: Dictionary = rp[0]
 		if picks.size() < _trea_cards.size():
@@ -3564,7 +3765,7 @@ func _roll_trea() -> void:
 		else:
 			picks[randi() % picks.size()] = r
 		used[str(r["name"])] = true
-	# 涓ゆ睜鍏滃簳锛氱緛缁婁笉澶熶笁寮犲氨缁х画鐢ㄧ█鏈夎ˉ锛涘悓鍚嶄笉閲嶅
+	# 两池兜底：羁绊不够三张就继续用稀有补；同名不重复
 	for e_v2 in rp:
 		if picks.size() >= _trea_cards.size():
 			break
@@ -3584,26 +3785,26 @@ func _roll_trea() -> void:
 		c.title = str(o["name"])
 		c.glyph = str(o["glyph"])
 		if bool(o.get("rare", false)):
-			# 绋€鏈夊崟鍗★細鏁板€煎浐瀹氾紝涓嶅悆鍝佽川
+			# 稀有单卡：数值固定，不吃品质
 			c.oval = int(o.get("v", 0))
 			c.effect = str(o.get("effect", ""))
-			c.desc = str(o.get("desc", "绋€鏈夊崟鍗?))
+			c.desc = str(o.get("desc", "稀有单卡"))
 			c.quality = 5
 		else:
 			c.oval = int(round(float(o["boost"]) * mult))
 			if o.has("need_series"):
-				c.effect = "缁勫悎鏁堟灉 +%d%%" % int(c.oval)
-				c.desc = "闇€鍚堟垚 " + _series_pair_cn(o) + "锛堜换鎰忎竴闃讹級"
+				c.effect = "组合效果 +%d%%" % int(c.oval)
+				c.desc = "需合成 " + _series_pair_cn(o) + "（任意一阶）"
 			else:
-				c.effect = str(o.get("lbl", "缁勫悎鏁堟灉 +%d%%")) % int(c.oval)
-				c.desc = "闇€鍚堟垚 " + "路".join(PackedStringArray(o["need"]))
+				c.effect = str(o.get("lbl", "组合效果 +%d%%")) % int(c.oval)
+				c.desc = "需合成 " + "·".join(PackedStringArray(o["need"]))
 			c.quality = q
 		c.visible = true
 		c.mouse_filter = Control.MOUSE_FILTER_STOP
 		c.queue_redraw()
 	_refresh_trea_btn()
 
-# 鐏垫櫠涓€鍒囨敹鍏ョ殑鍞竴鍏ュ彛锛堛€屽€惧泭銆嶆妸 _crystal_lock 鎵撳紑鍚庯紝杩欓噷灏卞啀涔熶笉缁欙級
+# 灵晶一切收入的唯一入口（「倾囊」把 _crystal_lock 打开后，这里就再也不给）
 func _gain_crystal(n: int) -> void:
 	if n <= 0 or _crystal_lock:
 		return
@@ -3612,32 +3813,33 @@ func _gain_crystal(n: int) -> void:
 	_pulse_chip(_crystal_lb)
 	_spawn_fly(_hero_screen() + Vector2(0, -30), Vector2(273, 40), Color(0.52, 0.78, 0.88), 2)
 
-# 绋€鏈夊崟鍗★細鎷垮埌褰撳満缁撶畻锛屼笉杩涚緛缁?func _apply_rare(o: Dictionary) -> void:
+# 稀有单卡：拿到当场结算，不进羁绊
+func _apply_rare(o: Dictionary) -> void:
 	var kind := str(o.get("kind", "res"))
 	var v := int(o.get("v", 0))
 	match kind:
 		"crystal_burst":
-			_gain_crystal(v)                 # 鍏堢粰锛屽啀涓婇攣
+			_gain_crystal(v)                 # 先给，再上锁
 			_crystal_lock = true
 			_update_crystal()
-			_toast("绋€鏈?路 鐏垫櫠 +%d锛屾鍚庣伒鏅朵笉鍐嶅鍔? % v)
+			_toast("稀有 · 灵晶 +%d，此后灵晶不再增加" % v)
 		"convert":
 			if _crystal_lock:
-				_toast("鐏垫櫠宸查攣锛屾崲涓嶄簡")
+				_toast("灵晶已锁，换不了")
 				return
 			var rate := maxi(1, v)
 			var cap := int(o.get("cap", 50))
 			var spend := mini(_wen, rate * cap)
 			var got := int(spend / rate)
 			if got <= 0:
-				_toast("鏂囬挶涓嶅锛屾崲涓嶄簡")
+				_toast("文钱不够，换不了")
 				return
 			_wen -= spend
 			if _coin_lb != null:
 				_coin_lb.text = str(_wen)
 			_crystal += got
 			_update_crystal()
-			_toast("绋€鏈?路 %d 鏂囬挶鎹?%d 鐏垫櫠" % [spend, got])
+			_toast("稀有 · %d 文钱换 %d 灵晶" % [spend, got])
 		"buff":
 			_apply_rare_buff(o)
 		"mix":
@@ -3649,7 +3851,7 @@ func _gain_crystal(n: int) -> void:
 				if _kill_lb != null:
 					_kill_lb.text = str(_kills)
 				_add_exp(20 * kk)
-			_toast("绋€鏈?路 " + str(o.get("effect", "")))
+			_toast("稀有 · " + str(o.get("effect", "")))
 		_:
 			match str(o.get("res", "")):
 				"wen":
@@ -3661,12 +3863,13 @@ func _gain_crystal(n: int) -> void:
 					if _kill_lb != null:
 						_kill_lb.text = str(_kills)
 					_add_exp(20 * v)
-			_toast("绋€鏈?路 " + str(o.get("effect", "")))
+			_toast("稀有 · " + str(o.get("effect", "")))
 	Aud.sfx("levelup", -4.0)
 	_refresh_trea_tile()
 	_refresh_str_tile()
 
-# 闄愭椂 buff锛氬揩鐓т竴浠藉骞呭墠鐨勫浐瀹氭敾鍑伙紝鍒扮偣鍙Щ闄よ嚜韬繖涓€浠姐€?func _apply_rare_buff(o: Dictionary) -> void:
+# 限时 buff：快照一份增幅前的固定攻击，到点只移除自身这一份。
+func _apply_rare_buff(o: Dictionary) -> void:
 	if _run_over or _core == null:
 		return
 	var pct := float(o.get("v", 0)) / 100.0
@@ -3676,7 +3879,7 @@ func _gain_crystal(n: int) -> void:
 	_core.attr_add("atk", add)
 	_core.hero["atk"] = _core.attr_final("atk")
 	_rare_buffs.append({"raw_atk": add, "t": dur})
-	_toast("绋€鏈?路 鏀诲嚮 +%d%%锛?d 绉掞級" % [int(o.get("v", 0)), int(dur)])
+	_toast("稀有 · 攻击 +%d%%（%d 秒）" % [int(o.get("v", 0)), int(dur)])
 
 func _tick_rare_buffs(dt: float) -> void:
 	if _run_over or _rare_buffs.is_empty() or _core == null or dt <= 0.0:
@@ -3691,7 +3894,7 @@ func _tick_rare_buffs(dt: float) -> void:
 
 func _refresh_trea_btn() -> void:
 	if _trea_refresh_btn != null:
-		_trea_refresh_btn.text = "鍒锋柊 路 %d 娆? % maxi(0, _trea_reroll)
+		_trea_refresh_btn.text = "刷新 · %d 次" % maxi(0, _trea_reroll)
 
 func _pop_trea_cards() -> void:
 	for i in _trea_cards.size():
@@ -3718,31 +3921,33 @@ func _pick_trea(o: Dictionary, val: int, close_hand := true) -> void:
 		_trea_pending = false
 		_hide_trea()
 	if bool(o.get("rare", false)):
-		_rare_taken[str(o["name"])] = true        # 绋€鏈夊崟鍗′篃鏄敮涓€锛屾嬁杩囦笉鍐嶅嚭
+		_rare_taken[str(o["name"])] = true        # 稀有单卡也是唯一，拿过不再出
 		_qc("trea", 1)
 		_apply_rare(o)
 		return
 	var b := {"name": str(o["name"]), "boost": int(val), "prog": 0,
-		"lbl": str(o.get("lbl", "缁勫悎鏁堟灉 +%d%%")),
-		"glyph": str(o.get("glyph", "缇?)), "quality": _trea_quality()}
+		"lbl": str(o.get("lbl", "组合效果 +%d%%")),
+		"glyph": str(o.get("glyph", "羁")), "quality": _trea_quality()}
 	if o.has("need_series"):
-		b["need_series"] = (o["need_series"] as Array).duplicate()   # 灏忕緛缁婏細鎸夌郴绠楋紝浠讳竴涓€闃堕兘琛?	else:
+		b["need_series"] = (o["need_series"] as Array).duplicate()   # 小羁绊：按系算，任一一阶都行
+	else:
 		b["need"] = (o["need"] as Array).duplicate()
 	if o.has("line"):
-		b["line"] = str(o["line"])          # 绾跨緛缁婏細鎴愬悗鎶暣鏉＄嚎锛屼笉鍙槸闇€姹傞噷閭ｅ嚑涓?	_bonds.append(b)
+		b["line"] = str(o["line"])          # 线羁绊：成后抬整条线，不只是需求里那几个
+	_bonds.append(b)
 	_bond_taken[str(o["name"])] = true
 	_qc("trea", 1)
 	if o.has("next"):
 		var nx := str(o["next"])
 		if not bool(_bond_unlocked.get(nx, false)):
 			_bond_unlocked[nx] = true
-			_toast("缇佺粖銆?s銆嶈В閿佸叆姹? % nx)
-	_toast("缁撴垚缇佺粖 路 %s锛?d/%d锛屽噾榻愬嵆娑堣€楋級" % [str(o["name"]), _bond_prog(b), _bond_need_n(b)])
+			_toast("羁绊「%s」解锁入池" % nx)
+	_toast("结成羁绊 · %s（%d/%d，凑齐即消耗）" % [str(o["name"]), _bond_prog(b), _bond_need_n(b)])
 	Aud.sfx("levelup", -6.0)
 	_bond_check()
 	_refresh_trea_tile()
 
-# ---- 缇佺粖缁撶畻 ----
+# ---- 羁绊结算 ----
 func _grant_random_treasure() -> bool:
 	var shown := {}
 	if _trea_pending:
@@ -3750,7 +3955,8 @@ func _grant_random_treasure() -> bool:
 			if card.visible and not card.o.is_empty():
 				shown[str(card.o.get("name", ""))] = true
 	var bonds: Array = _bond_pool().filter(func(o): return not shown.has(str(o["name"])))
-	# 鑷姩濂栧姳涓嶈兘鏇跨帺瀹堕€夋嫨鑺遍挶鍏戞崲鎴栨案涔呭叧闂伒鏅舵敹鍏ョ殑浠ｄ环鍗°€?	var rares: Array = _rare_pool().filter(func(o):
+	# 自动奖励不能替玩家选择花钱兑换或永久关闭灵晶收入的代价卡。
+	var rares: Array = _rare_pool().filter(func(o):
 		return not shown.has(str(o["name"])) and str(o.get("kind", "")) not in ["convert", "crystal_burst"] and not (_crystal_lock and str(o.get("kind", "")) == "res" and str(o.get("res", "")) == "crystal"))
 	var pool: Array = rares if not rares.is_empty() and (bonds.is_empty() or randf() < RARE_CHANCE) else bonds
 	if pool.is_empty():
@@ -3759,11 +3965,11 @@ func _grant_random_treasure() -> bool:
 	var multiplier: float = [1.0, 1.5, 2.0, 3.0][clampi(_trea_quality() - 2, 0, 3)]
 	var value := int(item.get("v", 0)) if bool(item.get("rare", false)) else int(round(float(item["boost"]) * multiplier))
 	_pick_trea(item, value, false)
-	_toast("闀囬瓊閾?路 鑾峰緱瀹濈墿銆?s銆? % str(item["name"]))
+	_toast("镇魂铃 · 获得宝物「%s」" % str(item["name"]))
 	return true
 
 func _combo_has(nm: String) -> bool:
-	# 鈿?鍥炴槬 / 鐢熸伅 杩欎袱涓悕瀛椾袱杈归兘鏈夛細鏅€氬崱浼樺厛锛屽懡涓櫘閫氬崱鍚嶅崟灏卞彧璁?_combined
+	# ⚠ 回春 / 生息 这两个名字两边都有：普通卡优先，命中普通卡名单就只认 _combined
 	var sys_first: bool = _sys_combos.has(nm)
 	for r_v in _combined:
 		if str((r_v as Dictionary).get("name", "")) == nm:
@@ -3775,7 +3981,7 @@ func _combo_has(nm: String) -> bool:
 			return true
 	return false
 
-# 杩欎釜缁勫悎鍚嶆槸涓嶆槸鏌愪綅绁栧畻鐨勫浼犵粍鍚堬紵鏄氨杩斿洖绁栧畻 id锛堟煶鍗垮嵖鏈変袱濂楋紝鍙栫涓€濂楀涓婂氨琛岋級
+# 这个组合名是不是某位祖宗的家传组合？是就返回祖宗 id（柳卿卿有两套，取第一套对上就行）
 func _ancestor_of_combo(nm: String) -> String:
 	for aid_v in AncestorData.ANCESTORS.keys():
 		var aid := str(aid_v)
@@ -3785,12 +3991,12 @@ func _ancestor_of_combo(nm: String) -> String:
 				return aid
 	return ""
 
-# "姘旇路鍐呭姏" / "鏂囬挶路鐏垫櫠"
+# "气血·内力" / "文钱·灵晶"
 func _series_pair_cn(d: Dictionary) -> String:
 	var out: Array = []
 	for sk_v in d.get("need_series", []):
 		out.append(str(SERIES_CN.get(str(sk_v), str(sk_v))))
-	return "路".join(PackedStringArray(out))
+	return "·".join(PackedStringArray(out))
 
 func _bond_prog(b: Dictionary) -> int:
 	var n := 0
@@ -3804,19 +4010,20 @@ func _bond_prog(b: Dictionary) -> int:
 			n += 1
 	return n
 
-# 杩欎釜绯绘湁娌℃湁鍚堟垚杩?*浠绘剰涓€闃?*缁勫悎锛堝皬缇佺粖鎸?绯?绠楋紝涓嶆寫鍏蜂綋鏄摢涓€闃讹級
+# 这个系有没有合成过**任意一阶**组合（小羁绊按"系"算，不挑具体是哪一阶）
 func _series_active(sk: String) -> bool:
 	for r_v in _combined:
 		if str((r_v as Dictionary).get("series", "")) == sk:
 			return true
 	return false
 
-# 杩欏紶缇佺粖瑕佸嚑鏉★紙绾?灏忕緛缁婃寜绯伙紝鍏跺畠鎸夌粍鍚堝悕锛?func _bond_need_n(b: Dictionary) -> int:
+# 这张羁绊要几条（线/小羁绊按系，其它按组合名）
+func _bond_need_n(b: Dictionary) -> int:
 	if b.has("need_series"):
 		return (b["need_series"] as Array).size()
 	return (b["need"] as Array).size()
 
-# 璇ョ郴鍥涢樁缁勫悎涓€璧锋姮
+# 该系四阶组合一起抬
 func _boost_series(sk: String, pct: float) -> void:
 	for tt in 4:
 		var cc: Dictionary = _card_db.get("%s_%d_0" % [sk, tt], {})
@@ -3824,7 +4031,7 @@ func _boost_series(sk: String, pct: float) -> void:
 		if cn != "":
 			_combo_boost[cn] = float(_combo_boost.get(cn, 0.0)) + pct
 
-# 姣忔缁勫悎婵€娲诲悗閮界畻涓€閬嶏細鍑戦綈 鈫?鐢熸晥骞?*娑堣€?*杩欏紶缇佺粖
+# 每次组合激活后都算一遍：凑齐 → 生效并**消耗**这张羁绊
 func _bond_check() -> void:
 	if _bonds.is_empty():
 		return
@@ -3835,14 +4042,16 @@ func _bond_check() -> void:
 		var prog := _bond_prog(b)
 		b["prog"] = prog
 		if prog >= _bond_need_n(b):
-			# 缇佺粖鎴?鈫?瀹冪偣鍚嶇殑缁勫悎鍏ㄩ儴澧炲箙锛屾案涔咃細
-			#   鏅€氬崱缁勫悎锛氫互鍚庢瘡娆¤Е鍙?脳(1+boost%)锛坃apply_combo 閲屼箻锛?			#   瀹朵紶缁勫悎锛氶偅浣嶇瀹楃殑鏈懡鎶€浼ゅ鐩存帴 +boost%锛堣窡瀹朵紶缁勫悎鑷繁閭ｅ璐﹀悓涓€涓?_anc_mod.dmg_pct锛?			var pct := float(b.get("boost", 0)) / 100.0
+			# 羁绊成 → 它点名的组合全部增幅，永久：
+			#   普通卡组合：以后每次触发 ×(1+boost%)（_apply_combo 里乘）
+			#   家传组合：那位祖宗的本命技伤害直接 +boost%（跟家传组合自己那套账同一个 _anc_mod.dmg_pct）
+			var pct := float(b.get("boost", 0)) / 100.0
 			if b.has("need_series"):
-				# 灏忕緛缁婏細鐐瑰悕鐨勯偅涓や釜绯伙紝鍥涢樁缁勫悎涓€璧锋姮
+				# 小羁绊：点名的那两个系，四阶组合一起抬
 				for sk_v in (b["need_series"] as Array):
 					_boost_series(str(sk_v), pct)
 			elif b.has("line"):
-				# 绾跨緛缁婏細杩欐潯绾?*鎵€鏈夌郴銆佹墍鏈夐樁**鐨勭粍鍚堜竴璧锋姮锛堜笉姝㈤渶姹傞噷閭ｅ嚑涓級
+				# 线羁绊：这条线**所有系、所有阶**的组合一起抬（不止需求里那几个）
 				for sk_v in (CARD_LINES.get(str(b["line"]), []) as Array):
 					_boost_series(str(sk_v), pct)
 			for nm2_v in need:
@@ -3860,29 +4069,29 @@ func _bond_check() -> void:
 			_bonds.remove_at(i)
 			_bonds_done += 1
 			if b.has("line"):
-				_toast("缇佺粖鎴?路 %s锛?s 鍏ㄩ儴缁勫悎 +%d%%锛? % [str(b["name"]), str(b["line"]), int(b.get("boost", 0))])
+				_toast("羁绊成 · %s（%s 全部组合 +%d%%）" % [str(b["name"]), str(b["line"]), int(b.get("boost", 0))])
 			elif b.has("need_series"):
-				_toast("缇佺粖鎴?路 %s锛?s 鍏ㄩ儴缁勫悎 +%d%%锛? % [str(b["name"]), _series_pair_cn(b), int(b.get("boost", 0))])
+				_toast("羁绊成 · %s（%s 全部组合 +%d%%）" % [str(b["name"]), _series_pair_cn(b), int(b.get("boost", 0))])
 			else:
-				_toast("缇佺粖鎴?路 %s锛?s 鏁堟灉 +%d%%锛? % [str(b["name"]),
-					"路".join(PackedStringArray(need)), int(b.get("boost", 0))])
+				_toast("羁绊成 · %s（%s 效果 +%d%%）" % [str(b["name"]),
+					"·".join(PackedStringArray(need)), int(b.get("boost", 0))])
 			Aud.sfx("levelup", -6.0)
 			changed = true
 		elif prog > int(b.get("last", 0)):
 			b["last"] = prog
-			_toast("缇佺粖銆?s銆嶈繘搴?%d/%d" % [str(b["name"]), prog, need.size()])
+			_toast("羁绊「%s」进度 %d/%d" % [str(b["name"]), prog, need.size()])
 			changed = true
 	if changed:
 		_refresh_trea_tile()
 		if _combined_layer != null and _combined_layer.visible and _tot_tab == "bond":
 			_refresh_tot_bond()
 
-# 鍒锋柊锛氭鏁板瀷
+# 刷新：次数型
 func _on_trea_refresh() -> void:
 	if _run_over or not _trea_pending or _trea_layer == null or not _trea_layer.visible:
 		return
 	if _trea_reroll <= 0:
-		_toast("鍒锋柊娆℃暟鐢ㄥ畬浜?)
+		_toast("刷新次数用完了")
 		return
 	if not _rr_free():
 		_trea_reroll -= 1
@@ -3890,7 +4099,8 @@ func _on_trea_refresh() -> void:
 	_pop_trea_cards()
 	Aud.sfx("ui_click", -8.0)
 
-# 鏀惧純锛氳繖涓€鎵嬩笉瑕佷簡锛屾崲 1 娆″埛鏂帮紙鏈轰細宸茬粡琚繖娆″紑椤靛悆鎺夛紝涓嶈兘鐧藉埛锛?func _on_trea_abandon() -> void:
+# 放弃：这一手不要了，换 1 次刷新（机会已经被这次开页吃掉，不能白刷）
+func _on_trea_abandon() -> void:
 	if _run_over or not _trea_pending or _trea_layer == null or not _trea_layer.visible:
 		return
 	_trea_pending = false
@@ -3898,10 +4108,12 @@ func _on_trea_refresh() -> void:
 	_hide_trea()
 	_refresh_trea_tile()
 	_refresh_trea_btn()
-	_toast("鏀惧純瀹濈墿 路 鍒锋柊 +1锛堢幇鏈?%d 娆★級" % _trea_reroll)
+	_toast("放弃宝物 · 刷新 +1（现有 %d 次）" % _trea_reroll)
 	Aud.sfx("ui_back", -8.0)
 
-# 椤舵爮锛绘€昏锛斤細鎵撳紑鎬昏椤碉紙椤堕儴涓変釜鍒嗙被閽細鍗＄粍 / 瀹濈墿 / 缁勫悎锛?# 鏁村眰鍏ュ満锛氭贰鍏?+ 浠?0.965 寮瑰洖锛堟瘮"鍟湴鍑虹幇"椤烘粦锛?func _layer_in(c) -> void:
+# 顶栏［总计］：打开总计页（顶部三个分类钮：卡组 / 宝物 / 组合）
+# 整层入场：淡入 + 从 0.965 弹回（比"啪地出现"顺滑）
+func _layer_in(c) -> void:
 	if c == null:
 		return
 	MenuUI.Motion.fade_in(c)
@@ -3939,14 +4151,15 @@ func _set_tot_tab(k: String) -> void:
 	else:
 		_refresh_combined()
 
-# 鍗＄粍鍒嗛〉锛氳繖涓€灞€鎶藉埌鐨勫崱
-# 瀹濈墿鍒嗛〉锛氱緛缁婂浘鏍囧锛堢偣鍥炬爣鎵嶇湅璇︽儏锛?func _refresh_tot_bond() -> void:
+# 卡组分页：这一局抽到的卡
+# 宝物分页：羁绊图标墙（点图标才看详情）
+func _refresh_tot_bond() -> void:
 	for ch in _tot_bond_root.get_children():
 		ch.queue_free()
-	_lbl("缇佺粖 %d 寮狅紙宸叉垚 %d锛夈€€路銆€宸茶В閿?%d/%d銆€路銆€鐐瑰浘鏍囩湅璇︽儏" % [_bonds.size(), _bonds_done, _bond_unlocked.size(), BOND_POOL.size()],
+	_lbl("羁绊 %d 张（已成 %d）　·　已解锁 %d/%d　·　点图标看详情" % [_bonds.size(), _bonds_done, _bond_unlocked.size(), BOND_POOL.size()],
 		Vector2(0, 0), Vector2(600, 26), 16, DIM, _tot_bond_root)
 	if _bonds.is_empty():
-		_lbl("杩樻病鏈夌緛缁?鈥斺€?姣忔竻涓€娉㈡湁 1 娆″疂鐗╂満浼?, Vector2(0, 40), Vector2(600, 30), 20,
+		_lbl("还没有羁绊 —— 每清一波有 1 次宝物机会", Vector2(0, 40), Vector2(600, 30), 20,
 			Color(0.55, 0.48, 0.36), _tot_bond_root)
 		return
 	for i in mini(_bonds.size(), 12):
@@ -3955,7 +4168,7 @@ func _set_tot_tab(k: String) -> void:
 		ic.position = Vector2(float(i % 4) * 146.0, 40.0 + float(i / 4) * 152.0)
 		ic.size = Vector2(132, 132)
 		ic.title = str(b["name"])
-		ic.glyph = str(b.get("glyph", "缇?))
+		ic.glyph = str(b.get("glyph", "羁"))
 		ic.quality = int(b.get("quality", 2))
 		ic.prog = _bond_prog(b)
 		ic.need_n = _bond_need_n(b)
@@ -3978,43 +4191,43 @@ func _show_bond_detail(b: Dictionary) -> void:
 	_combined_detail.add_child(p)
 	var need: Array = b.get("need", [])
 	_lbl(str(b["name"]), Vector2(170, 322), Vector2(360, 40), 30, INK, _combined_detail, HORIZONTAL_ALIGNMENT_CENTER)
-	_lbl("缇?缁娿€€%d/%d" % [_bond_prog(b), _bond_need_n(b)], Vector2(170, 366), Vector2(360, 28), 19,
+	_lbl("羁 绊　%d/%d" % [_bond_prog(b), _bond_need_n(b)], Vector2(170, 366), Vector2(360, 28), 19,
 		Color(0.46, 0.20, 0.10), _combined_detail, HORIZONTAL_ALIGNMENT_CENTER)
 	if b.has("need_series"):
-		_lbl("鎴愬悗锛? + _series_pair_cn(b) + " 鍏ㄩ儴缁勫悎 +%d%%" % int(b.get("boost", 0)), Vector2(170, 402), Vector2(380, 32), 20, INK, _combined_detail)
+		_lbl("成后：" + _series_pair_cn(b) + " 全部组合 +%d%%" % int(b.get("boost", 0)), Vector2(170, 402), Vector2(380, 32), 20, INK, _combined_detail)
 	else:
-		_lbl("鎴愬悗锛? + str(b.get("lbl", "缁勫悎鏁堟灉 +%d%%")) % int(b.get("boost", 0)), Vector2(170, 402), Vector2(380, 32), 21, INK, _combined_detail)
+		_lbl("成后：" + str(b.get("lbl", "组合效果 +%d%%")) % int(b.get("boost", 0)), Vector2(170, 402), Vector2(380, 32), 21, INK, _combined_detail)
 	if b.has("line"):
-		_lbl("锛堟暣鏉＄嚎涓嶅垎闃讹紝鍏ㄩ儴鍚冭繖涓骞咃級", Vector2(170, 424), Vector2(380, 24), 15, Color(0.46, 0.20, 0.10), _combined_detail)
+		_lbl("（整条线不分阶，全部吃这个增幅）", Vector2(170, 424), Vector2(380, 24), 15, Color(0.46, 0.20, 0.10), _combined_detail)
 	elif b.has("need_series"):
-		_lbl("锛堟瘡涓郴浠绘剰涓€闃剁粍鍚堥兘绠楋級", Vector2(170, 424), Vector2(380, 24), 15, Color(0.46, 0.20, 0.10), _combined_detail)
-	_lbl("瑕佸噾榻愮殑缁勫悎锛堟瘡濂?3 寮犲悓濂楀崱鍚堟垚锛夛細" if not b.has("need_series") else "瑕佸噾榻愮殑绯伙紙浠讳竴涓€闃剁粍鍚堝嵆鍙級锛?,
+		_lbl("（每个系任意一阶组合都算）", Vector2(170, 424), Vector2(380, 24), 15, Color(0.46, 0.20, 0.10), _combined_detail)
+	_lbl("要凑齐的组合（每套 3 张同套卡合成）：" if not b.has("need_series") else "要凑齐的系（任一一阶组合即可）：",
 		Vector2(170, 442), Vector2(380, 26), 16, DIM, _combined_detail)
 	var y := 472.0
 	if b.has("need_series"):
 		for sk_v in b["need_series"]:
 			var sk := str(sk_v)
 			var ok2 := _series_active(sk)
-			_lbl(("宸插悎鎴愩€€" if ok2 else "杩樼己銆€銆€") + str(SERIES_CN.get(sk, sk)) + " 绯讳换鎰忎竴濂?, Vector2(184, y), Vector2(360, 26), 18,
+			_lbl(("已合成　" if ok2 else "还缺　　") + str(SERIES_CN.get(sk, sk)) + " 系任意一套", Vector2(184, y), Vector2(360, 26), 18,
 				Color(0.28, 0.44, 0.26) if ok2 else Color(0.56, 0.40, 0.26), _combined_detail)
 			y += 30.0
 	else:
 		for nm_v in need:
 			var nm := str(nm_v)
 			var ok := _combo_has(nm)
-			_lbl(("宸插悎鎴愩€€" if ok else "杩樼己銆€銆€") + nm, Vector2(184, y), Vector2(360, 26), 18,
+			_lbl(("已合成　" if ok else "还缺　　") + nm, Vector2(184, y), Vector2(360, 26), 18,
 				Color(0.28, 0.44, 0.26) if ok else Color(0.56, 0.40, 0.26), _combined_detail)
 			y += 30.0
-	_btn("脳", Rect2(592, 302, 34, 30), 20, Color(0.97, 0.93, 0.85), DIM,
+	_btn("×", Rect2(592, 302, 34, 30), 20, Color(0.97, 0.93, 0.85), DIM,
 		func(): _combined_detail.visible = false, _combined_detail)
 
-# 缇佺粖鍥炬爣锛氬搧闃舵弿杈?+ 澧ㄥ瓧鍦嗙珷 + 鍙充笂杩涘害瑙掓爣
+# 羁绊图标：品阶描边 + 墨字圆章 + 右上进度角标
 class BondIcon extends Control:
 	const F := preload("res://fonts/ink.ttf")
 	const QC := [Color(0.54,0.48,0.38), Color(0.31,0.48,0.29), Color(0.18,0.42,0.45), Color(0.42,0.29,0.48), Color(0.72,0.53,0.16)]
 	signal pressed
 	var title := ""
-	var glyph := "缇?
+	var glyph := "羁"
 	var quality := 2
 	var prog := 0
 	var need_n := 3
@@ -4041,7 +4254,7 @@ class BondIcon extends Control:
 		draw_string(F, Vector2(size.x - 46, 22), "%d/%d" % [prog, need_n], HORIZONTAL_ALIGNMENT_CENTER,
 			40, 14, Color(0.98, 0.96, 0.90))
 		draw_rect(Rect2(6, 6, 22, 20), Color(0.64, 0.22, 0.15))
-		draw_string(F, Vector2(6, 22), "缇?, HORIZONTAL_ALIGNMENT_CENTER, 22, 14, Color(0.98, 0.92, 0.78))
+		draw_string(F, Vector2(6, 22), "羁", HORIZONTAL_ALIGNMENT_CENTER, 22, 14, Color(0.98, 0.92, 0.78))
 	func _gui_input(ev: InputEvent) -> void:
 		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
 			pressed.emit()
@@ -4071,22 +4284,24 @@ func _apply_aug(key: String, val: float) -> void:
 			_core.attr_add("cdmg", val / 100.0)
 			h["crit_dmg"] = _core.attr_final("cdmg")
 		"cut_add":
-			_core.type_add("鐗╃悊", "red_f", val / 100.0)
-			h["cut"] = _core.type_effective_field("鐗╃悊", "red_f")
+			_core.type_add("物理", "red_f", val / 100.0)
+			h["cut"] = _core.type_effective_field("物理", "red_f")
 		"cutall_add":
 			for t in _core.DMG_TYPES:
-				if t != "鐪熷疄":
+				if t != "真实":
 					_core.type_add(t, "red_f", val / 100.0)
-			h["cut"] = _core.type_effective_field("鐗╃悊", "red_f")
-			h["cut_all"] = 0.0 # 鍏郴瀛楁宸插寘鍚繖娆″鐩娿€?		"pen_flat":
-			# v6锛氫竷绯诲浐瀹氱┛閫忎竴璧峰姞锛堢湡瀹炰笉鍚冪┛閫忥紝璺宠繃锛?			for t in _core.DMG_TYPES:
-				if t != "鐪熷疄":
+			h["cut"] = _core.type_effective_field("物理", "red_f")
+			h["cut_all"] = 0.0 # 六系字段已包含这次增益。
+		"pen_flat":
+			# v6：七系固定穿透一起加（真实不吃穿透，跳过）
+			for t in _core.DMG_TYPES:
+				if t != "真实":
 					_core.type_add(t, "pen_f", val / 100.0)
 		"dmgall_add":
 			for t in _core.DMG_TYPES:
-				if t != "鐪熷疄":
+				if t != "真实":
 					_core.type_add(t, "amp_f", val / 100.0)
-			h["dmg_all"] = _core.type_amp("鐗╃悊")
+			h["dmg_all"] = _core.type_amp("物理")
 		"mp_add":
 			_core.attr_add("mp", val)
 			_mp_max = maxf(1.0, _core.attr_final("mp"))
@@ -4100,18 +4315,21 @@ func _apply_aug(key: String, val: float) -> void:
 		"exp_pct":
 			_exp_pct += val
 
-# 杩涢樁鍗★細涓夐€変竴鐨勫崱闈紙200脳300锛?class AugCard extends Control:
+# 进阶卡：三选一的卡面（200×300）
+class AugCard extends Control:
 	const F := preload("res://fonts/ink.ttf")
 	const QC := [Color(0.54,0.48,0.38), Color(0.31,0.48,0.29), Color(0.18,0.42,0.45), Color(0.42,0.29,0.48), Color(0.72,0.53,0.16)]
-	const QN := ["鑹搧", "鐜勫搧", "鍦板搧", "澶╁搧"]
+	const QN := ["良品", "玄品", "地品", "天品"]
 	const CF := preload("res://kushou/card_frame.gd")
 	signal picked
 	var title := ""
-	var glyph := "鏀?
+	var glyph := "攻"
 	var effect := ""
 	var desc := ""
 	var quality := 2
-	var o: Dictionary = {}      # 杩欎竴寮犳幏鍒板摢鏉¤繘闃?	var oval := 0               # 鏀惧ぇ鍚庣殑鏁板€?	func _ready() -> void:
+	var o: Dictionary = {}      # 这一张掷到哪条进阶
+	var oval := 0               # 放大后的数值
+	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_STOP
 	func _draw() -> void:
 		var q := clampi(quality - 1, 0, 4)
@@ -4125,18 +4343,20 @@ func _apply_aug(key: String, val: float) -> void:
 			sb.border_color = QC[q]
 			sb.set_border_width_all(6)
 			draw_style_box(sb, Rect2(Vector2.ZERO, size))
-		# 鍙充笂瑙掑搧闃跺嵃锛堝拰鎶藉崱鍗￠潰鐨?鏍囬鍦ㄦ渶涓?瀵归綈锛屼笉鎶㈡爣棰樼殑浣嶇疆锛?		var tp := Vector2(size.x - 62, 14)
+		# 右上角品阶印（和抽卡卡面的"标题在最上"对齐，不抢标题的位置）
+		var tp := Vector2(size.x - 62, 14)
 		draw_rect(Rect2(tp, Vector2(48, 22)), QC[q])
 		draw_string(F, tp + Vector2(0, 16), QN[clampi(quality - 2, 0, 3)],
 			HORIZONTAL_ALIGNMENT_CENTER, 48, 13, Color(0.98, 0.96, 0.90))
 		draw_string(F, Vector2(0, 52), title, HORIZONTAL_ALIGNMENT_CENTER, size.x, 28 if title.length() <= 3 else 24, Color(0.14, 0.11, 0.08))
-		# 鍥炬爣缂╁皬锛岀粰搴曢儴璇存槑鑵惧嚭鏇村ぇ瀛楀彿鐨勭┖闂?		var c := Vector2(size.x * 0.5, 134.0)
+		# 图标缩小，给底部说明腾出更大字号的空间
+		var c := Vector2(size.x * 0.5, 134.0)
 		draw_circle(c, 38, Color(0.93, 0.90, 0.82))
 		draw_arc(c, 38.0, 0.0, TAU, 48, QC[q], 2.0)
 		draw_string(F, c + Vector2(-11, 12), glyph, HORIZONTAL_ALIGNMENT_LEFT, -1, 34, Color(0.13, 0.12, 0.11))
 		draw_string(F, Vector2(0, 214), effect, HORIZONTAL_ALIGNMENT_CENTER, size.x, 26, Color(0.46, 0.20, 0.10))
 		draw_multiline_string(F, Vector2(10, 244), desc, HORIZONTAL_ALIGNMENT_CENTER, size.x - 20, 17, 2, Color(0.38, 0.33, 0.26))
-		draw_string(F, Vector2(0, 292), "鐐瑰嚮閫夊彇", HORIZONTAL_ALIGNMENT_CENTER, size.x, 13, Color(0.58, 0.50, 0.36))
+		draw_string(F, Vector2(0, 292), "点击选取", HORIZONTAL_ALIGNMENT_CENTER, size.x, 13, Color(0.58, 0.50, 0.36))
 	func _gui_input(ev: InputEvent) -> void:
 		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
 			picked.emit()
@@ -4144,17 +4364,19 @@ func _apply_aug(key: String, val: float) -> void:
 func _make_foe_token(f: Dictionary):
 	var kind := str(f.get("kind", "normal"))
 	var boss := bool(f.get("boss", false))
-	var rad := 52.0 if boss else 26.0        # Boss 鍦嗙墝鏄庢樉鏇村ぇ
+	var rad := 52.0 if boss else 26.0        # Boss 圆牌明显更大
 	var ring := Color(0.42, 0.36, 0.28)
 	if kind == "coin":
-		ring = Color(0.95, 0.78, 0.25)        # 閽辨€細浜噾
+		ring = Color(0.95, 0.78, 0.25)        # 钱怪：亮金
 	elif kind == "crystal":
-		ring = Color(0.42, 0.72, 0.95)        # 鏅舵€細浜摑
+		ring = Color(0.42, 0.72, 0.95)        # 晶怪：亮蓝
 	elif kind == "chal":
-		ring = Color(0.68, 0.38, 0.88)        # 鎸戞垬鎬細绱?	elif boss:
-		ring = Color(0.95, 0.62, 0.12)        # Boss锛氶噾姗?	var mark_ch := "鐜? if boss else ("閽? if kind == "coin" else ("鏅? if kind == "crystal" else ("鎸? if kind == "chal" else "鎬?)))
+		ring = Color(0.68, 0.38, 0.88)        # 挑战怪：紫
+	elif boss:
+		ring = Color(0.95, 0.62, 0.12)        # Boss：金橙
+	var mark_ch := "王" if boss else ("钱" if kind == "coin" else ("晶" if kind == "crystal" else ("挑" if kind == "chal" else "怪")))
 	var msize := 22 if not boss else 38
-	# 姹犻噷鏈夊氨澶嶇敤锛圱okenActor 姣忓缓涓€涓兘瑕?new Shader/ShaderMaterial锛屽緢璐碉級
+	# 池里有就复用（TokenActor 每建一个都要 new Shader/ShaderMaterial，很贵）
 	if not _foe_pool.is_empty():
 		var tk0 = _foe_pool.pop_back()
 		tk0.reset_pose()
@@ -4201,13 +4423,13 @@ func _make_foe_token(f: Dictionary):
 	tk.play_spawn(float(int(f.get("_tid", 0)) % 4) * 0.02)
 	return tk
 
-# ---------------- 鍗℃睜 / 缁勫悎 ----------------
+# ---------------- 卡池 / 组合 ----------------
 func _init_cards() -> void:
 	var d: Dictionary = CardData.build()
 	_card_db = d["cards"]
 	_set_cards = d["sets"]
-	# 鈿?鏅€氬崱缁勫悎涓庡浼犵粍鍚堟湁閲嶅悕锛堝洖鏄?/ 鐢熸伅锛夛紝鍏堣涓嬫櫘閫氬崱杩欎竴鎵瑰悕瀛楋紝
-	#   缇佺粖缁撶畻鏃朵紭鍏堟寜鏅€氬崱绠楋紝鍒鎴愭煇浣嶇瀹楃殑瀹朵紶缁勫悎
+	# ⚠ 普通卡组合与家传组合有重名（回春 / 生息），先记下普通卡这一批名字，
+	#   羁绊结算时优先按普通卡算，别认成某位祖宗的家传组合
 	_sys_combos.clear()
 	for sid_v in _set_cards.keys():
 		var ids0: Array = _set_cards[sid_v]
@@ -4232,7 +4454,7 @@ func _init_cards() -> void:
 	_combined.clear()
 	_ancestors.clear()
 	_ancestor_combos.clear()
-	# 瀹朵紶鍗★細骞惰繘鍚屼竴濂楀崱琛紙褰㈢姸涓庢櫘閫氬崱涓€鑷达紝鎵€浠ョ洿鎺ュ悎骞讹級
+	# 家传卡：并进同一套卡表（形状与普通卡一致，所以直接合并）
 	var a: Dictionary = AncestorData.build()
 	var acards: Dictionary = a["cards"]
 	for cid_v in acards.keys():
@@ -4240,30 +4462,31 @@ func _init_cards() -> void:
 	var asets: Dictionary = a["sets"]
 	for sid_v in asets.keys():
 		_set_cards[sid_v] = asets[sid_v]
-	# 鐐崱锛堢嫭绔嬪崱锛屼笉杩涘锛?	var shinies: Dictionary = AncestorData.shiny_cards()
+	# 炫卡（独立卡，不进套）
+	var shinies: Dictionary = AncestorData.shiny_cards()
 	for sh_v in shinies.keys():
 		_card_db[sh_v] = shinies[sh_v]
 	_card_db["shiny_zhongli"] = {
 		"id": "shiny_zhongli", "shiny": true, "ancestor": "", "ancestor_name": "",
-		"series": "zhongli", "label": "閲嶅埄", "tier": -1, "idx": 0,
-		"name": "閲嶅埄", "quality": 5, "art": "res://assets/items/loot_silver.png",
-		"own_key": "", "own_val": 0, "own_text": "鎶藉崱鏃?10% 澶嶅埗閫変腑鍗?,
+		"series": "zhongli", "label": "重利", "tier": -1, "idx": 0,
+		"name": "重利", "quality": 5, "art": "res://assets/items/loot_silver.png",
+		"own_key": "", "own_val": 0, "own_text": "抽卡时 10% 复制选中卡",
 		"set_id": "", "set_size": 0, "combo_name": "", "combo_text": "",
 		"trigger": "", "combo_key": "", "combo_val": 0,
 		"entry": false, "unlock_ids": [],
-		"shiny_self": "鎶藉崱鏃?10% 澶嶅埗閫変腑鍗?,
-		"shiny_devour": "澶嶅埗浣撳綋鍦哄悶鍣?路 鏁堟灉涓庤繘搴︿繚鐣?,
-		"shiny_per": "澶嶅埗浣撳啀鐙珛鎺?路 閾惧紡"}
+		"shiny_self": "抽卡时 10% 复制选中卡",
+		"shiny_devour": "复制体当场吞噬 · 效果与进度保留",
+		"shiny_per": "复制体再独立掷 · 链式"}
 	_card_db["shiny_backwash"] = {
 		"id": "shiny_backwash", "shiny": true, "ancestor": "", "ancestor_name": "",
-		"series": "backwash", "label": "鍥炴疆", "tier": -1, "idx": 0,
-		"name": "鍥炴疆", "quality": 4, "art": "res://assets/items/chest_jade.png",
-		"own_key": "", "own_val": 0, "own_text": "鏀?+4 路 闃?+4 路 琛€ +40 路 鍐?+40",
+		"series": "backwash", "label": "回潮", "tier": -1, "idx": 0,
+		"name": "回潮", "quality": 4, "art": "res://assets/items/chest_jade.png",
+		"own_key": "", "own_val": 0, "own_text": "攻 +4 · 防 +4 · 血 +40 · 内 +40",
 		"set_id": "", "set_size": 0, "combo_name": "", "combo_text": "",
 		"trigger": "", "combo_key": "", "combo_val": 0,
 		"entry": false, "unlock_ids": [],
-		"shiny_self": "鏀?+4 路 闃?+4 路 琛€ +40 路 鍐?+40",
-		"shiny_devour": "杩涘崱缁勫嵆瑙﹀彂锛氭尝鏁板洖閫€ 5 娉?,
+		"shiny_self": "攻 +4 · 防 +4 · 血 +40 · 内 +40",
+		"shiny_devour": "进卡组即触发：波数回退 5 波",
 		"shiny_per": ""}
 	_backwash_done = false
 	_devoured.clear()
@@ -4284,10 +4507,11 @@ func _init_cards() -> void:
 	_elem_mod.clear()
 	_shiny_rolled.clear()
 	_shiny_used.clear()
-	# 涓昏榛樿瑙ｉ攣锛屼絾瀹朵紶鍗℃槸銆岃绁炪€嶅眰鐨勪笢瑗匡細绗?5 鍏虫墠寮€濮嬭繘姹?	if LevelState.has_feature("ancestor"):
+	# 主角默认解锁，但家传卡是「请神」层的东西：第 5 关才开始进池
+	if LevelState.has_feature("ancestor"):
 		_grant_ancestor("zhujue")
 
-# 璇峰埌涓€浣嶇瀹楋細鎶婂畠鐨勩€屽垵绾у叆鍙ｅ崱銆嶆斁杩涙娊鍗℃睜
+# 请到一位祖宗：把它的「初级入口卡」放进抽卡池
 func _family_card_allowed(id: String) -> bool:
 	var card: Dictionary = _card_db.get(id, {})
 	if card.is_empty():
@@ -4311,7 +4535,8 @@ func _grant_ancestor(aid: String) -> void:
 	if _card_db.has(eid) and not _pool.has(eid) and not _acquired.has(eid):
 		_pool.append(eid)
 
-# 瀹朵紶缁勫悎婵€娲伙細涓嶅仛鏅€氬崱閭ｅ灞炴€х粨绠楋紝鍙櫥璁?+ 瑙ｉ攣涓嬩竴妗ｅ叆鍙?func _activate_ancestor_set(sid: String, first: Dictionary, ids: Array) -> void:
+# 家传组合激活：不做普通卡那套属性结算，只登记 + 解锁下一档入口
+func _activate_ancestor_set(sid: String, first: Dictionary, ids: Array) -> void:
 	var srcs: Array = []
 	for cid_v in ids:
 		var cid := str(cid_v)
@@ -4327,20 +4552,21 @@ func _grant_ancestor(aid: String) -> void:
 		arc["art"] = str(c0.get("art", ""))
 		arc["quality"] = int(c0.get("quality", 2))
 	_ancestor_combos.append(arc)
-	# 瀹朵紶缁勫悎涔熸挱涓夊悎涓€鍔ㄧ敾
+	# 家传组合也播三合一动画
 	_play_merge_fx(arc)
 	if LevelState.current_level == 5 and _ancestor_combos.size() == 2 and not _family_shiny_done:
-		_family_shiny_ready = true   # 绗簲鍏虫槸璇风寮曞锛氱浜岀粍瀹朵紶鍚庡繀鍑轰竴寮犵偒褰?	_add_ancestor_effects(ai, first.get("effects", {}))
+		_family_shiny_ready = true   # 第五关是请神引导：第二组家传后必出一张炫彩
+	_add_ancestor_effects(ai, first.get("effects", {}))
 	if ai == "zhujue":
 		_apply_hero_passive(first.get("effects", {}))
 	_toast_card(str(first["combo_name"]), int(first["quality"]),
-		"%s 路 %s锛?d 寮犲凡娓呯┖锛? % [str(first["ancestor_name"]), str(first["combo_text"]), ids.size()])
+		"%s · %s（%d 张已清空）" % [str(first["ancestor_name"]), str(first["combo_text"]), ids.size()])
 	var nid := "%s_t%d_0" % [ai, t + 1]
 	if _card_db.has(nid) and _family_card_allowed(nid) and not _pool.has(nid) and not _acquired.has(nid):
 		_pool.append(nid)
-		_toast_card(str((_card_db[nid] as Dictionary)["name"]), int(first["quality"]), "涓嬩竴妗ｅ叆鍙ｅ凡鍏ユ睜")
+		_toast_card(str((_card_db[nid] as Dictionary)["name"]), int(first["quality"]), "下一档入口已入池")
 	elif _card_db.has(nid) and not _family_card_allowed(nid):
-		_toast("涓嬩竴妗ｅ浼犻渶 %d 鏄燂紝璇峰湪灞€澶栬繘闃? % (t + 1))
+		_toast("下一档家传需 %d 星，请在局外进阶" % (t + 1))
 	_page = 0
 	_refresh_deck()
 	_bond_check()
@@ -4361,10 +4587,10 @@ func _on_core_coin(n: int) -> void:
 		return
 	_add_wen(n)
 
-# v6锛氫竴鍒囨枃閽辨敹鍏ラ兘璧拌繖閲岋紙濂借锛诲己鍖栵冀鐨勪环閽辩伅璺熺潃浜?鐏級
+# v6：一切文钱收入都走这里（好让［强化］的价钱灯跟着亮/灭）
 func _add_wen(raw: int) -> void:
 	if LevelState.current_level == 1:
-		raw = int(round(float(raw) * 1.8))   # 绗竴鍏虫枃閽卞姞閫燂細10 绾ц繘闃惰 840锛屼袱娉㈠唴鏀掑緱鍑烘潵
+		raw = int(round(float(raw) * 1.8))   # 第一关文钱加速：10 级进阶要 840，两波内攒得出来
 
 	_pulse_chip(_coin_lb)
 	if raw <= 0:
@@ -4374,14 +4600,15 @@ func _add_wen(raw: int) -> void:
 		_coin_lb.text = str(_wen)
 	_refresh_str_tile()
 
-# core 鐨?coin_drop锛氶挶鎬?/ 鍖 / boss 鎺夌殑鐪熼挶锛堝甫钀界偣锛屽厛鍙璐︼級
+# core 的 coin_drop：钱怪 / 匪首 / boss 掉的真钱（带落点，先只记账）
 func _on_coin_drop(amount: int, pos: Vector2) -> void:
 	if _run_over or _core == null or amount <= 0:
 		return
 	_add_wen(amount)
 	_spawn_fly(_core.position + pos + Vector2(0, -18), Vector2(99, 40), Color(0.90, 0.71, 0.30), 3)
 
-# 鎾掍竴鎶婇鍚戣硣婧愭潯鐨勫皬鐐癸紙閲戝竵閲戙€佺伒鏅惰摑锛?func _spawn_fly(from: Vector2, to: Vector2, col: Color, n: int) -> void:
+# 撒一把飞向資源条的小点（金币金、灵晶蓝）
+func _spawn_fly(from: Vector2, to: Vector2, col: Color, n: int) -> void:
 	for i in n:
 		if _fly.size() > 60:
 			break
@@ -4390,7 +4617,10 @@ func _on_coin_drop(amount: int, pos: Vector2) -> void:
 			"tx": to.x + randf_range(-18.0, 18.0), "ty": to.y + randf_range(-8.0, 8.0),
 			"t": randf_range(0.0, 0.12), "col": col, "r": randf_range(4.5, 7.0)})
 
-# 鏁村睆寰棯锛堟妧鑳介噴鏀?澶т簨浠剁敤锛夛細鏆栫焊鑹蹭竴闂紝涓嶅埡鐪?# 闀滃ご鎺ㄨ繘锛堢缉鏀炬垬鍦哄唴瀹癸紝涓嶅姩 HUD锛?# 鏀跺熬闀滃ご锛氭帹杩?鈫?鍋滀竴涓?鈫?閫€鍥?func _cam_pulse(s: float, hold: float) -> void:
+# 整屏微闪（技能释放/大事件用）：暖纸色一闪，不刺眼
+# 镜头推进（缩放战场内容，不动 HUD）
+# 收尾镜头：推近 → 停一下 → 退回
+func _cam_pulse(s: float, hold: float) -> void:
 	if _cam == null:
 		return
 	_cam_zoom_to(s, 0.26)
@@ -4411,15 +4641,15 @@ func _screen_flash(col: Color, a: float, dur := 0.16) -> void:
 	var tw := create_tween().bind_node(_flash_rect)
 	tw.tween_property(_flash_rect, "color:a", 0.0, dur)
 
-# 鎶€鑳介噴鏀剧殑鏁翠綋鍙嶉锛氬井闂?+ 杞婚渿 + 椤垮抚
-# 姣忕郴涓€涓棯鍏夐鑹诧細鐏銆侀噾閲戙€佹湪缁裤€佸彫鍞ょ传銆佺湡瀹炴殫绱€佺墿鐞嗙焊
+# 技能释放的整体反馈：微闪 + 轻震 + 顿帧
+# 每系一个闪光颜色：火橙、金金、木绿、召唤紫、真实暗紫、物理纸
 const SKILL_TINT := {
-	"閲戠郴": Color(1.0, 0.92, 0.60),
-	"鐏郴": Color(1.0, 0.70, 0.40),
-	"鏈ㄧ郴": Color(0.70, 0.95, 0.64),
-	"鍙敜": Color(0.78, 0.70, 1.0),
-	"鐗╃悊": Color(0.96, 0.93, 0.86),
-	"鐪熷疄": Color(0.72, 0.52, 0.88),
+	"金系": Color(1.0, 0.92, 0.60),
+	"火系": Color(1.0, 0.70, 0.40),
+	"木系": Color(0.70, 0.95, 0.64),
+	"召唤": Color(0.78, 0.70, 1.0),
+	"物理": Color(0.96, 0.93, 0.86),
+	"真实": Color(0.72, 0.52, 0.88),
 }
 
 func _skill_cast_juice() -> void:
@@ -4458,7 +4688,7 @@ func _tick_fly(dt: float) -> void:
 			_fly.remove_at(i)
 			continue
 		var e := float(d["t"])
-		var ee := 1.0 - pow(1.0 - e, 2.0)          # 鍏堝揩鍚庢參
+		var ee := 1.0 - pow(1.0 - e, 2.0)          # 先快后慢
 		d["x"] = lerpf(float(d["sx"]), float(d["tx"]), ee)
 		d["y"] = lerpf(float(d["sy"]), float(d["ty"]), ee) - sin(e * PI) * 56.0
 	_fly_layer.queue_redraw()
@@ -4470,13 +4700,15 @@ func _trigger_combos(trigger: String) -> void:
 	if _combined_layer != null and _combined_layer.visible:
 		_refresh_combined()
 
-# 绗洓鍏虫寫鎴樺埛鎬噺鍗婏紝鍗遍€斺€滄寫鎴樻敹鐩娾€濆崱鍋峰伔琛?1.5 鍊嶏紝淇濅綇椋庨櫓鎹㈡敹鐩?func _peril_scale(v: float) -> float:
+# 第四关挑战刷怪减半，危途“挑战收益”卡偷偷补 1.5 倍，保住风险换收益
+func _peril_scale(v: float) -> float:
 	return v
 
 func _apply_combo(rec: Dictionary) -> void:
 	rec["stacks"] = int(rec.get("stacks", 0)) + 1
 	var key := str(rec.get("combo_key", ""))
-	# 缇佺粖澧炲箙锛氳繖寮犵粍鍚堣缇佺粖鐐瑰悕杩囷紝灏辨寜姣斾緥鏀惧ぇ锛坃combo_boost 閲屾槸 0.4 = +40%锛?	var val := float(rec.get("combo_val", 0)) * (1.0 + float(_combo_boost.get(str(rec.get("name", "")), 0.0)))
+	# 羁绊增幅：这张组合被羁绊点名过，就按比例放大（_combo_boost 里是 0.4 = +40%）
+	var val := float(rec.get("combo_val", 0)) * (1.0 + float(_combo_boost.get(str(rec.get("name", "")), 0.0)))
 	match key:
 		"atk":
 			_stats["atk"] = float(_stats["atk"]) + val
@@ -4485,10 +4717,11 @@ func _apply_combo(rec: Dictionary) -> void:
 		"def":
 			# v6: def removed
 			if _core != null:
-				# v6锛氱粍鍚堥槻寰′篃璧颁竷绯诲浐瀹氬噺鍏嶏紝鍜屽崱鐗岄槻寰′竴鑷?				var def_red := val * DEF_CARD_TO_RED
+				# v6：组合防御也走七系固定减免，和卡牌防御一致
+				var def_red := val * DEF_CARD_TO_RED
 				if def_red > 0.0:
 					for t in _core.DMG_TYPES:
-						if t != "鐪熷疄":
+						if t != "真实":
 							_core.type_add(t, "red_f", def_red)
 		"hp":
 			_stats["hp"] = float(_stats["hp"]) + val
@@ -4505,7 +4738,8 @@ func _apply_combo(rec: Dictionary) -> void:
 			_gain_crystal(_take_int(rec, val))
 			_update_crystal()
 		"mp_flat":
-			_mp = minf(_mp_max, _mp + val)     # v5锛氬唴鍔涚郴缁勫悎 鈫?鍥炲唴鍔?		# ---- v13 缇?/ 闄?----
+			_mp = minf(_mp_max, _mp + val)     # v5：内力系组合 → 回内力
+		# ---- v13 群 / 险 ----
 		"count_flat":
 			_wave_extra += _take_int(rec, val)
 		"coin_count":
@@ -4520,14 +4754,17 @@ func _apply_combo(rec: Dictionary) -> void:
 			_devour_keep(_take_int(rec, val))
 		"killnum_pct":
 			_killnum_pct += val
-	# v13锛氱粍鍚堣繕甯︿竴鏉°€屽叏灞€闅惧害銆?	var ek := str(rec.get("combo_extra_key", ""))
+	# v13：组合还带一条「全局难度」
+	var ek := str(rec.get("combo_extra_key", ""))
 	if ek == "diff_pct":
 		_diff_pct += float(rec.get("combo_extra_val", 0))
 	if key in ["count_flat", "coin_count", "crystal_count", "treasure_pct", "boss_pct"] or ek == "diff_pct":
 		_push_run_mods()
 
-# 鏁存暟绫荤粍鍚堬紙+1 鏂囬挶 / +2 鍙€?/ +1 寮犲悶鍣€︼級鐨勫骞呭彇鏁达細
-#   +40% 浣滅敤鍦?1 涓?= 1.4锛岀洿鎺?int() 浼氳鎶规垚 1锛堢瓑浜庢病鍔狅級銆?#   杩欓噷鎶婂皬鏁版敀杩?_combo_frac锛屾敀澶?1 灏卞缁?1 鐐?鈥斺€?闀挎椂闂寸湅灏辨槸瀹炴墦瀹炵殑 +40%銆?func _take_int(rec: Dictionary, val: float) -> int:
+# 整数类组合（+1 文钱 / +2 只怪 / +1 张吞噬…）的增幅取整：
+#   +40% 作用在 1 上 = 1.4，直接 int() 会被抹成 1（等于没加）。
+#   这里把小数攒进 _combo_frac，攒够 1 就多给 1 点 —— 长时间看就是实打实的 +40%。
+func _take_int(rec: Dictionary, val: float) -> int:
 	var nm := str(rec.get("name", ""))
 	var whole := int(floor(val))
 	var frac := val - float(whole)
@@ -4555,7 +4792,7 @@ func _check_sets() -> void:
 				changed = true
 				break
 
-# 涓夊悎涓€鍔ㄧ敾锛氫笁寮犲崱鍚戜腑闂存眹鑱氾紝娣″嚭鍚庡啀鐢熸垚涓€寮狅紝椋炲悜椤舵爮銆屾€昏銆嶅苟鎵撳紑
+# 三合一动画：三张卡向中间汇聚，淡出后再生成一张，飞向顶栏「总计」并打开
 func _play_merge_fx(rec: Dictionary) -> void:
 	var layer := Control.new()
 	layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -4581,7 +4818,8 @@ func _play_merge_fx(rec: Dictionary) -> void:
 		tw.tween_property(t, "modulate:a", 1.0, 0.12).set_delay(float(i) * 0.05)
 		tw.parallel().tween_property(t, "position", center - t.size * 0.5, 0.30).set_delay(0.18 + float(i) * 0.05).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
 		tw.chain().tween_property(t, "modulate:a", 0.0, 0.10)
-	# 姹囪仛瀹屾垚鍚庯細鍚堟垚涓€寮狅紝椋炲悜銆屾€昏銆?	var tw2 := create_tween()
+	# 汇聚完成后：合成一张，飞向「总计」
+	var tw2 := create_tween()
 	tw2.tween_interval(0.62)
 	tw2.tween_callback(func() -> void: _fly_to_totals(layer, tex, center))
 
@@ -4608,14 +4846,16 @@ func _fly_to_totals(layer: Control, tex: Texture2D, from: Vector2) -> void:
 	tw.chain().tween_callback(func() -> void:
 		if is_instance_valid(layer):
 			layer.queue_free()
-		# 鏈眬绗竴娆＄粍鍚堬細鍘嬫殫灞忓箷 + 楂樹寒銆屾€昏銆嶏紝寮曞鐜╁鍘绘煡鐪?		if not _tot_hint_shown and LevelState.has_feature("draw") and not LevelState.has_feature("treasure"):
+		# 本局第一次组合：压暗屏幕 + 高亮「总计」，引导玩家去查看
+		if not _tot_hint_shown and LevelState.has_feature("draw") and not LevelState.has_feature("treasure"):
 			_tot_hint_shown = true
-			_l1_tutorial("l1_tot", _tot_btn, "鍚堟垚鍚庣殑鍗＄粍鍙互鍦ㄦ澶勬煡鐪?,
+			_l1_tutorial("l1_tot", _tot_btn, "合成后的卡组可以在此处查看",
 				func() -> void: _show_totals())
 		else:
 			_pulse_tot_btn())
 
-# 鍗曞崱椋炲悜鎬昏锛堢偒鍗¤鍚炲櫖鏃剁敤锛?func _fly_card_to_totals(art_path: String) -> void:
+# 单卡飞向总计（炫卡被吞噬时用）
+func _fly_card_to_totals(art_path: String) -> void:
 	var tex: Texture2D = null
 	if art_path != "" and ResourceLoader.exists(art_path):
 		tex = load(art_path)
@@ -4638,7 +4878,8 @@ func _activate_set(sid: String) -> void:
 	var ids: Array = _set_cards[sid]
 	if ids.is_empty(): return
 	var first: Dictionary = _card_db[str(ids[0])]
-	# 瀹朵紶鍗¤蛋鍙︿竴濂楃粨绠?	if first.has("ancestor"):
+	# 家传卡走另一套结算
+	if first.has("ancestor"):
 		_activate_ancestor_set(sid, first, ids)
 		return
 	var own_sum := {"atk": 0.0, "def": 0.0, "hp": 0.0, "mp": 0.0, "gold_pct": 0.0, "crystal_pct": 0.0,
@@ -4653,7 +4894,7 @@ func _activate_set(sid: String) -> void:
 		if own_sum.has(k):
 			own_sum[k] = float(own_sum[k]) + float(c["own_val"])
 		_cards.erase(cid)
-		_virtual_cards.erase(cid)          # 宸茶鍚炲櫖鐨勫壇鏈篃瑕佹竻锛屽惁鍒欒繖濂椾細姘歌繙"鍑戦綈"
+		_virtual_cards.erase(cid)          # 已被吞噬的副本也要清，否则这套会永远"凑齐"
 	var rec := {"set_id": sid, "series": str(first["series"]), "tier": int(first["tier"]),
 		"name": str(first["combo_name"]), "size": int(first["set_size"]),
 		"quality": int(first["quality"]), "art": str(first["art"]),
@@ -4664,24 +4905,26 @@ func _activate_set(sid: String) -> void:
 		"combo_extra_val": int(first.get("combo_extra_val", 0))}
 	_combined.append(rec)
 	_apply_own(own_sum)
-	# v13锛氱兢/闄?鏄父椹诲瀷 鈥斺€?缁勫悎瀹屾垚鐨勭灛闂村氨鐢熸晥涓€娆★紙涓嶇瓑"姣忔尝"锛?	if str(first["combo_key"]) in ["count_flat", "coin_count", "crystal_count", "treasure_pct", "boss_pct", "devour_n", "killnum_pct"]:
+	# v13：群/险 是常驻型 —— 组合完成的瞬间就生效一次（不等"每波"）
+	if str(first["combo_key"]) in ["count_flat", "coin_count", "crystal_count", "treasure_pct", "boss_pct", "devour_n", "killnum_pct"]:
 		_apply_combo(rec)
-	_toast_card(str(rec["name"]), int(rec["quality"]), "缁勫悎婵€娲伙紝" + str(rec["size"]) + " 寮犲凡娓呯┖")
-	# 涓夊悎涓€琛ㄧ幇锛氫笁寮犲崱姹囪仛 鈫?鍚堟垚涓€寮?鈫?椋炶繘銆屾€昏銆?	_play_merge_fx(rec)
-	# v8 鎴愰暱绯诲僵铔嬶細鍚堟垚 鏀诲嚮/闃插尽/姘旇/鍐呭姏 鏃?5% 鎺枫€屽洖娼€嶏紙涓€灞€涓€娆★級
-	# v13 閲嶅埄锛氬悎鎴愮粡娴庣郴锛堟枃閽?鐏垫櫠锛夋椂 3% 鍏ユ睜
+	_toast_card(str(rec["name"]), int(rec["quality"]), "组合激活，" + str(rec["size"]) + " 张已清空")
+	# 三合一表现：三张卡汇聚 → 合成一张 → 飞进「总计」
+	_play_merge_fx(rec)
+	# v8 成长系彩蛋：合成 攻击/防御/气血/内力 时 5% 掷「回潮」（一局一次）
+	# v13 重利：合成经济系（文钱/灵晶）时 3% 入池
 	if str(first["series"]) in ["gold", "crystal"] and not _zhongli_rolled and randf() < 0.03:
 		_zhongli_rolled = true
 		if not _pool.has("shiny_zhongli"):
 			_pool.append("shiny_zhongli")
-			_toast("褰╄泲锛併€岄噸鍒┿€嶅叆姹?)
+			_toast("彩蛋！「重利」入池")
 			Aud.sfx("ult_ready", -4.0)
 	var ser := str(first["series"])
 	if ser in ["atk", "def", "hp", "mp"] and not _backwash_done and randf() < 0.05:
 		_backwash_done = true
 		if not _pool.has("shiny_backwash") and not _acquired.has("shiny_backwash"):
 			_pool.append("shiny_backwash")
-			_toast("褰╄泲锛併€屽洖娼€嶅叆姹?鈥斺€?鍒锋柊灏辫兘鐪嬪埌")
+			_toast("彩蛋！「回潮」入池 —— 刷新就能看到")
 			Aud.sfx("ult_ready", -4.0)
 	var parts := sid.split("_")
 	if parts.size() == 2:
@@ -4693,7 +4936,7 @@ func _activate_set(sid: String) -> void:
 				if not _acquired.has(entry) and not _pool.has(entry):
 					_pool.append(entry)
 					var ec: Dictionary = _card_db[entry]
-					_toast_card(str(ec["name"]), int(ec["quality"]), "宸插姞鍏ュ崱姹?)
+					_toast_card(str(ec["name"]), int(ec["quality"]), "已加入卡池")
 	_refresh_deck()
 	_bond_check()
 	if _combined_layer != null and _combined_layer.visible:
@@ -4701,22 +4944,22 @@ func _activate_set(sid: String) -> void:
 
 func _own_text(s: Dictionary) -> String:
 	var arr: Array = []
-	if float(s["atk"]) > 0: arr.append("鏀诲嚮 +" + str(int(s["atk"])))
-	if float(s["def"]) > 0: arr.append("闃插尽 +" + str(int(s["def"])))
-	if float(s["hp"]) > 0: arr.append("姘旇 +" + str(int(s["hp"])))
-	if float(s.get("mp", 0.0)) > 0: arr.append("鍐呭姏 +" + str(int(s["mp"])))
-	if float(s["gold_pct"]) > 0: arr.append("閲戝竵 +" + str(int(s["gold_pct"])) + "%")
-	if float(s["crystal_pct"]) > 0: arr.append("鐏垫櫠 +" + str(int(s["crystal_pct"])) + "%")
-	if float(s.get("count", 0.0)) > 0: arr.append("姣忔尝 +" + str(int(s["count"])) + " 鍙?)
-	if float(s.get("coin_count", 0.0)) > 0: arr.append("鏂囬挶鎬?+" + str(int(s["coin_count"])))
-	if float(s.get("crystal_count", 0.0)) > 0: arr.append("鐏垫櫠鎬?+" + str(int(s["crystal_count"])))
-	if float(s.get("treasure_pct", 0.0)) > 0: arr.append("瀹濈墿 +" + str(int(s["treasure_pct"])) + "%")
-	if float(s.get("boss_pct", 0.0)) > 0: arr.append("棣栭 +" + str(int(s["boss_pct"])) + "%")
-	if float(s.get("wen_flat", 0.0)) > 0: arr.append("鏂囬挶 +" + str(int(s["wen_flat"])))
-	if float(s.get("crystal_flat", 0.0)) > 0: arr.append("鐏垫櫠 +" + str(int(s["crystal_flat"])))
-	if float(s.get("kill_pct", 0.0)) > 0: arr.append("鍑绘潃鏀剁泭 +" + str(int(s["kill_pct"])) + "%")
-	if float(s.get("exp_pct", 0.0)) > 0: arr.append("鏉€鎬暟 +" + str(int(s["exp_pct"])) + "%")
-	return " 路 ".join(PackedStringArray(arr))
+	if float(s["atk"]) > 0: arr.append("攻击 +" + str(int(s["atk"])))
+	if float(s["def"]) > 0: arr.append("防御 +" + str(int(s["def"])))
+	if float(s["hp"]) > 0: arr.append("气血 +" + str(int(s["hp"])))
+	if float(s.get("mp", 0.0)) > 0: arr.append("内力 +" + str(int(s["mp"])))
+	if float(s["gold_pct"]) > 0: arr.append("金币 +" + str(int(s["gold_pct"])) + "%")
+	if float(s["crystal_pct"]) > 0: arr.append("灵晶 +" + str(int(s["crystal_pct"])) + "%")
+	if float(s.get("count", 0.0)) > 0: arr.append("每波 +" + str(int(s["count"])) + " 只")
+	if float(s.get("coin_count", 0.0)) > 0: arr.append("文钱怪 +" + str(int(s["coin_count"])))
+	if float(s.get("crystal_count", 0.0)) > 0: arr.append("灵晶怪 +" + str(int(s["crystal_count"])))
+	if float(s.get("treasure_pct", 0.0)) > 0: arr.append("宝物 +" + str(int(s["treasure_pct"])) + "%")
+	if float(s.get("boss_pct", 0.0)) > 0: arr.append("首领 +" + str(int(s["boss_pct"])) + "%")
+	if float(s.get("wen_flat", 0.0)) > 0: arr.append("文钱 +" + str(int(s["wen_flat"])))
+	if float(s.get("crystal_flat", 0.0)) > 0: arr.append("灵晶 +" + str(int(s["crystal_flat"])))
+	if float(s.get("kill_pct", 0.0)) > 0: arr.append("击杀收益 +" + str(int(s["kill_pct"])) + "%")
+	if float(s.get("exp_pct", 0.0)) > 0: arr.append("杀怪数 +" + str(int(s["exp_pct"])) + "%")
+	return " · ".join(PackedStringArray(arr))
 
 func _apply_own(s: Dictionary) -> void:
 	_stats["atk"] = float(_stats["atk"]) + float(s["atk"])
@@ -4727,7 +4970,8 @@ func _apply_own(s: Dictionary) -> void:
 			_core.attr_add("mp", float(s["mp"]))
 	_gold_pct += float(s["gold_pct"])
 	_crystal_pct += float(s["crystal_pct"])
-	# v13 缇?闄?	if float(s.get("count", 0.0)) > 0.0:
+	# v13 群/险
+	if float(s.get("count", 0.0)) > 0.0:
 		_wave_extra += int(s["count"])
 	if float(s.get("coin_count", 0.0)) > 0.0:
 		_coin_count_extra += int(round(_peril_scale(float(s["coin_count"]))))
@@ -4748,30 +4992,33 @@ func _apply_own(s: Dictionary) -> void:
 		_killnum_pct += float(s["exp_pct"])
 	_push_run_mods()
 	if _core != null:
-		# v6锛氭柊灞炴€у眰鏄粨绠楁簮锛涙棫 hero 瀛楁缁х画缁欐妧鑳?鍙敜鐗╄锛屼袱杈逛竴璧峰姞
+		# v6：新属性层是结算源；旧 hero 字段继续给技能/召唤物读，两边一起加
 		_apply_flat_growth(float(s["atk"]), float(s["hp"]))
-		# v6锛氶槻寰″崱涓嶅啀鍔犮€屾暟鍊煎噺浼ゃ€嶏紝鏀规垚涓冪郴鍥哄畾鍑忓厤锛? 鐐归槻寰?= 3% 鍑忓厤锛岃窡鏃ф墜鎰熷榻愶級
+		# v6：防御卡不再加「数值减伤」，改成七系固定减免（1 点防御 = 3% 减免，跟旧手感对齐）
 		var def_red := float(s["def"]) * DEF_CARD_TO_RED
 		if def_red > 0.0:
 			for t in _core.DMG_TYPES:
-				if t != "鐪熷疄":
+				if t != "真实":
 					_core.type_add(t, "red_f", def_red)
 
-# 閫夋嫨绫诲弽棣堬細鎶藉崱 / 杩涢樁 / 瀹濈墿 / 璇风 / 鍗囩骇 鍚勪竴鍙ｇ壒鏁堬紜涓€澹伴煶
-# 棣栭鐧诲満锛氭殫绾㈢偢寮€ + 閲嶉渿 + 榧?func _on_boss_arrived(_tier: int) -> void:
+# 选择类反馈：抽卡 / 进阶 / 宝物 / 请神 / 升级 各一口特效＋一声音
+# 首领登场：暗红炸开 + 重震 + 鼓
+func _on_boss_arrived(_tier: int) -> void:
 	var p := Vector2(360, 250)
 	var b: Dictionary = _core._boss_foe() if _core != null else {}
 	if not b.is_empty():
 		p = _core.position + Vector2(float(b["x"]), float(b["y"]) - 24.0)
-	# 鍒硦鍒伴《閮?HUD 涓婏細鍘嬪洖鎴樺満鍐?	p.x = clampf(p.x, 90.0, 630.0)
+	# 别糊到顶部 HUD 上：压回战场内
+	p.x = clampf(p.x, 90.0, 630.0)
 	p.y = clampf(p.y, 210.0, 800.0)
 	_spawn_pfx("shadow/dark-explosion", p, 1.7, "shadow", 1.9)
 	_core._shake = maxf(float(_core._shake), 15.0)
 	Aud.sfx("drum", -6.0, 0.85)
 	Aud.sfx("tension", -14.0, 0.95)
-	_boss_intro_show(p, str(b.get("name", "棣栭")) if not b.is_empty() else "棣栭")
-	_cam_zoom_to(1.05, 0.75)     # 棣栭鎴橈細闀滃ご鎺ㄨ繎锛屽帇鍦?
-# 棣栭鐧诲満婕斿嚭锛氭垬鍦哄帇鏆?鈫?鑱氬厜缃╀綇棣栭 鈫?鍚嶅瓧澶у瓧寮瑰叆
+	_boss_intro_show(p, str(b.get("name", "首领")) if not b.is_empty() else "首领")
+	_cam_zoom_to(1.05, 0.75)     # 首领战：镜头推近，压场
+
+# 首领登场演出：战场压暗 → 聚光罩住首领 → 名字大字弹入
 func _boss_intro_show(at: Vector2, nm: String) -> void:
 	if _boss_veil == null or _boss_spot == null or _boss_name_lb == null:
 		return
@@ -4805,12 +5052,13 @@ func _boss_intro_show(at: Vector2, nm: String) -> void:
 	t3.chain().tween_property(_boss_name_lb, "modulate:a", 0.0, 0.45)
 	t3.chain().tween_callback(func() -> void: _boss_name_lb.visible = false)
 
-# Boss/澹眽寤惰繜鎶€鐮镐笅鏉ワ細鎸夊睘鎬х粰涓€鍙ｅ懡涓壒鏁?const LAND_FX := {
-	"鐗╃悊": ["impacts/ground-slam", "metal", 0.90],
-	"鐏郴": ["fire/fireball", "", 0.90],
-	"閲戠郴": ["lightning/zap-hit", "volt", 0.95],
-	"鏈ㄧ郴": ["nature/leaf-storm", "leaf", 0.85],
-	"鐪熷疄": ["shadow/soul-drain", "", 0.80],
+# Boss/壮汉延迟技砸下来：按属性给一口命中特效
+const LAND_FX := {
+	"物理": ["impacts/ground-slam", "metal", 0.90],
+	"火系": ["fire/fireball", "", 0.90],
+	"金系": ["lightning/zap-hit", "volt", 0.95],
+	"木系": ["nature/leaf-storm", "leaf", 0.85],
+	"真实": ["shadow/soul-drain", "", 0.80],
 }
 
 func _on_delayed_land(pos: Vector2, elem: String) -> void:
@@ -4818,7 +5066,8 @@ func _on_delayed_land(pos: Vector2, elem: String) -> void:
 	var wp: Vector2 = _core.position + pos
 	_spawn_pfx(str(e[0]), wp, float(e[2]), str(e[1]), 1.30)
 
-# 棣栭鍊掍笅锛氱櫧闂?+ 澶х垎 + 閲戣€€ + 閲嶉渿锛岄厤涓€娈靛緢鐭殑鎱㈤暅澶?# 绾镐汉 Lv5锛氬湪鏍稿績閭ｈ竟鎸′笅浜嗛棰嗗欢杩熸妧
+# 首领倒下：白闪 + 大爆 + 金耀 + 重震，配一段很短的慢镜头
+# 纸人 Lv5：在核心那边挡下了首领延迟技
 func _on_paper_blocked(pos: Vector2) -> void:
 	if _run_over or _core == null or _curio_id != "zhiren":
 		return
@@ -4831,7 +5080,7 @@ func _on_paper_blocked(pos: Vector2) -> void:
 	if not _skill_batch_active(epoch):
 		return
 	_curio_flash()
-	_toast("绾镐汉鏇胯韩 路 鎸′笅棣栭涓€鍑伙紙鍓?%d锛? % _zhiren)
+	_toast("纸人替身 · 挡下首领一击（剩 %d）" % _zhiren)
 	Aud.sfx("paper", -8.0, 1.0)
 	if _core != null:
 		_spawn_pfx("holy/heal", _core.position + pos, 1.0, "heal", 1.5)
@@ -4848,7 +5097,8 @@ func _on_boss_died(pos: Vector2) -> void:
 	Aud.sfx("hit_heavy", -2.0, 0.72)
 	Aud.sfx("bell", -4.0, 0.9)
 	Aud.sfx("levelup", -6.0, 0.95)
-	_cam_zoom_to(1.0, 0.85)      # 棣栭鍊掍笅锛氶暅澶撮€€鍥?
+	_cam_zoom_to(1.0, 0.85)      # 首领倒下：镜头退回
+
 func _choice_fx(kind: String) -> void:
 	var hpos := _hero_screen()
 	match kind:
@@ -4878,7 +5128,7 @@ func _add_card(id: String) -> void:
 		return
 	if not _card_db.has(id) or _acquired.has(id): return
 	if _cards.size() >= 10:
-		_toast("鍗＄粍宸叉弧锛?0 鏍硷級")
+		_toast("卡组已满（10 格）")
 		return
 	_choice_fx("draw")
 	_qc("draw", 1)
@@ -4921,11 +5171,11 @@ func _add_card(id: String) -> void:
 			if _family_card_allowed(us) and not _acquired.has(us) and not _pool.has(us):
 				_pool.append(us)
 				var uc: Dictionary = _card_db[us]
-				_toast_card(str(uc["name"]), int(uc["quality"]), "宸插姞鍏ュ崱姹?)
+				_toast_card(str(uc["name"]), int(uc["quality"]), "已加入卡池")
 	_check_sets()
 	_page = 0
 	_refresh_deck()
-	_toast_card(str(c["name"]), int(c["quality"]), "宸插叆鍗＄粍")
+	_toast_card(str(c["name"]), int(c["quality"]), "已入卡组")
 	_draw_paid = false
 	_show_draw(false)
 
@@ -4955,16 +5205,17 @@ func _build_combined() -> void:
 	panel.add_theme_stylebox_override("panel", sb)
 	panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	_combined_layer.add_child(panel)
-	_lbl("鎬?璁?, Vector2(60, 166), Vector2(260, 46), 34, INK, _combined_layer)
-	_btn("脳", Rect2(624, 170, 44, 36), 22, Color(0.95, 0.91, 0.83), DIM, func(): _show_combined(false), _combined_layer)
-	# 椤堕儴鍒嗙被閽細瀹濈墿 / 缁勫悎
-	var tabs := [["bond", "瀹濈墿"], ["combo", "缁勫悎"]]
+	_lbl("总 计", Vector2(60, 166), Vector2(260, 46), 34, INK, _combined_layer)
+	_btn("×", Rect2(624, 170, 44, 36), 22, Color(0.95, 0.91, 0.83), DIM, func(): _show_combined(false), _combined_layer)
+	# 顶部分类钮：宝物 / 组合
+	var tabs := [["bond", "宝物"], ["combo", "组合"]]
 	_tot_tabs.clear()
 	for i in tabs.size():
 		var b := _btn(str(tabs[i][1]), Rect2(60.0 + float(i) * 140.0, 216, 128, 42), 20,
 			Color(0.09, 0.08, 0.07, 0.98), LIGHT, _set_tot_tab.bind(str(tabs[i][0])), _combined_layer)
 		_tot_tabs.append(b)
-	# 涓や釜鍒嗛〉鐨勫唴瀹瑰尯锛堥兘鏄浘鏍囧锛氱偣鍥炬爣鎵嶇湅璇︽儏锛?	_tot_bond_root = Control.new()
+	# 两个分页的内容区（都是图标墙：点图标才看详情）
+	_tot_bond_root = Control.new()
 	_tot_bond_root.position = Vector2(50, 280)
 	_tot_bond_root.size = Vector2(620, 640)
 	_tot_bond_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -4986,11 +5237,12 @@ func _show_combined(v: bool) -> void:
 		_combined_layer.move_to_front()
 		_set_tot_tab(_tot_tab)
 
-# 缁勫悎椤碉細宸插悎鎴愮殑缁勫悎 + 琚悶鍣殑鍗曞崱锛屽叏鏄浘鏍囷紝鐐瑰紑鐪嬭鎯?func _refresh_combined() -> void:
+# 组合页：已合成的组合 + 被吞噬的单卡，全是图标，点开看详情
+func _refresh_combined() -> void:
 	for ch in _combined_icons.get_children(): ch.queue_free()
 	_combined_detail.visible = false
 	if _combined.is_empty() and _devoured.is_empty() and _ancestor_combos.is_empty():
-		_lbl("杩樻病鏈夊凡婵€娲荤粍鍚?, Vector2(20, 20), Vector2(580, 40), 22, DIM, _combined_icons)
+		_lbl("还没有已激活组合", Vector2(20, 20), Vector2(580, 40), 22, DIM, _combined_icons)
 		return
 	var k := 0
 	for a_v in _ancestor_combos:
@@ -5003,7 +5255,7 @@ func _show_combined(v: bool) -> void:
 		if ap2 != "" and ResourceLoader.exists(ap2):
 			ica.art = load(ap2)
 		ica.size_n = 3
-		ica.mark = "浼?
+		ica.mark = "传"
 		ica.pressed.connect(func() -> void:
 			_show_ancestor_combo_detail(ar))
 		_combined_icons.add_child(ica)
@@ -5016,7 +5268,7 @@ func _show_combined(v: bool) -> void:
 		ic.quality = int(rec["quality"])
 		ic.art = load(str(rec["art"]))
 		ic.size_n = int(rec["size"])
-		ic.mark = "鍚?
+		ic.mark = "合"
 		ic.pressed.connect(func() -> void: _show_combined_detail(rec))
 		_combined_icons.add_child(ic)
 		k += 1
@@ -5030,12 +5282,13 @@ func _show_combined(v: bool) -> void:
 		if ap != "" and ResourceLoader.exists(ap):
 			ic2.art = load(ap)
 		ic2.size_n = 0
-		ic2.mark = "鍚?
+		ic2.mark = "吞"
 		ic2.pressed.connect(func() -> void: _show_devour_detail(d))
 		_combined_icons.add_child(ic2)
 		k += 1
 
-# 鍚炲櫖鍗曞崱鐨勮鎯?func _show_devour_detail(d: Dictionary) -> void:
+# 吞噬单卡的详情
+func _show_devour_detail(d: Dictionary) -> void:
 	for ch in _combined_detail.get_children():
 		ch.queue_free()
 	_combined_detail.visible = true
@@ -5049,13 +5302,13 @@ func _show_combined(v: bool) -> void:
 	sb.set_border_width_all(7)
 	p.add_theme_stylebox_override("panel", sb)
 	_combined_detail.add_child(p)
-	_lbl(str(d.get("name", "鐐崱")), Vector2(170, 340), Vector2(360, 40), 30, INK, _combined_detail, HORIZONTAL_ALIGNMENT_CENTER)
-	_lbl("鍚炪€€鍣?, Vector2(170, 382), Vector2(360, 26), 18, Color(0.64, 0.22, 0.15), _combined_detail, HORIZONTAL_ALIGNMENT_CENTER)
-	_lbl("鍚炰笅 %d 寮犲浼犲崱" % int(d.get("n", 0)), Vector2(170, 422), Vector2(380, 30), 21, INK, _combined_detail)
-	_lbl("鐏垫櫠 +%d銆€鏂囬挶 +%d" % [int(d.get("crystal", 0)), int(d.get("wen", 0))], Vector2(170, 458), Vector2(380, 30), 19, INK, _combined_detail)
-	_lbl("%s +%d%%" % [str(d.get("skill", "鎶€鑳?)), int(d.get("pct", 0))], Vector2(170, 494), Vector2(380, 30), 19,
+	_lbl(str(d.get("name", "炫卡")), Vector2(170, 340), Vector2(360, 40), 30, INK, _combined_detail, HORIZONTAL_ALIGNMENT_CENTER)
+	_lbl("吞　噬", Vector2(170, 382), Vector2(360, 26), 18, Color(0.64, 0.22, 0.15), _combined_detail, HORIZONTAL_ALIGNMENT_CENTER)
+	_lbl("吞下 %d 张家传卡" % int(d.get("n", 0)), Vector2(170, 422), Vector2(380, 30), 21, INK, _combined_detail)
+	_lbl("灵晶 +%d　文钱 +%d" % [int(d.get("crystal", 0)), int(d.get("wen", 0))], Vector2(170, 458), Vector2(380, 30), 19, INK, _combined_detail)
+	_lbl("%s +%d%%" % [str(d.get("skill", "技能")), int(d.get("pct", 0))], Vector2(170, 494), Vector2(380, 30), 19,
 		Color(0.46, 0.20, 0.10), _combined_detail)
-	_btn("脳", Rect2(592, 322, 34, 30), 20, Color(0.97, 0.93, 0.85), DIM,
+	_btn("×", Rect2(592, 322, 34, 30), 20, Color(0.97, 0.93, 0.85), DIM,
 		func(): _combined_detail.visible = false, _combined_detail)
 
 func _show_combined_detail(rec: Dictionary) -> void:
@@ -5072,18 +5325,19 @@ func _show_combined_detail(rec: Dictionary) -> void:
 	p.add_theme_stylebox_override("panel", sb)
 	_combined_detail.add_child(p)
 	_lbl(str(rec["name"]), Vector2(170, 326), Vector2(360, 40), 30, INK, _combined_detail, HORIZONTAL_ALIGNMENT_CENTER)
-	var sz_cn: Array = ["涓?, "鍥?, "浜?, "鍏?]
-	_lbl(str(sz_cn[clampi(int(rec["size"]) - 3, 0, 3)]) + "鍚堜竴", Vector2(420, 330), Vector2(100, 28), 18, Color(0.64,0.22,0.15), _combined_detail)
-	_lbl("鍗￠潰鍚堣锛? + str(rec["own_text"]), Vector2(170, 390), Vector2(380, 32), 20, INK, _combined_detail)
+	var sz_cn: Array = ["三", "四", "五", "六"]
+	_lbl(str(sz_cn[clampi(int(rec["size"]) - 3, 0, 3)]) + "合一", Vector2(420, 330), Vector2(100, 28), 18, Color(0.64,0.22,0.15), _combined_detail)
+	_lbl("卡面合计：" + str(rec["own_text"]), Vector2(170, 390), Vector2(380, 32), 20, INK, _combined_detail)
 	var bst := float(_combo_boost.get(str(rec["name"]), 0.0))
-	var btail := "" if bst <= 0.0 else ("銆€缇佺粖 +%d%%" % int(round(bst * 100.0)))
-	_lbl("缁勫悎锛? + str(rec["combo_text"]) + btail, Vector2(170, 430), Vector2(380, 32), 20, INK, _combined_detail)
-	_lbl("瑙﹀彂锛? + str(rec["trigger"]) + "銆€宸插彔 " + str(int(rec["stacks"])), Vector2(170, 470), Vector2(380, 30), 18, DIM, _combined_detail)
-	_lbl("婧愶細" + " 路 ".join(PackedStringArray(rec["sources"])), Vector2(170, 510), Vector2(380, 60), 17, Color(0.38,0.30,0.20), _combined_detail)
-	_btn("脳", Rect2(592, 302, 34, 30), 20, Color(0.97,0.93,0.85), DIM, func(): _combined_detail.visible = false, _combined_detail)
+	var btail := "" if bst <= 0.0 else ("　羁绊 +%d%%" % int(round(bst * 100.0)))
+	_lbl("组合：" + str(rec["combo_text"]) + btail, Vector2(170, 430), Vector2(380, 32), 20, INK, _combined_detail)
+	_lbl("触发：" + str(rec["trigger"]) + "　已叠 " + str(int(rec["stacks"])), Vector2(170, 470), Vector2(380, 30), 18, DIM, _combined_detail)
+	_lbl("源：" + " · ".join(PackedStringArray(rec["sources"])), Vector2(170, 510), Vector2(380, 60), 17, Color(0.38,0.30,0.20), _combined_detail)
+	_btn("×", Rect2(592, 302, 34, 30), 20, Color(0.97,0.93,0.85), DIM, func(): _combined_detail.visible = false, _combined_detail)
 
 
-# 瀹朵紶缁勫悎璇︽儏锛堢嫭绔嬩竴濂楀瓧娈碉紝涓嶅鐢ㄦ櫘閫氱粍鍚堢殑 rec锛?func _show_ancestor_combo_detail(ar: Dictionary) -> void:
+# 家传组合详情（独立一套字段，不套用普通组合的 rec）
+func _show_ancestor_combo_detail(ar: Dictionary) -> void:
 	for ch in _combined_detail.get_children(): ch.queue_free()
 	_combined_detail.visible = true
 	var q := clampi(int(ar.get("quality", 2)), 1, 5)
@@ -5097,11 +5351,11 @@ func _show_combined_detail(rec: Dictionary) -> void:
 	sb.set_border_width_all(7)
 	p.add_theme_stylebox_override("panel", sb)
 	_combined_detail.add_child(p)
-	_lbl(str(ar.get("name", "瀹朵紶缁勫悎")), Vector2(170, 346), Vector2(360, 40), 30, INK, _combined_detail, HORIZONTAL_ALIGNMENT_CENTER)
-	_lbl("瀹?浼?路 " + str(ar.get("tier", 1)) + " 妗?, Vector2(420, 350), Vector2(140, 28), 18, Color(0.64,0.22,0.15), _combined_detail)
-	_lbl("鏁堟灉锛? + str(ar.get("text", "")), Vector2(170, 410), Vector2(380, 80), 20, INK, _combined_detail)
-	_lbl("婧愶細" + " 路 ".join(PackedStringArray(ar.get("sources", []))), Vector2(170, 500), Vector2(380, 70), 17, Color(0.38,0.30,0.20), _combined_detail)
-	_btn("脳", Rect2(592, 322, 34, 30), 20, Color(0.97,0.93,0.85), DIM, func(): _combined_detail.visible = false, _combined_detail)
+	_lbl(str(ar.get("name", "家传组合")), Vector2(170, 346), Vector2(360, 40), 30, INK, _combined_detail, HORIZONTAL_ALIGNMENT_CENTER)
+	_lbl("家 传 · " + str(ar.get("tier", 1)) + " 档", Vector2(420, 350), Vector2(140, 28), 18, Color(0.64,0.22,0.15), _combined_detail)
+	_lbl("效果：" + str(ar.get("text", "")), Vector2(170, 410), Vector2(380, 80), 20, INK, _combined_detail)
+	_lbl("源：" + " · ".join(PackedStringArray(ar.get("sources", []))), Vector2(170, 500), Vector2(380, 70), 17, Color(0.38,0.30,0.20), _combined_detail)
+	_btn("×", Rect2(592, 322, 34, 30), 20, Color(0.97,0.93,0.85), DIM, func(): _combined_detail.visible = false, _combined_detail)
 
 class CombinedIcon extends Control:
 	const F := preload("res://fonts/ink.ttf")
@@ -5110,7 +5364,7 @@ class CombinedIcon extends Control:
 	var quality := 3
 	var art: Texture2D = null
 	var size_n := 3
-	var mark := "鍚?
+	var mark := "合"
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_STOP
 	func _draw() -> void:
@@ -5153,16 +5407,18 @@ func _spawn_hit_fx(global_pos: Vector2, radius: float, dmg: int, hero_hit: bool,
 		return
 	_fx_front.spawn_hit(global_pos - FIELD_POS, radius, dmg, hero_hit, crit or heavy, heavy)
 	var impact := global_pos - Vector2(0, radius * 0.85)
-	# 鍍忕礌鍛戒腑鐗规晥锛坧ixelfx锛孧IT锛夛細鏅€氬皬銆佹毚鍑婚噾浜€佹尐鎵撳亸琛€
+	# 像素命中特效（pixelfx，MIT）：普通小、暴击金亮、挨打偏血
 	if hero_hit:
 		_spawn_pfx("impacts/blunt-hit", impact, 0.70, "blood", 1.2)
 	elif crit:
 		_spawn_pfx("impacts/crit-hit", impact, 0.95, "gold", 1.9)
-		# 鏆村嚮鍐嶅彔涓€鍙ｅ皬鐨勯敊浣嶉噾鐖嗭紙鍚屼竴涓凡鐑樺彉浣擄紝鍙敼缂╂斁/浣嶇疆锛?		_spawn_pfx("impacts/crit-hit", impact + Vector2(randf_range(-14.0, 14.0), randf_range(-10.0, 6.0)), 0.58, "gold", 1.9)
+		# 暴击再叠一口小的错位金爆（同一个已烘变体，只改缩放/位置）
+		_spawn_pfx("impacts/crit-hit", impact + Vector2(randf_range(-14.0, 14.0), randf_range(-10.0, 6.0)), 0.58, "gold", 1.9)
 	elif heavy:
 		_spawn_pfx("impacts/crit-hit", impact, 0.80, "", 1.4)
 	elif randf() < (0.40 if _boss_on else 0.70):
-		# 妯壂涓€娆℃墦濂藉嚑鍙椂锛屾櫘閫氬懡涓笉姣忓彧閮芥斁锛堜繚涓濇粦锛岃鎰熶篃澶燂級锛涢棰嗘垬鍐嶉檷涓€妗?		_spawn_pfx("impacts/hit-spark", impact, 0.72, "", 1.0)
+		# 横扫一次打好几只时，普通命中不每只都放（保丝滑，观感也够）；首领战再降一档
+		_spawn_pfx("impacts/hit-spark", impact, 0.72, "", 1.0)
 
 class ComboReadout extends Control:
 	var count := 0
@@ -5187,10 +5443,11 @@ class ComboReadout extends Control:
 		var pop := 1.0 + 0.12 * sin(_pulse * PI)
 		draw_set_transform(size * 0.5 * (1.0 - pop), 0.0, Vector2.ONE * pop)
 		draw_line(Vector2(10, 52), Vector2(148, 52), Color(0.66, 0.47, 0.19, 0.65), 1.5, true)
-		draw_string(FONT, Vector2(10, 37), "杩炴柀", HORIZONTAL_ALIGNMENT_LEFT, -1, 23, Color(0.42, 0.30, 0.16))
+		draw_string(FONT, Vector2(10, 37), "连斩", HORIZONTAL_ALIGNMENT_LEFT, -1, 23, Color(0.42, 0.30, 0.16))
 		draw_string(FONT, Vector2(72, 39), str(count), HORIZONTAL_ALIGNMENT_LEFT, -1, 42, Color(0.58, 0.22, 0.10))
 
-# 杞婚噺鍛戒腑鐏姳锛氱▼搴忓寲鏀惧皠绾匡紝涓嶉鐑樸€佷笉鐢?pixelfx锛?.18 绉掕嚜姣?class ImpactSpark extends Control:
+# 轻量命中火花：程序化放射线，不预烘、不用 pixelfx，0.18 秒自毁
+class ImpactSpark extends Control:
 	var col := Color.WHITE
 	var life := 0.18
 	var t := 0.0
@@ -5255,19 +5512,20 @@ func _on_hero_attack() -> void:
 		return
 	_play_attack_fx(true)
 	_attack_count += 1
-	# 瀹朵紶杩藉姞鏀诲嚮鐢県ero_strike_resolved鍦ㄤ富鍒€鍛戒腑鍚庣粨绠楋紝璧锋墜浠呰鏀诲嚮浜嬩欢銆?	_curio_on_attack()                       # 濂囩墿锛氶摐閽卞墤锛堟櫘鏀婚檮甯﹂挶闀栵級
+	# 家传追加攻击由hero_strike_resolved在主刀命中后结算，起手仅计攻击事件。
+	_curio_on_attack()                       # 奇物：铜钱剑（普攻附带钱镖）
 	if not _skill_batch_active(epoch):
 		return
-	_trigger_combos("姣忔鏀诲嚮")
+	_trigger_combos("每次攻击")
 	if _attack_count % 5 == 0:
-		_trigger_combos("姣?5 娆℃敾鍑?)
+		_trigger_combos("每 5 次攻击")
 	if _attack_count % 10 == 0:
-		_trigger_combos("姣?10 娆℃敾鍑?)
+		_trigger_combos("每 10 次攻击")
 
 func _on_hero_hit() -> void:
 	_play_attack_fx(false)
 	_hit_count += 1
-	_trigger_combos("姣忔鍙楀嚮")
+	_trigger_combos("每次受击")
 	_stone_on_hit()
 
 func _on_hero_foe_hit(tgt: Dictionary, dmg: float, crit: bool, heavy: bool) -> void:
@@ -5280,7 +5538,8 @@ func _on_hero_foe_hit(tgt: Dictionary, dmg: float, crit: bool, heavy: bool) -> v
 	if not _skill_batch_active(epoch) or not _core.foes.has(tgt):
 		return
 	if crit:
-		_curio_on_crit(tgt)                  # 濂囩墿锛氬瘨鐜夋壋鎸?/ 閱夌縼澹?	if _fx_front == null:
+		_curio_on_crit(tgt)                  # 奇物：寒玉扳指 / 醉翁壶
+	if _fx_front == null:
 		return
 	var tk = _foe_tokens.get(int(tgt.get("_tid", 0)))
 	if tk == null:
@@ -5289,36 +5548,38 @@ func _on_hero_foe_hit(tgt: Dictionary, dmg: float, crit: bool, heavy: bool) -> v
 	tk.play_hit(tk.position - _hero_token.position, crit or heavy)
 
 # ============================================================
-# v3 璇风 + 鎶€鑳芥爮锛堢瀹楁妧鑳斤細鍚勮嚜 CD + 鍐呭姏锛?# ============================================================
+# v3 请神 + 技能栏（祖宗技能：各自 CD + 内力）
+# ============================================================
 const Aud := preload("res://shared/audio.gd")
 
 const SKILL_DEFS := {
-	"zl": {"name": "澶╅浄閬撴湳", "dtype": "閲戠郴", "mul": 1.6, "cd": 10.0, "mp": 260.0,
+	"zl": {"name": "天雷道术", "dtype": "金系", "mul": 1.6, "cd": 10.0, "mp": 260.0,
 		"targets": 3, "col": Color(0.86, 0.78, 0.34)},
-	"cuisanniang": {"name": "闆炬捣榫欑帇", "dtype": "鍙敜", "mul": 2.5, "cd": 60.0, "mp": 300.0,
+	"cuisanniang": {"name": "雾海龙王", "dtype": "召唤", "mul": 2.5, "cd": 60.0, "mp": 300.0,
 		"targets": 1, "col": Color(0.38, 0.62, 0.82)},
-	"jicanghai": {"name": "鎬掔伀鐒氳韩", "dtype": "鐏郴", "mul": 1.3, "cd": 9.0, "mp": 0.0,
+	"jicanghai": {"name": "怒火焚身", "dtype": "火系", "mul": 1.3, "cd": 9.0, "mp": 0.0,
 		"targets": 3, "col": Color(0.88, 0.42, 0.22)},
-	"chenshi": {"name": "鍒洪", "dtype": "鐪熷疄", "mul": 1.4, "cd": 8.0, "mp": 90.0,
+	"chenshi": {"name": "刺骨", "dtype": "真实", "mul": 1.4, "cd": 8.0, "mp": 90.0,
 		"targets": 1, "col": Color(0.86, 0.55, 0.62)},
-	"liuqingqing": {"name": "鍥炴槬", "dtype": "鏈ㄧ郴", "mul": 1.0, "heal_mul": 2.0, "cd": 12.0, "mp": 80.0,
+	"liuqingqing": {"name": "回春", "dtype": "木系", "mul": 1.0, "heal_mul": 2.0, "cd": 12.0, "mp": 80.0,
 		"targets": 1, "col": Color(0.42, 0.72, 0.42)},
-	"xiaoqier": {"name": "椤烘墜", "dtype": "鐗╃悊", "mul": 0.9, "cd": 5.0, "mp": 60.0,
+	"xiaoqier": {"name": "顺手", "dtype": "物理", "mul": 0.9, "cd": 5.0, "mp": 60.0,
 		"targets": 1, "col": Color(0.90, 0.84, 0.66)},
-	"gundilong": {"name": "鑲夎泲鍐叉挒", "dtype": "鐗╃悊", "mul": 1.5, "cd": 6.0, "mp": 80.0,
+	"gundilong": {"name": "肉蛋冲撞", "dtype": "物理", "mul": 1.5, "cd": 6.0, "mp": 80.0,
 		"targets": 1, "col": Color(0.78, 0.68, 0.42)},
-	"qingluan": {"name": "闈掗妇椋炲垉", "dtype": "鐗╃悊", "mul": 1.2, "cd": 8.0, "mp": 90.0,
+	"qingluan": {"name": "青鸾飞刃", "dtype": "物理", "mul": 1.2, "cd": 8.0, "mp": 90.0,
 		"targets": 1, "col": Color(0.55, 0.82, 0.90)},
-	"liuqingqing2": {"name": "鍥炴槬", "dtype": "鏈ㄧ郴", "mul": 1.0, "cd": 12.0, "mp": 80.0,
+	"liuqingqing2": {"name": "回春", "dtype": "木系", "mul": 1.0, "cd": 12.0, "mp": 80.0,
 		"targets": 1, "col": Color(0.45, 0.78, 0.42)},
-	"zhiyuan": {"name": "鍓焊鎴愬叺", "dtype": "鍙敜", "mul": 1.0, "cd": 10.0, "mp": 90.0,
+	"zhiyuan": {"name": "剪纸成兵", "dtype": "召唤", "mul": 1.0, "cd": 10.0, "mp": 90.0,
 		"targets": 1, "col": Color(0.94, 0.92, 0.84)},
 }
 
-# 鎶€鑳藉浘鏍囷細鍚屼竴鎶€鑳界殑閲嶅鏉＄洰鍏辩敤涓€寮犲浘
+# 技能图标：同一技能的重复条目共用一张图
 const SKILL_ICON_ALIAS := {"liuqingqing2": "liuqingqing"}
 
-# 姣忕骇浼ゅ鎴愰暱锛氶珮棰戞妧鑳藉皬銆佷綆棰?楂樺€嶇巼鎶€鑳藉ぇ锛涜绁為〉涓庢垬鏂楀叡鐢ㄥ悓涓€濂?const SKILL_LV_STEP := {
+# 每级伤害成长：高频技能小、低频/高倍率技能大；请神页与战斗共用同一套
+const SKILL_LV_STEP := {
 	"zl": 3, "cuisanniang": 5, "jicanghai": 3, "chenshi": 3, "liuqingqing": 3,
 	"xiaoqier": 2, "gundilong": 2, "qingluan": 3, "zhujue": 2,
 }
@@ -5332,9 +5593,10 @@ var _god_layer: Control = null
 var _god_root: Control = null
 var _god_ban_lb: Label = null
 var _god_refresh_btn: Button = null
-var _god_reroll := 0            # 璇风鍒锋柊娆℃暟锛堟斁寮?+1锛屽埛鏂?-1锛?var _god_hand_charge := -1      # 璁颁綇杩欎竴鎵嬫槸鍑犳璇风鏃舵幏鐨勶紙闅愯棌鍐嶅紑涓嶉噸鎺凤級
+var _god_reroll := 0            # 请神刷新次数（放弃 +1，刷新 -1）
+var _god_hand_charge := -1      # 记住这一手是几次请神时掷的（隐藏再开不重掷）
 
-# ---------------- 鎶€鑳芥爮 ----------------
+# ---------------- 技能栏 ----------------
 func _build_skill_bar() -> void:
 	for i in 6:
 		var s := SkillSlot.new()
@@ -5361,7 +5623,7 @@ func _tick_skills(dt: float) -> void:
 	if not _skill_batch_active(epoch):
 		return
 	if _core != null and float(_core.hero.get("aspd", 1.0)) > MAX_ASPD:
-		_core.hero["aspd"] = MAX_ASPD          # 纭《锛氶槻鏀婚€熷彔澶珮鍗″抚
+		_core.hero["aspd"] = MAX_ASPD          # 硬顶：防攻速叠太高卡帧
 	var lv_mul := float(_lv - 1)
 	_mp_max = maxf(1.0, float(_core.attr_final("mp"))) if _core != null else 100.0
 	var boosted_seconds := minf(maxf(0.0, dt), _curio_mana_regen_left)
@@ -5412,23 +5674,24 @@ func _tick_skills(dt: float) -> void:
 	if _core != null:
 		_core.hero["mp"] = _mp
 
-# 璇风鎶€鑳界壒鏁堬細鎸夋妧鑳藉睘鎬ф寫鏁堟灉 + 鎹㈣壊锛坧ixelfx锛?const SKILL_FX := {
-	"閲戠郴": ["lightning/zap-hit", "volt", 1.10],
-	"鐏郴": ["fire/fireball", "", 1.00],
-	"鏈ㄧ郴": ["nature/leaf-storm", "leaf", 0.95],
-	"鍙敜": ["arcane/magic-circle-cast", "", 1.10],
-	"鐗╃悊": ["impacts/ground-slam", "metal", 0.95],
-	"鐪熷疄": ["shadow/soul-drain", "", 0.85],
+# 请神技能特效：按技能属性挑效果 + 换色（pixelfx）
+const SKILL_FX := {
+	"金系": ["lightning/zap-hit", "volt", 1.10],
+	"火系": ["fire/fireball", "", 1.00],
+	"木系": ["nature/leaf-storm", "leaf", 0.95],
+	"召唤": ["arcane/magic-circle-cast", "", 1.10],
+	"物理": ["impacts/ground-slam", "metal", 0.95],
+	"真实": ["shadow/soul-drain", "", 0.85],
 }
 
-# 鎶€鑳介煶鏁堬細鎸夊睘鎬ф寫涓€涓?鑷繁鐨勯煶鑹?锛堝彧鏀句竴娆★紝璺熺潃璧锋墜鐗规晥璧帮級
+# 技能音效：按属性挑一个"自己的音色"（只放一次，跟着起手特效走）
 const SKILL_SFX := {
-	"閲戠郴": [["slash_light2", -8.0, 1.15], ["bell", -13.0, 1.25]],
-	"鐏郴": [["swing", -8.0, 0.88], ["drum", -9.0, 0.90]],
-	"鏈ㄧ郴": [["wood_down", -8.0, 1.10], ["dart", -15.0, 1.20]],
-	"鍙敜": [["enlighten", -8.0, 1.05], ["flute", -12.0, 1.12]],
-	"鐗╃悊": [["sword_in_ground", -7.0, 1.00], ["hit_heavy", -10.0, 0.95]],
-	"鐪熷疄": [["heartbeat", -10.0, 0.90], ["tension", -13.0, 1.00]],
+	"金系": [["slash_light2", -8.0, 1.15], ["bell", -13.0, 1.25]],
+	"火系": [["swing", -8.0, 0.88], ["drum", -9.0, 0.90]],
+	"木系": [["wood_down", -8.0, 1.10], ["dart", -15.0, 1.20]],
+	"召唤": [["enlighten", -8.0, 1.05], ["flute", -12.0, 1.12]],
+	"物理": [["sword_in_ground", -7.0, 1.00], ["hit_heavy", -10.0, 0.95]],
+	"真实": [["heartbeat", -10.0, 0.90], ["tension", -13.0, 1.00]],
 }
 
 func _skill_fx(dtype: String, world_pos: Vector2, big := false) -> void:
@@ -5466,31 +5729,31 @@ func _cast_skill(i: int) -> void:
 	var cost0 := maxf(0.0, float(sk["mp"]) - float(md0.get("mp_flat", 0.0)))
 	if _mp < cost0:
 		return
-	# 鐭崇毊娴侊細绾鍔紙涓嶈繘鎶€鑳芥爮锛夛紝杩欓噷鍙负鍏滃簳
+	# 石皮流：纯被动（不进技能栏），这里只为兜底
 	if aid0 == "chenshi2":
 		return
-	# 鍙敜娴侊細鍓焊鎴愬叺
+	# 召唤流：剪纸成兵
 	if aid0 == "zhiyuan":
 		_mp -= cost0
 		sk["cd_t"] = maxf(0.5, float(sk["cd"]) * (1.0 - clampf(float(md0.get("cd_pct", 0.0)), 0.0, 80.0) / 100.0))
 		_cast_paper()
-		_skill_fx("鍙敜", _hero_screen())
+		_skill_fx("召唤", _hero_screen())
 		return
-	# 娌荤枟娴侊細鍥炶 + 鐜瘨 + 鏄撲激
+	# 治疗流：回血 + 环毒 + 易伤
 	if aid0 in ["liuqingqing", "liuqingqing2"]:
 		_mp -= cost0
 		sk["cd_t"] = maxf(0.5, float(sk["cd"]) * (1.0 - clampf(float(md0.get("cd_pct", 0.0)), 0.0, 80.0) / 100.0))
 		var times := 1
 		if _baicao:
 			times = _baicao_times()
-		_skill_fx("鏈ㄧ郴", _hero_screen())
+		_skill_fx("木系", _hero_screen())
 		for _i in times:
 			if not _skill_batch_active(epoch): return
 			_cast_heal(float(sk["mul"]), aid0)
 		if times > 1:
-			_toast("鐧捐崏 路 杩炴斁 %d 娆★紙鍙墸涓€娆″唴鍔涳級" % times)
+			_toast("百草 · 连放 %d 次（只扣一次内力）" % times)
 		return
-	# 绌块€忔祦锛氱洿绾跨┛閫?+ 鍥炵▼
+	# 穿透流：直线穿透 + 回程
 	if aid0 == "qingluan":
 		if _live_foes().is_empty():
 			return
@@ -5498,9 +5761,9 @@ func _cast_skill(i: int) -> void:
 		sk["cd_t"] = maxf(0.5, float(sk["cd"]) * (1.0 - clampf(float(md0.get("cd_pct", 0.0)), 0.0, 80.0) / 100.0))
 		_cast_feiren(float(sk["mul"]))
 		if _skill_batch_active(epoch):
-			_skill_fx("鐗╃悊", _hero_screen())
+			_skill_fx("物理", _hero_screen())
 		return
-	# 鎾炲嚮娴侊細鎸夋皵琛€涓婇檺绠椾激瀹筹紝骞舵妸鐩爣鎾為
+	# 撞击流：按气血上限算伤害，并把目标撞飞
 	if aid0 == "gundilong":
 		if _live_foes().is_empty():
 			return
@@ -5508,23 +5771,23 @@ func _cast_skill(i: int) -> void:
 		sk["cd_t"] = maxf(0.5, float(sk["cd"]) * (1.0 - clampf(float(md0.get("cd_pct", 0.0)), 0.0, 80.0) / 100.0))
 		_charge_ram()
 		if _skill_batch_active(epoch):
-			_skill_fx("鐗╃悊", _hero_screen(), true)
+			_skill_fx("物理", _hero_screen(), true)
 		return
-	# 鐏郴锛氱洿浼?+ 鐏肩儳锛堝紩鐕冨鍚嶏級
+	# 火系：直伤 + 灼烧（引燃多名）
 	if aid0 == "jicanghai":
 		if _live_foes().is_empty():
-			return                                  # 绌哄満涓嶇┖鏀撅紝CD 涓庡唴鍔涢兘涓嶆墸
+			return                                  # 空场不空放，CD 与内力都不扣
 		_mp -= cost0
 		sk["cd_t"] = maxf(0.5, float(sk["cd"]) * (1.0 - clampf(float(md0.get("cd_pct", 0.0)), 0.0, 80.0) / 100.0))
 		_cast_fire()
-		_skill_fx("鐏郴", _hero_screen())
+		_skill_fx("火系", _hero_screen())
 		return
-	# 鍙敜绯伙細涓嶇洿鎺ュ嚭浼わ紝鍙竴鏉¤洘榫欓《涓婂幓
+	# 召唤系：不直接出伤，召一条蛟龙顶上去
 	if aid0 == "cuisanniang":
 		_mp -= cost0
 		sk["cd_t"] = maxf(0.5, float(sk["cd"]) * (1.0 - clampf(float(md0.get("cd_pct", 0.0)), 0.0, 80.0) / 100.0))
-		_summon_dragon(float(md0.get("dmg_pct", 0.0)) + float(_elem_mod.get("鍙敜", 0.0)) + _skill_level_bonus(aid0))
-		_skill_fx("鍙敜", _hero_screen())
+		_summon_dragon(float(md0.get("dmg_pct", 0.0)) + float(_elem_mod.get("召唤", 0.0)) + _skill_level_bonus(aid0))
+		_skill_fx("召唤", _hero_screen())
 		return
 	var foes: Array = []
 	for f_v in _core.foes:
@@ -5534,7 +5797,8 @@ func _cast_skill(i: int) -> void:
 		foes.append(f)
 	if foes.is_empty():
 		return
-	# v4锛氱粍鍚堝姞鎴愬湪杩欓噷鐢熸晥锛堝浼犲崱鎶戒簡鎵嶆湁鎰忎箟锛?	var aid := str(sk["aid"])
+	# v4：组合加成在这里生效（家传卡抽了才有意义）
+	var aid := str(sk["aid"])
 	var dtype := str(sk["dtype"])
 	var m: Dictionary = _anc_mod.get(aid, {})
 	var shared_pct := 0.0 if _core.DMG_TYPES.has(dtype) else float(_elem_mod.get(dtype, 0.0))
@@ -5563,7 +5827,8 @@ func _cast_skill(i: int) -> void:
 			continue
 		var extra := 1.0
 		if para_amp > 0.0 and float(f.get("para", 0.0)) > 0.0:
-			extra = 1.0 + para_amp / 100.0        # 楹荤椆鏈熼棿鍚冮澶栦激瀹?		_core._apply_dmg(f, base * extra, dtype)
+			extra = 1.0 + para_amp / 100.0        # 麻痹期间吃额外伤害
+		_core._apply_dmg(f, base * extra, dtype)
 		if para_s > 0.0 and float(f.get("hp", 0.0)) > 0.0:
 			f["para"] = maxf(float(f.get("para", 0.0)), para_s)
 		_core._push_float(float(f["x"]), float(f["y"]) - 46.0, str(sk["name"]), sk["col"], true)
@@ -5590,7 +5855,8 @@ func _add_ancestor_effects(aid: String, eff: Dictionary) -> void:
 		if eff.has(k):
 			m[k] = float(m.get(k, 0.0)) + float(eff[k])
 	if eff.has("elem_pct"):
-		# 涓冪闈㈡澘绫诲瀷鍦ㄧ粺涓€浼ゅ灞傜粨绠楋紱鍙敜缁х画娌跨幇鏈夌嫭绔嬭矾寰勩€?		var ep: Dictionary = eff["elem_pct"]
+		# 七种面板类型在统一伤害层结算；召唤继续沿现有独立路径。
+		var ep: Dictionary = eff["elem_pct"]
 		for e in ep.keys():
 			_elem_mod[e] = float(_elem_mod.get(e, 0.0)) + float(ep[e])
 			if _core != null and _core.DMG_TYPES.has(str(e)):
@@ -5598,11 +5864,11 @@ func _add_ancestor_effects(aid: String, eff: Dictionary) -> void:
 	if aid == "zhujue" and _core != null:
 		_sync_basic_family_bonus()
 
-# 鐐崱鍚炲櫖锛氬悶鎺夎绁栧畻鍏ㄩ儴瀹朵紶鍗★紙杩涘害涓庢晥鏋滀繚鐣欙級鈫?杩旇繕璧勬簮 + 姘镐箙鍔犱激 鈫?鑷韩绂诲満
+# 炫卡吞噬：吞掉该祖宗全部家传卡（进度与效果保留）→ 返还资源 + 永久加伤 → 自身离场
 func _do_devour(shiny_id: String) -> void:
 	var c: Dictionary = _card_db.get(shiny_id, {})
 	var aid := str(c.get("ancestor", ""))
-	var nm := str(c.get("name", "鐐崱"))
+	var nm := str(c.get("name", "炫卡"))
 	_shiny_used[aid] = true
 	_pool.erase(shiny_id)
 	var n := 0
@@ -5635,7 +5901,7 @@ func _do_devour(shiny_id: String) -> void:
 	_page = 0
 	_refresh_deck()
 	_fly_card_to_totals(str(c.get("art", "")))
-	# ---- 琛ㄧ幇锛氱櫧闂?+ 闇囧睆 + 闊虫晥 ----
+	# ---- 表现：白闪 + 震屏 + 音效 ----
 	var flash := ColorRect.new()
 	flash.color = Color(1.0, 0.98, 0.90, 0.0)
 	flash.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -5650,17 +5916,17 @@ func _do_devour(shiny_id: String) -> void:
 		_core.Shake_add(9.0)
 	_shiny_present("devour")
 	await get_tree().create_timer(0.12).timeout
-	_toast("%s 鍚炰簡 %d 寮犲浼?路 鐏垫櫠 +%d 路 鏂囬挶 +%d 路 %s +%d%%" % [nm, n, crystal, wen, str(_label_skill(aid)), 10 * n])
+	_toast("%s 吞了 %d 张家传 · 灵晶 +%d · 文钱 +%d · %s +%d%%" % [nm, n, crystal, wen, str(_label_skill(aid)), 10 * n])
 
 func _label_skill(aid: String) -> String:
 	var d: Dictionary = SKILL_DEFS.get(aid, {})
-	return str(d.get("name", "鎶€鑳?))
+	return str(d.get("name", "技能"))
 
-# ---------------- 璇风涓夐€変竴 ----------------
+# ---------------- 请神三选一 ----------------
 func _build_god_pick() -> void:
 	_god_layer = Control.new()
 	_god_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_god_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE      # 绌虹櫧澶勬斁琛岀粰鎴樺満
+	_god_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE      # 空白处放行给战场
 	_god_layer.visible = false
 	_god_layer.z_index = 40
 	add_child(_god_layer)
@@ -5675,33 +5941,35 @@ func _build_god_pick() -> void:
 	ban.add_theme_stylebox_override("panel", bsb)
 	_god_layer.add_child(ban)
 	_breathe(ban)
-	_god_ban_lb = _lbl("璇风", Vector2(0, 0), Vector2(260, 42), 20, Color(0.97, 0.90, 0.74), ban, HORIZONTAL_ALIGNMENT_CENTER)
-	_btn("闅愯棌", Rect2(620, 162, 72, 32), 17, Color(0.09, 0.08, 0.07, 0.98), GOLD, func(): _hide_god_pick(), _god_layer)
+	_god_ban_lb = _lbl("请神", Vector2(0, 0), Vector2(260, 42), 20, Color(0.97, 0.90, 0.74), ban, HORIZONTAL_ALIGNMENT_CENTER)
+	_btn("隐藏", Rect2(620, 162, 72, 32), 17, Color(0.09, 0.08, 0.07, 0.98), GOLD, func(): _hide_god_pick(), _god_layer)
 	_god_root = Control.new()
 	_god_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_god_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_god_layer.add_child(_god_root)
-	_god_refresh_btn = _btn("鍒锋柊 路 0 娆?, Rect2(140, 620, 200, 54), 19,
+	_god_refresh_btn = _btn("刷新 · 0 次", Rect2(140, 620, 200, 54), 19,
 		Color(0.09, 0.08, 0.07, 0.98), GOLD, func(): _on_god_refresh(), _god_layer)
-	_btn("鏀惧純 +1 鍒锋柊", Rect2(360, 620, 200, 54), 19,
+	_btn("放弃 +1 刷新", Rect2(360, 620, 200, 54), 19,
 		Color(0.09, 0.08, 0.07, 0.98), Color(0.80, 0.62, 0.34), func(): _on_god_abandon(), _god_layer)
 
 func _show_god_pick() -> void:
 	if _run_over or _god_layer == null:
 		return
 	if _draw_charge <= 0:
-		_toast("鍗囩骇鍚庡彲璇风")
+		_toast("升级后可请神")
 		return
 	if _draw_layer != null:
-		_draw_layer.visible = false                    # 鎶藉崱椤靛紑鐫€涓€骞舵敹鎺?	# 鍚屼竴鎵嬪彧鎺蜂竴娆★細鐐癸蓟闅愯棌锛藉叧浜嗗啀鐐癸蓟璇风锛斤紝鐪嬪埌鐨勬槸鍚屼竴鎵嬶紙涓嶈兘鐧藉埛锛?	if _god_hand_charge != _draw_charge:
+		_draw_layer.visible = false                    # 抽卡页开着一并收掉
+	# 同一手只掷一次：点［隐藏］关了再点［请神］，看到的是同一手（不能白刷）
+	if _god_hand_charge != _draw_charge:
 		_god_hand_charge = _draw_charge
 		_roll_god()
 	if _god_root.get_child_count() == 0:
 		return
 	if _god_ban_lb != null:
-		_god_ban_lb.text = "璇风 路 鍓?%d 娆? % _draw_charge
+		_god_ban_lb.text = "请神 · 剩 %d 次" % _draw_charge
 	if _god_refresh_btn != null:
-		_god_refresh_btn.text = "鍒锋柊 路 %d 娆? % maxi(0, _god_reroll)
+		_god_refresh_btn.text = "刷新 · %d 次" % maxi(0, _god_reroll)
 		_god_refresh_btn.disabled = _god_reroll <= 0
 	_god_layer.visible = true
 	_layer_in(_god_layer)
@@ -5714,28 +5982,31 @@ func _pop_god_cards() -> void:
 		MenuUI.Motion.pop(card, true, i * 0.055, card.get_meta("motion_rest_position", card.position), (i - 0.5) * 0.025)
 		i += 1
 
-# 鎺疯繖涓€鎵嬶紙浜岄€変竴锛?func _roll_god() -> void:
+# 掷这一手（二选一）
+func _roll_god() -> void:
 	for c in _god_root.get_children():
-		_god_root.remove_child(c)          # 绔嬪埢鎽樻帀锛屽埆绛夊抚鏈紙鍚﹀垯鏂版棫鍗＄墖浼氬悓鏃跺瓨鍦級
+		_god_root.remove_child(c)          # 立刻摘掉，别等帧末（否则新旧卡片会同时存在）
 		c.queue_free()
 	var cands: Array = []
 	var allowed := LevelState.god_ids()
 	var unseen := allowed.duplicate()
-	# 鍥哄畾椤哄簭锛氱涓€娆¤绁炵粰绗竴浣嶏紝绗簩娆＄粰绗簩浣嶏紝涓嶉殢鏈?	for aid_v in unseen:
+	# 固定顺序：第一次请神给第一位，第二次给第二位，不随机
+	for aid_v in unseen:
 		var aid := str(aid_v)
 		if SEALED.has(aid):
 			continue
 		if not _ancestors.has(aid) and AncestorData.ANCESTORS.has(aid):
 			cands.append(aid)
 	if _god_ban_lb != null:
-		_god_ban_lb.text = "璇风 路 鍓?%d 娆? % _draw_charge
+		_god_ban_lb.text = "请神 · 剩 %d 次" % _draw_charge
 	if cands.is_empty():
-		_toast("鍙鐨勭瀹楅兘宸蹭笂韬紙楂樺搧绁栧畻闇€鎶藉彇锛屾殏鏈紑鏀撅級")
+		_toast("可请的祖宗都已上身（高品祖宗需抽取，暂未开放）")
 		_hide_god_pick()
 		return
 	var n := 1
 	if LevelState.current_level >= 7:
-		n = 2   # 鍚庣画鍏宠绁炴敼鎴愪簩閫変竴锛堜粛鎸夊浐瀹氶『搴忓彇鍓嶄袱浣嶆湭璇风殑锛?	n = mini(n, cands.size())
+		n = 2   # 后续关请神改成二选一（仍按固定顺序取前两位未请的）
+	n = mini(n, cands.size())
 	var total_w := float(n) * 260.0 + float(maxi(0, n - 1)) * 40.0
 	var x0 := (720.0 - total_w) * 0.5
 	for i in n:
@@ -5753,15 +6024,15 @@ func _pop_god_cards() -> void:
 		gc.picked.connect(func() -> void: _on_god_card(gc))
 		_god_root.add_child(gc)
 	if _god_refresh_btn != null:
-		_god_refresh_btn.text = "鍒锋柊 路 %d 娆? % maxi(0, _god_reroll)
+		_god_refresh_btn.text = "刷新 · %d 次" % maxi(0, _god_reroll)
 		_god_refresh_btn.disabled = _god_reroll <= 0
 
-# 鍒锋柊锛氭鏁板瀷锛堢敤涓€娆″皯涓€娆★級
+# 刷新：次数型（用一次少一次）
 func _on_god_refresh() -> void:
 	if _run_over or _god_layer == null or not _god_layer.visible or _draw_charge <= 0:
 		return
 	if _god_reroll <= 0:
-		_toast("鍒锋柊娆℃暟鐢ㄥ畬浜?)
+		_toast("刷新次数用完了")
 		return
 	if not _rr_free():
 		_god_reroll -= 1
@@ -5769,12 +6040,13 @@ func _on_god_refresh() -> void:
 	Aud.sfx("ui_click", -10.0)
 	_pop_god_cards()
 
-# 鏀惧純锛氳繖涓€鎵嬩笉瑕佷簡锛屾崲 1 娆″埛鏂帮紙涓嬫璇风鑳界敤锛?func _on_god_abandon() -> void:
+# 放弃：这一手不要了，换 1 次刷新（下次请神能用）
+func _on_god_abandon() -> void:
 	if _run_over or _god_layer == null or not _god_layer.visible or _draw_charge <= 0:
 		return
 	_god_reroll += 1
 	_hide_god_pick()
-	_toast("鏀惧純璇风 路 鍒锋柊 +1锛堢幇鏈?%d 娆★級" % _god_reroll)
+	_toast("放弃请神 · 刷新 +1（现有 %d 次）" % _god_reroll)
 	Aud.sfx("ui_back", -10.0)
 
 func _hide_god_pick() -> void:
@@ -5791,14 +6063,16 @@ func _pick_god(aid: String) -> void:
 		return
 	if _draw_charge <= 0:
 		return
-	_god_hand_charge = -1   # 閫夊畬鍚庢棫鎵嬬墝浣滃簾锛屽嵆浣垮崌绾у張琛ュ洖鐩稿悓娆℃暟涔熷繀椤婚噸鎺?	_choice_fx("god")
+	_god_hand_charge = -1   # 选完后旧手牌作废，即使升级又补回相同次数也必须重掷
+	_choice_fx("god")
 	_draw_charge -= 1
 	_qc("god", 1)
 	_grant_ancestor(aid)
 	var def: Dictionary = SKILL_DEFS.get(aid, {})
 	if not def.is_empty() and not _has_skill(aid):
 		var sk: Dictionary = def.duplicate()
-		sk["cd"] = float(sk["cd"]) * _curio_skill_cd_mul()   # 濂囩墿路瀹氶鐝?		sk["aid"] = aid
+		sk["cd"] = float(sk["cd"]) * _curio_skill_cd_mul()   # 奇物·定风珠
+		sk["aid"] = aid
 		sk["cd_t"] = 0.0
 		sk["quality"] = int((AncestorData.ANCESTORS[aid] as Dictionary)["quality"])
 		var icon_key := str(SKILL_ICON_ALIAS.get(aid, aid))
@@ -5807,7 +6081,7 @@ func _pick_god(aid: String) -> void:
 		_skills.append(sk)
 	_hide_god_pick()
 	_refresh_level_ui()
-	_toast("璇峰埌 %s 路 鎶€鑳借繘鏍忥紝瀹朵紶鍏ュ彛鍗¤繘姹? % str((AncestorData.ANCESTORS[aid] as Dictionary)["name"]))
+	_toast("请到 %s · 技能进栏，家传入口卡进池" % str((AncestorData.ANCESTORS[aid] as Dictionary)["name"]))
 	Aud.sfx("levelup", -6.0)
 
 func _has_skill(aid: String) -> bool:
@@ -5816,7 +6090,7 @@ func _has_skill(aid: String) -> bool:
 			return true
 	return false
 
-# ---------------- 鎶€鑳芥牸 ----------------
+# ---------------- 技能格 ----------------
 class SkillSlot extends Control:
 	const F := preload("res://fonts/ink.ttf")
 	const QC := [Color(0.54,0.48,0.38), Color(0.31,0.48,0.29), Color(0.18,0.42,0.45), Color(0.42,0.29,0.48), Color(0.72,0.53,0.16)]
@@ -5826,7 +6100,8 @@ class SkillSlot extends Control:
 	var cd_left := 0.0
 	var cd_max := 1.0
 	var mp_cost := 0
-	var flash := 0.0          # 鍒氭斁瀹屾妧鑳斤細涓€鍦堥噾鑹叉墿鏁?	var _tex: Texture2D = null
+	var flash := 0.0          # 刚放完技能：一圈金色扩散
+	var _tex: Texture2D = null
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
 	func _draw() -> void:
@@ -5845,7 +6120,7 @@ class SkillSlot extends Control:
 				var inset := size * 0.10
 				draw_texture_rect(_tex, Rect2(inset, size - inset * 2.0), false)
 		if _tex == null:
-			var ch := "鎶€"
+			var ch := "技"
 			if skill_name.length() > 0:
 				ch = skill_name.substr(1 if skill_name.length() > 1 else 0, 1)
 			draw_string(F, Vector2(0, c.y + 8), ch, HORIZONTAL_ALIGNMENT_CENTER, size.x, 22, Color(0.20, 0.16, 0.11))
@@ -5866,7 +6141,7 @@ class SkillSlot extends Control:
 			draw_string(F, Vector2(size.x - 24, 12), str(mp_cost),
 				HORIZONTAL_ALIGNMENT_CENTER, 23, 10, Color(0.95, 0.98, 1.0))
 
-# ---------------- 璇风鍗?----------------
+# ---------------- 请神卡 ----------------
 class GodCard extends Control:
 	const F := preload("res://fonts/ink.ttf")
 	const QC := [Color(0.54,0.48,0.38), Color(0.31,0.48,0.29), Color(0.18,0.42,0.45), Color(0.42,0.29,0.48), Color(0.72,0.53,0.16)]
@@ -5881,7 +6156,8 @@ class GodCard extends Control:
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_STOP
 	func _draw() -> void:
-		# 鍏ㄩ儴鎸夊崱鐗囧昂瀵告瘮渚嬬敾 鈥斺€?鍗″澶у瓧灏卞澶э紙璇风鏀规垚浜岄€変竴鍚庡崱鏀惧ぇ鍒?260脳390锛?		var qc: Color = QC[clampi(quality - 1, 0, 4)]
+		# 全部按卡片尺寸比例画 —— 卡多大字就多大（请神改成二选一后卡放大到 260×390）
+		var qc: Color = QC[clampi(quality - 1, 0, 4)]
 		var w := size.x
 		var h := size.y
 		if not CF.draw_on(self, quality, size):
@@ -5910,12 +6186,12 @@ class GodCard extends Control:
 		draw_string(F, Vector2(0, h * 0.725), skill_name, HORIZONTAL_ALIGNMENT_CENTER, w, int(w * 0.100), Color(0.20, 0.15, 0.10))
 		draw_line(Vector2(w * 0.08, h * 0.768), Vector2(w * 0.92, h * 0.768), Color(0.5, 0.4, 0.25, 0.35), 1.6)
 		draw_string(F, Vector2(0, h * 0.845), element, HORIZONTAL_ALIGNMENT_CENTER, w, int(w * 0.082), Color(0.42, 0.30, 0.12))
-		draw_string(F, Vector2(0, h * 0.945), "鐐?鍑?璇?绁?, HORIZONTAL_ALIGNMENT_CENTER, w, int(w * 0.076), Color(0.66, 0.22, 0.15))
+		draw_string(F, Vector2(0, h * 0.945), "点 击 请 神", HORIZONTAL_ALIGNMENT_CENTER, w, int(w * 0.076), Color(0.66, 0.22, 0.15))
 	func _gui_input(ev: InputEvent) -> void:
 		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
 			picked.emit()
 
-# ---------------- 鍙敜鐗╋細铔熼緳 ----------------
+# ---------------- 召唤物：蛟龙 ----------------
 func _summon_dragon(bonus_pct: float) -> void:
 	var m: Dictionary = _anc_mod.get("cuisanniang", {})
 	var cap := 1 + int(m.get("cap_add", 0.0))
@@ -5930,7 +6206,7 @@ func _summon_dragon(bonus_pct: float) -> void:
 	tk.setup(null, 20.0, Color(0.30, 0.62, 0.80), false)
 	tk.show_bar = true
 	tk.bar_w = 44.0
-	tk.unit_name = "铔熼緳"
+	tk.unit_name = "蛟龙"
 	tk.z_index = 5
 	tk.position = _core.position + pos
 	add_child(tk)
@@ -5943,7 +6219,7 @@ func _summon_dragon(bonus_pct: float) -> void:
 		"atk_cd": 0.6, "wave_cd": 20.0,
 		"base_dmg": bd, "base_wave": hero_atk * 2.5 * mul,
 		"dmg": bd * ss, "wave_dmg": hero_atk * 2.5 * mul * ss, "tk": tk})
-	_toast("铔熼緳鐜颁笘 路 瀛樺湪 %d 绉? % int(life))
+	_toast("蛟龙现世 · 存在 %d 秒" % int(life))
 	Aud.sfx("warcry", -8.0)
 
 var _minions_ticking := false
@@ -5962,7 +6238,8 @@ func _step_minions(dt: float) -> void:
 	if not _skill_batch_active(epoch):
 		return
 	if _swallow_sea:
-		_ss_pct += 0.4 * dt                    # 姣忕 +0.4% 铔熼緳灞炴€?	if _minions.is_empty():
+		_ss_pct += 0.4 * dt                    # 每秒 +0.4% 蛟龙属性
+	if _minions.is_empty():
 		return
 	for m_v in _minions.duplicate():
 		if not _skill_batch_active(epoch):
@@ -5978,11 +6255,12 @@ func _step_minions(dt: float) -> void:
 			m["dmg"] = float(m["base_dmg"]) * ss2
 			m["wave_dmg"] = float(m["base_wave"]) * ss2
 		if float(m["life"]) <= 0.0:
-			_minions.erase(m) # 鍏堥€€鍦猴紝鍑绘潃鍥炶皟涓嶈兘鍐嶆瑙﹀彂鍚屼竴鍙殑鍒版湡鏁堟灉銆?			if m.has("decoy"):
+			_minions.erase(m) # 先退场，击杀回调不能再次触发同一只的到期效果。
+			if m.has("decoy"):
 				m["decoy"]["active"] = false
 			if tk != null and is_instance_valid(tk):
 				tk.play_down()
-			# 濂囩墿路鎷涢瓊骞?Lv5锛氶褰辨秷澶辨椂鑷垎
+			# 奇物·招魂幡 Lv5：鬼影消失时自爆
 			if float(m.get("boom", 0.0)) > 0.0 and _core != null:
 				var at_e: Vector2 = m["pos"]
 				for f_v2 in _core.foes.duplicate():
@@ -5993,7 +6271,7 @@ func _step_minions(dt: float) -> void:
 						continue
 					if at_e.distance_to(Vector2(float(f2["x"]), float(f2["y"]))) > 90.0:
 						continue
-					_core._apply_dmg(f2, float(_core.hero.get("atk", 12.0)) * float(m["boom"]), "鍙敜")
+					_core._apply_dmg(f2, float(_core.hero.get("atk", 12.0)) * float(m["boom"]), "召唤")
 					if float(f2.get("hp", 0.0)) <= 0.0:
 						_core._kill_foe(f2)
 					if not _skill_batch_active(epoch):
@@ -6009,7 +6287,8 @@ func _step_minions(dt: float) -> void:
 				tk.position = _core.position + Vector2(m["pos"])
 				tk.hp_ratio = float(m["life"]) / float(m["max_life"])
 				tk.queue_redraw()
-			continue # 闀滃儚澶嶅埗鐪熷疄鏅敾锛屼笉鍐嶇嫭绔嬫寜鍥哄畾CD鍑烘墜銆?		var mp0: Vector2 = m["pos"]
+			continue # 镜像复制真实普攻，不再独立按固定CD出手。
+		var mp0: Vector2 = m["pos"]
 		var ghost := str(m.get("curio", "")) == "zhaohunfan"
 		var best: Dictionary = {}
 		var bd := 1e9
@@ -6018,7 +6297,8 @@ func _step_minions(dt: float) -> void:
 			if float(f.get("hp", 0.0)) <= 0.0 or float(f.get("dying", 0.0)) > 0.0:
 				continue
 			if ghost and _core.hero_pos.distance_to(Vector2(float(f["x"]), float(f["y"]))) > 220.0:
-				continue # 楝煎奖鍙敮鎻翠富瑙掗檮杩戠洰鏍囷紝涓嶈拷鍑鸿窡闅忚寖鍥淬€?			var d := (Vector2(float(f["x"]), float(f["y"])) - mp0).length()
+				continue # 鬼影只支援主角附近目标，不追出跟随范围。
+			var d := (Vector2(float(f["x"]), float(f["y"])) - mp0).length()
 			if d < bd:
 				bd = d
 				best = f
@@ -6031,14 +6311,14 @@ func _step_minions(dt: float) -> void:
 				m["atk_cd"] = float(m["atk_cd"]) - dt
 				if float(m["atk_cd"]) <= 0.0:
 					m["atk_cd"] = 1.1
-					var md: float = _core._apply_dmg(best, float(m["dmg"]), "鍙敜")
+					var md: float = _core._apply_dmg(best, float(m["dmg"]), "召唤")
 					if float(best.get("hp", 0.0)) <= 0.0:
 						_core._kill_foe(best)
 					if not _skill_batch_active(epoch):
 						return
 					if not _minions.has(m):
 						continue
-					# 濂囩墿路閾滈暅 Lv3锛氶暅褰辨敾鍑诲惛琛€
+					# 奇物·铜镜 Lv3：镜影攻击吸血
 					if float(m.get("lc", 0.0)) > 0.0 and md > 0.0 and _core != null:
 						_core.heal_hero(md * float(m["lc"]))
 			m["wave_cd"] = float(m["wave_cd"]) - dt
@@ -6056,7 +6336,8 @@ func _step_minions(dt: float) -> void:
 			tk.hp_ratio = float(m["life"]) / maxf(1.0, float(m["max_life"]))
 			tk.queue_redraw()
 
-# 澶ф氮鎷嶅嚮锛氬崟浣擄紱鍏。銆屾€掓稕銆嶈繘鍖栨垚涓€鍦?+ 鍑忛€?func _dragon_wave(m: Dictionary, target: Dictionary) -> void:
+# 大浪拍击：单体；六档「怒涛」进化成一圈 + 减速
+func _dragon_wave(m: Dictionary, target: Dictionary) -> void:
 	var wm: Dictionary = _anc_mod.get("cuisanniang", {})
 	var evo := float(wm.get("wave_evo", 0.0)) > 0.0
 	var at := Vector2(float(target["x"]), float(target["y"]))
@@ -6067,16 +6348,16 @@ func _step_minions(dt: float) -> void:
 		var d := (Vector2(float(f["x"]), float(f["y"])) - at).length()
 		if f != target and not (evo and d <= 130.0):
 			continue
-		_core._apply_dmg(f, float(m["wave_dmg"]), "鍙敜")
+		_core._apply_dmg(f, float(m["wave_dmg"]), "召唤")
 		if evo:
 			f["slow_t"] = 2.0
-		_core._push_float(float(f["x"]), float(f["y"]) - 40.0, "澶ф氮", Color(0.38, 0.62, 0.82), true)
+		_core._push_float(float(f["x"]), float(f["y"]) - 40.0, "大浪", Color(0.38, 0.62, 0.82), true)
 	Aud.sfx("hit_heavy", -10.0)
 
-# ---------------- 鍚炴捣锛堝磾涓夊鐐崱锛?----------------
+# ---------------- 吞海（崔三娘炫卡） ----------------
 func _enable_swallow_sea() -> void:
 	_swallow_sea = true
-	_ss_pct = 10.0          # 鍗曞崱鏁板€硷細铔熼緳灞炴€?+10%
+	_ss_pct = 10.0          # 单卡数值：蛟龙属性 +10%
 	_ss_kills = 0
 	for m_v in _minions:
 		var m: Dictionary = m_v
@@ -6084,10 +6365,10 @@ func _enable_swallow_sea() -> void:
 			continue
 		m["max_life"] = 999999.0
 		m["life"] = 999999.0
-	_toast("鍚炴捣鍏ュ崱缁?路 铔熼緳姘镐箙瀛樺湪锛屾瘡绉?+0.4%銆佹瘡 10 鏉€ +4% 灞炴€?)
+	_toast("吞海入卡组 · 蛟龙永久存在，每秒 +0.4%、每 10 杀 +4% 属性")
 	_shiny_present("swallow_sea")
 
-# ---------------- 鐏肩儳 / 寮曠噧 / 鐒氬ぉ ----------------
+# ---------------- 灼烧 / 引燃 / 焚天 ----------------
 func _live_foes() -> Array:
 	var out: Array = []
 	for f_v in _core.foes:
@@ -6153,8 +6434,8 @@ func _tick_burn(dt: float) -> void:
 				f["burn_acc"] = maxf(0.0, float(f["burn_acc"]) - 1.0)
 				var at_t := elapsed - float(f["burn_acc"])
 				var vuln := 1.0 + float(f.get("vuln_pct", 0.0)) / 100.0 if float(f.get("vuln_t", 0.0)) > at_t else 1.0
-				_core._apply_dmg(f, _burn_dps() * float(f["burn"]), "鐏郴", -1, vuln)
-				_core._push_float(float(f["x"]), float(f["y"]) - 30.0, "鐑?, Color(0.88, 0.45, 0.20))
+				_core._apply_dmg(f, _burn_dps() * float(f["burn"]), "火系", -1, vuln)
+				_core._push_float(float(f["x"]), float(f["y"]) - 30.0, "烧", Color(0.88, 0.45, 0.20))
 				if randf() < 0.6:
 					_spawn_pfx("impacts/hit-spark", _core.position + Vector2(float(f["x"]), float(f["y"]) - 18.0), 0.55, "fire", 1.2)
 				if float(f.get("hp", 0.0)) <= 0.0:
@@ -6184,17 +6465,17 @@ func _cast_fire() -> void:
 	var n := mini(ign, foes.size())
 	for k in n:
 		var f: Dictionary = foes[k]
-		_core._apply_dmg(f, float(_core.hero.get("atk", 12.0)) * 0.6 * (1.0 + dmg_pct / 100.0), "鐏郴")
+		_core._apply_dmg(f, float(_core.hero.get("atk", 12.0)) * 0.6 * (1.0 + dmg_pct / 100.0), "火系")
 		_apply_burn(f, stacks, 4.0)
-		_core._push_float(float(f["x"]), float(f["y"]) - 46.0, "寮曠噧", Color(0.88, 0.45, 0.20), true)
+		_core._push_float(float(f["x"]), float(f["y"]) - 46.0, "引燃", Color(0.88, 0.45, 0.20), true)
 	Aud.sfx("skill", -10.0)
 
-# 鐒氬ぉ锛堝娌ф捣鐐崱锛夛細鐏肩儳涓嶈“鍑?+ 姣?15 鏉€鍚炰竴寮犲崱 + 姣忓悶涓€寮犲紩鐕?+1
+# 焚天（季沧海炫卡）：灼烧不衰减 + 每 15 杀吞一张卡 + 每吞一张引燃 +1
 func _enable_fentian() -> void:
 	_fentian = true
 	_burn_unlimited = true
 	_ft_kills = 0
-	_toast("鐒氬ぉ鍏ュ崱缁?路 鐏肩儳鏃犱笂闄愶紝姣?15 鏉€鍚炰竴寮犲崱銆佸紩鐕?+1")
+	_toast("焚天入卡组 · 灼烧无上限，每 15 杀吞一张卡、引燃 +1")
 	_shiny_present("fentian")
 
 func _devour_random() -> void:
@@ -6204,19 +6485,21 @@ func _devour_random() -> void:
 	_cards.erase(pick)
 	_ignite_bonus += 1
 	_refresh_deck()
-	var nm := str((_card_db.get(pick, {}) as Dictionary).get("name", "涓€寮犲崱"))
-	_toast("鐒氬ぉ鍚炲櫖銆?s銆嵚?寮曠噧鐩爣 +1锛堝叡 %d锛? % [nm, 1 + _ignite_bonus])
+	var nm := str((_card_db.get(pick, {}) as Dictionary).get("name", "一张卡"))
+	_toast("焚天吞噬「%s」· 引燃目标 +1（共 %d）" % [nm, 1 + _ignite_bonus])
 	Aud.sfx("coin", -8.0)
 	Aud.sfx("hit_heavy", -14.0)
 
-# ---------------- 鍥炴疆锛堟垚闀跨郴褰╄泲锛?----------------
-#   鍚堟垚 鏀诲嚮/闃插尽/姘旇/鍐呭姏 浠绘剰涓€濂楁椂 5% 鎺凤紱涓€灞€涓€娆?#   杩涘崱缁勶細鍥涚淮绔嬪埢 +4/+4/+40/+40锛屾尝鏁板洖閫€ 5 娉紙褰撳墠娉㈡竻绌洪噸鍒凤級
+# ---------------- 回潮（成长系彩蛋） ----------------
+#   合成 攻击/防御/气血/内力 任意一套时 5% 掷；一局一次
+#   进卡组：四维立刻 +4/+4/+40/+40，波数回退 5 波（当前波清空重刷）
 func _backwash() -> void:
 	if _core == null or not _skill_batch_active(_core._enemy_attack_epoch):
 		return
 	var w := int(_core.wave)
 	var nw := maxi(1, w - 5)
-	# 鍥炲埌鏅€氭尝鏃朵笉鑳芥部鐢ㄦ湯娉㈢殑棣栭闂ㄦ锛屼篃涓嶈兘璁╂棫鍦轰笂鐨勬敾鍑昏拷鍒伴噸鍒锋尝銆?	if not _q_cur.is_empty() and str(_q_cur.get("kind", "")) in ["statue", "zone", "guard", "champion", "elite"]:
+	# 回到普通波时不能沿用末波的首领门槛，也不能让旧场上的攻击追到重刷波。
+	if not _q_cur.is_empty() and str(_q_cur.get("kind", "")) in ["statue", "zone", "guard", "champion", "elite"]:
 		_q_finish("fail")
 	_core.foes.clear()
 	_core.clear_enemy_attacks()
@@ -6233,18 +6516,19 @@ func _backwash() -> void:
 	_last_wave = nw
 	_run_cleared = false
 	if _wave_lb != null:
-		_wave_lb.text = "娉?%d/%d" % [nw, _max_wave]
-	_toast("鍥炴疆 路 娉㈡暟 %d 鈫?%d锛岄噸澶村啀鍒? % [w, nw])
+		_wave_lb.text = "波 %d/%d" % [nw, _max_wave]
+	_toast("回潮 · 波数 %d → %d，重头再刷" % [w, nw])
 	_shiny_present("backwash")
 
 # ============================================================
-# 鐐僵鍗″嚭鍦烘紨鍑猴細鍥涘紶鍚勪竴濂楋紙鍔ㄧ敾 / 闊虫晥 / 闊充箰閮戒笉鍚岋級
-#   devour       鍣浄 路 鍚炲櫖鏀跺壊 鈥斺€?鐧介棯 + 绔栨潯鍐插嚮 + drum
-#   swallow_sea  鍚炴捣 路 鍏婚緳 鈥斺€?钃濇疆浠庡簳鍗囪捣 + warcry
-#   fentian      鐒氬ぉ 路 鐏?鈥斺€?姗欒壊鍥涜竟鍚戝唴鐑?+ tension
-#   backwash     鍥炴疆 路 鍊掓祦 鈥斺€?鐧藉渾浠庝腑蹇冩墿鏁?+ 浣庨煶閽?# ============================================================
+# 炫彩卡出场演出：四张各一套（动画 / 音效 / 音乐都不同）
+#   devour       噬雷 · 吞噬收割 —— 白闪 + 竖条冲击 + drum
+#   swallow_sea  吞海 · 养龙 —— 蓝潮从底升起 + warcry
+#   fentian      焚天 · 火 —— 橙色四边向内烧 + tension
+#   backwash     回潮 · 倒流 —— 白圆从中心扩散 + 低音钟
+# ============================================================
 func _shiny_present(kind: String) -> void:
-	# ---- 闊充箰锛堢煭淇?stinger锛?.8 绉掑悗鏀舵帀锛?---
+	# ---- 音乐（短促 stinger，1.8 秒后收掉）----
 	var music := ""
 	match kind:
 		"devour": music = "bgm_tower"
@@ -6262,7 +6546,7 @@ func _shiny_present(kind: String) -> void:
 	if music != "":
 		Aud.play_bgm(music, 0.25)
 		_stop_stinger(1.8)
-	# ---- 闊虫晥 ----
+	# ---- 音效 ----
 	match kind:
 		"devour":
 			Aud.sfx("coin", -6.0, 1.0)
@@ -6275,7 +6559,8 @@ func _shiny_present(kind: String) -> void:
 			Aud.sfx("tension", -6.0, 1.2)
 			Aud.sfx("hit_slash2", -10.0, 0.9)
 		"backwash":
-			Aud.sfx("bell", -6.0, 0.6)          # 浣庨煶閽?			Aud.sfx("ink_drop", -10.0, 0.7)
+			Aud.sfx("bell", -6.0, 0.6)          # 低音钟
+			Aud.sfx("ink_drop", -10.0, 0.7)
 		"jianpo":
 			Aud.sfx("sword_draw", -4.0, 1.1)
 			Aud.sfx("slash_light2", -8.0, 0.95)
@@ -6300,12 +6585,12 @@ func _shiny_present(kind: String) -> void:
 		"zhongli":
 			Aud.sfx("coin", -4.0, 1.15)
 			Aud.sfx("chest", -8.0, 1.0)
-	# ---- 瑙嗛锛堟湁瑙嗛灏辩敤瑙嗛锛屾病鏈夋墠閫€鍥炵▼搴忓寲鍔ㄧ敾锛?---
+	# ---- 视频（有视频就用视频，没有才退回程序化动画）----
 	if _play_shiny_video(kind):
 		if _core != null:
 			_core.Shake_add(6.0)
 		return
-	# ---- 鍔ㄧ敾 ----
+	# ---- 动画 ----
 	match kind:
 		"devour":
 			_flash(Color(1.0, 0.98, 0.90), 0.85, 0.06, 0.30)
@@ -6434,39 +6719,46 @@ func _ring_out() -> void:
 	tw.tween_property(r, "modulate:a", 0.0, 0.45)
 	tw.chain().tween_callback(func() -> void: c.queue_free())
 
-# ---------------- 涓昏锛氬熀纭€鍓戞硶锛堣鍔級 ----------------
-#   涓昏涓嶈繘鎶€鑳芥爮锛屼粬鐨勫叚妗ｅ叏閮ㄦ姌鎴愭櫘鏀诲姞鎴愶紝缁勫悎涓€婵€娲诲氨鐩存帴鍔犲湪鑻遍泟韬笂銆?#   dmg_pct灞炰簬鍩虹鍓戞硶锛沞lem_pct.鐗╃悊鐢盻add_ancestor_effects鐧昏鍒扮墿鐞嗙被鍨嬨€?func _apply_hero_passive(eff: Dictionary) -> void:
+# ---------------- 主角：基础剑法（被动） ----------------
+#   主角不进技能栏，他的六档全部折成普攻加成，组合一激活就直接加在英雄身上。
+#   dmg_pct属于基础剑法；elem_pct.物理由_add_ancestor_effects登记到物理类型。
+func _apply_hero_passive(eff: Dictionary) -> void:
 	if eff.is_empty() or _core == null:
 		return
-	# dmg_pct宸茬敱_add_ancestor_effects鐧昏鍒版湰鎶€鑳斤紝鐗╃悊鍏变韩宸茶繘绫诲瀷澧炲箙銆?	var pct := float(eff.get("dmg_pct", 0.0))
-	var physical_shared := float((eff.get("elem_pct", {}) as Dictionary).get("鐗╃悊", 0.0))
-	# 鏀婚€熶粠灞炴€у眰璇诲彇锛屾牳蹇冩寜鐜拌鍩虹鍑烘墜闂撮殧闄や互鍊嶇巼銆?	if eff.has("aspd_pct"):
+	# dmg_pct已由_add_ancestor_effects登记到本技能，物理共享已进类型增幅。
+	var pct := float(eff.get("dmg_pct", 0.0))
+	var physical_shared := float((eff.get("elem_pct", {}) as Dictionary).get("物理", 0.0))
+	# 攻速从属性层读取，核心按现行基础出手间隔除以倍率。
+	if eff.has("aspd_pct"):
 		_core.attr_add_amp("aspd", float(eff["aspd_pct"]) / 100.0)
 		_core.hero["aspd"] = minf(MAX_ASPD, _core.attr_final("aspd") / float(_core.ATTR_BASE["aspd"]))
-	# 澶氱洰鏍?/ 杩藉嚮 / 鍓戞皵锛氳涓嬫潵锛屾櫘鏀绘椂缁撶畻
+	# 多目标 / 追击 / 剑气：记下来，普攻时结算
 	for k in ["tgt_add", "chase", "qijian"]:
 		if eff.has(k):
 			_hero_passive[k] = float(_hero_passive.get(k, 0.0)) + float(eff[k])
 	var parts: Array = []
-	if pct != 0.0: parts.append("鍓戞硶浼ゅ +%d%%" % int(pct))
-	if physical_shared != 0.0: parts.append("鐗╃悊鍏变韩 +%d%%" % int(physical_shared))
-	if eff.has("aspd_pct"): parts.append("鏀婚€?+%d%%" % int(eff["aspd_pct"]))
-	if eff.has("tgt_add"): parts.append("鐩爣 +%d" % int(eff["tgt_add"]))
-	if eff.has("chase"): parts.append("杩藉嚮 %d%%" % int(eff["chase"]))
-	if eff.has("qijian"): parts.append("鍓戞皵 %d%%" % int(eff["qijian"]))
+	if pct != 0.0: parts.append("剑法伤害 +%d%%" % int(pct))
+	if physical_shared != 0.0: parts.append("物理共享 +%d%%" % int(physical_shared))
+	if eff.has("aspd_pct"): parts.append("攻速 +%d%%" % int(eff["aspd_pct"]))
+	if eff.has("tgt_add"): parts.append("目标 +%d" % int(eff["tgt_add"]))
+	if eff.has("chase"): parts.append("追击 %d%%" % int(eff["chase"]))
+	if eff.has("qijian"): parts.append("剑气 %d%%" % int(eff["qijian"]))
 	if not parts.is_empty():
-		_toast("鍩虹鍓戞硶 路 " + " 路 ".join(PackedStringArray(parts)))
+		_toast("基础剑法 · " + " · ".join(PackedStringArray(parts)))
 	Aud.sfx("skill", -14.0)
 
-# 涓昏鏅敾鐨勯澶栫粨绠楋紙澶氱洰鏍?/ 杩藉嚮 / 鍓戞皵锛?func _hero_extra_hits(primary: Dictionary = {}) -> void:
+# 主角普攻的额外结算（多目标 / 追击 / 剑气）
+func _hero_extra_hits(primary: Dictionary = {}) -> void:
 	if _run_over or _core == null or not _core.running or float(_core.hero.get("hp", 0.0)) <= 0.0:
 		return
 	var foes := _live_foes()
 	if foes.is_empty():
 		return
 	if primary.is_empty():
-		primary = foes[0] # 淇濈暀鐩存帴璋冪敤宸ュ叿鐨勯粯璁ょ洰鏍囷紝瀹炴垬淇″彿鎬绘槸浼犲叆鏈垁鐩爣銆?	var epoch: int = _core._enemy_attack_epoch
-	# v9 鍓戦瓌锛氳繛缁墦鍚屼竴鐩爣 鈫?鏀婚€熷彔灞傦紱鎹㈢洰鏍囩珛鍒婚噸缃?	if _hero_jianpo:
+		primary = foes[0] # 保留直接调用工具的默认目标，实战信号总是传入本刀目标。
+	var epoch: int = _core._enemy_attack_epoch
+	# v9 剑魄：连续打同一目标 → 攻速叠层；换目标立刻重置
+	if _hero_jianpo:
 		var tid := int(primary.get("_tid", -1))
 		if tid != _jpo_tid:
 			_jpo_tid = tid
@@ -6474,7 +6766,7 @@ func _ring_out() -> void:
 				_core.attr_add_amp("aspd", -0.06 * float(_jpo_stacks))
 			_jpo_stacks = 0
 		else:
-			_jpo_stacks += 1                      # 涓嶈涓婇檺锛氬彧闈?鎹㈢洰鏍?閲嶇疆
+			_jpo_stacks += 1                      # 不设上限：只靠"换目标"重置
 			_core.attr_add_amp("aspd", 0.06)
 		_core.hero["aspd"] = minf(MAX_ASPD, _core.attr_final("aspd") / float(_core.ATTR_BASE["aspd"]))
 	if _hero_passive.is_empty():
@@ -6490,17 +6782,18 @@ func _ring_out() -> void:
 	if randf() < float(_hero_passive.get("chase", 0.0)) / 100.0:
 		if float(primary.get("hp", 0.0)) > 0.0:
 			if not _hero_extra_damage(primary, base * 0.5, epoch): return
-			_core._push_float(float(primary["x"]), float(primary["y"]) - 40.0, "杩藉嚮", Color(0.95, 0.85, 0.55))
+			_core._push_float(float(primary["x"]), float(primary["y"]) - 40.0, "追击", Color(0.95, 0.85, 0.55))
 	if randf() < float(_hero_passive.get("qijian", 0.0)) / 100.0:
 		var at := Vector2(float(primary["x"]), float(primary["y"]))
-		# 鍓戦瓌锛氬墤姘旇繘鍖栨垚銆屼竾鍓戝綊瀹椼€嶁€斺€旇寖鍥存洿澶с€佷激瀹虫洿鐙?		var rad := 300.0 if _hero_jianpo else 130.0
+		# 剑魄：剑气进化成「万剑归宗」——范围更大、伤害更狠
+		var rad := 300.0 if _hero_jianpo else 130.0
 		var mul := 2.5 if _hero_jianpo else 1.2
 		for f_v in foes:
 			var f: Dictionary = f_v
 			if float(f.get("hp", 0.0)) > 0.0 and (Vector2(float(f["x"]), float(f["y"])) - at).length() <= rad:
 				if not _hero_extra_damage(f, base * mul, epoch): return
 				_core._push_float(float(f["x"]), float(f["y"]) - 44.0,
-					"涓囧墤褰掑畻" if _hero_jianpo else "鍓戞皵",
+					"万剑归宗" if _hero_jianpo else "剑气",
 					Color(0.98, 0.94, 0.74) if _hero_jianpo else Color(0.88, 0.92, 1.0), true)
 		Aud.sfx("slash_light2" if _hero_jianpo else "slash_light", -6.0 if _hero_jianpo else -8.0)
 		if _hero_jianpo and _core != null:
@@ -6511,20 +6804,20 @@ func _hero_extra_damage(target: Dictionary, amount: float, epoch: int) -> bool:
 		return false
 	if float(target.get("hp", 0.0)) <= 0.0 or bool(target.get("_death_settled", false)) or float(target.get("dying", 0.0)) > 0.0:
 		return true
-	_core._apply_dmg(target, amount, "鐗╃悊")
+	_core._apply_dmg(target, amount, "物理")
 	if float(target.get("hp", 0.0)) <= 0.0:
 		_core._kill_foe(target)
 	return not _run_over and _core.running and epoch == _core._enemy_attack_epoch and float(_core.hero.get("hp", 0.0)) > 0.0
 
-# ---------------- 鍓戦瓌锛堜富瑙掔偒鍗★級 ----------------
+# ---------------- 剑魄（主角炫卡） ----------------
 func _enable_jianpo() -> void:
 	_hero_jianpo = true
 	_jpo_tid = -1
 	_jpo_stacks = 0
-	_toast("鍓戦瓌鍏ュ崱缁?路 杩炲嚮鍚屼竴鐩爣鏀婚€熼€掑锛堟崲鐩爣閲嶇疆锛壜?鍓戞皵杩涘寲涓恒€屼竾鍓戝綊瀹椼€?)
+	_toast("剑魄入卡组 · 连击同一目标攻速递增（换目标重置）· 剑气进化为「万剑归宗」")
 	_shiny_present("jianpo")
 
-# 鍓戦洦锛氫竴鎺掔珫鍓戜粠澶╄€岄檷锛堝墤榄勪笓灞炴紨鍑猴級
+# 剑雨：一排竖剑从天而降（剑魄专属演出）
 func _sword_rain() -> void:
 	for i in 9:
 		var r := ColorRect.new()
@@ -6541,17 +6834,21 @@ func _sword_rain() -> void:
 		tw.tween_callback(func() -> void: r.queue_free())
 
 # ============================================================
-# 婊氬湴榫?路 鎾炲嚮娴侊紙鐢熷懡鍊肩櫨鍒嗘瘮浼ゅ + 鍙扮悆鍙嶅脊锛?#   鎾炲嚮浼ゅ = 姘旇涓婇檺 脳 6%锛堢墿鐞嗭級锛屾瘡璺冲叏棰濄€佷笉閫掑噺
-#   鍙嶅脊棰勭畻锛氭棤鐐崱 鍏ㄥ満 1 娆★紱鏈夈€屾粴灞便€嶆瘡涓晫浜哄悇涓€娆?鈫?鏃犻檺杩為攣
+# 滚地龙 · 撞击流（生命值百分比伤害 + 台球反弹）
+#   撞击伤害 = 气血上限 × 6%（物理），每跳全额、不递减
+#   反弹预算：无炫卡 全场 1 次；有「滚山」每个敌人各一次 → 无限连锁
 # ============================================================
-const RAM_HP_PCT := 6.0          # 鎾炲嚮浼ゅ = 姘旇涓婇檺 脳 6%
-const RAM_KNOCK := 1800.0        # 鍑婚€€鍒濋€?px/s锛堣鍘嬭繃鏍稿績鐨勫璺Щ鍔級
-const RAM_HIT_R := 34.0          # 纰版挒鍒ゅ畾鍗婂緞锛?鈽?浼氬姞锛?const WALL_X0 := 24.0
+const RAM_HP_PCT := 6.0          # 撞击伤害 = 气血上限 × 6%
+const RAM_KNOCK := 1800.0        # 击退初速 px/s（要压过核心的寻路移动）
+const RAM_HIT_R := 34.0          # 碰撞判定半径（3★ 会加）
+const WALL_X0 := 24.0
 const WALL_X1 := 696.0
 const WALL_Y0 := 150.0
 const WALL_Y1 := 700.0
 
-var _ram_shiny := false          # 婊氬北锛氭瘡涓晫浜哄悇寮逛竴娆?var _ram_foe_seq := 0            # 鍐叉挒鍛戒腑璁板綍浣跨敤鐙珛缂栧彿锛屼笉渚濊禆灏氭湭鐢熸垚鐨勬樉绀簍oken銆?var _ram_step_accum := 0.0
+var _ram_shiny := false          # 滚山：每个敌人各弹一次
+var _ram_foe_seq := 0            # 冲撞命中记录使用独立编号，不依赖尚未生成的显示token。
+var _ram_step_accum := 0.0
 var _ram_step_epoch := -1
 const RAM_STEP := 1.0 / 60.0
 
@@ -6575,7 +6872,8 @@ func _ram_damage() -> float:
 	var pct := RAM_HP_PCT * (1.0 + (float(m.get("dmg_pct", 0.0)) + _skill_level_bonus("gundilong")) / 100.0)
 	return float(_core.hero.get("hp_max", 200.0)) * pct / 100.0
 
-# 鍖栬韩鑲夎泲锛氭妸鏈€杩戠殑涓€鍙挒椋?func _charge_ram() -> void:
+# 化身肉蛋：把最近的一只撞飞
+func _charge_ram() -> void:
 	if _core == null:
 		return
 	var epoch: int = _core._enemy_attack_epoch
@@ -6590,13 +6888,14 @@ func _ram_damage() -> float:
 	if dir.length() < 1.0:
 		dir = Vector2(0, -1)
 	dir = dir.normalized()
-	# 姣忔鏂芥硶鍚勮嚜淇濆瓨浼ゅ銆侀绠楀拰鍛戒腑缂栧彿锛涗笉鎸佹湁鏁屼汉寮曠敤锛岄伩鍏嶅惊鐜紩鐢ㄣ€?	var ctx := {"damage": _ram_damage(), "budget": 999 if _ram_shiny else 1,
+	# 每次施法各自保存伤害、预算和命中编号；不持有敌人引用，避免循环引用。
+	var ctx := {"damage": _ram_damage(), "budget": 999 if _ram_shiny else 1,
 		"shiny": _ram_shiny, "epoch": epoch, "hits": {_ram_foe_id(f0): true}, "bounced": {}}
 	ctx["chain_damage"] = float(ctx["damage"]) * (1.0 + float(_ram_mods().get("chain_dmg", 0.0)) / 100.0)
-	# 鍐叉挒婕斿嚭锛氫竴閬撳湡榛剆treak
+	# 冲撞演出：一道土黄streak
 	_ram_streak(hp0, Vector2(float(f0["x"]), float(f0["y"])))
-	_core._apply_dmg(f0, float(ctx["damage"]), "鐗╃悊")
-	_core._push_float(float(f0["x"]), float(f0["y"]) - 46.0, "鑲夎泲鍐插嚮", Color(0.92, 0.80, 0.42), true)
+	_core._apply_dmg(f0, float(ctx["damage"]), "物理")
+	_core._push_float(float(f0["x"]), float(f0["y"]) - 46.0, "肉蛋冲击", Color(0.92, 0.80, 0.42), true)
 	if float(f0.get("hp", 0.0)) <= 0.0:
 		_core._kill_foe(f0)
 	if not _skill_batch_active(epoch):
@@ -6604,10 +6903,10 @@ func _ram_damage() -> float:
 	if not _core.foes.has(f0) or float(f0.get("hp", 0.0)) <= 0.0 or bool(f0.get("_death_settled", false)):
 		_ram_stop(f0)
 		return
-	var pm := 1.0 + float(_ram_mods().get("impact", 0.0)) * 0.15   # 鍐插嚮鍔涳細姣忕偣 +15% 鍑婚€€璺濈
+	var pm := 1.0 + float(_ram_mods().get("impact", 0.0)) * 0.15   # 冲击力：每点 +15% 击退距离
 	f0["_kx"] = dir.x * RAM_KNOCK * pm
 	f0["_ky"] = dir.y * RAM_KNOCK * pm
-	f0["_seg_a"] = Vector2(float(f0["x"]), float(f0["y"]))   # 鎵帬璧风偣
+	f0["_seg_a"] = Vector2(float(f0["x"]), float(f0["y"]))   # 扫掠起点
 	f0["_ram_ctx"] = ctx
 	_core.Shake_add(7.0)
 	Aud.sfx("hit_heavy", -6.0)
@@ -6643,7 +6942,8 @@ func _tick_knock(dt: float) -> void:
 	if not moving:
 		_ram_step_accum = 0.0
 		return
-	# 淇濈暀鍘?0甯т笅鐨勮繍鍔?澧欓潰/纰版挒椤哄簭锛涙覆鏌撳抚鐜囧彧鍐冲畾鏈抚琛ュ嚑涓浐瀹氭銆?	_ram_step_accum += maxf(0.0, dt)
+	# 保留原60帧下的运动/墙面/碰撞顺序；渲染帧率只决定本帧补几个固定步。
+	_ram_step_accum += maxf(0.0, dt)
 	while _ram_step_accum + 0.000000001 >= RAM_STEP:
 		_ram_step_accum = maxf(0.0, _ram_step_accum - RAM_STEP)
 		_step_knock(RAM_STEP, epoch)
@@ -6668,7 +6968,7 @@ func _step_knock(dt: float, epoch: int) -> void:
 			continue
 		var px := float(f["x"]) + kx * dt
 		var py := float(f["y"]) + ky * dt
-		# 鎾炲 鈫?鍙嶅脊涓€娆″悗鍋滐紙鎾炲涓嶇畻娑堣€楅绠楋級
+		# 撞墙 → 反弹一次后停（撞墙不算消耗预算）
 		if px < WALL_X0 or px > WALL_X1:
 			kx = -kx * 0.6
 			px = clampf(px, WALL_X0, WALL_X1)
@@ -6677,7 +6977,7 @@ func _step_knock(dt: float, epoch: int) -> void:
 			py = clampf(py, WALL_Y0, WALL_Y1)
 		f["x"] = px
 		f["y"] = py
-		# 琛板噺
+		# 衰减
 		kx *= 0.955
 		ky *= 0.955
 		if absf(kx) < 6.0 and absf(ky) < 6.0:
@@ -6685,7 +6985,7 @@ func _step_knock(dt: float, epoch: int) -> void:
 			ky = 0.0
 		f["_kx"] = kx
 		f["_ky"] = ky
-		# 鎾炲埌鍒殑鎬?鈫?杩為攣
+		# 撞到别的怪 → 连锁
 		if int(ctx["budget"]) <= 0 or (ctx["bounced"] as Dictionary).has(_ram_foe_id(f)):
 			continue
 		var seg_a: Vector2 = f.get("_seg_a", Vector2(float(f["x"]), float(f["y"])))
@@ -6701,8 +7001,8 @@ func _step_knock(dt: float, epoch: int) -> void:
 			ctx["budget"] = int(ctx["budget"]) - 1
 			ctx["bounced"][_ram_foe_id(f)] = true
 			ctx["hits"][_ram_foe_id(o)] = true
-			_core._apply_dmg(o, float(ctx["chain_damage"]), "鐗╃悊")
-			_core._push_float(float(o["x"]), float(o["y"]) - 40.0, "鍙嶅脊", Color(0.92, 0.80, 0.42))
+			_core._apply_dmg(o, float(ctx["chain_damage"]), "物理")
+			_core._push_float(float(o["x"]), float(o["y"]) - 40.0, "反弹", Color(0.92, 0.80, 0.42))
 			if float(o.get("hp", 0.0)) <= 0.0:
 				_core._kill_foe(o)
 			if not _skill_batch_active(epoch):
@@ -6721,14 +7021,16 @@ func _step_knock(dt: float, epoch: int) -> void:
 				o["_ky"] = d.y * RAM_KNOCK * pm2
 				o["_seg_a"] = Vector2(float(o["x"]), float(o["y"]))
 				o["_ram_ctx"] = ctx
-			# 婊氬北锛氭瘡娆″弽寮?鈫?姘旇涓婇檺鍥哄畾 +8锛堝崰浣嶏紝鐐崱瀹炶鍚庢墦寮€锛?			if bool(ctx["shiny"]):
+			# 滚山：每次反弹 → 气血上限固定 +8（占位，炫卡实装后打开）
+			if bool(ctx["shiny"]):
 				_apply_flat_growth(0.0, 8.0)
 			break
 
 func _ram_radius_bonus() -> float:
 	return float(_ram_mods().get("radius_add", 0.0))
 
-# 鐐瑰埌绾挎鐨勮窛绂伙紙鐢ㄤ簬"鎾為璺緞鎵繃璋?锛?func _dist_point_seg(p: Vector2, a: Vector2, b: Vector2) -> float:
+# 点到线段的距离（用于"撞飞路径扫过谁"）
+func _dist_point_seg(p: Vector2, a: Vector2, b: Vector2) -> float:
 	var ab := b - a
 	var l2 := ab.length_squared()
 	if l2 < 0.0001:
@@ -6736,22 +7038,26 @@ func _ram_radius_bonus() -> float:
 	var t := clampf((p - a).dot(ab) / l2, 0.0, 1.0)
 	return p.distance_to(a + ab * t)
 
-# ---------------- 婊氬北锛堟粴鍦伴緳鐐崱锛?----------------
-#   姣忎釜琚挒鐨勬晫浜洪兘鑳藉悇寮逛竴娆?鈫?鐞嗚涓婃棤闄愯繛閿?#   姣忔瑙﹀彂鍙嶅脊 鈫?姘旇涓婇檺鍥哄畾 +8
+# ---------------- 滚山（滚地龙炫卡） ----------------
+#   每个被撞的敌人都能各弹一次 → 理论上无限连锁
+#   每次触发反弹 → 气血上限固定 +8
 const GUNSHAN_HP := 8.0
 
 func _enable_gunshan() -> void:
 	_ram_shiny = true
-	_toast("婊氬北鍏ュ崱缁?路 姣忎釜琚挒鐨勬晫浜洪兘鑳藉弽寮逛竴娆★紝姣忔鍙嶅脊姘旇涓婇檺 +8")
+	_toast("滚山入卡组 · 每个被撞的敌人都能反弹一次，每次反弹气血上限 +8")
 	_shiny_present("gunshan")
 
 func _gunshan_grow() -> void:
 	_apply_flat_growth(0.0, GUNSHAN_HP)
 
 # ============================================================
-# 鑻忛潚楦?路 闈掗妇椋炲垉锛堢洿绾跨┛閫?+ 鍥炵▼锛?#   绌块€?= 涓€鏉＄嚎涓婅兘鎵撳埌鍑犱釜浜猴紱椋炲垁 = 鍚屾椂鍑犳潯绾?#   5鈽?鍥炴棆锛氬埌缁堢偣鍚庡師璺啀绌夸竴閬嶏紙浼ゅ 脳鍥炵▼鍊嶇巼锛?# ============================================================
-const FEIREN_HALF_W := 26.0       # 椋炲垉鍒ゅ畾鍗婂
-const FEIREN_LEN := 780.0         # 椋炲垉闀垮害
+# 苏青鸾 · 青鸾飞刃（直线穿透 + 回程）
+#   穿透 = 一条线上能打到几个人；飞刀 = 同时几条线
+#   5★ 回旋：到终点后原路再穿一遍（伤害 ×回程倍率）
+# ============================================================
+const FEIREN_HALF_W := 26.0       # 飞刃判定半宽
+const FEIREN_LEN := 780.0         # 飞刃长度
 
 func _cast_feiren(mul: float) -> void:
 	if _core == null:
@@ -6766,10 +7072,10 @@ func _cast_feiren(mul: float) -> void:
 	var dmg_pct := float(m.get("dmg_pct", 0.0)) + _skill_level_bonus("qingluan")
 	var pierce := 1 + int(m.get("pierce", 0.0))
 	if _wanren:
-		pierce += 2 + _wanren_pierce            # 鐐崱锛氳捣姝?+2锛屽洖绋嬫垚闀挎棤涓婇檺
+		pierce += 2 + _wanren_pierce            # 炫卡：起步 +2，回程成长无上限
 	var knives := 1 + int(m.get("knife", 0.0))
 	if _wanren:
-		knives += pierce                        # 鐐崱锛氭瘡 1 鐐圭┛閫?+1 鎶婇鍒€
+		knives += pierce                        # 炫卡：每 1 点穿透 +1 把飞刀
 	var volley := float(m.get("volley", 0.0)) > 0.0
 	var vmul := 1.0 + float(m.get("volley_pct", 0.0)) / 100.0
 	var base := float(_core.hero.get("atk", 12.0)) * mul * (1.0 + dmg_pct / 100.0)
@@ -6811,8 +7117,8 @@ func _feiren_line(origin: Vector2, d: Vector2, base: float, pierce: int, volley:
 		var f: Dictionary = (hits[i] as Dictionary)["f"]
 		if not _core.foes.has(f) or float(f.get("hp", 0.0)) <= 0.0 or bool(f.get("_death_settled", false)) or float(f.get("dying", 0.0)) > 0.0:
 			continue
-		_core._apply_dmg(f, base, "鐗╃悊")
-		_core._push_float(float(f["x"]), float(f["y"]) - 42.0, "椋炲垉", Color(0.55, 0.82, 0.90), i == 0)
+		_core._apply_dmg(f, base, "物理")
+		_core._push_float(float(f["x"]), float(f["y"]) - 42.0, "飞刃", Color(0.55, 0.82, 0.90), i == 0)
 		if float(f.get("hp", 0.0)) <= 0.0:
 			_core._kill_foe(f)
 		if not _skill_batch_active(epoch):
@@ -6822,13 +7128,13 @@ func _feiren_line(origin: Vector2, d: Vector2, base: float, pierce: int, volley:
 			_wanren_volleys += 1
 			if _wanren_volleys % 3 == 0:
 				_wanren_pierce += 1
-				_toast("涓囧垉 路 绌块€?+1锛堢疮璁?%d锛? % (2 + _wanren_pierce))
+				_toast("万刃 · 穿透 +1（累计 %d）" % (2 + _wanren_pierce))
 		for i in range(n - 1, -1, -1):
 			var f2: Dictionary = (hits[i] as Dictionary)["f"]
 			if not _core.foes.has(f2) or float(f2.get("hp", 0.0)) <= 0.0 or bool(f2.get("_death_settled", false)) or float(f2.get("dying", 0.0)) > 0.0:
 				continue
-			_core._apply_dmg(f2, base * vmul, "鐗╃悊")
-			_core._push_float(float(f2["x"]), float(f2["y"]) - 62.0, "鍥炵▼", Color(0.75, 0.95, 1.0), true)
+			_core._apply_dmg(f2, base * vmul, "物理")
+			_core._push_float(float(f2["x"]), float(f2["y"]) - 62.0, "回程", Color(0.75, 0.95, 1.0), true)
 			if float(f2.get("hp", 0.0)) <= 0.0:
 				_core._kill_foe(f2)
 			if not _skill_batch_active(epoch):
@@ -6847,25 +7153,26 @@ func _feiren_line(origin: Vector2, d: Vector2, base: float, pierce: int, volley:
 	tw.tween_property(r, "modulate:a", 0.0, 0.25)
 	tw.tween_callback(func() -> void: r.queue_free())
 
-# ---------------- 涓囧垉锛堣嫃闈掗妇鐐崱锛?----------------
+# ---------------- 万刃（苏青鸾炫卡） ----------------
 func _enable_wanren() -> void:
 	_wanren = true
 	_wanren_pierce = 0
 	_wanren_volleys = 0
-	_toast("涓囧垉鍏ュ崱缁?路 绌块€忔棤涓婇檺锛屾瘡鐐圭┛閫?+1 鎶婇鍒€锛屾瘡 3 娆″洖绋嬬┛閫?+1")
+	_toast("万刃入卡组 · 穿透无上限，每点穿透 +1 把飞刀，每 3 次回程穿透 +1")
 	_shiny_present("wanren")
 
 # ============================================================
-# 鏌冲嵖鍗?路 鍥炴槬锛堟不鐤?+ 鐜瘨 + 鏄撲激锛?#   娌荤枟 = 鏀诲嚮 脳 200% 脳 (1 + 娌荤枟% + 鏈ㄧ郴%)      鈥斺€?浼ゅ鍒绘剰浣庯紝濂规槸杈呭姪
-#   鐜瘨 = 鍦堝唴鏁屼汉姣忕 鏀诲嚮 脳 30% 脳 灞傛暟 脳 (1 + 鏈ㄧ郴%)
-#   5鈽?闀挎槬锛氭瘨鏇翠箙锛屼笖涓嫑鑰呭彈浼?+10%锛堝敮涓€涓€灞傦紝鍙埛鏂帮級
+# 柳卿卿 · 回春（治疗 + 环毒 + 易伤）
+#   治疗 = 攻击 × 200% × (1 + 治疗% + 木系%)      —— 伤害刻意低，她是辅助
+#   环毒 = 圈内敌人每秒 攻击 × 30% × 层数 × (1 + 木系%)
+#   5★ 长春：毒更久，且中招者受伤 +10%（唯一一层，只刷新）
 # ============================================================
 const HEAL_RATIO := 2.0
 const POISON_RATE := 0.30
 const AURA_BASE_R := 110.0
 
 func _wood_pct() -> float:
-	return _core.type_amp("鏈ㄧ郴") * 100.0 if _core != null else 0.0
+	return _core.type_amp("木系") * 100.0 if _core != null else 0.0
 
 func _cast_heal(mul: float, aid := "liuqingqing") -> void:
 	if _core == null or not _skill_batch_active(_core._enemy_attack_epoch):
@@ -6896,8 +7203,9 @@ func _cast_heal(mul: float, aid := "liuqingqing") -> void:
 		f["poison"] = float(layers.size())
 		f["poison_t"] = maxf(float(f.get("poison_t", 0.0)), dur)
 		if vuln > 0.0:
-			f["vuln_t"] = maxf(float(f.get("vuln_t", 0.0)), dur)   # 鍙埛鏂帮紝涓嶅彔灞?			f["vuln_pct"] = vuln
-	# 缁胯壊鐜尝
+			f["vuln_t"] = maxf(float(f.get("vuln_t", 0.0)), dur)   # 只刷新，不叠层
+			f["vuln_pct"] = vuln
+	# 绿色环波
 	_heal_ring(rad)
 	Aud.sfx("enlighten", -10.0)
 
@@ -6949,8 +7257,8 @@ func _tick_poison(dt: float) -> void:
 				var at_t := elapsed - float(f["poison_acc"])
 				var vuln := 1.0 + float(f.get("vuln_pct", 0.0)) / 100.0 if float(f.get("vuln_t", 0.0)) > at_t else 1.0
 				var dmg := float(_core.hero.get("atk", 12.0)) * POISON_RATE * float(f["poison"]) * float(f.get("poison_bonus", 1.0))
-				_core._apply_dmg(f, dmg, "鏈ㄧ郴", -1, vuln)
-				_core._push_float(float(f["x"]), float(f["y"]) - 34.0, "姣?, Color(0.45, 0.80, 0.40))
+				_core._apply_dmg(f, dmg, "木系", -1, vuln)
+				_core._push_float(float(f["x"]), float(f["y"]) - 34.0, "毒", Color(0.45, 0.80, 0.40))
 				if randf() < 0.6:
 					_spawn_pfx("impacts/hit-spark", _core.position + Vector2(float(f["x"]), float(f["y"]) - 18.0), 0.55, "poison", 1.2)
 				if float(f.get("hp", 0.0)) <= 0.0: _core._kill_foe(f)
@@ -6975,8 +7283,8 @@ func _tick_poison_layers(f: Dictionary, dt: float, epoch: int) -> bool:
 				weight += float(layer["bonus"])
 		if weight > 0.0:
 			var vuln := 1.0 + float(f.get("vuln_pct", 0.0)) / 100.0 if float(f.get("vuln_t", 0.0)) > at_t else 1.0
-			_core._apply_dmg(f, float(_core.hero.get("atk", 12.0)) * POISON_RATE * weight, "鏈ㄧ郴", -1, vuln)
-			_core._push_float(float(f["x"]), float(f["y"]) - 34.0, "姣?, Color(0.45, 0.80, 0.40))
+			_core._apply_dmg(f, float(_core.hero.get("atk", 12.0)) * POISON_RATE * weight, "木系", -1, vuln)
+			_core._push_float(float(f["x"]), float(f["y"]) - 34.0, "毒", Color(0.45, 0.80, 0.40))
 			if randf() < 0.6:
 				_spawn_pfx("impacts/hit-spark", _core.position + Vector2(float(f["x"]), float(f["y"]) - 18.0), 0.55, "poison", 1.2)
 			if float(f.get("hp", 0.0)) <= 0.0: _core._kill_foe(f)
@@ -7008,9 +7316,10 @@ func _tick_vuln(dt: float) -> void:
 		if float(f.get("vuln_t", 0.0)) > 0.0:
 			f["vuln_t"] = float(f["vuln_t"]) - dt
 
-# ---------------- 鐧捐崏锛堟煶鍗垮嵖鐐崱锛?----------------
+# ---------------- 百草（柳卿卿炫卡） ----------------
 var _baicao := false
-# v12 鏄庣儧鍏夌幆锛堢函琚姩锛?var _mingzhu := false
+# v12 明烛光环（纯被动）
+var _mingzhu := false
 var _aura_pull_acc := 0.0
 var _undying_lamp := false
 var _lamp_kills := 0
@@ -7020,10 +7329,10 @@ func _enable_baicao() -> void:
 	if _baicao: return
 	_baicao = true
 	_add_ancestor_effects("liuqingqing", {"heal_pct": 10.0})
-	_toast("鐧捐崏鍏ュ崱缁?路 姣掔礌鍙彔鍔狅紝鏂芥斁鏈夊嚑鐜囪繛鏀撅紙鍙墸涓€娆″唴鍔涳級")
+	_toast("百草入卡组 · 毒素可叠加，施放有几率连放（只扣一次内力）")
 	_shiny_present("baicao")
 
-# 杩斿洖鏈瀹為檯鏂芥斁娆℃暟锛堝彧鍒や竴绉嶏級
+# 返回本次实际施放次数（只判一种）
 func _baicao_times() -> int:
 	var r := randf()
 	if r < 0.10:
@@ -7035,8 +7344,10 @@ func _baicao_times() -> int:
 	return 1
 
 # ============================================================
-# 鏄庣儧 路 鐏収鍏夌幆锛堢函琚姩锛屼笉杩涙妧鑳芥爮锛?#   鍦堝唴鏁屼汉锛氬噺閫?路 鏄撲激锛?鈽?鑱氱伅锛氭瘡绉?20% 姒傜巼琚惛鍚戜腑蹇?+ 鏈ㄧ郴纾ㄨ锛?#   2鈽?闀挎槑锛氬湀鍐呬富瑙掑洖琛€鍥炲唴
-#   鑱氱伅浼ゅ闅忓崐寰勬垚闀匡細鏀诲嚮 脳 15% 脳 (鍗婂緞 / 180)
+# 明烛 · 灯照光环（纯被动，不进技能栏）
+#   圈内敌人：减速 · 易伤（5★ 聚灯：每秒 20% 概率被吸向中心 + 木系磨血）
+#   2★ 长明：圈内主角回血回内
+#   聚灯伤害随半径成长：攻击 × 15% × (半径 / 180)
 # ============================================================
 const AURA_R_BASE := 180.0
 const AURA_PULL_STEP := 120.0
@@ -7074,7 +7385,8 @@ func _tick_aura(dt: float) -> void:
 		var d := Vector2(float(f["x"]), float(f["y"])) - hp0
 		if d.length() > rad:
 			continue
-		f["slow_t"] = maxf(float(f.get("slow_t", 0.0)), 0.3)      # 鎸佺画鍑忛€?		if vuln > 0.0:
+		f["slow_t"] = maxf(float(f.get("slow_t", 0.0)), 0.3)      # 持续减速
+		if vuln > 0.0:
 			f["vuln_t"] = maxf(float(f.get("vuln_t", 0.0)), 0.3)
 			f["vuln_pct"] = vuln
 		if pull and do_pull and randf() < 0.20:
@@ -7083,21 +7395,22 @@ func _tick_aura(dt: float) -> void:
 			f["x"] = float(f["x"]) + dir.x * step
 			f["y"] = float(f["y"]) + dir.y * step
 			var dmg := float(_core.hero.get("atk", 12.0)) * 0.15 * (rad / AURA_R_BASE)
-			_core._apply_dmg(f, dmg, "鏈ㄧ郴")
-			_core._push_float(float(f["x"]), float(f["y"]) - 30.0, "鑱?, Color(0.95, 0.85, 0.55))
+			_core._apply_dmg(f, dmg, "木系")
+			_core._push_float(float(f["x"]), float(f["y"]) - 30.0, "聚", Color(0.95, 0.85, 0.55))
 			if float(f.get("hp", 0.0)) <= 0.0:
 				_core._kill_foe(f)
 
-# ---------------- 涓嶇伃涔嬬伅锛堟槑鐑涚偒鍗★級 ----------------
+# ---------------- 不灭之灯（明烛炫卡） ----------------
 func _enable_undying_lamp() -> void:
 	_undying_lamp = true
 	_lamp_kills = 0
-	_toast("涓嶇伃涔嬬伅鍏ュ崱缁?路 鍗婂緞 +40锛屾瘡鍑绘潃 5 鍙啀 +10锛堟棤涓婇檺锛?)
+	_toast("不灭之灯入卡组 · 半径 +40，每击杀 5 只再 +10（无上限）")
 	_shiny_present("undying")
 
 # ============================================================
-# 绾搁涪 路 鍓焊鎴愬叺锛堝彫鍞ょ郴锛屽鐢ㄦ牳蹇冪殑鍙敜鐗╃郴缁燂級
-#   绾镐汉锛氱户鎵夸富瑙掓敾鍑?15%锛堟牳蹇?"paper" 鍒嗘敮锛壜?浼氭尐鎵?路 浼氬娈?# ============================================================
+# 纸鸢 · 剪纸成兵（召唤系，复用核心的召唤物系统）
+#   纸人：继承主角攻击 15%（核心 "paper" 分支）· 会挨打 · 会增殖
+# ============================================================
 var _qianzhi := false
 
 func _cast_paper() -> void:
@@ -7106,19 +7419,23 @@ func _cast_paper() -> void:
 	if _qianzhi:
 		n += 0
 	var secs := 8.0 + float(m.get("life_flat", 0.0))
-	var life_m := secs / 30.0          # cn_life() 鍩哄噯 30 绉?	for i in n:
-		_core.summon_minion("绾镐汉", Color(0.95, 0.93, 0.86), 0.72, 0.5, life_m, 1.0, 0.0, 99, "", "paper")
-	_toast("鍓焊鎴愬叺 路 鍙?%d 寮犵焊浜猴紙瀛樺湪 %d 绉掞級" % [n, int(secs)])
+	var life_m := secs / 30.0          # cn_life() 基准 30 秒
+	for i in n:
+		_core.summon_minion("纸人", Color(0.95, 0.93, 0.86), 0.72, 0.5, life_m, 1.0, 0.0, 99, "", "paper")
+	_toast("剪纸成兵 · 召 %d 张纸人（存在 %d 秒）" % [n, int(secs)])
 	Aud.sfx("paper", -8.0)
 
 func _enable_qianzhi() -> void:
 	_qianzhi = true
-	_toast("鍗冪焊鍏ュ崱缁?路 绾镐汉鍑绘潃浼氬娈栵紝娑堝け鏃跺垎瑁?2 涓皬绾镐汉")
+	_toast("千纸入卡组 · 纸人击杀会增殖，消失时分裂 2 个小纸人")
 	_shiny_present("qianzhi")
 
 # ============================================================
-# 闄堢煶 路 鐭崇毊锛堢函琚姩锛屼笉杩涙妧鑳芥爮锛?#   姣?X 绉?+N 灞傦紙鏃犱笂闄愶級路 姣忓眰闃插尽 +2/+3 路 鎸ㄦ墦鎺?1 灞傚苟鍙嶆墜鐪熷疄浼ゅ锛堥槻寰∶?.5锛?#   5鈽?绱鑴?10 灞?鈫?纰庤锛堣寖鍥寸湡瀹炰激瀹筹級
-#   鐐崱鐭虫畳锛氭湁鐨椂 25% 鍥哄畾鍑忎激 路 鎸ㄦ墦 30% 鍐嶆定涓€灞?# ============================================================
+# 陈石 · 石皮（纯被动，不进技能栏）
+#   每 X 秒 +N 层（无上限）· 每层防御 +2/+3 · 挨打掉 1 层并反手真实伤害（防御×0.5）
+#   5★ 累计脱 10 层 → 碎裂（范围真实伤害）
+#   炫卡石殒：有皮时 25% 固定减伤 · 挨打 30% 再涨一层
+# ============================================================
 var _shixi := false
 var _stone_layers := 0
 var _stone_acc := 0.0
@@ -7135,12 +7452,12 @@ func _apply_stone_def() -> void:
 	if _core == null:
 		return
 	var def_pts := _stone_def + float(_stone_layers) * _stone_per_def()
-	# v6锛氫笉鍐嶈蛋 hero.def 鏁板€煎噺浼わ紱1 鐐归槻寰?= 3% 鍥哄畾鍑忓厤锛岀煶闊靛啀鍔?25%
+	# v6：不再走 hero.def 数值减伤；1 点防御 = 3% 固定减免，石韵再加 25%
 	var red := def_pts * 0.03 + (0.25 if (_shiyun and _stone_layers > 0) else 0.0)
 	var delta := red - _stone_red_applied
 	if absf(delta) > 0.0001:
 		for t in _core.DMG_TYPES:
-			if t != "鐪熷疄":
+			if t != "真实":
 				_core.type_add(t, "red_f", delta)
 		_stone_red_applied = red
 
@@ -7170,8 +7487,8 @@ func _stone_on_hit() -> void:
 		var dmg := float(_core.hero.get("def", 0.0)) * 0.5
 		var foes := _live_foes()
 		if not foes.is_empty() and dmg > 0.0:
-			_core._apply_dmg(foes[0], dmg, "鐪熷疄")
-			_core._push_float(float(foes[0]["x"]), float(foes[0]["y"]) - 40.0, "鐭冲睉", Color(0.80, 0.78, 0.72))
+			_core._apply_dmg(foes[0], dmg, "真实")
+			_core._push_float(float(foes[0]["x"]), float(foes[0]["y"]) - 40.0, "石屑", Color(0.80, 0.78, 0.72))
 		var need := int((_anc_mod.get("chenshi2", {}) as Dictionary).get("stone_burst", 0.0))
 		if need > 0 and _stone_burst >= need:
 			_stone_burst = 0
@@ -7181,44 +7498,47 @@ func _stone_on_hit() -> void:
 		_stone_layers += 1
 		_apply_stone_def()
 
-# 5鈽?纰庤锛氫竴鍦堢湡瀹炰激瀹?func _stone_shatter() -> void:
+# 5★ 碎裂：一圈真实伤害
+func _stone_shatter() -> void:
 	var dmg := float(_core.hero.get("def", 0.0)) * 1.5
 	var hp0 := Vector2(_core.hero_pos)
 	var hit := 0
 	for f_v in _live_foes():
 		var f: Dictionary = f_v
 		if (Vector2(float(f["x"]), float(f["y"])) - hp0).length() <= 140.0:
-			_core._apply_dmg(f, dmg, "鐪熷疄")
-			_core._push_float(float(f["x"]), float(f["y"]) - 50.0, "纰庤", Color(0.86, 0.84, 0.76), true)
+			_core._apply_dmg(f, dmg, "真实")
+			_core._push_float(float(f["x"]), float(f["y"]) - 50.0, "碎裂", Color(0.86, 0.84, 0.76), true)
 			hit += 1
 	if hit > 0:
 		_core.Shake_add(6.0)
-	_toast("纰庤锛佷竴鍦堢湡瀹炰激瀹筹紙闃插尽 %d锛? % int(float(_core.hero.get("def", 0.0))))
+	_toast("碎裂！一圈真实伤害（防御 %d）" % int(float(_core.hero.get("def", 0.0))))
 
-# ---------------- 鐭虫畳锛堥檲鐭崇偒鍗★級 ----------------
+# ---------------- 石殒（陈石炫卡） ----------------
 func _enable_shiyun() -> void:
 	_shiyun = true
 	_apply_stone_def()
-	_toast("鐭虫畳鍏ュ崱缁?路 鐭崇毊鍦ㄨ韩 25% 鍑忎激锛屾尐鎵?30% 鍐嶆定涓€灞?)
+	_toast("石殒入卡组 · 石皮在身 25% 减伤，挨打 30% 再涨一层")
 	_shiny_present("shiyun")
 
 # ============================================================
-# 鏀跺熬锛氱焊浜虹垎鏁?/ 鍗冪焊鍒嗚 / 鍦伴潰鐭崇毊
+# 收尾：纸人爆散 / 千纸分裂 / 地面石皮
 # ============================================================
 var _zhiyuan := false
-var _shards: Array = []          # {pos, t, r} 鍦颁笂鐨勭煶鐨?var _shard_acc := 0.0
+var _shards: Array = []          # {pos, t, r} 地上的石皮
+var _shard_acc := 0.0
 
 func _enable_zhiyuan() -> void:
 	_zhiyuan = true
 
-# 姣忓抚鎵弿鏍稿績鐨勫彫鍞ょ墿锛氱焊浜鸿繘鍏?dying 灏辩垎涓€娆★紙涓嶆敼鏍稿績锛?func _tick_paper(dt: float) -> void:
+# 每帧扫描核心的召唤物：纸人进入 dying 就爆一次（不改核心）
+func _tick_paper(dt: float) -> void:
 	if not _zhiyuan or _core == null:
 		return
 	var m: Dictionary = _anc_mod.get("zhiyuan", {})
 	var burst := float(m.get("burst", 0.0)) > 0.0
 	for m_v in _core._minions:
 		var mm: Dictionary = m_v
-		if str(mm.get("kind", "")) != "绾镐汉":
+		if str(mm.get("kind", "")) != "纸人":
 			continue
 		if float(mm.get("dying", 0.0)) <= 0.0 or bool(mm.get("_burst_done", false)):
 			continue
@@ -7229,13 +7549,13 @@ func _enable_zhiyuan() -> void:
 			for f_v in _live_foes():
 				var f: Dictionary = f_v
 				if (Vector2(float(f["x"]), float(f["y"])) - at).length() <= 110.0:
-					_core._apply_dmg(f, dmg, "鍙敜")
-					_core._push_float(float(f["x"]), float(f["y"]) - 36.0, "鐖嗘暎", Color(0.94, 0.92, 0.86))
+					_core._apply_dmg(f, dmg, "召唤")
+					_core._push_float(float(f["x"]), float(f["y"]) - 36.0, "爆散", Color(0.94, 0.92, 0.86))
 			_paper_puff(at)
 			Aud.sfx("paper", -10.0)
 		if _qianzhi:
 			for k in 2:
-				_core.summon_minion("灏忕焊浜?, Color(0.98, 0.96, 0.90), 0.5, 0.3, 5.0 / 30.0, 0.9, 0.0, 99, "", "paper")
+				_core.summon_minion("小纸人", Color(0.98, 0.96, 0.90), 0.5, 0.3, 5.0 / 30.0, 0.9, 0.0, 99, "", "paper")
 			_paper_puff(at)
 			Aud.sfx("paper", -12.0)
 
@@ -7281,7 +7601,7 @@ func _tick_shards(dt: float) -> void:
 			s["t"] = 0.0
 			_stone_layers += 1
 			_apply_stone_def()
-			_core._push_float(sp.x, sp.y - 30.0, "鐭崇毊 +1", Color(0.84, 0.82, 0.74))
+			_core._push_float(sp.x, sp.y - 30.0, "石皮 +1", Color(0.84, 0.82, 0.74))
 			continue
 		if _shiyun and tick:
 			for f_v in _live_foes():
@@ -7289,14 +7609,15 @@ func _tick_shards(dt: float) -> void:
 				if (Vector2(float(f["x"]), float(f["y"])) - sp).length() <= float(s["r"]) + extra_r:
 					var dmg := float(_core.hero.get("def", 0.0)) * 0.2
 					if dmg > 0.0:
-						_core._apply_dmg(f, dmg, "鐪熷疄")
-						_core._push_float(float(f["x"]), float(f["y"]) - 26.0, "鐮?, Color(0.80, 0.78, 0.70))
+						_core._apply_dmg(f, dmg, "真实")
+						_core._push_float(float(f["x"]), float(f["y"]) - 26.0, "砾", Color(0.80, 0.78, 0.70))
 	for i in range(_shards.size() - 1, -1, -1):
 		if float((_shards[i] as Dictionary)["t"]) <= 0.0:
 			_shards.remove_at(i)
 
 # ============================================================
-# 缇?/ 闄?涓ょ郴锛氭妸鍗＄墝鍔犳垚鎺ㄧ粰鏍稿績锛堟瘡娉㈠畾棰?+ 鍏ㄥ眬闅惧害锛?# ============================================================
+# 群 / 险 两系：把卡牌加成推给核心（每波定额 + 全局难度）
+# ============================================================
 func _push_run_mods() -> void:
 	if _core == null:
 		return
@@ -7307,8 +7628,9 @@ func _push_run_mods() -> void:
 	pass
 
 # ============================================================
-# 闄╃郴锛氭€墿绫诲瀷锛堟枃閽辨€?/ 鐏垫櫠鎬級+ 瀹濈墿路棣栭濂栧姳鍔犳垚
-#   棰濆鍒峰嚭鏉ョ殑鎬墦 rtype 鏍囩锛涘彧鍦ㄦ牳蹇冪‘璁ゆ浜℃椂缁撶畻銆?# ============================================================
+# 险系：怪物类型（文钱怪 / 灵晶怪）+ 宝物·首领奖励加成
+#   额外刷出来的怪打 rtype 标签；只在核心确认死亡时结算。
+# ============================================================
 func _spawn_typed_foes() -> void:
 	if _core == null:
 		return
@@ -7328,7 +7650,8 @@ func _tag_last(rt: String) -> void:
 func _on_foe_defeated(foe: Dictionary) -> void:
 	if _run_over or _core == null or not _core.foes.has(foe) or not bool(foe.get("_death_settled", false)) or bool(foe.get("_rtype_rewarded", false)):
 		return
-	# 鍦ㄥ彂鏀惧墠璁拌处锛岄伩鍏嶅鍔?鍑绘潃淇″彿閲嶅叆閲嶅鍙戞斁锛涗笉渚濊禆瑙嗚_tid鎴栧案浣撴秷澶便€?	foe["_rtype_rewarded"] = true
+	# 在发放前记账，避免奖励/击杀信号重入重复发放；不依赖视觉_tid或尸体消失。
+	foe["_rtype_rewarded"] = true
 	_grant_rtype(str(foe.get("rtype", "")))
 
 func _grant_rtype(rt: String) -> void:
@@ -7342,15 +7665,16 @@ func _grant_rtype(rt: String) -> void:
 			_gain_crystal(int(round(20.0 * (1.0 + _boss_pct / 100.0))))
 
 # ============================================================
-# 閲嶅埄锛堢粡娴庣郴鐐崱锛夛細鍚堟垚缁忔祹绯?3% 鍑?#   鎶藉崱閫変腑涓€寮?鈫?姣忓紶閲嶅埄鎺?10% 鈫?涓簡澶嶅埗涓€寮狅紙褰撳満鍚炲櫖銆佷繚鐣欐晥鏋滐級
-#   澶嶅埗浣撳啀鐙珛鎺?鈫?閾惧紡
+# 重利（经济系炫卡）：合成经济系 3% 出
+#   抽卡选中一张 → 每张重利掷 10% → 中了复制一张（当场吞噬、保留效果）
+#   复制体再独立掷 → 链式
 # ============================================================
 var _zhongli_count := 0
 var _zhongli_rolled := false
 
 func _enable_zhongli() -> void:
 	_zhongli_count += 1
-	_toast("閲嶅埄鍏ュ崱缁?路 鎶藉崱閫変腑鏃舵湁 %d 娆?10%% 澶嶅埗鏈轰細" % _zhongli_count)
+	_toast("重利入卡组 · 抽卡选中时有 %d 次 10%% 复制机会" % _zhongli_count)
 	_shiny_present("zhongli")
 
 func _zhongli_try(id: String) -> void:
@@ -7367,10 +7691,11 @@ func _zhongli_try(id: String) -> void:
 		if randf() < 0.10:
 			hits += 1
 			_grant_copy(cid)
-			queue.append(cid)          # 澶嶅埗浣撳啀鐙珛鎺?	if hits > 0:
-		_toast("閲嶅埄 路 澶嶅埗浜?%d 寮狅紙鍏ㄩ儴鍚炲櫖锛屾晥鏋滀繚鐣欙級" % hits)
+			queue.append(cid)          # 复制体再独立掷
+	if hits > 0:
+		_toast("重利 · 复制了 %d 张（全部吞噬，效果保留）" % hits)
 
-# 澶嶅埗浣擄細涓嶈繘鍗＄粍鏍硷紝褰撳満鍚炲櫖锛屼絾鏁堟灉/杩涘害淇濈暀
+# 复制体：不进卡组格，当场吞噬，但效果/进度保留
 func _grant_copy(id: String) -> void:
 	if _run_over:
 		return
@@ -7389,10 +7714,10 @@ func _grant_copy(id: String) -> void:
 		if own.has(k):
 			own[k] = float(c.get("own_val", 0))
 			_apply_own(own)
-	_core._push_float(_core.hero_pos.x, _core.hero_pos.y - 80.0, "澶嶅埗 路 " + str(c.get("name", "")), Color(0.96, 0.88, 0.55), true)
+	_core._push_float(_core.hero_pos.x, _core.hero_pos.y - 80.0, "复制 · " + str(c.get("name", "")), Color(0.96, 0.88, 0.55), true)
 
 # ============================================================
-# 璐紙缁忔祹绾匡級锛氶殢鏈哄悶鍣崱缁勭殑鍗?鈥斺€?鏁堟灉涓庤繘搴﹂兘淇濈暀
+# 财（经济线）：随机吞噬卡组的卡 —— 效果与进度都保留
 # ============================================================
 var _devouring := false
 
@@ -7411,46 +7736,48 @@ func _devour_keep(n: int) -> void:
 		var c: Dictionary = _card_db.get(pick, {})
 		if c.has("ancestor"):
 			_virtual_cards.append(pick)
-		_toast("璐?路 鍚炲櫖銆?s銆嶏紙鏁堟灉淇濈暀锛? % str(c.get("name", "")))
+		_toast("财 · 吞噬「%s」（效果保留）" % str(c.get("name", "")))
 	_refresh_deck()
 	_devouring = false
 
 
 # ============================================================
-# 濂囬亣锛氱┖妲芥寜Q_TICK闂撮殧鎺蜂竴鏉★紱**琛€鏉℃涓嬫柟閭ｄ竴鏉″氨鏄叆鍙?*
-#   鎺峰埌 鈫?閭ｄ竴鏉℃樉绀恒€岀偣寮€鐪嬭鎯呫€嶁啋 鐐瑰紑寮规锛绘帴鍙楋冀锛绘斁寮冿冀
-#   鎺ュ彈鍚庢墠寮€濮嬭鏃?/ 甯冪疆鎴樺満锛?*鎴樻枟涓€斾笉鑳芥斁寮?*
-#   寰呮帴鎴栬繘琛屼腑涓嶅偍瀛樹笅涓€鏉★紝缁撴潫/鏀惧純鍚庨噸鏂拌鏃躲€?# ============================================================
-const Q_TICK := 180.0             # 濂囬亣姣?180 绉掍竴娆★紙鏃х増 75s锛屾寜鏂拌妭濂忔媺闀匡級
-const Q_TIER_CN := ["绠€鍗?, "鏅€?, "鍥伴毦", "鐗规畩"]
+# 奇遇：空槽按Q_TICK间隔掷一条；**血条正下方那一条就是入口**
+#   掷到 → 那一条显示「点开看详情」→ 点开弹框［接受］［放弃］
+#   接受后才开始计时 / 布置战场；**战斗中途不能放弃**
+#   待接或进行中不储存下一条，结束/放弃后重新计时。
+# ============================================================
+const Q_TICK := 180.0             # 奇遇每 180 秒一次（旧版 75s，按新节奏拉长）
+const Q_TIER_CN := ["简单", "普通", "困难", "特殊"]
 const Q_TIER_W := [[45.0, 55.0, 0.0, 0.0], [20.0, 50.0, 30.0, 0.0], [10.0, 35.0, 40.0, 15.0]]
 const Q_TIER_COL := [Color(0.40, 0.46, 0.34), Color(0.40, 0.36, 0.24), Color(0.52, 0.30, 0.16), Color(0.52, 0.18, 0.16)]
 
 const QUEST_POOL := [
-	{"id": "tu", "n": "灞犲満", "tier": 0, "kind": "count", "key": "kill", "need": 40, "lim": 60.0, "desc": "鏉€ 40 鍙?, "r": {"crystal": 25}},
-	{"id": "can", "n": "鍙傛偀", "tier": 0, "kind": "count", "key": "draw", "need": 3, "lim": 0.0, "desc": "鎶?3 寮犲崱", "r": {"crystal": 25}},
-	{"id": "xb", "n": "瀵诲疂", "tier": 0, "kind": "count", "key": "trea", "need": 1, "lim": 0.0, "desc": "鎷?1 浠跺疂鐗?, "r": {"crystal": 25, "trea_rr": 1}},
-	{"id": "sl", "n": "璇曠偧", "tier": 0, "kind": "count", "key": "chal", "need": 2, "lim": 0.0, "desc": "瀹屾垚 2 娆℃寫鎴?, "r": {"crystal": 30}},
-	{"id": "ch", "n": "娣伀", "tier": 0, "kind": "count", "key": "str", "need": 5, "lim": 0.0, "desc": "寮哄寲鑷韩 5 娆?, "r": {"crystal": 25}},
-	{"id": "qs", "n": "璇风", "tier": 0, "kind": "count", "key": "god", "need": 1, "lim": 0.0, "desc": "璇?1 浣嶇瀹?, "r": {"crystal": 30}},
-	{"id": "yx", "n": "澶滃贰", "tier": 0, "kind": "survive", "need": 0, "lim": 60.0, "desc": "鎾戣繃 60 绉掍笉鍊?, "r": {"crystal": 30}},
+	{"id": "tu", "n": "屠场", "tier": 0, "kind": "count", "key": "kill", "need": 40, "lim": 60.0, "desc": "杀 40 只", "r": {"crystal": 25}},
+	{"id": "can", "n": "参悟", "tier": 0, "kind": "count", "key": "draw", "need": 3, "lim": 0.0, "desc": "抽 3 张卡", "r": {"crystal": 25}},
+	{"id": "xb", "n": "寻宝", "tier": 0, "kind": "count", "key": "trea", "need": 1, "lim": 0.0, "desc": "拿 1 件宝物", "r": {"crystal": 25, "trea_rr": 1}},
+	{"id": "sl", "n": "试炼", "tier": 0, "kind": "count", "key": "chal", "need": 2, "lim": 0.0, "desc": "完成 2 次挑战", "r": {"crystal": 30}},
+	{"id": "ch", "n": "淬火", "tier": 0, "kind": "count", "key": "str", "need": 5, "lim": 0.0, "desc": "强化自身 5 次", "r": {"crystal": 25}},
+	{"id": "qs", "n": "请神", "tier": 0, "kind": "count", "key": "god", "need": 1, "lim": 0.0, "desc": "请 1 位祖宗", "r": {"crystal": 30}},
+	{"id": "yx", "n": "夜巡", "tier": 0, "kind": "survive", "need": 0, "lim": 60.0, "desc": "撑过 60 秒不倒", "r": {"crystal": 30}},
 
-	{"id": "pz", "n": "鐮撮樀", "tier": 1, "kind": "statue", "need": 3, "lim": 60.0, "desc": "鎵撶 3 搴х煶鍍?, "r": {"crystal": 60}},
-	{"id": "sg", "n": "鍗囨牸", "tier": 1, "kind": "count", "key": "lv", "need": 2, "lim": 0.0, "desc": "杩炲崌 2 绾?, "r": {"crystal": 50, "aug_rr": 1}},
-	{"id": "ky", "n": "鑻﹀焦", "tier": 1, "kind": "restrain", "key": "chal", "lim": 30.0, "desc": "30 绉掑唴涓嶇敤鎸戞垬", "r": {"crystal": 50}},
-	{"id": "qdf", "n": "娓呴亾澶?, "tier": 1, "kind": "count", "key": "clearwave", "need": 1, "lim": 0.0, "desc": "涓€娉㈢粨鏉熸椂鍦轰笂鏃犳€?, "r": {"crystal": 50, "trea_rr": 1}},
+	{"id": "pz", "n": "破阵", "tier": 1, "kind": "statue", "need": 3, "lim": 60.0, "desc": "打碎 3 座石像", "r": {"crystal": 60}},
+	{"id": "sg", "n": "升格", "tier": 1, "kind": "count", "key": "lv", "need": 2, "lim": 0.0, "desc": "连升 2 级", "r": {"crystal": 50, "aug_rr": 1}},
+	{"id": "ky", "n": "苦役", "tier": 1, "kind": "restrain", "key": "chal", "lim": 30.0, "desc": "30 秒内不用挑战", "r": {"crystal": 50}},
+	{"id": "qdf", "n": "清道夫", "tier": 1, "kind": "count", "key": "clearwave", "need": 1, "lim": 0.0, "desc": "一波结束时场上无怪", "r": {"crystal": 50, "trea_rr": 1}},
 
-	{"id": "sh", "n": "瀹堟姢", "tier": 2, "kind": "guard", "need": 0, "lim": 60.0, "desc": "鐗㈣溅涓嶇", "r": {"crystal": 100, "trea_rr": 2}},
-	{"id": "zd", "n": "鍗犵偣", "tier": 2, "kind": "zone", "need": 12, "lim": 45.0, "desc": "绔欎綇娉曢樀 12 绉?, "r": {"crystal": 90, "aug_rr": 2}},
-	{"id": "bs", "n": "涓嶆潃", "tier": 2, "kind": "restrain", "key": "kill", "lim": 30.0, "desc": "30 绉掑唴涓嶅嚮鏉€", "r": {"crystal": 90}},
-	{"id": "xj", "n": "鐚キ", "tier": 2, "kind": "survive", "need": 0, "lim": 60.0, "desc": "鎵?20% 姘旇锛屾椿杩?60 绉?, "r": {"crystal": 130}},
+	{"id": "sh", "n": "守护", "tier": 2, "kind": "guard", "need": 0, "lim": 60.0, "desc": "牢车不碎", "r": {"crystal": 100, "trea_rr": 2}},
+	{"id": "zd", "n": "占点", "tier": 2, "kind": "zone", "need": 12, "lim": 45.0, "desc": "站住法阵 12 秒", "r": {"crystal": 90, "aug_rr": 2}},
+	{"id": "bs", "n": "不杀", "tier": 2, "kind": "restrain", "key": "kill", "lim": 30.0, "desc": "30 秒内不击杀", "r": {"crystal": 90}},
+	{"id": "xj", "n": "献祭", "tier": 2, "kind": "survive", "need": 0, "lim": 60.0, "desc": "扣 20% 气血，活过 60 秒", "r": {"crystal": 130}},
 
-	{"id": "dt", "n": "鍗曟寫", "tier": 3, "kind": "champion", "need": 0, "lim": 90.0, "desc": "鎵撴鎷﹁矾楂樻墜", "r": {"crystal": 180, "trea": 1}},
-	{"id": "sy", "n": "涓夎嫳", "tier": 3, "kind": "elite", "need": 3, "lim": 120.0, "desc": "鏉€鎺?3 鍙簿鑻?, "r": {"crystal": 200, "trea": 1}},
-	{"id": "dj", "n": "璧屽眬", "tier": 3, "kind": "instant", "need": 0, "lim": 0.0, "desc": "鎶?100 鏂囷紝50% 姒傜巼涓", "r": {"wen": 400}},
+	{"id": "dt", "n": "单挑", "tier": 3, "kind": "champion", "need": 0, "lim": 90.0, "desc": "打死拦路高手", "r": {"crystal": 180, "trea": 1}},
+	{"id": "sy", "n": "三英", "tier": 3, "kind": "elite", "need": 3, "lim": 120.0, "desc": "杀掉 3 只精英", "r": {"crystal": 200, "trea": 1}},
+	{"id": "dj", "n": "赌局", "tier": 3, "kind": "instant", "need": 0, "lim": 0.0, "desc": "押 100 文，50% 概率中奖", "r": {"wen": 400}},
 ]
 
-var _q_offer: Dictionary = {}     # 鎺峰埌銆佺瓑鐜╁鐐瑰紑鐪嬬殑閭ｄ竴鏉?var _q_cur: Dictionary = {}       # 宸叉帴鍙椼€佹鍦ㄥ仛鐨勯偅涓€鏉★紙鍚屾椂鍙湁涓€鏉★級
+var _q_offer: Dictionary = {}     # 掷到、等玩家点开看的那一条
+var _q_cur: Dictionary = {}       # 已接受、正在做的那一条（同时只有一条）
 var _q_t := 0.0
 var _q_done := 0
 var _q_giveup := 0
@@ -7472,7 +7799,8 @@ func _q_init() -> void:
 	_q_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_q_layer.z_index = 9
 	add_child(_q_layer)
-	# 涓昏琛€鏉℃涓嬫柟锛氳繖涓€鏉℃湰韬氨鏄叆鍙?	_q_bar = _panel(Rect2(96, 138, 528, 34), Color(0.10, 0.09, 0.08, 0.92), 6, Color(0.85, 0.66, 0.23, 0.75), 2, _q_layer)
+	# 主角血条正下方：这一条本身就是入口
+	_q_bar = _panel(Rect2(96, 138, 528, 34), Color(0.10, 0.09, 0.08, 0.92), 6, Color(0.85, 0.66, 0.23, 0.75), 2, _q_layer)
 	_q_lb = _lbl("", Vector2(110, 145), Vector2(500, 22), 15, Color(0.95, 0.90, 0.80), _q_layer)
 	_q_hit = Button.new()
 	_q_hit.position = Vector2(96, 138)
@@ -7486,22 +7814,25 @@ func _q_init() -> void:
 	_q_bar.visible = false
 	_q_lb.visible = false
 	_q_hit.visible = false
-	# 寰呮帴鍙楋細涓昏宸︿晶鐨勫渾閽?+ 澶х孩瀛椼€屽閬囷紒銆?	_q_orb = QuestOrb.new()
+	# 待接受：主角左侧的圆钮 + 大红字「奇遇！」
+	_q_orb = QuestOrb.new()
 	_q_orb.position = Vector2(196, 706)
 	_q_orb.size = Vector2(92, 92)
 	_q_orb.visible = false
 	_q_orb.pressed.connect(_q_open_popup)
 	_q_layer.add_child(_q_orb)
-	_q_orb_lb = _lbl("濂囬亣锛?, Vector2(132, 644), Vector2(220, 56), 40, Color(0.82, 0.16, 0.10), _q_layer, HORIZONTAL_ALIGNMENT_CENTER)
+	_q_orb_lb = _lbl("奇遇！", Vector2(132, 644), Vector2(220, 56), 40, Color(0.82, 0.16, 0.10), _q_layer, HORIZONTAL_ALIGNMENT_CENTER)
 	_q_orb_lb.visible = false
 
 func _q_refresh() -> void:
 	var has_cur := not _q_cur.is_empty()
 	var has_offer := (not _q_offer.is_empty()) and _q_cur.is_empty()
-	# 杩涜涓細琛€鏉′笅闈㈤偅涓€鏉★紙涓嶅啓鎻愮ず锛岀帺瀹惰嚜宸辩偣浼氬嚭璇︽儏锛?	_q_bar.visible = has_cur
+	# 进行中：血条下面那一条（不写提示，玩家自己点会出详情）
+	_q_bar.visible = has_cur
 	_q_lb.visible = has_cur
 	_q_hit.visible = has_cur
-	# 寰呮帴鍙楋細涓昏宸︿晶鐨勫渾閽?+ 澶х孩瀛?	if _q_orb != null:
+	# 待接受：主角左侧的圆钮 + 大红字
+	if _q_orb != null:
 		_q_orb.visible = has_offer
 	if _q_orb_lb != null:
 		_q_orb_lb.visible = has_offer
@@ -7509,15 +7840,15 @@ func _q_refresh() -> void:
 	if not has_cur:
 		return
 	var q: Dictionary = _q_cur
-	var s := "銆?s銆?s" % [str(q["n"]), str(q["desc"])]
+	var s := "「%s」%s" % [str(q["n"]), str(q["desc"])]
 	if int(q.get("need", 0)) > 0:
 		s += "  %d/%d" % [int(q.get("prog", 0)), int(q["need"])]
 	if float(q.get("lim", 0.0)) > 0.0:
-		s += "  路  %.0f 绉? % ceil(float(q["t"]))
+		s += "  ·  %.0f 秒" % ceil(float(q["t"]))
 	_q_lb.text = s
 	_q_bar.add_theme_stylebox_override("panel", _q_style(Color(0.30, 0.24, 0.12), 2))
 
-# 銆屽閬囷紒銆嶅懠鍚革細缂╂斁 + 鍗婇€忔槑鏉ュ洖锛屽彧鍦ㄦ湁濂囬亣寰呮帴鏃惰窇
+# 「奇遇！」呼吸：缩放 + 半透明来回，只在有奇遇待接时跑
 func _q_set_pulse(on: bool) -> void:
 	if _q_orb_lb == null:
 		return
@@ -7541,7 +7872,8 @@ func _q_set_pulse(on: bool) -> void:
 		_q_orb_lb.scale = Vector2.ONE
 		_q_orb_lb.modulate = Color(1, 1, 1, 1)
 
-# 寮圭獥缁熶竴鎵嬫劅锛氬厛銆屽脊杩涙潵銆嶏紝鍐嶈交杞诲懠鍚?func _pop_bounce(c: Control, delay := 0.0) -> void:
+# 弹窗统一手感：先「弹进来」，再轻轻呼吸
+func _pop_bounce(c: Control, delay := 0.0) -> void:
 	if c == null:
 		return
 	MenuUI.Motion.pop(c, false, delay)
@@ -7564,7 +7896,7 @@ func _q_close_popup() -> void:
 		_q_pop.queue_free()
 		_q_pop = null
 
-# 鐐归偅涓€鏉★細寮硅鎯咃紙鎺峰埌鐨勶細鎺ュ彈/鏀惧純锛涘凡鎺ュ彈锛氬彧鐪嬶級
+# 点那一条：弹详情（掷到的：接受/放弃；已接受：只看）
 func _q_open_popup() -> void:
 	if not _q_can_act():
 		return
@@ -7584,7 +7916,7 @@ func _q_open_popup() -> void:
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layer.add_child(dim)
-	# 鍐呭瑁呰繘 holder锛氭暣浣撳脊鍏?+ 鍛煎惛
+	# 内容装进 holder：整体弹入 + 呼吸
 	var holder := Control.new()
 	holder.position = Vector2(120, 330)
 	holder.size = Vector2(480, 470)
@@ -7594,22 +7926,22 @@ func _q_open_popup() -> void:
 	_lbl(str(q["n"]), Vector2(30, 18), Vector2(220, 44), 32, INK, holder)
 	var tier := clampi(int(q.get("tier", 0)), 0, 3)
 	_panel(Rect2(280, 26, 120, 26), Q_TIER_COL[tier], 4, Q_TIER_COL[tier], 0, holder)
-	_lbl("濂囬亣 路 " + str(Q_TIER_CN[tier]), Vector2(280, 28), Vector2(120, 22), 14, Color(0.99, 0.95, 0.87), holder, HORIZONTAL_ALIGNMENT_CENTER)
+	_lbl("奇遇 · " + str(Q_TIER_CN[tier]), Vector2(280, 28), Vector2(120, 22), 14, Color(0.99, 0.95, 0.87), holder, HORIZONTAL_ALIGNMENT_CENTER)
 	var r := _q_rewards(q)
-	var rw := "鐏垫櫠 " + str(int(r["crystal"])) if r.has("crystal") else ""
+	var rw := "灵晶 " + str(int(r["crystal"])) if r.has("crystal") else ""
 	if r.has("wen"):
-		rw += (" 路 " if not rw.is_empty() else "") + "鏂囬挶 " + str(int(r["wen"]))
+		rw += (" · " if not rw.is_empty() else "") + "文钱 " + str(int(r["wen"]))
 	if r.has("trea_rr"):
-		rw += " 路 瀹濈墿鍒锋柊 " + str(int(r["trea_rr"]))
+		rw += " · 宝物刷新 " + str(int(r["trea_rr"]))
 	if r.has("aug_rr"):
-		rw += " 路 杩涢樁鍒锋柊 " + str(int(r["aug_rr"]))
+		rw += " · 进阶刷新 " + str(int(r["aug_rr"]))
 	if r.has("trea"):
-		rw += " 路 瀹濈墿鏈轰細 " + str(int(r["trea"]))
+		rw += " · 宝物机会 " + str(int(r["trea"]))
 	var rows := [
-		["鏉′欢", str(q["desc"])],
-		["闄愭椂", "鎺ュ彈鍚庣珛鍗崇粨绠? if str(q.get("kind", "")) == "instant" else (("%d 绉掞紙鎺ュ彈鍚庢墠寮€濮嬬畻锛? % int(q["lim"])) if float(q.get("lim", 0.0)) > 0.0 else "涓嶉檺鏃?)],
-		["濂栧姳", rw],
-		["澶辫触", "鏈腑濂栧垯鎹熷け 100 鏂囨娂閲? if str(q.get("id", "")) == "dj" else "瓒呮椂鑷姩娑堝け锛屼笉缁欎笢瑗?],
+		["条件", str(q["desc"])],
+		["限时", "接受后立即结算" if str(q.get("kind", "")) == "instant" else (("%d 秒（接受后才开始算）" % int(q["lim"])) if float(q.get("lim", 0.0)) > 0.0 else "不限时")],
+		["奖励", rw],
+		["失败", "未中奖则损失 100 文押金" if str(q.get("id", "")) == "dj" else "超时自动消失，不给东西"],
 	]
 	var y := 90.0
 	for row in rows:
@@ -7617,17 +7949,17 @@ func _q_open_popup() -> void:
 		_lbl(str(row[1]), Vector2(92, y - 3), Vector2(340, 26), 18, INK, holder)
 		y += 50.0
 	if is_offer:
-		_btn("鎺?鍙?, Rect2(32, 370, 180, 62), 26, Color(0.85, 0.66, 0.23), Color(0.13, 0.10, 0.06),
+		_btn("接 受", Rect2(32, 370, 180, 62), 26, Color(0.85, 0.66, 0.23), Color(0.13, 0.10, 0.06),
 			func() -> void:
 				if _q_pop == layer and is_same(_q_offer, q): _q_accept(), holder)
-		_btn("鏀?寮?, Rect2(268, 370, 180, 62), 26, Color(0.93, 0.89, 0.80), Color(0.35, 0.28, 0.18),
+		_btn("放 弃", Rect2(268, 370, 180, 62), 26, Color(0.93, 0.89, 0.80), Color(0.35, 0.28, 0.18),
 			func() -> void:
 				if _q_pop == layer and is_same(_q_offer, q): _q_decline(), holder)
 	else:
-		_btn("鍏?闂?, Rect2(150, 370, 180, 62), 26, Color(0.93, 0.89, 0.80), Color(0.35, 0.28, 0.18),
+		_btn("关 闭", Rect2(150, 370, 180, 62), 26, Color(0.93, 0.89, 0.80), Color(0.35, 0.28, 0.18),
 			func() -> void:
 				if _q_pop == layer: _q_close_popup(), holder)
-		_lbl("鎺ヤ簡灏卞緱鎵撳畬 路 涓€斾笉鑳芥斁寮?, Vector2(30, 342), Vector2(420, 22), 14, Color(0.62, 0.20, 0.14), holder, HORIZONTAL_ALIGNMENT_CENTER)
+		_lbl("接了就得打完 · 中途不能放弃", Vector2(30, 342), Vector2(420, 22), 14, Color(0.62, 0.20, 0.14), holder, HORIZONTAL_ALIGNMENT_CENTER)
 	_pop_bounce(holder)
 	_breathe(holder)
 
@@ -7638,7 +7970,7 @@ func _q_accept() -> void:
 	if not _q_can_act() or not _q_cur.is_empty() or _q_offer.is_empty():
 		return
 	if str(_q_offer.get("id", "")) == "dj" and _wen < 100:
-		_toast("璧屽眬 路 闇€瑕?100 鏂囷紝褰撳墠涓嶈冻")
+		_toast("赌局 · 需要 100 文，当前不足")
 		return
 	var q: Dictionary = _q_offer
 	_q_offer = {}
@@ -7656,7 +7988,7 @@ func _q_decline() -> void:
 	_q_close_popup()
 	_q_refresh()
 
-# 濂囬亣灏介噺涓嶅嚭澹版槑锛氳繖閲岀暀绌猴紙濂栧姳鑷繁鐪嬫暟瀛楀彉鍖栵級
+# 奇遇尽量不出声明：这里留空（奖励自己看数字变化）
 func _q_notify(_text: String) -> void:
 	pass
 
@@ -7664,7 +7996,8 @@ func _q_finish(why: String) -> void:
 	if not _q_can_act() or _q_cur.is_empty():
 		return
 	var q: Dictionary = _q_cur
-	_q_cur = {} # 鍏堝叧闂粨绠楀叆鍙ｏ紝濂栧姳/娓呯悊鍥炶皟涓嶈兘鍐嶆瀹屾垚鍚屼竴濂囬亣銆?	_q_close_popup()
+	_q_cur = {} # 先关闭结算入口，奖励/清理回调不能再次完成同一奇遇。
+	_q_close_popup()
 	_q_t = 0.0
 	_q_cleanup(q)
 	match why:
@@ -7678,8 +8011,8 @@ func _q_finish(why: String) -> void:
 			_cam_pulse(1.05, 0.42)
 			if _curio_id == "zhenhunling" and _curio_lv >= 5 and _roll_bell_treasure():
 				if not _grant_random_treasure():
-					_toast("闀囬瓊閾?路 鏆傛棤鍙彂鏀剧殑瀹濈墿")
-			_q_notify("濂囬亣瀹屾垚 路 %s" % str(q["n"]))
+					_toast("镇魂铃 · 暂无可发放的宝物")
+			_q_notify("奇遇完成 · %s" % str(q["n"]))
 			Aud.sfx("levelup", -6.0)
 			Aud.sfx("bell", -8.0, 1.05)
 		"fail":
@@ -7688,7 +8021,7 @@ func _q_finish(why: String) -> void:
 			_spawn_pfx("impacts/blunt-hit", _hero_screen() + Vector2(0, -20), 0.9, "blood", 1.2)
 			_cam_pulse(1.03, 0.22)
 			Aud.sfx("ui_close", -8.0, 0.9)
-			_q_notify("濂囬亣澶辫触 路 %s" % str(q["n"]))
+			_q_notify("奇遇失败 · %s" % str(q["n"]))
 	_q_refresh()
 
 func _roll_bell_treasure() -> bool:
@@ -7742,13 +8075,15 @@ func _q_done_kind(kind: String) -> void:
 	if not _q_cur.is_empty() and str(_q_cur.get("kind", "")) == kind:
 		_q_finish("done")
 
-# 鍗曟Ы锛氬緟鎺ユ垨杩涜涓椂涓嶆幏涓嬩竴鏉★紝涓嶇Н鏀掗殣钘忛槦鍒椼€?func _q_roll() -> void:
+# 单槽：待接或进行中时不掷下一条，不积攒隐藏队列。
+func _q_roll() -> void:
 	if not _q_can_act() or not _q_cur.is_empty() or not _q_offer.is_empty():
 		return
 	var wave := int(_core.wave)
 	var tw: Array = Q_TIER_W[0] if wave <= 2 else (Q_TIER_W[1] if wave == 3 else Q_TIER_W[2])
 	if LevelState.current_level == 4:
-		tw = [5.0, 25.0, 45.0, 25.0]   # 绗洓鍏冲閬囷細鍥伴毦鍜岀壒娈婃潈閲嶆姮楂?	var roll := randf() * 100.0
+		tw = [5.0, 25.0, 45.0, 25.0]   # 第四关奇遇：困难和特殊权重抬高
+	var roll := randf() * 100.0
 	var tier := 0
 	var acc := 0.0
 	for i in tw.size():
@@ -7772,7 +8107,8 @@ func _q_done_kind(kind: String) -> void:
 	_q_offer = pick
 	_q_refresh()
 
-# 鎺ュ彈鍚庯細甯冪疆鎴樺満 + 鍊掕鏃朵粠杩欓噷鎵嶅紑濮?func _q_prepare(source: Dictionary) -> Dictionary:
+# 接受后：布置战场 + 倒计时从这里才开始
+func _q_prepare(source: Dictionary) -> Dictionary:
 	var q := source.duplicate(true)
 	if bool(q.get("_prepared", false)):
 		return q
@@ -7812,9 +8148,10 @@ func _q_activate(q: Dictionary) -> void:
 			if str(q["id"]) == "xj":
 				var h: Dictionary = _core.hero
 				var hp := float(h.get("hp", 0.0))
-				h["hp"] = minf(hp, maxf(1.0, hp * 0.8)) # 鎵ｈ涓嶈嚧姝伙紝涔熶笉鑳芥妸涓嶈冻1琛€鐨勮鑹叉不鐤楀埌1銆?		"instant":
+				h["hp"] = minf(hp, maxf(1.0, hp * 0.8)) # 扣血不致死，也不能把不足1血的角色治疗到1。
+		"instant":
 			if str(q.get("id", "")) == "dj" and _wen < 100:
-				_toast("璧屽眬 路 闇€瑕?100 鏂囷紝褰撳墠涓嶈冻")
+				_toast("赌局 · 需要 100 文，当前不足")
 				return
 			_q_cur = q
 			_q_instant(q)
@@ -7833,10 +8170,10 @@ func _q_instant(q: Dictionary) -> void:
 	_refresh_str_tile()
 	if _roll_quest_gamble():
 		_q_finish("done")
-		_toast("璧屽眬 路 鑾峰緱 %d 鏂囷紝宸蹭粯 100 鏂囨娂閲? % int(q.get("_awarded_wen", 0)))
+		_toast("赌局 · 获得 %d 文，已付 100 文押金" % int(q.get("_awarded_wen", 0)))
 	else:
 		_q_finish("fail")
-		_toast("璧屽眬 路 鏈腑濂栵紝鎹熷け 100 鏂囨娂閲?)
+		_toast("赌局 · 未中奖，损失 100 文押金")
 
 func _roll_quest_gamble() -> bool:
 	return randf() < 0.5
@@ -7871,7 +8208,8 @@ func _q_check(q: Dictionary) -> void:
 func _q_tick(dt: float) -> void:
 	if not _q_can_act():
 		return
-	# 璁捐绋匡細濂囬亣鏄 4 鍏虫墠瑙ｉ攣鐨勬柊鍔熻兘锛堢粺涓€璧拌В閿佽〃锛?	if not LevelState.has_feature("encounter"):
+	# 设计稿：奇遇是第 4 关才解锁的新功能（统一走解锁表）
+	if not LevelState.has_feature("encounter"):
 		return
 	if _q_cur.is_empty() and _q_offer.is_empty():
 		_q_t += dt
@@ -7959,7 +8297,8 @@ func _q_ai(dt: float) -> void:
 	_core.clear_order()
 
 # ============================================================
-# 鐐崱鍑哄満瑙嗛锛坅ssets/video/shiny/*.ogv锛孴heora锛?#   鏆楀簳鐨勪袱娈碉紙鍣浄/婊氬北锛夌敤鍔犺壊娣峰悎锛岄粦=閫忔槑
+# 炫卡出场视频（assets/video/shiny/*.ogv，Theora）
+#   暗底的两段（噬雷/滚山）用加色混合，黑=透明
 # ============================================================
 const SHINY_VIDEO := {
 	"devour": "zl",
@@ -7975,8 +8314,9 @@ const SHINY_VIDEO := {
 	"shiyun": "chenshi2",
 	"zhongli": "zhongli",
 }
-# 鏆楀簳鐨勬锛堝櫖闆?婊氬北锛夛細瀹炴祴鍔犺壊娣峰悎鍦ㄧ焊鑹茶儗鏅笂浼氳鍐茬櫧锛屾敼鎴愭甯告贩鍚堬紝
-# 鐩存帴褰撱€岄浄闆?娉ョ煶娴佽繃鍦恒€嶁€斺€旀垬鏂楀凡鍐荤粨锛岄粦搴曞弽鑰屾洿鏈夊帇杩劅銆?const SHINY_VIDEO_ADD: Array = []
+# 暗底的段（噬雷/滚山）：实测加色混合在纸色背景上会被冲白，改成正常混合，
+# 直接当「雷雨/泥石流过场」——战斗已冻结，黑底反而更有压迫感。
+const SHINY_VIDEO_ADD: Array = []
 
 var _shiny_video_busy := false
 
@@ -8007,7 +8347,7 @@ func _play_shiny_video(kind: String) -> bool:
 	var was_running := false
 	if _core != null:
 		was_running = bool(_core.running)
-	# ---- 璧锋墜锛氶】甯?+ 鐧介棯 + 闇囧睆锛堝厛璁╂垬鍦烘姈涓€涓嬶紝鍐嶅垏瑙嗛锛?---
+	# ---- 起手：顿帧 + 白闪 + 震屏（先让战场抖一下，再切视频）----
 	if _core != null:
 		_core.Shake_add(13.0)
 		_core._hitstop = maxf(float(_core._hitstop), 0.10)
@@ -8016,7 +8356,8 @@ func _play_shiny_video(kind: String) -> bool:
 	_play_video_after_beat(v, was_running)
 	return true
 
-# 鍏堣鎴樺満鎶?0.12 绉掞紙杩欐蹇呴』淇濇寔 running锛屽惁鍒欓渿灞忓仠浣忕湅涓嶅埌锛夛紝鍐嶅喕缁?+ 鎾棰?func _play_video_after_beat(v: VideoStreamPlayer, was_running: bool) -> void:
+# 先让战场抖 0.12 秒（这段必须保持 running，否则震屏停住看不到），再冻结 + 播视频
+func _play_video_after_beat(v: VideoStreamPlayer, was_running: bool) -> void:
 	await get_tree().create_timer(0.12).timeout
 	if not is_instance_valid(v):
 		return

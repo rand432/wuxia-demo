@@ -38,8 +38,10 @@ func _ready() -> void:
 	_refresh()
 
 func _build_head() -> void:
+	UI.deco(self, "banner", Rect2(210, 86, 300, 60), 1.0)
 	UI.label(self, "奇 物", Vector2(0, 96), Vector2(720, 44), 34, P.INK, HORIZONTAL_ALIGNMENT_CENTER)
-	UI.label(self, "单局只能带一件 · 局外强化固定路线", Vector2(0, 140), Vector2(720, 26), 17, P.DIM, HORIZONTAL_ALIGNMENT_CENTER)
+	UI.deco(self, "divider", Rect2(250, 150, 220, 16), 0.9)
+	UI.label(self, "单局只能带一件 · 局外强化固定路线", Vector2(0, 166), Vector2(720, 26), 17, P.DIM, HORIZONTAL_ALIGNMENT_CENTER)
 
 # ---------------- 轮播 ----------------
 func _build_cards() -> void:

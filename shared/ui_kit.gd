@@ -48,6 +48,44 @@ static func bg(root: Control) -> void:
 	tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.add_child(tr)
 
+# ---------------- 装饰（程序绘制的匾额/分隔线，比生成图锐利） ----------------
+class Deco extends Control:
+	var kind := "banner"          # banner / divider
+	var col := Color(0.42, 0.35, 0.25, 0.55)
+	func _ready() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+	func _draw() -> void:
+		if kind == "banner":
+			var p := 6.0
+			draw_line(Vector2(p, 6), Vector2(size.x - p, 6), col, 1.4, true)
+			draw_line(Vector2(p, size.y - 6), Vector2(size.x - p, size.y - 6), col, 1.4, true)
+			draw_line(Vector2(p, 2), Vector2(p, size.y - 2), col, 1.8, true)
+			draw_line(Vector2(size.x - p, 2), Vector2(size.x - p, size.y - 2), col, 1.8, true)
+			# 端头小回钩
+			draw_line(Vector2(p + 10, 2), Vector2(p + 10, 12), col, 1.2, true)
+			draw_line(Vector2(size.x - p - 10, 2), Vector2(size.x - p - 10, 12), col, 1.2, true)
+			draw_line(Vector2(p + 10, size.y - 2), Vector2(p + 10, size.y - 12), col, 1.2, true)
+			draw_line(Vector2(size.x - p - 10, size.y - 2), Vector2(size.x - p - 10, size.y - 12), col, 1.2, true)
+			var mid := size * 0.5
+			draw_colored_polygon(PackedVector2Array([
+				Vector2(mid.x, 1), Vector2(mid.x + 5, 6), Vector2(mid.x, 11), Vector2(mid.x - 5, 6)]), col)
+		else:
+			var mid := size * 0.5
+			draw_line(Vector2(6, mid.y), Vector2(mid.x - 16, mid.y), col, 1.4, true)
+			draw_line(Vector2(mid.x + 16, mid.y), Vector2(size.x - 6, mid.y), col, 1.4, true)
+			draw_colored_polygon(PackedVector2Array([
+				mid + Vector2(0, -6), mid + Vector2(8, 0), mid + Vector2(0, 6), mid + Vector2(-8, 0)]), col)
+			draw_circle(mid, 1.8, col)
+
+static func deco(root: Control, kind: String, rect: Rect2, alpha := 1.0) -> Control:
+	var d := Deco.new()
+	d.kind = kind
+	d.col = Color(0.42, 0.35, 0.25, 0.55 * alpha)
+	d.position = rect.position
+	d.size = rect.size
+	root.add_child(d)
+	return d
+
 static func label(root: Control, txt: String, pos: Vector2, sz: Vector2, fs: int, col: Color,
 		align := HORIZONTAL_ALIGNMENT_LEFT, parent: Control = null) -> Label:
 	var l := Label.new()
@@ -132,6 +170,7 @@ static func page_head(root: Control, title: String, back_cb := Callable(), right
 	if has_back:
 		button(root, "‹", Rect2(16, 100, 48, 44), 26, P.PAPER_HI, P.INK, back_cb, P.LINE, 1, 22)
 		x0 = 76.0
+	deco(root, "banner", Rect2(x0 - 16, 92, 236, 58), 1.0)
 	label(root, title, Vector2(x0, 98), Vector2(520, 48), 30, P.INK)
 	if right_txt != "":
 		button(root, right_txt, Rect2(566, 100, 138, 44), 20, P.PAPER_HI, P.SEAL, right_cb, P.GOLD, 1, 22)
