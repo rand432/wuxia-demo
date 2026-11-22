@@ -62,6 +62,9 @@ assets/gen/bg_*.png
 *.import
 # 这些小图的尺寸上限会影响首开卡牌和刷怪时的帧时间。
 !assets/gen/enemies/foe_*.png.import
+!assets/gen/icons/skill_*.png.import
+!assets/gen/qingshen/portrait_*.jpg.import
+!assets/gen/qingshen/portrait_liuqingqing_ink_v1.png.import
 !assets/art/cards/frames/frame_*.png.import
 !assets/art/cards/gen/*.png.import
 assets/art/cards/gen/*_*_*.png.import

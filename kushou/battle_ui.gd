@@ -2435,6 +2435,7 @@ func _show_draw(v: bool) -> void:
 			_update_crystal()
 			_roll_draw()
 			_draw_paid = true
+		_hide_god_pick()
 		_draw_open = true
 		_draw_layer.visible = true
 		_layer_in(_draw_layer)
@@ -3090,6 +3091,7 @@ func _end_run(win: bool) -> void:
 		else:
 			_toast("首通记录恢复失败，请检查存储空间")
 	_run_over = true
+	_hide_god_pick()
 	if _tut != null:
 		_tut.cancel()
 	_q_close_popup()
@@ -3534,6 +3536,7 @@ func _open_aug_pick() -> void:
 	if _draw_layer != null:
 		_draw_layer.visible = false                 # 抽卡页开着一并收掉，别叠在一起
 	_hide_trea()
+	_hide_god_pick()
 	_str_round = maxi(1, _str_lv / STR_EVERY)
 	# 同一手只掷一次：点［隐藏］关了再点［强化］，看到的是同一手（不能白刷）
 	var invalidated := false
@@ -3849,6 +3852,7 @@ func _open_trea() -> void:
 		_draw_layer.visible = false
 	if _str_layer != null:
 		_str_layer.visible = false
+	_hide_god_pick()
 	_trea_layer.visible = true
 	_layer_in(_trea_layer)
 	_trea_layer.move_to_front()
@@ -5834,13 +5838,17 @@ func _tick_skills(dt: float) -> void:
 				if i < _skill_slots.size():
 					_skill_slots[i].flash = 1.0
 				_skill_cast_juice()
+	_refresh_skill_slots(dt)
+	_core.hero["mp"] = _mp
+
+func _refresh_skill_slots(dt: float) -> void:
 	for i in _skill_slots.size():
 		var s = _skill_slots[i]
 		if i < _skills.size():
 			var sk2: Dictionary = _skills[i]
 			s.visible = true
 			s.skill_name = str(sk2["name"])
-			s.skill_icon = str(sk2.get("icon", ""))
+			s.set_icon(str(sk2.get("icon", "")))
 			s.quality = int(sk2.get("quality", 4))
 			s.cd_left = float(sk2["cd_t"])
 			s.cd_max = maxf(0.01, float(sk2["cd"]))
@@ -5850,9 +5858,6 @@ func _tick_skills(dt: float) -> void:
 			s.queue_redraw()
 		else:
 			s.visible = false
-
-	if _core != null:
-		_core.hero["mp"] = _mp
 
 # 请神技能特效：按技能属性挑效果 + 换色（pixelfx）
 const SKILL_FX := {
@@ -6102,7 +6107,7 @@ func _label_skill(aid: String) -> String:
 	var d: Dictionary = SKILL_DEFS.get(aid, {})
 	return str(d.get("name", "技能"))
 
-# ---------------- 请神三选一 ----------------
+# ---------------- 请神选卡 ----------------
 func _build_god_pick() -> void:
 	_god_layer = Control.new()
 	_god_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -6110,27 +6115,40 @@ func _build_god_pick() -> void:
 	_god_layer.visible = false
 	_god_layer.z_index = 40
 	add_child(_god_layer)
-	var ban := Panel.new()
-	ban.position = Vector2(230, 162)
-	ban.size = Vector2(260, 42)
-	var bsb := StyleBoxFlat.new()
-	bsb.bg_color = Color(0.48, 0.14, 0.10, 0.97)
-	bsb.set_corner_radius_all(4)
-	bsb.border_color = Color(0.95, 0.76, 0.36, 0.9)
-	bsb.set_border_width_all(2)
-	ban.add_theme_stylebox_override("panel", bsb)
-	_god_layer.add_child(ban)
-	_breathe(ban)
-	_god_ban_lb = _lbl("请神", Vector2(0, 0), Vector2(260, 42), 20, Color(0.97, 0.90, 0.74), ban, HORIZONTAL_ALIGNMENT_CENTER)
-	_btn("隐藏", Rect2(620, 162, 72, 32), 17, Color(0.09, 0.08, 0.07, 0.98), GOLD, func(): _hide_god_pick(), _god_layer)
+	var ink_wash := Gradient.new()
+	var shade_color := Color(0.10, 0.08, 0.06)
+	ink_wash.offsets = PackedFloat32Array([0.0, 0.11, 0.70, 1.0])
+	ink_wash.colors = PackedColorArray([Color(shade_color, 0.0), Color(shade_color, 0.25), Color(shade_color, 0.21), Color(shade_color, 0.0)])
+	var wash_texture := GradientTexture2D.new()
+	wash_texture.gradient = ink_wash
+	wash_texture.width = 2
+	wash_texture.height = 256
+	wash_texture.fill_to = Vector2.DOWN
+	var shade := TextureRect.new()
+	shade.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	shade.texture = wash_texture
+	shade.position = Vector2(0, 136)
+	shade.size = Vector2(W, 720)
+	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_god_layer.add_child(shade)
+	var ink := Color(0.13, 0.106, 0.081)
+	var rim := Color(0.64, 0.48, 0.29)
+	var brass := Color(0.87, 0.73, 0.49)
+	_panel(Rect2(52, 166, 616, 498), Color(0.19, 0.15, 0.11, 0.98), 14, rim, 2, _god_layer)
+	_panel(Rect2(65, 228, 590, 365), ink, 10, Color(0.39, 0.28, 0.18), 1, _god_layer)
+	_lbl("请神", Vector2(75, 179), Vector2(152, 43), 32, LIGHT, _god_layer)
+	_god_ban_lb = _lbl("", Vector2(223, 182), Vector2(274, 40), 22, brass, _god_layer, HORIZONTAL_ALIGNMENT_CENTER)
+	_btn("隐藏", Rect2(562, 180, 84, 40), 19, ink, LIGHT, _hide_god_pick, _god_layer, rim, 1)
 	_god_root = Control.new()
 	_god_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_god_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_god_layer.add_child(_god_root)
-	_god_refresh_btn = _btn("刷新 · 0 次", Rect2(140, 620, 200, 54), 19,
-		Color(0.09, 0.08, 0.07, 0.98), GOLD, func(): _on_god_refresh(), _god_layer)
-	_btn("放弃 +1 刷新", Rect2(360, 620, 200, 54), 19,
-		Color(0.09, 0.08, 0.07, 0.98), Color(0.80, 0.62, 0.34), func(): _on_god_abandon(), _god_layer)
+	_god_refresh_btn = _btn("刷新 · 0 次", Rect2(106, 602, 240, 47), 20,
+		Color(0.30, 0.22, 0.14), LIGHT, _on_god_refresh, _god_layer, rim, 1)
+	_god_refresh_btn.add_theme_stylebox_override("disabled", _god_refresh_btn.get_theme_stylebox("normal").duplicate())
+	_god_refresh_btn.add_theme_color_override("font_disabled_color", Color(0.63, 0.54, 0.43))
+	_btn("放弃 · +1 刷新", Rect2(374, 602, 240, 47), 20,
+		ink, LIGHT, _on_god_abandon, _god_layer, rim, 1)
 
 func _show_god_pick() -> void:
 	if _run_over or _god_layer == null:
@@ -6138,16 +6156,18 @@ func _show_god_pick() -> void:
 	if _draw_charge <= 0:
 		_toast("升级后可请神")
 		return
-	if _draw_layer != null:
-		_draw_layer.visible = false                    # 抽卡页开着一并收掉
 	# 同一手只掷一次：点［隐藏］关了再点［请神］，看到的是同一手（不能白刷）
 	if _god_hand_charge != _draw_charge:
 		_god_hand_charge = _draw_charge
 		_roll_god()
 	if _god_root.get_child_count() == 0:
 		return
+	if _draw_layer != null:
+		_show_draw(false)
+	_hide_aug_pick()
+	_hide_trea()
 	if _god_ban_lb != null:
-		_god_ban_lb.text = "请神 · 剩 %d 次" % _draw_charge
+		_god_ban_lb.text = "剩余 %d 次" % _draw_charge
 	if _god_refresh_btn != null:
 		_god_refresh_btn.text = "刷新 · %d 次" % maxi(0, _god_reroll)
 		_god_refresh_btn.disabled = _god_reroll <= 0
@@ -6178,7 +6198,7 @@ func _roll_god() -> void:
 		if not _ancestors.has(aid) and AncestorData.ANCESTORS.has(aid):
 			cands.append(aid)
 	if _god_ban_lb != null:
-		_god_ban_lb.text = "请神 · 剩 %d 次" % _draw_charge
+		_god_ban_lb.text = "剩余 %d 次" % _draw_charge
 	if cands.is_empty():
 		_toast("可请的祖宗都已上身（高品祖宗需抽取，暂未开放）")
 		_hide_god_pick()
@@ -6187,7 +6207,7 @@ func _roll_god() -> void:
 	if LevelState.current_level >= 7:
 		n = 2   # 后续关请神改成二选一（仍按固定顺序取前两位未请的）
 	n = mini(n, cands.size())
-	var total_w := float(n) * 260.0 + float(maxi(0, n - 1)) * 40.0
+	var total_w := float(n) * 250.0 + float(n - 1) * 24.0
 	var x0 := (720.0 - total_w) * 0.5
 	for i in n:
 		var gc := GodCard.new()
@@ -6198,9 +6218,16 @@ func _roll_god() -> void:
 		gc.skill_name = str(a["skill"])
 		gc.element = str(a.get("dtype", ""))
 		gc.quality = int(a["quality"])
-		gc.icon = load(str(a["art"]))
-		gc.position = Vector2(x0 + float(i) * 300.0, 214)
-		gc.size = Vector2(260, 390)
+		var icon_path := _god_skill_icon(aid)
+		gc.skill_art = load(icon_path if icon_path != "" else str(a["art"])) as Texture2D
+		var skill: Dictionary = SKILL_DEFS.get(aid, {})
+		if skill.is_empty():
+			gc.skill_meta = "被动光环" if aid == "mingzhu" else "家传入口入池"
+		else:
+			var cool := String.num(float(skill["cd"]) * _curio_skill_cd_mul(), 1)
+			gc.skill_meta = "内力 %d  ·  冷却 %s 秒" % [int(skill["mp"]), cool]
+		gc.position = Vector2(x0 + float(i) * 274.0, 242)
+		gc.size = Vector2(250, 335)
 		gc.picked.connect(func() -> void: _on_god_card(gc))
 		_god_root.add_child(gc)
 	if _god_refresh_btn != null:
@@ -6232,11 +6259,51 @@ func _on_god_abandon() -> void:
 func _hide_god_pick() -> void:
 	if _god_layer != null:
 		_god_layer.visible = false
+		for card in _god_root.get_children():
+			MenuUI.Motion.stop(card)
 
 func _on_god_card(card: GodCard) -> void:
 	if _run_over or _god_layer == null or not _god_layer.visible or not is_instance_valid(card) or card.get_parent() != _god_root:
 		return
+	var from: Vector2 = get_global_transform().affine_inverse() * (card.get_global_transform() * card.art_center())
+	var old_size := _skills.size()
+	var charge := _draw_charge
 	_pick_god(card.aid)
+	if _draw_charge < charge:
+		var slot: SkillSlot = _skill_slots[old_size] if _skills.size() > old_size and old_size < _skill_slots.size() else null
+		_fly_god_seal(card.skill_art, from, slot)
+
+func _god_skill_icon(aid: String) -> String:
+	var icon_key := str(SKILL_ICON_ALIAS.get(aid, aid))
+	var path := "res://assets/gen/icons/skill_%s.png" % icon_key
+	return path if ResourceLoader.exists(path) else ""
+
+func _fly_god_seal(tex: Texture2D, from: Vector2, slot: SkillSlot) -> void:
+	if tex == null:
+		return
+	var edge := Color(0.86, 0.68, 0.38)
+	var seal := _panel(Rect2(from - Vector2(42, 42), Vector2(84, 84)), Color(0.90, 0.85, 0.72), 14, edge, 2)
+	seal.name = "GodSkillSeal"
+	seal.z_index = 20
+	seal.pivot_offset = seal.size * 0.5
+	var icon := TextureRect.new()
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.texture = tex
+	icon.position = Vector2(8, 8)
+	icon.size = Vector2(68, 68)
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	seal.add_child(icon)
+	var dest := slot.position + slot.size * 0.5 if slot != null else _hero_screen()
+	var fly := create_tween()
+	fly.tween_property(seal, "position", from - seal.pivot_offset + Vector2(0, -18), 0.07).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	fly.tween_property(seal, "position", dest - seal.pivot_offset, 0.25).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN_OUT)
+	fly.parallel().tween_property(seal, "scale", Vector2.ONE * 0.58, 0.25).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	fly.tween_callback(func():
+		if is_instance_valid(slot) and not _run_over:
+			slot.flash = 1.0
+			slot.queue_redraw()
+		seal.queue_free())
 
 func _pick_god(aid: String) -> void:
 	if _run_over or _ancestors.has(aid) or not AncestorData.ANCESTORS.has(aid):
@@ -6255,13 +6322,14 @@ func _pick_god(aid: String) -> void:
 		sk["aid"] = aid
 		sk["cd_t"] = 0.0
 		sk["quality"] = int((AncestorData.ANCESTORS[aid] as Dictionary)["quality"])
-		var icon_key := str(SKILL_ICON_ALIAS.get(aid, aid))
-		var icon_path := "res://assets/gen/icons/skill_%s.png" % icon_key
-		sk["icon"] = icon_path if ResourceLoader.exists(icon_path) else ""
+		sk["icon"] = _god_skill_icon(aid)
 		_skills.append(sk)
+		_refresh_skill_slots(0.0)
 	_hide_god_pick()
 	_refresh_level_ui()
-	_toast("请到 %s · 技能进栏，家传入口卡进池" % str((AncestorData.ANCESTORS[aid] as Dictionary)["name"]))
+	var role_name := str((AncestorData.ANCESTORS[aid] as Dictionary)["name"])
+	var buff_text := "光环生效" if aid == "mingzhu" else "家传入口已入池"
+	_toast("请到 %s · %s" % [role_name, buff_text if def.is_empty() else "技能已入栏"])
 	Aud.sfx("levelup", -6.0)
 
 func _has_skill(aid: String) -> bool:
@@ -6284,6 +6352,11 @@ class SkillSlot extends Control:
 	var _tex: Texture2D = null
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
+	func set_icon(path: String) -> void:
+		if skill_icon == path:
+			return
+		skill_icon = path
+		_tex = load(path) as Texture2D if not path.is_empty() else null
 	func _draw() -> void:
 		var qc: Color = QC[clampi(quality - 1, 0, 4)]
 		var sb := StyleBoxFlat.new()
@@ -6293,13 +6366,10 @@ class SkillSlot extends Control:
 		sb.set_border_width_all(3)
 		draw_style_box(sb, Rect2(Vector2.ZERO, size))
 		var c := size * 0.5
-		if skill_icon != "":
-			if _tex == null:
-				_tex = load(skill_icon) as Texture2D
-			if _tex != null:
-				var inset := size * 0.10
-				draw_texture_rect(_tex, Rect2(inset, size - inset * 2.0), false)
-		if _tex == null:
+		if _tex != null:
+			var inset := size * 0.10
+			draw_texture_rect(_tex, Rect2(inset, size - inset * 2.0), false)
+		else:
 			var ch := "技"
 			if skill_name.length() > 0:
 				ch = skill_name.substr(1 if skill_name.length() > 1 else 0, 1)
@@ -6322,54 +6392,71 @@ class SkillSlot extends Control:
 				HORIZONTAL_ALIGNMENT_CENTER, 23, 10, Color(0.95, 0.98, 1.0))
 
 # ---------------- 请神卡 ----------------
-class GodCard extends Control:
+class GodCard extends Button:
 	const F := preload("res://fonts/ink.ttf")
-	const QC := [Color(0.54,0.48,0.38), Color(0.31,0.48,0.29), Color(0.18,0.42,0.45), Color(0.42,0.29,0.48), Color(0.72,0.53,0.16)]
-	const CF := preload("res://kushou/card_frame.gd")
+	const P := preload("res://shared/ui_pal.gd")
+	const Motion := preload("res://shared/ui_motion.gd")
 	signal picked
 	var aid := ""
 	var god_name := ""
 	var skill_name := ""
 	var element := ""
+	var skill_meta := ""
 	var quality := 5
-	var icon: Texture2D = null
+	var skill_art: Texture2D = null
+
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_STOP
+		focus_mode = Control.FOCUS_NONE
+		var blank := StyleBoxEmpty.new()
+		for state in ["normal", "hover", "pressed", "focus"]:
+			add_theme_stylebox_override(state, blank)
+		pressed.connect(func(): picked.emit())
+		mouse_entered.connect(queue_redraw)
+		mouse_exited.connect(queue_redraw)
+		Motion.bind_button(self)
+
+	func art_center() -> Vector2:
+		return Vector2(size.x * 0.5, 140)
+
 	func _draw() -> void:
-		# 全部按卡片尺寸比例画 —— 卡多大字就多大（请神改成二选一后卡放大到 260×390）
-		var qc: Color = QC[clampi(quality - 1, 0, 4)]
-		var w := size.x
-		var h := size.y
-		if not CF.draw_on(self, quality, size):
-			var sb := StyleBoxFlat.new()
-			sb.bg_color = Color(0.965, 0.945, 0.90, 1.0)
-			sb.set_corner_radius_all(int(11.0 * w / 260.0))
-			sb.border_color = qc
-			sb.set_border_width_all(int(7.0 * w / 260.0))
-			draw_style_box(sb, Rect2(Vector2.ZERO, size))
-		else:
-			CF.content_panel(self, Rect2(0.07 * w, 0.06 * h, 0.86 * w, 0.88 * h))
-		draw_string(F, Vector2(0, h * 0.108), god_name, HORIZONTAL_ALIGNMENT_CENTER, w, int(w * 0.130), Color(0.14, 0.11, 0.08))
-		var side := w * 0.56
-		var pr := Rect2(Vector2((w - side) * 0.5, h * 0.145), Vector2(side, side))
-		draw_rect(pr, Color(0.88, 0.85, 0.78))
-		if icon != null:
-			var ts := icon.get_size()
-			var asp: float = pr.size.x / pr.size.y
-			var iw: float = ts.x
-			var ih: float = iw / asp
-			if ih > ts.y:
-				ih = ts.y
-				iw = ih * asp
-			draw_texture_rect_region(icon, pr, Rect2((ts.x - iw) * 0.5, (ts.y - ih) * 0.5, iw, ih))
-		draw_rect(pr, Color(0.35, 0.30, 0.24, 0.30), false, 2.0)
-		draw_string(F, Vector2(0, h * 0.725), skill_name, HORIZONTAL_ALIGNMENT_CENTER, w, int(w * 0.100), Color(0.20, 0.15, 0.10))
-		draw_line(Vector2(w * 0.08, h * 0.768), Vector2(w * 0.92, h * 0.768), Color(0.5, 0.4, 0.25, 0.35), 1.6)
-		draw_string(F, Vector2(0, h * 0.845), element, HORIZONTAL_ALIGNMENT_CENTER, w, int(w * 0.082), Color(0.42, 0.30, 0.12))
-		draw_string(F, Vector2(0, h * 0.945), "点 击 请 神", HORIZONTAL_ALIGNMENT_CENTER, w, int(w * 0.076), Color(0.66, 0.22, 0.15))
-	func _gui_input(ev: InputEvent) -> void:
-		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
-			picked.emit()
+		var tone := P.quality(quality)
+		var metal := tone.lerp(Color(0.91, 0.76, 0.48), 0.7)
+		if is_hovered():
+			metal = metal.lightened(0.20)
+		var frame := StyleBoxFlat.new()
+		frame.bg_color = Color(0.195, 0.155, 0.109)
+		frame.set_corner_radius_all(11)
+		frame.border_color = metal
+		frame.set_border_width_all(2)
+		frame.shadow_color = Color(0.02, 0.015, 0.01, 0.7)
+		frame.shadow_size = 6
+		frame.shadow_offset = Vector2(0, 3)
+		draw_style_box(frame, Rect2(Vector2.ZERO, size))
+		var image := Rect2(9, 53, size.x - 18, 177)
+		var paper := StyleBoxFlat.new()
+		paper.bg_color = Color(0.86, 0.81, 0.68).lerp(tone, 0.14)
+		paper.set_corner_radius_all(8)
+		paper.border_color = metal
+		paper.set_border_width_all(1)
+		draw_style_box(paper, image)
+		var center := art_center()
+		draw_circle(center, 67, Color(0.95, 0.90, 0.76, 0.76), true, -1.0, true)
+		draw_arc(center, 70, 0.0, TAU, 48, Color(tone, 0.43), 1.2, true)
+		draw_arc(center, 75, 0.0, TAU, 48, Color(tone, 0.24), 1.0, true)
+		if skill_art != null:
+			var source_size := skill_art.get_size()
+			var art_size := source_size * (150.0 / maxf(source_size.x, source_size.y))
+			draw_texture_rect(skill_art, Rect2(center - art_size * 0.5, art_size), false)
+		var pale := Color(0.97, 0.90, 0.76)
+		draw_string(F, Vector2(12, 38), god_name, HORIZONTAL_ALIGNMENT_LEFT, size.x - 82, 30, pale)
+		draw_string(F, Vector2(size.x - 76, 36), element, HORIZONTAL_ALIGNMENT_RIGHT, 64, 18, metal.lightened(0.20))
+		draw_string(F, Vector2(9, 260), skill_name, HORIZONTAL_ALIGNMENT_CENTER, size.x - 18, 27, pale)
+		draw_string(F, Vector2(9, 284), skill_meta, HORIZONTAL_ALIGNMENT_CENTER, size.x - 18, 16, Color(0.87, 0.79, 0.65))
+		draw_line(Vector2(14, 296), Vector2(size.x - 14, 296), Color(metal, 0.52), 1.0, true)
+		draw_string(F, Vector2(9, 321), "请神", HORIZONTAL_ALIGNMENT_CENTER, size.x - 18, 18, metal.lightened(0.33))
+
+
 
 # ---------------- 召唤物：蛟龙 ----------------
 func _summon_dragon(bonus_pct: float) -> void:

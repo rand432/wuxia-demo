@@ -35,6 +35,9 @@ func _run() -> void:
 	var aid: String = card.aid
 	card.picked.emit()
 	assert(b._ancestors.has(aid) and b._draw_charge == 2)
+	assert(not b._god_layer.visible and b._skill_slots[0].visible)
+	assert(b._skill_slots[0].skill_icon == b._god_skill_icon(aid))
+	assert(b.get_node_or_null("GodSkillSeal") != null)
 	state = _snapshot(b)
 	card.picked.emit()
 	assert(_snapshot(b) == state)
@@ -63,6 +66,11 @@ func _run() -> void:
 	assert(b._core.attr_final("atk") > atk)
 	b._crystal = 100
 	b._show_draw(true)
+	var crystal_after_draw: int = b._crystal
+	b._show_god_pick()
+	assert(b._god_layer.visible and not b._draw_layer.visible and b._draw_paid)
+	b._show_draw(true)
+	assert(not b._god_layer.visible and b._draw_layer.visible and b._crystal == crystal_after_draw)
 	b._zhongli_count = 12
 	b._on_draw_pick(b._draw_cards[0])
 	assert(b._draw_anim)
@@ -88,5 +96,5 @@ func _run() -> void:
 	assert(not b._draw_anim and _snapshot(b) == state)
 	b.queue_free()
 	await process_frame
-	print("PASS: visible current god hand only; abandonment once; result blocks god/copy and in-flight draw claims")
+	print("PASS: current god hand only, skill arrival, paid draw resumes across choices, abandonment once, result blocks claims")
 	Audio.quit_cleanly()

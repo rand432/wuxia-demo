@@ -42,6 +42,7 @@ const CABINET := Color(0.123, 0.112, 0.096, 0.84)
 const INSET := Color(0.105, 0.096, 0.083)
 const PAPER := Color(0.89, 0.85, 0.74)
 const BACKDROP := "res://assets/art/ui/partner_pavilion_v1.webp"
+const GRADE_NAMES := ["凡品", "良品", "玄品", "地品", "绝品"]
 
 const PORTRAIT := {
 	"zl": "res://assets/gen/qingshen/portrait_zl.jpg",
@@ -386,7 +387,7 @@ func _close_pop(expected: Control = null) -> void:
 	_pop = null
 
 func grade_cn(q: int) -> String:
-	return ["凡品", "良品", "玄品", "地品", "绝品"][clampi(q - 1, 0, 4)]
+	return GRADE_NAMES[clampi(q - 1, 0, 4)]
 
 func _build_hot() -> void:
 	var back := Button.new()
@@ -469,7 +470,7 @@ class GodArt extends Button:
 			seal.border_color = rim
 			seal.set_border_width_all(1)
 			draw_style_box(seal, Rect2(14, 15, 58, 30))
-			var grade: String = ["凡品", "良品", "玄品", "地品", "绝品"][clampi(quality - 1, 0, 4)]
+			var grade: String = GRADE_NAMES[clampi(quality - 1, 0, 4)]
 			draw_string(P.FONT, Vector2(14, 36), grade, HORIZONTAL_ALIGNMENT_CENTER, 58, 16, TEXT)
 			draw_string(P.FONT, Vector2(20, size.y - 48), god_name, HORIZONTAL_ALIGNMENT_LEFT, size.x - 154, 38, TEXT)
 			draw_string(P.FONT, Vector2(size.x - 122, size.y - 47), dtype, HORIZONTAL_ALIGNMENT_RIGHT, 100, 22, TEXT)
