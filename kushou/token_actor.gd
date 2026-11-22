@@ -35,6 +35,9 @@ var _art_height := 0.0
 var _attack_time := 0.0
 var _windup := 0.0
 var _attack_direction := Vector2.RIGHT
+var _attack_reach := 13.0
+var _ready_time := 0.0
+var _ready_duration := 0.0
 var _recover_after_down := false
 var _flash := 0.0
 var _death_t := -1.0
@@ -130,6 +133,7 @@ func _process(delta: float) -> void:
 		return
 	_spawn_t = minf(0.26, _spawn_t + delta)
 	_attack_time = maxf(0.0, _attack_time - delta)
+	_ready_time = maxf(0.0, _ready_time - delta)
 	_flash = maxf(0.0, _flash - delta * 7.0)
 	_hit_t = maxf(0.0, _hit_t - delta / 0.16)
 	var enter := clampf(_spawn_t / 0.26, 0.0, 1.0)
@@ -147,10 +151,12 @@ func _process(delta: float) -> void:
 		atk = -0.55 * smoothstep(0.0, 1.0, 1.0 - (_attack_time - 0.14) / maxf(_windup, 0.001))
 	elif _attack_time > 0.0:
 		atk = sin(PI * pow(1.0 - _attack_time / 0.14, 0.48))
+	elif _ready_time > 0.0:
+		atk = -0.8 * sin(PI * (1.0 - _ready_time / _ready_duration))
 	var beat := lerpf(sin(_anim_t + 0.6) * 1.4, -absf(sin(_anim_t)) * 6.0, _walk_blend)
 	var sx := pop * breathe * (1.0 + recoil * 0.08) * (1.0 + 0.16 * atk)
 	var sy := pop / breathe * (1.0 - recoil * 0.08) * (1.0 - 0.14 * atk)
-	_apply_visual_pose(Vector2(sx, sy), Vector2(0, 18.0 * (1.0 - enter) + beat) + _hit_dir * recoil * 7.0 + _attack_direction * atk * 13.0, 0.12 * atk * _attack_direction.x)
+	_apply_visual_pose(Vector2(sx, sy), Vector2(0, 18.0 * (1.0 - enter) + beat) + _hit_dir * recoil * 7.0 + _attack_direction * atk * _attack_reach, 0.12 * atk * _attack_direction.x)
 	modulate = Color(1, 1, 1, lerpf(0.35, 1.0, enter))
 	if is_instance_valid(_sprite):
 		_sprite.modulate = Color(1.0 + 0.40 * _flash, 1.0 - 0.38 * _flash, 1.0 - 0.47 * _flash)
@@ -180,11 +186,20 @@ func death_finished() -> bool:
 func play_move(_move_id: String = "", _speed := 1.0) -> void:
 	play_attack(Vector2.RIGHT)
 
-func play_attack(direction: Vector2, windup := 0.0) -> void:
+func play_attack(direction: Vector2, windup := 0.0, visual_reach := 13.0) -> void:
 	if _death_t >= 0.0: return
+	_ready_time = 0.0
 	_attack_direction = direction.normalized()
+	_attack_reach = visual_reach
 	_windup = clampf(windup, 0.0, 0.22)
 	_attack_time = _windup + 0.14
+
+func prepare_attack(direction: Vector2, duration: float) -> void:
+	if _death_t >= 0.0 or duration <= 0.0: return
+	_attack_direction = direction.normalized()
+	_attack_reach = 10.0
+	_ready_duration = duration
+	_ready_time = duration
 
 
 func play_hit(direction := Vector2.RIGHT, strong := false) -> void:
@@ -215,6 +230,7 @@ func reset_pose() -> void:
 	_sink = 0.0
 	_flash = 0.0
 	_attack_time = 0.0
+	_ready_time = 0.0
 	_recover_after_down = false
 	_anim_t = 0.0
 	_walk_blend = 0.0

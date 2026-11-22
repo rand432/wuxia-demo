@@ -617,32 +617,37 @@ class CardSlot extends Control:
 	var quality := 3
 	var shiny := false
 	var art: Texture2D = null
+	var card_name := ""
 	var idx = 0
-	var _back_tex: Texture2D = null
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_STOP
 	func _draw() -> void:
-		if empty:
-			var c := Color(0.42, 0.36, 0.28, 0.45)
-			if _back_tex == null and ResourceLoader.exists("res://assets/art/cards/card_back.png"):
-				_back_tex = load("res://assets/art/cards/card_back.png") as Texture2D
-			if _back_tex != null:
-				draw_texture_rect(_back_tex, Rect2(Vector2.ZERO, size), false, Color(1, 1, 1, 0.92))
-				return
-			draw_dashed_line(Vector2(2,2), Vector2(size.x-2,2), c, 2.0, 6.0)
-			draw_dashed_line(Vector2(size.x-2,2), Vector2(size.x-2,size.y-2), c, 2.0, 6.0)
-			draw_dashed_line(Vector2(size.x-2,size.y-2), Vector2(2,size.y-2), c, 2.0, 6.0)
-			draw_dashed_line(Vector2(2,size.y-2), Vector2(2,2), c, 2.0, 6.0)
-			draw_string(F, size * 0.5 + Vector2(-10, 7), "空", HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color(0.42,0.36,0.28,0.55))
-			return
+		var bounds := Rect2(Vector2.ZERO, size)
 		var sb := StyleBoxFlat.new()
-		sb.bg_color = Color(0.96, 0.93, 0.86, 0.98)
-		sb.set_corner_radius_all(8)
-		sb.border_color = QC[clampi(quality-1,0,4)]
-		sb.set_border_width_all(5)
-		draw_style_box(sb, Rect2(Vector2.ZERO, size))
+		sb.set_corner_radius_all(9)
+		sb.set_border_width_all(1 if empty else 2)
+		if empty:
+			sb.bg_color = Color(0.092, 0.078, 0.063)
+			sb.border_color = Color(0.41, 0.32, 0.22)
+			draw_style_box(sb, bounds)
+			var center := size * 0.5
+			var diamond := PackedVector2Array([center + Vector2(0, -11), center + Vector2(8, 0), center + Vector2(0, 11), center + Vector2(-8, 0), center + Vector2(0, -11)])
+			draw_polyline(diamond, Color(0.65, 0.52, 0.34, 0.55), 1.2, true)
+			return
+		var accent: Color = QC[clampi(quality - 1, 0, 4)]
+		sb.bg_color = Color(0.93, 0.88, 0.77)
+		sb.border_color = accent.lightened(0.22)
+		sb.shadow_color = Color(0.02, 0.015, 0.010, 0.56)
+		sb.shadow_size = 4
+		sb.shadow_offset = Vector2(0, 2)
+		draw_style_box(sb, bounds)
 		if art != null:
-			draw_texture_rect(art, Rect2(8, 8, size.x - 16, size.y - 16), false)
+			var aperture := Rect2(8, 4, size.x - 16, size.y - 29)
+			var source := art.get_size()
+			var fitted := source * minf(aperture.size.x / source.x, aperture.size.y / source.y)
+			draw_texture_rect(art, Rect2(aperture.get_center() - fitted * 0.5, fitted), false)
+		draw_rect(Rect2(4, size.y - 24, size.x - 8, 18), Color(0.19, 0.15, 0.12))
+		draw_string(F, Vector2(6, size.y - 10), card_name, HORIZONTAL_ALIGNMENT_CENTER, size.x - 12, 14, Color(1, 0.94, 0.79))
 		if shiny:
 			var cols := [Color(0.85,0.28,0.30), Color(0.93,0.58,0.22), Color(0.90,0.80,0.28),
 				Color(0.38,0.70,0.42), Color(0.32,0.62,0.85), Color(0.62,0.42,0.82)]
@@ -666,13 +671,19 @@ class DrawCard extends Control:
 	var data: Dictionary = {}
 	var progress := 0          # 该卡所属组合的当前进度（由外壳写入）
 	var _art_rect: TextureRect
+	var _shadow := StyleBoxFlat.new()
 	func set_art(texture: Texture2D) -> void:
 		_art_rect.texture = texture
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_STOP
+		_shadow.bg_color = Color(0.19, 0.14, 0.09)
+		_shadow.set_corner_radius_all(6)
+		_shadow.shadow_color = Color(0.035, 0.022, 0.014, 0.72)
+		_shadow.shadow_size = 12
+		_shadow.shadow_offset = Vector2(0, 6)
 		_art_rect = TextureRect.new()
-		_art_rect.position = Vector2(40, 52)
-		_art_rect.size = Vector2(120, 120)
+		_art_rect.position = Vector2(22, 45)
+		_art_rect.size = Vector2(156, 139)
 		_art_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		_art_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		_art_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -685,6 +696,8 @@ class DrawCard extends Control:
 		if _art_rect != null:
 			_art_rect.visible = true
 		var q := clampi(int(data.get("quality", 3)) - 1, 0, 4)
+		var accent: Color = QC[q]
+		draw_style_box(_shadow, Rect2(Vector2(1, 1), size - Vector2(2, 2)))
 		var framed := CF.draw_on(self, int(data.get("quality", 3)), size)
 		if framed:
 			CF.content_panel(self, Rect2(18, 40, size.x - 36, size.y - 58))
@@ -707,10 +720,14 @@ class DrawCard extends Control:
 				sp.set_border_width_all(2)
 				draw_style_box(sp, Rect2(Vector2(-2.0 - float(i) * 2.0, -2.0 - float(i) * 2.0),
 					size + Vector2(4.0 + float(i) * 4.0, 4.0 + float(i) * 4.0)))
-		CF.title_band(self, Rect2(6, 6, size.x - 12, 30))
-		draw_string(F, Vector2(0, 34), str(data.get("name", "")), HORIZONTAL_ALIGNMENT_CENTER, size.x, 24, Color(0.14,0.11,0.08))
-		draw_string(F, Vector2(20, 204), str(data.get("own_text", "")), HORIZONTAL_ALIGNMENT_LEFT, size.x - 40, 21, Color(0.14,0.11,0.08))
-		draw_line(Vector2(20, 220), Vector2(size.x - 20, 220), Color(0.5,0.4,0.25,0.35), 1.5)
+		var artwork_center := Vector2(size.x * 0.5, 113)
+		draw_circle(artwork_center, 55.0, Color(accent, 0.068), true, -1.0, true)
+		draw_arc(artwork_center, 58.0, 0.0, TAU, 40, Color(accent, 0.26), 1.0, true)
+		draw_rect(Rect2(12, 8, size.x - 24, 31), Color(accent.darkened(0.20), 0.96))
+		draw_string(F, Vector2(0, 32), str(data.get("name", "")), HORIZONTAL_ALIGNMENT_CENTER, size.x, 23, Color(0.99, 0.95, 0.83))
+		draw_rect(Rect2(14, 188, size.x - 28, 34), Color(accent, 0.13))
+		draw_string(F, Vector2(20, 211), str(data.get("own_text", "")), HORIZONTAL_ALIGNMENT_CENTER, size.x - 40, 19, Color(0.14,0.11,0.08))
+		draw_line(Vector2(18, 226), Vector2(size.x - 18, 226), Color(accent, 0.48), 1.0, true)
 		if bool(data.get("shiny", false)):
 			# 炫卡：不显示组合进度，改成吞噬说明
 			draw_string(F, Vector2(20, 240), "进卡组即吞尽全部家传卡", HORIZONTAL_ALIGNMENT_LEFT, size.x - 36, 16, Color(0.42,0.30,0.12))
@@ -840,6 +857,7 @@ func _build_field() -> void:
 	_core.champion_down.connect(func() -> void: _q_done_kind("champion"))
 	_core.hero_attack.connect(_on_hero_attack)
 	_core.foe_attack.connect(_on_foe_attack)
+	_core.foe_windup.connect(_on_foe_windup)
 	_core.hero_strike_resolved.connect(_hero_extra_hits)
 	_core.hero_hit.connect(_on_hero_hit)
 	_core.hero_damaged.connect(_curio_on_hero_hurt)
@@ -1902,13 +1920,17 @@ func _build_card_detail() -> void:
 
 # ---------------- 卡组 ----------------
 func _build_deck() -> void:
-	_deck_count_lb = _lbl("卡组 0/10", Vector2(22, 910), Vector2(160, 30), 20, INK)
-	_page_lb = _lbl("1/2", Vector2(330, 910), Vector2(60, 30), 17, DIM, self, HORIZONTAL_ALIGNMENT_CENTER)
-	_btn("<", Rect2(8, 960, 56, 60), 28, Color(0.09, 0.08, 0.07, 0.98), GOLD, func(): _flip(-1))
-	_btn(">", Rect2(656, 960, 56, 60), 28, Color(0.09, 0.08, 0.07, 0.98), GOLD, func(): _flip(1))
+	var tray := _panel(Rect2(8, 882, 704, 175), Color(0.20, 0.157, 0.115), 12, Color(0.64, 0.48, 0.29), 2)
+	tray.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var rail := _panel(Rect2(16, 921, 688, 123), Color(0.13, 0.106, 0.081), 8, Color(0.39, 0.28, 0.18), 1)
+	rail.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_deck_count_lb = _lbl("卡组 0/10", Vector2(24, 888), Vector2(160, 30), 20, LIGHT)
+	_page_lb = _lbl("1/2", Vector2(624, 889), Vector2(60, 28), 17, LIGHT, self, HORIZONTAL_ALIGNMENT_RIGHT)
+	_btn("‹", Rect2(12, 958, 36, 50), 24, Color(0.19, 0.15, 0.11), GOLD, func(): _flip(-1))
+	_btn("›", Rect2(672, 958, 36, 50), 24, Color(0.19, 0.15, 0.11), GOLD, func(): _flip(1))
 	for i in 5:
 		var s := CardSlot.new()
-		s.position = Vector2(46 + i * 132, 940)
+		s.position = Vector2(56 + i * 127, 933)
 		s.size = Vector2(100, 100)
 		s.idx = ""
 		s.pressed.connect(func(): _pick_card(str(s.idx)))
@@ -1934,18 +1956,21 @@ func _refresh_deck() -> void:
 			s.idx = id
 			s.quality = int(c["quality"])
 			s.shiny = bool(c.get("shiny", false))
-			s.art = load(str(c["art"]))
+			s.art = _draw_art(str(c["art"]))
+			s.card_name = str(c["name"])
 			s.queue_redraw()
 		else:
 			s.empty = true
 			s.idx = ""
+			s.art = null
+			s.card_name = ""
 			s.queue_redraw()
 
 func _pick_card(id: String) -> void:
 	if id == "" or not _card_db.has(id): return
 	var c: Dictionary = _card_db[id]
 	_detail_name.text = str(c["name"])
-	_detail_art.texture = load(str(c["art"]))
+	_detail_art.texture = _draw_art(str(c["art"]))
 	_detail_effect.text = str(c["own_text"])
 	var prog := _set_progress(str(c["set_id"]))
 	_detail_combo.text = str(c["combo_name"]) + " " + str(prog) + "/" + str(c["set_size"])
@@ -1967,7 +1992,8 @@ func _pick_card(id: String) -> void:
 
 # ---------------- 底栏 ----------------
 func _build_bottom() -> void:
-	_panel(Rect2(8, 1076, 704, 204), Color(0.075, 0.068, 0.060, 0.98), 10, Color(0.85, 0.66, 0.23, 0.45), 2)
+	_panel(Rect2(8, 1071, 704, 209), Color(0.20, 0.157, 0.115), 12, Color(0.64, 0.48, 0.29), 2)
+	_panel(Rect2(16, 1114, 688, 154), Color(0.13, 0.106, 0.081), 8, Color(0.39, 0.28, 0.18), 1)
 	_lv_lb = _lbl("Lv 1", Vector2(22, 1088), Vector2(70, 28), 18, GOLD)
 	_panel(Rect2(96, 1090, 600, 16), Color(0.93, 0.90, 0.82, 0.16), 8)
 	_exp_bar = _panel(Rect2(96, 1090, 4, 16), Color(0.85, 0.66, 0.23), 8)
@@ -1984,6 +2010,7 @@ func _build_bottom() -> void:
 	_str_tile.hot = false
 	_draw_tile = _tile(560, 1116, 136, "draw", "抽卡", true)
 	_draw_tile.visible = LevelState.show_button("draw")
+	_refresh_draw_tile()
 	_refresh_level_ui()
 	_refresh_str_tile()
 	_refresh_trea_tile()
@@ -1996,6 +2023,8 @@ func _tile(x: float, y: float, s: float, kind: String, label: String, hot: bool)
 	t.label = label
 	t.hot = hot
 	var hit := func() -> void:
+		if _run_over or not t.is_visible_in_tree():
+			return
 		match kind:
 			"draw": _show_draw(true)
 			"market": _open_bm()
@@ -2104,9 +2133,8 @@ class QuestOrb extends Control:
 			var yy := c.y - h * 0.22 + float(i) * h * 0.24
 			draw_line(Vector2(c.x - w * 0.30, yy), Vector2(c.x + w * 0.30, yy), Color(0.42, 0.32, 0.18), 1.6)
 
-class Tile extends Control:
+class Tile extends Button:
 	const F := preload("res://fonts/ink.ttf")
-	signal pressed
 	var kind := "market"
 	var label := ""
 	var hot := false
@@ -2114,15 +2142,27 @@ class Tile extends Control:
 	var sub := ""          # 小字（强化：Lv · 价钱）
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_STOP
+		focus_mode = Control.FOCUS_NONE
+		var blank := StyleBoxEmpty.new()
+		for state in ["normal", "hover", "pressed", "focus"]:
+			add_theme_stylebox_override(state, blank)
+		preload("res://shared/ui_motion.gd").bind_button(self)
 	func _draw() -> void:
 		var sb := StyleBoxFlat.new()
-		sb.bg_color = Color(0.48, 0.14, 0.10) if hot else Color(0.09, 0.08, 0.07, 0.98)
-		sb.set_corner_radius_all(8)
-		sb.border_color = Color(0.95, 0.76, 0.36, 0.95) if hot else Color(0.85, 0.66, 0.23, 0.5)
-		sb.set_border_width_all(3 if hot else 1)
+		var primary := kind == "draw"
+		sb.bg_color = Color(0.46, 0.19, 0.13) if primary and hot else Color(0.25, 0.19, 0.13)
+		if is_hovered(): sb.bg_color = sb.bg_color.lightened(0.06)
+		sb.set_corner_radius_all(10)
+		sb.border_color = Color(0.94, 0.74, 0.39) if hot else Color(0.57, 0.44, 0.29)
+		sb.set_border_width_all(2 if hot else 1)
+		sb.shadow_color = Color(0.055, 0.037, 0.024, 0.7)
+		sb.shadow_size = 4
+		sb.shadow_offset = Vector2(0, 3)
 		draw_style_box(sb, Rect2(Vector2.ZERO, size))
 		var c := Vector2(size.x * 0.5, size.y * 0.34)
-		var ink := Color(0.93, 0.88, 0.76) if hot else Color(0.88, 0.83, 0.73)
+		var ink := Color(0.98, 0.91, 0.75) if hot else Color(0.89, 0.81, 0.66)
+		draw_circle(c, 30, Color(0.10, 0.072, 0.050, 0.44), true, -1.0, true)
+		draw_arc(c, 30, 0.0, TAU, 40, Color(ink, 0.28), 1.0, true)
 		if kind == "market":
 			draw_circle(c, 20, Color(0.88, 0.69, 0.29))
 			draw_circle(c, 8, Color(0.09, 0.08, 0.07))
@@ -2148,12 +2188,11 @@ class Tile extends Control:
 			draw_string(F, Vector2(0, size.y - 40), sub, HORIZONTAL_ALIGNMENT_CENTER, size.x, 15,
 				Color(0.86, 0.70, 0.34) if hot else Color(0.66, 0.59, 0.48))
 		draw_string(F, Vector2(0, size.y - 14), label, HORIZONTAL_ALIGNMENT_CENTER, size.x, 20 if size.x < 130 else 22, ink)
-		if hot:
-			draw_circle(Vector2(size.x - 15, 15), 11, Color(0.88, 0.69, 0.29))
-			draw_string(F, Vector2(size.x - 23, 21), str(badge), HORIZONTAL_ALIGNMENT_CENTER, 18, 17, Color(0.18, 0.10, 0.05))
-	func _gui_input(ev: InputEvent) -> void:
-		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
-			pressed.emit()
+		if hot and badge > 0 and kind in ["treasure", "mate"]:
+			var value := str(badge)
+			var badge_width := maxf(22.0, F.get_string_size(value, HORIZONTAL_ALIGNMENT_LEFT, -1, 16).x + 10.0)
+			draw_rect(Rect2(size.x - badge_width - 6, 6, badge_width, 21), Color(0.86, 0.65, 0.29))
+			draw_string(F, Vector2(size.x - badge_width - 6, 22), value, HORIZONTAL_ALIGNMENT_CENTER, badge_width, 16, Color(0.18, 0.10, 0.05))
 
 # ---------------- 抽卡层 ----------------
 func _build_draw() -> void:
@@ -2315,9 +2354,20 @@ func _roll_shiny_check(cards: Array) -> void:
 func _update_crystal() -> void:
 	if _crystal_lb != null:
 		_crystal_lb.text = str(_crystal)
+	_refresh_draw_tile()
+
+func _refresh_draw_tile() -> void:
+	if _draw_tile == null:
+		return
+	var available := _draw_paid or (_crystal >= 20 and not _pool.is_empty())
+	var subtitle := "继续选卡" if _draw_paid else "20 灵晶"
+	if _draw_tile.hot != available or _draw_tile.sub != subtitle:
+		_draw_tile.hot = available
+		_draw_tile.sub = subtitle
+		_draw_tile.queue_redraw()
 
 func _show_draw(v: bool) -> void:
-	if v and _run_over:
+	if v and (_run_over or _draw_anim):
 		return
 	if v:
 		_hide_aug_pick()                     # 进阶页开着一并收掉
@@ -2341,6 +2391,7 @@ func _show_draw(v: bool) -> void:
 	else:
 		_draw_layer.visible = false
 		_draw_open = false
+	_refresh_draw_tile()
 
 func _on_draw_pick(card: DrawCard) -> void:
 	if _run_over or not _draw_paid or _draw_layer == null or not _draw_layer.visible:
@@ -2352,7 +2403,12 @@ func _on_draw_pick(card: DrawCard) -> void:
 		_toast("卡组已满（10 格）")
 		return
 	_draw_anim = true
-	var target := Vector2(46 + float(_cards.size() % 5) * 132.0, 870)
+	var target := card.position
+	if not _slots.is_empty():
+		var slot: CardSlot = _slots[_cards.size() % _slots.size()]
+		_page = _cards.size() / _slots.size()
+		_refresh_deck()
+		target = _draw_layer.get_global_transform().affine_inverse() * slot.get_global_rect().get_center() - card.size * 0.5
 	for other in _draw_cards:
 		MenuUI.Motion.stop(other)
 		if other != card:
@@ -2364,7 +2420,8 @@ func _on_draw_pick(card: DrawCard) -> void:
 	var tw := create_tween()
 	tw.set_parallel(true)
 	tw.tween_property(card, "position", target, 0.34).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
-	tw.tween_property(card, "scale", Vector2(0.36, 0.36), 0.34)
+	tw.tween_property(card, "scale", Vector2(0.32, 0.32), 0.34)
+	tw.tween_property(card, "rotation", 0.0, 0.34)
 	tw.tween_property(card, "modulate:a", 0.42, 0.34)
 	tw.chain().tween_callback(func() -> void:
 		_draw_anim = false
@@ -2875,10 +2932,10 @@ func _refresh_level_ui() -> void:
 		_exp_bar.size = Vector2(maxf(4.0, 600.0 * r), 16.0)
 	if _mate_tile != null:
 		var lit := _draw_charge > 0
-		if _mate_tile.hot != lit:
+		if _mate_tile.hot != lit or _mate_tile.badge != _draw_charge:
 			_mate_tile.hot = lit
+			_mate_tile.badge = _draw_charge
 			_mate_tile.queue_redraw()
-		_mate_tile.badge = _draw_charge
 
 # ============================================================
 # 当局生命：主角倒下 = 这一波没打下来，不是直接结束
@@ -3702,11 +3759,12 @@ func _refresh_trea_tile() -> void:
 		return
 	var s := "待选羁绊" if _trea_pending else "羁绊 %d" % _bonds.size()
 	var hot := _trea_pending or _trea_charge > 0
-	if _trea_tile.sub != s or _trea_tile.hot != hot:
+	var count := 1 if _trea_pending else maxi(0, _trea_charge)
+	if _trea_tile.sub != s or _trea_tile.hot != hot or _trea_tile.badge != count:
 		_trea_tile.sub = s
 		_trea_tile.hot = hot
+		_trea_tile.badge = count
 		_trea_tile.queue_redraw()
-	_trea_tile.badge = 1 if _trea_pending else maxi(0, _trea_charge)
 
 # 点［宝物］：有一手没选就接着看那一手；否则花掉一次机会、掷三张
 func _on_trea_tile() -> void:
@@ -5210,7 +5268,8 @@ func _add_card(id: String) -> void:
 				var uc: Dictionary = _card_db[us]
 				_toast_card(str(uc["name"]), int(uc["quality"]), "已加入卡池")
 	_check_sets()
-	_page = 0
+	var claimed_at := _cards.find(id)
+	_page = (claimed_at if claimed_at >= 0 else maxi(0, _cards.size() - 1)) / 5
 	_refresh_deck()
 	_toast_card(str(c["name"]), int(c["quality"]), "已入卡组")
 	_draw_paid = false
@@ -5562,6 +5621,12 @@ func _on_hero_hit() -> void:
 	_trigger_combos("每次受击")
 	_stone_on_hit()
 
+func _on_foe_windup(foe: Dictionary, target: Vector2, seconds: float) -> void:
+	var token = _foe_tokens.get(int(foe.get("_tid", 0)))
+	if _run_over or token == null: return
+	var direction: Vector2 = _core.position + target - token.position
+	token.prepare_attack(direction, seconds)
+
 func _on_foe_attack(foe: Dictionary, target: Vector2) -> void:
 	var token = _foe_tokens.get(int(foe.get("_tid", 0)))
 	if _run_over or token == null: return
@@ -5573,8 +5638,8 @@ func _on_foe_attack(foe: Dictionary, target: Vector2) -> void:
 		kind = "bow"
 	var direction: Vector2 = destination - token.position
 	match kind:
-		"bow": token.play_attack(-direction * 0.55)
-		"mage": token.play_attack(Vector2.UP)
+		"bow": token.play_attack(-direction, 0.0, 7.0)
+		"mage": token.play_attack(Vector2.UP, 0.0, 9.0)
 		_: token.play_attack(direction)
 	if _fx_front != null:
 		var origin: Vector2 = token.position - Vector2(0, token.radius * 1.2) - FIELD_POS
