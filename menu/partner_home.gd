@@ -1,13 +1,6 @@
 extends Control
-# ============================================================
-# menu/partner_home.gd —— 局外「请神」页（v2 改版）
-#
-# 版式沿用原页面：底图（顶栏/底栏在图里）+ 禁用技能 + 方案 + 总伤害加成 + 七格
-# 改动的只有三处：
-#   ① 大立绘 → 祖宗「立绘卡轮播」（中间聚焦、两侧淡出、点两侧切换）
-#   ② 七格内容 → 该祖宗的技能（名字 + Lv + 星级）
-#   ③ 点立绘 → 「进阶路线」弹窗（六档：星级 / 档位 / 张数 / 组合 / 状态）
-# ============================================================
+# 局外请神图录、家传进阶与技能升级。
+
 const AD := preload("res://kushou/ancestor_data.gd")
 const GameState := preload("res://shared/game_state.gd")
 const LevelState := preload("res://shared/level_state.gd")
@@ -39,15 +32,17 @@ const SKILL_LV_STEP := {
 	"zl": 3, "cuisanniang": 5, "jicanghai": 3, "chenshi": 3, "liuqingqing": 3,
 	"xiaoqier": 2, "gundilong": 2, "qingluan": 3, "zhujue": 2,
 }
-const W := 720.0
-const H := 1280.0
-const INK := Color(0.14, 0.13, 0.15)
-const SEAL := Color(0.55, 0.20, 0.12)
-const GOLD := Color(0.78, 0.58, 0.22)
-const DIM := Color(0.42, 0.38, 0.32)
-const QC := [Color(0.54,0.48,0.38), Color(0.31,0.48,0.29), Color(0.18,0.42,0.45), Color(0.42,0.29,0.48), Color(0.72,0.53,0.16)]
 
-# 立绘：11 位请神角色（assets/gen/qingshen/portrait_*.jpg，Seedream 5.0 半身版）
+const P := UI.P
+const FRAME := Color(0.45, 0.36, 0.24)
+const GOLD := Color(0.85, 0.69, 0.42)
+const TEXT := Color(0.96, 0.91, 0.81)
+const MUTED := Color(0.77, 0.71, 0.61)
+const CABINET := Color(0.123, 0.112, 0.096, 0.84)
+const INSET := Color(0.105, 0.096, 0.083)
+const PAPER := Color(0.89, 0.85, 0.74)
+const BACKDROP := "res://assets/art/ui/partner_pavilion_v1.webp"
+
 const PORTRAIT := {
 	"zl": "res://assets/gen/qingshen/portrait_zl.jpg",
 	"cuisanniang": "res://assets/gen/qingshen/portrait_cuisanniang.jpg",
@@ -62,491 +57,322 @@ const PORTRAIT := {
 	"zhiyuan": "res://assets/gen/qingshen/portrait_zhiyuan.jpg",
 }
 
-var _ids: Array = []
+var _ids: Array[String] = []
 var _sel := 0
-var _stars := {}          # 局外存档星级
-var _cards: Array = []
+var _stars := {}
+var _cards: Array[GodArt] = []
+var _skill_tiles: Array[Button] = []
+var _skill_levels: Array[Label] = []
+var _portraits := {}
+var _skill_icons := {}
 var _pop: Control = null
-var _plan := 0
-var _plan_btns: Array = []
 
 func _ready() -> void:
 	GameState.ensure_loaded()
-	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	LevelState.ensure_loaded()
-	# 只显示当前关卡已解锁的请神角色；主角始终在列表里（基础剑法）
-	for aid_v in LevelState.god_ids():
-		_ids.append(str(aid_v))
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	for aid in LevelState.god_ids():
+		_ids.append(str(aid))
 	if not _ids.has("zhujue"):
 		_ids.append("zhujue")
-	# 无存档角色从 0 星开始，已有进阶记录保留。
-	for i in _ids.size():
-		var aid0 := str(_ids[i])
-		_stars[aid0] = clampi(int(GameState.stars.get(aid0, 0)), 0, GameState.ROLE_STAR_MAX)
-	var bg := TextureRect.new()
-	bg.texture = load("res://assets/art/ui/partner_bg.png")
-	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	bg.stretch_mode = TextureRect.STRETCH_SCALE
-	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(bg)
-	UI.app_bar(self, GameState.player_name, GameState.role_grade_cn(""), func() -> void: UI.open_settings(self))
+	for aid in _ids:
+		_stars[aid] = clampi(int(GameState.stars.get(aid, 0)), 0, GameState.ROLE_STAR_MAX)
+		_portraits[aid] = load(str(PORTRAIT.get(aid, "res://assets/char/player_full_cut.png"))) as Texture2D
+	_build_backdrop()
+	UI.app_bar(self, GameState.player_name, GameState.role_grade_cn(""), func(): UI.open_settings(self))
 	_build_carousel()
-	_build_rest()
+	_build_slots()
 	_build_hot()
 	UI.dock(self, "god", _on_dock)
 
-# ---------------- 立绘卡轮播 ----------------
+func _build_backdrop() -> void:
+	var ground := ColorRect.new()
+	ground.color = P.DARK
+	ground.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ground.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(ground)
+	if ResourceLoader.exists(BACKDROP):
+		var art := TextureRect.new()
+		art.texture = load(BACKDROP) as Texture2D
+		art.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+		art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(art)
+
+func _title(parent: Control, text: String, pos: Vector2, area: Vector2, font_size: int) -> Label:
+	var label := UI.label(parent, text, pos, area, font_size, TEXT)
+	label.add_theme_font_override("font", P.FONT)
+	return label
+
 func _build_carousel() -> void:
-	for i in 3:
-		var c := GodArt.new()
-		c.size = Vector2(280, 372) if i == 1 else Vector2(200, 266)
-		c.mouse_filter = Control.MOUSE_FILTER_STOP
-		c.pressed.connect(func() -> void: _on_card_click(i))
-		add_child(c)
-		_cards.append(c)
+	var cabinet := UI.panel(self, Rect2(18, 106, 684, 682), Color(0.12, 0.104, 0.086, 0.55), 14, FRAME, 1)
+	_title(cabinet, "请神", Vector2(18, 14), Vector2(220, 46), 34)
+	UI.panel(cabinet, Rect2(18, 67, 648, 1), FRAME, 0)
+	var boxes := [Rect2(34, 278, 130, 308), Rect2(174, 186, 372, 514), Rect2(556, 278, 130, 308)]
+	for i in boxes.size():
+		var box: Rect2 = boxes[i]
+		var mount := Control.new()
+		mount.position = box.position
+		mount.size = box.size
+		mount.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(mount)
+		var card := GodArt.new()
+		card.size = box.size
+		card.featured = i == 1
+		card.pressed.connect(_on_card_click.bind(i))
+		mount.add_child(card)
+		_cards.append(card)
+	UI.button(self, "进阶路线  ›", Rect2(228, 720, 264, 51), 21, Color(0.25, 0.19, 0.13), TEXT,
+		_show_advance, GOLD, 1, 9)
 	_refresh_carousel()
 
-func _refresh_carousel() -> void:
-	var n := _ids.size()
-	if n == 0:
-		return
-	var order := [(_sel - 1 + n) % n, _sel, (_sel + 1) % n]
-	var geo := [Vector2(-40, 176), Vector2(220, 116), Vector2(560, 176)]
-	for i in 3:
-		var c: GodArt = _cards[i]
-		var aid := str(_ids[order[i]])
-		c.aid = aid
-		c.god_name = str((AD.ANCESTORS[aid] as Dictionary)["name"])
-		c.skill_name = str((AD.ANCESTORS[aid] as Dictionary)["skill"])
-		c.quality = int((AD.ANCESTORS[aid] as Dictionary)["quality"])
-		c.dtype = str((AD.ANCESTORS[aid] as Dictionary).get("dtype", ""))
-		c.stars = int(_stars.get(aid, 0))
-		c.art = load(str(PORTRAIT.get(aid, "res://assets/char/player_full_cut.png")))
-		c.focus = i == 1
-		c.position = geo[i]
-		c.size = Vector2(280, 372) if i == 1 else Vector2(200, 266)
-		c.modulate = Color(1, 1, 1, 1.0 if i == 1 else 0.32)
-		c.queue_redraw()
+func _refresh_carousel(slide := 0) -> void:
+	var count := _ids.size()
+	var order := [posmod(_sel - 1, count), _sel, posmod(_sel + 1, count)]
+	for i in _cards.size():
+		var card := _cards[i]
+		var visible_card := i == 1 or count > 1
+		(card.get_parent() as Control).visible = visible_card
+		if visible_card:
+			_set_portrait(card, _ids[order[i]])
+	if slide != 0:
+		UI.Motion.pop(_cards[1].get_parent() as Control, false, 0.0, Vector2.INF, 0.018 * float(slide))
+	_refresh_slots()
+
+func _set_portrait(card: GodArt, aid: String) -> void:
+	var role: Dictionary = AD.ANCESTORS[aid]
+	card.god_name = str(role["name"])
+	card.dtype = str(role.get("dtype", ""))
+	card.quality = int(role["quality"])
+	card.stars = int(_stars[aid])
+	card.art = _portraits[aid] as Texture2D
+	card.tooltip_text = card.god_name
+	card.queue_redraw()
 
 func _on_card_click(i: int) -> void:
 	if i == 1:
 		_show_advance()
-		return
-	var n := _ids.size()
-	_sel = (_sel + (1 if i == 2 else -1) + n) % n
-	_refresh_carousel()
+	elif _ids.size() > 1:
+		var direction := 1 if i == 2 else -1
+		_sel = posmod(_sel + direction, _ids.size())
+		_refresh_carousel(direction)
 
-# ---------------- 其余（保持原版式） ----------------
-func _build_rest() -> void:
-	_lbl("禁用技能(0/3)", 18, Color(0.62,0.55,0.38), Vector2(240, 516))
-	_lbl("ⓘ", 18, Color(0.62,0.55,0.38), Vector2(408, 514))
-	_lbl("方案", 16, Color(0.46,0.42,0.36), Vector2(40, 566))
-	for i in 3:
-		var b := Button.new()
-		b.text = str(i + 1)
-		b.position = Vector2(100.0 + float(i) * 46.0, 558)
-		b.size = Vector2(40, 34)
-		b.add_theme_font_size_override("font_size", 17)
-		b.focus_mode = Control.FOCUS_NONE
-		b.pressed.connect(_on_plan.bind(i))
-		add_child(b)
-		_plan_btns.append(b)
-	_style_plan()
-	_lbl("总伤害加成 0%", 24, Color(0.55,0.38,0.12), Vector2(40, 620))
-	_lbl("ⓘ", 20, Color(0.55,0.48,0.34), Vector2(300, 620))
-	var edit := Button.new()
-	edit.text = "禁用编辑"
-	edit.position = Vector2(430, 610)
-	edit.size = Vector2(250, 54)
-	edit.add_theme_font_size_override("font_size", 22)
-	edit.focus_mode = Control.FOCUS_NONE
-	var esb := StyleBoxFlat.new()
-	esb.bg_color = Color(0.94,0.89,0.79,0.98)
-	esb.set_corner_radius_all(4)
-	esb.border_color = Color(0.65,0.46,0.20,0.9)
-	esb.set_border_width_all(2)
-	edit.add_theme_stylebox_override("normal", esb)
-	edit.add_theme_stylebox_override("hover", esb)
-	edit.add_theme_stylebox_override("pressed", esb)
-	edit.add_theme_color_override("font_color", Color(0.36,0.20,0.09))
-	edit.pressed.connect(func() -> void: print("[请神页] 禁用编辑"))
-	add_child(edit)
-	_build_slots()
+func _skill_icon(aid: String) -> Texture2D:
+	if not _skill_icons.has(aid):
+		var icon_path := "res://assets/gen/icons/skill_%s.png" % aid
+		_skill_icons[aid] = load(icon_path if ResourceLoader.exists(icon_path) else str(AD.ANCESTORS[aid]["art"])) as Texture2D
+	return _skill_icons[aid] as Texture2D
 
-# 七格：该祖宗的技能
 func _build_slots() -> void:
-	var n := _ids.size()
-	for i in 7:
-		var row := 0 if i < 4 else 1
-		var col := i % 4
-		var p := Vector2(36.0 + float(col) * 166.0, 690.0 + float(row) * 168.0)
-		if i >= n:
-			var cell := Panel.new()
-			cell.position = p
-			cell.size = Vector2(150, 150)
-			var csb := StyleBoxFlat.new()
-			csb.bg_color = Color(0.99,0.97,0.93,0.75)
-			csb.set_corner_radius_all(8)
-			csb.border_color = Color(0.80,0.76,0.68)
-			csb.set_border_width_all(2)
-			cell.add_theme_stylebox_override("panel", csb)
-			add_child(cell)
-			continue
-		var aid := str(_ids[i])
-		var a: Dictionary = AD.ANCESTORS[aid]
-		var cell2 := Panel.new()
-		cell2.position = p
-		cell2.size = Vector2(150, 150)
-		var csb2 := StyleBoxFlat.new()
-		csb2.bg_color = Color(0.99,0.97,0.93,0.98)
-		csb2.set_corner_radius_all(8)
-		csb2.border_color = QC[clampi(int(a["quality"]) - 1, 0, 4)]
-		csb2.set_border_width_all(3)
-		cell2.add_theme_stylebox_override("panel", csb2)
-		cell2.mouse_filter = Control.MOUSE_FILTER_STOP
-		cell2.gui_input.connect(func(ev: InputEvent) -> void:
-			if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
-				_sel = i
-				_refresh_carousel()
-				_show_skill_detail(i))
-		add_child(cell2)
-		var tr := TextureRect.new()
-		tr.position = Vector2(22, 10)
-		tr.size = Vector2(106, 88)
-		tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		# 技能图标优先；没有就回退该祖宗的立绘
-		var skill_icon := "res://assets/gen/icons/skill_%s.png" % aid
-		tr.texture = load(skill_icon if ResourceLoader.exists(skill_icon) else str(a["art"]))
-		tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		cell2.add_child(tr)
-		var nm := Label.new()
-		nm.text = str(a["skill"])
-		nm.position = Vector2(0, 100)
-		nm.size = Vector2(150, 22)
-		nm.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		nm.add_theme_font_size_override("font_size", 15)
-		nm.add_theme_color_override("font_color", Color(0.30,0.26,0.20))
-		cell2.add_child(nm)
-		var lv := Label.new()
-		lv.text = "Lv %d" % int(GameState.skill_lv.get(aid, 0))
-		lv.position = Vector2(82, 124)
-		lv.size = Vector2(60, 18)
-		lv.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-		lv.add_theme_font_size_override("font_size", 13)
-		lv.add_theme_color_override("font_color", GOLD)
-		cell2.add_child(lv)
+	var shelf_height := 361.0 if _ids.size() > 4 else 218.0
+	var tile_width := 240.0 if _ids.size() == 1 else 151.0
+	var book := UI.panel(self, Rect2(18, 800, 684, shelf_height), CABINET, 14, FRAME, 1)
+	_title(book, "技能", Vector2(18, 9), Vector2(168, 43), 31)
+	for i in _ids.size():
+		var aid := _ids[i]
+		var role: Dictionary = AD.ANCESTORS[aid]
+		var row := floori(float(i) / 4.0)
+		var cols := mini(4, _ids.size() - row * 4)
+		var x := (684.0 - (cols * tile_width + (cols - 1) * 14.0)) * 0.5 + float(i % 4) * (tile_width + 14.0)
+		var y := 60.0 + float(row) * 145.0
+		var tile := UI.button(book, "", Rect2(x, y, tile_width, 133), 20, INSET, TEXT, _show_skill_detail.bind(i), FRAME, 1, 9)
+		tile.tooltip_text = str(role["name"])
+		_skill_tiles.append(tile)
+		UI.panel(tile, Rect2(9, 8, tile_width - 18, 69), PAPER, 6)
+		_add_icon(tile, _skill_icon(aid), Rect2((tile_width - 79.0) * 0.5, 8, 79, 69))
+		UI.label(tile, str(role["skill"]), Vector2(5, 79), Vector2(tile_width - 10, 27), 17, TEXT, HORIZONTAL_ALIGNMENT_CENTER)
+		var level := UI.label(tile, "", Vector2(5, 105), Vector2(tile_width - 10, 21), 13, MUTED, HORIZONTAL_ALIGNMENT_CENTER)
+		_skill_levels.append(level)
+	_refresh_slots()
 
-# 技能详情：点七格里的技能 → 上面立绘跳到该祖宗，同时弹详情；升级放在详情里
+func _refresh_slots() -> void:
+	for i in _skill_tiles.size():
+		var aid := _ids[i]
+		var role: Dictionary = AD.ANCESTORS[aid]
+		_skill_levels[i].text = "%s · Lv %d" % [role["name"], int(GameState.skill_lv.get(aid, 0))]
+		var tile := _skill_tiles[i]
+		var edge := GOLD if i == _sel else FRAME
+		for state in ["normal", "hover", "pressed"]:
+			var style := tile.get_theme_stylebox(state) as StyleBoxFlat
+			style.border_color = edge
+			style.set_border_width_all(2 if i == _sel else 1)
+
+func _add_icon(parent: Control, texture: Texture2D, rect: Rect2) -> void:
+	var tr := TextureRect.new()
+	tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	tr.position = rect.position
+	tr.size = rect.size
+	tr.texture = texture
+	tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(tr)
+
+func _open_panel(rect: Rect2, panel_name: String) -> Panel:
+	_close_pop()
+	var popup := Control.new()
+	popup.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	popup.mouse_filter = Control.MOUSE_FILTER_STOP
+	popup.z_index = 80
+	add_child(popup)
+	_pop = popup
+	var dim := ColorRect.new()
+	dim.color = Color(0.025, 0.021, 0.017, 0.76)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	dim.gui_input.connect(func(event: InputEvent) -> void:
+		if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+			_close_pop(popup))
+	popup.add_child(dim)
+	var panel := UI.panel(popup, rect, Color(0.153, 0.126, 0.099), 15, GOLD, 2)
+	panel.name = panel_name
+	panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	return panel
+
+func _close_button(panel: Panel, popup: Control) -> void:
+	UI.button(panel, "×", Rect2(panel.size.x - 62, 18, 44, 42), 26, INSET, TEXT,
+		_close_pop.bind(popup), FRAME, 1, 8)
+
+func _action(parent: Control, text: String, rect: Rect2, callback: Callable) -> Button:
+	var button := UI.button(parent, text, rect, 22, Color(0.36, 0.25, 0.14), TEXT, callback, GOLD, 1, 9)
+	var disabled := StyleBoxFlat.new()
+	disabled.bg_color = INSET
+	disabled.border_color = FRAME
+	disabled.set_border_width_all(1)
+	disabled.set_corner_radius_all(9)
+	button.add_theme_stylebox_override("disabled", disabled)
+	button.add_theme_color_override("font_disabled_color", MUTED)
+	return button
+
 func _show_skill_detail(i: int) -> void:
 	if i < 0 or i >= _ids.size():
 		return
-	var aid := str(_ids[i])
-	var a: Dictionary = AD.ANCESTORS[aid]
-	_close_pop()
-	_pop = Control.new()
+	if _sel != i:
+		_sel = i
+		_refresh_carousel()
+	var aid := _ids[i]
+	var role: Dictionary = AD.ANCESTORS[aid]
+	var panel := _open_panel(Rect2(74, 314, 572, 550), "SkillPanel")
 	var popup := _pop
-	_pop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_pop.mouse_filter = Control.MOUSE_FILTER_STOP
-	_pop.z_index = 80
-	add_child(_pop)
-	var dim := ColorRect.new()
-	dim.color = Color(0.02, 0.02, 0.03, 0.55)
-	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	dim.mouse_filter = Control.MOUSE_FILTER_STOP
-	_pop.add_child(dim)
-	var panel := Panel.new()
-	panel.position = Vector2(90, 300)
-	panel.size = Vector2(540, 470)
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.97, 0.93, 0.85, 0.99)
-	sb.set_corner_radius_all(12)
-	sb.border_color = Color(0.78, 0.58, 0.22)
-	sb.set_border_width_all(3)
-	panel.add_theme_stylebox_override("panel", sb)
-	_pop.add_child(panel)
-	var title := Label.new()
-	title.text = "技能详情"
-	title.position = Vector2(30, 18)
-	title.size = Vector2(300, 40)
-	title.add_theme_font_size_override("font_size", 26)
-	title.add_theme_color_override("font_color", Color(0.30, 0.20, 0.10))
-	panel.add_child(title)
-	var nm := Label.new()
-	nm.text = str(a["skill"])
-	nm.position = Vector2(30, 72)
-	nm.size = Vector2(470, 44)
-	nm.add_theme_font_size_override("font_size", 32)
-	nm.add_theme_color_override("font_color", Color(0.55, 0.20, 0.12))
-	panel.add_child(nm)
-	var owner_lb := Label.new()
-	owner_lb.text = "所属：%s · %s" % [str(a["name"]), str(a.get("dtype", ""))]
-	owner_lb.position = Vector2(30, 122)
-	owner_lb.size = Vector2(470, 28)
-	owner_lb.add_theme_font_size_override("font_size", 18)
-	owner_lb.add_theme_color_override("font_color", Color(0.40, 0.36, 0.28))
-	panel.add_child(owner_lb)
-	var lv_lb := Label.new()
-	lv_lb.text = "当前等级：Lv %d" % int(GameState.skill_lv.get(aid, 0))
-	lv_lb.position = Vector2(30, 162)
-	lv_lb.size = Vector2(300, 30)
-	lv_lb.add_theme_font_size_override("font_size", 20)
-	lv_lb.add_theme_color_override("font_color", Color(0.55, 0.38, 0.12))
-	panel.add_child(lv_lb)
-	# 伤害倍率：当前 → 下一级（每级只 +3%，慢慢养成）
-	var sk: Dictionary = SKILL_DEFS.get(aid, {})
-	var mul_pct := int(round(float(sk.get("heal_mul", sk.get("mul", 1.0))) * 100.0))
-	var sk_desc := str(sk.get("desc", ""))
-	if sk_desc == "":
-		sk_desc = "对 %d 名敌人造成 %s 伤害" % [int(sk.get("targets", 1)), str(sk.get("dtype", a.get("dtype", "")))]
-	var desc_lb := Label.new()
-	desc_lb.text = sk_desc
-	desc_lb.position = Vector2(30, 196)
-	desc_lb.size = Vector2(470, 26)
-	desc_lb.add_theme_font_size_override("font_size", 17)
-	desc_lb.add_theme_color_override("font_color", Color(0.40, 0.36, 0.28))
-	panel.add_child(desc_lb)
-	var dmg_lb := Label.new()
+	var header := UI.panel(panel, Rect2(14, 14, 544, 144), INSET, 11, FRAME, 1)
+	UI.panel(header, Rect2(14, 16, 112, 112), PAPER, 8)
+	_add_icon(header, _skill_icon(aid), Rect2(22, 22, 96, 100))
+	UI.label(header, "技能详情", Vector2(146, 13), Vector2(247, 27), 16, GOLD)
+	_title(header, str(role["skill"]), Vector2(146, 43), Vector2(334, 51), 38)
 	var lv_now := int(GameState.skill_lv.get(aid, 0))
-	var lv_step := int(SKILL_LV_STEP.get(aid, 3))
-	var cur_pct := float(mul_pct) * (1.0 + float(lv_now * lv_step) / 100.0)
-	var nxt_pct := float(mul_pct) * (1.0 + float((lv_now + 1) * lv_step) / 100.0)
-	dmg_lb.text = ("治疗：%.1f%% → %.1f%%（攻击）" % [cur_pct, nxt_pct]) if sk.has("heal_mul") else ("伤害：%.1f%% → %.1f%%（%s）" % [cur_pct, nxt_pct, str(sk.get("dtype", a.get("dtype", "")))])
-	dmg_lb.position = Vector2(30, 226)
-	dmg_lb.size = Vector2(470, 26)
-	dmg_lb.add_theme_font_size_override("font_size", 18)
-	dmg_lb.add_theme_color_override("font_color", Color(0.55, 0.20, 0.12))
-	panel.add_child(dmg_lb)
-	var qnames := ["", "凡品", "良品", "玄品", "地品", "天品"]
-	var qn: String = str(qnames[clampi(int(a["quality"]), 1, 5)])
-	var cost_wen := 200
-	var book_n := int(GameState.skill_books.get(qn, 0))
-	# 文钱：需求 / 已有
-	var coin_tex: Texture2D = load("res://assets/items/loot_silver.png")
-	var coin_ic := TextureRect.new()
-	coin_ic.texture = coin_tex
-	coin_ic.position = Vector2(30, 266)
-	coin_ic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	coin_ic.stretch_mode = TextureRect.STRETCH_SCALE
-	coin_ic.size = coin_tex.get_size()
-	coin_ic.scale = Vector2(16.0 / maxf(1.0, coin_tex.get_width()), 16.0 / maxf(1.0, coin_tex.get_height()))
-	panel.add_child(coin_ic)
-	var coin_lb := Label.new()
-	coin_lb.text = "文钱 %d / %d" % [cost_wen, GameState.coin("wen")]
-	coin_lb.position = Vector2(52, 258)
-	coin_lb.size = Vector2(420, 30)
-	coin_lb.add_theme_font_size_override("font_size", 20)
-	coin_lb.add_theme_color_override("font_color", Color(0.30, 0.26, 0.20))
-	panel.add_child(coin_lb)
-	# 技能书：需求 / 已有
-	var book_tex: Texture2D = load("res://assets/items/it_book.png")
-	var book_ic := TextureRect.new()
-	book_ic.texture = book_tex
-	book_ic.position = Vector2(30, 308)
-	book_ic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	book_ic.stretch_mode = TextureRect.STRETCH_SCALE
-	book_ic.size = book_tex.get_size()
-	book_ic.scale = Vector2(16.0 / maxf(1.0, book_tex.get_width()), 16.0 / maxf(1.0, book_tex.get_height()))
-	panel.add_child(book_ic)
-	var book_lb := Label.new()
-	book_lb.text = "%s技能书 1 / %d" % [qn, book_n]
-	book_lb.position = Vector2(52, 300)
-	book_lb.size = Vector2(420, 30)
-	book_lb.add_theme_font_size_override("font_size", 20)
-	book_lb.add_theme_color_override("font_color", Color(0.30, 0.26, 0.20))
-	panel.add_child(book_lb)
-	var up := Button.new()
-	up.text = "升级"
-	up.position = Vector2(160, 372)
-	up.size = Vector2(220, 56)
-	up.add_theme_font_size_override("font_size", 22)
-	up.focus_mode = Control.FOCUS_NONE
+	UI.label(header, "%s · %s · Lv %d" % [role["name"], role.get("dtype", ""), lv_now],
+		Vector2(146, 99), Vector2(370, 30), 17, MUTED)
+	var sk: Dictionary = SKILL_DEFS.get(aid, {})
+	var base_pct := int(round(float(sk.get("heal_mul", sk.get("mul", 1.0))) * 100.0))
+	var desc := str(sk.get("desc", ""))
+	if desc.is_empty():
+		desc = "对 %d 名敌人造成 %s 伤害" % [int(sk.get("targets", 1)), str(sk.get("dtype", role.get("dtype", "")))]
+	UI.label(panel, desc, Vector2(32, 175), Vector2(508, 42), 19, TEXT)
+	var growth := float(int(SKILL_LV_STEP.get(aid, 3))) / 100.0
+	var current := float(base_pct) * (1.0 + float(lv_now) * growth)
+	var next := float(base_pct) * (1.0 + float(lv_now + 1) * growth)
+	var effect := "治疗 · 攻击" if sk.has("heal_mul") else "伤害 · " + str(sk.get("dtype", role.get("dtype", "")))
+	var strip := UI.panel(panel, Rect2(30, 229, 512, 60), INSET, 8, FRAME, 1)
+	UI.label(strip, effect, Vector2(16, 0), Vector2(173, 60), 17, GOLD)
+	UI.label(strip, "%.1f%%  →  %.1f%%" % [current, next], Vector2(183, 0), Vector2(309, 60), 23,
+		TEXT, HORIZONTAL_ALIGNMENT_RIGHT)
+	# 技能书沿用存档的五种品级名称。
+	var book_grade: String = ["凡品", "良品", "玄品", "地品", "天品"][clampi(int(role["quality"]) - 1, 0, 4)]
+	var cost := 200
+	var coin := UI.label(panel, "", Vector2(32, 317), Vector2(508, 32), 19, TEXT)
+	var book := UI.label(panel, "", Vector2(32, 364), Vector2(508, 32), 19, TEXT)
+	var refresh_cost := func() -> void:
+		var wen := GameState.coin("wen")
+		var stock := int(GameState.skill_books.get(book_grade, 0))
+		coin.text = "文钱 %d / %d" % [wen, cost]
+		book.text = "%s技能书 %d / 1" % [book_grade, stock]
+		coin.add_theme_color_override("font_color", GOLD if wen < cost else TEXT)
+		book.add_theme_color_override("font_color", GOLD if stock < 1 else TEXT)
+	refresh_cost.call()
+	var up := _action(panel, "升级", Rect2(32, 459, 508, 58), Callable())
 	up.pressed.connect(func() -> void:
 		if not _popup_current(popup) or up.disabled:
 			return
-		var book := int(GameState.skill_books.get(qn, 0))
-		if book <= 0 or GameState.coin("wen") < cost_wen:
-			coin_lb.text = "文钱 %d / %d（不足）" % [cost_wen, GameState.coin("wen")]
-			book_lb.text = "%s技能书 1 / %d（不足）" % [qn, book]
+		if int(GameState.skill_books.get(book_grade, 0)) < 1 or GameState.coin("wen") < cost:
+			refresh_cost.call()
+			up.text = "升级 · 材料不足"
 			return
 		up.disabled = true
-		if not GameState.upgrade_skill(aid, qn, cost_wen):
+		if not GameState.upgrade_skill(aid, book_grade, cost):
 			up.disabled = false
-			up.text = "保存失败，请重试"
+			up.text = "升级 · 保存失败"
 			return
-		_close_pop(popup)
-		_show_skill_detail(i)
-		_build_slots()
-	)
-	panel.add_child(up)
-	var close := Button.new()
-	close.text = "×"
-	close.position = Vector2(472, 16)
-	close.size = Vector2(44, 40)
-	close.add_theme_font_size_override("font_size", 22)
-	close.focus_mode = Control.FOCUS_NONE
-	close.pressed.connect(func() -> void:
-		_close_pop(popup)
-	)
-	panel.add_child(close)
+		_refresh_slots()
+		_show_skill_detail(i))
+	_close_button(panel, popup)
 	UI.Motion.present(popup, panel)
 
-func _lbl(t: String, fs: int, col: Color, pos: Vector2) -> Label:
-	var l := Label.new()
-	l.text = t
-	l.add_theme_font_size_override("font_size", fs)
-	l.add_theme_color_override("font_color", col)
-	l.position = pos
-	l.size = Vector2(420, fs + 14)
-	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(l)
-	return l
-
-func _style_plan() -> void:
-	for i in _plan_btns.size():
-		var b: Button = _plan_btns[i]
-		var on := i == _plan
-		var sb := StyleBoxFlat.new()
-		sb.bg_color = SEAL if on else Color(0.91,0.88,0.82)
-		sb.set_corner_radius_all(4)
-		sb.border_color = GOLD if on else Color(0.78,0.73,0.64)
-		sb.set_border_width_all(1)
-		b.add_theme_stylebox_override("normal", sb)
-		b.add_theme_stylebox_override("hover", sb)
-		b.add_theme_stylebox_override("pressed", sb)
-		b.add_theme_color_override("font_color", Color(0.96,0.92,0.80) if on else Color(0.30,0.27,0.22))
-
-func _on_plan(i: int) -> void:
-	_plan = i
-	_style_plan()
-
-# ---------------- 进阶路线弹窗 ----------------
 func _show_advance() -> void:
-	_close_pop()
-	var aid := str(_ids[_sel])
-	var a: Dictionary = AD.ANCESTORS[aid]
-	var star := int(_stars.get(aid, 0))
-	_pop = Control.new()
+	var aid := _ids[_sel]
+	var role: Dictionary = AD.ANCESTORS[aid]
+	var star := int(_stars[aid])
+	var panel := _open_panel(Rect2(38, 107, 644, 1059), "AdvancePanel")
 	var popup := _pop
-	_pop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_pop.mouse_filter = Control.MOUSE_FILTER_STOP
-	_pop.z_index = 80
-	add_child(_pop)
-	var dim := ColorRect.new()
-	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	dim.color = Color(0.05, 0.04, 0.03, 0.62)
-	dim.mouse_filter = Control.MOUSE_FILTER_STOP
-	dim.gui_input.connect(func(ev: InputEvent) -> void:
-		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
-			_close_pop(popup))
-	_pop.add_child(dim)
-	var b := Rect2(Vector2(40, 150), Vector2(640, 930))
-	var box := Panel.new()
-	box.position = b.position
-	box.size = b.size
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.975, 0.955, 0.915, 1.0)
-	sb.set_corner_radius_all(10)
-	sb.border_color = Color(0.72, 0.53, 0.16)
-	sb.set_border_width_all(3)
-	box.add_theme_stylebox_override("panel", sb)
-	_pop.add_child(box)
-	# 头像
-	var ph := Panel.new()
-	ph.position = Vector2(26, 24)
-	ph.size = Vector2(190, 246)
-	var psb := StyleBoxFlat.new()
-	psb.bg_color = Color(0.90, 0.86, 0.77)
-	psb.set_corner_radius_all(6)
-	psb.border_color = QC[clampi(int(a["quality"]) - 1, 0, 4)]
-	psb.set_border_width_all(3)
-	ph.add_theme_stylebox_override("panel", psb)
-	box.add_child(ph)
-	var pt := TextureRect.new()
-	pt.position = Vector2(6, 6)
-	pt.size = Vector2(178, 234)
-	pt.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	pt.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	pt.texture = load(str(PORTRAIT.get(aid, "res://assets/char/player_full_cut.png")))
-	ph.add_child(pt)
-	_push_label(box, str(a["name"]), 32, INK, Vector2(238, 40))
-	_push_label(box, "%s · %s" % [grade_cn(int(a["quality"])), str(a.get("dtype", ""))], 15, DIM, Vector2(238, 82))
-	_push_label(box, "%d ★" % star, 20, Color(0.55, 0.40, 0.16), Vector2(238, 112))
-	_push_label(box, "来 历", 14, Color(0.55, 0.40, 0.16), Vector2(238, 150))
-	_push_label(box, "请神上身，代代相传。", 15, Color(0.28, 0.24, 0.19), Vector2(238, 176), 360)
-	# 路线
-	_push_label(box, "进 阶 路 线", 20, Color(0.55, 0.30, 0.12), Vector2(26, 292))
-	_push_label(box, "每档独立：集齐 3 张 → 组合 → 清空", 14, DIM, Vector2(174, 292), 440)
-	# 角色进阶：消耗角色碎片，升 1 星
-	var shard_n := int(GameState.shards.get(aid, 0))
-	var adv_wen := GameState.ROLE_ADVANCE_WEN
-	var wen_now := GameState.coin("wen")
-	var up_btn := Button.new()
-	up_btn.text = "进阶（碎片 60 / 已有 %d　·　文钱 %d / 已有 %d）" % [shard_n, adv_wen, wen_now]
-	up_btn.position = Vector2(26, 846)
-	up_btn.size = Vector2(588, 56)
-	up_btn.add_theme_font_size_override("font_size", 19)
-	up_btn.focus_mode = Control.FOCUS_NONE
-	up_btn.disabled = not GameState.can_advance_role(aid, star)
-	if star >= GameState.ROLE_STAR_MAX:
-		up_btn.text = "已满星"
-	up_btn.pressed.connect(func() -> void:
-		if not _popup_current(popup) or up_btn.disabled:
+	var hero := UI.panel(panel, Rect2(14, 14, 616, 289), INSET, 11, FRAME, 1)
+	var portrait := GodArt.new()
+	portrait.art_only = true
+	portrait.position = Vector2(305, 0)
+	portrait.size = Vector2(311, 289)
+	hero.add_child(portrait)
+	_set_portrait(portrait, aid)
+	UI.label(hero, "进阶路线", Vector2(19, 20), Vector2(263, 35), 19, GOLD)
+	_title(hero, str(role["name"]), Vector2(17, 59), Vector2(273, 70), 48)
+	UI.label(hero, "%s · %s" % [grade_cn(int(role["quality"])), str(role.get("dtype", ""))],
+		Vector2(20, 138), Vector2(262, 31), 20, MUTED)
+	UI.label(hero, "%d / %d 星" % [star, GameState.ROLE_STAR_MAX],
+		Vector2(20, 179), Vector2(262, 35), 23, GOLD)
+	UI.label(hero, "技能 · %s" % str(role["skill"]), Vector2(20, 232), Vector2(262, 33), 18, TEXT)
+	_close_button(panel, popup)
+	_title(panel, "家传卡", Vector2(29, 320), Vector2(149, 41), 28)
+	UI.label(panel, "每升 1 星开启下一档 · 局内每档集齐 3 张成组",
+		Vector2(158, 321), Vector2(448, 39), 16, MUTED, HORIZONTAL_ALIGNMENT_RIGHT)
+	var tiers: Array = role["tiers"]
+	for i in tiers.size():
+		_build_tier(panel, tiers[i], i, star)
+	var footer := UI.panel(panel, Rect2(14, 872, 616, 169), INSET, 10, FRAME, 1)
+	var shard := int(GameState.shards.get(aid, 0))
+	var wen := GameState.coin("wen")
+	var full := star >= GameState.ROLE_STAR_MAX
+	if not full:
+		UI.label(footer, "碎片 %d / %d" % [shard, GameState.ROLE_ADVANCE_SHARDS],
+			Vector2(20, 23), Vector2(270, 33), 21, GOLD if shard < GameState.ROLE_ADVANCE_SHARDS else TEXT)
+		UI.label(footer, "文钱 %d / %d" % [wen, GameState.ROLE_ADVANCE_WEN],
+			Vector2(306, 23), Vector2(290, 33), 21, GOLD if wen < GameState.ROLE_ADVANCE_WEN else TEXT,
+			HORIZONTAL_ALIGNMENT_RIGHT)
+	var action_rect := Rect2(20, 55 if full else 83, 576, 59)
+	var up := _action(footer, "已满星" if full else "进阶", action_rect, Callable())
+	up.disabled = not GameState.can_advance_role(aid, star)
+	up.pressed.connect(func() -> void:
+		if not _popup_current(popup) or up.disabled:
 			return
-		up_btn.disabled = true
+		up.disabled = true
 		if not GameState.advance_role(aid, star):
-			up_btn.disabled = false
-			up_btn.text = "进阶未完成，请检查资源或存储空间"
+			up.disabled = not GameState.can_advance_role(aid, star)
+			up.text = "进阶未完成，请检查资源或存储空间"
 			return
 		_stars[aid] = int(GameState.stars[aid])
-		_close_pop(popup)
-		_show_advance()
-		_build_slots()
-	)
-	box.add_child(up_btn)
-	var tiers: Array = a["tiers"]
-	var y := 312.0
-	for t in tiers.size():
-		var tier: Dictionary = tiers[t]
-		var done := t < star
-		var cur := t == star
-		var rp := Panel.new()
-		rp.position = Vector2(26, y)
-		rp.size = Vector2(588, 78)
-		var rsb := StyleBoxFlat.new()
-		rsb.bg_color = Color(0.99, 0.965, 0.88) if cur else (Color(0.90, 0.86, 0.77) if done else Color(0.95, 0.92, 0.865))
-		rsb.set_corner_radius_all(6)
-		if cur:
-			rsb.border_color = Color(0.82, 0.50, 0.12, 0.85)
-			rsb.set_border_width_all(2)
-		rp.add_theme_stylebox_override("panel", rsb)
-		box.add_child(rp)
-		var lc := Color(0.55, 0.40, 0.16) if (done or cur) else Color(0.62, 0.57, 0.48)
-		_push_label(rp, "%d★" % t, 21, lc, Vector2(14, 24))
-		_push_label(rp, "%s · 3 张" % str(AD.TIER_NAMES[t]), 18, INK if (done or cur) else Color(0.45, 0.41, 0.35), Vector2(72, 6))
-		_push_label(rp, str(tier["combo_text"]), 14, Color(0.45, 0.41, 0.35), Vector2(72, 36), 380)
-		var st := "已解锁" if (done or cur) else "需 %d 星" % t
-		var sc := Color(0.20, 0.50, 0.28) if done else (Color(0.66, 0.18, 0.12) if cur else Color(0.58, 0.53, 0.45))
-		var sl := Label.new()
-		sl.text = st
-		sl.position = Vector2(430, 28)
-		sl.size = Vector2(140, 26)
-		sl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-		sl.add_theme_font_size_override("font_size", 16)
-		sl.add_theme_color_override("font_color", sc)
-		rp.add_child(sl)
-		y += 86.0
-	_push_label(box, "0 星解锁初档；每升 1 星解锁下一档，局内仍需逐档成组", 14, Color(0.66, 0.18, 0.12), Vector2(26, 906), 580)
-	var close := Button.new()
-	close.text = "×"
-	close.position = Vector2(568, 16)
-	close.size = Vector2(48, 44)
-	close.focus_mode = Control.FOCUS_NONE
-	close.add_theme_font_size_override("font_size", 20)
-	close.pressed.connect(_close_pop.bind(popup))
-	box.add_child(close)
-	UI.Motion.present(popup, box)
+		_refresh_carousel()
+		_show_advance())
+	UI.Motion.present(popup, panel)
+
+func _build_tier(panel: Panel, tier: Dictionary, index: int, star: int) -> void:
+	var current := index == star
+	var unlocked := index <= star
+	var color := TEXT if unlocked else MUTED
+	var row := UI.panel(panel, Rect2(28, 378.0 + float(index) * 79.0, 588, 69),
+		Color(0.244, 0.181, 0.119) if current else INSET, 8, GOLD if current else FRAME, 1)
+	UI.label(row, "%d 星" % index, Vector2(8, 0), Vector2(65, 69), 20, GOLD if unlocked else MUTED,
+		HORIZONTAL_ALIGNMENT_CENTER)
+	UI.label(row, "%s · %s" % [AD.TIER_NAMES[index], str(tier["combo_name"])],
+		Vector2(81, 4), Vector2(390, 29), 19, color)
+	UI.label(row, str(tier["combo_text"]), Vector2(81, 34), Vector2(390, 29), 16, color)
+	UI.label(row, "已解锁" if unlocked else "需 %d 星" % index,
+		Vector2(474, 0), Vector2(97, 69), 15, GOLD if unlocked else MUTED, HORIZONTAL_ALIGNMENT_RIGHT)
 
 func _popup_current(popup: Control) -> bool:
 	return is_inside_tree() and not is_queued_for_deletion() and is_instance_valid(popup) and _pop == popup and not popup.is_queued_for_deletion()
@@ -554,31 +380,29 @@ func _popup_current(popup: Control) -> bool:
 func _close_pop(expected: Control = null) -> void:
 	if expected != null and not _popup_current(expected):
 		return
-	if _pop != null and is_instance_valid(_pop):
+	if is_instance_valid(_pop):
 		_pop.hide()
 		_pop.queue_free()
-		_pop = null
-
-func _push_label(parent: Control, t: String, fs: int, col: Color, pos: Vector2, w := 260.0) -> void:
-	var l := Label.new()
-	l.text = t
-	l.position = pos
-	l.size = Vector2(w, fs + 12)
-	l.add_theme_font_size_override("font_size", fs)
-	l.add_theme_color_override("font_color", col)
-	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	parent.add_child(l)
+	_pop = null
 
 func grade_cn(q: int) -> String:
 	return ["凡品", "良品", "玄品", "地品", "绝品"][clampi(q - 1, 0, 4)]
 
-# ---------------- 热区（顶栏 / 底栏） ----------------
 func _build_hot() -> void:
-	_hot(Rect2(10, 6, 240, 76), func() -> void: UI.navigate(self, "res://menu/main_home.tscn"))
+	var back := Button.new()
+	back.position = Vector2(10, 6)
+	back.size = Vector2(240, 76)
+	back.flat = true
+	back.focus_mode = Control.FOCUS_NONE
+	for state in ["normal", "hover", "pressed", "focus"]:
+		back.add_theme_stylebox_override(state, StyleBoxEmpty.new())
+	back.pressed.connect(func(): UI.navigate(self, "res://menu/main_home.tscn"))
+	add_child(back)
+	UI.Motion.bind_button(back)
 
 func _on_dock(key: String) -> void:
-	if not UI.navigation_available(self): return
+	if not UI.navigation_available(self):
+		return
 	match key:
 		"start":
 			UI.navigate(self, "res://menu/main_home.tscn")
@@ -587,85 +411,81 @@ func _on_dock(key: String) -> void:
 		"curio":
 			UI.navigate(self, "res://menu/curio_home.tscn")
 
-func _hot(rect: Rect2, cb: Callable) -> void:
-	var b := Button.new()
-	b.position = rect.position
-	b.size = rect.size
-	b.flat = true
-	b.focus_mode = Control.FOCUS_NONE
-	b.add_theme_stylebox_override("normal", StyleBoxEmpty.new())
-	b.add_theme_stylebox_override("hover", StyleBoxEmpty.new())
-	b.add_theme_stylebox_override("pressed", StyleBoxEmpty.new())
-	b.pressed.connect(cb)
-	add_child(b)
-
-# ============================================================
-# 立绘卡
-# ============================================================
-class GodArt extends Control:
-	const F := preload("res://fonts/ink.ttf")
-	const QC := [Color(0.54,0.48,0.38), Color(0.31,0.48,0.29), Color(0.18,0.42,0.45), Color(0.42,0.29,0.48), Color(0.72,0.53,0.16)]
-	signal pressed
-	var aid := ""
+class GodArt extends Button:
 	var god_name := ""
-	var skill_name := ""
 	var dtype := ""
 	var quality := 5
 	var stars := 0
-	var focus := false
-	var art: Texture2D = null
+	var featured := false
+	var art_only := false
+	var art: Texture2D
+
 	func _ready() -> void:
-		mouse_filter = Control.MOUSE_FILTER_STOP
+		mouse_filter = Control.MOUSE_FILTER_IGNORE if art_only else Control.MOUSE_FILTER_STOP
+		focus_mode = Control.FOCUS_NONE
+		var blank := StyleBoxEmpty.new()
+		for state in ["normal", "hover", "pressed", "focus"]:
+			add_theme_stylebox_override(state, blank)
+		if not art_only:
+			UI.Motion.bind_button(self)
+			mouse_entered.connect(queue_redraw)
+			mouse_exited.connect(queue_redraw)
+
 	func _draw() -> void:
-		var qc: Color = QC[clampi(quality - 1, 0, 4)]
-		var sb := StyleBoxFlat.new()
-		sb.bg_color = Color(0.12, 0.14, 0.13)
-		sb.set_corner_radius_all(12 if focus else 9)
-		sb.border_color = qc.lerp(Color(0.88, 0.75, 0.49), 0.55)
-		sb.set_border_width_all(3 if focus else 2)
-		sb.shadow_color = Color(0.16, 0.11, 0.06, 0.38)
-		sb.shadow_size = 12 if focus else 5
-		sb.shadow_offset = Vector2(0, 5)
-		draw_style_box(sb, Rect2(Vector2.ZERO, size))
+		var hue := P.quality(quality)
+		var rim := hue.lerp(GOLD, 0.69 if featured else 0.40)
+		if is_hovered():
+			rim = rim.lightened(0.18)
+		var frame := StyleBoxFlat.new()
+		frame.bg_color = INSET
+		frame.set_corner_radius_all(10)
+		frame.border_color = rim
+		frame.set_border_width_all(2)
+		frame.shadow_color = Color(0.025, 0.021, 0.017, 0.8)
+		frame.shadow_size = 8 if featured else 3
+		frame.shadow_offset = Vector2(0, 4)
+		draw_style_box(frame, Rect2(Vector2.ZERO, size))
+		var inset := 5.0
+		var image := Rect2(Vector2.ONE * inset, size - Vector2.ONE * inset * 2.0)
 		if art != null:
-			var pad := 5.0
-			var ar := Rect2(Vector2(pad, pad), size - Vector2.ONE * pad * 2.0)
-			var ts := art.get_size()
-			var source_size := ar.size / maxf(ar.size.x / ts.x, ar.size.y / ts.y)
-			var source := Rect2((ts - source_size) * Vector2(0.5, 0.32), source_size)
-			draw_texture_rect_region(art, ar, source)
-		var foot := size.y - (106.0 if focus else 68.0)
-		var ink_clear := Color(0.055, 0.071, 0.062, 0.0)
-		var ink_dark := Color(0.055, 0.071, 0.062, 0.97)
-		draw_polygon(PackedVector2Array([Vector2(5, foot), Vector2(size.x - 5, foot), Vector2(size.x - 5, size.y - 5), Vector2(5, size.y - 5)]), PackedColorArray([ink_clear, ink_clear, ink_dark, ink_dark]))
-		draw_string(F, Vector2(18, size.y - (49.0 if focus else 23.0)), god_name,
-			HORIZONTAL_ALIGNMENT_LEFT, size.x - 60.0, 31 if focus else 24, Color(0.99, 0.94, 0.81))
-		# 品质章
-		var qs := 34.0 if focus else 26.0
-		var qp := Rect2(Vector2(size.x - qs - 14, size.y - qs - (40 if focus else 12)), Vector2(qs, qs))
-		var qsb := StyleBoxFlat.new()
-		qsb.bg_color = qc
-		qsb.set_corner_radius_all(4)
-		draw_style_box(qsb, qp)
-		draw_string(F, qp.position + Vector2(0, qs * 0.72), ["凡","良","玄","地","天"][clampi(quality - 1, 0, 4)],
-			HORIZONTAL_ALIGNMENT_CENTER, qs, 17 if focus else 13, Color(0.99, 0.96, 0.88))
-		# 星级（画在图上）
-		if focus:
-			var cy := size.y - 22.0
-			draw_line(Vector2(16, cy - 14), Vector2(size.x - 16, cy - 14), Color(0.85, 0.70, 0.43, 0.52), 1.0, true)
-			for i in 5:
-				_star(Vector2(size.x * 0.5 - 40.0 + float(i) * 20.0, cy), 7.0, i < stars)
-	func _star(c: Vector2, r: float, filled: bool) -> void:
-		var pts := PackedVector2Array()
-		for i in 10:
-			var ang := -PI * 0.5 + float(i) * PI / 5.0
-			var rr := r if i % 2 == 0 else r * 0.42
-			pts.append(c + Vector2(cos(ang), sin(ang)) * rr)
-		if filled:
-			draw_colored_polygon(pts, GOLD)
+			var asset_size := art.get_size()
+			var source_size := image.size / maxf(image.size.x / asset_size.x, image.size.y / asset_size.y)
+			var anchor := Vector2(0.5, 0.24 if art_only else 0.32)
+			draw_texture_rect_region(art, image, Rect2((asset_size - source_size) * anchor, source_size))
+			if not featured and not art_only:
+				draw_rect(image, Color(0.071, 0.063, 0.054, 0.24))
+		var foot := size.y - (146.0 if featured else (58.0 if art_only else 90.0))
+		var dark := Color(0.075, 0.072, 0.066, 0.98)
+		draw_polygon(PackedVector2Array([Vector2(inset, foot), Vector2(size.x - inset, foot),
+			image.end, Vector2(inset, image.end.y)]),
+			PackedColorArray([Color(dark, 0.0), Color(dark, 0.0), dark, dark]))
+		draw_rect(image, Color(rim, 0.68), false, 1.0)
+		if art_only:
+			return
+		if featured:
+			var seal := StyleBoxFlat.new()
+			seal.bg_color = Color(hue.darkened(0.30), 0.96)
+			seal.set_corner_radius_all(5)
+			seal.border_color = rim
+			seal.set_border_width_all(1)
+			draw_style_box(seal, Rect2(14, 15, 58, 30))
+			var grade: String = ["凡品", "良品", "玄品", "地品", "绝品"][clampi(quality - 1, 0, 4)]
+			draw_string(P.FONT, Vector2(14, 36), grade, HORIZONTAL_ALIGNMENT_CENTER, 58, 16, TEXT)
+			draw_string(P.FONT, Vector2(20, size.y - 48), god_name, HORIZONTAL_ALIGNMENT_LEFT, size.x - 154, 38, TEXT)
+			draw_string(P.FONT, Vector2(size.x - 122, size.y - 47), dtype, HORIZONTAL_ALIGNMENT_RIGHT, 100, 22, TEXT)
+			draw_line(Vector2(18, size.y - 39), Vector2(size.x - 18, size.y - 39), Color(GOLD, 0.45), 1.0, true)
+			for i in GameState.ROLE_STAR_MAX:
+				_star(Vector2(size.x * 0.5 - 52.0 + float(i) * 26.0, size.y - 21.0), i < stars)
 		else:
-			pts.append(pts[0])
-			draw_polyline(pts, Color(0.55, 0.48, 0.38, 0.6), 1.2, true)
-	func _gui_input(ev: InputEvent) -> void:
-		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
-			pressed.emit()
+			draw_string(P.FONT, Vector2(7, size.y - 24), god_name, HORIZONTAL_ALIGNMENT_CENTER, size.x - 14, 19, TEXT)
+
+	func _star(center: Vector2, filled: bool) -> void:
+		var points := PackedVector2Array()
+		for i in 10:
+			var angle := -PI * 0.5 + float(i) * PI / 5.0
+			points.append(center + Vector2.from_angle(angle) * (8.0 if i % 2 == 0 else 3.5))
+		if filled:
+			draw_colored_polygon(points, GOLD)
+		else:
+			points.append(points[0])
+			draw_polyline(points, Color(GOLD, 0.68), 1.0, true)

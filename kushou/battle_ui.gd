@@ -4821,7 +4821,7 @@ func _skill_cast_juice() -> void:
 func _pulse_chip(lb: Label) -> void:
 	if lb == null:
 		return
-	lb.pivot_offset = lb.size * 0.5
+	lb.pivot_offset = Vector2(lb.size.x, lb.size.y * 0.5)
 	_pulses[lb] = 1.0
 
 func _tick_pulses(dt: float) -> void:
