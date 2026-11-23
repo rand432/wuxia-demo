@@ -217,10 +217,14 @@ func _tick_frame_pose(delta: float, travel: Vector2, moving: bool, pop: float, e
 	var frame := 0
 	if _cast_time > 0.0:
 		frame = 12 if _cast_time > 0.24 else 13
-	elif _attack_time > 0.0 and _attack_time <= 0.14:
-		frame = 10 if _attack_time > 0.075 else 11
 	elif not boss_warning.is_empty():
 		frame = 8 if float(boss_warning["t"]) < float(boss_warning["warn"]) * 0.82 else 9
+		if str(boss_warning.get("shape", "")) in ["sector", "beam"]:
+			var aim := Vector2(boss_warning["dir"])
+			if aim.x * _dir < -0.05:
+				face(-1 if aim.x < 0.0 else 1)
+	elif _attack_time > 0.0 and _attack_time <= 0.14:
+		frame = 10 if _attack_time > 0.075 else 11
 	elif _hit_t > 0.0:
 		frame = 14 if role == "player" else (12 if _hit_t > 0.48 else 13)
 	elif _attack_time > 0.0:
@@ -263,6 +267,9 @@ func play_spawn(delay := 0.0) -> void:
 
 func death_finished() -> bool:
 	return _death_t >= DEATH_DURATION
+
+func death_time_left() -> float:
+	return maxf(0.0, DEATH_DURATION - _death_t) if _death_t >= 0.0 else 0.0
 
 
 func play_move(_move_id: String = "", _speed := 1.0) -> void:

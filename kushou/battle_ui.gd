@@ -28,6 +28,7 @@ const SKILL_FRAMES_PATH := "res://assets/art/fx/skill_bursts_v1.png"
 const DRAGON_FRAMES_PATH := "res://assets/gen/allies/river_dragon.png"
 const DRAGON_WAVE_PATH := "res://assets/art/fx/dragon_wave_v1.png"
 const ENTRY_ELITE_FRAME_IDS := ["shijia_yuan", "challenge_mimic", "challenge_chief"]
+const FINAL_BEAST_FRAME_ID := "kunshou_zhongyan_v1"
 var _entry_art: Dictionary = {}
 var _entry_cards_ready := false
 var _entry_god_portraits: Dictionary = {}
@@ -59,6 +60,7 @@ const FOE_FRAME_PATH := {
 	"狱狼": "yulang", "石甲巨猿": "shijia_yuan",
 	"山匪弓手": "archer", "符杖术士": "talisman_mage",
 	"宝箱大怪": "challenge_mimic", "挑战匪首": "challenge_chief",
+	"困兽·终焉": FINAL_BEAST_FRAME_ID,
 }
 const CROWD_FRAME_PATH := {"山匪": "crowd_bandit", "山匪弓手": "crowd_archer", "符杖术士": "crowd_mage"}
 const CHALLENGE_RIMS := [Color(0.99, 0.76, 0.31), Color(0.32, 0.79, 0.91), Color(0.47, 0.79, 0.58),
@@ -336,7 +338,7 @@ func prepare_entry_art() -> Array[String]:
 		_entry_cards_ready = true
 	var paths: Array[String] = [HERO_FRAMES_PATH, BATTLE_FRAMES_PATH, SKILL_FRAMES_PATH,
 		DRAGON_FRAMES_PATH, DRAGON_WAVE_PATH, BgArt.path_for(LevelState.current_level - 1)]
-	for frame_id in ENTRY_ELITE_FRAME_IDS + CROWD_FRAME_PATH.values():
+	for frame_id in _entry_enemy_frame_ids():
 		paths.append(_foe_frame_path(frame_id))
 	for id in _pool:
 		var card: Dictionary = _card_db.get(id, {})
@@ -372,6 +374,12 @@ func _entry_texture(path: String) -> Texture2D:
 func _foe_frame_path(frame_id: String) -> String:
 	return "res://assets/gen/enemies/frames/%s.png" % frame_id
 
+func _entry_enemy_frame_ids() -> Array:
+	var ids := ENTRY_ELITE_FRAME_IDS + CROWD_FRAME_PATH.values()
+	if LevelState.boss_tier() == 4:
+		ids.append(FINAL_BEAST_FRAME_ID)
+	return ids
+
 func _ready() -> void:
 	GameState.ensure_loaded()
 	Aud.play_battle_music()
@@ -389,7 +397,7 @@ func _ready() -> void:
 		_skill_frame_art = _entry_texture(SKILL_FRAMES_PATH)
 		_dragon_frame_art = _entry_texture(DRAGON_FRAMES_PATH)
 		_dragon_wave_art = _entry_texture(DRAGON_WAVE_PATH)
-		for frame_id in ENTRY_ELITE_FRAME_IDS + CROWD_FRAME_PATH.values():
+		for frame_id in _entry_enemy_frame_ids():
 			_foe_animation_cache[frame_id] = _entry_texture(_foe_frame_path(frame_id))
 		_build_bg()
 	if not _no_ui:
@@ -3421,6 +3429,7 @@ func _on_hero_down() -> void:
 
 # ---- 本局结束：命尽（输） / 通关（赢） ----
 var _result_layer: Control = null
+var _fallen_guardian: TokenActor
 
 func _end_run(win: bool) -> void:
 	if _run_over:
@@ -3461,16 +3470,27 @@ func _end_run(win: bool) -> void:
 	if win:
 		for i in 10:
 			_spawn_fly(Vector2(360, 470), _chip_target("文钱"), Color(0.92, 0.74, 0.32), 1)
-	_build_result(win)
-	Aud.sfx("win" if win else "lose", -6.0)
+	var reveal_delay := 0.0
+	if win and is_instance_valid(_fallen_guardian) and _fallen_guardian.guardian:
+		reveal_delay = _fallen_guardian.death_time_left()
+	_build_result(win, reveal_delay)
 
-func _build_result(win: bool) -> void:
+func _build_result(win: bool, reveal_delay := 0.0) -> void:
 	var layer := Control.new()
 	layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	layer.mouse_filter = Control.MOUSE_FILTER_STOP
 	layer.z_index = 40
 	add_child(layer)
 	_result_layer = layer
+	if reveal_delay > 0.0:
+		var reveal := create_tween().bind_node(layer)
+		reveal.tween_interval(reveal_delay)
+		reveal.tween_callback(_fill_result.bind(win, layer))
+	else:
+		_fill_result(win, layer)
+
+func _fill_result(win: bool, layer: Control) -> void:
+	Aud.sfx("win" if win else "lose", -6.0)
 	# 结局 CG 当全屏背景（有图才加，缺图保持原来的纯色压暗）
 	var cg_path := "res://assets/art/cg/ending_win.png" if win else "res://assets/art/cg/ending_lose.png"
 	var has_cg := ResourceLoader.exists(cg_path)
@@ -5640,8 +5660,12 @@ func _on_boss_impact(caster: Dictionary, pos: Vector2, ring_radius: float) -> vo
 		_hazard_view.flash_ring(pos, ring_radius)
 	var token := _foe_tokens.get(int(caster.get("_tid", 0))) as TokenActor
 	if token != null:
+		var direction: Vector2 = _core.position + pos - token.position
+		var warning := token.boss_warning
+		if str(warning.get("shape", "")) in ["sector", "beam"]:
+			direction = Vector2(warning["dir"]) * 40.0
 		token.boss_warning = {}
-		token.play_attack(_core.position + pos - token.position)
+		token.play_attack(direction)
 
 # 首领倒下：白闪 + 大爆 + 金耀 + 重震，配一段很短的慢镜头
 # 纸人 Lv5：在核心那边挡下了首领延迟技
@@ -8597,6 +8621,11 @@ func _on_foe_defeated(foe: Dictionary) -> void:
 		return
 	# 在发放前记账，避免奖励/击杀信号重入重复发放；不依赖视觉_tid或尸体消失。
 	foe["_rtype_rewarded"] = true
+	if bool(foe.get("boss", false)) and not foe.has("chal"):
+		var token := _foe_tokens.get(int(foe.get("_tid", 0))) as TokenActor
+		if is_instance_valid(token) and token.visible:
+			_fallen_guardian = token
+			token.play_down()
 	if _fx_front != null and float(foe.get("y", 0.0)) >= 90.0:
 		var challenge := clampi(int(foe.get("chal", -1)), -1, 4)
 		var large := bool(foe.get("boss", false))

@@ -75,5 +75,42 @@ func _case(win: bool) -> void:
 func _run() -> void:
 	await _case(false)
 	await _case(true)
-	print("PASS: win/loss freezes run/skills/claims and late reward signals; market panels, stock, inventory, consumables, timers and buffs frozen")
+	await _guardian_defeat()
+	print("PASS: win/loss freezes rewards and actions; guardian finishes visual defeat before result reveal")
 	Audio.quit_cleanly()
+
+func _guardian_defeat() -> void:
+	LS.current_level = 10
+	var battle = Battle.instantiate()
+	root.add_child(battle)
+	await process_frame
+	battle._tut.cancel()
+	battle.set_process(false)
+	var core = battle._core
+	core.set_process(false)
+	core.foes.clear()
+	core.set_wave(LS.waves())
+	core.wave_reset_quota()
+	core._wave_spawned = core._wave_quota
+	core.start_boss(LS.boss_tier(), "困兽·终焉")
+	battle._boss_spawned = true
+	var foe: Dictionary = core._boss_foe(false)
+	foe["x"] = 350.0
+	foe["y"] = 380.0
+	battle._process(0.0)
+	var token = battle._foe_tokens[foe["_tid"]]
+	assert(token._frame_atlas.resource_path.ends_with("kunshou_zhongyan_v1.png"))
+	core._apply_dmg(foe, float(foe["hp"]) + 1.0, "真实")
+	core._kill_foe(foe)
+	battle._process(0.0)
+	assert(battle._run_over and not core.running and LS.first_clear.get("10") == true)
+	assert(battle._result_layer.mouse_filter == Control.MOUSE_FILTER_STOP and battle._result_layer.get_child_count() == 0)
+	var rewards := _rewards(battle)
+	core.coin.emit(100)
+	battle._show_draw(true)
+	await create_timer(0.22).timeout
+	assert(token._frame_index == 15 and token.visible and battle._result_layer.get_child_count() == 0)
+	await create_timer(0.27).timeout
+	assert(not token.visible and battle._result_layer.get_child_count() > 0 and _rewards(battle) == rewards)
+	battle.queue_free()
+	await process_frame

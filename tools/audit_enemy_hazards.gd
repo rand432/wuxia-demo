@@ -119,7 +119,32 @@ func _run() -> void:
 	assert(cast["x"] == boss["x"] and cast["y"] == boss["y"])
 	core.interrupt_cast(boss)
 	assert(core._delayed.is_empty())
+	# 号令使用首领的额外名额，只移动这轮实际新生的敌人。
+	core.foes.clear()
+	core.start_boss(4, "困兽·终焉")
+	boss = core._boss_foe()
+	core.intro_wait = 0.0
+	for i in range(core.MAX_FOES - 1):
+		assert(not core._spawn_foe().is_empty())
+	var sentinel: Dictionary = core.foes.back()
+	sentinel["y"] = 325.0
+	core._hitstop = 0.0
+	boss["boss_summon_t"] = 0.0
+	core._process(0.01)
+	assert(core.foes.size() == core.MAX_FOES + 2 and float(sentinel["y"]) > 320.0)
+	assert(core.foes[-2]["y"] == -30.0 and core.foes[-1]["y"] == -70.0)
+	assert(core._banner.contains("2 只") and boss["boss_summon_t"] == 12.0)
+	while core.foes.size() < core.BOSS_SUMMON_FIELD_CAP - 1:
+		assert(not core._spawn_foe("chal").is_empty())
+	boss["boss_summon_t"] = 0.0
+	core._process(0.01)
+	assert(core.foes.size() == core.BOSS_SUMMON_FIELD_CAP and core._banner.contains("1 只"))
+	core._banner = ""
+	boss["boss_summon_t"] = 0.0
+	core._process(0.01)
+	assert(core.foes.size() == core.BOSS_SUMMON_FIELD_CAP and core._banner.is_empty())
+	assert(core._spawn_foe().is_empty() and float(sentinel["y"]) > 320.0)
 	battle.queue_free()
 	await process_frame
-	print("PASS: pool impact/ticks/expiry/escape/long frames; failed-wave invalidation and paper survival")
+	print("PASS: pool timing, failed-wave invalidation, paper survival and bounded boss summons")
 	Audio.quit_cleanly()

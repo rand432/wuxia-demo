@@ -1782,6 +1782,23 @@ func _delayed_hit(d: Dictionary, damage_scale := 1.0, allow_paper := true, is_im
 	if _hitstop < 0.10:
 		_hitstop = 0.10
 
+func _summon_boss_foes(boss: Dictionary) -> void:
+	var added := 0
+	for i in 2:
+		var minion := _spawn_foe("normal", 1.3, 1.1, false, 1, "", BOSS_SUMMON_FIELD_CAP)
+		if minion.is_empty():
+			break
+		minion["y"] = -30.0 - float(i) * 40.0
+		minion["x"] = clampf(float(boss["x"]) + float(i) * 70.0 - 35.0, 60.0, size.x - 60.0)
+		added += 1
+	if added == 0:
+		return
+	_banner = "兽王号令！%d 只走狗扑下来" % added
+	_banner_t = 1.8
+	_bursts.append({"x": float(boss["x"]), "y": float(boss["y"]), "t": 0.0,
+		"col": Color(0.92, 0.56, 0.28), "scale": 1.8})
+	Audio.sfx("heartbeat", -6.0)
+
 # 场上活着的那只 boss（给顶上的专属血条用）
 func _boss_foe(include_challenges := true) -> Dictionary:
 	for f_v in foes:
