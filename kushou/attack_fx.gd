@@ -10,11 +10,18 @@ const FONT := preload("res://fonts/ink.ttf")
 const SWORD_ART := preload("res://assets/char/jian_ink_v1.png")
 const INK := Color(0.13, 0.12, 0.11)
 const GOLD := Color(0.85, 0.66, 0.23)
+const MAX_HITS := 24
+const MAX_NUMBERS := 12
+const MAX_CLUSTER_NUMBERS := 6
+const NUMBER_CLUSTER_RADIUS_SQ := 156.0 * 156.0
+const MAX_DEFEATS := 14
+const NUMBER_OFFSETS := [Vector2.ZERO, Vector2(33, -23), Vector2(-36, -23), Vector2(0, -45)]
 
 var front := false
 var swings: Array = []
 var hits: Array = []
 var nums: Array = []
+var defeats: Array[Dictionary] = []
 var enemy_attacks: Array[Dictionary] = []
 var _sword: AtlasTexture
 
@@ -34,14 +41,71 @@ func spawn_swing(attacker: Vector2, target: Vector2, radius: float, windup: floa
 	})
 	queue_redraw()
 
-func spawn_hit(pos: Vector2, radius: float, dmg: int, hero_hit: bool, gold := false, big := false) -> void:
-	hits.append({"p": pos - Vector2(0, radius), "r": radius * 0.7, "t": 0.0, "dur": 0.22 if gold or big else 0.16, "strong": gold or big})
+func spawn_hit(pos: Vector2, radius: float, dmg: int, hero_hit: bool, crit := false, heavy := false) -> void:
+	var intensity := 2 if crit else (1 if heavy or hero_hit else 0)
+	var accent := Color(0.96, 0.40, 0.32) if hero_hit else (GOLD if crit else (Color(1.0, 0.52, 0.25) if heavy else Color(0.90, 0.83, 0.67)))
+	if hits.size() >= MAX_HITS:
+		hits.pop_front()
+	hits.append({"p": pos - Vector2(0, radius), "r": radius * 0.7, "t": 0.0, "dur": 0.22 if intensity > 0 else 0.14,
+		"intensity": intensity, "accent": accent})
+	queue_redraw()
+	_place_number(pos + Vector2(24, -radius - 11), dmg, hero_hit, crit, heavy)
+
+func _place_number(anchor: Vector2, dmg: int, hero_hit: bool, crit: bool, heavy: bool) -> void:
+	var important := hero_hit or crit or heavy
+	var crowded := 0
+	var replace := -1
+	for i in nums.size():
+		var current: Dictionary = nums[i]
+		if anchor.distance_squared_to(current["p"]) > NUMBER_CLUSTER_RADIUS_SQ:
+			continue
+		crowded += 1
+		if replace < 0 and not current["important"]:
+			replace = i
+	var displace := crowded >= MAX_CLUSTER_NUMBERS and not hero_hit
+	if displace:
+		if not important or replace < 0:
+			return
+	var location := Vector2.INF
+	for offset: Vector2 in NUMBER_OFFSETS:
+		var spot := Vector2(clampf(anchor.x + offset.x, 44.0, size.x - 56.0), maxf(53.0, anchor.y + offset.y))
+		var occupied := false
+		for i in nums.size():
+			if displace and i == replace:
+				continue
+			var gap := (spot - _number_position(nums[i])).abs()
+			if gap.x < 46.0 and gap.y < 25.0:
+				occupied = true
+				break
+		if not occupied:
+			location = spot
+			break
+	if location == Vector2.INF:
+		if not hero_hit:
+			return
+		location = Vector2(clampf(anchor.x, 44.0, size.x - 56.0), maxf(44.0, anchor.y - 56.0))
+	if displace:
+		nums.remove_at(replace)
+	elif nums.size() >= MAX_NUMBERS:
+		var ordinary := nums.find_custom(func(entry: Dictionary) -> bool: return not bool(entry["important"]))
+		if ordinary < 0 and not important:
+			return
+		nums.remove_at(maxi(0, ordinary))
 	nums.append({
-		"p": pos + Vector2(32.0, -radius - 8.0), "txt": "-" + str(maxi(1, dmg)),
-		"t": 0.0, "dur": 0.62,
-		"size": 36 if hero_hit else (34 if big else 28),
-		"hero": hero_hit, "gold": gold,
+		"p": location, "txt": "-" + str(maxi(1, dmg)),
+		"t": 0.0, "dur": 0.58 if important else 0.40,
+		"size": 36 if hero_hit else (35 if crit else (31 if heavy else 24)),
+		"hero": hero_hit, "gold": crit, "heavy": heavy, "important": important,
 	})
+
+func spawn_defeat(feet: Vector2, radius: float, accent: Color, important: bool) -> void:
+	if defeats.size() >= MAX_DEFEATS:
+		var ordinary := defeats.find_custom(func(entry: Dictionary) -> bool: return not bool(entry["important"]))
+		if ordinary < 0 and not important:
+			return
+		defeats.remove_at(maxi(0, ordinary))
+	defeats.append({"p": feet, "r": radius, "accent": accent,
+		"important": important, "t": 0.0, "dur": 0.39 if important else 0.30})
 	queue_redraw()
 
 func spawn_enemy_attack(origin: Vector2, target: Vector2, kind: String) -> void:
@@ -74,6 +138,11 @@ func _process(delta: float) -> void:
 		if float(nums[i]["t"]) >= float(nums[i]["dur"]):
 			nums.remove_at(i)
 		dirty = true
+	for i in range(defeats.size() - 1, -1, -1):
+		defeats[i]["t"] += delta
+		if float(defeats[i]["t"]) >= float(defeats[i]["dur"]):
+			defeats.remove_at(i)
+		dirty = true
 	if dirty:
 		queue_redraw()
 
@@ -81,6 +150,8 @@ func _draw() -> void:
 	if front:
 		for strike in enemy_attacks:
 			_draw_enemy_attack(strike)
+		for defeat in defeats:
+			_draw_defeat(defeat)
 		for h in hits:
 			_draw_hit(h)
 		for n in nums:
@@ -145,21 +216,40 @@ func _draw_hit(h: Dictionary) -> void:
 		return
 	var c: Vector2 = h["p"]
 	var r := float(h["r"])
-	var strong := bool(h.get("strong", false))
-	var accent := GOLD if strong else INK
+	var intensity := int(h["intensity"])
+	var accent: Color = h["accent"]
 	var spread := r * (0.45 + p * 1.3)
-	draw_circle(c, 7.0 * a, Color(1.0, 0.96, 0.84, 0.8 * a))
-	draw_arc(c, spread, -PI * 0.85, PI * 0.6, 28, Color(accent.r, accent.g, accent.b, a * 0.7), (3.0 if strong else 1.8) * a + 0.6, true)
-	for i in range(4 if strong else 2):
+	draw_circle(c, (4.5 + intensity * 1.8) * a, Color(1.0, 0.96, 0.84, 0.82 * a))
+	draw_arc(c, spread, -PI * 0.85, PI * 0.6, 20, Color(accent, a * 0.81), (1.6 + intensity * 1.3) * a + 0.6, true)
+	for i in range(2 + intensity * 2):
 		var direction := Vector2.from_angle(-0.65 + float(i) * 1.55)
-		draw_line(c + direction * (3.0 + p * 9.0), c + direction * (12.0 + spread), Color(accent.r, accent.g, accent.b, a), 2.5 * a + 0.5, true)
+		draw_line(c + direction * (3.0 + p * 9.0), c + direction * (9.0 + spread), Color(accent, a), (2.0 + intensity * 0.5) * a + 0.5, true)
+
+func _draw_defeat(entry: Dictionary) -> void:
+	var progress := float(entry["t"]) / float(entry["dur"])
+	var alpha := 1.0 - progress
+	var p: Vector2 = entry["p"]
+	var radius := float(entry["r"])
+	var accent: Color = entry["accent"]
+	draw_set_transform(p, 0.0, Vector2(1.0, 0.32))
+	draw_arc(Vector2.ZERO, radius * (0.50 + progress * 0.82), 0, TAU, 24, Color(accent, alpha * 0.8), 2.0 * alpha + 0.6, true)
+	draw_set_transform(Vector2.ZERO)
+	for i in range(6 if entry["important"] else 4):
+		var side := -1.0 if i % 2 == 0 else 1.0
+		var gap := (7.0 + i * 3.0) * (0.5 + progress * 1.2)
+		var at := p + Vector2(gap * side, -sin(progress * PI * 0.85) * (17.0 + i * 4.0))
+		draw_line(at, at + Vector2(side * 4.0, -6.0) * alpha, Color(accent, alpha), 3.0 * alpha + 0.5, true)
+
+func _number_position(n: Dictionary) -> Vector2:
+	var p := clampf(float(n["t"]) / float(n["dur"]), 0.0, 1.0)
+	return n["p"] + Vector2(9.0 * p, -38.0 * (1.0 - pow(1.0 - p, 2.0)))
 
 func _draw_num(n: Dictionary) -> void:
 	var p := float(n["t"]) / maxf(0.001, float(n["dur"]))
 	var a := 1.0 - clampf((p - 0.62) / 0.38, 0.0, 1.0)
 	if a <= 0.0:
 		return
-	var pos: Vector2 = n["p"] + Vector2(14.0 * p, -46.0 * (1.0 - pow(1.0 - p, 2.0)))
+	var pos := _number_position(n)
 	var txt: String = str(n["txt"])
 	var pop := lerpf(0.72, 1.12, minf(1.0, p / 0.16)) if p < 0.16 else lerpf(1.12, 1.0, minf(1.0, (p - 0.16) / 0.18))
 	var fsz := int(round(float(n["size"]) * pop))
@@ -167,6 +257,8 @@ func _draw_num(n: Dictionary) -> void:
 	var base := Vector2(pos.x - w * 0.5, pos.y)
 	var strong := bool(n["gold"])
 	var color := Color(1.0, 0.79, 0.30, a) if strong else Color(1.0, 0.95, 0.82, a)
+	if bool(n["heavy"]) and not strong:
+		color = Color(1.0, 0.64, 0.37, a)
 	if bool(n["hero"]):
 		color = Color(1.0, 0.51, 0.45, a)
 	draw_string_outline(FONT, base, txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fsz, 5 if strong else 4, Color(0.16, 0.095, 0.055, a))

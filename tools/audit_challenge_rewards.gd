@@ -22,8 +22,17 @@ func _run() -> void:
 		cap_core._spawn_foe("coin")
 	var last: Dictionary = cap_core.foes.back()
 	var snapshot := last.duplicate(true)
-	cap_core.spawn_challenge(3, 1)
+	cap_core.set_wave(5)
+	cap_test._refresh_chal_panel()
+	assert(cap_test._chal_btns[3].status == "应战")
+	cap_test._chal_press(3)
 	assert(not last.has("chal") and last == snapshot)
+	assert(cap_test._chal_cd[3] == 0.0 and cap_test._chal_count == 0)
+	assert(cap_test._chal_btns[3].status == "应战")
+	cap_core.foes.pop_back()
+	cap_test._chal_press(3)
+	assert(cap_core.foes.back().get("chal") == 3)
+	assert(cap_test._chal_cd[3] > 0.0 and cap_test._chal_count == 1 and cap_test._chal_btns[3].disabled)
 	cap_test.queue_free()
 	await process_frame
 	for wave in [1, 5, 10]:

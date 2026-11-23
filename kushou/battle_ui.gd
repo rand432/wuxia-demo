@@ -269,13 +269,11 @@ var _boss_bar = null           # 首领血条
 var _foe_pool: Array = []      # 怪物牌对象池（省掉每只都建 Shader/节点的开销）
 var _recycle_q: Array = []     # 阵亡动画播完再回收
 var _boss_bar_t := 0.0
-var _boss_on := false          # 首领在场时特效降档（首领战场景本来就重）
 var _flash_rect: ColorRect = null  # 技能释放时的整屏微闪
 var _cast_dtype := ""              # 最近一次释放的技能属性（决定闪光颜色）
 var _boss_veil: ColorRect = null   # 首领登场：压暗
 var _boss_spot: Sprite2D = null    # 首领登场：聚光
 var _boss_name_lb: Label = null    # 首领登场：名字大字
-var _last_combo := 0            # 连杀里程碑用（每 10 连炸一口）
 var _combo_readout: Control
 const PFX_MAX_LIVE := 26          # 同屏特效上限（实测 60fps 有余量，放回 26）
 var _curio_sq = null             # 奇物方块（战场右下，与挑战对称）
@@ -1002,8 +1000,8 @@ func _build_field() -> void:
 	_hero_token.z_index = 6
 	_cam.add_child(_hero_token)
 	_combo_readout = ComboReadout.new()
-	_combo_readout.position = Vector2(542, 190)
-	_combo_readout.size = Vector2(160, 58)
+	_combo_readout.position = Vector2(448, 225)
+	_combo_readout.size = Vector2(166, 58)
 	_combo_readout.z_index = 12
 	add_child(_combo_readout)
 	var hit := Button.new()
@@ -1018,9 +1016,16 @@ func _build_field() -> void:
 	_hero_hit_btn = hit
 	_hero_hit_btn.position = _hero_token.position - Vector2(48, 48 + _hero_token.radius)
 	# 挑战方形
-	_chal_btn = _btn("挑战", Rect2(0, 760, 96, 96), 20, Color(0.075, 0.068, 0.060, 0.98), Color(0.91, 0.78, 0.42), func(): _toggle_challenge())
+	_chal_btn = Tile.new()
+	_chal_btn.kind = "challenge"
+	_chal_btn.label = "挑战"
+	_chal_btn.position = Vector2(8, 760)
+	_chal_btn.size = Vector2(96, 96)
+	_chal_btn.pressed.connect(_toggle_challenge)
+	add_child(_chal_btn)
 	_chal_btn.visible = LevelState.show_button("challenge")
-	_build_challenge()
+	if _chal_btn.visible:
+		_build_challenge()
 	_build_curio()
 	# pixelfx 特效层：盖在战场和角色之上、UI 之下
 	# 首领登场演出三件套（平时隐藏）
@@ -1124,23 +1129,39 @@ class SkillIcon extends Control:
 			pressed.emit()
 
 func _toggle_challenge() -> void:
-	if not LevelState.show_button("challenge"):
+	if _run_over or _chal_layer == null:
 		return
-	_chal_layer.visible = not _chal_layer.visible
 	if _chal_layer.visible:
-		_refresh_chal_panel()
-		_chal_layer.move_to_front()
-		if _chal_holder != null:
-			_pop_bounce(_chal_holder)
-			_breathe(_chal_holder)
+		_close_challenge()
+		return
+	if _draw_layer != null:
+		_show_draw(false)
+	_hide_aug_pick()
+	_hide_trea()
+	_hide_god_pick()
+	_chal_layer.show()
+	_chal_btn.hot = true
+	_chal_btn.queue_redraw()
+	_refresh_chal_panel()
+	_pop_bounce(_chal_holder)
+	Aud.sfx("ui_open", -8.0)
+
+func _close_challenge() -> void:
+	if _chal_layer == null or not _chal_layer.visible:
+		return
+	MenuUI.Motion.stop(_chal_holder)
+	_chal_layer.hide()
+	_chal_btn.hot = false
+	_chal_btn.queue_redraw()
 
 # ============================================================
 # 挑战：冷却制 + 按波解锁，打完给资源
 # ============================================================
 const CHAL_NAMES := ["钱怪", "晶怪", "书怪", "宝箱", "匪首"]
 const CHAL_GROUP := [6, 3, 4, 1, 1]
+const CHAL_REWARD := ["额外文钱", "额外灵晶", "额外经验", "宝物机会和刷新", "文钱、灵晶、宝物和刷新"]
 
-var _chal_btns: Array = []
+var _chal_btns: Array[ChallengeCard] = []
 var _chal_auto_btn: Button = null
 var _chal_holder: Control = null
 var _auto_chal := false
@@ -1155,33 +1176,103 @@ func _build_challenge() -> void:
 	_chal_layer.z_index = 15
 	add_child(_chal_layer)
 	_chal_holder = Control.new()
-	_chal_holder.position = Vector2(8, 360)
-	_chal_holder.size = Vector2(320, 340)
-	_chal_holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_chal_holder.position = Vector2(24, 342)
+	_chal_holder.size = Vector2(672, 368)
+	_chal_holder.mouse_filter = Control.MOUSE_FILTER_STOP
 	_chal_layer.add_child(_chal_holder)
-	_panel(Rect2(0, 0, 320, 340), Color(0.94, 0.90, 0.82, 0.98), 8, Color(0.85, 0.66, 0.23, 0.6), 2, _chal_holder)
+	_panel(Rect2(3, 6, 666, 365), Color(0.04, 0.03, 0.025, 0.62), 16, Color.TRANSPARENT, 0, _chal_holder)
+	_panel(Rect2(Vector2.ZERO, _chal_holder.size), Color(0.13, 0.105, 0.078), 13, Color(0.74, 0.55, 0.29), 2, _chal_holder)
+	_panel(Rect2(8, 8, 656, 352), Color.TRANSPARENT, 9, Color(0.70, 0.53, 0.32, 0.50), 1, _chal_holder)
+	_lbl("挑战", Vector2(25, 14), Vector2(150, 38), 26, LIGHT, _chal_holder)
+	_btn("收起", Rect2(556, 16, 92, 34), 18, MenuUI.P.DARK, MenuUI.P.GOLD_HI, _close_challenge, _chal_holder)
 	for i in CHAL_NAMES.size():
-		var x := 16.0 + float(i % 2) * 148.0
-		var y := 16.0 + float(i / 2) * 84.0
-		var idx := i
-		var b := _btn(str(CHAL_NAMES[i]), Rect2(x, y, 132, 72), 17, Color(0.09, 0.08, 0.07, 0.98),
-			Color(0.91, 0.78, 0.42), func() -> void: _chal_press(idx), _chal_holder)
-		_chal_btns.append(b)
-	_chal_auto_btn = _btn("自动挑战：关", Rect2(16, 276, 288, 48), 18, Color(0.13, 0.11, 0.09),
-		Color(0.91, 0.78, 0.42), func() -> void: _toggle_auto_chal(), _chal_holder)
+		var card := ChallengeCard.new()
+		card.position = Vector2(20 + i * 214, 58) if i < 3 else Vector2(20 + (i - 3) * 320, 185)
+		card.size = Vector2(204 if i < 3 else 312, 117)
+		card.title = CHAL_NAMES[i]
+		card.reward = CHAL_REWARD[i]
+		card.group = CHAL_GROUP[i]
+		card.accent = CHALLENGE_RIMS[i]
+		var foe_name: String = BattleCore.CHAL_FOE_NAME[i]
+		var atlas := _foe_animation_cache.get(FOE_FRAME_PATH.get(foe_name, "")) as Texture2D
+		card.art = _foe_art(foe_name) if atlas == null else atlas
+		if atlas != null:
+			var cell := float(atlas.get_width()) / 4.0
+			card.art_region = Rect2(Vector2.ZERO, Vector2.ONE * cell)
+		card.pressed.connect(_chal_press.bind(i))
+		_chal_holder.add_child(card)
+		_chal_btns.append(card)
+	_chal_auto_btn = _btn("自动挑战 · 关", Rect2(432, 312, 220, 42), 20, MenuUI.P.DARK, MenuUI.P.GOLD_HI,
+		_toggle_auto_chal, _chal_holder)
+
+class ChallengeCard extends Button:
+	const P := preload("res://shared/ui_pal.gd")
+	var title := ""
+	var reward := ""
+	var group := 1
+	var accent := Color.WHITE
+	var art: Texture2D
+	var art_region := Rect2()
+	var status := ""
+
+	func _ready() -> void:
+		var normal := StyleBoxFlat.new()
+		normal.bg_color = Color(0.19, 0.155, 0.117).lerp(accent, 0.07)
+		normal.border_color = Color(accent, 0.54)
+		normal.set_border_width_all(1)
+		normal.set_corner_radius_all(8)
+		var hover := normal.duplicate() as StyleBoxFlat
+		hover.bg_color = normal.bg_color.lightened(0.08)
+		hover.border_color = Color(accent, 0.88)
+		var inactive := normal.duplicate() as StyleBoxFlat
+		inactive.bg_color = P.DARK
+		inactive.border_color = Color(accent, 0.32)
+		add_theme_stylebox_override("normal", normal)
+		add_theme_stylebox_override("hover", hover)
+		add_theme_stylebox_override("pressed", hover)
+		add_theme_stylebox_override("disabled", inactive)
+		MenuUI.Motion.bind_button(self)
+
+	func show_status(value: String, unavailable: bool) -> void:
+		if status == value and disabled == unavailable:
+			return
+		status = value
+		disabled = unavailable
+		accessibility_name = "%s ×%d，%s，%s" % [title, group, reward, status]
+		queue_redraw()
+
+	func _draw() -> void:
+		var hue := accent.lerp(P.DIM, 0.47) if disabled else accent
+		var wide := size.x > 240.0
+		var center := Vector2(46 if wide else 40, 59)
+		var radius := 35.0 if wide else 28.0
+		draw_circle(center, radius, Color(0.070, 0.056, 0.043), true, -1.0, true)
+		draw_arc(center, radius, 0, TAU, 40, Color(hue, 0.50), 1.25, true)
+		if art != null:
+			var source := art_region if art_region.has_area() else Rect2(Vector2.ZERO, art.get_size())
+			var fit := source.size * ((77.0 if wide else 49.0) / maxf(source.size.x, source.size.y))
+			var tint := Color(0.74, 0.71, 0.66) if disabled else Color.WHITE
+			draw_texture_rect_region(art, Rect2(center - fit * 0.5, fit), source, tint)
+		var text_x := 94.0 if wide else 77.0
+		draw_string(P.FONT, Vector2(text_x, 35), title, HORIZONTAL_ALIGNMENT_LEFT, -1, 24, P.PAPER_HI)
+		draw_string(P.FONT, Vector2(size.x - 54, 34), "×%d" % group, HORIZONTAL_ALIGNMENT_RIGHT, 40, 18, hue)
+		draw_string(P.FONT, Vector2(text_x, 62), reward, HORIZONTAL_ALIGNMENT_LEFT, -1, 17, P.LINE)
+		draw_line(Vector2(text_x, 74), Vector2(size.x - 13, 74), Color(hue, 0.32), 1.0, true)
+		draw_string(P.FONT, Vector2(text_x, 98), status, HORIZONTAL_ALIGNMENT_LEFT, -1, 17, hue)
 
 func _toggle_auto_chal() -> void:
+	if _run_over:
+		return
 	_auto_chal = not _auto_chal
 	if _chal_auto_btn != null:
-		_chal_auto_btn.text = "自动挑战：" + ("开" if _auto_chal else "关")
-	_refresh_chal_panel()
+		_chal_auto_btn.text = "自动挑战 · " + ("开" if _auto_chal else "关")
 
 func _chal_unlocked(i: int) -> bool:
 	if _core == null:
 		return false
 	return int(_core.wave) >= int(CHAL_MIN_WAVE[clampi(i, 0, CHAL_MIN_WAVE.size() - 1)])
 
-func _chal_press(i: int) -> void:
+func _chal_press(i: int, automatic := false) -> void:
 	if _run_over or _core == null:
 		return
 	if not _chal_unlocked(i):
@@ -1190,41 +1281,42 @@ func _chal_press(i: int) -> void:
 	if float(_chal_cd[i]) > 0.0:
 		_toast("「%s」冷却中 %.0f 秒" % [str(CHAL_NAMES[i]), ceil(float(_chal_cd[i]))])
 		return
+	var group := int(CHAL_GROUP[i])
+	var spawned: int = _core.spawn_challenge(i, group)
+	if spawned == 0:
+		if not automatic:
+			_toast("场上怪物已满，击败部分后再挑战")
+		return
 	_chal_cd[i] = _chal_base_cd(i)
 	_chal_count += 1
 	_qc("chal", 1)
-	var grp := int(CHAL_GROUP[i])
-	_core.spawn_challenge(i, grp)
 	# 挑战开打：战场上方一口落地冲击 + 鼓，给"应战"的分量
 	_spawn_pfx("impacts/ground-slam", Vector2(360, 235), 0.95, "shadow", 1.5)
 	Aud.sfx("drum", -12.0, 1.10)
-	_toast("挑战 · " + str(CHAL_NAMES[i]))
+	var title := str(CHAL_NAMES[i])
+	_toast("挑战 · " + title if spawned == group else "挑战 · %s ×%d" % [title, spawned])
 	Aud.sfx("ui_open", -8.0)
 	_refresh_chal_panel()
+	if not automatic:
+		_close_challenge()
 
 func _refresh_chal_panel() -> void:
 	for i in _chal_btns.size():
-		var b: Button = _chal_btns[i]
-		if b == null:
-			continue
+		var card := _chal_btns[i]
 		var cd := float(_chal_cd[i])
 		if not _chal_unlocked(i):
-			b.text = "%s\n第 %d 波解锁" % [str(CHAL_NAMES[i]), int(CHAL_MIN_WAVE[i])]
-			b.disabled = true
+			card.show_status("第 %d 波解锁" % CHAL_MIN_WAVE[i], true)
 		elif cd > 0.0:
-			b.text = "%s\n%.0f 秒" % [str(CHAL_NAMES[i]), ceil(cd)]
-			b.disabled = true
+			card.show_status("冷却 %d 秒" % ceili(cd), true)
 		else:
-			b.text = "%s\n×%d" % [str(CHAL_NAMES[i]), int(CHAL_GROUP[i])]
-			b.disabled = false
-		b.add_theme_font_size_override("font_size", 17)
+			card.show_status("应战", false)
 
 func _chal_auto_try() -> void:
 	if not _auto_chal or _run_over or _core == null:
 		return
 	for i in _chal_btns.size():
 		if _chal_unlocked(i) and float(_chal_cd[i]) <= 0.0:
-			_chal_press(i)
+			_chal_press(i, true)
 			return
 
 func _tick_chal(dt: float) -> void:
@@ -2510,6 +2602,7 @@ func _show_draw(v: bool) -> void:
 			_roll_draw()
 			_draw_paid = true
 		_hide_god_pick()
+		_close_challenge()
 		_draw_open = true
 		_draw_layer.visible = true
 		_layer_in(_draw_layer)
@@ -2861,7 +2954,6 @@ func _process(_delta: float) -> void:
 					_recycle_q.remove_at(i)
 		if _boss_bar != null:
 			var bf: Dictionary = _core._boss_foe(false) if _core != null else {}
-			_boss_on = not bf.is_empty()
 			if bf.is_empty():
 				if _boss_bar.visible:
 					_boss_bar_t = maxf(0.0, _boss_bar_t - _delta)
@@ -2887,15 +2979,8 @@ func _process(_delta: float) -> void:
 					need = true
 				if need:
 					_boss_bar.queue_redraw()
-		if _core != null:
-			var cb := int(_core._combo)
-			if _combo_readout != null:
-				_combo_readout.update_combo(cb, float(_core._combo_t))
-			if cb != _last_combo:
-				if cb > _last_combo and cb % 10 == 0:
-					_spawn_pfx("holy/sunburst", _hero_screen(), 1.05, "gold", 1.9)
-					_core._shake = maxf(float(_core._shake), 7.0)
-				_last_combo = cb
+	if _combo_readout != null:
+		_combo_readout.update_combo(int(_core._combo), float(_core._combo_t))
 		if not _tick_battle_effects(_delta):
 			return
 		if _hero_token != null:
@@ -2956,8 +3041,6 @@ func _process(_delta: float) -> void:
 					tk.unit_name = uname
 					tk.queue_redraw()
 				if bool(f.get("_death_settled", false)):
-					if tk._death_t < 0.0:
-						_spawn_pfx("impacts/blunt-hit", tk.position - Vector2(0, 5), 0.70, "dust", 1.1)
 					tk.play_down()
 				tk.visible = float(f.get("y", 0.0)) >= 90.0 and not tk.death_finished()
 		for tid in _foe_tokens.keys():
@@ -2984,7 +3067,6 @@ func _on_core_kill(n: int) -> void:
 	if _kill_lb != null:
 		_kill_lb.text = str(_kills)
 	_pulse_chip(_kill_lb)
-	_spawn_fly(_hero_screen() + Vector2(0, -26), _chip_target("杀敌"), Color(0.80, 0.36, 0.24), 2)
 	if _bm != null and LevelState.show_button("market"):
 		_bm.add_kill(kn)   # 黑市没开放前不喂杀敌数，避免开局弹“黑市升到 Lv”
 	_add_exp(20 * kn)                      # v2：杀 1 只 +20 经验
@@ -3178,6 +3260,7 @@ func _end_run(win: bool) -> void:
 		else:
 			_toast("首通记录恢复失败，请检查存储空间")
 	_run_over = true
+	_close_challenge()
 	_hide_god_pick()
 	if _tut != null:
 		_tut.cancel()
@@ -3614,6 +3697,7 @@ func _build_str() -> void:
 func _open_aug_pick() -> void:
 	if _run_over or not _str_pending or _str_layer == null:
 		return
+	_close_challenge()
 	if _draw_layer != null:
 		_show_draw(false)
 	_hide_trea()
@@ -3915,6 +3999,7 @@ func _on_trea_tile() -> void:
 func _open_trea() -> void:
 	if _trea_layer == null:
 		return
+	_close_challenge()
 	if _draw_layer != null:
 		_show_draw(false)
 	_hide_aug_pick()
@@ -4901,7 +4986,7 @@ func _on_coin_drop(amount: int, pos: Vector2) -> void:
 	if _run_over or _core == null or amount <= 0:
 		return
 	_add_wen(amount)
-	_spawn_fly(_core.position + pos + Vector2(0, -18), _chip_target("文钱"), Color(0.90, 0.71, 0.30), 3)
+	_spawn_fly(_core.position + pos + Vector2(0, -18), _chip_target("文钱"), Color(0.90, 0.71, 0.30), 3 if amount >= 20 else 1)
 
 func _chip_target(key: String) -> Vector2:
 	var chip := _chips.get(key) as Control
@@ -5723,51 +5808,55 @@ func _hero_slash_frames(target: Dictionary) -> void:
 	_spawn_frame_burst(0, from.lerp(dst, 0.60), 0.98, 0.17, (dst - from).angle())
 
 func _spawn_hit_fx(global_pos: Vector2, radius: float, dmg: int, hero_hit: bool, crit: bool, heavy: bool) -> void:
-	if _fx_front == null:
-		return
-	_fx_front.spawn_hit(global_pos - FIELD_POS, radius, dmg, hero_hit, crit or heavy, heavy)
-	var impact := global_pos - Vector2(0, radius * 0.85)
-	# 像素命中特效（pixelfx，MIT）：普通小、暴击金亮、挨打偏血
-	if hero_hit:
-		_spawn_pfx("impacts/blunt-hit", impact, 0.70, "blood", 1.2)
-	elif crit:
-		_spawn_pfx("impacts/crit-hit", impact, 0.95, "gold", 1.9)
-		# 暴击再叠一口小的错位金爆（同一个已烘变体，只改缩放/位置）
-		_spawn_pfx("impacts/crit-hit", impact + Vector2(randf_range(-14.0, 14.0), randf_range(-10.0, 6.0)), 0.58, "gold", 1.9)
-	elif heavy:
-		_spawn_pfx("impacts/crit-hit", impact, 0.80, "", 1.4)
-	elif randf() < (0.40 if _boss_on else 0.70):
-		# 横扫一次打好几只时，普通命中不每只都放（保丝滑，观感也够）；首领战再降一档
-		_spawn_pfx("impacts/hit-spark", impact, 0.72, "", 1.0)
+	if _fx_front != null:
+		_fx_front.spawn_hit(global_pos - FIELD_POS, radius, dmg, hero_hit, crit, heavy)
 
 class ComboReadout extends Control:
 	var count := 0
 	var _pulse := 0.0
+	var _milestone := 0.0
 	var _remaining := 0.0
+	var _frame := StyleBoxFlat.new()
+
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
-		visible = false
+		hide()
+		set_process(false)
+		_frame.set_corner_radius_all(9)
+		_frame.set_border_width_all(1)
+
 	func update_combo(value: int, remaining: float) -> void:
 		_remaining = remaining
-		visible = value >= 3 and remaining > 0.0
+		var show_combo := value >= 3 and remaining > 0.0
+		if visible != show_combo:
+			visible = show_combo
+			set_process(show_combo)
 		if count != value:
+			if value / 10 > count / 10:
+				_milestone = 1.0
+			elif value < count:
+				_milestone = 0.0
 			count = value
 			_pulse = 1.0
 			queue_redraw()
+
 	func _process(dt: float) -> void:
-		if not visible: return
 		_pulse = maxf(0.0, _pulse - dt * 5.5)
-		modulate.a = clampf(_remaining / 0.3, 0.0, 1.0)
+		_milestone = maxf(0.0, _milestone - dt * 2.8)
+		modulate.a = smoothstep(0.0, 0.22, _remaining)
 		queue_redraw()
+
 	func _draw() -> void:
-		var pop := 1.0 + 0.12 * sin(_pulse * PI)
-		draw_set_transform(size * 0.5 * (1.0 - pop), 0.0, Vector2.ONE * pop)
-		draw_line(Vector2(10, 52), Vector2(148, 52), Color(0.66, 0.47, 0.19, 0.65), 1.5, true)
-		var outline := Color(0.14, 0.09, 0.06, 0.90)
-		draw_string_outline(FONT, Vector2(10, 37), "连斩", HORIZONTAL_ALIGNMENT_LEFT, -1, 23, 5, outline)
-		draw_string_outline(FONT, Vector2(72, 39), str(count), HORIZONTAL_ALIGNMENT_LEFT, -1, 42, 6, outline)
-		draw_string(FONT, Vector2(10, 37), "连斩", HORIZONTAL_ALIGNMENT_LEFT, -1, 23, Color(0.98, 0.91, 0.74))
-		draw_string(FONT, Vector2(72, 39), str(count), HORIZONTAL_ALIGNMENT_LEFT, -1, 42, Color(1.0, 0.74, 0.31))
+		var accent := Color(1.0, 0.72, 0.32) if count >= 10 else Color(0.86, 0.70, 0.41)
+		_frame.bg_color = Color(0.13, 0.095, 0.067, 0.96).lerp(Color(0.39, 0.19, 0.08, 0.96), _milestone)
+		_frame.border_color = Color(accent, 0.60 + _milestone * 0.40)
+		draw_style_box(_frame, Rect2(Vector2.ZERO, size))
+		draw_string(FONT, Vector2(14, 34), "连斩", HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Color(0.98, 0.91, 0.74))
+		var pop := 1.0 + (0.11 + 0.15 * _milestone) * sin(_pulse * PI)
+		draw_string(FONT, Vector2(65, 39), "×%d" % count, HORIZONTAL_ALIGNMENT_RIGHT, 86, roundi(34.0 * pop), accent)
+		var width := (size.x - 24.0) * clampf(_remaining / BattleCore.COMBO_WINDOW, 0.0, 1.0)
+		draw_rect(Rect2(12, 49, size.x - 24.0, 3), Color(0.31, 0.23, 0.14))
+		draw_rect(Rect2(12, 49, width, 3), accent)
 
 # 轻量命中火花：程序化放射线，不预烘、不用 pixelfx，0.18 秒自毁
 class FrameBurst extends Sprite2D:
@@ -6437,6 +6526,7 @@ func _show_god_pick() -> void:
 		_roll_god()
 	if _god_root.get_child_count() == 0:
 		return
+	_close_challenge()
 	if _draw_layer != null:
 		_show_draw(false)
 	_hide_aug_pick()
@@ -8190,6 +8280,12 @@ func _on_foe_defeated(foe: Dictionary) -> void:
 		return
 	# 在发放前记账，避免奖励/击杀信号重入重复发放；不依赖视觉_tid或尸体消失。
 	foe["_rtype_rewarded"] = true
+	if _fx_front != null and float(foe.get("y", 0.0)) >= 90.0:
+		var challenge := clampi(int(foe.get("chal", -1)), -1, 4)
+		var large := bool(foe.get("boss", false))
+		var accent: Color = CHALLENGE_RIMS[challenge] if challenge >= 0 else (GOLD if large else Color(0.79, 0.72, 0.57))
+		var feet: Vector2 = _core.position + Vector2(float(foe["x"]), float(foe["y"])) - FIELD_POS
+		_fx_front.spawn_defeat(feet, 45.0 if large else 24.0, accent, large or challenge >= 0)
 	_grant_rtype(str(foe.get("rtype", "")))
 
 func _grant_rtype(rt: String) -> void:

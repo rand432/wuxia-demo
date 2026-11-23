@@ -21,6 +21,10 @@ static func draw_ui(icon: CanvasItem, center: Vector2, extent: float, key: Strin
 			icon.draw_rect(Rect2(-16, -5, 32, 19), color, false, 2.5)
 			_outline(icon, [Vector2(-16, -5), Vector2(-12, -12), Vector2(12, -12), Vector2(16, -5)], color)
 			icon.draw_rect(Rect2(-3, -3, 6, 7), color, false, 2.0)
+		"challenge":
+			_outline(icon, [Vector2(-13, -13), Vector2(13, -13), Vector2(12, 1),
+				Vector2(8, 9), Vector2(0, 15), Vector2(-8, 9), Vector2(-12, 1), Vector2(-13, -13)], color)
+			_outline(icon, [Vector2(-6, 0), Vector2(0, -7), Vector2(6, 0), Vector2(0, 7), Vector2(-6, 0)], color)
 		"curio":
 			_outline(icon, [Vector2(-5, -13), Vector2(5, -13), Vector2(4, -6), Vector2(11, -2),
 				Vector2(13, 7), Vector2(8, 14), Vector2(-8, 14), Vector2(-13, 7), Vector2(-11, -2),

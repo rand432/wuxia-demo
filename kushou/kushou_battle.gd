@@ -477,6 +477,7 @@ const HERO_MID := 0.50
 const HERO_REACH := 74.0            # 进这个距离就出手
 const FOE_REACH := 66.0             # 怪进这个距离就停下开打
 var _sfx_t := 0.0                   # 距上一次播音效多久（节流用）
+const COMBO_WINDOW := 1.4
 var _combo := 0                     # 连杀（爽感：连着杀会喊"连杀 ×N"，抖屏也跟着加码）
 var _combo_t := 0.0
 var _heavy := 0                     # 每第 3 下算"重击"（更重的手感）
@@ -656,7 +657,7 @@ func chal_crystal_mul() -> float:
 func chal_exp_mul() -> float:
 	return 1.0 + CHAL_EXP_RAMP * float(maxi(0, wave - 1))
 
-func spawn_challenge(kind_i: int, n: int) -> void:
+func spawn_challenge(kind_i: int, n: int) -> int:
 	var i := clampi(kind_i, 0, 4)
 	var big := i >= 3
 	var spawned := 0
@@ -675,12 +676,13 @@ func spawn_challenge(kind_i: int, n: int) -> void:
 		#   跟默认一样改用 FOE_REACH（上面那批我改漏了这一处）。
 		f["stop"] = (FOE_REACH + 60.0 if big else FOE_REACH) + randf() * 20.0
 	if spawned == 0:
-		return
+		return 0
 	_banner = "挑战：" + str(CHAL_FOE_NAME[i])
 	if not big:
 		_banner += "　一群 " + str(spawned) + " 只"
 	_banner_t = 2.0
 	Audio.sfx("bell", -8.0)
+	return spawned
 	# v16o（用户："背景喊杀声太多了 其实没必要有喊杀声"）：
 	#   原来这里 `if big:` 里只有一声 drum（战鼓）—— 现在整块去掉了。
 	#   （替换脚本把唯一语句换成注释，导致 if 空块报错，这里连同 if 一起清掉。）
@@ -2193,6 +2195,7 @@ func clear_champion() -> void:
 #   各类挑战怪再叠一个"自己的音色"（钱怪叮当 / 晶怪钟声 / 甲士装备声 / 宝箱怪开箱声）；
 #   boss 死是另一套：低音闷响 ＋ 鼓 ＋ 长倒下。同时节流，一群怪一起死不会糊成一片。
 var _death_sfx_t := 0.0
+var _coin_sfx_frame := -1
 
 func _death_sfx(kind: String, is_boss: bool) -> void:
 	# 连杀递进：连得越多，死的音越高（割草时一串往上走的音阶）；再加一点随机免得机械
@@ -2286,7 +2289,7 @@ func _kill_foe(f: Dictionary) -> void:
 		f["hp"] = 0.0
 		kills_total += 1
 		_combo += 1
-		_combo_t = 1.4
+		_combo_t = COMBO_WINDOW
 		_shake = maxf(_shake, 16.0)
 		_hitstop = maxf(_hitstop, 0.10)
 		for ci in 12:
@@ -2335,7 +2338,7 @@ func _kill_foe(f: Dictionary) -> void:
 	f["hp"] = 0.0
 	kills_total += 1
 	_combo += 1
-	_combo_t = 1.4
+	_combo_t = COMBO_WINDOW
 	_on_kill_partner()                       # 肝：持续期间杀敌涨生命上限
 	_shake = maxf(_shake, 6.0 + minf(6.0, float(_combo) * 0.4))
 	_hitstop = maxf(_hitstop, 0.05)
@@ -2386,7 +2389,10 @@ func _kill_foe(f: Dictionary) -> void:
 		boss_died.emit(Vector2(float(f["x"]), float(f["y"])))
 	coin_drop.emit(coins, Vector2(float(f["x"]), float(f["y"])))
 	# 连杀不再在每只怪头上飘字（那是刷屏）：只留屏幕中上那行大字
-	Audio.sfx("coin", -10.0)
+	var audio_frame := Engine.get_process_frames()
+	if coins > 0 and _coin_sfx_frame != audio_frame:
+		_coin_sfx_frame = audio_frame
+		Audio.sfx("coin", -10.0)
 	if kind != "normal" and kind != "coin":
 		special.emit(kind, coins, Vector2(float(f["x"]), float(f["y"])))
 	kill.emit(1)
@@ -5800,7 +5806,7 @@ func _draw() -> void:
 			HORIZONTAL_ALIGNMENT_CENTER, 120.0, fs, Color(c.r, c.g, c.b, a))
 	# 连杀：屏幕中上那行大字（3 连以上才喊）
 	if show_combo_counter and _combo >= 3 and _combo_t > 0.0:
-		var k := clampf(_combo_t / 1.4, 0.0, 1.0)
+		var k := clampf(_combo_t / COMBO_WINDOW, 0.0, 1.0)
 		var cs := int(round(30.0 + 16.0 * k))
 		draw_string(ThemeDB.fallback_font, Vector2(w * 0.5 - 160.0, 168.0), "连杀 ×" + str(_combo),
 			HORIZONTAL_ALIGNMENT_CENTER, 320.0, cs, Color(1.0, 0.84, 0.34, 0.35 + 0.65 * k))
