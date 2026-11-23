@@ -28,6 +28,8 @@ var hp_ratio := 1.0
 var unit_name := ""
 var bar_w := 72.0
 var name_col := Color(0.99, 0.94, 0.81)
+var challenge_kind := -1
+var guardian := false
 
 var _sprite: Sprite2D
 var _base_scale := 1.0
@@ -50,14 +52,20 @@ var _hit_strength := 1.0
 var _anim_t := 0.0
 var _last_feet := Vector2.ZERO
 var _walk_blend := 0.0
+var _frame_atlas: Texture2D
+var _frame_index := -1
+var _frame_clock := 0.0
 const DEATH_DURATION := 0.38
+const FRAME_CELL := 128
+const FRAME_GROUND := 116
 
 
-func setup(tex: Texture2D, r: float, ring: Color, crop: bool) -> void:
+func setup(tex: Texture2D, r: float, ring: Color, crop: bool, frames: Texture2D = null) -> void:
 	art_tex = tex
 	radius = maxf(20.0, r)
 	ring_col = ring
 	crop_top = crop
+	_frame_atlas = frames
 	if is_instance_valid(_sprite):
 		_refresh_sprite()
 
@@ -93,7 +101,17 @@ func _refresh_sprite() -> void:
 	_art_height = 0.0
 	_sprite.texture = art_tex
 	_sprite.region_enabled = crop_top and art_tex != null
-	if art_tex != null:
+	if _frame_atlas != null:
+		_frame_index = -1
+		_sprite.texture = _frame_atlas
+		_sprite.region_enabled = true
+		_sprite.region_filter_clip_enabled = true
+		_base_scale = radius * 3.15 / 101.0
+		_art_height = 108.0 * _base_scale
+		_sprite.scale = Vector2.ONE * _base_scale
+		_sprite.position.y = _frame_center_y()
+		_show_frame(0)
+	elif art_tex != null:
 		var w := float(art_tex.get_width())
 		var h := float(art_tex.get_height())
 		if crop_top:
@@ -114,6 +132,15 @@ func _refresh_sprite() -> void:
 	else:
 		_sprite.material = null
 
+func _frame_center_y() -> float:
+	return -(FRAME_GROUND - FRAME_CELL * 0.5) * _base_scale
+
+func _show_frame(index: int) -> void:
+	if _frame_atlas == null or index == _frame_index:
+		return
+	_frame_index = index
+	_sprite.region_rect = Rect2((index % 4) * FRAME_CELL, floori(index / 4.0) * FRAME_CELL, FRAME_CELL, FRAME_CELL)
+
 
 func _process(delta: float) -> void:
 	if _death_t >= 0.0:
@@ -122,6 +149,13 @@ func _process(delta: float) -> void:
 		if p >= 1.0 and _recover_after_down:
 			reset_pose()
 			play_spawn()
+			return
+		if _frame_atlas != null:
+			_show_frame(14 if p < 0.38 else 15)
+			modulate = Color(0.88, 0.83, 0.77, 1.0 - smoothstep(0.44, 1.0, p))
+			_apply_visual_pose(Vector2.ONE, _hit_dir * p * 9.0)
+			visible = p < 1.0
+			queue_redraw()
 			return
 		modulate = Color(0.68, 0.64, 0.57, pow(1.0 - p, 1.3))
 		# 击败：先狠狠压扁，再散开（q 弹）
@@ -143,6 +177,9 @@ func _process(delta: float) -> void:
 	var travel := position - _last_feet
 	_last_feet = position
 	var moving := travel.length_squared() > 0.04 and travel.length_squared() < 400.0
+	if _frame_atlas != null:
+		_tick_frame_pose(delta, travel, moving, pop, enter, recoil)
+		return
 	_walk_blend = move_toward(_walk_blend, 1.0 if moving else 0.0, delta * 8.0)
 	_anim_t += delta * lerpf(3.1, 16.0, _walk_blend)
 	var breathe := 1.0 + lerpf(0.03, 0.085, _walk_blend) * sin(_anim_t)
@@ -163,6 +200,28 @@ func _process(delta: float) -> void:
 	if enter < 1.0 or _flash > 0.0 or _hit_t > 0.0 or _attack_time > 0.0:
 		queue_redraw()
 
+func _tick_frame_pose(delta: float, travel: Vector2, moving: bool, pop: float, enter: float, recoil: float) -> void:
+	_frame_clock += delta
+	var frame := 0
+	if _hit_t > 0.0:
+		frame = 12 if _hit_t > 0.48 else 13
+	elif _attack_time > 0.0:
+		frame = 8 if _attack_time > 0.14 else (10 if _attack_time > 0.075 else 11)
+	elif _ready_time > 0.0:
+		frame = 8 if _ready_time > _ready_duration * 0.28 else 9
+	elif moving:
+		frame = 4 + posmod(int(_frame_clock * (8.0 if guardian else 12.0)), 4)
+		if absf(travel.x) > 0.12:
+			face(1 if travel.x >= 0.0 else -1)
+	else:
+		frame = posmod(int(_frame_clock * 4.0), 4)
+	_show_frame(frame)
+	_apply_visual_pose(Vector2.ONE * pop, Vector2(0, 18.0 * (1.0 - enter)) + _hit_dir * recoil * 4.0)
+	modulate = Color(1, 1, 1, lerpf(0.35, 1.0, enter))
+	_sprite.modulate = Color(1.0 + 0.25 * _flash, 1.0 - 0.28 * _flash, 1.0 - 0.32 * _flash)
+	if enter < 1.0 or _flash > 0.0:
+		queue_redraw()
+
 func _apply_visual_pose(visual_scale: Vector2, offset: Vector2, angle := 0.0) -> void:
 	var center := Vector2(0, 0 if _art_height > 0.0 else -radius)
 	var pose := Transform2D(angle, Vector2.ZERO).scaled(visual_scale)
@@ -173,6 +232,7 @@ func _apply_visual_pose(visual_scale: Vector2, offset: Vector2, angle := 0.0) ->
 func play_spawn(delay := 0.0) -> void:
 	_spawn_t = -clampf(delay, 0.0, 0.08)
 	_anim_t = delay * 48.0
+	_frame_clock = delay * 5.0
 	_last_feet = position
 	_walk_blend = 0.0
 	modulate.a = 0.35
@@ -190,6 +250,8 @@ func play_attack(direction: Vector2, windup := 0.0, visual_reach := 13.0) -> voi
 	if _death_t >= 0.0: return
 	_ready_time = 0.0
 	_attack_direction = direction.normalized()
+	if _frame_atlas != null and absf(direction.x) > 1.0:
+		face(1 if direction.x > 0.0 else -1)
 	_attack_reach = visual_reach
 	_windup = clampf(windup, 0.0, 0.22)
 	_attack_time = _windup + 0.14
@@ -197,6 +259,8 @@ func play_attack(direction: Vector2, windup := 0.0, visual_reach := 13.0) -> voi
 func prepare_attack(direction: Vector2, duration: float) -> void:
 	if _death_t >= 0.0 or duration <= 0.0: return
 	_attack_direction = direction.normalized()
+	if _frame_atlas != null and absf(direction.x) > 1.0:
+		face(1 if direction.x > 0.0 else -1)
 	_attack_reach = 10.0
 	_ready_duration = duration
 	_ready_time = duration
@@ -233,6 +297,7 @@ func reset_pose() -> void:
 	_ready_time = 0.0
 	_recover_after_down = false
 	_anim_t = 0.0
+	_frame_clock = 0.0
 	_walk_blend = 0.0
 	_last_feet = position
 	_spawn_t = 0.26
@@ -243,7 +308,8 @@ func reset_pose() -> void:
 	modulate = Color(1, 1, 1, 1)
 	if is_instance_valid(_sprite):
 		_sprite.rotation = 0.0
-		_sprite.position = Vector2(0.0, -_art_height * 0.5 if _art_height > 0.0 else -radius)
+		_sprite.flip_h = false
+		_sprite.position = Vector2(0.0, _frame_center_y() if _frame_atlas != null else (-_art_height * 0.5 if _art_height > 0.0 else -radius))
 		_sprite.modulate = Color(1, 1, 1, 1)
 	_apply_visual_pose(Vector2.ONE, Vector2.ZERO)
 
@@ -254,6 +320,12 @@ func _draw() -> void:
 	draw_set_transform(off + Vector2(0.0, -4.0), 0.0, Vector2(1.0, 0.34))
 	draw_circle(Vector2.ZERO, radius * 0.76, Color(0.10, 0.09, 0.08, 0.30))
 	draw_circle(Vector2.ZERO, radius * 0.44, Color(0.07, 0.06, 0.05, 0.22))
+	if (challenge_kind >= 0 or guardian) and _death_t < 0.0:
+		var color := ring_col
+		draw_circle(Vector2.ZERO, radius * 0.95, Color(color, 0.11), true, -1.0, true)
+		draw_arc(Vector2.ZERO, radius * 0.98, 0, TAU, 36, Color(color, 0.87), 2.6, true)
+		if guardian or challenge_kind >= 3:
+			draw_arc(Vector2.ZERO, radius * 1.12, 0, TAU, 36, Color(color, 0.45), 1.7, true)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	# 圆牌底 + 金边（怪物：有立绘时省掉圆牌，直接站人）
 	var c := Vector2(0.0, -radius) + off
@@ -289,6 +361,12 @@ func _draw() -> void:
 			var label_position := Vector2(-tw * 0.5, by - 6.0)
 			draw_string_outline(UI_FONT, label_position, unit_name, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 4, Color(0.10, 0.08, 0.06, 0.9))
 			draw_string(UI_FONT, label_position, unit_name, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, name_col)
+		if challenge_kind >= 0 or guardian:
+			var tag: String = ["钱", "晶", "书", "宝", "战"][challenge_kind] if challenge_kind >= 0 else "首"
+			var plaque := Rect2(bx - 24, by - 6, 20, 22)
+			draw_rect(plaque, Color(0.11, 0.08, 0.05, 0.95))
+			draw_rect(plaque, ring_col, false, 1.3)
+			draw_string(UI_FONT, plaque.position + Vector2(0, 17), tag, HORIZONTAL_ALIGNMENT_CENTER, 20, 15, ring_col)
 
 
 func _hp_color(r: float) -> Color:

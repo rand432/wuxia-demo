@@ -657,9 +657,12 @@ func spawn_challenge(kind_i: int, n: int) -> void:
 	var i := clampi(kind_i, 0, 4)
 	var big := i >= 3
 	for k in maxi(1, n):
+		var count_before := foes.size()
 		# v15s：挑战怪也吃全局难度 +50%
 		_spawn_foe("chal", float(CHAL_FOE_HP[i]) * chal_hp_mul() * diff_mul(),
 			float(CHAL_FOE_ATK[i]) * chal_atk_mul() * diff_mul(), big, 1, str(CHAL_FOE_NAME[i]))
+		if foes.size() == count_before:
+			break
 		var f: Dictionary = foes[foes.size() - 1]
 		f["scale"] = float(CHAL_FOE_SCALE[i])
 		f["chal"] = i                              # 掉什么由这个字段决定（结算侧读它）

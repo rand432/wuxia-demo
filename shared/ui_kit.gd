@@ -177,29 +177,27 @@ static func page_head(root: Control, title: String, back_cb := Callable(), right
 
 # ---------------- 底栏 ----------------
 static func dock(root: Control, active: String, on_pick: Callable) -> void:
-	var ch := DockChrome.new()
-	ch.size = Vector2(W, DOCK_H)
-	ch.position = Vector2(0, DOCK_Y)
-	ch.active = active
-	ch.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(ch)
-	# 四格图标栏：开始 / 角色 / 请神 / 奇物（最后一格用奇物图标）
-	var items := [["start", 86.0], ["role", 252.0], ["god", 418.0], ["curio", 584.0]]
-	for it in items:
-		var key := str(it[0])
-		var cx := float(it[1])
-		var b := Button.new()
-		b.flat = true
-		b.focus_mode = Control.FOCUS_NONE
-		b.position = Vector2(cx - 60.0, 10)
-		b.size = Vector2(120, 84)
-		b.add_theme_stylebox_override("normal", StyleBoxEmpty.new())
-		b.add_theme_stylebox_override("hover", StyleBoxEmpty.new())
-		b.add_theme_stylebox_override("pressed", StyleBoxEmpty.new())
-		b.pressed.connect(func() -> void:
-			if on_pick.is_valid():
-				on_pick.call(key))
-		ch.add_child(b)
+	var chrome := DockChrome.new()
+	chrome.name = "Dock"
+	chrome.size = Vector2(W, DOCK_H)
+	chrome.position = Vector2(0, DOCK_Y)
+	chrome.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(chrome)
+	var tabs := [["start", "关卡"], ["role", "角色"], ["god", "请神"], ["curio", "奇物"]]
+	for i in tabs.size():
+		var key: String = tabs[i][0]
+		var tab := DockTab.new()
+		tab.name = key
+		tab.destination = key
+		tab.text = tabs[i][1]
+		tab.active = key == active
+		tab.position = Vector2(24 + i * 170, 9)
+		tab.size = Vector2(162, 86)
+		if on_pick.is_valid():
+			tab.pressed.connect(on_pick.bind(key))
+		chrome.add_child(tab)
+
+
 
 class BarChrome extends Control:
 	const P := preload("res://shared/ui_pal.gd")
@@ -246,44 +244,51 @@ class BarChrome extends Control:
 		]), P.DARK)
 
 class DockChrome extends Control:
-	const P := preload("res://shared/ui_pal.gd")
-	var active := ""
 	func _draw() -> void:
-		draw_rect(Rect2(0, 0, 720, 104), P.DARK)
-		draw_line(Vector2(0, 0), Vector2(720, 0), Color(P.GOLD.r, P.GOLD.g, P.GOLD.b, 0.35), 1.5, true)
-		var items := [["start", 86.0], ["role", 252.0], ["god", 418.0], ["curio", 584.0]]
-		for it in items:
-			var key := str(it[0])
-			var cx := float(it[1])
-			var on := key == active
-			var sb := StyleBoxFlat.new()
-			sb.bg_color = Color(0.157, 0.137, 0.110) if on else P.DARK2
-			sb.set_corner_radius_all(10)
-			sb.border_color = P.GOLD_HI if on else Color(0.471, 0.408, 0.322)
-			sb.set_border_width_all(2 if on else 1)
-			draw_style_box(sb, Rect2(cx - 52.0, 20, 104, 64))
-			_draw_icon(cx, 52.0, key, on)
-	func _draw_icon(cx: float, cy: float, key: String, on: bool) -> void:
-		var col := P.GOLD_HI if on else Color(0.78, 0.70, 0.55)
-		match key:
-			"start":
-				draw_colored_polygon(PackedVector2Array([
-					Vector2(cx - 9, cy - 14), Vector2(cx + 14, cy), Vector2(cx - 9, cy + 14)
-				]), col)
-			"role":
-				draw_line(Vector2(cx - 13, cy + 12), Vector2(cx + 13, cy - 12), col, 3.0, true)
-				draw_line(Vector2(cx - 13, cy - 12), Vector2(cx + 13, cy + 12), col, 3.0, true)
-				draw_line(Vector2(cx - 15, cy + 8), Vector2(cx - 8, cy + 15), col, 3.0, true)
-				draw_line(Vector2(cx + 8, cy + 15), Vector2(cx + 15, cy + 8), col, 3.0, true)
-			"god":
-				draw_circle(Vector2(cx - 7, cy - 6), 5.5, col)
-				draw_circle(Vector2(cx + 7, cy - 6), 5.5, col)
-				draw_arc(Vector2(cx, cy + 8), 12.0, PI, TAU, 16, col, 2.4, true)
-			"curio":
-				# 奇物：小匣子 + 提环
-				draw_rect(Rect2(cx - 12, cy - 2, 24, 14), col, false, 2.2)
-				draw_line(Vector2(cx - 12, cy + 3), Vector2(cx + 12, cy + 3), col, 1.8, true)
-				draw_arc(Vector2(cx, cy - 5), 6.0, PI, TAU, 12, col, 2.0, true)
+		draw_rect(Rect2(Vector2.ZERO, size), P.DARK)
+		draw_line(Vector2.ZERO, Vector2(size.x, 0), Color(P.GOLD, 0.66), 1.5, true)
+		var tray := StyleBoxFlat.new()
+		tray.bg_color = Color(0.13, 0.109, 0.087)
+		tray.border_color = Color(0.32, 0.25, 0.17)
+		tray.set_border_width_all(1)
+		tray.set_corner_radius_all(13)
+		draw_style_box(tray, Rect2(14, 6, size.x - 28, size.y - 12))
+
+class DockTab extends Button:
+	const Glyph := preload("res://shared/glyph_draw.gd")
+	var destination := ""
+	var active := false
+
+	func _ready() -> void:
+		var blank := StyleBoxEmpty.new()
+		for state in ["normal", "hover", "pressed", "focus"]:
+			add_theme_stylebox_override(state, blank)
+			add_theme_color_override("font_color" if state == "normal" else "font_%s_color" % state, Color.TRANSPARENT)
+		add_theme_color_override("font_hover_pressed_color", Color.TRANSPARENT)
+		mouse_entered.connect(queue_redraw)
+		mouse_exited.connect(queue_redraw)
+		focus_entered.connect(queue_redraw)
+		focus_exited.connect(queue_redraw)
+		Motion.bind_button(self)
+
+	func _draw() -> void:
+		var middle := size.x * 0.5
+		var ink := P.GOLD_HI if active else Color(0.78, 0.70, 0.58)
+		if active or is_hovered() or has_focus():
+			var face := StyleBoxFlat.new()
+			face.bg_color = Color(0.25, 0.189, 0.119) if active else Color(0.19, 0.153, 0.111)
+			face.border_color = Color(0.73, 0.54, 0.32) if active or has_focus() else Color(0.40, 0.32, 0.23)
+			face.set_border_width_all(1)
+			face.set_corner_radius_all(10)
+			draw_style_box(face, Rect2(5, 0, size.x - 10, size.y))
+		if active:
+			draw_circle(Vector2(middle, 29), 22, Color(0.38, 0.265, 0.132), true, -1.0, true)
+			draw_arc(Vector2(middle, 29), 22, 0, TAU, 32, Color(P.GOLD_HI, 0.38), 1.0, true)
+			draw_line(Vector2(middle - 14, 78), Vector2(middle + 14, 78), P.GOLD_HI, 2, true)
+		Glyph.draw_ui(self, Vector2(middle, 29), 39, destination, ink)
+		draw_string(P.FONT, Vector2(0, 68), text, HORIZONTAL_ALIGNMENT_CENTER, size.x, 22, ink)
+
+
 
 # ---------------- 大号切关箭头（照原图的鎏金双人字纹） ----------------
 static func chevron(dir: int, rect: Rect2, cb: Callable) -> Button:

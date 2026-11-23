@@ -33,6 +33,10 @@ const FOE_ART := {
 	"万蛊虫母": "wanqu_chongmu", "困兽·终焉": "kunshou_zhongyan",
 }
 var _foe_tex_cache := {}
+var _foe_animation_cache := {}
+const FOE_FRAME_PATH := {"狱狼": "yulang", "石甲巨猿": "shijia_yuan"}
+const CHALLENGE_RIMS := [Color(0.99, 0.76, 0.31), Color(0.32, 0.79, 0.91), Color(0.47, 0.79, 0.58),
+	Color(0.98, 0.53, 0.34), Color(0.79, 0.48, 0.94)]
 
 func _foe_art(nm: String) -> Texture2D:
 	var key := str(FOE_ART.get(nm, ""))
@@ -771,6 +775,44 @@ func _build_bg() -> void:
 	bg.size = Vector2(W, H)
 	bg.setup(int(LevelState.current_level) - 1)
 	add_child(bg)
+	if bg.village_yard or bg.courtyard:
+		var air := StageAir.new()
+		air.lantern = bg.courtyard
+		add_child(air)
+
+class StageAir extends Node2D:
+	var lantern := false
+	var _motes: Array[Sprite2D] = []
+	var _elapsed := 0.0
+
+	func _ready() -> void:
+		var glow := Gradient.new()
+		glow.set_color(0, Color(1, 1, 1, 0.78))
+		glow.set_color(1, Color(1, 1, 1, 0))
+		var mote_art := GradientTexture2D.new()
+		mote_art.gradient = glow
+		mote_art.width = 20
+		mote_art.height = 20
+		mote_art.fill = GradientTexture2D.FILL_RADIAL
+		mote_art.fill_from = Vector2(0.5, 0.5)
+		mote_art.fill_to = Vector2(1, 0.5)
+		for i in 8:
+			var mote := Sprite2D.new()
+			mote.texture = mote_art
+			mote.modulate = Color(1.0, 0.78, 0.40, 0.0) if lantern else Color(1.0, 0.90, 0.68, 0.0)
+			mote.scale = Vector2.ONE * (0.36 + float(i % 3) * 0.13)
+			add_child(mote)
+			_motes.append(mote)
+
+	func _process(delta: float) -> void:
+		_elapsed += delta
+		for i in _motes.size():
+			var fade := fposmod(_elapsed * (0.07 + float(i % 3) * 0.017) + i * 0.138, 1.0)
+			var start := 47.0 + float(i % 4) * 195.0
+			var y := 274.0 + float(i % 5) * 102.0
+			var mote := _motes[i]
+			mote.position = Vector2(start + 38.0 * fade + 14.0 * sin(fade * TAU), y - 65.0 * fade)
+			mote.modulate.a = sin(fade * PI) * (0.42 if lantern else 0.31)
 
 func _chip(x: float, width: float, kind: String, value: String, cap: String) -> Label:
 	var chip := Control.new()
@@ -1242,7 +1284,9 @@ func _build_curio() -> void:
 	_curio_sq.position = Vector2(624, 760)
 	_curio_sq.size = Vector2(96, 96)
 	_curio_sq.glyph = str(info.get("glyph", "奇")) if not info.is_empty() else "奇"
-	_curio_sq.label = "奇物"
+	_curio_sq.equipped = not info.is_empty()
+	_curio_sq.label = "玉壶" if _curio_id == "yuhu" else (_curio_sq.glyph + " · 奇物" if not info.is_empty() else "未携带")
+	_curio_sq.tooltip_text = str(info.get("name", "未携带奇物"))
 	_curio_sq.cd_max = maxf(1.0, float(info.get("cd", 1.0)))
 	_curio_sq.pressed.connect(_show_curio_detail)
 	add_child(_curio_sq)
@@ -2132,33 +2176,54 @@ class FlyLayer extends Control:
 			var d: Dictionary = d_v
 			draw_circle(Vector2(float(d["x"]), float(d["y"])), float(d["r"]), d["col"])
 
-class CurioSquare extends Control:
+class CurioSquare extends Button:
 	const F := preload("res://fonts/ink.ttf")
-	signal pressed
+	const Glyph := preload("res://shared/glyph_draw.gd")
 	var glyph := "壶"
 	var label := "奇物"
+	var equipped := false
 	var cd_left := 0.0
 	var cd_max := 60.0
-	var flash := 0.0            # 触发时闪一圈金环
+	var flash := 0.0
+
 	func _ready() -> void:
-		mouse_filter = Control.MOUSE_FILTER_STOP
-	func _gui_input(ev: InputEvent) -> void:
-		if ev is InputEventMouseButton and ev.pressed and ev.button_index == MOUSE_BUTTON_LEFT:
-			pressed.emit()
+		focus_mode = Control.FOCUS_NONE
+		var blank := StyleBoxEmpty.new()
+		for state in ["normal", "hover", "pressed", "focus"]:
+			add_theme_stylebox_override(state, blank)
+		mouse_entered.connect(queue_redraw)
+		mouse_exited.connect(queue_redraw)
+		MenuUI.Motion.bind_button(self)
+
 	func _draw() -> void:
-		draw_rect(Rect2(Vector2.ZERO, size), Color(0.075, 0.068, 0.060, 0.98))
-		draw_rect(Rect2(Vector2.ZERO, size), Color(0.85, 0.66, 0.23, 0.55), false, 2.0)
-		var ready := cd_left <= 0.001
-		var col := Color(0.91, 0.78, 0.42) if ready else Color(0.52, 0.48, 0.40)
-		draw_string(F, Vector2(0, 54), glyph, HORIZONTAL_ALIGNMENT_CENTER, size.x, 38, col)
-		draw_string(F, Vector2(0, 84), label, HORIZONTAL_ALIGNMENT_CENTER, size.x, 18, col)
-		if not ready:
-			draw_rect(Rect2(Vector2.ZERO, size), Color(0.02, 0.02, 0.02, 0.42))
-			draw_string(F, Vector2(0, 62), str(int(ceil(cd_left))), HORIZONTAL_ALIGNMENT_CENTER, size.x, 30, Color(0.94, 0.89, 0.78))
+		var cooling := cd_left > 0.001
+		var edge := Color(0.76, 0.61, 0.36)
+		if equipped and not cooling:
+			edge = Color(0.63, 0.82, 0.68)
+		var face := StyleBoxFlat.new()
+		face.bg_color = Color(0.16, 0.13, 0.10) if equipped else Color(0.11, 0.10, 0.08)
+		if is_hovered():
+			face.bg_color = face.bg_color.lightened(0.065)
+		face.border_color = edge
+		face.set_border_width_all(2)
+		face.set_corner_radius_all(12)
+		draw_style_box(face, Rect2(Vector2.ZERO, size))
+		var c := Vector2(size.x * 0.5, 34)
+		draw_circle(c, 25, Color(0.08, 0.07, 0.055, 0.72), true, -1.0, true)
+		if glyph == "壶" or not equipped:
+			Glyph.draw_ui(self, c, 41, "curio", Color(edge, 0.42) if cooling or not equipped else edge)
+		else:
+			draw_string(F, Vector2(0, 46), glyph, HORIZONTAL_ALIGNMENT_CENTER, size.x, 35, Color(edge, 0.38) if cooling else edge)
+		if cooling:
+			var remaining := clampf(cd_left / maxf(cd_max, 0.001), 0.0, 1.0)
+			draw_arc(c, 26, -PI * 0.5, -PI * 0.5 + TAU * remaining, 36, edge, 2.0, true)
+			draw_string_outline(F, Vector2(0, 45), str(ceili(cd_left)), HORIZONTAL_ALIGNMENT_CENTER, size.x, 25, 5, Color(0.10, 0.08, 0.05))
+			draw_string(F, Vector2(0, 45), str(ceili(cd_left)), HORIZONTAL_ALIGNMENT_CENTER, size.x, 25, Color(0.99, 0.91, 0.75))
+		draw_string(F, Vector2(0, 76), label, HORIZONTAL_ALIGNMENT_CENTER, size.x, 17, Color(0.94, 0.87, 0.74))
 		if flash > 0.0:
-			var k := 1.0 - flash
-			draw_arc(size * 0.5, size.x * (0.5 + 0.30 * k), 0.0, TAU, 32,
-				Color(0.98, 0.82, 0.36, flash * 0.9), 3.0)
+			draw_arc(c, 26.0 + 12.0 * (1.0 - flash), 0, TAU, 36, Color(edge, flash * 0.90), 2.0, true)
+
+
 
 # 奇遇圆钮：只在新奇遇掷到时出现，靠在主角左侧；上面浮着大红字「奇遇！」
 class QuestOrb extends Control:
@@ -2186,6 +2251,7 @@ class QuestOrb extends Control:
 			draw_line(Vector2(c.x - w * 0.30, yy), Vector2(c.x + w * 0.30, yy), Color(0.42, 0.32, 0.18), 1.6)
 
 class Tile extends Button:
+	const Glyph := preload("res://shared/glyph_draw.gd")
 	const F := preload("res://fonts/ink.ttf")
 	var kind := "market"
 	var label := ""
@@ -2215,27 +2281,7 @@ class Tile extends Button:
 		var ink := Color(0.98, 0.91, 0.75) if hot else Color(0.89, 0.81, 0.66)
 		draw_circle(c, 30, Color(0.10, 0.072, 0.050, 0.44), true, -1.0, true)
 		draw_arc(c, 30, 0.0, TAU, 40, Color(ink, 0.28), 1.0, true)
-		if kind == "market":
-			draw_circle(c, 20, Color(0.88, 0.69, 0.29))
-			draw_circle(c, 8, Color(0.09, 0.08, 0.07))
-		elif kind == "treasure":
-			draw_rect(Rect2(c + Vector2(-24, -10), Vector2(48, 24)), Color(0.88, 0.83, 0.73))
-			draw_rect(Rect2(c + Vector2(-24, -16), Vector2(48, 8)), Color(0.88, 0.69, 0.29))
-			draw_rect(Rect2(c + Vector2(-4, -4), Vector2(8, 13)), Color(0.09, 0.08, 0.07))
-		elif kind == "mate":
-			draw_circle(c + Vector2(-11, -7), 9, Color(0.88, 0.83, 0.73))
-			draw_circle(c + Vector2(11, -7), 9, Color(0.88, 0.83, 0.73))
-			draw_circle(c + Vector2(-11, 13), 12, Color(0.88, 0.83, 0.73))
-			draw_circle(c + Vector2(11, 13), 12, Color(0.88, 0.83, 0.73))
-		elif kind == "skill":
-			draw_rect(Rect2(c + Vector2(-17, -22), Vector2(34, 44)), Color(0.88, 0.83, 0.73))
-			draw_rect(Rect2(c + Vector2(-2, -13), Vector2(4, 26)), Color(0.88, 0.69, 0.29))
-			draw_rect(Rect2(c + Vector2(-13, -2), Vector2(26, 4)), Color(0.88, 0.69, 0.29))
-		else:
-			draw_set_transform(c + Vector2(-7, 2), -0.25, Vector2.ONE)
-			draw_rect(Rect2(-16, -20, 22, 32), Color(0.93, 0.88, 0.76))
-			draw_rect(Rect2(-2, -16, 22, 32), Color(0.88, 0.69, 0.29))
-			draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		Glyph.draw_ui(self, c, 54, kind, ink)
 		if sub != "":
 			draw_string(F, Vector2(0, size.y - 40), sub, HORIZONTAL_ALIGNMENT_CENTER, size.x, 15,
 				Color(0.86, 0.70, 0.34) if hot else Color(0.66, 0.59, 0.48))
@@ -2982,9 +3028,11 @@ func _refresh_level_ui() -> void:
 		_exp_bar.size.x = maxf(4.0, _exp_track.size.x * r)
 	if _mate_tile != null:
 		var lit := _draw_charge > 0
-		if _mate_tile.hot != lit or _mate_tile.badge != _draw_charge:
+		var subtitle := "待请神" if lit else "升级获得"
+		if _mate_tile.hot != lit or _mate_tile.badge != _draw_charge or _mate_tile.sub != subtitle:
 			_mate_tile.hot = lit
 			_mate_tile.badge = _draw_charge
+			_mate_tile.sub = subtitle
 			_mate_tile.queue_redraw()
 
 # ============================================================
@@ -4538,9 +4586,12 @@ class AugCard extends Button:
 func _make_foe_token(f: Dictionary):
 	var kind := str(f.get("kind", "normal"))
 	var boss := bool(f.get("boss", false))
+	var challenge := clampi(int(f.get("chal", -1)), -1, 4)
 	var rad := 52.0 if boss else 26.0        # Boss 圆牌明显更大
 	var ring := Color(0.42, 0.36, 0.28)
-	if kind == "coin":
+	if challenge >= 0:
+		ring = CHALLENGE_RIMS[challenge]
+	elif kind == "coin":
 		ring = Color(0.95, 0.78, 0.25)        # 钱怪：亮金
 	elif kind == "crystal":
 		ring = Color(0.42, 0.72, 0.95)        # 晶怪：亮蓝
@@ -4551,12 +4602,22 @@ func _make_foe_token(f: Dictionary):
 	var mark_ch := "王" if boss else ("钱" if kind == "coin" else ("晶" if kind == "crystal" else ("挑" if kind == "chal" else "怪")))
 	var msize := 22 if not boss else 38
 	var foe_tex := _foe_art(str(f.get("name", "")))
+	var frames: Texture2D = null
+	if challenge < 0 and not bool(f.get("ranged", false)) and not bool(f.get("mage", false)):
+		var frame_id := str(FOE_FRAME_PATH.get(f.get("name", ""), ""))
+		if not frame_id.is_empty():
+			if not _foe_animation_cache.has(frame_id):
+				var path := "res://assets/gen/enemies/frames/%s.png" % frame_id
+				_foe_animation_cache[frame_id] = load(path) as Texture2D if ResourceLoader.exists(path) else null
+			frames = _foe_animation_cache[frame_id] as Texture2D
 	# 池里有就复用（TokenActor 每建一个都要 new Shader/ShaderMaterial，很贵）
 	if not _foe_pool.is_empty():
 		var tk0 = _foe_pool.pop_back()
 		tk0.reset_pose()
-		tk0.round_mask = foe_tex == null
-		tk0.setup(foe_tex, rad, ring, false)
+		tk0.round_mask = foe_tex == null and frames == null
+		tk0.challenge_kind = challenge
+		tk0.guardian = boss and challenge < 0
+		tk0.setup(foe_tex, rad, ring, false, frames)
 		tk0.hp_ratio = 1.0
 		tk0.show_bar = true
 		tk0.bar_w = 84.0 if boss else 54.0
@@ -4574,8 +4635,10 @@ func _make_foe_token(f: Dictionary):
 		tk0.play_spawn(float(int(f.get("_tid", 0)) % 4) * 0.02)
 		return tk0
 	var tk = TokenActor.new()
-	tk.round_mask = foe_tex == null
-	tk.setup(foe_tex, rad, ring, false)
+	tk.round_mask = foe_tex == null and frames == null
+	tk.challenge_kind = challenge
+	tk.guardian = boss and challenge < 0
+	tk.setup(foe_tex, rad, ring, false, frames)
 	tk.show_bar = true
 	tk.bar_w = 84.0 if boss else 54.0
 	tk.unit_name = str(f.get("name", ""))

@@ -39,7 +39,7 @@ func _ready() -> void:
 	_build_stage_art()
 	_build_info()
 	_build_start_btn()
-	UI.dock(self, "", _on_dock)
+	UI.dock(self, "start", _on_dock)
 	_refresh()
 	_unroll(0.0)
 	var SaveFile := preload("res://shared/save_file.gd")
@@ -184,6 +184,7 @@ func _build_info() -> void:
 
 # ---------------- 开始游戏 ----------------
 var _start_btn: Button = null
+var _start_hint: Tween
 
 func _build_start_btn() -> void:
 	_start_btn = UI.button(self, "开 始 游 戏", Rect2(150, 1076, 420, 82), 32,
@@ -200,11 +201,13 @@ func _start_level() -> void:
 
 # 底栏「开始」在主界面只提醒：已经在关卡界面，用下方大按钮开始
 func _pulse_start_btn() -> void:
-	if _start_btn == null:
+	if _start_btn == null or _start_btn.disabled:
 		return
-	var tw := create_tween()
-	tw.tween_property(_start_btn, "scale", Vector2(1.06, 1.06), 0.10)
-	tw.tween_property(_start_btn, "scale", Vector2(1.0, 1.0), 0.14)
+	if _start_hint != null and _start_hint.is_valid():
+		_start_hint.kill()
+	_start_hint = create_tween()
+	_start_hint.tween_property(_start_btn, "scale", Vector2(1.06, 1.06), 0.10)
+	_start_hint.tween_property(_start_btn, "scale", Vector2.ONE, 0.17).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	_start_btn.pivot_offset = _start_btn.size * 0.5
 
 # ---------------- 底栏 ----------------
