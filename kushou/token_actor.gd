@@ -2,9 +2,7 @@ extends Node2D
 # ============================================================
 # kushou/token_actor.gd —— 圆形人物牌（v0）
 #
-# 背景：现成人物素材都是静态图，硬做全身动作会僵。
-#   这里把人物收进一枚"圆形牌"：纸底 + 金边 + 圆内头像/半身，
-#   只做轻量的出手前倾、挨打闪红、倒地淡出。
+# 带图集的角色按战斗事件切换独立动作帧，其余素材使用轻量姿态变化。
 #
 # 坐标：position = 脚底中心（与 StickFighter / QActor 同口径）
 # 接口：set_role / set_weapon / fit_height / face / play_move / play_hit
@@ -35,6 +33,7 @@ var _sprite: Sprite2D
 var _base_scale := 1.0
 var _art_height := 0.0
 var _attack_time := 0.0
+var _cast_time := 0.0
 var _windup := 0.0
 var _attack_direction := Vector2.RIGHT
 var _attack_reach := 13.0
@@ -106,7 +105,7 @@ func _refresh_sprite() -> void:
 		_sprite.texture = _frame_atlas
 		_sprite.region_enabled = true
 		_sprite.region_filter_clip_enabled = true
-		_base_scale = radius * 3.15 / 101.0
+		_base_scale = radius * (2.02 if role == "player" and round_mask else 3.15) / 101.0
 		_art_height = 108.0 * _base_scale
 		_sprite.scale = Vector2.ONE * _base_scale
 		_sprite.position.y = _frame_center_y()
@@ -122,7 +121,7 @@ func _refresh_sprite() -> void:
 		if not round_mask:
 			_art_height = h * _base_scale
 			_sprite.position.y = -_art_height * 0.5
-	if round_mask and art_tex != null:
+	if round_mask and art_tex != null and _frame_atlas == null:
 		if _sprite.material == null:
 			var shader := Shader.new()
 			shader.code = "shader_type canvas_item;\nvoid fragment(){ if (distance(UV, vec2(0.5)) > 0.5) discard; }"
@@ -151,7 +150,7 @@ func _process(delta: float) -> void:
 			play_spawn()
 			return
 		if _frame_atlas != null:
-			_show_frame(14 if p < 0.38 else 15)
+			_show_frame(14 if role != "player" and p < 0.38 else 15)
 			modulate = Color(0.88, 0.83, 0.77, 1.0 - smoothstep(0.44, 1.0, p))
 			_apply_visual_pose(Vector2.ONE, _hit_dir * p * 9.0)
 			visible = p < 1.0
@@ -167,6 +166,7 @@ func _process(delta: float) -> void:
 		return
 	_spawn_t = minf(0.26, _spawn_t + delta)
 	_attack_time = maxf(0.0, _attack_time - delta)
+	_cast_time = maxf(0.0, _cast_time - delta)
 	_ready_time = maxf(0.0, _ready_time - delta)
 	_flash = maxf(0.0, _flash - delta * 7.0)
 	_hit_t = maxf(0.0, _hit_t - delta / 0.16)
@@ -203,10 +203,14 @@ func _process(delta: float) -> void:
 func _tick_frame_pose(delta: float, travel: Vector2, moving: bool, pop: float, enter: float, recoil: float) -> void:
 	_frame_clock += delta
 	var frame := 0
-	if _hit_t > 0.0:
-		frame = 12 if _hit_t > 0.48 else 13
+	if _cast_time > 0.0:
+		frame = 12 if _cast_time > 0.24 else 13
+	elif _attack_time > 0.0 and _attack_time <= 0.14:
+		frame = 10 if _attack_time > 0.075 else 11
+	elif _hit_t > 0.0:
+		frame = 14 if role == "player" else (12 if _hit_t > 0.48 else 13)
 	elif _attack_time > 0.0:
-		frame = 8 if _attack_time > 0.14 else (10 if _attack_time > 0.075 else 11)
+		frame = 8
 	elif _ready_time > 0.0:
 		frame = 8 if _ready_time > _ready_duration * 0.28 else 9
 	elif moving:
@@ -273,6 +277,10 @@ func play_hit(direction := Vector2.RIGHT, strong := false) -> void:
 	_hit_dir = direction.normalized() if direction.length_squared() > 0.001 else Vector2.RIGHT
 	_hit_strength = 1.5 if strong else 1.0
 
+func play_cast() -> void:
+	if role == "player" and _frame_atlas != null and _death_t < 0.0:
+		_cast_time = 0.32
+
 
 func play_dodge() -> void:
 	play_attack(Vector2.UP)
@@ -285,6 +293,7 @@ func play_down(recover := false) -> void:
 	_death_t = 0.0
 	_sink = 0.0
 	_attack_time = 0.0
+	_cast_time = 0.0
 	_recover_after_down = recover
 	_flash = 0.0
 
@@ -294,6 +303,7 @@ func reset_pose() -> void:
 	_sink = 0.0
 	_flash = 0.0
 	_attack_time = 0.0
+	_cast_time = 0.0
 	_ready_time = 0.0
 	_recover_after_down = false
 	_anim_t = 0.0

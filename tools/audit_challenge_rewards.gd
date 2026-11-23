@@ -12,6 +12,20 @@ func _initialize() -> void:
 func _run() -> void:
 	LS.ensure_loaded()
 	LS.current_level = 6
+	var cap_test = Battle.instantiate()
+	root.add_child(cap_test)
+	cap_test.set_process(false)
+	var cap_core = cap_test._core
+	cap_core.set_process(false)
+	cap_core.foes.clear()
+	for i in cap_core.MAX_FOES + 16:
+		cap_core._spawn_foe("coin")
+	var last: Dictionary = cap_core.foes.back()
+	var snapshot := last.duplicate(true)
+	cap_core.spawn_challenge(3, 1)
+	assert(not last.has("chal") and last == snapshot)
+	cap_test.queue_free()
+	await process_frame
 	for wave in [1, 5, 10]:
 		for kind in [3, 4]:
 			for boosted in [false, true]:

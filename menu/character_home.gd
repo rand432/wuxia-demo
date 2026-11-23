@@ -57,6 +57,7 @@ func _rebuild() -> void:
 
 # ---------------- 立绘 + 四槽 ----------------
 func _build_figure() -> void:
+	UI.panel(self, Rect2(22, 154, 676, 452), Color(0.90, 0.865, 0.79), 14, P.LINE, 1)
 	var tex := CharArt.full("player")
 	if tex != null:
 		var clip := Control.new()
@@ -65,21 +66,29 @@ func _build_figure() -> void:
 		clip.clip_contents = true
 		clip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		add_child(clip)
+		UI.panel(clip, Rect2(0, 4, 328, 440), Color(0.15, 0.16, 0.145), 12, Color(0.66, 0.51, 0.32), 2)
 		var tr := TextureRect.new()
-		tr.texture = tex
 		tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		tr.texture = tex
 		tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		clip.add_child(tr)
-		tr.position = Vector2.ZERO
-		tr.size = clip.size
+		tr.position = Vector2(6, 10)
+		tr.size = clip.size - Vector2(12, 20)
 	for s in SLOTS:
 		_build_slot(str(s["key"]), s["rect"])
 
 func _build_slot(key: String, rect: Rect2) -> void:
-	var root := Control.new()
+	var root := Button.new()
+	root.name = "Slot_%s" % key
 	root.position = rect.position
 	root.size = rect.size
+	root.focus_mode = Control.FOCUS_NONE
+	root.tooltip_text = str(FD.SLOT_LABEL.get(key, key))
+	var blank := StyleBoxEmpty.new()
+	for style in ["normal", "hover", "pressed", "focus"]:
+		root.add_theme_stylebox_override(style, blank)
+	root.pressed.connect(_on_slot.bind(key))
 	add_child(root)
 	var it: Dictionary = FD.equipped.get(key, {})
 	var filled := not it.is_empty()
@@ -87,6 +96,7 @@ func _build_slot(key: String, rect: Rect2) -> void:
 	var pan := Panel.new()
 	pan.position = Vector2.ZERO
 	pan.size = rect.size
+	pan.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(0.988, 0.976, 0.949)
 	sb.set_corner_radius_all(12)
@@ -109,6 +119,7 @@ func _build_slot(key: String, rect: Rect2) -> void:
 		var tag := Panel.new()
 		tag.position = Vector2(78, 6)
 		tag.size = Vector2(50, 24)
+		tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		var tsb := StyleBoxFlat.new()
 		tsb.bg_color = Color(0.149, 0.129, 0.106)
 		tsb.set_corner_radius_all(5)
@@ -137,16 +148,7 @@ func _build_slot(key: String, rect: Rect2) -> void:
 		ov.size = rect.size
 		ov.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		root.add_child(ov)
-	var hit := Button.new()
-	hit.flat = true
-	hit.focus_mode = Control.FOCUS_NONE
-	hit.position = Vector2.ZERO
-	hit.size = rect.size
-	hit.add_theme_stylebox_override("normal", StyleBoxEmpty.new())
-	hit.add_theme_stylebox_override("hover", StyleBoxEmpty.new())
-	hit.add_theme_stylebox_override("pressed", StyleBoxEmpty.new())
-	hit.pressed.connect(func() -> void: _on_slot(key))
-	root.add_child(hit)
+	UI.Motion.bind_button(root)
 
 func _on_slot(key: String) -> void:
 	if _rebuild_pending or not UI.navigation_available(self): return

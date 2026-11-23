@@ -21,6 +21,8 @@ const BlackMarket := preload("res://kushou/black_market.gd")
 const MenuUI := preload("res://shared/ui_kit.gd")
 const CardFrame := preload("res://kushou/card_frame.gd")
 var _draw_art_cache: Dictionary = {}
+var _frame_fx_art: Texture2D
+var _frame_fx_live := 0
 
 # 怪物立绘：名字 → assets/gen/enemies/foe_<key>.png；没有就回退旧的圆牌 + 一个字
 const FOE_ART := {
@@ -315,6 +317,12 @@ func _ready() -> void:
 	theme = th
 	if not _no_ui2:
 		_init_cards()
+		var effect_path := "res://assets/art/fx/battle_bursts_v1.png"
+		if ResourceLoader.exists(effect_path):
+			_frame_fx_art = load(effect_path) as Texture2D
+		for frame_id in FOE_FRAME_PATH.values():
+			var path := "res://assets/gen/enemies/frames/%s.png" % frame_id
+			_foe_animation_cache[frame_id] = load(path) as Texture2D if ResourceLoader.exists(path) else null
 		_build_bg()
 	if not _no_ui:
 		_build_hud()
@@ -777,6 +785,7 @@ func _build_bg() -> void:
 	add_child(bg)
 	if bg.village_yard or bg.courtyard:
 		var air := StageAir.new()
+		air.name = "StageAir"
 		air.lantern = bg.courtyard
 		add_child(air)
 
@@ -945,6 +954,7 @@ func _build_field() -> void:
 	_core.hero_attack.connect(_on_hero_attack)
 	_core.foe_attack.connect(_on_foe_attack)
 	_core.foe_windup.connect(_on_foe_windup)
+	_core.hero_strike_resolved.connect(_hero_slash_frames)
 	_core.hero_strike_resolved.connect(_hero_extra_hits)
 	_core.hero_hit.connect(_on_hero_hit)
 	_core.hero_damaged.connect(_curio_on_hero_hurt)
@@ -964,7 +974,9 @@ func _build_field() -> void:
 		_core.wave_extra = -4
 	_core.start_run()
 	_hero_token = TokenActor.new()
-	_hero_token.setup(PLAYER_TEX, 44.0, Color(0.85, 0.66, 0.23), true)
+	var hero_frame_path := "res://assets/char/player_battle_frames.png"
+	var hero_frames := load(hero_frame_path) as Texture2D if ResourceLoader.exists(hero_frame_path) else null
+	_hero_token.setup(PLAYER_TEX, 44.0, Color(0.85, 0.66, 0.23), true, hero_frames)
 	_hero_token.set_role("player")
 	_hero_token.set_weapon("sword")
 	_hero_token.show_bar = false          # 主角血条只看顶部 HUD，不再挂漂浮血条
@@ -4617,6 +4629,7 @@ func _make_foe_token(f: Dictionary):
 		tk0.round_mask = foe_tex == null and frames == null
 		tk0.challenge_kind = challenge
 		tk0.guardian = boss and challenge < 0
+		tk0.set_role("enemy")
 		tk0.setup(foe_tex, rad, ring, false, frames)
 		tk0.hp_ratio = 1.0
 		tk0.show_bar = true
@@ -4638,6 +4651,7 @@ func _make_foe_token(f: Dictionary):
 	tk.round_mask = foe_tex == null and frames == null
 	tk.challenge_kind = challenge
 	tk.guardian = boss and challenge < 0
+	tk.set_role("enemy")
 	tk.setup(foe_tex, rad, ring, false, frames)
 	tk.show_bar = true
 	tk.bar_w = 84.0 if boss else 54.0
@@ -4899,6 +4913,8 @@ const SKILL_TINT := {
 }
 
 func _skill_cast_juice() -> void:
+	if _hero_token != null:
+		_hero_token.play_cast()
 	_screen_flash(SKILL_TINT.get(_cast_dtype, Color(1.0, 0.94, 0.80)), 0.16, 0.18)
 	Aud.sfx("swing", -7.0, 0.85)
 	_core._shake = maxf(float(_core._shake), 5.0)
@@ -5642,7 +5658,15 @@ func _play_attack_fx() -> void:
 	var destination: Vector2 = _core.position + Vector2(float(tgt["x"]), float(tgt["y"]))
 	var windup: float = _core._hero_pending_t
 	_hero_token.play_attack(destination - _hero_token.position, windup)
-	_fx_back.spawn_swing(_hero_token.position - FIELD_POS, destination - FIELD_POS, _hero_token.radius, windup)
+	if _frame_fx_art == null:
+		_fx_back.spawn_swing(_hero_token.position - FIELD_POS, destination - FIELD_POS, _hero_token.radius, windup)
+
+func _hero_slash_frames(target: Dictionary) -> void:
+	if _run_over or _frame_fx_art == null or _hero_token == null or _core == null or target.is_empty():
+		return
+	var from: Vector2 = _hero_token.position - Vector2(0, 43)
+	var dst: Vector2 = _core.position + Vector2(float(target["x"]), float(target["y"]) - 34)
+	_spawn_frame_burst(0, from.lerp(dst, 0.60), 0.98, 0.17, (dst - from).angle())
 
 func _spawn_hit_fx(global_pos: Vector2, radius: float, dmg: int, hero_hit: bool, crit: bool, heavy: bool) -> void:
 	if _fx_front == null:
@@ -5692,6 +5716,48 @@ class ComboReadout extends Control:
 		draw_string(FONT, Vector2(72, 39), str(count), HORIZONTAL_ALIGNMENT_LEFT, -1, 42, Color(1.0, 0.74, 0.31))
 
 # 轻量命中火花：程序化放射线，不预烘、不用 pixelfx，0.18 秒自毁
+class FrameBurst extends Sprite2D:
+	var row := 0
+	var lifetime := 0.24
+	var elapsed := 0.0
+	var _shown := -1
+
+	func _ready() -> void:
+		region_enabled = true
+		region_filter_clip_enabled = true
+		z_index = 7
+		_show(0)
+
+	func _process(delta: float) -> void:
+		elapsed += delta
+		if elapsed >= lifetime:
+			queue_free()
+			return
+		_show(mini(3, int(elapsed * 4.0 / lifetime)))
+		modulate.a = 1.0 - smoothstep(0.71, 1.0, elapsed / lifetime)
+
+	func _show(index: int) -> void:
+		if index == _shown:
+			return
+		_shown = index
+		var side := float(texture.get_width()) / 4.0
+		region_rect = Rect2(side * index, side * row, side, side)
+
+func _spawn_frame_burst(row: int, at: Vector2, size_mul: float, duration: float, angle := 0.0) -> Sprite2D:
+	if _frame_fx_art == null or _cam == null or _frame_fx_live >= 16:
+		return null
+	var burst := FrameBurst.new()
+	burst.texture = _frame_fx_art
+	burst.row = row
+	burst.lifetime = duration
+	burst.position = at
+	burst.scale = Vector2.ONE * size_mul
+	burst.rotation = angle
+	_frame_fx_live += 1
+	burst.tree_exited.connect(func(): _frame_fx_live -= 1)
+	_cam.add_child(burst)
+	return burst
+
 class ImpactSpark extends Control:
 	var col := Color.WHITE
 	var life := 0.18
@@ -5741,6 +5807,14 @@ func _pfx_col(pal: String, effect: String) -> Color:
 func _spawn_pfx(effect: String, pos: Vector2, s := 1.0, pal := "", lig := 1.0, spd := 1.0, flip := false):
 	if _cam == null:
 		return null
+	if _frame_fx_art != null:
+		match effect:
+			"holy/heal", "nature/leaf-storm":
+				return _spawn_frame_burst(1, pos, s, 0.29)
+			"arcane/spell-charge", "holy/sunburst", "holy/halo":
+				return _spawn_frame_burst(1 if pal == "heal" else 2, pos, s, 0.27)
+			"impacts/ground-slam":
+				return _spawn_frame_burst(3, pos, s, 0.25)
 	var sp := ImpactSpark.new()
 	sp.position = pos
 	sp.scale = Vector2(s, s) * (1.15 if lig > 1.7 else 1.0)
@@ -5792,6 +5866,8 @@ func _on_foe_attack(foe: Dictionary, target: Vector2) -> void:
 		"bow": token.play_attack(-direction, 0.0, 7.0)
 		"mage": token.play_attack(Vector2.UP, 0.0, 9.0)
 		_: token.play_attack(direction)
+	if token.guardian and token._frame_atlas != null and kind == "melee":
+		_spawn_frame_burst(3, destination, 1.5, 0.28)
 	if _fx_front != null:
 		var origin: Vector2 = token.position - Vector2(0, token.radius * 1.2) - FIELD_POS
 		_fx_front.spawn_enemy_attack(origin, destination - Vector2(0, 26) - FIELD_POS, kind)

@@ -18,7 +18,6 @@ var _anvil: AnvilArt = null
 var _hammer_btn: Button = null
 var _ores_lb: Label = null
 var _item_lbs: Array = []
-var _item_roots: Array = []
 var _chip: Control = null
 var _toast: Label = null
 var _toast_seq := 0
@@ -64,6 +63,7 @@ func _build() -> void:
 		tr0.position = Vector2(66, 222)
 		tr0.size = Vector2(76, 80)
 	_anvil = AnvilArt.new()
+	UI.panel(_panel, Rect2(40, 326, 640, 314), Color(0.22, 0.181, 0.139), 15, Color(0.63, 0.48, 0.29), 2)
 	_anvil.position = Vector2(40, 330)
 	_anvil.size = Vector2(640, 320)
 	_anvil.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -89,7 +89,10 @@ func _build() -> void:
 	for i in FD.ITEM_KEYS.size():
 		var nm := str(FD.ITEM_KEYS[i])
 		var x := 56.0 + float(i) * 150.0
-		UI.panel(_panel, Rect2(x, 930, 132, 128), Color(0.957, 0.933, 0.886), 10, Color(0.804, 0.753, 0.675), 1)
+		var hit := UI.button(_panel, "", Rect2(x, 930, 132, 128), 17, Color(0.957, 0.933, 0.886), P.INK,
+			_open_item.bind(nm), Color(0.68, 0.58, 0.43), 1, 10)
+		hit.name = "Material_%d" % i
+		hit.tooltip_text = nm
 		var art: String = str(FD.ITEM_ICON.get(nm, ""))
 		if art != "" and ResourceLoader.exists(art):
 			var tr := TextureRect.new()
@@ -97,27 +100,16 @@ func _build() -> void:
 			tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 			tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 			tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			_panel.add_child(tr)
-			tr.position = Vector2(x + 32, 940)
-			tr.size = Vector2(68, 72)
-		var cnt := UI.label(_panel, "×0", Vector2(x, 1016), Vector2(132, 30), 18, P.DIM, HORIZONTAL_ALIGNMENT_CENTER)
+			hit.add_child(tr)
+			tr.position = Vector2(32, 5)
+			tr.size = Vector2(68, 64)
+		UI.label(hit, nm, Vector2(0, 74), Vector2(132, 26), 17, P.INK, HORIZONTAL_ALIGNMENT_CENTER)
+		var cnt := UI.label(hit, "×0", Vector2(0, 98), Vector2(132, 23), 16, P.DIM, HORIZONTAL_ALIGNMENT_CENTER)
 		_item_lbs.append(cnt)
-		var hit := Button.new()
-		hit.flat = true
-		hit.focus_mode = Control.FOCUS_NONE
-		hit.position = Vector2(x, 930)
-		hit.size = Vector2(132, 128)
-		for st in ["normal", "hover", "pressed"]:
-			hit.add_theme_stylebox_override(st, StyleBoxEmpty.new())
-		hit.pressed.connect(func() -> void: _open_item(nm))
-		_panel.add_child(hit)
-		_item_roots.append(hit)
 	# 花费 + 按钮
 	_ores_lb = UI.label(_panel, "", Vector2(56, 1086), Vector2(360, 34), 22, P.INK)
-	UI.label(_panel, "", Vector2(430, 1086), Vector2(230, 34), 17, P.DIM, HORIZONTAL_ALIGNMENT_RIGHT)
-	UI.button(_panel, "锤 一 下", Rect2(56, 1130, 414, 78), 32, P.SEAL, Color(0.988, 0.941, 0.839),
+	_hammer_btn = UI.button(_panel, "锤 一 下", Rect2(56, 1130, 414, 78), 32, P.SEAL, Color(0.988, 0.941, 0.839),
 		func() -> void: _hammer(), P.GOLD, 3, 12)
-	_hammer_btn = _panel.get_child(_panel.get_child_count() - 1) as Button
 	UI.button(_panel, "收 下", Rect2(494, 1130, 170, 74), 26, Color(0.22, 0.18, 0.14), Color(0.94, 0.91, 0.85),
 		func() -> void:
 			if _closed or not is_inside_tree() or is_queued_for_deletion(): return
@@ -343,14 +335,14 @@ class AnvilArt extends Control:
 					Color(1.0, 0.84, 0.46, 0.020 + 0.016 * float(i) * (0.7 + 0.5 * pulse)))
 			draw_arc(Vector2(320 + ox, 150 + oy), 250.0 + 12.0 * pulse, 0, TAU, 64,
 				Color(1.0, 0.90, 0.62, 0.16 + 0.14 * pulse), 3.0, true)
-		var body := Color(0.204, 0.176, 0.149)
+		var body := Color(0.39, 0.34, 0.28)
 		draw_rect(Rect2(100 + ox, 96 + oy, 384, 32), body)
 		draw_colored_polygon(PackedVector2Array([
 			Vector2(484 + ox, 96 + oy), Vector2(538 + ox, 112 + oy), Vector2(484 + ox, 128 + oy)
 		]), body)
 		draw_colored_polygon(PackedVector2Array([
 			Vector2(190 + ox, 128 + oy), Vector2(394 + ox, 128 + oy), Vector2(362 + ox, 218 + oy), Vector2(222 + ox, 218 + oy)
-		]), Color(0.180, 0.157, 0.133))
+		]), Color(0.31, 0.26, 0.21))
 		if empty:
 			return
 		if trance:

@@ -656,6 +656,7 @@ func chal_exp_mul() -> float:
 func spawn_challenge(kind_i: int, n: int) -> void:
 	var i := clampi(kind_i, 0, 4)
 	var big := i >= 3
+	var spawned := 0
 	for k in maxi(1, n):
 		var count_before := foes.size()
 		# v15s：挑战怪也吃全局难度 +50%
@@ -663,13 +664,16 @@ func spawn_challenge(kind_i: int, n: int) -> void:
 			float(CHAL_FOE_ATK[i]) * chal_atk_mul() * diff_mul(), big, 1, str(CHAL_FOE_NAME[i]))
 		if foes.size() == count_before:
 			break
+		spawned += 1
 		var f: Dictionary = foes[foes.size() - 1]
 		f["scale"] = float(CHAL_FOE_SCALE[i])
 		f["chal"] = i                              # 掉什么由这个字段决定（结算侧读它）
 		# v16m 补漏：这里原来写的是 FOE_STOP(150) —— stop 真被读之后就变成"挑战怪隔空打"了，
 		#   跟默认一样改用 FOE_REACH（上面那批我改漏了这一处）。
 		f["stop"] = (FOE_REACH + 60.0 if big else FOE_REACH) + randf() * 20.0
-	_banner = ("挑战：" + str(CHAL_FOE_NAME[i]) + ("　大怪" if big else ("　一群 " + str(n) + " 只")))
+	if spawned == 0:
+		return
+	_banner = ("挑战：" + str(CHAL_FOE_NAME[i]) + ("　大怪" if big else ("　一群 " + str(spawned) + " 只")))
 	_banner_t = 2.0
 	Audio.sfx("bell", -8.0)
 	# v16o（用户："背景喊杀声太多了 其实没必要有喊杀声"）：
