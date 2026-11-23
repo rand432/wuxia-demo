@@ -6,6 +6,7 @@ const GameState := preload("res://shared/game_state.gd")
 const Audio := preload("res://shared/audio.gd")
 const LevelState := preload("res://shared/level_state.gd")
 const UI := preload("res://shared/ui_kit.gd")
+const GodPortraits := preload("res://shared/god_portraits.gd")
 # 每个技能自己的描述 + 伤害倍率（跟 battle_ui 的 SKILL_DEFS 保持一份数据）
 const SKILL_DEFS := {
 	"zl": {"name": "天雷道术", "dtype": "金系", "mul": 1.6, "cd": 10.0, "mp": 260.0, "targets": 3,
@@ -45,20 +46,6 @@ const PAPER := Color(0.89, 0.85, 0.74)
 const BACKDROP := "res://assets/art/ui/partner_pavilion_v1.webp"
 const GRADE_NAMES := ["凡品", "良品", "玄品", "地品", "绝品"]
 
-const PORTRAIT := {
-	"zl": "res://assets/gen/qingshen/portrait_zl.jpg",
-	"cuisanniang": "res://assets/gen/qingshen/portrait_cuisanniang.jpg",
-	"jicanghai": "res://assets/gen/qingshen/portrait_jicanghai.jpg",
-	"zhujue": "res://assets/gen/qingshen/portrait_zhujue.jpg",
-	"chenshi": "res://assets/gen/qingshen/portrait_chenshi.jpg",
-	"liuqingqing": "res://assets/gen/qingshen/portrait_liuqingqing_ink_v1.png",
-	"xiaoqier": "res://assets/gen/qingshen/portrait_xiaoqier.jpg",
-	"gundilong": "res://assets/gen/qingshen/portrait_gundilong.jpg",
-	"qingluan": "res://assets/gen/qingshen/portrait_qingluan.jpg",
-	"mingzhu": "res://assets/gen/qingshen/portrait_mingzhu.jpg",
-	"zhiyuan": "res://assets/gen/qingshen/portrait_zhiyuan.jpg",
-}
-
 var _ids: Array[String] = []
 var _sel := 0
 var _stars := {}
@@ -79,7 +66,8 @@ func _ready() -> void:
 		_ids.append("zhujue")
 	for aid in _ids:
 		_stars[aid] = clampi(int(GameState.stars.get(aid, 0)), 0, GameState.ROLE_STAR_MAX)
-		_portraits[aid] = load(str(PORTRAIT.get(aid, "res://assets/char/player_full_cut.png"))) as Texture2D
+		var path := GodPortraits.path_for(aid)
+		_portraits[aid] = load(path if not path.is_empty() else "res://assets/char/player_full_cut.png") as Texture2D
 	_build_backdrop()
 	UI.app_bar(self, GameState.player_name, GameState.role_grade_cn(""), func(): UI.open_settings(self))
 	_build_carousel()

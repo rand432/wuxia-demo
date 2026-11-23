@@ -144,6 +144,7 @@ signal special(kind: String, n: int, pos: Vector2)
 # ---- 数值（要调就改这一块） ----
 const MAX_FOES := 36
 const MAX_FIELD_FOES := MAX_FOES + 16
+const BOSS_SUMMON_FIELD_CAP := MAX_FOES + 8
 const SPAWN_GAP := 0.12
 const DENSE_SPAWN_GAP := 0.09
 var wave_stage_adjustment := 0
@@ -576,8 +577,8 @@ func _foe_hp() -> float:
 func _foe_atk() -> float:
 	return BASE_FOE_ATK * pow(WAVE_ATK, float(wave - 1)) * foe_mul * diff_mul() * early_mul(true)     # v14e：关卡难度倍率
 
-func _spawn_foe(kind := "normal", hp_mul := 1.0, atk_mul := 1.0, big := false, tier := 1, nm := "") -> Dictionary:
-	if foes.size() >= MAX_FOES and kind == "normal":
+func _spawn_foe(kind := "normal", hp_mul := 1.0, atk_mul := 1.0, big := false, tier := 1, nm := "", normal_cap := MAX_FOES) -> Dictionary:
+	if foes.size() >= normal_cap and kind == "normal":
 		return {}
 	# v13g：**总上限**——挑战怪/招怪套原来绕过了 MAX_FOES，挂机久了能堆到几百只
 	if foes.size() >= MAX_FIELD_FOES and kind != "boss" and kind != "champion" and kind != "elite":
@@ -1369,18 +1370,7 @@ func _process(delta: float) -> void:
 			fb["boss_summon_t"] = float(fb.get("boss_summon_t", 12.0)) - dt
 			if float(fb["boss_summon_t"]) <= 0.0:
 				fb["boss_summon_t"] = 12.0
-				var add_n := 2
-				for si in add_n:
-					if foes.size() < MAX_FOES + 8:
-						_spawn_foe("normal", 1.3, 1.1, false, 1, "")
-						var addf: Dictionary = foes[foes.size() - 1]
-						addf["y"] = -30.0 - float(si) * 40.0
-						addf["x"] = clampf(float(fb["x"]) + float(si) * 70.0 - 35.0, 60.0, size.x - 60.0)
-				_banner = "兽王号令！" + str(add_n) + " 只走狗扑下来"
-				_banner_t = 1.8
-				_bursts.append({"x": float(fb["x"]), "y": float(fb["y"]), "t": 0.0,
-					"col": Color(0.92, 0.56, 0.28), "scale": 1.8})
-				Audio.sfx("heartbeat", -6.0)
+				_summon_boss_foes(fb)
 		fb["ult_t"] = float(fb.get("ult_t", 14.0)) - dt
 		if float(fb["ult_t"]) <= 0.0:
 			var first_cast := _delayed.size()

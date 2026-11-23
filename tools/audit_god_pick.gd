@@ -22,7 +22,9 @@ func _run() -> void:
 	battle._show_god_pick()
 	for card in battle._god_root.get_children():
 		assert(card.aid != "chenshi")
+		assert(card.portrait.resource_path.ends_with("portrait_liuqingqing_ink_v1.png"))
+		assert(card.skill_art.resource_path.ends_with("skill_liuqingqing.png"))
 	battle.queue_free()
 	await process_frame
-	print("PASS: god pick invalidates cache; duplicate pick free; new hand excludes owned")
+	print("PASS: new god hand excludes owned; duplicate pick free; current Liu portrait and separate skill seal")
 	quit()

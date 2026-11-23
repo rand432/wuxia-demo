@@ -21,6 +21,7 @@ const HazardTelegraph := preload("res://kushou/hazard_telegraph.gd")
 const BlackMarket := preload("res://kushou/black_market.gd")
 const MenuUI := preload("res://shared/ui_kit.gd")
 const CardFrame := preload("res://kushou/card_frame.gd")
+const GodPortraits := preload("res://shared/god_portraits.gd")
 const HERO_FRAMES_PATH := "res://assets/char/player_battle_frames.png"
 const BATTLE_FRAMES_PATH := "res://assets/art/fx/battle_bursts_v1.png"
 const SKILL_FRAMES_PATH := "res://assets/art/fx/skill_bursts_v1.png"
@@ -29,6 +30,7 @@ const DRAGON_WAVE_PATH := "res://assets/art/fx/dragon_wave_v1.png"
 const ENTRY_ELITE_FRAME_IDS := ["shijia_yuan", "challenge_mimic", "challenge_chief"]
 var _entry_art: Dictionary = {}
 var _entry_cards_ready := false
+var _entry_god_portraits: Dictionary = {}
 var _draw_art_cache: Dictionary = {}
 var _frame_fx_art: Texture2D
 var _skill_frame_art: Texture2D
@@ -353,6 +355,10 @@ func prepare_entry_art() -> Array[String]:
 			var path := _god_skill_path(aid, AncestorData.ANCESTORS[aid]["art"])
 			if not paths.has(path):
 				paths.append(path)
+	for aid in LevelState.god_ids().slice(0, 2):
+		var path := GodPortraits.path_for(aid)
+		if not path.is_empty() and not paths.has(path):
+			paths.append(path)
 	return paths
 
 func supply_entry_art(path: String, texture: Texture2D) -> void:
@@ -396,6 +402,10 @@ func _ready() -> void:
 		_q_init()
 		_warm_initial_draw_art()
 		_warm_choice_art()
+		for aid in LevelState.god_ids().slice(0, 2):
+			var path := GodPortraits.path_for(aid)
+			if _entry_art.has(path):
+				_entry_god_portraits[aid] = _entry_art[path]
 		_build_toast()
 	_entry_art.clear()
 	if not _no_ui:
@@ -548,6 +558,10 @@ func _toast_next() -> void:
 class BgArt extends Control:
 	# 关卡 → 背景轮换；文件不存在时回退到程序画的纸面
 	const VILLAGE_YARD := "res://assets/art/bg/bg_village_yard_v1.webp"
+	const CLIFF_PASS := "res://assets/art/bg/bg_cliff_pass_v1.webp"
+	const FINAL_COURT := "res://assets/art/bg/bg_final_bamboo_court_v1.webp"
+	const ARENA_FIELD := Rect2(0, 132, 720, 1080)
+	const COURT_Y_OFFSET := 48.0
 	const BG_LIST := [
 		"res://assets/art/bg/bg_village.jpg",
 		"res://assets/art/bg/bg_bamboo.jpg",
@@ -561,15 +575,23 @@ class BgArt extends Control:
 	var tex: Texture2D = null
 	var village_yard := false
 	var courtyard := false
+	var cliff_pass := false
+	var final_court := false
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
 	static func path_for(idx: int) -> String:
 		if idx == 0 and ResourceLoader.exists(VILLAGE_YARD):
 			return VILLAGE_YARD
+		if idx == 6 and ResourceLoader.exists(CLIFF_PASS):
+			return CLIFF_PASS
+		if idx == 9 and ResourceLoader.exists(FINAL_COURT):
+			return FINAL_COURT
 		return BG_LIST[wrapi(idx, 0, BG_LIST.size())]
 	func setup(idx: int, path: String, art: Texture2D) -> void:
 		village_yard = path == VILLAGE_YARD
 		courtyard = idx == 5
+		cliff_pass = path == CLIFF_PASS and art != null
+		final_court = path == FINAL_COURT and art != null
 		tex = art
 	func _draw() -> void:
 		if village_yard and tex != null:
@@ -583,6 +605,20 @@ class BgArt extends Control:
 			draw_texture_rect_region(tex, field, Rect2((source_size - crop_size) * 0.5, crop_size))
 			_fade_band(102, 190, surround, clear)
 			_fade_band(1010, 1192, clear, surround)
+			return
+		if cliff_pass or final_court:
+			var surround := Color(0.125, 0.13, 0.10) if final_court else Color(0.17, 0.16, 0.15)
+			var clear := Color(surround, 0.0)
+			var bottom := 1020.0
+			var field := Rect2(ARENA_FIELD.position, Vector2(W, bottom - ARENA_FIELD.position.y))
+			var scale_to_source := tex.get_size().y / ARENA_FIELD.size.y
+			var crop_start := Vector2(0.0, COURT_Y_OFFSET * scale_to_source if final_court else 0.0)
+			var source_size := Vector2(tex.get_size().x, field.size.y * scale_to_source)
+			draw_rect(Rect2(0, 0, W, ARENA_FIELD.position.y), surround)
+			draw_texture_rect_region(tex, field, Rect2(crop_start, source_size))
+			_fade_band(ARENA_FIELD.position.y, 162.0, surround, clear)
+			_fade_band(834.0, bottom, clear, surround)
+			draw_rect(Rect2(0, bottom, W, H - bottom), surround)
 			return
 		draw_rect(Rect2(0, 0, 720, 1280), Color(0.93, 0.90, 0.82))
 		if courtyard and tex != null:
@@ -857,7 +893,12 @@ func _build_bg() -> void:
 	var path := BgArt.path_for(index)
 	bg.setup(index, path, _entry_texture(path))
 	add_child(bg)
-	if bg.village_yard or bg.courtyard:
+	if bg.cliff_pass or bg.final_court:
+		var air := ArenaAir.new()
+		air.final_court = bg.final_court
+		air.name = "FinalCourtAir" if bg.final_court else "CliffAir"
+		add_child(air)
+	elif bg.village_yard or bg.courtyard:
 		var air := StageAir.new()
 		air.name = "StageAir"
 		air.lantern = bg.courtyard
@@ -868,17 +909,21 @@ class StageAir extends Node2D:
 	var _motes: Array[Sprite2D] = []
 	var _elapsed := 0.0
 
-	func _ready() -> void:
+	static func glow_texture(resolution: int) -> GradientTexture2D:
 		var glow := Gradient.new()
 		glow.set_color(0, Color(1, 1, 1, 0.78))
 		glow.set_color(1, Color(1, 1, 1, 0))
 		var mote_art := GradientTexture2D.new()
 		mote_art.gradient = glow
-		mote_art.width = 20
-		mote_art.height = 20
+		mote_art.width = resolution
+		mote_art.height = resolution
 		mote_art.fill = GradientTexture2D.FILL_RADIAL
 		mote_art.fill_from = Vector2(0.5, 0.5)
 		mote_art.fill_to = Vector2(1, 0.5)
+		return mote_art
+
+	func _ready() -> void:
+		var mote_art := glow_texture(20)
 		for i in 8:
 			var mote := Sprite2D.new()
 			mote.texture = mote_art
@@ -896,6 +941,54 @@ class StageAir extends Node2D:
 			var mote := _motes[i]
 			mote.position = Vector2(start + 38.0 * fade + 14.0 * sin(fade * TAU), y - 65.0 * fade)
 			mote.modulate.a = sin(fade * PI) * (0.42 if lantern else 0.31)
+
+class ArenaAir extends Node2D:
+	const CLIFF_LANTERNS := [Vector2(0.113, 0.184), Vector2(0.888, 0.128), Vector2(0.951, 0.517)]
+	const COURT_LANTERNS := [Vector2(0.339, 0.075), Vector2(0.660, 0.075),
+		Vector2(0.054, 0.456), Vector2(0.945, 0.457)]
+	var final_court := false
+	var _mist_anchors: Array[Vector2] = []
+	var _lights: Array[Sprite2D] = []
+	var _mist: Array[Sprite2D] = []
+	var _elapsed := 0.0
+
+	func _ready() -> void:
+		var glow := StageAir.glow_texture(64)
+		var blend := CanvasItemMaterial.new()
+		blend.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+		var lanterns := COURT_LANTERNS if final_court else CLIFF_LANTERNS
+		var shift := Vector2(0.0, BgArt.COURT_Y_OFFSET) if final_court else Vector2.ZERO
+		for uv in lanterns:
+			var light := Sprite2D.new()
+			light.texture = glow
+			light.material = blend
+			light.position = BgArt.ARENA_FIELD.position + uv * BgArt.ARENA_FIELD.size - shift
+			light.modulate = Color(1.0, 0.56, 0.28, 0.18)
+			light.scale = Vector2(1.28, 1.10)
+			add_child(light)
+			_lights.append(light)
+		if final_court:
+			_mist_anchors.assign([Vector2(20, 325), Vector2(688, 399), Vector2(48, 801)])
+		else:
+			_mist_anchors.assign([Vector2(75, 380), Vector2(672, 570), Vector2(64, 743)])
+		for anchor in _mist_anchors:
+			var wisp := Sprite2D.new()
+			wisp.texture = glow
+			wisp.position = anchor
+			wisp.rotation = -0.29
+			wisp.modulate = Color(0.54, 0.61, 0.68, 0.12)
+			wisp.scale = Vector2(2.60, 0.73)
+			add_child(wisp)
+			_mist.append(wisp)
+
+	func _process(dt: float) -> void:
+		_elapsed += dt
+		for i in _lights.size():
+			_lights[i].modulate.a = 0.18 + sin(_elapsed * (2.1 + i * 0.72) + i) * 0.06
+		for i in _mist.size():
+			var phase := fposmod(_elapsed * 0.13 + i * 0.39, 1.0)
+			_mist[i].position = _mist_anchors[i] + Vector2(44, -25) * phase
+			_mist[i].modulate.a = 0.19 * sin(phase * PI)
 
 func _chip(hud: Control, x: float, width: float, kind: String, value: String, cap: String) -> Label:
 	var chip := Control.new()
@@ -6742,6 +6835,11 @@ func _roll_god() -> void:
 		gc.element = str(a.get("dtype", ""))
 		gc.quality = int(a["quality"])
 		gc.skill_art = _god_skill_art(aid, str(a["art"]))
+		if _entry_god_portraits.has(aid):
+			gc.portrait = _entry_god_portraits[aid]
+			_entry_god_portraits.erase(aid)
+		else:
+			gc.portrait = _entry_texture(GodPortraits.path_for(aid))
 		var skill: Dictionary = SKILL_DEFS.get(aid, {})
 		if skill.is_empty():
 			gc.skill_meta = "被动光环" if aid == "mingzhu" else "家传入口入池"
@@ -6788,7 +6886,7 @@ func _hide_god_pick() -> void:
 func _on_god_card(card: GodCard) -> void:
 	if _run_over or _god_layer == null or not _god_layer.visible or not is_instance_valid(card) or card.get_parent() != _god_root:
 		return
-	var from: Vector2 = get_global_transform().affine_inverse() * (card.get_global_transform() * card.art_center())
+	var from: Vector2 = get_global_transform().affine_inverse() * (card.get_global_transform() * card.seal_center())
 	var old_size := _skills.size()
 	var charge := _draw_charge
 	_pick_god(card.aid)
@@ -6964,6 +7062,10 @@ class GodCard extends Button:
 	const F := preload("res://fonts/ink.ttf")
 	const P := preload("res://shared/ui_pal.gd")
 	const Motion := preload("res://shared/ui_motion.gd")
+	const PORTRAIT_CROP := {"chenshi": 0.20, "liuqingqing": 0.26, "qingluan": 0.65,
+		"xiaoqier": 0.45, "gundilong": 0.40, "mingzhu": 0.64}
+	const ELEMENT_TONES := {"木系": Color(0.58, 0.76, 0.57), "真实": Color(0.83, 0.74, 0.62),
+		"物理": Color(0.73, 0.76, 0.83), "火系": Color(0.94, 0.64, 0.43)}
 	signal picked
 	var aid := ""
 	var god_name := ""
@@ -6972,6 +7074,8 @@ class GodCard extends Button:
 	var skill_meta := ""
 	var quality := 5
 	var skill_art: Texture2D = null
+	var portrait: Texture2D
+	var _frame := StyleBoxFlat.new()
 
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_STOP
@@ -6983,46 +7087,60 @@ class GodCard extends Button:
 		mouse_entered.connect(queue_redraw)
 		mouse_exited.connect(queue_redraw)
 		Motion.bind_button(self)
+		_frame.bg_color = Color(0.135, 0.110, 0.084)
+		_frame.set_corner_radius_all(11)
+		_frame.set_border_width_all(2)
+		_frame.shadow_color = Color(0.02, 0.015, 0.01, 0.76)
+		_frame.shadow_size = 8
+		_frame.shadow_offset = Vector2(0, 4)
 
-	func art_center() -> Vector2:
-		return Vector2(size.x * 0.5, 140)
+	func seal_center() -> Vector2:
+		return Vector2(31, 272)
 
 	func _draw() -> void:
 		var tone := P.quality(quality)
-		var metal := tone.lerp(Color(0.91, 0.76, 0.48), 0.7)
+		var metal := tone.lerp(Color(0.86, 0.71, 0.46), 0.65)
 		if is_hovered():
 			metal = metal.lightened(0.20)
-		var frame := StyleBoxFlat.new()
-		frame.bg_color = Color(0.195, 0.155, 0.109)
-		frame.set_corner_radius_all(11)
-		frame.border_color = metal
-		frame.set_border_width_all(2)
-		frame.shadow_color = Color(0.02, 0.015, 0.01, 0.7)
-		frame.shadow_size = 6
-		frame.shadow_offset = Vector2(0, 3)
-		draw_style_box(frame, Rect2(Vector2.ZERO, size))
-		var image := Rect2(9, 53, size.x - 18, 177)
-		var paper := StyleBoxFlat.new()
-		paper.bg_color = Color(0.86, 0.81, 0.68).lerp(tone, 0.14)
-		paper.set_corner_radius_all(8)
-		paper.border_color = metal
-		paper.set_border_width_all(1)
-		draw_style_box(paper, image)
-		var center := art_center()
-		draw_circle(center, 67, Color(0.95, 0.90, 0.76, 0.76), true, -1.0, true)
-		draw_arc(center, 70, 0.0, TAU, 48, Color(tone, 0.43), 1.2, true)
-		draw_arc(center, 75, 0.0, TAU, 48, Color(tone, 0.24), 1.0, true)
+		_frame.border_color = metal
+		draw_style_box(_frame, Rect2(Vector2.ZERO, size))
+		var image := Rect2(7, 7, size.x - 14, 236)
+		var ink := Color(0.083, 0.071, 0.056, 0.97)
+		var accent: Color = ELEMENT_TONES.get(element, metal.lightened(0.22))
+		if portrait != null:
+			var source := portrait.get_size()
+			var crop := image.size / maxf(image.size.x / source.x, image.size.y / source.y)
+			var anchor := Vector2(0.5, float(PORTRAIT_CROP.get(aid, 0.30)))
+			draw_texture_rect_region(portrait, image, Rect2((source - crop) * anchor, crop))
+		else:
+			draw_rect(image, Color(0.79, 0.73, 0.60).lerp(tone, 0.22))
+			_draw_skill_icon(image.get_center(), 124.0)
+		var fade_y := image.end.y - 80.0
+		draw_polygon(PackedVector2Array([Vector2(image.position.x, fade_y), Vector2(image.end.x, fade_y),
+			image.end, Vector2(image.position.x, image.end.y)]),
+			PackedColorArray([Color(ink, 0.0), Color(ink, 0.0), ink, ink]))
+		draw_rect(image, Color(metal, 0.63), false, 1.0)
+		var tag := Rect2(size.x - 69.0, 15, 53, 25)
+		draw_rect(tag, ink)
+		draw_rect(tag, Color(accent, 0.72), false, 1.0)
+		draw_string(F, Vector2(tag.position.x, 33), element, HORIZONTAL_ALIGNMENT_CENTER, tag.size.x, 17, accent)
+		var pale := Color(0.97, 0.91, 0.78)
+		draw_string_outline(F, Vector2(17, 230), god_name, HORIZONTAL_ALIGNMENT_LEFT, size.x - 34, 32, 4, ink)
+		draw_string(F, Vector2(17, 230), god_name, HORIZONTAL_ALIGNMENT_LEFT, size.x - 34, 32, pale)
+		var sigil := seal_center()
+		draw_circle(sigil, 17, Color(0.72, 0.65, 0.48, 0.40))
+		draw_arc(sigil, 17, 0.0, TAU, 26, Color(accent, 0.77), 1.0, true)
+		_draw_skill_icon(sigil, 30.0)
+		draw_string(F, Vector2(57, 268), skill_name, HORIZONTAL_ALIGNMENT_LEFT, size.x - 72, 23, pale)
+		draw_string(F, Vector2(57, 289), skill_meta, HORIZONTAL_ALIGNMENT_LEFT, size.x - 70, 15, Color(0.87, 0.80, 0.66))
+		draw_line(Vector2(14, 301), Vector2(size.x - 14, 301), Color(metal, 0.53), 1.0, true)
+		draw_string(F, Vector2(9, 324), "请神", HORIZONTAL_ALIGNMENT_CENTER, size.x - 18, 18, metal.lightened(0.30))
+
+	func _draw_skill_icon(center: Vector2, width: float) -> void:
 		if skill_art != null:
 			var source_size := skill_art.get_size()
-			var art_size := source_size * (150.0 / maxf(source_size.x, source_size.y))
+			var art_size := source_size * (width / maxf(source_size.x, source_size.y))
 			draw_texture_rect(skill_art, Rect2(center - art_size * 0.5, art_size), false)
-		var pale := Color(0.97, 0.90, 0.76)
-		draw_string(F, Vector2(12, 38), god_name, HORIZONTAL_ALIGNMENT_LEFT, size.x - 82, 30, pale)
-		draw_string(F, Vector2(size.x - 76, 36), element, HORIZONTAL_ALIGNMENT_RIGHT, 64, 18, metal.lightened(0.20))
-		draw_string(F, Vector2(9, 260), skill_name, HORIZONTAL_ALIGNMENT_CENTER, size.x - 18, 27, pale)
-		draw_string(F, Vector2(9, 284), skill_meta, HORIZONTAL_ALIGNMENT_CENTER, size.x - 18, 16, Color(0.87, 0.79, 0.65))
-		draw_line(Vector2(14, 296), Vector2(size.x - 14, 296), Color(metal, 0.52), 1.0, true)
-		draw_string(F, Vector2(9, 321), "请神", HORIZONTAL_ALIGNMENT_CENTER, size.x - 18, 18, metal.lightened(0.33))
 
 
 

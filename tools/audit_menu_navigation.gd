@@ -133,6 +133,7 @@ func _run() -> void:
 	assert(battle._entry_cards_ready and battle._entry_art.is_empty())
 	assert(battle._hero_token._frame_atlas != null and battle._skill_frame_art != null)
 	assert(battle._draw_art_cache.values().any(func(art): return art != null))
+	assert(battle._entry_god_portraits.size() == 2 and battle._entry_god_portraits["chenshi"] != null)
 	assert(battle._draw_layer == null and battle._str_layer == null and battle._trea_layer == null and battle._god_layer == null)
 	battle._tut.cancel()
 	battle._crystal = 40
@@ -143,6 +144,9 @@ func _run() -> void:
 	battle._mate_tile.pressed.emit()
 	var god_panel: Control = battle._god_layer
 	assert(god_panel.visible and not draw_panel.visible and battle._god_root.get_child_count() > 0)
+	var god = battle._god_root.get_child(0)
+	assert(god.portrait.resource_path.ends_with("portrait_chenshi.jpg") and god.skill_art != god.portrait)
+	assert(not battle._entry_god_portraits.has(god.aid))
 	battle._trea_charge = 1
 	battle._trea_tile.pressed.emit()
 	var treasure_panel: Control = battle._trea_layer
