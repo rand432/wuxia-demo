@@ -5662,8 +5662,12 @@ func _on_boss_impact(caster: Dictionary, pos: Vector2, ring_radius: float) -> vo
 	if token != null:
 		var direction: Vector2 = _core.position + pos - token.position
 		var warning := token.boss_warning
-		if str(warning.get("shape", "")) in ["sector", "beam"]:
+		var shape := str(warning.get("shape", ""))
+		if shape == "sector" or shape == "beam":
 			direction = Vector2(warning["dir"]) * 40.0
+		if shape == "sector":
+			_hazard_view.flash_sector(pos, direction, float(warning["r"]), float(warning["spread"]))
+			Aud.sfx("swing", -8.0, 0.72, 180)
 		token.boss_warning = {}
 		token.play_attack(direction)
 

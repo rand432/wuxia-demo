@@ -4,17 +4,27 @@ const BEAM_BACK := 40.0
 const RING_PADDING := 26.0
 const BOLT_ABOVE := 260.0
 const BOLT_BELOW := 60.0
+const SECTOR_FLASH_TIME := 0.24
 
 var core: Control
 var _had_warnings := false
 var _ring_flashes: Array[Dictionary] = []
+var _sector_flashes: Array[Dictionary] = []
 
 func flash_ring(center: Vector2, radius: float) -> void:
 	_ring_flashes.append({"center": center, "radius": radius, "elapsed": 0.0})
 	queue_redraw()
 
+func flash_sector(center: Vector2, direction: Vector2, radius: float, spread: float) -> void:
+	if _sector_flashes.size() >= 4:
+		_sector_flashes.pop_front()
+	_sector_flashes.append({"center": center, "angle": direction.angle(), "radius": radius,
+		"half": spread * 0.5, "elapsed": 0.0})
+	queue_redraw()
+
 func _process(delta: float) -> void:
-	var has_warnings: bool = is_instance_valid(core) and (not core._delayed.is_empty() or not _ring_flashes.is_empty())
+	var has_warnings: bool = is_instance_valid(core) and (not core._delayed.is_empty()
+		or not _ring_flashes.is_empty() or not _sector_flashes.is_empty())
 	if has_warnings or _had_warnings:
 		queue_redraw()
 	_had_warnings = has_warnings
@@ -22,6 +32,10 @@ func _process(delta: float) -> void:
 		_ring_flashes[i]["elapsed"] += delta
 		if float(_ring_flashes[i]["elapsed"]) >= 0.24:
 			_ring_flashes.remove_at(i)
+	for i in range(_sector_flashes.size() - 1, -1, -1):
+		_sector_flashes[i]["elapsed"] += delta
+		if float(_sector_flashes[i]["elapsed"]) >= SECTOR_FLASH_TIME:
+			_sector_flashes.remove_at(i)
 
 func _draw() -> void:
 	if is_instance_valid(core):
@@ -32,6 +46,16 @@ func _draw() -> void:
 		var radius: float = ring["radius"]
 		draw_arc(center, radius, 0, TAU, 56, Color(1.0, 0.48, 0.17, 0.8 * (1.0 - progress)), 4.0, true)
 		draw_arc(center, radius * lerpf(0.65, 1.0, progress), 0, TAU, 56, Color(1.0, 0.77, 0.37, 0.65 * (1.0 - progress)), 2.0, true)
+	for sweep in _sector_flashes:
+		var progress := float(sweep["elapsed"]) / SECTOR_FLASH_TIME
+		var alpha := 1.0 - progress
+		var center: Vector2 = sweep["center"]
+		var from := float(sweep["angle"]) - float(sweep["half"])
+		var to := float(sweep["angle"]) + float(sweep["half"])
+		var radius := float(sweep["radius"]) * lerpf(0.73, 0.98, ease(progress, 0.55))
+		draw_arc(center, radius - 7.0, from, to, 35, Color(0.58, 0.13, 0.05, alpha * 0.78), 13.0 * alpha + 2.0, true)
+		draw_arc(center, radius, from, to, 35, Color(1.0, 0.40, 0.11, alpha * 0.92), 6.0 * alpha + 1.0, true)
+		draw_arc(center, radius, from + 0.10, to - 0.08, 35, Color(1.0, 0.82, 0.44, alpha), 2.8 * alpha + 0.5, true)
 
 static func paint(canvas: CanvasItem, hazards: Array, clock: float) -> void:
 	for hazard: Dictionary in hazards:
