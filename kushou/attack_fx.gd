@@ -118,10 +118,10 @@ func spawn_enemy_attack(origin: Vector2, target: Vector2, kind: String) -> void:
 	enemy_attacks.append({"origin": origin, "target": target, "kind": kind, "age": 0.0})
 	queue_redraw()
 
-func spawn_cast_seal(feet: Vector2, tint: Color) -> void:
+func spawn_cast_seal(feet: Vector2, tint: Color, radius := 54.0, flatten := 0.36) -> void:
 	if cast_seals.size() >= 3:
 		cast_seals.pop_front()
-	cast_seals.append({"p": feet, "tint": tint, "age": 0.0})
+	cast_seals.append({"p": feet, "tint": tint, "age": 0.0, "radius": radius, "flatten": flatten})
 	queue_redraw()
 
 func spawn_skill_trail(origin: Vector2, target: Vector2, tint: Color, width: float) -> void:
@@ -188,8 +188,8 @@ func _draw_cast_seal(seal: Dictionary) -> void:
 	var progress := clampf(float(seal["age"]) / 0.24, 0.0, 1.0)
 	var tone: Color = seal["tint"]
 	var center: Vector2 = seal["p"]
-	var radius := lerpf(24.0, 54.0, ease(progress, 0.44))
-	draw_set_transform(center, 0.0, Vector2(1.0, 0.36))
+	var radius := float(seal["radius"]) * lerpf(0.44, 1.0, ease(progress, 0.44))
+	draw_set_transform(center, 0.0, Vector2(1.0, float(seal["flatten"])))
 	draw_arc(Vector2.ZERO, radius, 0.0, TAU, 32, Color(tone, 0.85 * (1.0 - progress)), 2.8, true)
 	draw_arc(Vector2.ZERO, radius * 0.74, 0.0, TAU, 26, Color(tone, 0.36 * (1.0 - progress)), 1.2, true)
 	draw_set_transform(Vector2.ZERO)

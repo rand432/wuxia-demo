@@ -92,5 +92,33 @@ func _run() -> void:
 		assert(b._minions.size() == 2 and b._curio_cd == 0.0 and b._curio_uses == uses)
 		b.queue_free()
 		await process_frame
-	print("PASS: two ghost expiry blasts once under reentry; attacks and later minions stop after callbacks; death/stop freeze lifetime and motion")
+	for evolved in [false, true]:
+		var b = _battle()
+		var c = b._core
+		b._anc_mod["cuisanniang"] = {"wave_evo": 1.0 if evolved else 0.0}
+		b._summon_dragon(0.0)
+		var dragon: Dictionary = b._minions.back()
+		var first := _foe(c, 1.0)
+		var nearby := _foe(c, 1000.0, 130.0)
+		var outside := _foe(c, 1000.0, 131.0)
+		var kills: int = b._kills
+		b._dragon_wave(dragon, first)
+		assert(first.get("_death_settled", false) and b._kills == kills + 1)
+		assert(nearby["hp"] == (750.0 if evolved else 1000.0) and nearby.get("slow_t", 0.0) == (2.0 if evolved else 0.0))
+		assert(outside["hp"] == 1000.0 and not outside.has("slow_t"))
+		var interruption := _foe(c, 1.0)
+		var spared := _foe(c, 1000.0, 40.0)
+		c.kill.connect(func(_n): c.clear_enemy_attacks())
+		nearby["hp"] = 0.0
+		b._dragon_wave(dragon, interruption)
+		assert(interruption.get("_death_settled", false) and spared["hp"] == 1000.0)
+		var actor: Node = dragon["tk"]
+		dragon["life"] = 0.005
+		b._tick_minions(0.01)
+		assert(not b._minions.has(dragon) and is_instance_valid(actor))
+		await create_timer(0.44).timeout
+		assert(not is_instance_valid(actor))
+		b.queue_free()
+		await process_frame
+	print("PASS: ghost expiry reentry and pause; dragon wave range, once-only kills, stale epoch interruption and actor retirement")
 	Audio.quit_cleanly()

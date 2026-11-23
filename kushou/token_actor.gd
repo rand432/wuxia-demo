@@ -41,6 +41,7 @@ var _attack_reach := 13.0
 var _ready_time := 0.0
 var _ready_duration := 0.0
 var _recover_after_down := false
+var _discard_after_down := false
 var _flash := 0.0
 var _death_t := -1.0
 var _sink := 0.0
@@ -146,6 +147,9 @@ func _process(delta: float) -> void:
 	if _death_t >= 0.0:
 		_death_t += delta
 		var p := clampf(_death_t / DEATH_DURATION, 0.0, 1.0)
+		if p >= 1.0 and _discard_after_down:
+			queue_free()
+			return
 		if p >= 1.0 and _recover_after_down:
 			reset_pose()
 			play_spawn()
@@ -280,9 +284,12 @@ func play_hit(direction := Vector2.RIGHT, strong := false) -> void:
 	_hit_dir = direction.normalized() if direction.length_squared() > 0.001 else Vector2.RIGHT
 	_hit_strength = 1.5 if strong else 1.0
 
-func play_cast() -> void:
-	if role == "player" and _frame_atlas != null and _death_t < 0.0:
-		_cast_time = 0.32
+func play_cast(direction := Vector2.ZERO) -> void:
+	if role not in ["player", "dragon"] or _frame_atlas == null or _death_t >= 0.0:
+		return
+	if absf(direction.x) > 1.0:
+		face(1 if direction.x > 0.0 else -1)
+	_cast_time = 0.32
 
 
 func play_dodge() -> void:
@@ -301,6 +308,11 @@ func play_down(recover := false) -> void:
 	_flash = 0.0
 
 
+func retire() -> void:
+	play_down()
+	_discard_after_down = true
+
+
 func reset_pose() -> void:
 	boss_warning = {}
 	_death_t = -1.0
@@ -310,6 +322,7 @@ func reset_pose() -> void:
 	_cast_time = 0.0
 	_ready_time = 0.0
 	_recover_after_down = false
+	_discard_after_down = false
 	_anim_t = 0.0
 	_frame_clock = 0.0
 	_walk_blend = 0.0
@@ -334,7 +347,7 @@ func _draw() -> void:
 	draw_set_transform(off + Vector2(0.0, -4.0), 0.0, Vector2(1.0, 0.34))
 	draw_circle(Vector2.ZERO, radius * 0.76, Color(0.10, 0.09, 0.08, 0.30))
 	draw_circle(Vector2.ZERO, radius * 0.44, Color(0.07, 0.06, 0.05, 0.22))
-	if (challenge_kind >= 0 or guardian) and _death_t < 0.0:
+	if (challenge_kind >= 0 or guardian or role == "dragon") and _death_t < 0.0:
 		var color := ring_col
 		draw_circle(Vector2.ZERO, radius * 0.95, Color(color, 0.11), true, -1.0, true)
 		draw_arc(Vector2.ZERO, radius * 0.98, 0, TAU, 36, Color(color, 0.87), 2.6, true)
@@ -368,7 +381,8 @@ func _draw() -> void:
 		draw_rect(Rect2(bx, by, bw, bh), Color(0.20, 0.18, 0.20))
 		draw_rect(Rect2(bx, by, bw, bh), Color(0.06, 0.05, 0.06), false, 1.5)
 		var rr := clampf(hp_ratio, 0.0, 1.0)
-		draw_rect(Rect2(bx + 1.5, by + 1.5, (bw - 3.0) * rr, bh - 3.0), _hp_color(rr))
+		var fill := ring_col.lerp(Color(0.89, 0.70, 0.40), 1.0 - rr) if role == "dragon" else _hp_color(rr)
+		draw_rect(Rect2(bx + 1.5, by + 1.5, (bw - 3.0) * rr, bh - 3.0), fill)
 		if unit_name != "":
 			var fs := 16
 			var tw := UI_FONT.get_string_size(unit_name, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x

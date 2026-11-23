@@ -24,6 +24,8 @@ const CardFrame := preload("res://kushou/card_frame.gd")
 var _draw_art_cache: Dictionary = {}
 var _frame_fx_art: Texture2D
 var _skill_frame_art: Texture2D
+var _dragon_frame_art: Texture2D
+var _dragon_wave_art: Texture2D
 var _frame_fx_live := 0
 var _hazard_view: HazardTelegraph
 
@@ -328,6 +330,12 @@ func _ready() -> void:
 		var skill_effect_path := "res://assets/art/fx/skill_bursts_v1.png"
 		if ResourceLoader.exists(skill_effect_path):
 			_skill_frame_art = load(skill_effect_path) as Texture2D
+		var dragon_path := "res://assets/gen/allies/river_dragon.png"
+		if ResourceLoader.exists(dragon_path):
+			_dragon_frame_art = load(dragon_path) as Texture2D
+		var wave_path := "res://assets/art/fx/dragon_wave_v1.png"
+		if ResourceLoader.exists(wave_path):
+			_dragon_wave_art = load(wave_path) as Texture2D
 		for frame_id in FOE_FRAME_PATH.values():
 			var path := "res://assets/gen/enemies/frames/%s.png" % frame_id
 			_foe_animation_cache[frame_id] = load(path) as Texture2D if ResourceLoader.exists(path) else null
@@ -6871,6 +6879,9 @@ class GodCard extends Button:
 
 
 # ---------------- 召唤物：蛟龙 ----------------
+const DRAGON_TONE := Color(0.38, 0.90, 0.82)
+const DRAGON_WAVE_RADIUS := 130.0
+
 func _summon_dragon(bonus_pct: float) -> void:
 	var m: Dictionary = _anc_mod.get("cuisanniang", {})
 	var cap := 1 + int(m.get("cap_add", 0.0))
@@ -6880,15 +6891,19 @@ func _summon_dragon(bonus_pct: float) -> void:
 	var hero_atk := float(_core.hero.get("atk", 12.0))
 	var life := 30.0 + float(m.get("life_flat", 0.0))
 	var idx := dragon_count
-	var pos := Vector2(360.0 - 80.0 + float(idx) * 160.0, 726.0)
-	var tk = TokenActor.new()
-	tk.setup(null, 20.0, Color(0.30, 0.62, 0.80), false)
+	# 脚底和召唤阵都在提示条上方，入场时也能看见完整动作。
+	var pos := Vector2(clampf(280.0 + float(idx) * 160.0, 70.0, _core.size.x - 70.0), _core.size.y - 80.0)
+	var tk := TokenActor.new()
+	tk.set_role("dragon")
+	tk.round_mask = _dragon_frame_art == null
+	tk.setup(null, 25.0, DRAGON_TONE, false, _dragon_frame_art)
 	tk.show_bar = true
-	tk.bar_w = 44.0
+	tk.bar_w = 48.0
 	tk.unit_name = "蛟龙"
+	tk.name_col = Color(0.74, 0.98, 0.91)
 	tk.z_index = 5
 	tk.position = _core.position + pos
-	add_child(tk)
+	_cam.add_child(tk)
 	tk.play_spawn()
 	_skill_fx("召唤", tk.position - Vector2(0, 12))
 	var mul := 1.0 + bonus_pct / 100.0
@@ -6901,7 +6916,6 @@ func _summon_dragon(bonus_pct: float) -> void:
 		"base_dmg": bd, "base_wave": hero_atk * 2.5 * mul,
 		"dmg": bd * ss, "wave_dmg": hero_atk * 2.5 * mul * ss, "tk": tk})
 	_toast("蛟龙现世 · 存在 %d 秒" % int(life))
-	Aud.sfx("warcry", -8.0)
 
 var _minions_ticking := false
 
@@ -6929,7 +6943,8 @@ func _step_minions(dt: float) -> void:
 		if not _minions.has(m):
 			continue
 		m["life"] = float(m["life"]) - dt
-		var tk = m["tk"]
+		var tk := m["tk"] as TokenActor
+		var is_dragon := is_instance_valid(tk) and tk.role == "dragon"
 		if _swallow_sea and m.has("base_dmg"):
 			m["life"] = float(m["max_life"])
 			var ss2 := 1.0 + _ss_pct / 100.0
@@ -6940,7 +6955,7 @@ func _step_minions(dt: float) -> void:
 			if m.has("decoy"):
 				m["decoy"]["active"] = false
 			if tk != null and is_instance_valid(tk):
-				tk.play_down()
+				tk.retire()
 			# 奇物·招魂幡 Lv5：鬼影消失时自爆
 			if float(m.get("boom", 0.0)) > 0.0 and _core != null:
 				var at_e: Vector2 = m["pos"]
@@ -6989,9 +7004,14 @@ func _step_minions(dt: float) -> void:
 			if dv.length() > 48.0:
 				m["pos"] = mp0 + dv.normalized() * minf(150.0 * dt, dv.length() - 48.0)
 			else:
+				var previous_cd := float(m["atk_cd"])
 				m["atk_cd"] = float(m["atk_cd"]) - dt
+				if is_dragon and previous_cd > 0.17 and float(m["atk_cd"]) > 0.0 and float(m["atk_cd"]) <= 0.17:
+					tk.prepare_attack(dv, float(m["atk_cd"]))
 				if float(m["atk_cd"]) <= 0.0:
 					m["atk_cd"] = 1.1
+					if is_dragon:
+						tk.play_attack(dv)
 					var md: float = _core._apply_dmg(best, float(m["dmg"]), "召唤")
 					if float(best.get("hp", 0.0)) <= 0.0:
 						_core._kill_foe(best)
@@ -7003,7 +7023,7 @@ func _step_minions(dt: float) -> void:
 					if float(m.get("lc", 0.0)) > 0.0 and md > 0.0 and _core != null:
 						_core.heal_hero(md * float(m["lc"]))
 			m["wave_cd"] = float(m["wave_cd"]) - dt
-			if float(m["wave_cd"]) <= 0.0:
+			if float(m["wave_cd"]) <= 0.0 and _core.foes.has(best) and float(best.get("hp", 0.0)) > 0.0:
 				m["wave_cd"] = 20.0
 				_dragon_wave(m, best)
 				if not _skill_batch_active(epoch):
@@ -7014,25 +7034,47 @@ func _step_minions(dt: float) -> void:
 			m["pos"] = mp0 + back.normalized() * minf(150.0 * dt, back.length())
 		if tk != null and is_instance_valid(tk):
 			tk.position = _core.position + Vector2(m["pos"])
-			tk.hp_ratio = float(m["life"]) / maxf(1.0, float(m["max_life"]))
-			tk.queue_redraw()
+			var ratio := float(m["life"]) / maxf(1.0, float(m["max_life"]))
+			if absf(tk.hp_ratio - ratio) > 0.002:
+				tk.hp_ratio = ratio
+				tk.queue_redraw()
 
 # 大浪拍击：单体；六档「怒涛」进化成一圈 + 减速
 func _dragon_wave(m: Dictionary, target: Dictionary) -> void:
+	var epoch: int = _core._enemy_attack_epoch
+	if not _skill_batch_active(epoch):
+		return
 	var wm: Dictionary = _anc_mod.get("cuisanniang", {})
 	var evo := float(wm.get("wave_evo", 0.0)) > 0.0
 	var at := Vector2(float(target["x"]), float(target["y"]))
+	var origin := Vector2(m["pos"])
+	var actor := m["tk"] as TokenActor
+	if is_instance_valid(actor):
+		actor.play_cast(at - origin)
+	if _fx_front != null:
+		_fx_front.spawn_skill_trail(origin - Vector2(0, 24), at - Vector2(0, 17), DRAGON_TONE, 12.0)
+		if evo:
+			_fx_front.spawn_cast_seal(at, DRAGON_TONE, DRAGON_WAVE_RADIUS, 1.0)
+	if _dragon_wave_art != null:
+		var burst_scale := 1.40 if evo else 1.02
+		var wave := _spawn_frame_burst(0, _core.position + at - Vector2(0, 52.0 * burst_scale), burst_scale, 0.36, 0.0, _dragon_wave_art)
+		if wave != null:
+			wave.flip_h = at.x < origin.x
 	for f_v in _core.foes.duplicate():
 		var f: Dictionary = f_v
-		if float(f.get("hp", 0.0)) <= 0.0 or float(f.get("dying", 0.0)) > 0.0:
+		if not _core.foes.has(f) or float(f.get("hp", 0.0)) <= 0.0 or float(f.get("dying", 0.0)) > 0.0:
 			continue
 		var d := (Vector2(float(f["x"]), float(f["y"])) - at).length()
-		if f != target and not (evo and d <= 130.0):
+		if f != target and not (evo and d <= DRAGON_WAVE_RADIUS):
 			continue
 		_core._apply_dmg(f, float(m["wave_dmg"]), "召唤")
 		if evo:
 			f["slow_t"] = 2.0
 		_core._push_float(float(f["x"]), float(f["y"]) - 40.0, "大浪", Color(0.38, 0.62, 0.82), true)
+		if float(f["hp"]) <= 0.0:
+			_core._kill_foe(f)
+			if not _skill_batch_active(epoch):
+				return
 	Aud.sfx("hit_heavy", -10.0)
 
 # ---------------- 吞海（崔三娘炫卡） ----------------
