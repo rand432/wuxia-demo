@@ -99,17 +99,39 @@ func _draw_enemy_attack(strike: Dictionary) -> void:
 		"bow":
 			# 伤害已经在出手帧结算，短残影指向落点，不再补一次假命中。
 			var tail := origin.lerp(target, progress * 0.82)
-			draw_line(tail, target, Color(0.98, 0.79, 0.40, opacity * 0.46), 5.0, true)
+			draw_line(tail, target, Color(0.21, 0.13, 0.07, opacity * 0.66), 4.5, true)
 			draw_line(tail, target, Color(1.0, 0.95, 0.71, opacity), 1.8, true)
 			var normal := direction.orthogonal()
 			draw_colored_polygon(PackedVector2Array([target, target - direction * 11.0 + normal * 4.0, target - direction * 11.0 - normal * 4.0]), Color(1.0, 0.93, 0.71, opacity))
+			if progress < 0.5:
+				draw_line(tail - normal * 4.0 - direction * 8.0, tail, Color(1.0, 0.66, 0.28, opacity), 2.2, true)
+				draw_line(tail + normal * 4.0 - direction * 8.0, tail, Color(1.0, 0.66, 0.28, opacity), 2.2, true)
 		"mage":
-			draw_arc(origin, 9.0 + 13.0 * progress, 0.0, TAU, 22, Color(0.78, 0.62, 1.0, opacity), 2.2, true)
+			var flare := Color(0.78, 0.62, 1.0, opacity)
+			var spread := 5.0 + 12.0 * progress
+			draw_polyline(PackedVector2Array([origin + Vector2(0, -spread), origin + Vector2(spread, 0),
+				origin + Vector2(0, spread), origin + Vector2(-spread, 0), origin + Vector2(0, -spread)]), flare, 2.2, true)
 			var bend := origin.lerp(target, 0.55) + direction.orthogonal() * 12.0
 			draw_polyline(PackedVector2Array([origin, bend, target]), Color(0.74, 0.49, 1.0, opacity * 0.72), 4.0, true)
 			for i in range(3):
 				var spark := origin.lerp(target, (float(i) + 1.0 + progress) / 5.0)
 				draw_circle(spark, (4.0 - float(i) * 0.7) * opacity, Color(0.91, 0.83, 1.0, opacity))
+		"snap":
+			var center := origin.lerp(target, 0.68)
+			var angle := direction.angle()
+			var gap := lerpf(0.74, 0.30, progress)
+			var reach := 21.0 + progress * 10.0
+			for side in [-1.0, 1.0]:
+				var tip := center + Vector2.from_angle(angle + gap * side) * reach
+				var corner := center + Vector2.from_angle(angle + (gap + 0.20) * side) * reach * 0.76
+				draw_colored_polygon(PackedVector2Array([center - direction * 7.0, corner, tip]),
+					Color(1.0, 0.73, 0.35, opacity))
+		"cleaver":
+			var center := origin.lerp(target, 0.55)
+			var angle := direction.angle() + 0.34 * progress
+			var reach := 30.0 + progress * 18.0
+			draw_arc(center, reach, angle - 1.17, angle + 0.92, 22, Color(0.39, 0.23, 0.51, opacity), 8.0 * opacity + 1.0, true)
+			draw_arc(center, reach + 2.0, angle - 1.06, angle + 0.82, 22, Color(0.94, 0.85, 1.0, opacity), 2.8 * opacity + 0.5, true)
 		_:
 			var center := origin.lerp(target, 0.60)
 			var angle := direction.angle()

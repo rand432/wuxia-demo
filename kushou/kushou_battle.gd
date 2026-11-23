@@ -631,7 +631,7 @@ func _spawn_foe(kind := "normal", hp_mul := 1.0, atk_mul := 1.0, big := false, t
 const CHAL_FOE_HP := [1.0, 1.2, 1.0, 2.6, 3.2]        # 血量倍率（大怪明显厚）
 const CHAL_FOE_ATK := [0.9, 1.0, 0.9, 1.5, 1.8]       # 攻击倍率
 const CHAL_FOE_SCALE := [0.86, 0.86, 0.86, 1.7, 2.0]  # 体型（大怪一眼看得出来）
-const CHAL_FOE_NAME := ["钱怪", "晶怪", "书怪", "宝箱大怪", "挑战 boss"]
+const CHAL_FOE_NAME := ["钱怪", "晶怪", "书怪", "宝箱大怪", "挑战匪首"]
 # v15o（用户："挑战方面 也会随着波次增强 奖励也会随之提升"）：
 #   挑战原来跟普通怪吃**同一条**波次曲线（血 1.12^波 / 攻 1.08^波），后期会觉得"白送"。
 #   这里再叠一层**挑战专属**的线性爬升：怪涨得比奖励快（不然灵晶经济会崩）。
@@ -676,7 +676,9 @@ func spawn_challenge(kind_i: int, n: int) -> void:
 		f["stop"] = (FOE_REACH + 60.0 if big else FOE_REACH) + randf() * 20.0
 	if spawned == 0:
 		return
-	_banner = ("挑战：" + str(CHAL_FOE_NAME[i]) + ("　大怪" if big else ("　一群 " + str(spawned) + " 只")))
+	_banner = "挑战：" + str(CHAL_FOE_NAME[i])
+	if not big:
+		_banner += "　一群 " + str(spawned) + " 只"
 	_banner_t = 2.0
 	Audio.sfx("bell", -8.0)
 	# v16o（用户："背景喊杀声太多了 其实没必要有喊杀声"）：
@@ -1801,10 +1803,12 @@ func _delayed_hit(d: Dictionary, damage_scale := 1.0, allow_paper := true, is_im
 		_hitstop = 0.10
 
 # 场上活着的那只 boss（给顶上的专属血条用）
-func _boss_foe() -> Dictionary:
+func _boss_foe(include_challenges := true) -> Dictionary:
 	for f_v in foes:
 		var f: Dictionary = f_v
 		if bool(f.get("boss", false)) and float(f.get("dying", 0.0)) <= 0.0:
+			if not include_challenges and f.has("chal"):
+				continue
 			return f
 	return {}
 

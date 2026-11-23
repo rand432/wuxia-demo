@@ -343,7 +343,7 @@ func _draw() -> void:
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	# 圆牌底 + 金边（怪物：有立绘时省掉圆牌，直接站人）
 	var c := Vector2(0.0, -radius) + off
-	var show_plate := art_tex == null or round_mask
+	var show_plate := (art_tex == null and _frame_atlas == null) or round_mask
 	if show_plate:
 		draw_circle(c, radius, Color(0.93, 0.90, 0.83, 1.0))
 		draw_arc(c, radius, 0.0, TAU, 64, Color(0.42, 0.35, 0.25, 0.55), 2.0, true)

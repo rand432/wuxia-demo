@@ -29,7 +29,7 @@ var _hazard_view: HazardTelegraph
 # 怪物立绘：名字 → assets/gen/enemies/foe_<key>.png；没有就回退旧的圆牌 + 一个字
 const FOE_ART := {
 	"狱狼": "yulang", "疯牛": "fengniu", "毒蝎": "duxie", "牢鼠": "laoshu",
-	"钱怪": "qian", "晶怪": "jing", "书怪": "shu", "宝箱大怪": "baoxiang", "挑战 boss": "boss",
+	"钱怪": "qian", "晶怪": "jing", "书怪": "shu", "宝箱大怪": "baoxiang", "挑战匪首": "boss",
 	"看门恶犬": "kanmen_quan", "铁背苍狼": "tiebei_lang", "毒牙蟒": "duya_mang", "石甲巨猿": "shijia_yuan",
 	"双头狮": "shuangtou_shi", "独眼狱卒": "duyan_yuzu", "火尾狐妖": "huowei_hu", "赤焰蛟": "chiyan_jiao",
 	"场主亲养·狴犴": "bian", "血手判官": "xueshou_panguan", "困兽之主": "kunshou_zhu",
@@ -38,7 +38,11 @@ const FOE_ART := {
 }
 var _foe_tex_cache := {}
 var _foe_animation_cache := {}
-const FOE_FRAME_PATH := {"狱狼": "yulang", "石甲巨猿": "shijia_yuan"}
+const FOE_FRAME_PATH := {
+	"狱狼": "yulang", "石甲巨猿": "shijia_yuan",
+	"山匪弓手": "archer", "符杖术士": "talisman_mage",
+	"宝箱大怪": "challenge_mimic", "挑战匪首": "challenge_chief",
+}
 const CHALLENGE_RIMS := [Color(0.99, 0.76, 0.31), Color(0.32, 0.79, 0.91), Color(0.47, 0.79, 0.58),
 	Color(0.98, 0.53, 0.34), Color(0.79, 0.48, 0.94)]
 
@@ -2856,7 +2860,7 @@ func _process(_delta: float) -> void:
 						tkq.queue_free()
 					_recycle_q.remove_at(i)
 		if _boss_bar != null:
-			var bf: Dictionary = _core._boss_foe() if _core != null else {}
+			var bf: Dictionary = _core._boss_foe(false) if _core != null else {}
 			_boss_on = not bf.is_empty()
 			if bf.is_empty():
 				if _boss_bar.visible:
@@ -2947,7 +2951,7 @@ func _process(_delta: float) -> void:
 				if absf(hr - float(tk.hp_ratio)) > 0.0015:
 					tk.hp_ratio = hr
 					tk.queue_redraw()
-				var uname := str(f.get("name", ""))
+				var uname := _foe_display_name(f)
 				if uname != tk.unit_name:
 					tk.unit_name = uname
 					tk.queue_redraw()
@@ -4622,11 +4626,23 @@ class AugCard extends Button:
 
 
 
+func _foe_display_name(foe: Dictionary) -> String:
+	if str(foe.get("kind", "normal")) == "normal":
+		if bool(foe.get("mage", false)):
+			return "符杖术士"
+		if bool(foe.get("ranged", false)):
+			return "山匪弓手"
+	return str(foe.get("name", ""))
+
 func _make_foe_token(f: Dictionary):
 	var kind := str(f.get("kind", "normal"))
 	var boss := bool(f.get("boss", false))
 	var challenge := clampi(int(f.get("chal", -1)), -1, 4)
-	var rad := 52.0 if boss else 26.0        # Boss 圆牌明显更大
+	var rad := 52.0 if boss else 26.0
+	if challenge == 3:
+		rad = 41.0
+	elif challenge == 4:
+		rad = 47.0
 	var ring := Color(0.42, 0.36, 0.28)
 	if challenge >= 0:
 		ring = CHALLENGE_RIMS[challenge]
@@ -4640,15 +4656,16 @@ func _make_foe_token(f: Dictionary):
 		ring = Color(0.95, 0.62, 0.12)        # Boss：金橙
 	var mark_ch := "王" if boss else ("钱" if kind == "coin" else ("晶" if kind == "crystal" else ("挑" if kind == "chal" else "怪")))
 	var msize := 22 if not boss else 38
-	var foe_tex := _foe_art(str(f.get("name", "")))
+	var title := _foe_display_name(f)
 	var frames: Texture2D = null
-	if challenge < 0 and not bool(f.get("ranged", false)) and not bool(f.get("mage", false)):
-		var frame_id := str(FOE_FRAME_PATH.get(f.get("name", ""), ""))
+	if challenge < 0 or challenge >= 3:
+		var frame_id := str(FOE_FRAME_PATH.get(title, ""))
 		if not frame_id.is_empty():
 			if not _foe_animation_cache.has(frame_id):
 				var path := "res://assets/gen/enemies/frames/%s.png" % frame_id
 				_foe_animation_cache[frame_id] = load(path) as Texture2D if ResourceLoader.exists(path) else null
 			frames = _foe_animation_cache[frame_id] as Texture2D
+	var foe_tex := _foe_art(str(f.get("name", ""))) if frames == null else null
 	# 池里有就复用（TokenActor 每建一个都要 new Shader/ShaderMaterial，很贵）
 	if not _foe_pool.is_empty():
 		var tk0 = _foe_pool.pop_back()
@@ -4661,12 +4678,12 @@ func _make_foe_token(f: Dictionary):
 		tk0.hp_ratio = 1.0
 		tk0.show_bar = true
 		tk0.bar_w = 84.0 if boss else 54.0
-		tk0.unit_name = str(f.get("name", ""))
+		tk0.unit_name = title
 		tk0.position = _core.position + Vector2(float(f["x"]), float(f["y"]))
 		tk0.visible = true
 		var mk: Label = tk0.get_meta("mark", null)
 		if mk != null:
-			mk.visible = foe_tex == null
+			mk.visible = foe_tex == null and frames == null
 			mk.text = mark_ch
 			mk.position = Vector2(-rad, -rad * 2.0 + 6.0)
 			mk.size = Vector2(rad * 2.0, rad * 1.5)
@@ -4682,11 +4699,11 @@ func _make_foe_token(f: Dictionary):
 	tk.setup(foe_tex, rad, ring, false, frames)
 	tk.show_bar = true
 	tk.bar_w = 84.0 if boss else 54.0
-	tk.unit_name = str(f.get("name", ""))
+	tk.unit_name = title
 	tk.z_index = 5
 	tk.position = _core.position + Vector2(float(f["x"]), float(f["y"]))
 	var mark := Label.new()
-	mark.visible = foe_tex == null
+	mark.visible = foe_tex == null and frames == null
 	mark.text = mark_ch
 	mark.position = Vector2(-rad, -rad * 2.0 + 6.0)
 	mark.size = Vector2(rad * 2.0, rad * 1.5)
@@ -5898,15 +5915,24 @@ func _on_foe_attack(foe: Dictionary, target: Vector2) -> void:
 		kind = "mage"
 	elif bool(foe.get("ranged", false)):
 		kind = "bow"
+	elif token.challenge_kind == 3:
+		kind = "snap"
+	elif token.challenge_kind == 4:
+		kind = "cleaver"
 	var direction: Vector2 = destination - token.position
 	match kind:
-		"bow": token.play_attack(-direction, 0.0, 7.0)
-		"mage": token.play_attack(Vector2.UP, 0.0, 9.0)
+		"bow": token.play_attack(direction if token._frame_atlas != null else -direction, 0.0, 7.0)
+		"mage": token.play_attack(direction if token._frame_atlas != null else Vector2.UP, 0.0, 9.0)
 		_: token.play_attack(direction)
 	if token.guardian and token._frame_atlas != null and kind == "melee":
 		_spawn_frame_burst(3, destination, 1.5, 0.28)
 	if _fx_front != null:
-		var origin: Vector2 = token.position - Vector2(0, token.radius * 1.2) - FIELD_POS
+		var origin: Vector2 = token.position - Vector2(0, token.radius * (0.85 if kind == "snap" else 1.2)) - FIELD_POS
+		if token._frame_atlas != null and (kind == "bow" or kind == "mage"):
+			var side := signf(direction.x) if absf(direction.x) > 1.0 else float(token._dir)
+			origin.x += token.radius * 0.84 * side
+			if kind == "mage":
+				origin.y -= token.radius * 0.26
 		_fx_front.spawn_enemy_attack(origin, destination - Vector2(0, 26) - FIELD_POS, kind)
 
 func _on_hero_foe_hit(tgt: Dictionary, dmg: float, crit: bool, heavy: bool) -> void:
