@@ -25,6 +25,15 @@ static func navigate_packed(page: Control, scene: PackedScene) -> Error:
 	var err := page.get_tree().change_scene_to_packed(scene)
 	if err != OK: page.set_meta("scene_changing", false)
 	return err
+
+static func navigate_instance(page: Control, scene: Node) -> Error:
+	if not navigation_available(page): return ERR_BUSY
+	if scene == null or scene.get_parent() != null: return ERR_INVALID_PARAMETER
+	page.set_meta("scene_changing", true)
+	var err := page.get_tree().change_scene_to_node(scene)
+	if err != OK: page.set_meta("scene_changing", false)
+	return err
+
 const TEX_PAPER := preload("res://assets/art/ui/tile_paper.png")
 
 const W := 720.0

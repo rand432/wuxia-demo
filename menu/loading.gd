@@ -1,5 +1,5 @@
 extends Control
-# 战斗加载页：线程加载 battle_ui，加载完直接切（稳定版，不再自己挂战斗）
+# 战斗加载页：场景与首屏贴图就绪后再切入。
 const BATTLE := "res://kushou/battle_ui.tscn"
 const FONT := preload("res://fonts/ink.ttf")
 const UI := preload("res://shared/ui_kit.gd")
@@ -9,6 +9,9 @@ var _tip: Label = null
 var _done := false
 var _requesting := false
 var _recovery: HBoxContainer
+var _battle: Control
+var _art_pending: Array[String] = []
+var _art_total := 0
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -94,19 +97,67 @@ func _loading_failed() -> void:
 	_tip.text = "加载失败，请重试或返回主页"
 	_recovery.show()
 
+func _exit_tree() -> void:
+	if _battle != null:
+		_battle.free()
+		_battle = null
+
 func _process(_delta: float) -> void:
 	if _done or not UI.navigation_available(self):
+		return
+	if _battle != null:
+		_poll_art()
 		return
 	var prog: Array = []
 	var st := ResourceLoader.load_threaded_get_status(BATTLE, prog)
 	var v := float(prog[0]) if prog.size() > 0 else 0.0
-	_fill.size = Vector2(520.0 * clampf(v, 0.0, 1.0), 18)
-	_pct.text = "%d%%" % int(clampf(v, 0.0, 1.0) * 100.0)
+	_show_progress(0.45 * v)
 	if st == ResourceLoader.THREAD_LOAD_LOADED:
+		var ps: PackedScene = ResourceLoader.load_threaded_get(BATTLE)
+		if ps == null:
+			_loading_failed()
+			return
+		var instance := ps.instantiate()
+		if not instance is Control:
+			if instance != null:
+				instance.free()
+			_loading_failed()
+			return
+		_battle = instance
+		var paths: Array[String] = _battle.prepare_entry_art()
+		for path in paths:
+			if ResourceLoader.exists(path) and ResourceLoader.load_threaded_request(path, "Texture2D") == OK:
+				_art_pending.append(path)
+		_art_total = _art_pending.size()
+		_tip.text = "正在准备战场和卡牌…"
+		_show_progress(1.0 if _art_pending.is_empty() else 0.45)
+	elif st == ResourceLoader.THREAD_LOAD_FAILED or st == ResourceLoader.THREAD_LOAD_INVALID_RESOURCE:
+		if st == ResourceLoader.THREAD_LOAD_FAILED:
+			ResourceLoader.load_threaded_get(BATTLE)
+		_loading_failed()
+
+func _poll_art() -> void:
+	if _art_pending.is_empty():
 		_done = true
 		_requesting = false
-		var ps: PackedScene = ResourceLoader.load_threaded_get(BATTLE)
-		if ps == null or UI.navigate_packed(self, ps) != OK:
+		# 切换场景时当前页会先退出，提前转交新节点的所有权。
+		var battle := _battle
+		_battle = null
+		if UI.navigate_instance(self, battle) != OK:
+			battle.free()
 			_loading_failed()
-	elif st == ResourceLoader.THREAD_LOAD_FAILED or st == ResourceLoader.THREAD_LOAD_INVALID_RESOURCE:
-		_loading_failed()
+		return
+	for i in range(_art_pending.size() - 1, -1, -1):
+		var path := _art_pending[i]
+		var status := ResourceLoader.load_threaded_get_status(path)
+		if status == ResourceLoader.THREAD_LOAD_IN_PROGRESS:
+			continue
+		if status == ResourceLoader.THREAD_LOAD_LOADED or status == ResourceLoader.THREAD_LOAD_FAILED:
+			_battle.supply_entry_art(path, ResourceLoader.load_threaded_get(path) as Texture2D)
+		_art_pending.remove_at(i)
+	_show_progress(1.0 - 0.55 * float(_art_pending.size()) / float(_art_total))
+
+func _show_progress(value: float) -> void:
+	var fraction := clampf(value, 0.0, 1.0)
+	_fill.size.x = 520.0 * fraction
+	_pct.text = "%d%%" % int(fraction * 100.0)

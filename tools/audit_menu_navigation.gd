@@ -123,13 +123,44 @@ func _run() -> void:
 	home._start_level()
 	home._on_dock("role")
 	assert(LS.current_level == 6)
+	var loading = await _scene("res://menu/loading.tscn")
+	for i in range(600):
+		if loading._battle != null: break
+		await process_frame
+	assert(loading._art_total > 0 and not loading._battle.is_inside_tree())
 	var battle = await _scene("res://kushou/battle_ui.tscn")
 	assert(battle._core != null and LS.current_level == 6)
+	assert(battle._entry_cards_ready and battle._entry_art.is_empty())
+	assert(battle._hero_token._frame_atlas != null and battle._skill_frame_art != null)
+	assert(battle._draw_art_cache.values().any(func(art): return art != null))
+	assert(battle._draw_layer == null and battle._str_layer == null and battle._trea_layer == null and battle._god_layer == null)
+	battle._tut.cancel()
+	battle._crystal = 40
+	battle._draw_tile.pressed.emit()
+	var draw_panel: Control = battle._draw_layer
+	assert(draw_panel.visible and battle._draw_cards.size() == 3 and battle._crystal == 20)
+	battle._draw_charge = 1
+	battle._mate_tile.pressed.emit()
+	var god_panel: Control = battle._god_layer
+	assert(god_panel.visible and not draw_panel.visible and battle._god_root.get_child_count() > 0)
+	battle._trea_charge = 1
+	battle._trea_tile.pressed.emit()
+	var treasure_panel: Control = battle._trea_layer
+	assert(treasure_panel.visible and not god_panel.visible and battle._trea_cards.size() == 3 and battle._trea_charge == 0)
+	battle._str_pending = true
+	battle._str_lv = 10
+	battle._open_aug_pick()
+	var augment_panel: Control = battle._str_layer
+	assert(augment_panel.visible and not treasure_panel.visible and battle._aug_cards.size() == 3)
+	for i in range(8): await process_frame
+	assert(battle._draw_layer == draw_panel and battle._god_layer == god_panel)
+	assert(battle._trea_layer == treasure_panel and battle._str_layer == augment_panel)
+	assert(augment_panel.visible and battle._exit_layer != null and battle._combined_layer != null)
 	paused = false
 	battle.queue_free()
 	current_scene = null
 	await process_frame
 	await process_frame
 	await create_timer(0.5).timeout # 等场景切换/音频的延迟清理完成后再退出引擎。
-	print("PASS: loading retry single-flight/failure/back recovery; real four-page navigation and loading->battle; late stage/equipment/settings callbacks inert")
+	print("PASS: loading recovery, detached prefetch, immediate first panel opens during staged setup, and late callbacks inert")
 	Audio.quit_cleanly()

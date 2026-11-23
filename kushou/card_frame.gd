@@ -4,11 +4,14 @@ const QC := [Color(0.54, 0.48, 0.38), Color(0.31, 0.48, 0.29), Color(0.18, 0.42,
 
 static var _cache: Dictionary = {}
 
+static func texture_path(quality: int) -> String:
+	return "res://assets/art/cards/frames/frame_%d.png" % clampi(quality, 1, 5)
+
 static func tex_of(quality: int) -> Texture2D:
 	var q := clampi(quality - 1, 0, 4)
 	if _cache.has(q):
 		return _cache[q] as Texture2D
-	var path := "res://assets/art/cards/frames/frame_%d.png" % (q + 1)
+	var path := texture_path(quality)
 	var t: Texture2D = null
 	if ResourceLoader.exists(path):
 		t = load(path) as Texture2D

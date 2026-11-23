@@ -21,12 +21,24 @@ const HazardTelegraph := preload("res://kushou/hazard_telegraph.gd")
 const BlackMarket := preload("res://kushou/black_market.gd")
 const MenuUI := preload("res://shared/ui_kit.gd")
 const CardFrame := preload("res://kushou/card_frame.gd")
+const HERO_FRAMES_PATH := "res://assets/char/player_battle_frames.png"
+const BATTLE_FRAMES_PATH := "res://assets/art/fx/battle_bursts_v1.png"
+const SKILL_FRAMES_PATH := "res://assets/art/fx/skill_bursts_v1.png"
+const DRAGON_FRAMES_PATH := "res://assets/gen/allies/river_dragon.png"
+const DRAGON_WAVE_PATH := "res://assets/art/fx/dragon_wave_v1.png"
+const ENTRY_ELITE_FRAME_IDS := ["shijia_yuan", "challenge_mimic", "challenge_chief"]
+var _entry_art: Dictionary = {}
+var _entry_cards_ready := false
 var _draw_art_cache: Dictionary = {}
 var _frame_fx_art: Texture2D
 var _skill_frame_art: Texture2D
 var _dragon_frame_art: Texture2D
 var _dragon_wave_art: Texture2D
+const FRAME_FX_LIMIT := 16
+const FRAME_FX_AMBIENT_LIMIT := 12
 var _frame_fx_live := 0
+var _frame_fx_pool: Array[FrameBurst] = []
+var _impact_sparks: ImpactSparks
 var _hazard_view: HazardTelegraph
 
 # 怪物立绘：名字 → assets/gen/enemies/foe_<key>.png；没有就回退旧的圆牌 + 一个字
@@ -315,6 +327,45 @@ var _hero_hit_btn: Button = null
 var _hero_name_lb: Label = null
 const HERO_NAME_OFFSET := Vector2(-60, 9)
 
+func prepare_entry_art() -> Array[String]:
+	GameState.ensure_loaded()
+	if not _entry_cards_ready:
+		_init_cards()
+		_entry_cards_ready = true
+	var paths: Array[String] = [HERO_FRAMES_PATH, BATTLE_FRAMES_PATH, SKILL_FRAMES_PATH,
+		DRAGON_FRAMES_PATH, DRAGON_WAVE_PATH, BgArt.path_for(LevelState.current_level - 1)]
+	for frame_id in ENTRY_ELITE_FRAME_IDS + CROWD_FRAME_PATH.values():
+		paths.append(_foe_frame_path(frame_id))
+	for id in _pool:
+		var card: Dictionary = _card_db.get(id, {})
+		var frame := CardFrame.texture_path(int(card.get("quality", 3)))
+		var art := str(card.get("art", ""))
+		if not paths.has(frame):
+			paths.append(frame)
+		if not art.is_empty() and not paths.has(art):
+			paths.append(art)
+	for key in _entry_choice_item_keys():
+		var path := _choice_item_path(key)
+		if not paths.has(path):
+			paths.append(path)
+	for aid in LevelState.god_ids():
+		if AncestorData.ANCESTORS.has(aid):
+			var path := _god_skill_path(aid, AncestorData.ANCESTORS[aid]["art"])
+			if not paths.has(path):
+				paths.append(path)
+	return paths
+
+func supply_entry_art(path: String, texture: Texture2D) -> void:
+	_entry_art[path] = texture
+
+func _entry_texture(path: String) -> Texture2D:
+	if _entry_art.has(path):
+		return _entry_art[path] as Texture2D
+	return load(path) as Texture2D if not path.is_empty() and ResourceLoader.exists(path) else null
+
+func _foe_frame_path(frame_id: String) -> String:
+	return "res://assets/gen/enemies/frames/%s.png" % frame_id
+
 func _ready() -> void:
 	GameState.ensure_loaded()
 	Aud.play_battle_music()
@@ -326,22 +377,14 @@ func _ready() -> void:
 	th.default_font_size = 17
 	theme = th
 	if not _no_ui2:
-		_init_cards()
-		var effect_path := "res://assets/art/fx/battle_bursts_v1.png"
-		if ResourceLoader.exists(effect_path):
-			_frame_fx_art = load(effect_path) as Texture2D
-		var skill_effect_path := "res://assets/art/fx/skill_bursts_v1.png"
-		if ResourceLoader.exists(skill_effect_path):
-			_skill_frame_art = load(skill_effect_path) as Texture2D
-		var dragon_path := "res://assets/gen/allies/river_dragon.png"
-		if ResourceLoader.exists(dragon_path):
-			_dragon_frame_art = load(dragon_path) as Texture2D
-		var wave_path := "res://assets/art/fx/dragon_wave_v1.png"
-		if ResourceLoader.exists(wave_path):
-			_dragon_wave_art = load(wave_path) as Texture2D
-		for frame_id in ["shijia_yuan", "challenge_mimic", "challenge_chief"] + CROWD_FRAME_PATH.values():
-			var path := "res://assets/gen/enemies/frames/%s.png" % frame_id
-			_foe_animation_cache[frame_id] = load(path) as Texture2D if ResourceLoader.exists(path) else null
+		if not _entry_cards_ready:
+			_init_cards()
+		_frame_fx_art = _entry_texture(BATTLE_FRAMES_PATH)
+		_skill_frame_art = _entry_texture(SKILL_FRAMES_PATH)
+		_dragon_frame_art = _entry_texture(DRAGON_FRAMES_PATH)
+		_dragon_wave_art = _entry_texture(DRAGON_WAVE_PATH)
+		for frame_id in ENTRY_ELITE_FRAME_IDS + CROWD_FRAME_PATH.values():
+			_foe_animation_cache[frame_id] = _entry_texture(_foe_frame_path(frame_id))
 		_build_bg()
 	if not _no_ui:
 		_build_hud()
@@ -351,16 +394,16 @@ func _ready() -> void:
 			_build_deck()
 		_build_bottom()
 		_q_init()
-		_build_draw()
 		_warm_initial_draw_art()
-	# v6：角色属性统一走详细属性页（attr_panel），旧 8 行窗不再创建
-	if not _no_ui:
-		_build_exit()
+		_warm_choice_art()
 		_build_toast()
-		_build_combined()
-		_build_god_pick()
-		_build_str()
-		_build_trea()
+	_entry_art.clear()
+	if not _no_ui:
+		if _entry_cards_ready:
+			_build_entry_dialogs.call_deferred()
+		else:
+			for build in _entry_dialog_builders():
+				build.call()
 	if not _no_ui2:
 		_bm = BlackMarket.new()
 		_bm.setup(_core, self)
@@ -386,6 +429,16 @@ func _ready() -> void:
 	if _el_ready > 50000:
 		print("[SLOW] battle_ui ready ", _el_ready / 1000.0, " ms")
 	set_process(true)
+
+func _entry_dialog_builders() -> Array[Callable]:
+	return [_build_exit, _build_draw, _build_combined, _build_god_pick, _build_str, _build_trea]
+
+func _build_entry_dialogs() -> void:
+	for build in _entry_dialog_builders():
+		await get_tree().process_frame
+		if _run_over or not MenuUI.navigation_available(self):
+			return
+		build.call()
 
 # 上一关首通留下的“预习”：下一关开局生效一次
 func _apply_level_preview() -> void:
@@ -510,14 +563,14 @@ class BgArt extends Control:
 	var courtyard := false
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
-	func setup(idx: int) -> void:
-		var p: String = BG_LIST[wrapi(idx, 0, BG_LIST.size())]
-		village_yard = idx == 0 and ResourceLoader.exists(VILLAGE_YARD)
+	static func path_for(idx: int) -> String:
+		if idx == 0 and ResourceLoader.exists(VILLAGE_YARD):
+			return VILLAGE_YARD
+		return BG_LIST[wrapi(idx, 0, BG_LIST.size())]
+	func setup(idx: int, path: String, art: Texture2D) -> void:
+		village_yard = path == VILLAGE_YARD
 		courtyard = idx == 5
-		if village_yard:
-			p = VILLAGE_YARD
-		if ResourceLoader.exists(p):
-			tex = load(p) as Texture2D
+		tex = art
 	func _draw() -> void:
 		if village_yard and tex != null:
 			var surround := Color(0.15, 0.12, 0.09)
@@ -800,7 +853,9 @@ class DrawCard extends Control:
 func _build_bg() -> void:
 	var bg := BgArt.new()
 	bg.size = Vector2(W, H)
-	bg.setup(int(LevelState.current_level) - 1)
+	var index := LevelState.current_level - 1
+	var path := BgArt.path_for(index)
+	bg.setup(index, path, _entry_texture(path))
 	add_child(bg)
 	if bg.village_yard or bg.courtyard:
 		var air := StageAir.new()
@@ -1004,9 +1059,7 @@ func _build_field() -> void:
 	_core.start_run()
 	_hero_token = TokenActor.new()
 	_hero_token.round_mask = false
-	var hero_frame_path := "res://assets/char/player_battle_frames.png"
-	var hero_frames := load(hero_frame_path) as Texture2D if ResourceLoader.exists(hero_frame_path) else null
-	_hero_token.setup(PLAYER_TEX, 44.0, Color(0.96, 0.74, 0.30), false, hero_frames)
+	_hero_token.setup(PLAYER_TEX, 44.0, Color(0.96, 0.74, 0.30), false, _entry_texture(HERO_FRAMES_PATH))
 	_hero_token.set_role("player")
 	_hero_token.set_weapon("sword")
 	_hero_token.show_bar = false          # 主角血条只看顶部 HUD，不再挂漂浮血条
@@ -2431,6 +2484,8 @@ class Tile extends Button:
 
 # ---------------- 抽卡层 ----------------
 func _build_draw() -> void:
+	if _draw_layer != null:
+		return
 	_draw_layer = Control.new()
 	_draw_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_draw_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -2470,7 +2525,7 @@ func _warm_initial_draw_art() -> void:
 
 func _draw_art(path: String) -> Texture2D:
 	if not _draw_art_cache.has(path):
-		_draw_art_cache[path] = load(path) as Texture2D if not path.is_empty() and ResourceLoader.exists(path) else null
+		_draw_art_cache[path] = _entry_texture(path)
 	return _draw_art_cache[path]
 
 func _roll_draw() -> void:
@@ -2602,7 +2657,7 @@ func _refresh_draw_tile() -> void:
 		_draw_tile.queue_redraw()
 
 func _show_draw(v: bool) -> void:
-	if v and (_run_over or _draw_anim):
+	if v and (_run_over or _draw_anim or _no_ui):
 		return
 	if v:
 		_hide_aug_pick()                     # 进阶页开着一并收掉
@@ -2614,6 +2669,7 @@ func _show_draw(v: bool) -> void:
 			if _crystal < 20:
 				_toast("灵晶不足，不足以抽卡（一次要 20）")
 				return
+			_build_draw()
 			_crystal -= 20
 			_update_crystal()
 			_roll_draw()
@@ -2626,7 +2682,8 @@ func _show_draw(v: bool) -> void:
 		_draw_layer.move_to_front()
 		_pop_draw_cards()
 	else:
-		_draw_layer.visible = false
+		if _draw_layer != null:
+			_draw_layer.visible = false
 		_draw_open = false
 	_refresh_draw_tile()
 
@@ -2801,6 +2858,8 @@ func _apply_flat_growth(atk_add: float, hp_add: float, preserve_hp_ratio := fals
 
 # ---------------- 退出 ----------------
 func _build_exit() -> void:
+	if _exit_layer != null:
+		return
 	_exit_layer = Control.new()
 	_exit_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_exit_layer.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -2827,6 +2886,10 @@ func _build_exit() -> void:
 	_btn("退出", Rect2(220, 130, 140, 48), 18, Color(0.48, 0.14, 0.10), Color(0.97, 0.90, 0.74), func(): _quit(), p)
 
 func _show_exit(v: bool) -> void:
+	if v and not _no_ui:
+		_build_exit()
+	if _exit_layer == null:
+		return
 	_exit_open = v
 	_exit_layer.visible = v
 	if v:
@@ -3699,8 +3762,8 @@ const AUG_ART := {
 }
 
 func _build_str() -> void:
-	for art in AUG_ART.values():
-		_choice_item(str(art))
+	if _str_layer != null:
+		return
 	_str_layer = Control.new()
 	_str_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_str_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE     # 空白处放行给战场
@@ -3718,8 +3781,9 @@ func _build_str() -> void:
 		_aug_cards.append(card)
 
 func _open_aug_pick() -> void:
-	if _run_over or not _str_pending or _str_layer == null:
+	if _run_over or not _str_pending or _no_ui:
 		return
+	_build_str()
 	_close_challenge()
 	if _draw_layer != null:
 		_show_draw(false)
@@ -3955,10 +4019,8 @@ const RARE_POOL := [
 const RARE_CHANCE := 0.30
 
 func _build_trea() -> void:
-	if LevelState.show_button("treasure"):
-		for pool in [BOND_POOL, RARE_POOL]:
-			for option in pool:
-				_choice_item(_treasure_art_key(option))
+	if _trea_layer != null:
+		return
 	_trea_layer = Control.new()
 	_trea_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_trea_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -4020,8 +4082,9 @@ func _on_trea_tile() -> void:
 	_open_trea()
 
 func _open_trea() -> void:
-	if _trea_layer == null:
+	if _no_ui:
 		return
+	_build_trea()
 	_close_challenge()
 	if _draw_layer != null:
 		_show_draw(false)
@@ -4053,6 +4116,9 @@ func _rare_pool() -> Array:
 	return out
 
 func _roll_trea() -> void:
+	if _no_ui:
+		return
+	_build_trea()
 	var q := _trea_quality()
 	var mult: float = [1.0, 1.5, 2.0, 3.0][clampi(q - 2, 0, 3)]
 	var bp: Array = _bond_pool()
@@ -4444,8 +4510,9 @@ func _layer_in(c) -> void:
 	MenuUI.Motion.fade_in(c)
 
 func _show_totals() -> void:
-	if _combined_layer == null:
+	if _no_ui:
 		return
+	_build_combined()
 	_combined_layer.visible = true
 	_combined_layer.move_to_front()
 	_layer_in(_combined_layer)
@@ -4774,8 +4841,7 @@ func _make_foe_token(f: Dictionary):
 		var frame_id := str(FOE_FRAME_PATH.get(title, ""))
 		if frames == null and not frame_id.is_empty():
 			if not _foe_animation_cache.has(frame_id):
-				var path := "res://assets/gen/enemies/frames/%s.png" % frame_id
-				_foe_animation_cache[frame_id] = load(path) as Texture2D if ResourceLoader.exists(path) else null
+				_foe_animation_cache[frame_id] = _entry_texture(_foe_frame_path(frame_id))
 			frames = _foe_animation_cache[frame_id] as Texture2D
 	var foe_tex := _foe_art(str(f.get("name", ""))) if frames == null else null
 	var needs_mark := foe_tex == null and frames == null
@@ -5599,6 +5665,8 @@ func _add_card(id: String) -> void:
 	_show_draw(false)
 
 func _build_combined() -> void:
+	if _combined_layer != null:
+		return
 	_combined_layer = Control.new()
 	_combined_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_combined_layer.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -5875,23 +5943,43 @@ class ComboReadout extends Control:
 		draw_rect(Rect2(12, 49, size.x - 24.0, 3), Color(0.31, 0.23, 0.14))
 		draw_rect(Rect2(12, 49, width, 3), accent)
 
-# 轻量命中火花：程序化放射线，不预烘、不用 pixelfx，0.18 秒自毁
 class FrameBurst extends Sprite2D:
+	signal finished
+
 	var row := 0
 	var lifetime := 0.24
 	var elapsed := 0.0
 	var _shown := -1
+	var _side := 0.0
 
 	func _ready() -> void:
 		region_enabled = true
 		region_filter_clip_enabled = true
 		z_index = 7
+
+	func play(art: Texture2D, atlas_row: int, at: Vector2, size_mul: float, duration: float, angle: float) -> void:
+		texture = art
+		_side = float(art.get_width()) / 4.0
+		row = atlas_row
+		position = at
+		scale = Vector2.ONE * size_mul
+		rotation = angle
+		flip_h = false
+		lifetime = duration
+		elapsed = 0.0
+		_shown = -1
+		modulate.a = 1.0
 		_show(0)
+		show()
+		set_process(true)
 
 	func _process(delta: float) -> void:
 		elapsed += delta
 		if elapsed >= lifetime:
-			queue_free()
+			hide()
+			set_process(false)
+			texture = null
+			finished.emit()
 			return
 		_show(mini(3, int(elapsed * 4.0 / lifetime)))
 		modulate.a = 1.0 - smoothstep(0.71, 1.0, elapsed / lifetime)
@@ -5900,52 +5988,89 @@ class FrameBurst extends Sprite2D:
 		if index == _shown:
 			return
 		_shown = index
-		var side := float(texture.get_width()) / 4.0
-		region_rect = Rect2(side * index, side * row, side, side)
+		region_rect = Rect2(_side * index, _side * row, _side, _side)
 
-func _spawn_frame_burst(row: int, at: Vector2, size_mul: float, duration: float, angle := 0.0, atlas: Texture2D = null) -> Sprite2D:
+func _spawn_frame_burst(row: int, at: Vector2, size_mul: float, duration: float, angle := 0.0, atlas: Texture2D = null, priority := false) -> Sprite2D:
 	var art := _frame_fx_art if atlas == null else atlas
-	if art == null or _cam == null or _frame_fx_live >= 16:
+	var limit := FRAME_FX_LIMIT if priority else FRAME_FX_AMBIENT_LIMIT
+	if art == null or _cam == null or _frame_fx_live >= limit:
 		return null
-	var burst := FrameBurst.new()
-	burst.texture = art
-	burst.row = row
-	burst.lifetime = duration
-	burst.position = at
-	burst.scale = Vector2.ONE * size_mul
-	burst.rotation = angle
+	var burst: FrameBurst
+	if _frame_fx_pool.is_empty():
+		burst = FrameBurst.new()
+		burst.finished.connect(_recycle_frame_burst.bind(burst))
+		_cam.add_child(burst)
+	else:
+		burst = _frame_fx_pool.pop_back()
+		_cam.move_child(burst, _cam.get_child_count() - 1)
 	_frame_fx_live += 1
-	burst.tree_exited.connect(func(): _frame_fx_live -= 1)
-	_cam.add_child(burst)
+	burst.play(art, row, at, size_mul, duration, angle)
 	return burst
 
-class ImpactSpark extends Control:
-	var col := Color.WHITE
-	var life := 0.18
-	var t := 0.0
-	var dirs: Array = []
+func _recycle_frame_burst(burst: FrameBurst) -> void:
+	_frame_fx_live -= 1
+	_frame_fx_pool.append(burst)
+
+# 同一图层绘制短火花。密集毒伤只取分散的几个落点。
+class ImpactSparks extends Node2D:
+	const LIMIT := 18
+	const POISON_LIMIT := 8
+	const POISON_SPACING_SQ := 30.0 * 30.0
+	var sparks: Array[Dictionary] = []
+	var _rng := RandomNumberGenerator.new()
+	var _segments := PackedVector2Array()
+
 	func _ready() -> void:
-		mouse_filter = Control.MOUSE_FILTER_IGNORE
 		z_index = 7
-		var n := 6 + randi() % 3
+		_rng.randomize()
+		set_process(false)
+
+	func spawn(at: Vector2, radius_scale: float, tint: Color, lifetime: float, poison: bool) -> void:
+		if poison:
+			if sparks.size() >= LIMIT or _rng.randf() >= 0.6:
+				return
+			var poison_count := 0
+			for spark in sparks:
+				if spark["poison"]:
+					poison_count += 1
+					if at.distance_squared_to(spark["pos"]) < POISON_SPACING_SQ or poison_count >= POISON_LIMIT:
+						return
+		elif sparks.size() >= LIMIT:
+			var ambient := sparks.find_custom(func(spark: Dictionary) -> bool: return spark["poison"])
+			sparks.remove_at(maxi(0, ambient))
+		var n := _rng.randi_range(6, 8)
+		var dirs := PackedVector2Array()
+		dirs.resize(n)
 		for i in n:
-			var a := TAU * float(i) / float(n) + randf_range(-0.4, 0.4)
-			dirs.append(Vector2(cos(a), sin(a)) * randf_range(0.8, 1.3))
+			var angle := TAU * float(i) / float(n) + _rng.randf_range(-0.4, 0.4)
+			dirs[i] = Vector2.from_angle(angle) * _rng.randf_range(0.8, 1.3)
+		sparks.append({"pos": at, "scale": radius_scale, "tint": tint, "life": lifetime,
+			"age": 0.0, "dirs": dirs, "poison": poison})
 		set_process(true)
-	func _process(dt: float) -> void:
-		t += dt
-		if t >= life:
-			queue_free()
-			return
 		queue_redraw()
+
+	func _process(dt: float) -> void:
+		for i in range(sparks.size() - 1, -1, -1):
+			var spark: Dictionary = sparks[i]
+			spark["age"] += dt
+			if spark["age"] >= spark["life"]:
+				sparks.remove_at(i)
+		if sparks.is_empty():
+			set_process(false)
+		queue_redraw()
+
 	func _draw() -> void:
-		var k := 1.0 - t / life
-		var c := Color(col.r, col.g, col.b, k)
-		draw_circle(Vector2.ZERO, 6.0 * k, Color(col.r, col.g, col.b, k * 0.55))
-		for d in dirs:
-			var p0: Vector2 = d * 3.0
-			var p1: Vector2 = d * (7.0 + 16.0 * (1.0 - k))
-			draw_line(p0, p1, c, 2.2 * k + 0.6)
+		for spark in sparks:
+			var fade := 1.0 - float(spark["age"]) / float(spark["life"])
+			var tint: Color = spark["tint"]
+			var dirs: PackedVector2Array = spark["dirs"]
+			draw_set_transform(spark["pos"], 0.0, Vector2.ONE * float(spark["scale"]))
+			draw_circle(Vector2.ZERO, 6.0 * fade, Color(tint, fade * 0.55))
+			_segments.resize(dirs.size() * 2)
+			for i in dirs.size():
+				_segments[i * 2] = dirs[i] * 3.0
+				_segments[i * 2 + 1] = dirs[i] * (7.0 + 16.0 * (1.0 - fade))
+			draw_multiline(_segments, Color(tint, fade), 2.2 * fade + 0.6)
 
 func _pfx_col(pal: String, effect: String) -> Color:
 	match pal:
@@ -5976,13 +6101,11 @@ func _spawn_pfx(effect: String, pos: Vector2, s := 1.0, pal := "", lig := 1.0, s
 				return _spawn_frame_burst(1 if pal == "heal" else 2, pos, s, 0.27)
 			"impacts/ground-slam":
 				return _spawn_frame_burst(3, pos, s, 0.25)
-	var sp := ImpactSpark.new()
-	sp.position = pos
-	sp.scale = Vector2(s, s) * (1.15 if lig > 1.7 else 1.0)
-	sp.col = _pfx_col(pal, effect)
-	sp.life = 0.16 / maxf(0.6, spd)
-	_cam.add_child(sp)
-	return sp
+	if _impact_sparks == null:
+		_impact_sparks = ImpactSparks.new()
+		_cam.add_child(_impact_sparks)
+	_impact_sparks.spawn(pos, s * (1.15 if lig > 1.7 else 1.0), _pfx_col(pal, effect), 0.16 / maxf(0.6, spd), pal == "poison")
+	return _impact_sparks
 
 func _on_hero_attack() -> void:
 	if _run_over or _core == null or not _core.running:
@@ -6032,7 +6155,7 @@ func _on_foe_attack(foe: Dictionary, target: Vector2) -> void:
 		"mage": token.play_attack(direction if token._frame_atlas != null else Vector2.UP, 0.0, 9.0)
 		_: token.play_attack(direction)
 	if token.guardian and token._frame_atlas != null and kind == "melee":
-		_spawn_frame_burst(3, destination, 1.5, 0.28)
+		_spawn_frame_burst(3, destination, 1.5, 0.28, 0.0, null, true)
 	if _fx_front != null:
 		var origin: Vector2 = token.position - Vector2(0, token.radius * (0.85 if kind == "snap" else 1.2)) - FIELD_POS
 		if token._frame_atlas != null and (kind == "bow" or kind == "mage"):
@@ -6217,7 +6340,7 @@ func _skill_fx(dtype: String, world_pos: Vector2, scale_mul := 1.0) -> void:
 	if _skill_frame_art != null and SKILL_FRAMES.has(dtype):
 		var frames: Dictionary = SKILL_FRAMES[dtype]
 		var offset := Vector2(0.0, float(frames["offset"]) * scale_mul)
-		_spawn_frame_burst(int(frames["row"]), world_pos - offset, scale_mul, float(frames["duration"]), 0.0, _skill_frame_art)
+		_spawn_frame_burst(int(frames["row"]), world_pos - offset, scale_mul, float(frames["duration"]), 0.0, _skill_frame_art, true)
 		return
 	var e: Array = SKILL_FX.get(dtype, [])
 	if e.is_empty():
@@ -6438,9 +6561,8 @@ func _label_skill(aid: String) -> String:
 
 # ---------------- 请神选卡 ----------------
 func _build_god_pick() -> void:
-	for aid in LevelState.god_ids():
-		if AncestorData.ANCESTORS.has(aid):
-			_god_skill_art(str(aid), str(AncestorData.ANCESTORS[aid]["art"]))
+	if _god_layer != null:
+		return
 	_god_layer = Control.new()
 	_god_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_god_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE      # 空白处放行给战场
@@ -6475,10 +6597,30 @@ func _pop_option_cards(cards: Array) -> void:
 
 var _choice_item_art := {}
 
+func _entry_choice_item_keys() -> Array[String]:
+	var keys: Array[String] = []
+	keys.assign(AUG_ART.values())
+	if LevelState.show_button("treasure"):
+		for pool in [BOND_POOL, RARE_POOL]:
+			for option in pool:
+				var key := _treasure_art_key(option)
+				if not keys.has(key):
+					keys.append(key)
+	return keys
+
+func _warm_choice_art() -> void:
+	for key in _entry_choice_item_keys():
+		_choice_item(key)
+	for aid in LevelState.god_ids():
+		if AncestorData.ANCESTORS.has(aid):
+			_god_skill_art(aid, AncestorData.ANCESTORS[aid]["art"])
+
+func _choice_item_path(key: String) -> String:
+	return "res://assets/items/%s.png" % key
+
 func _choice_item(key: String) -> Texture2D:
 	if not _choice_item_art.has(key):
-		var path := "res://assets/items/%s.png" % key
-		_choice_item_art[key] = load(path) as Texture2D if ResourceLoader.exists(path) else null
+		_choice_item_art[key] = _entry_texture(_choice_item_path(key))
 	return _choice_item_art[key] as Texture2D
 
 func _treasure_art_key(option: Dictionary) -> String:
@@ -6530,11 +6672,12 @@ func _build_choice_chrome(layer: Control, title: String, hide: Callable, refresh
 	return [caption, refresh_button]
 
 func _show_god_pick() -> void:
-	if _run_over or _god_layer == null:
+	if _run_over or _no_ui:
 		return
 	if _draw_charge <= 0:
 		_toast("升级后可请神")
 		return
+	_build_god_pick()
 	# 同一手只掷一次：点［隐藏］关了再点［请神］，看到的是同一手（不能白刷）
 	if _god_hand_charge != _draw_charge:
 		_god_hand_charge = _draw_charge
@@ -6658,10 +6801,13 @@ func _god_skill_icon(aid: String) -> String:
 	var path := "res://assets/gen/icons/skill_%s.png" % icon_key
 	return path if ResourceLoader.exists(path) else ""
 
+func _god_skill_path(aid: String, fallback: String) -> String:
+	var path := _god_skill_icon(aid)
+	return fallback if path.is_empty() else path
+
 func _god_skill_art(aid: String, fallback: String) -> Texture2D:
 	if not _god_art.has(aid):
-		var path := _god_skill_icon(aid)
-		_god_art[aid] = load(fallback if path.is_empty() else path) as Texture2D
+		_god_art[aid] = _entry_texture(_god_skill_path(aid, fallback))
 	return _god_art[aid] as Texture2D
 
 func _fly_god_seal(tex: Texture2D, from: Vector2, slot: SkillSlot) -> void:
@@ -7059,7 +7205,7 @@ func _dragon_wave(m: Dictionary, target: Dictionary) -> void:
 			_fx_front.spawn_cast_seal(at, DRAGON_TONE, DRAGON_WAVE_RADIUS, 1.0)
 	if _dragon_wave_art != null:
 		var burst_scale := 1.40 if evo else 1.02
-		var wave := _spawn_frame_burst(0, _core.position + at - Vector2(0, 52.0 * burst_scale), burst_scale, 0.36, 0.0, _dragon_wave_art)
+		var wave := _spawn_frame_burst(0, _core.position + at - Vector2(0, 52.0 * burst_scale), burst_scale, 0.36, 0.0, _dragon_wave_art, true)
 		if wave != null:
 			wave.flip_h = at.x < origin.x
 	for f_v in _core.foes.duplicate():
@@ -7953,8 +8099,7 @@ func _tick_poison(dt: float) -> void:
 				var dmg := float(_core.hero.get("atk", 12.0)) * POISON_RATE * float(f["poison"]) * float(f.get("poison_bonus", 1.0))
 				_core._apply_dmg(f, dmg, "木系", -1, vuln)
 				_core._push_float(float(f["x"]), float(f["y"]) - 34.0, "毒", Color(0.45, 0.80, 0.40))
-				if randf() < 0.6:
-					_spawn_pfx("impacts/hit-spark", _core.position + Vector2(float(f["x"]), float(f["y"]) - 18.0), 0.55, "poison", 1.2)
+				_spawn_pfx("impacts/hit-spark", _core.position + Vector2(float(f["x"]), float(f["y"]) - 18.0), 0.55, "poison", 1.2)
 				if float(f.get("hp", 0.0)) <= 0.0: _core._kill_foe(f)
 				if not _skill_batch_active(epoch): return
 				if float(f.get("hp", 0.0)) <= 0.0 or not _core.foes.has(f): break
@@ -7979,8 +8124,7 @@ func _tick_poison_layers(f: Dictionary, dt: float, epoch: int) -> bool:
 			var vuln := 1.0 + float(f.get("vuln_pct", 0.0)) / 100.0 if float(f.get("vuln_t", 0.0)) > at_t else 1.0
 			_core._apply_dmg(f, float(_core.hero.get("atk", 12.0)) * POISON_RATE * weight, "木系", -1, vuln)
 			_core._push_float(float(f["x"]), float(f["y"]) - 34.0, "毒", Color(0.45, 0.80, 0.40))
-			if randf() < 0.6:
-				_spawn_pfx("impacts/hit-spark", _core.position + Vector2(float(f["x"]), float(f["y"]) - 18.0), 0.55, "poison", 1.2)
+			_spawn_pfx("impacts/hit-spark", _core.position + Vector2(float(f["x"]), float(f["y"]) - 18.0), 0.55, "poison", 1.2)
 			if float(f.get("hp", 0.0)) <= 0.0: _core._kill_foe(f)
 			if not _skill_batch_active(epoch): return false
 			if float(f.get("hp", 0.0)) <= 0.0 or not _core.foes.has(f): return true
