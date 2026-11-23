@@ -23,6 +23,7 @@ const MenuUI := preload("res://shared/ui_kit.gd")
 const CardFrame := preload("res://kushou/card_frame.gd")
 var _draw_art_cache: Dictionary = {}
 var _frame_fx_art: Texture2D
+var _skill_frame_art: Texture2D
 var _frame_fx_live := 0
 var _hazard_view: HazardTelegraph
 
@@ -324,6 +325,9 @@ func _ready() -> void:
 		var effect_path := "res://assets/art/fx/battle_bursts_v1.png"
 		if ResourceLoader.exists(effect_path):
 			_frame_fx_art = load(effect_path) as Texture2D
+		var skill_effect_path := "res://assets/art/fx/skill_bursts_v1.png"
+		if ResourceLoader.exists(skill_effect_path):
+			_skill_frame_art = load(skill_effect_path) as Texture2D
 		for frame_id in FOE_FRAME_PATH.values():
 			var path := "res://assets/gen/enemies/frames/%s.png" % frame_id
 			_foe_animation_cache[frame_id] = load(path) as Texture2D if ResourceLoader.exists(path) else null
@@ -5044,8 +5048,11 @@ const SKILL_TINT := {
 func _skill_cast_juice() -> void:
 	if _hero_token != null:
 		_hero_token.play_cast()
-	_screen_flash(SKILL_TINT.get(_cast_dtype, Color(1.0, 0.94, 0.80)), 0.16, 0.18)
-	Aud.sfx("swing", -7.0, 0.85)
+	var tint: Color = SKILL_TINT.get(_cast_dtype, Color(1.0, 0.94, 0.80))
+	if _fx_front != null:
+		_fx_front.spawn_cast_seal(_hero_screen() - FIELD_POS, tint)
+	for layer: Array in SKILL_SFX.get(_cast_dtype, []):
+		Aud.sfx(str(layer[0]), float(layer[1]), float(layer[2]))
 	_core._shake = maxf(float(_core._shake), 5.0)
 	_core._hitstop = maxf(float(_core._hitstop), 0.045)
 
@@ -5886,11 +5893,12 @@ class FrameBurst extends Sprite2D:
 		var side := float(texture.get_width()) / 4.0
 		region_rect = Rect2(side * index, side * row, side, side)
 
-func _spawn_frame_burst(row: int, at: Vector2, size_mul: float, duration: float, angle := 0.0) -> Sprite2D:
-	if _frame_fx_art == null or _cam == null or _frame_fx_live >= 16:
+func _spawn_frame_burst(row: int, at: Vector2, size_mul: float, duration: float, angle := 0.0, atlas: Texture2D = null) -> Sprite2D:
+	var art := _frame_fx_art if atlas == null else atlas
+	if art == null or _cam == null or _frame_fx_live >= 16:
 		return null
 	var burst := FrameBurst.new()
-	burst.texture = _frame_fx_art
+	burst.texture = art
 	burst.row = row
 	burst.lifetime = duration
 	burst.position = at
@@ -6113,6 +6121,12 @@ func _skill_mana_cost(sk: Dictionary) -> float:
 	var mods: Dictionary = _anc_mod.get(str(sk.get("aid", "")), {})
 	return maxf(0.0, float(sk.get("mp", 0.0)) - float(mods.get("mp_flat", 0.0)))
 
+func _start_skill_cooldown(skill: Dictionary, mods: Dictionary) -> void:
+	var reduction := clampf(float(mods.get("cd_pct", 0.0)), 0.0, 80.0) / 100.0
+	var duration := maxf(0.5, float(skill["cd"]) * (1.0 - reduction))
+	skill["cd_t"] = duration
+	skill["cd_span"] = duration
+
 func _tick_skills(dt: float) -> void:
 	if _core == null:
 		return
@@ -6154,21 +6168,13 @@ func _tick_skills(dt: float) -> void:
 
 func _refresh_skill_slots(dt: float) -> void:
 	for i in _skill_slots.size():
-		var s = _skill_slots[i]
+		var slot: SkillSlot = _skill_slots[i]
 		if i < _skills.size():
-			var sk2: Dictionary = _skills[i]
-			s.visible = true
-			s.skill_name = str(sk2["name"])
-			s.set_icon(str(sk2.get("icon", "")))
-			s.quality = int(sk2.get("quality", 4))
-			s.cd_left = float(sk2["cd_t"])
-			s.cd_max = maxf(0.01, float(sk2["cd"]))
-			s.mp_cost = int(sk2["mp"])
-			if s.flash > 0.0:
-				s.flash = maxf(0.0, s.flash - dt * 2.2)
-			s.queue_redraw()
+			var skill: Dictionary = _skills[i]
+			var cost := _skill_mana_cost(skill)
+			slot.update_state(skill, ceili(cost), _mp >= cost, dt)
 		else:
-			s.visible = false
+			slot.hide()
 
 # 请神技能特效：按技能属性挑效果 + 换色（pixelfx）
 const SKILL_FX := {
@@ -6178,6 +6184,13 @@ const SKILL_FX := {
 	"召唤": ["arcane/magic-circle-cast", "", 1.10],
 	"物理": ["impacts/ground-slam", "metal", 0.95],
 	"真实": ["shadow/soul-drain", "", 0.85],
+}
+
+const SKILL_FRAMES := {
+	"金系": {"row": 0, "duration": 0.34, "offset": 33.0},
+	"火系": {"row": 1, "duration": 0.29, "offset": 21.0},
+	"真实": {"row": 2, "duration": 0.24, "offset": 0.0},
+	"召唤": {"row": 3, "duration": 0.40, "offset": 0.0},
 }
 
 # 技能音效：按属性挑一个"自己的音色"（只放一次，跟着起手特效走）
@@ -6190,16 +6203,16 @@ const SKILL_SFX := {
 	"真实": [["heartbeat", -10.0, 0.90], ["tension", -13.0, 1.00]],
 }
 
-func _skill_fx(dtype: String, world_pos: Vector2, big := false, scale_mul := 1.0) -> void:
+func _skill_fx(dtype: String, world_pos: Vector2, scale_mul := 1.0) -> void:
+	if _skill_frame_art != null and SKILL_FRAMES.has(dtype):
+		var frames: Dictionary = SKILL_FRAMES[dtype]
+		var offset := Vector2(0.0, float(frames["offset"]) * scale_mul)
+		_spawn_frame_burst(int(frames["row"]), world_pos - offset, scale_mul, float(frames["duration"]), 0.0, _skill_frame_art)
+		return
 	var e: Array = SKILL_FX.get(dtype, [])
 	if e.is_empty():
 		return
-	_spawn_pfx(str(e[0]), world_pos, float(e[2]) * (1.35 if big else 1.0) * scale_mul, str(e[1]), 1.9, 1.0)
-	if not big:
-		var layers: Array = SKILL_SFX.get(dtype, [])
-		for one in layers:
-			if one.size() >= 3:
-				Aud.sfx(str(one[0]), float(one[1]), float(one[2]))
+	_spawn_pfx(str(e[0]), world_pos, float(e[2]) * scale_mul, str(e[1]), 1.9, 1.0)
 
 func _hero_screen() -> Vector2:
 	return _core.position + _core.hero_pos
@@ -6231,21 +6244,20 @@ func _cast_skill(i: int) -> void:
 	# 召唤流：剪纸成兵
 	if aid0 == "zhiyuan":
 		_mp -= cost0
-		sk["cd_t"] = maxf(0.5, float(sk["cd"]) * (1.0 - clampf(float(md0.get("cd_pct", 0.0)), 0.0, 80.0) / 100.0))
+		_start_skill_cooldown(sk, md0)
 		_cast_paper()
-		_skill_fx("召唤", _hero_screen())
 		return
 	# 治疗流：回血 + 环毒 + 易伤
 	if aid0 in ["liuqingqing", "liuqingqing2"]:
 		_mp -= cost0
-		sk["cd_t"] = maxf(0.5, float(sk["cd"]) * (1.0 - clampf(float(md0.get("cd_pct", 0.0)), 0.0, 80.0) / 100.0))
+		_start_skill_cooldown(sk, md0)
 		var times := 1
 		if _baicao:
 			times = _baicao_times()
 		var has_aura := float(md0.get("aura", 0.0)) > 0.0
 		var center := _hero_screen() - (Vector2.ZERO if has_aura else Vector2(0, 32))
 		var visual_scale := (AURA_BASE_R + float(md0.get("radius_add", 0.0))) / 49.0 if has_aura else 1.0
-		_skill_fx("木系", center, false, visual_scale)
+		_skill_fx("木系", center, visual_scale)
 		for _i in times:
 			if not _skill_batch_active(epoch): return
 			_cast_heal(float(sk["mul"]), aid0)
@@ -6257,36 +6269,30 @@ func _cast_skill(i: int) -> void:
 		if _live_foes().is_empty():
 			return
 		_mp -= cost0
-		sk["cd_t"] = maxf(0.5, float(sk["cd"]) * (1.0 - clampf(float(md0.get("cd_pct", 0.0)), 0.0, 80.0) / 100.0))
+		_start_skill_cooldown(sk, md0)
 		_cast_feiren(float(sk["mul"]))
-		if _skill_batch_active(epoch):
-			_skill_fx("物理", _hero_screen())
 		return
 	# 撞击流：按气血上限算伤害，并把目标撞飞
 	if aid0 == "gundilong":
 		if _live_foes().is_empty():
 			return
 		_mp -= cost0
-		sk["cd_t"] = maxf(0.5, float(sk["cd"]) * (1.0 - clampf(float(md0.get("cd_pct", 0.0)), 0.0, 80.0) / 100.0))
+		_start_skill_cooldown(sk, md0)
 		_charge_ram()
-		if _skill_batch_active(epoch):
-			_skill_fx("物理", _hero_screen(), true)
 		return
 	# 火系：直伤 + 灼烧（引燃多名）
 	if aid0 == "jicanghai":
 		if _live_foes().is_empty():
 			return                                  # 空场不空放，CD 与内力都不扣
 		_mp -= cost0
-		sk["cd_t"] = maxf(0.5, float(sk["cd"]) * (1.0 - clampf(float(md0.get("cd_pct", 0.0)), 0.0, 80.0) / 100.0))
+		_start_skill_cooldown(sk, md0)
 		_cast_fire()
-		_skill_fx("火系", _hero_screen())
 		return
 	# 召唤系：不直接出伤，召一条蛟龙顶上去
 	if aid0 == "cuisanniang":
 		_mp -= cost0
-		sk["cd_t"] = maxf(0.5, float(sk["cd"]) * (1.0 - clampf(float(md0.get("cd_pct", 0.0)), 0.0, 80.0) / 100.0))
+		_start_skill_cooldown(sk, md0)
 		_summon_dragon(float(md0.get("dmg_pct", 0.0)) + float(_elem_mod.get("召唤", 0.0)) + _skill_level_bonus(aid0))
-		_skill_fx("召唤", _hero_screen())
 		return
 	var foes: Array = []
 	for f_v in _core.foes:
@@ -6302,7 +6308,6 @@ func _cast_skill(i: int) -> void:
 	var m: Dictionary = _anc_mod.get(aid, {})
 	var shared_pct := 0.0 if _core.DMG_TYPES.has(dtype) else float(_elem_mod.get(dtype, 0.0))
 	var dmg_pct := float(m.get("dmg_pct", 0.0)) + shared_pct + _skill_level_bonus(aid)
-	var cd_pct := float(m.get("cd_pct", 0.0))
 	var mp_flat := float(m.get("mp_flat", 0.0))
 	var para_s := float(m.get("para_s", 0.0))
 	var para_amp := float(m.get("para_amp", 0.0))
@@ -6310,7 +6315,7 @@ func _cast_skill(i: int) -> void:
 	if _mp < cost:
 		return
 	_mp -= cost
-	sk["cd_t"] = maxf(0.5, float(sk["cd"]) * (1.0 - clampf(cd_pct, 0.0, 80.0) / 100.0))
+	_start_skill_cooldown(sk, m)
 	var hp0 := Vector2(_core.hero_pos)
 	foes.sort_custom(func(a, b) -> bool:
 		var da := (Vector2(float(a["x"]), float(a["y"])) - hp0).length()
@@ -6331,7 +6336,7 @@ func _cast_skill(i: int) -> void:
 		if para_s > 0.0 and float(f.get("hp", 0.0)) > 0.0:
 			f["para"] = maxf(float(f.get("para", 0.0)), para_s)
 		_core._push_float(float(f["x"]), float(f["y"]) - 46.0, str(sk["name"]), sk["col"], true)
-		_skill_fx(dtype, _core.position + Vector2(float(f["x"]), float(f["y"]) - 26.0), true)
+		_skill_fx(dtype, _core.position + Vector2(float(f["x"]), float(f["y"]) - 26.0))
 		if float(f.get("hp", 0.0)) <= 0.0:
 			_core._kill_foe(f)
 			if not _skill_batch_active(epoch):
@@ -6721,27 +6726,51 @@ class SkillSlot extends Control:
 	var skill_name := ""
 	var skill_icon := ""
 	var quality := 4
-	var cd_left := 0.0
-	var cd_max := 1.0
+	var cooldown_seconds := 0
+	var cooldown_steps := 0
 	var mp_cost := 0
+	var affordable := true
 	var arriving := false
 	var flash := 0.0          # 刚放完技能：一圈金色扩散
 	var _tex: Texture2D = null
+	var _box := StyleBoxFlat.new()
+
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
-	func set_icon(path: String) -> void:
-		if skill_icon == path:
-			return
-		skill_icon = path
-		_tex = load(path) as Texture2D if not path.is_empty() else null
+		_box.set_corner_radius_all(9)
+		_box.set_border_width_all(2)
+
+	func update_state(skill: Dictionary, cost: int, can_pay: bool, dt: float) -> void:
+		var title := str(skill["name"])
+		var icon := str(skill.get("icon", ""))
+		var grade := int(skill.get("quality", 4))
+		var time := float(skill["cd_t"])
+		var seconds := ceili(time)
+		var steps := ceili(clampf(time / maxf(0.01, float(skill.get("cd_span", skill["cd"]))), 0.0, 1.0) * 24.0)
+		var changed := not visible or skill_name != title or skill_icon != icon or quality != grade \
+			or cooldown_seconds != seconds or cooldown_steps != steps or mp_cost != cost or affordable != can_pay
+		show()
+		if skill_icon != icon:
+			skill_icon = icon
+			_tex = load(icon) as Texture2D if not icon.is_empty() else null
+		skill_name = title
+		quality = grade
+		cooldown_seconds = seconds
+		cooldown_steps = steps
+		mp_cost = cost
+		affordable = can_pay
+		if flash > 0.0:
+			flash = maxf(0.0, flash - dt * 2.2)
+			changed = true
+		if changed:
+			queue_redraw()
+
 	func _draw() -> void:
 		var qc: Color = QC[clampi(quality - 1, 0, 4)]
-		var sb := StyleBoxFlat.new()
-		sb.bg_color = Color(0.16, 0.13, 0.10, 0.80) if arriving else Color(0.96, 0.93, 0.86, 0.98)
-		sb.set_corner_radius_all(9)
-		sb.border_color = qc
-		sb.set_border_width_all(3)
-		draw_style_box(sb, Rect2(Vector2.ZERO, size))
+		var ready_to_cast := cooldown_seconds <= 0 and affordable
+		_box.bg_color = Color(0.15, 0.12, 0.09, 0.96)
+		_box.border_color = qc.lightened(0.42) if ready_to_cast and not arriving else qc
+		draw_style_box(_box, Rect2(Vector2.ZERO, size))
 		var c := size * 0.5
 		if arriving:
 			draw_arc(c, 15, 0.0, TAU, 32, Color(0.89, 0.73, 0.42, 0.56), 1.5, true)
@@ -6753,23 +6782,26 @@ class SkillSlot extends Control:
 			var ch := "技"
 			if skill_name.length() > 0:
 				ch = skill_name.substr(1 if skill_name.length() > 1 else 0, 1)
-			draw_string(F, Vector2(0, c.y + 8), ch, HORIZONTAL_ALIGNMENT_CENTER, size.x, 22, Color(0.20, 0.16, 0.11))
+			draw_string(F, Vector2(0, c.y + 8), ch, HORIZONTAL_ALIGNMENT_CENTER, size.x, 22, Color(0.96, 0.89, 0.72))
+		if cooldown_seconds > 0:
+			draw_circle(c, size.x * 0.5 - 4.0, Color(0.05, 0.04, 0.03, 0.64))
+			draw_arc(c, size.x * 0.5 - 5.0, -PI * 0.5, TAU * float(24 - cooldown_steps) / 24.0 - PI * 0.5,
+				28, Color(0.92, 0.74, 0.41), 2.2, true)
+			draw_string(F, Vector2(0, c.y + 8), str(cooldown_seconds), HORIZONTAL_ALIGNMENT_CENTER, size.x, 20, Color(0.97, 0.92, 0.80))
+		elif not affordable:
+			draw_circle(c, size.x * 0.5 - 4.0, Color(0.08, 0.15, 0.23, 0.70))
+			draw_string(F, Vector2(0, c.y + 5), "缺内力", HORIZONTAL_ALIGNMENT_CENTER, size.x, 13, Color(0.74, 0.89, 0.98))
 		if flash > 0.0:
 			var k := 1.0 - flash
 			var rr := size.x * (0.5 + 0.45 * k)
 			draw_arc(c, rr, 0.0, TAU, 32, Color(0.98, 0.82, 0.36, flash * 0.9), 3.0)
 			draw_circle(c, size.x * (0.55 + 0.25 * k), Color(0.98, 0.82, 0.36, flash * 0.16))
-		if cd_left > 0.0:
-			draw_circle(c, size.x * 0.5 - 2.0, Color(0.05, 0.04, 0.03, 0.58))
-			draw_string(F, Vector2(0, c.y + 8), str(int(ceil(cd_left))),
-				HORIZONTAL_ALIGNMENT_CENTER, size.x, 20, Color(0.97, 0.92, 0.80))
 		if mp_cost > 0:
-			var sb2 := StyleBoxFlat.new()
-			sb2.bg_color = Color(0.28, 0.48, 0.68, 0.92)
-			sb2.set_corner_radius_all(3)
-			draw_style_box(sb2, Rect2(Vector2(size.x - 24, 1), Vector2(23, 14)))
-			draw_string(F, Vector2(size.x - 24, 12), str(mp_cost),
-				HORIZONTAL_ALIGNMENT_CENTER, 23, 10, Color(0.95, 0.98, 1.0))
+			var cost_text := str(mp_cost)
+			var wid := maxf(22.0, F.get_string_size(cost_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x + 6.0)
+			var left := size.x - wid - 2.0
+			draw_rect(Rect2(left, 2, wid, 15), Color(0.16, 0.32, 0.48, 0.96))
+			draw_string(F, Vector2(left, 14), cost_text, HORIZONTAL_ALIGNMENT_CENTER, wid, 12, Color(0.92, 0.97, 1.0))
 
 # ---------------- 请神卡 ----------------
 class GodCard extends Button:
@@ -6857,6 +6889,8 @@ func _summon_dragon(bonus_pct: float) -> void:
 	tk.z_index = 5
 	tk.position = _core.position + pos
 	add_child(tk)
+	tk.play_spawn()
+	_skill_fx("召唤", tk.position - Vector2(0, 12))
 	var mul := 1.0 + bonus_pct / 100.0
 	if _swallow_sea:
 		life = 999999.0
@@ -7084,7 +7118,7 @@ func _tick_burn(dt: float) -> void:
 				_core._apply_dmg(f, _burn_dps() * float(f["burn"]), "火系", -1, vuln)
 				_core._push_float(float(f["x"]), float(f["y"]) - 30.0, "烧", Color(0.88, 0.45, 0.20))
 				if randf() < 0.6:
-					_spawn_pfx("impacts/hit-spark", _core.position + Vector2(float(f["x"]), float(f["y"]) - 18.0), 0.55, "fire", 1.2)
+					_skill_fx("火系", _core.position + Vector2(float(f["x"]), float(f["y"]) - 14.0), 0.58)
 				if float(f.get("hp", 0.0)) <= 0.0:
 					_core._kill_foe(f)
 				if not _skill_batch_active(epoch):
@@ -7114,6 +7148,7 @@ func _cast_fire() -> void:
 		var f: Dictionary = foes[k]
 		_core._apply_dmg(f, float(_core.hero.get("atk", 12.0)) * 0.6 * (1.0 + dmg_pct / 100.0), "火系")
 		_apply_burn(f, stacks, 4.0)
+		_skill_fx("火系", _core.position + Vector2(float(f["x"]), float(f["y"]) - 13.0))
 		_core._push_float(float(f["x"]), float(f["y"]) - 46.0, "引燃", Color(0.88, 0.45, 0.20), true)
 	Aud.sfx("skill", -10.0)
 
@@ -7558,18 +7593,9 @@ func _charge_ram() -> void:
 	Aud.sfx("hit_heavy", -6.0)
 
 func _ram_streak(a: Vector2, b: Vector2) -> void:
-	var r := ColorRect.new()
-	r.color = Color(0.92, 0.80, 0.42, 0.55)
-	r.size = Vector2(maxf(6.0, (b - a).length()), 10)
-	r.position = _core.position + a
-	r.pivot_offset = Vector2(0, 5)
-	r.rotation = (b - a).angle()
-	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	r.z_index = 9
-	add_child(r)
-	var tw := create_tween()
-	tw.tween_property(r, "modulate:a", 0.0, 0.30)
-	tw.tween_callback(func() -> void: r.queue_free())
+	if _fx_front != null:
+		_fx_front.spawn_skill_trail(a, b, Color(0.97, 0.70, 0.38), 13.0)
+	_skill_fx("物理", _core.position + b)
 
 func _tick_knock(dt: float) -> void:
 	if _core == null:
@@ -7785,19 +7811,12 @@ func _feiren_line(origin: Vector2, d: Vector2, base: float, pierce: int, volley:
 				_core._kill_foe(f2)
 			if not _skill_batch_active(epoch):
 				return
-	var a: Vector2 = _core.position + origin
-	var r := ColorRect.new()
-	r.color = Color(0.70, 0.92, 1.0, 0.7)
-	r.size = Vector2(FEIREN_LEN, 4)
-	r.position = Vector2(a.x, a.y - 2.0)
-	r.pivot_offset = Vector2(0, 2)
-	r.rotation = d.angle()
-	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	r.z_index = 9
-	add_child(r)
-	var tw := create_tween()
-	tw.tween_property(r, "modulate:a", 0.0, 0.25)
-	tw.tween_callback(func() -> void: r.queue_free())
+	if _fx_front != null:
+		var reach := minf(FEIREN_LEN, float(hits[n - 1]["t"]) + 46.0) if n > 0 else FEIREN_LEN
+		var tip := origin + d * reach
+		_fx_front.spawn_skill_trail(origin, tip, Color(0.49, 0.87, 0.96), 6.5)
+		if volley and n > 0:
+			_fx_front.spawn_skill_trail(tip + d.orthogonal() * 8.0, origin, Color(0.75, 0.97, 1.0), 5.0)
 
 # ---------------- 万刃（苏青鸾炫卡） ----------------
 func _enable_wanren() -> void:
@@ -8049,7 +8068,10 @@ func _cast_paper() -> void:
 	var secs := 8.0 + float(m.get("life_flat", 0.0))
 	var life_m := secs / 30.0          # cn_life() 基准 30 秒
 	for i in n:
+		var before: int = _core._minions.size()
 		_core.summon_minion("纸人", Color(0.95, 0.93, 0.86), 0.72, 0.5, life_m, 1.0, 0.0, 99, "", "paper")
+		if _core._minions.size() > before:
+			_skill_fx("召唤", _core.position + Vector2(_core._minions.back()["pos"]), 0.72)
 	_toast("剪纸成兵 · 召 %d 张纸人（存在 %d 秒）" % [n, int(secs)])
 	Aud.sfx("paper", -8.0)
 

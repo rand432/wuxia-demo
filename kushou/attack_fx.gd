@@ -22,6 +22,8 @@ var swings: Array = []
 var hits: Array = []
 var nums: Array = []
 var defeats: Array[Dictionary] = []
+var cast_seals: Array[Dictionary] = []
+var skill_trails: Array[Dictionary] = []
 var enemy_attacks: Array[Dictionary] = []
 var _sword: AtlasTexture
 
@@ -116,6 +118,18 @@ func spawn_enemy_attack(origin: Vector2, target: Vector2, kind: String) -> void:
 	enemy_attacks.append({"origin": origin, "target": target, "kind": kind, "age": 0.0})
 	queue_redraw()
 
+func spawn_cast_seal(feet: Vector2, tint: Color) -> void:
+	if cast_seals.size() >= 3:
+		cast_seals.pop_front()
+	cast_seals.append({"p": feet, "tint": tint, "age": 0.0})
+	queue_redraw()
+
+func spawn_skill_trail(origin: Vector2, target: Vector2, tint: Color, width: float) -> void:
+	if skill_trails.size() >= 10:
+		skill_trails.pop_front()
+	skill_trails.append({"origin": origin, "target": target, "tint": tint, "width": width, "age": 0.0})
+	queue_redraw()
+
 func _process(delta: float) -> void:
 	var dirty := false
 	for i in range(enemy_attacks.size() - 1, -1, -1):
@@ -143,11 +157,21 @@ func _process(delta: float) -> void:
 		if float(defeats[i]["t"]) >= float(defeats[i]["dur"]):
 			defeats.remove_at(i)
 		dirty = true
+	for events in [cast_seals, skill_trails]:
+		for i in range(events.size() - 1, -1, -1):
+			events[i]["age"] += delta
+			if float(events[i]["age"]) >= 0.24:
+				events.remove_at(i)
+			dirty = true
 	if dirty:
 		queue_redraw()
 
 func _draw() -> void:
 	if front:
+		for seal in cast_seals:
+			_draw_cast_seal(seal)
+		for trail in skill_trails:
+			_draw_skill_trail(trail)
 		for strike in enemy_attacks:
 			_draw_enemy_attack(strike)
 		for defeat in defeats:
@@ -159,6 +183,28 @@ func _draw() -> void:
 	else:
 		for s in swings:
 			_draw_swing(s)
+
+func _draw_cast_seal(seal: Dictionary) -> void:
+	var progress := clampf(float(seal["age"]) / 0.24, 0.0, 1.0)
+	var tone: Color = seal["tint"]
+	var center: Vector2 = seal["p"]
+	var radius := lerpf(24.0, 54.0, ease(progress, 0.44))
+	draw_set_transform(center, 0.0, Vector2(1.0, 0.36))
+	draw_arc(Vector2.ZERO, radius, 0.0, TAU, 32, Color(tone, 0.85 * (1.0 - progress)), 2.8, true)
+	draw_arc(Vector2.ZERO, radius * 0.74, 0.0, TAU, 26, Color(tone, 0.36 * (1.0 - progress)), 1.2, true)
+	draw_set_transform(Vector2.ZERO)
+
+func _draw_skill_trail(trail: Dictionary) -> void:
+	var progress := clampf(float(trail["age"]) / 0.24, 0.0, 1.0)
+	var alpha := 1.0 - progress
+	var origin: Vector2 = trail["origin"]
+	var target: Vector2 = trail["target"]
+	var tint: Color = trail["tint"]
+	var side := origin.direction_to(target).orthogonal() * float(trail["width"]) * alpha
+	var tail := origin.lerp(target, progress * 0.72)
+	var shoulder := origin.lerp(target, 0.42 + progress * 0.48)
+	draw_colored_polygon(PackedVector2Array([tail, shoulder + side, target, shoulder - side]), Color(tint, alpha * 0.58))
+	draw_line(tail, target, Color(tint.lightened(0.55), alpha), 2.5 * alpha + 0.7, true)
 
 func _draw_enemy_attack(strike: Dictionary) -> void:
 	var origin: Vector2 = strike["origin"]
