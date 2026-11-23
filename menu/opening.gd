@@ -76,6 +76,7 @@ func _build_skip() -> void:
 		_skip.add_theme_font_override("font", load("res://fonts/ink.ttf"))
 	_skip.pressed.connect(_finish)
 	add_child(_skip)
+	preload("res://shared/ui_motion.gd").bind_button(_skip)
 
 func _fade_in() -> void:
 	_fade = ColorRect.new()

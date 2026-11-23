@@ -2963,8 +2963,8 @@ func _process(_delta: float) -> void:
 					continue
 				it[1] = float(it[1]) - _delta
 				if float(it[1]) <= 0.0:
-					tkq.reset_pose()
 					tkq.visible = false
+					tkq.set_process(false)
 					if _foe_pool.size() < 40:
 						_foe_pool.append(tkq)
 					else:
@@ -4766,8 +4766,6 @@ func _make_foe_token(f: Dictionary):
 		ring = Color(0.68, 0.38, 0.88)        # 挑战怪：紫
 	elif boss:
 		ring = Color(0.95, 0.62, 0.12)        # Boss：金橙
-	var mark_ch := "王" if boss else ("钱" if kind == "coin" else ("晶" if kind == "crystal" else ("挑" if kind == "chal" else "怪")))
-	var msize := 22 if not boss else 38
 	var title := _foe_display_name(f)
 	var frames: Texture2D = null
 	if challenge < 0 or challenge >= 3:
@@ -4780,56 +4778,43 @@ func _make_foe_token(f: Dictionary):
 				_foe_animation_cache[frame_id] = load(path) as Texture2D if ResourceLoader.exists(path) else null
 			frames = _foe_animation_cache[frame_id] as Texture2D
 	var foe_tex := _foe_art(str(f.get("name", ""))) if frames == null else null
-	# 池里有就复用（TokenActor 每建一个都要 new Shader/ShaderMaterial，很贵）
-	if not _foe_pool.is_empty():
-		var tk0 = _foe_pool.pop_back()
-		tk0.reset_pose()
-		tk0.round_mask = foe_tex == null and frames == null
-		tk0.challenge_kind = challenge
-		tk0.guardian = boss and challenge < 0
-		tk0.set_role("enemy")
-		tk0.setup(foe_tex, rad, ring, false, frames)
-		tk0.hp_ratio = 1.0
-		tk0.show_bar = true
-		tk0.bar_w = 84.0 if boss else 54.0
-		tk0.unit_name = title
-		tk0.position = _core.position + Vector2(float(f["x"]), float(f["y"]))
-		tk0.visible = true
-		var mk: Label = tk0.get_meta("mark", null)
-		if mk != null:
-			mk.visible = foe_tex == null and frames == null
-			mk.text = mark_ch
-			mk.position = Vector2(-rad, -rad * 2.0 + 6.0)
-			mk.size = Vector2(rad * 2.0, rad * 1.5)
-			mk.add_theme_font_size_override("font_size", msize)
-		tk0.queue_redraw()
-		tk0.play_spawn(float(int(f.get("_tid", 0)) % 4) * 0.02)
-		return tk0
-	var tk = TokenActor.new()
-	tk.round_mask = foe_tex == null and frames == null
+	var needs_mark := foe_tex == null and frames == null
+	var fresh := _foe_pool.is_empty()
+	var tk: TokenActor = TokenActor.new() if fresh else _foe_pool.pop_back()
+	tk.position = _core.position + Vector2(float(f["x"]), float(f["y"]))
+	tk.round_mask = needs_mark
 	tk.challenge_kind = challenge
 	tk.guardian = boss and challenge < 0
 	tk.set_role("enemy")
 	tk.setup(foe_tex, rad, ring, false, frames)
+	tk.hp_ratio = 1.0
 	tk.show_bar = true
 	tk.bar_w = 84.0 if boss else 54.0
 	tk.unit_name = title
-	tk.z_index = 5
-	tk.position = _core.position + Vector2(float(f["x"]), float(f["y"]))
-	var mark := Label.new()
-	mark.visible = foe_tex == null and frames == null
-	mark.text = mark_ch
-	mark.position = Vector2(-rad, -rad * 2.0 + 6.0)
-	mark.size = Vector2(rad * 2.0, rad * 1.5)
-	mark.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	mark.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	mark.add_theme_font_override("font", FONT)
-	mark.add_theme_font_size_override("font_size", msize)
-	mark.add_theme_color_override("font_color", Color(0.30, 0.24, 0.16))
-	mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	tk.add_child(mark)
-	tk.set_meta("mark", mark)
-	_cam.add_child(tk)
+	var mark: Label = tk.get_meta("mark") if tk.has_meta("mark") else null
+	if needs_mark:
+		if mark == null:
+			mark = Label.new()
+			mark.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			mark.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+			mark.add_theme_font_override("font", FONT)
+			mark.add_theme_color_override("font_color", Color(0.30, 0.24, 0.16))
+			mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			tk.add_child(mark)
+			tk.set_meta("mark", mark)
+		mark.text = "王" if boss else ("钱" if kind == "coin" else ("晶" if kind == "crystal" else ("挑" if kind == "chal" else "怪")))
+		mark.position = Vector2(-rad, -rad * 2.0 + 6.0)
+		mark.add_theme_font_size_override("font_size", 38 if boss else 22)
+		mark.size = Vector2(rad * 2.0, rad * 1.5)
+	if mark != null:
+		mark.visible = needs_mark
+	if fresh:
+		tk.z_index = 5
+		_cam.add_child(tk)
+	else:
+		tk.reset_pose()
+		tk.set_process(true)
+		tk.queue_redraw()
 	tk.play_spawn(float(int(f.get("_tid", 0)) % 4) * 0.02)
 	return tk
 
@@ -7158,7 +7143,7 @@ func _tick_burn(dt: float) -> void:
 		if not _skill_batch_active(epoch):
 			return
 		var f: Dictionary = f_v
-		if not _core.foes.has(f) or float(f.get("burn", 0.0)) <= 0.0 or float(f.get("hp", 0.0)) <= 0.0 or float(f.get("dying", 0.0)) > 0.0 or bool(f.get("_death_settled", false)):
+		if float(f.get("burn", 0.0)) <= 0.0 or float(f.get("hp", 0.0)) <= 0.0 or float(f.get("dying", 0.0)) > 0.0 or bool(f.get("_death_settled", false)) or not _core.foes.has(f):
 			continue
 		var remaining := dt
 		var elapsed := 0.0
@@ -7943,9 +7928,8 @@ func _tick_poison(dt: float) -> void:
 	for f_v in _core.foes.duplicate():
 		if not _skill_batch_active(epoch): return
 		var f: Dictionary = f_v
-		if not _core.foes.has(f): continue
 		var st := float(f.get("poison", 0.0))
-		if st <= 0.0:
+		if st <= 0.0 or not _core.foes.has(f):
 			continue
 		if float(f.get("hp", 0.0)) <= 0.0 or bool(f.get("_death_settled", false)) or float(f.get("dying", 0.0)) > 0.0:
 			f["poison"] = 0.0

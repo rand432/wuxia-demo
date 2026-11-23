@@ -100,7 +100,7 @@ static func _begin_bgm(key: String, fade: float, request: int) -> void:
 	await (ml as SceneTree).process_frame
 	if _shutting_down or request != _bgm_request:
 		return
-	var root := (ml as SceneTree).root
+	var root := _root()
 	if root == null:
 		_cur_bgm = ""
 		return
@@ -262,9 +262,10 @@ static func set_battle_track(key: String) -> void:
 static func set_bgm_volume(v: float) -> void:
 	_ensure_loaded()
 	_bgm_vol = clampf(v, 0.0, 1.0)
-	for p in [_bgm_a, _bgm_b]:
-		if p != null and is_instance_valid(p) and p.playing:
-			p.volume_db = _bgm_db + _vol_db(_bgm_vol)
+	var active := _bgm_b if _use_a else _bgm_a
+	if is_instance_valid(active) and active.playing:
+		_cancel_music_fade(active)
+		active.volume_db = _bgm_db + _vol_db(_bgm_vol)
 	save_settings()
 
 static func set_sfx_volume(v: float) -> void:

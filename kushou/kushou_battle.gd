@@ -1075,45 +1075,32 @@ func _process(delta: float) -> void:
 		if float(f.get("hp", 0.0)) <= 0.0:
 			_kill_foe(f)
 			continue
-		# 持续伤害（毒/灼烧）：每秒跳一次（麻痹时照样掉血）
-		var dots: Array = f.get("dot", [])
-		for di in range(dots.size() - 1, -1, -1):
-			var dd: Dictionary = dots[di]
-			dd["t"] = float(dd["t"]) - dt
-			dd["tick"] = float(dd["tick"]) - dt
-			if float(dd["tick"]) <= 0.0:
-				dd["tick"] = 1.0
-				var dtd := str(dd["dtype"])
-				var dm3 := _apply_dmg(f, float(hero["atk"]) * float(dd["mul"]), dtd)
-				_push_float(float(f["x"]) + 18.0, float(f["y"]) - 22.0, dtd + " " + str(int(dm3)),
-					Color(0.64, 0.92, 0.58) if dtd == DMG_WOOD else Color(1.0, 0.66, 0.32))
-				if float(f["hp"]) <= 0.0:
-					_kill_foe(f)
-					break
-			if float(dd["t"]) <= 0.0:
-				dots.remove_at(di)
-		f["dot"] = dots
-		if not running or frame_epoch != _enemy_attack_epoch or float(hero.get("hp", 0.0)) <= 0.0:
-			queue_redraw()
-			return
-		if not foes.has(f):
-			continue
-		var cold_frozen := _tick_cold_control(f, dt)
-		if not running or frame_epoch != _enemy_attack_epoch or float(hero.get("hp", 0.0)) <= 0.0:
-			queue_redraw()
-			return
-		if not foes.has(f) or float(f.get("hp", 0.0)) <= 0.0:
-			continue
+		if f.has("dot"):
+			_tick_foe_dots(f, dt)
+			if not running or frame_epoch != _enemy_attack_epoch or float(hero.get("hp", 0.0)) <= 0.0:
+				queue_redraw()
+				return
+			if not foes.has(f) or float(f.get("hp", 0.0)) <= 0.0:
+				continue
+		var cold_frozen := false
+		if f.has("cold_t") or f.has("cold_freeze_t"):
+			cold_frozen = _tick_cold_control(f, dt)
+			if not running or frame_epoch != _enemy_attack_epoch or float(hero.get("hp", 0.0)) <= 0.0:
+				queue_redraw()
+				return
+			if not foes.has(f) or float(f.get("hp", 0.0)) <= 0.0:
+				continue
 		# v13d P3：石像——不移动、不出手，只挨打
 		if bool(f.get("still", false)):
 			f["flash"] = maxf(0.0, float(f.get("flash", 0.0)) - delta)
 			continue
-		_tick_wood_control(f, dt)
-		if not running or frame_epoch != _enemy_attack_epoch or float(hero.get("hp", 0.0)) <= 0.0:
-			queue_redraw()
-			return
-		if not foes.has(f) or float(f.get("hp", 0.0)) <= 0.0:
-			continue
+		if float(f.get("wood_t", 0.0)) > 0.0:
+			_tick_wood_control(f, dt)
+			if not running or frame_epoch != _enemy_attack_epoch or float(hero.get("hp", 0.0)) <= 0.0:
+				queue_redraw()
+				return
+			if not foes.has(f) or float(f.get("hp", 0.0)) <= 0.0:
+				continue
 		# 麻痹（天雷）：这段时间**不动也不打**
 		if float(f.get("para", 0.0)) > 0.0 or cold_frozen:
 			f["para"] = maxf(0.0, float(f.get("para", 0.0)) - dt)
@@ -1571,6 +1558,24 @@ func foe_move_speed(foe: Dictionary) -> float:
 		slow = maxf(slow, float(foe.get("cold_slow", 0.0)))
 	return FOE_SPD * (1.0 + float(foe.get("boss_spd", 0.0))) * (1.0 - clampf(slow, 0.0, 1.0))
 
+func _tick_foe_dots(foe: Dictionary, dt: float) -> void:
+	var dots: Array = foe["dot"]
+	for i in range(dots.size() - 1, -1, -1):
+		var effect: Dictionary = dots[i]
+		effect["t"] = float(effect["t"]) - dt
+		effect["tick"] = float(effect["tick"]) - dt
+		if float(effect["tick"]) <= 0.0:
+			effect["tick"] = 1.0
+			var element := str(effect["dtype"])
+			var amount := _apply_dmg(foe, float(hero["atk"]) * float(effect["mul"]), element)
+			var tint := Color(0.64, 0.92, 0.58) if element == DMG_WOOD else Color(1.0, 0.66, 0.32)
+			_push_float(float(foe["x"]) + 18.0, float(foe["y"]) - 22.0, element + " " + str(int(amount)), tint)
+			if float(foe["hp"]) <= 0.0:
+				_kill_foe(foe)
+				return
+		if float(effect["t"]) <= 0.0:
+			dots.remove_at(i)
+
 func _tick_cold_control(foe: Dictionary, dt: float) -> bool:
 	if float(foe.get("cold_t", 0.0)) > 0.0:
 		foe["cold_t"] = maxf(0.0, float(foe["cold_t"]) - dt)
@@ -1852,7 +1857,7 @@ func _hero_strike(tgt: Dictionary) -> void:
 			_push_float(float(h["x"]), float(h["y"]) - 26.0, str(int(dmg)),
 				(Color(1.0, 0.72, 0.30) if is_extra else (GOLD if crit else Color(0.96, 0.95, 0.92))),
 				crit or heavy or is_extra)
-		if is_extra:
+		if is_extra and show_basic_hit_numbers:
 			_bursts.append({"x": float(h["x"]), "y": float(h["y"]) - 18.0, "t": 0.0,
 				"col": Color(1.0, 0.74, 0.34), "scale": 1.25})
 		dealt += minf(hp_before, maxf(0.0, dmg)) # 吸血只累计本刀实际扣掉的气血，排除后续镜像等回调伤害。
@@ -2325,8 +2330,8 @@ func _kill_foe(f: Dictionary) -> void:
 	_shake = maxf(_shake, 6.0 + minf(6.0, float(_combo) * 0.4))
 	_hitstop = maxf(_hitstop, 0.05)
 	_death_sfx(str(f["kind"]), bool(f.get("boss", false)))
-	if _shards.size() < FX_SHARDS_MAX:      # v13g：碎屑按预算给，别一次塞几千片
-		for i in 7:
+	if _shards.size() < FX_SHARDS_MAX:      # 外壳已有脚边特效，保留少量过渡碎屑。
+		for i in (4 if hide_units else 7):
 			_shards.append({"x": float(f["x"]), "y": float(f["y"]) - 20.0,
 				"vx": randf_range(-160.0, 160.0), "vy": randf_range(-280.0, -90.0), "t": 0.0})
 	if str(f.get("kind", "")) == "normal":

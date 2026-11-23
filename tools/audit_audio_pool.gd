@@ -21,5 +21,11 @@ func _run() -> void:
 	await create_timer(1.0).timeout
 	assert(Audio._sfx_active.is_empty())
 	assert(Audio._sfx_pool.size() <= Audio.SFX_POOL_MAX)
-	print("PASS: 100 long sounds bounded to 32 active; pool <=16; natural completion and reuse work")
+	for i in 16: Audio.sfx("bow", -13.0, 1.0, 95)
+	assert(Audio._sfx_active.size() == 1)
+	Audio.sfx("forge_hammer", -8.0)
+	assert(Audio._sfx_active.size() == 2)
+	await create_timer(0.85).timeout
+	assert(Audio._sfx_active.is_empty())
+	print("PASS: bounded audio pool, natural completion and reuse; dense volley is throttled; separate forge strike")
 	quit()

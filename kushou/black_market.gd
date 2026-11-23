@@ -7,6 +7,7 @@ extends Control
 # - 不暂停：面板打开时战斗继续
 
 const FONT := preload("res://fonts/ink.ttf")
+const Audio := preload("res://shared/audio.gd")
 const INK := Color(0.13, 0.12, 0.11)
 const PAPER := Color(0.93, 0.90, 0.82)
 const PAPER_HI := Color(0.97, 0.95, 0.89)
@@ -506,23 +507,28 @@ func _gui_input(event: InputEvent) -> void:
 		var p: Vector2 = event.position
 		if view == "shop":
 			if _close_rect.has_point(p):
+				Audio.sfx("ui_close", -11.0)
 				close_panel()
 				return
 			if _warehouse_rect.has_point(p):
+				Audio.sfx("ui_open", -12.0)
 				view = "warehouse"
 				selected_kind = ""
 				selected_i = -1
 				queue_redraw()
 				return
 			if _refresh_rect.has_point(p):
+				Audio.sfx("ui_click", -12.0)
 				_refresh_stock()
 				return
 			for i in _buy_rects.size():
 				if (_buy_rects[i] as Rect2).has_point(p):
+					Audio.sfx("ui_click", -12.0)
 					_buy(i)
 					return
 		else:
 			if _close_rect.has_point(p) or _back_rect.has_point(p):
+				Audio.sfx("ui_back", -11.0)
 				view = "shop"
 				selected_kind = ""
 				selected_i = -1
@@ -530,25 +536,30 @@ func _gui_input(event: InputEvent) -> void:
 				return
 			for i in _slot_rects.size():
 				if (_slot_rects[i] as Rect2).has_point(p):
+					Audio.sfx("ui_click", -12.0)
 					selected_kind = "slot"
 					selected_i = i
 					queue_redraw()
 					return
 			for j in _inv_rects.size():
 				if (_inv_rects[j] as Rect2).has_point(p):
+					Audio.sfx("ui_click", -12.0)
 					selected_kind = "inv"
 					selected_i = mini(_inv_offset, maxi(0, warehouse.size() - 1)) + j
 					queue_redraw()
 					return
 			if _take_rect.has_point(p):
+				Audio.sfx("ui_click", -12.0)
 				if selected_kind == "inv":
 					_take_out(selected_i)
 				return
 			if _store_rect.has_point(p):
+				Audio.sfx("ui_click", -12.0)
 				if selected_kind == "slot":
 					_store(selected_i)
 				return
 			if _use_rect.has_point(p):
+				Audio.sfx("ui_click", -12.0)
 				if selected_kind == "inv":
 					_use_prop(selected_i)
 				return

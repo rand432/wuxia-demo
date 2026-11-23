@@ -1,6 +1,6 @@
 extends Node2D
 # ============================================================
-# kushou/token_actor.gd —— 圆形人物牌（v0）
+# kushou/token_actor.gd —— 战斗角色表现
 #
 # 带图集的角色按战斗事件切换独立动作帧，其余素材使用轻量姿态变化。
 #
@@ -15,7 +15,7 @@ const HERO_OUTLINE := preload("res://kushou/hero_outline.gdshader")
 
 var role := "player"
 var art_tex: Texture2D = null
-var round_mask := true      # false = 画完整立绘（怪物用），不裁成圆牌
+var round_mask := true      # 旧式圆牌素材才需要裁切
 var radius := 62.0
 var ring_col := Color(0.86, 0.68, 0.26)
 var crop_top := false
@@ -59,6 +59,7 @@ var _frame_atlas: Texture2D
 var _frame_index := -1
 var _frame_clock := 0.0
 var _frame_cell := 128.0
+var _visual_pose_applied := false
 const DEATH_DURATION := 0.38
 
 
@@ -240,6 +241,10 @@ func _tick_frame_pose(delta: float, travel: Vector2, moving: bool, pop: float, e
 		queue_redraw()
 
 func _apply_visual_pose(visual_scale: Vector2, offset: Vector2, angle := 0.0) -> void:
+	var changed := visual_scale != Vector2.ONE or offset != Vector2.ZERO or angle != 0.0
+	if not changed and not _visual_pose_applied:
+		return
+	_visual_pose_applied = changed
 	var center := Vector2(0, 0 if _art_height > 0.0 else -radius)
 	var pose := Transform2D(angle, Vector2.ZERO).scaled(visual_scale)
 	pose.origin = center + offset - pose * center
@@ -353,9 +358,9 @@ func _draw() -> void:
 	draw_set_transform(off + Vector2(0.0, -4.0), 0.0, Vector2(1.0, 0.34))
 	draw_circle(Vector2.ZERO, radius * 0.76, Color(0.10, 0.09, 0.08, 0.30))
 	draw_circle(Vector2.ZERO, radius * 0.44, Color(0.07, 0.06, 0.05, 0.22))
-	if (challenge_kind >= 0 or guardian or role == "dragon" or role == "player") and _death_t < 0.0:
+	if (challenge_kind >= 0 or guardian or role == "dragon") and _death_t < 0.0:
 		var color := ring_col
-		var ring_radius := radius * (0.70 if role == "player" else 0.98)
+		var ring_radius := radius * 0.98
 		draw_circle(Vector2.ZERO, ring_radius, Color(color, 0.11), true, -1.0, true)
 		draw_arc(Vector2.ZERO, ring_radius, 0, TAU, 36, Color(color, 0.87), 2.6, true)
 		if guardian or challenge_kind >= 3:
