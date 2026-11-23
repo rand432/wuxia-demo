@@ -46,6 +46,7 @@ const FOE_FRAME_PATH := {
 	"山匪弓手": "archer", "符杖术士": "talisman_mage",
 	"宝箱大怪": "challenge_mimic", "挑战匪首": "challenge_chief",
 }
+const CROWD_FRAME_PATH := {"山匪": "crowd_bandit", "山匪弓手": "crowd_archer", "符杖术士": "crowd_mage"}
 const CHALLENGE_RIMS := [Color(0.99, 0.76, 0.31), Color(0.32, 0.79, 0.91), Color(0.47, 0.79, 0.58),
 	Color(0.98, 0.53, 0.34), Color(0.79, 0.48, 0.94)]
 
@@ -271,6 +272,7 @@ var _pulses: Dictionary = {}   # 资源格被加钱时的缩放脉冲
 var _boss_bar = null           # 首领血条
 var _foe_pool: Array = []      # 怪物牌对象池（省掉每只都建 Shader/节点的开销）
 var _recycle_q: Array = []     # 阵亡动画播完再回收
+var _dense_roster := false
 var _boss_bar_t := 0.0
 var _flash_rect: ColorRect = null  # 技能释放时的整屏微闪
 var _cast_dtype := ""              # 最近一次释放的技能属性（决定闪光颜色）
@@ -315,6 +317,7 @@ const HERO_NAME_OFFSET := Vector2(-60, 9)
 
 func _ready() -> void:
 	GameState.ensure_loaded()
+	Aud.play_battle_music()
 	var _t_ready := Time.get_ticks_usec()
 	_max_wave = LevelState.waves()
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -336,7 +339,7 @@ func _ready() -> void:
 		var wave_path := "res://assets/art/fx/dragon_wave_v1.png"
 		if ResourceLoader.exists(wave_path):
 			_dragon_wave_art = load(wave_path) as Texture2D
-		for frame_id in FOE_FRAME_PATH.values():
+		for frame_id in ["shijia_yuan", "challenge_mimic", "challenge_chief"] + CROWD_FRAME_PATH.values():
 			var path := "res://assets/gen/enemies/frames/%s.png" % frame_id
 			_foe_animation_cache[frame_id] = load(path) as Texture2D if ResourceLoader.exists(path) else null
 		_build_bg()
@@ -995,14 +998,15 @@ func _build_field() -> void:
 	_core.paper_blocked.connect(_on_paper_blocked)
 	# 教学关每波少刷几只，节奏更快（奖励不变）
 	if LevelState.current_level <= 5:
-		_core.wave_extra = -8       # 前五关：大幅减量，快速推进
+		_core.wave_stage_adjustment = -8
 	elif LevelState.current_level <= 10:
-		_core.wave_extra = -4
+		_core.wave_stage_adjustment = -4
 	_core.start_run()
 	_hero_token = TokenActor.new()
+	_hero_token.round_mask = false
 	var hero_frame_path := "res://assets/char/player_battle_frames.png"
 	var hero_frames := load(hero_frame_path) as Texture2D if ResourceLoader.exists(hero_frame_path) else null
-	_hero_token.setup(PLAYER_TEX, 44.0, Color(0.85, 0.66, 0.23), true, hero_frames)
+	_hero_token.setup(PLAYER_TEX, 44.0, Color(0.96, 0.74, 0.30), false, hero_frames)
 	_hero_token.set_role("player")
 	_hero_token.set_weapon("sword")
 	_hero_token.show_bar = false          # 主角血条只看顶部 HUD，不再挂漂浮血条
@@ -1025,6 +1029,7 @@ func _build_field() -> void:
 	hit.add_theme_stylebox_override("pressed", StyleBoxEmpty.new())
 	hit.pressed.connect(func(): _open_attr_page())
 	_cam.add_child(hit)
+	MenuUI.Motion.bind_button(hit)
 	_hero_hit_btn = hit
 	_hero_hit_btn.position = _hero_token.position - Vector2(48, 48 + _hero_token.radius)
 	# 挑战方形
@@ -2886,7 +2891,8 @@ func _process(_delta: float) -> void:
 		# 最后一波：先把小怪清完，Boss 才登场（不同时出现）
 		if int(_core.wave) >= _max_wave:
 			_core.boss_required = true
-		if not _boss_spawned and not _run_cleared and int(_core.wave) >= _max_wave 				and _core._wave_spawned >= _core._wave_quota and _core.live_foes() <= 0:
+		if not _boss_spawned and not _run_cleared and int(_core.wave) >= _max_wave \
+				and _core.wave_spawn_complete() and _core.live_foes() <= 0:
 			_boss_spawned = true
 			_core.start_boss(LevelState.boss_tier(), "")
 		_run_time += _delta
@@ -3012,6 +3018,7 @@ func _process(_delta: float) -> void:
 				_hero_token.play_hit()
 			_prev_hero_hp = hhp
 		var active := {}
+		_dense_roster = _core.foes.size() >= (22 if _dense_roster else 28)
 		var boss_casts := {}
 		for hazard: Dictionary in _core._delayed:
 			if not bool(hazard.get("boss_attack", false)) or bool(hazard.get("landed", false)):
@@ -3040,6 +3047,10 @@ func _process(_delta: float) -> void:
 			var tk = _foe_tokens.get(tid)
 			if tk != null:
 				tk.position = _core.position + Vector2(float(f["x"]), float(f["y"]))
+				var compact: bool = _dense_roster and str(f.get("kind", "")) == "normal" and not f.has("rtype")
+				if compact != tk.compact_bar:
+					tk.compact_bar = compact
+					tk.queue_redraw()
 				if bool(f.get("boss", false)):
 					tk.boss_warning = boss_casts.get(tid, {})
 				var hr := float(f["hp"]) / maxf(1.0, float(f["hp_max"]))
@@ -3295,7 +3306,7 @@ func _end_run(win: bool) -> void:
 		for i in 10:
 			_spawn_fly(Vector2(360, 470), _chip_target("文钱"), Color(0.92, 0.74, 0.32), 1)
 	_build_result(win)
-	Aud.sfx("levelup" if win else "ui_back", -3.0)
+	Aud.sfx("win" if win else "lose", -6.0)
 
 func _build_result(win: bool) -> void:
 	var layer := Control.new()
@@ -4729,6 +4740,8 @@ func _foe_display_name(foe: Dictionary) -> String:
 			return "符杖术士"
 		if bool(foe.get("ranged", false)):
 			return "山匪弓手"
+		if _foe_animation_cache.get("crowd_bandit") != null:
+			return "山匪"
 	return str(foe.get("name", ""))
 
 func _make_foe_token(f: Dictionary):
@@ -4736,6 +4749,8 @@ func _make_foe_token(f: Dictionary):
 	var boss := bool(f.get("boss", false))
 	var challenge := clampi(int(f.get("chal", -1)), -1, 4)
 	var rad := 52.0 if boss else 26.0
+	if kind == "normal" and bool(f.get("brute", false)):
+		rad = 30.0
 	if challenge == 3:
 		rad = 41.0
 	elif challenge == 4:
@@ -4756,8 +4771,10 @@ func _make_foe_token(f: Dictionary):
 	var title := _foe_display_name(f)
 	var frames: Texture2D = null
 	if challenge < 0 or challenge >= 3:
+		if kind == "normal":
+			frames = _foe_animation_cache.get(CROWD_FRAME_PATH.get(title, "")) as Texture2D
 		var frame_id := str(FOE_FRAME_PATH.get(title, ""))
-		if not frame_id.is_empty():
+		if frames == null and not frame_id.is_empty():
 			if not _foe_animation_cache.has(frame_id):
 				var path := "res://assets/gen/enemies/frames/%s.png" % frame_id
 				_foe_animation_cache[frame_id] = load(path) as Texture2D if ResourceLoader.exists(path) else null
@@ -7250,6 +7267,8 @@ func _backwash() -> void:
 #   fentian      焚天 · 火 —— 橙色四边向内烧 + tension
 #   backwash     回潮 · 倒流 —— 白圆从中心扩散 + 低音钟
 # ============================================================
+var _stinger_revision := 0
+
 func _shiny_present(kind: String) -> void:
 	# ---- 音乐（短促 stinger，1.8 秒后收掉）----
 	var music := ""
@@ -7268,7 +7287,8 @@ func _shiny_present(kind: String) -> void:
 		"zhongli": music = "menu_jiangnan"
 	if music != "":
 		Aud.play_bgm(music, 0.25)
-		_stop_stinger(1.8)
+		_stinger_revision += 1
+		_stop_stinger(1.8, _stinger_revision)
 	# ---- 音效 ----
 	match kind:
 		"devour":
@@ -7355,9 +7375,10 @@ func _shiny_present(kind: String) -> void:
 	if _core != null:
 		_core.Shake_add(6.0 if kind != "devour" else 9.0)
 
-func _stop_stinger(delay: float) -> void:
+func _stop_stinger(delay: float, revision: int) -> void:
 	await get_tree().create_timer(delay).timeout
-	Aud.stop_bgm(0.6)
+	if is_inside_tree() and revision == _stinger_revision:
+		Aud.play_battle_music(0.6)
 
 func _flash(col: Color, a: float, t_in: float, t_out: float) -> void:
 	var r := ColorRect.new()
@@ -8313,11 +8334,8 @@ func _tick_shards(dt: float) -> void:
 func _push_run_mods() -> void:
 	if _core == null:
 		return
-	_core.wave_extra = _wave_extra
+	_core.set_wave_extra(_wave_extra)
 	_core.extra_diff_mul = 1.0 + _diff_pct / 100.0
-	if _core.has_method("wave_reset_quota"):
-		_core.wave_reset_quota()
-	pass
 
 # ============================================================
 # 险系：怪物类型（文钱怪 / 灵晶怪）+ 宝物·首领奖励加成
@@ -8326,18 +8344,7 @@ func _push_run_mods() -> void:
 func _spawn_typed_foes() -> void:
 	if _core == null:
 		return
-	for i in _coin_count_extra:
-		_core._spawn_foe("normal")
-		_tag_last("coin")
-	for i in _crystal_count_extra:
-		_core._spawn_foe("normal")
-		_tag_last("crystal")
-
-func _tag_last(rt: String) -> void:
-	if _core.foes.is_empty():
-		return
-	var f: Dictionary = _core.foes[_core.foes.size() - 1]
-	f["rtype"] = rt
+	_core.queue_wave_reward_foes(_coin_count_extra, _crystal_count_extra)
 
 func _on_foe_defeated(foe: Dictionary) -> void:
 	if _run_over or _core == null or not _core.foes.has(foe) or not bool(foe.get("_death_settled", false)) or bool(foe.get("_rtype_rewarded", false)):
@@ -8509,6 +8516,7 @@ func _q_init() -> void:
 		_q_hit.add_theme_stylebox_override(st, StyleBoxEmpty.new())
 	_q_hit.pressed.connect(_q_open_popup)
 	_q_layer.add_child(_q_hit)
+	MenuUI.Motion.bind_button(_q_hit)
 	_q_bar.visible = false
 	_q_lb.visible = false
 	_q_hit.visible = false

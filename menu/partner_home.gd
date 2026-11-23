@@ -3,6 +3,7 @@ extends Control
 
 const AD := preload("res://kushou/ancestor_data.gd")
 const GameState := preload("res://shared/game_state.gd")
+const Audio := preload("res://shared/audio.gd")
 const LevelState := preload("res://shared/level_state.gd")
 const UI := preload("res://shared/ui_kit.gd")
 # 每个技能自己的描述 + 伤害倍率（跟 battle_ui 的 SKILL_DEFS 保持一份数据）
@@ -303,6 +304,7 @@ func _show_skill_detail(i: int) -> void:
 			up.disabled = false
 			up.text = "升级 · 保存失败"
 			return
+		Audio.sfx("levelup", -8.0)
 		_refresh_slots()
 		_show_skill_detail(i))
 	_close_button(panel, popup)
@@ -356,6 +358,7 @@ func _show_advance() -> void:
 			up.disabled = not GameState.can_advance_role(aid, star)
 			up.text = "进阶未完成，请检查资源或存储空间"
 			return
+		Audio.sfx("enlighten", -7.0)
 		_stars[aid] = int(GameState.stars[aid])
 		_refresh_carousel()
 		_show_advance())

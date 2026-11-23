@@ -67,6 +67,7 @@ func _ready() -> void:
 			button.pressed.connect(_start_loading)
 		else:
 			button.pressed.connect(_return_home)
+		UI.Motion.bind_button(button)
 	_start_loading()
 
 func _start_loading() -> void:

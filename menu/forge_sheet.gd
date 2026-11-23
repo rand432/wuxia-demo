@@ -174,13 +174,14 @@ func _hammer() -> void:
 		return
 	var res := str(transaction["result"])
 	var out: Dictionary = transaction["outcome"]
-	Audio.sfx("hit_heavy", -8.0)
+	Audio.sfx("forge_hammer", -8.0)
 	match res:
 		"大":
 			_show_toast("大 成 功 ！  +2")
 			Audio.sfx("ult_ready", -10.0)
 		"成":
 			_show_toast("成 功  +1")
+			Audio.sfx("equip", -12.0, 1.12)
 		"维":
 			_show_toast("维 持")
 		"损":

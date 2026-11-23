@@ -11,6 +11,7 @@ extends Node2D
 
 const CharArt := preload("res://shared/char_art.gd")
 const UI_FONT := preload("res://fonts/ink.ttf")
+const HERO_OUTLINE := preload("res://kushou/hero_outline.gdshader")
 
 var role := "player"
 var art_tex: Texture2D = null
@@ -22,6 +23,7 @@ var weapon_type := "sword"
 var fit_height := 160.0
 var is_q_art := true
 var show_bar := false
+var compact_bar := false
 var hp_ratio := 1.0
 var unit_name := ""
 var bar_w := 72.0
@@ -107,7 +109,7 @@ func _refresh_sprite() -> void:
 		_sprite.region_enabled = true
 		_sprite.region_filter_clip_enabled = true
 		_frame_cell = float(_frame_atlas.get_width()) / 4.0
-		_base_scale = radius * (2.02 if role == "player" and round_mask else 3.15) / (_frame_cell * 101.0 / 128.0)
+		_base_scale = radius * (2.24 if role == "player" else 3.15) / (_frame_cell * 101.0 / 128.0)
 		_art_height = (_frame_cell * 108.0 / 128.0) * _base_scale
 		_sprite.scale = Vector2.ONE * _base_scale
 		_sprite.position.y = _frame_center_y()
@@ -123,7 +125,11 @@ func _refresh_sprite() -> void:
 		if not round_mask:
 			_art_height = h * _base_scale
 			_sprite.position.y = -_art_height * 0.5
-	if round_mask and art_tex != null and _frame_atlas == null:
+	if role == "player" and _frame_atlas != null and not round_mask:
+		var outline := ShaderMaterial.new()
+		outline.shader = HERO_OUTLINE
+		_sprite.material = outline
+	elif round_mask and art_tex != null and _frame_atlas == null:
 		if _sprite.material == null:
 			var shader := Shader.new()
 			shader.code = "shader_type canvas_item;\nvoid fragment(){ if (distance(UV, vec2(0.5)) > 0.5) discard; }"
@@ -347,10 +353,11 @@ func _draw() -> void:
 	draw_set_transform(off + Vector2(0.0, -4.0), 0.0, Vector2(1.0, 0.34))
 	draw_circle(Vector2.ZERO, radius * 0.76, Color(0.10, 0.09, 0.08, 0.30))
 	draw_circle(Vector2.ZERO, radius * 0.44, Color(0.07, 0.06, 0.05, 0.22))
-	if (challenge_kind >= 0 or guardian or role == "dragon") and _death_t < 0.0:
+	if (challenge_kind >= 0 or guardian or role == "dragon" or role == "player") and _death_t < 0.0:
 		var color := ring_col
-		draw_circle(Vector2.ZERO, radius * 0.95, Color(color, 0.11), true, -1.0, true)
-		draw_arc(Vector2.ZERO, radius * 0.98, 0, TAU, 36, Color(color, 0.87), 2.6, true)
+		var ring_radius := radius * (0.70 if role == "player" else 0.98)
+		draw_circle(Vector2.ZERO, ring_radius, Color(color, 0.11), true, -1.0, true)
+		draw_arc(Vector2.ZERO, ring_radius, 0, TAU, 36, Color(color, 0.87), 2.6, true)
 		if guardian or challenge_kind >= 3:
 			draw_arc(Vector2.ZERO, radius * 1.12, 0, TAU, 36, Color(color, 0.45), 1.7, true)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
@@ -373,9 +380,9 @@ func _draw() -> void:
 			var start := c + direction * radius * (0.7 + p * 0.7)
 			draw_line(start, start + direction * (4.0 + 14.0 * p), Color(0.16, 0.15, 0.13, 0.8 * (1.0 - p)), 2.5 * (1.0 - p) + 0.5, true)
 	# 头顶血条（照困兽那只怪：厚一点、带深色描边、绿→黄→红）
-	if show_bar and _death_t < 0.0:
+	if show_bar and _death_t < 0.0 and (not compact_bar or hp_ratio < 0.995):
 		var bw := bar_w
-		var bh := 10.0
+		var bh := 6.0 if compact_bar else 10.0
 		var bx := -bw * 0.5
 		var by := -maxf(_art_height, radius * 2.0) - 14.0 + _sink
 		draw_rect(Rect2(bx, by, bw, bh), Color(0.20, 0.18, 0.20))
@@ -383,7 +390,7 @@ func _draw() -> void:
 		var rr := clampf(hp_ratio, 0.0, 1.0)
 		var fill := ring_col.lerp(Color(0.89, 0.70, 0.40), 1.0 - rr) if role == "dragon" else _hp_color(rr)
 		draw_rect(Rect2(bx + 1.5, by + 1.5, (bw - 3.0) * rr, bh - 3.0), fill)
-		if unit_name != "":
+		if not compact_bar and unit_name != "":
 			var fs := 16
 			var tw := UI_FONT.get_string_size(unit_name, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
 			var label_position := Vector2(-tw * 0.5, by - 6.0)

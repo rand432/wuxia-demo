@@ -142,15 +142,11 @@ signal hero_foe_hit(tgt: Dictionary, dmg: float, crit: bool, heavy: bool)
 signal special(kind: String, n: int, pos: Vector2)
 
 # ---- 数值（要调就改这一块） ----
-const MAX_FOES := 24
-# ============================================================
-# v17x（用户："设计每波多少只普通怪 刷完可以提前进入下一波
-#        但是整体一定要保证60帧能流畅运行"）：
-#   **每波定额** —— 一波只刷 FixedN 只普通怪，刷完且清空就**提前开下一波**
-#   （不用干等 30 秒）。定额随波数涨，但**封顶 20 只**保帧率：
-#     波1-3:8 · 4-6:10 · 7-10:12 · 11-15:14 · 16-20:16 · 21-25:18 · 26+:20
-#   帧率：同屏上限仍是 MAX_FOES(24)，20 只 + 24 上限 = 留足余量（实测 77 只才掉帧）。
-# ============================================================
+const MAX_FOES := 36
+const MAX_FIELD_FOES := MAX_FOES + 16
+const SPAWN_GAP := 0.12
+const DENSE_SPAWN_GAP := 0.09
+var wave_stage_adjustment := 0
 var wave_extra := 0                 # v13：群系卡给每波定额的加成
 var extra_diff_mul := 1.0           # v13：险系卡带的全局难度倍率（乘血量与攻击）
 var _wave_quota := 8                # 这一波要刷几只普通怪
@@ -165,11 +161,10 @@ func _wave_quota_for(w: int) -> int:
 	if w <= 3:   return 16
 	if w <= 5:   return 18        # 第 4–5 波再降一档（前五关 -8 后实际 10 只）
 	if w <= 6:   return 22
-	if w <= 10:  return 24
-	if w <= 15:  return 24
-	if w <= 20:  return 20
-	if w <= 25:  return 18
-	return 18
+	if w <= 10:  return 28
+	if w <= 15:  return 32
+	if w <= 20:  return 36
+	return 38
 
 var SPAWN_EVERY := 1.6               # 每批之间的间隔（原来是 1.2 秒刷一只；现在成批刷）
 var SPAWN_PACK := 4                  # 一批几只（割草：一次涌出 4 只，凑成可被横扫的一团）
@@ -423,6 +418,8 @@ var foe_vuln := 0.0                 # 隐藏易伤：抽卡组合越多，怪实
 var _spawn_t := 0.6
 var _spawn_left := 0                 # 本批还剩几只没放出来
 var _spawn_gap := 0.0                # 下一只的间隔计时
+var _queued_coin_foes := 0
+var _queued_crystal_foes := 0
 var _hero_cd := 0.0
 # 主角出手：先起手（表现层同步挥剑），到兵器接触点才结算伤害
 const HERO_ATTACK_TIME := preload("res://shared/combat_rules.gd").BASE_ATTACK_SECONDS
@@ -579,12 +576,12 @@ func _foe_hp() -> float:
 func _foe_atk() -> float:
 	return BASE_FOE_ATK * pow(WAVE_ATK, float(wave - 1)) * foe_mul * diff_mul() * early_mul(true)     # v14e：关卡难度倍率
 
-func _spawn_foe(kind := "normal", hp_mul := 1.0, atk_mul := 1.0, big := false, tier := 1, nm := "") -> void:
+func _spawn_foe(kind := "normal", hp_mul := 1.0, atk_mul := 1.0, big := false, tier := 1, nm := "") -> Dictionary:
 	if foes.size() >= MAX_FOES and kind == "normal":
-		return
+		return {}
 	# v13g：**总上限**——挑战怪/招怪套原来绕过了 MAX_FOES，挂机久了能堆到几百只
-	if foes.size() >= MAX_FOES + 16 and kind != "boss" and kind != "champion" and kind != "elite":
-		return
+	if foes.size() >= MAX_FIELD_FOES and kind != "boss" and kind != "champion" and kind != "elite":
+		return {}
 	var x := 150.0 + randf() * maxf(60.0, size.x - 320.0)
 	# 所有怪都刷在战场可见范围内（y 70~170），不许从屏幕外走进来
 	var y0 := 70.0 + randf() * 100.0
@@ -624,6 +621,7 @@ func _spawn_foe(kind := "normal", hp_mul := 1.0, atk_mul := 1.0, big := false, t
 			f["shield"] = true
 			f["stop"] = FOE_REACH + 30.0 + randf() * 20.0       # 盾兵：顶在前面（约 105）
 	foes.append(f)
+	return f
 
 
 # v9g（用户："文钱/经验/灵晶都是群怪 boss和宝物是大怪"）：
@@ -945,22 +943,7 @@ func _process(delta: float) -> void:
 	if _last_quota_wave != wave:
 		_last_quota_wave = wave
 		wave_reset_quota()
-	_spawn_t -= delta
-	if _spawn_t <= 0.0:
-		_spawn_t = SPAWN_EVERY_LATE if wave >= 10 else SPAWN_EVERY
-		# v17x：这一波只刷定额那么多（刷完就等玩家清场，然后提前进下一波）
-		if _wave_spawned + _spawn_left < _wave_quota or _wave_spawned < _wave_quota:
-			# 割草：成批涌出（一波最多 SPAWN_PACK 只），但**错开 0.12 秒一只**
-			# —— 视觉上仍是一群，却不会同一帧建 4 个令牌造成尖峰
-			_spawn_left = mini(SPAWN_PACK, _wave_quota - _wave_spawned - _spawn_left)
-			_spawn_gap = 0.0
-	if _spawn_left > 0:
-		_spawn_gap -= delta
-		if _spawn_gap <= 0.0:
-			_spawn_gap = 0.12
-			_spawn_foe()
-			_wave_spawned += 1
-			_spawn_left -= 1
+	_tick_wave_spawn(delta)
 	_hero_cd -= delta
 	if _hero_pending_t > 0.0:
 		_hero_pending_t -= delta
@@ -1253,14 +1236,14 @@ func _process(delta: float) -> void:
 					# v16p（用户："还有就是 类似吹笛的声音 陆陆续续的"）：
 					#   ⚠ 那是我给法师配的 flute（笛声）—— 法师一多就"陆陆续续"吹个不停，很烦。
 					#   换成 dart（短促的暗器破空声）：**短、脆、一下就完**，不拖尾巴。
-					Audio.sfx("dart", -13.0)                    # 法师：短促一声
+					Audio.sfx("dart", -15.0, 1.0, 95)            # 同类齐射留一点空隙
 					# 法师有 1/3 概率**不近身打，改成放一发小号火雨**（预警 → 砸下）
 					if randf() < 0.33:
 						self.queue_delayed(_enemy_aim_position().x, _enemy_aim_position().y - 6.0, 70.0, float(f["atk"]) * 1.7,
 							DMG_FIRE, 1.0, "法火", "circle", Vector2.RIGHT, 0.0, 0.0, 0, 0.0, 0.0, 0.0, f)
 				elif bool(f.get("brute", false)):
 					# v6：**普通挨打不再击退**——壮汉只有那次延迟冲锋才把主角撞开
-					Audio.sfx("hit_heavy", -8.0)                 # 壮汉：闷重一记
+					Audio.sfx("hit_heavy", -11.0, 0.92, 85)      # 壮汉：闷重一记
 					if randf() < 0.35:
 						var cdir := (_enemy_aim_position() - Vector2(float(f["x"]), float(f["y"]))).normalized()
 						self.queue_delayed(float(f["x"]), float(f["y"]) - 10.0, 52.0, float(f["atk"]) * 2.2,
@@ -1271,11 +1254,11 @@ func _process(delta: float) -> void:
 					var adir := (ftgt - Vector2(float(f["x"]), float(f["y"]))).normalized()
 					_bursts.append({"x": float(f["x"]) + adir.x * 26.0, "y": float(f["y"]) - 30.0 + adir.y * 26.0,
 						"t": 0.0, "col": Color(0.92, 0.86, 0.62), "scale": 0.9})
-					Audio.sfx("bow", -11.0)                      # 弓手：弓弦一响
+					Audio.sfx("bow", -13.0, 1.0, 95)             # 弓手：弓弦一响
 				elif bool(f.get("shield", false)):
-					Audio.sfx("swing", -12.0)                    # 盾兵：钝器一挥
+					Audio.sfx("swing", -15.0, 0.91, 95)          # 盾兵：钝器一挥
 				else:
-					Audio.sfx("melee", -14.0)                    # 普通怪：轻挥
+					Audio.sfx("melee", -17.0, 1.0, 105)          # 普通怪：轻挥
 				if hit_decoy:
 					_mirror_decoy["hits"] = int(_mirror_decoy.get("hits", 0)) + 1
 					_push_float(ftgt.x, ftgt.y - 26.0, "镜影", Color(0.72, 0.70, 0.90))
@@ -2209,9 +2192,9 @@ func _death_sfx(kind: String, is_boss: bool) -> void:
 		return
 	if _death_sfx_t > 0.0:
 		return                                  # 同一瞬间死一片时只留第一声"闷响"
-	_death_sfx_t = 0.06
-	Audio.sfx("hit_heavy", -2.0, pt)
-	Audio.sfx("fall_down", -4.0, pt)
+	_death_sfx_t = 0.085
+	Audio.sfx("hit_heavy", -11.0, pt)
+	Audio.sfx("fall_down", -8.0, pt)
 	match kind:
 		"coin":
 			Audio.sfx("coin", -5.0, pt + 0.1)
@@ -2221,7 +2204,6 @@ func _death_sfx(kind: String, is_boss: bool) -> void:
 			Audio.sfx("equip", -5.0, pt)
 		"treasure":
 			Audio.sfx("chest", -4.0, pt)
-	Audio.sfx("swing", -12.0, pt)               # 一点点"挥空"的余韵
 
 # 死：不立刻消失——先"被打飞"半秒（碎片＋淡出＋上飘），爽感全在这一下
 # v9h：挑战怪死亡 —— 外壳按类型发奖（文钱/灵晶/经验/宝物）
@@ -5454,14 +5436,60 @@ func wave_cleared() -> bool:
 	var boss_ok := true
 	if boss_required:
 		boss_ok = boss_spawned_once and not boss_alive
-	return _wave_spawned >= _wave_quota and live_foes() <= 0 and boss_ok
+	return wave_spawn_complete() and live_foes() <= 0 and boss_ok
+
+func wave_spawn_complete() -> bool:
+	return _wave_spawned >= _wave_quota and _queued_coin_foes == 0 and _queued_crystal_foes == 0
+
+func set_wave_extra(value: int) -> void:
+	if value == wave_extra:
+		return
+	wave_extra = value
+	_wave_quota = maxi(0, _wave_quota_for(wave) + wave_stage_adjustment + wave_extra)
+	_spawn_left = mini(_spawn_left, maxi(0, _wave_quota - _wave_spawned))
+	if _spawn_left == 0:
+		_spawn_t = minf(_spawn_t, 0.24)
+
+func queue_wave_reward_foes(coin_count: int, crystal_count: int) -> void:
+	_queued_coin_foes += maxi(0, coin_count)
+	_queued_crystal_foes += maxi(0, crystal_count)
+
+func _tick_wave_spawn(delta: float) -> void:
+	var dense := _wave_quota >= 24
+	_spawn_t -= delta
+	if _spawn_left == 0 and _spawn_t <= 0.0 and _wave_spawned < _wave_quota:
+		var pack := maxi(SPAWN_PACK, 7) if dense else SPAWN_PACK
+		_spawn_left = mini(pack, _wave_quota - _wave_spawned)
+		_spawn_t = SPAWN_EVERY_LATE if dense or wave >= 10 else SPAWN_EVERY
+	_spawn_gap = maxf(0.0, _spawn_gap - delta)
+	if _spawn_gap > 0.0 or foes.size() >= MAX_FOES:
+		return
+	if _spawn_left == 0 and _queued_coin_foes == 0 and _queued_crystal_foes == 0:
+		return
+	var foe := _spawn_foe()
+	if foe.is_empty():
+		return
+	_spawn_gap = DENSE_SPAWN_GAP if dense else SPAWN_GAP
+	if _queued_coin_foes > 0:
+		foe["rtype"] = "coin"
+		_queued_coin_foes -= 1
+	elif _queued_crystal_foes > 0:
+		foe["rtype"] = "crystal"
+		_queued_crystal_foes -= 1
+	else:
+		_wave_spawned += 1
+		_spawn_left -= 1
 
 # 换波时调用：重置定额与计数（新一波从头刷）
 func wave_reset_quota() -> void:
-	_wave_quota = _wave_quota_for(wave) + int(wave_extra)
+	_wave_quota = maxi(0, _wave_quota_for(wave) + wave_stage_adjustment + wave_extra)
 	_wave_spawned = 0
-	_spawn_left = 0   # 上一波没刷完的批次要清掉，否则新波会被卡住不刷怪
-	_spawn_t = 0.0   # 进关/换波立刻出第一批，不再先等 0.6 秒
+	_last_quota_wave = wave
+	_spawn_left = 0
+	_spawn_gap = 0.0
+	_spawn_t = 0.0
+	_queued_coin_foes = 0
+	_queued_crystal_foes = 0
 
 func live_foes() -> int:
 	var n := 0

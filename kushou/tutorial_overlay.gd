@@ -2,6 +2,7 @@ extends Control
 
 # 一次性强制教学层：暂停全场、压暗、只留目标高亮；点目标才继续。
 signal done
+const Motion := preload("res://shared/ui_motion.gd")
 
 var _on_done: Callable
 var _on_pause: Callable
@@ -47,6 +48,7 @@ func _ready() -> void:
 	_hit.add_theme_stylebox_override("pressed", StyleBoxEmpty.new())
 	_hit.pressed.connect(_on_pressed)
 	add_child(_hit)
+	Motion.bind_button(_hit)
 
 	# 跳过：万一玩家没找准高亮目标，也能一次性退出教学，避免"游戏卡住"
 	var skip := Button.new()
@@ -66,6 +68,7 @@ func _ready() -> void:
 	skip.add_theme_color_override("font_color", Color(0.97, 0.90, 0.74))
 	skip.pressed.connect(_on_pressed)
 	add_child(skip)
+	Motion.bind_button(skip)
 
 func open(target: Node, text: String, on_done: Callable, on_pause := Callable(), on_resume := Callable()) -> void:
 	_target = target

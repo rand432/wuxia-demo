@@ -26,6 +26,8 @@ const DIR_BGM := "res://assets/audio/"
 const DIR_SFX := "res://assets/audio/sfx/"
 
 static var _cur_bgm := ""
+static var _music_context := ""
+static var _bgm_request := 0
 static var _shutting_down := false
 static var _quit_hook_installed := false
 static var _amb: AudioStreamPlayer = null   # v230：循环环境音（风/雨）
@@ -90,13 +92,13 @@ static func _stream(path: String) -> AudioStream:
 	return s
 
 # 真正开播：先等一帧（跳出 _ready 的调用栈），再加载、建播放器、淡入
-static func _begin_bgm(key: String, fade: float) -> void:
+static func _begin_bgm(key: String, fade: float, request: int) -> void:
 	var ml := Engine.get_main_loop()
 	if not (ml is SceneTree):
 		_cur_bgm = ""
 		return
 	await (ml as SceneTree).process_frame
-	if _shutting_down:
+	if _shutting_down or request != _bgm_request:
 		return
 	var root := (ml as SceneTree).root
 	if root == null:
@@ -105,7 +107,7 @@ static func _begin_bgm(key: String, fade: float) -> void:
 	var s := _stream(DIR_BGM + key + ".ogg")
 	if s == null:
 		await (ml as SceneTree).process_frame      # 再给一帧机会
-		if _shutting_down:
+		if _shutting_down or request != _bgm_request:
 			return
 		_cache.erase(DIR_BGM + key + ".ogg")       # 清掉可能缓存下来的 null
 		s = _stream(DIR_BGM + key + ".ogg")
@@ -127,17 +129,29 @@ static func _begin_bgm(key: String, fade: float) -> void:
 	var old: AudioStreamPlayer = _bgm_b if _use_a else _bgm_a
 	var newp: AudioStreamPlayer = _bgm_a if _use_a else _bgm_b
 	_use_a = not _use_a
+	_cancel_music_fade(newp)
 	newp.stream = s
 	newp.volume_db = -60.0
 	newp.play()
 	_ensure_playing(newp)
 	_ensure_loaded()
-	var tw := newp.create_tween()
-	tw.tween_property(newp, "volume_db", _bgm_db + _vol_db(_bgm_vol), fade)
+	_fade_music(newp, _bgm_db + _vol_db(_bgm_vol), fade)
 	if old.playing:
-		var tw2 := old.create_tween()
-		tw2.tween_property(old, "volume_db", -60.0, fade)
-		tw2.tween_callback(old.stop)
+		_fade_music(old, -60.0, fade, true)
+
+static func _cancel_music_fade(player: AudioStreamPlayer) -> void:
+	if player.has_meta("music_fade"):
+		var fade := player.get_meta("music_fade") as Tween
+		if fade != null and fade.is_valid():
+			fade.kill()
+
+static func _fade_music(player: AudioStreamPlayer, db: float, seconds: float, stop_after := false) -> void:
+	_cancel_music_fade(player)
+	var fade := player.create_tween()
+	player.set_meta("music_fade", fade)
+	fade.tween_property(player, "volume_db", db, maxf(0.01, seconds))
+	if stop_after:
+		fade.tween_callback(player.stop)
 
 # v71d：**播放兜底**——用户问「音乐音效呢」，查出来是这个：
 #   音频设备/混音线程还没就绪时，AudioStreamPlayer.play() 会**静默失败**（不报错、playing 一直是 false）。
@@ -241,7 +255,7 @@ static func set_battle_track(key: String) -> void:
 	_battle_track = key
 	save_settings()
 	# 正在放战斗曲就**立刻换掉**（换完这首重新流进来）
-	if _cur_bgm == "bgm_battle" or _cur_bgm == "bgm_tower" or _cur_bgm.begins_with("menu_"):
+	if _music_context == "battle":
 		play_bgm(key, 0.6)
 
 # 改音量：立刻作用到**正在播的那一路**上（不然要等下一首才生效）
@@ -264,11 +278,18 @@ static func set_menu_track(key: String) -> void:
 	_ensure_loaded()
 	_menu_track = key
 	save_settings()
-	if _cur_bgm.begins_with("menu_") or _cur_bgm == "bgm_menu":
-		_cur_bgm = ""
+	if _music_context == "menu":
 		play_bgm(key, 0.8)
 
 # ---------------- BGM ----------------
+
+static func play_menu_music(fade := 0.7) -> void:
+	_music_context = "menu"
+	play_bgm(menu_track(), fade)
+
+static func play_battle_music(fade := 0.55) -> void:
+	_music_context = "battle"
+	play_bgm(battle_track(), fade)
 
 static func play_bgm(key: String, fade := 1.2) -> void:
 	if key == _cur_bgm:
@@ -280,15 +301,16 @@ static func play_bgm(key: String, fade := 1.2) -> void:
 	#   游历/战斗是后面进的场景，那时候一切都就绪，所以有声。
 	#   修法：**把开播推迟一帧**（跳出 _ready 的调用栈），并且加载失败时再等一帧重试。
 	_cur_bgm = key
-	_begin_bgm(key, fade)
+	_bgm_request += 1
+	_begin_bgm(key, fade, _bgm_request)
 
 static func stop_bgm(fade := 0.8) -> void:
 	_cur_bgm = ""
+	_music_context = ""
+	_bgm_request += 1
 	for p in [_bgm_a, _bgm_b]:
 		if p != null and p.playing:
-			var tw: Tween = p.create_tween()
-			tw.tween_property(p, "volume_db", -60.0, fade)
-			tw.tween_callback(p.stop)
+			_fade_music(p, -60.0, fade, true)
 
 # ---------------- 音效 ----------------
 
@@ -296,6 +318,7 @@ static func stop_bgm(fade := 0.8) -> void:
 # 现在复用。放完回收，池满/不在树里才真释放。
 static var _sfx_pool: Array = []
 static var _sfx_active: Array = []
+static var _last_sfx_msec := {}
 const SFX_POOL_MAX := 16
 const SFX_ACTIVE_MAX := 32
 
@@ -320,7 +343,11 @@ static func _release_sfx_player(p: AudioStreamPlayer) -> void:
 	else:
 		p.queue_free()
 
-static func sfx(key: String, vol_db := -6.0, pitch := 1.0) -> void:
+static func sfx(key: String, vol_db := -6.0, pitch := 1.0, min_gap_ms := 0) -> void:
+	var gap := maxi(min_gap_ms, 45 if key == "ui_click" else 0)
+	var now := Time.get_ticks_msec()
+	if gap > 0 and now - int(_last_sfx_msec.get(key, -gap)) < gap:
+		return
 	var root := _root()
 	if root == null:
 		return
@@ -331,6 +358,8 @@ static func sfx(key: String, vol_db := -6.0, pitch := 1.0) -> void:
 	var p := _acquire_sfx_player()
 	if p == null:
 		return
+	if gap > 0:
+		_last_sfx_msec[key] = now
 	_sfx_active.append(p)
 	p.stream = s
 	p.volume_db = vol_db + _vol_db(_sfx_vol)
@@ -383,6 +412,7 @@ static func shutdown() -> void:
 		player.queue_free()
 	_sfx_active.clear()
 	_sfx_pool.clear()
+	_last_sfx_msec.clear()
 	_cache.clear()
 	_bgm_a = null
 	_bgm_b = null

@@ -1,5 +1,6 @@
 extends RefCounted
 # 共用的短促触感；不延迟按钮业务回调，空闲时不逐帧处理。
+const Audio := preload("res://shared/audio.gd")
 class PressFeedback extends Control:
 	var _button: Button
 	var _tween: Tween
@@ -54,6 +55,7 @@ class PressFeedback extends Control:
 		_tween.tween_property(self, "_visual_scale", 1.0, 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 	func _pulse() -> void:
+		Audio.sfx("ui_click", -13.0)
 		if not _available(): return
 		_age = 0.0
 		set_process(true)

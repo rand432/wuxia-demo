@@ -226,6 +226,7 @@ func _build_attr() -> void:
 	hit.focus_mode = Control.FOCUS_NONE
 	hit.pressed.connect(_open_detail)
 	add_child(hit)
+	UI.Motion.bind_button(hit)
 
 func _open_detail() -> void:
 	if _sheet == null or _rebuild_pending or not UI.navigation_available(self):

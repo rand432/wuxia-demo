@@ -110,5 +110,44 @@ func _run() -> void:
 	assert(b._wen == 36)
 	b.queue_free()
 	await process_frame
+	b = _battle()
+	c = b._core
+	c.set_wave(16)
+	c.wave_reset_quota()
+	c._wave_spawned = 9
+	var previous_quota: int = c._wave_quota
+	var swarm: Array = b._set_cards["swarm_0"]
+	b._cards.append_array(swarm)
+	b._activate_set("swarm_0")
+	assert(c._wave_spawned == 9 and c._wave_quota == previous_quota + 5 and c.wave_stage_adjustment == -4)
+	for i in c.MAX_FOES:
+		assert(not c._spawn_foe().is_empty())
+	b._coin_count_extra = 4
+	b._crystal_count_extra = 3
+	b._spawn_typed_foes()
+	c._tick_wave_spawn(2.0)
+	assert(c.foes.size() == c.MAX_FOES and c._wave_spawned == 9)
+	assert(c._queued_coin_foes == 4 and c._queued_crystal_foes == 3 and not c.foes.back().has("rtype"))
+	var typed := {"coin": 0, "crystal": 0}
+	for i in 100:
+		if c.wave_spawn_complete():
+			break
+		if c.foes.size() >= c.MAX_FOES:
+			c.foes.pop_front()
+		var previous_size: int = c.foes.size()
+		c._tick_wave_spawn(0.22)
+		assert(c.foes.size() <= previous_size + 1)
+		if c.foes.size() > previous_size and c.foes.back().has("rtype"):
+			typed[c.foes.back()["rtype"]] += 1
+	assert(c.wave_spawn_complete() and c._wave_spawned == c._wave_quota and typed == {"coin": 4, "crystal": 3})
+	c.foes.clear()
+	c.queue_wave_reward_foes(1, 0)
+	assert(not c.wave_cleared())
+	c.set_wave(17)
+	c.wave_reset_quota()
+	assert(c._queued_coin_foes == 0 and c._queued_crystal_foes == 0)
+	print("PASS: dense queue preserves active wave quota, no loss at cap, one spawn per tick and no premature clear")
+	b.queue_free()
+	await process_frame
 	print("PASS: confirmed typed kills pay once before result; same/no visual ID, fast kills, revive, multipliers and crystal lock; withdrawal/death/backwash never pay")
 	Audio.quit_cleanly()
