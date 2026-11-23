@@ -17,12 +17,14 @@ const LevelState := preload("res://shared/level_state.gd")
 const TutorialOverlay := preload("res://kushou/tutorial_overlay.gd")
 const AncestorData := preload("res://kushou/ancestor_data.gd")
 const AttackFx := preload("res://kushou/attack_fx.gd")
+const HazardTelegraph := preload("res://kushou/hazard_telegraph.gd")
 const BlackMarket := preload("res://kushou/black_market.gd")
 const MenuUI := preload("res://shared/ui_kit.gd")
 const CardFrame := preload("res://kushou/card_frame.gd")
 var _draw_art_cache: Dictionary = {}
 var _frame_fx_art: Texture2D
 var _frame_fx_live := 0
+var _hazard_view: HazardTelegraph
 
 # 怪物立绘：名字 → assets/gen/enemies/foe_<key>.png；没有就回退旧的圆牌 + 一个字
 const FOE_ART := {
@@ -940,7 +942,12 @@ func _build_field() -> void:
 	_core.modulate = Color(1, 1, 1, 0.25)
 	_core.show_combo_counter = false
 	_core.show_basic_hit_numbers = false
+	_core.draw_hazard_warnings = false
 	_cam.add_child(_core)
+	_hazard_view = HazardTelegraph.new()
+	_hazard_view.core = _core
+	_hazard_view.position = _core.position
+	_cam.add_child(_hazard_view)
 	_core.setup({"atk": 12.0, "hp_max": 200.0, "mp_max": 100.0})
 	_core.hero["basic_skill_bonus"] = _skill_level_bonus("zhujue") / 100.0
 	if LevelState.has_feature("equip"):
@@ -966,6 +973,7 @@ func _build_field() -> void:
 	_core.hero_down.connect(_on_hero_down)
 	_core.boss_arrived.connect(_on_boss_arrived)
 	_core.delayed_land.connect(_on_delayed_land)
+	_core.boss_impact.connect(_on_boss_impact)
 	_core.boss_died.connect(_on_boss_died)
 	_core.boss_slain.connect(_curio_on_boss_slain)
 	_core.wood_expired.connect(_curio_on_wood_expired)
@@ -2903,6 +2911,15 @@ func _process(_delta: float) -> void:
 				_hero_token.play_hit()
 			_prev_hero_hp = hhp
 		var active := {}
+		var boss_casts := {}
+		for hazard: Dictionary in _core._delayed:
+			if not bool(hazard.get("boss_attack", false)) or bool(hazard.get("landed", false)):
+				continue
+			var caster: Dictionary = hazard.get("caster", {})
+			var id := int(caster.get("_tid", 0))
+			var first: Dictionary = boss_casts.get(id, {})
+			if first.is_empty() or float(hazard["warn"]) - float(hazard["t"]) < float(first["warn"]) - float(first["t"]):
+				boss_casts[id] = hazard
 		if _no_tokens:
 			for i in range(_enemies.size() - 1, -1, -1):
 				_enemies[i].queue_free()
@@ -2922,6 +2939,8 @@ func _process(_delta: float) -> void:
 			var tk = _foe_tokens.get(tid)
 			if tk != null:
 				tk.position = _core.position + Vector2(float(f["x"]), float(f["y"]))
+				if bool(f.get("boss", false)):
+					tk.boss_warning = boss_casts.get(tid, {})
 				var hr := float(f["hp"]) / maxf(1.0, float(f["hp_max"]))
 				if hr > 0.0 and hr < float(tk.hp_ratio) - 0.0015 and tk._hit_t <= 0.0:
 					tk.play_hit(tk.position - _hero_token.position)
@@ -3163,6 +3182,10 @@ func _end_run(win: bool) -> void:
 		_bm.close_panel()
 	if _core != null:
 		_core.running = false
+		_core.clear_enemy_attacks()
+	for token in _foe_tokens.values():
+		if is_instance_valid(token):
+			token.boss_warning = {}
 	if _cam != null:
 		_cam.scale = Vector2.ONE
 	# 结算前的"定格式"反馈：一闪 + 长顿帧，然后才弹面板
@@ -5331,6 +5354,16 @@ func _on_delayed_land(pos: Vector2, elem: String) -> void:
 	var e: Array = LAND_FX.get(elem, ["impacts/crit-hit", "", 0.85])
 	var wp: Vector2 = _core.position + pos
 	_spawn_pfx(str(e[0]), wp, float(e[2]), str(e[1]), 1.30)
+
+func _on_boss_impact(caster: Dictionary, pos: Vector2, ring_radius: float) -> void:
+	if _run_over:
+		return
+	if ring_radius > 0.0:
+		_hazard_view.flash_ring(pos, ring_radius)
+	var token := _foe_tokens.get(int(caster.get("_tid", 0))) as TokenActor
+	if token != null:
+		token.boss_warning = {}
+		token.play_attack(_core.position + pos - token.position)
 
 # 首领倒下：白闪 + 大爆 + 金耀 + 重震，配一段很短的慢镜头
 # 纸人 Lv5：在核心那边挡下了首领延迟技

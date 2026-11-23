@@ -109,6 +109,7 @@ var _last_lucky := false
 #   音效库是现成的（hit_slash / hit_heavy / coin / levelup / drum / fall_down…），不新增素材；
 #   boss 登场那一首是这一轮新做的 assets/audio/bgm_boss_intro.ogg（取不到就退回 drum＋tension）。
 const Audio := preload("res://shared/audio.gd")
+const HazardTelegraph := preload("res://kushou/hazard_telegraph.gd")
 const SFX_MIN_GAP := 0.09           # 音效最短间隔（免得一群怪一起打的时候"炸音"）
 
 signal coin(n: int)
@@ -123,6 +124,7 @@ signal foe_defeated(foe: Dictionary) # 确认死亡后的单次事件，不含�
 signal hero_down()
 signal boss_arrived(tier: int)
 signal delayed_land(pos: Vector2, elem: String)   # 延迟技落点（外壳在这里挂 pixelfx）
+signal boss_impact(caster: Dictionary, pos: Vector2, ring_radius: float)
 signal boss_died(pos: Vector2)                    # 首领倒下（外壳做演出）
 signal boss_slain()                              # 所有首领真正死亡（含挑战，不含不死复活）
 signal wood_expired(foe: Dictionary)
@@ -277,6 +279,7 @@ const FOE_NAMES := ["狱狼", "疯牛", "毒蝎", "牢鼠"]
 var hide_units := true
 var show_combo_counter := true # 接入战斗外壳时使用外壳的清晰连斩读数。
 var show_basic_hit_numbers := true # 外壳已有普攻飘字时不重复绘制。
+var draw_hazard_warnings := true
 # v6：闪避下线（设计稿）—— 怪打人必中；命中率补偿见 BASE_FOE_ATK
 var hero := {"atk": 12.0, "hp": 200.0, "hp_max": 200.0, "mp": 100.0, "mp_max": 100.0,
 	"aspd": 1.0, "crit": 0.05, "cut": 0.0, "dmg_pct": 0.0}
@@ -755,7 +758,9 @@ func start_boss(tier: int, boss_name := "") -> void:
 	f["bskill"] = str(d.get("skill", ""))
 	f["bult"] = str(d.get("ult", ""))
 	f["baffix"] = str(d.get("affix", ""))
-	f["ult_t"] = float(d.get("ult_cd", 14.0))     # v14g：大招计时
+	f["ult_shape"] = str(d.get("ult_shape", "circle"))
+	f["ult_cd"] = float(d.get("ult_cd", 14.0))
+	f["ult_t"] = f["ult_cd"]
 	boss_alive = true
 	boss_spawned_once = true
 	_banner = ["", "一阶 boss", "二阶 boss", "三阶 boss", "四阶 boss"][tt] + "　" + str(d["name"])
@@ -1446,6 +1451,8 @@ func _process(delta: float) -> void:
 			match ushape:
 				"beam":
 					self.queue_delayed(float(fb["x"]), float(fb["y"]) - 10.0, 46.0, dmg, DMG_PHYS, 1.3, ult, "beam", dir2, 420.0)
+				"ring":
+					self.queue_delayed(float(fb["x"]), float(fb["y"]), 96.0, dmg, DMG_PHYS, 1.2, ult, "ring")
 				"sector":
 					# 扇形横扫：以 boss 为圆心、朝主角方向扫约 100°、半径 300
 					self.queue_delayed(float(fb["x"]), float(fb["y"]) - 10.0, 300.0, dmg, DMG_PHYS, 1.35, ult, "sector", dir2, 0.0, PI * 0.55)
@@ -1462,6 +1469,8 @@ func _process(delta: float) -> void:
 			for cast_index in range(first_cast, _delayed.size()):
 				_delayed[cast_index]["caster"] = fb
 				_delayed[cast_index]["boss_attack"] = not fb.has("chal") or int(fb["chal"]) == 4
+				if ushape == "ring":
+					_delayed[cast_index]["track_caster"] = true
 			if float(fb["hp"]) <= 0.0:
 				_kill_foe(fb)
 	# 飘字
@@ -1664,6 +1673,10 @@ func _delayed_tick(delta: float) -> void:
 		if str(d["shape"]) == "follow" and float(d["t"]) < float(d["warn"]) - 0.25:
 			d["x"] = _enemy_aim_position().x
 			d["y"] = _enemy_aim_position().y - 6.0
+		if bool(d.get("track_caster", false)):
+			var caster: Dictionary = d["caster"]
+			d["x"] = caster["x"]
+			d["y"] = caster["y"]
 		d["t"] = float(d["t"]) + delta
 		if float(d["t"]) < float(d["warn"]):
 			continue
@@ -1716,7 +1729,7 @@ func _delayed_in_at(d: Dictionary, c: Vector2, r: float) -> bool:
 		var rel := hero_pos - c
 		var along := rel.dot(Vector2(d["dir"]))
 		var side := absf(rel.cross(Vector2(d["dir"])))
-		inr = along > -40.0 and along < float(d["len"]) and side < r
+		inr = along > -HazardTelegraph.BEAM_BACK and along < float(d["len"]) and side < r
 	elif shape == "sector":
 		# 扇形横扫：距离在 r 内 ＋ 角度落在 dir 两侧 spread/2 里
 		var rel2 := hero_pos - c
@@ -1727,10 +1740,10 @@ func _delayed_in_at(d: Dictionary, c: Vector2, r: float) -> bool:
 	elif shape == "ring":
 		# 冲击环：落下瞬间环扫过一圈——判定就是"到中心的距离 ≈ 半径"
 		#   （给一点容差，不然贴着边站的会被判成没打中）
-		inr = c.distance_to(hero_pos) <= r + 26.0
+		inr = c.distance_to(hero_pos) <= r + HazardTelegraph.RING_PADDING
 	elif shape == "bolt":
 		# 落雷：一条**竖直**的细长柱（x 方向很窄，y 方向很长）
-		inr = absf(hero_pos.x - c.x) <= r and hero_pos.y >= c.y - 260.0 and hero_pos.y <= c.y + 60.0
+		inr = absf(hero_pos.x - c.x) <= r and hero_pos.y >= c.y - HazardTelegraph.BOLT_ABOVE and hero_pos.y <= c.y + HazardTelegraph.BOLT_BELOW
 	else:
 		inr = c.distance_to(hero_pos) <= r
 	return inr
@@ -1777,6 +1790,11 @@ func _delayed_hit(d: Dictionary, damage_scale := 1.0, allow_paper := true, is_im
 	delayed_land.emit(c, elem)
 	if not running or epoch != _enemy_attack_epoch or float(hero.get("hp", 0.0)) <= 0.0:
 		return
+	if bool(d.get("boss_attack", false)):
+		var ring_radius := r + HazardTelegraph.RING_PADDING if str(d["shape"]) == "ring" else 0.0
+		boss_impact.emit(d.get("caster", {}), c, ring_radius)
+		if not running or epoch != _enemy_attack_epoch:
+			return
 	_shake = maxf(_shake, 12.0)
 	# v16o（用户："背景喊杀声太多了 其实没必要有喊杀声"）：已去掉喊杀/战鼓声
 	if _hitstop < 0.10:
@@ -5560,91 +5578,8 @@ func _draw() -> void:
 	draw_rect(Rect2(0, 0, w, 46), Color(1, 1, 1, 0.030))
 	draw_rect(Rect2(0, h - 84.0, w, 84), Color(1, 1, 1, 0.045))
 	draw_line(Vector2(24, h - 84.0), Vector2(w - 24, h - 84.0), Color(1, 1, 1, 0.06), 2.0)
-	# v16a/v16d：延迟技的地面预警（**画在最下面一层**，怪和主角都在它上面）
-	#   「由淡转深 深后就释放」（用户）：
-	#     · alpha 从很淡一路涨到接近实心（0.06 → 0.55）
-	#     · 颜色从暗红一路烧到亮红（红/绿通道一起抬）
-	#     · 最后 0.25 秒再压一层高亮 —— "深到发亮就该跑了"
-	for dv in _delayed:
-		var d: Dictionary = dv
-		var pr := 1.0 if bool(d.get("landed", false)) else clampf(float(d["t"]) / maxf(0.01, float(d["warn"])), 0.0, 1.0)
-		# 手绘预警：极淡的墨洗填充 + 断续笔触描边（不是一块实心色板）
-		var fa := 0.05 + 0.16 * pr
-		var ea := 0.30 + 0.55 * pr
-		var fr := 0.46 + 0.30 * pr
-		var fg := 0.10 + 0.20 * pr
-		var dc := Vector2(float(d["x"]), float(d["y"])) + shk
-		var rr := float(d["r"])
-		var shape := str(d["shape"])
-		var hot := Color(fr, fg * 1.5, 0.12, ea)
-		if shape == "beam":
-			# 剑气/冲锋：两端收笔、中段最粗的毛笔形
-			var dv2 := Vector2(d["dir"]).normalized()
-			var nrm := Vector2(-dv2.y, dv2.x)
-			var ln := float(d["len"])
-			var a := dc
-			var b := dc + dv2 * ln
-			var p0 := a + nrm * rr * 0.45
-			var p1 := a + dv2 * (ln * 0.33) + nrm * rr
-			var p2 := b + nrm * rr * 0.35
-			var p3 := b - nrm * rr * 0.35
-			var p4 := a + dv2 * (ln * 0.33) - nrm * rr
-			var p5 := a - nrm * rr * 0.45
-			draw_colored_polygon(PackedVector2Array([p0, p1, p2, p3, p4, p5]), Color(fr, fg, 0.10, fa))
-			_dashed_line(p0, p1, hot, 2.0)
-			_dashed_line(p1, p2, hot, 2.0)
-			_dashed_line(p3, p4, hot, 2.0)
-			_dashed_line(p4, p5, hot, 2.0)
-		elif shape == "sector":
-			var fwd := Vector2(d["dir"]).normalized()
-			var half := float(d["spread"]) * 0.5
-			var a0 := fwd.angle() - half
-			var a1 := fwd.angle() + half
-			draw_colored_polygon(PackedVector2Array([dc, dc + Vector2(cos(a0), sin(a0)) * rr,
-				dc + Vector2(cos((a0 + a1) * 0.5), sin((a0 + a1) * 0.5)) * rr, dc + Vector2(cos(a1), sin(a1)) * rr]),
-				Color(fr, fg, 0.09, fa))
-			_dashed_arc(dc, rr, a0, a1, hot, 2.0, 26)
-			_dashed_line(dc, dc + Vector2(cos(a0), sin(a0)) * rr, hot, 2.0)
-			_dashed_line(dc, dc + Vector2(cos(a1), sin(a1)) * rr, hot, 2.0)
-		elif shape == "ring":
-			_dashed_arc(dc, rr, 0.0, TAU, hot, 2.0 + 2.0 * pr, 40)
-			draw_circle(dc, rr, Color(fr, fg, 0.10, fa * 0.6))
-		elif shape == "bolt":
-			var bw := maxf(10.0, rr * 0.5)
-			draw_colored_polygon(PackedVector2Array([
-				dc + Vector2(-bw * 0.55, -280.0), dc + Vector2(bw * 0.55, -280.0),
-				dc + Vector2(bw, 10.0), dc + Vector2(-bw, 10.0)]), Color(fr, fg, 0.12, fa))
-			_dashed_line(dc + Vector2(-bw * 0.55, -280.0), dc + Vector2(-bw, 10.0), hot, 2.0)
-			_dashed_line(dc + Vector2(bw * 0.55, -280.0), dc + Vector2(bw, 10.0), hot, 2.0)
-			draw_circle(dc, rr * 0.6, Color(fr, fg, 0.12, fa))
-		elif shape == "pool":
-			draw_circle(dc, rr, Color(fr * 0.8, fg, 0.16, 0.10 + 0.18 * pr))
-			_dashed_arc(dc, rr, 0.0, TAU, Color(fr * 0.85, fg * 1.3, 0.20, 0.40 + 0.30 * pr), 2.5, 36)
-			draw_arc(dc, rr * (0.5 + 0.4 * sin(_t * 4.0)), 0.0, TAU, 28, Color(fr, fg * 1.6, 0.24, 0.24), 2.0)
-		else:
-			draw_circle(dc, rr, Color(fr, fg, 0.09, fa))
-			_dashed_arc(dc, rr, 0.0, TAU, hot, 2.5, 40)
-			draw_arc(dc, rr * pr, 0.0, TAU, 32, Color(fr, fg * 1.6, 0.24, ea * 0.7), 2.0)
-		# 最后 0.25 秒：只加一层很淡的朱砂红提示，不再压成实心
-		if pr > 0.80:
-			var fl2 := (pr - 0.80) / 0.20
-			var col2 := Color(0.86, 0.32, 0.20, 0.14 * fl2)
-			if shape == "beam":
-				var dv3 := Vector2(d["dir"])
-				var nrm2 := Vector2(-dv3.y, dv3.x)
-				var hw2 := float(d["r"])
-				var q1 := dc + nrm2 * hw2
-				var q2 := dc - nrm2 * hw2
-				draw_colored_polygon(PackedVector2Array([q1, q2, q2 + dv3 * float(d["len"]), q1 + dv3 * float(d["len"])]), col2)
-			elif shape == "sector":
-				var fw2 := Vector2(d["dir"]).normalized()
-				var hf2 := float(d["spread"]) * 0.5
-				var b0 := fw2.angle() - hf2
-				var b1 := fw2.angle() + hf2
-				draw_colored_polygon(PackedVector2Array([dc, dc + Vector2(cos(b0), sin(b0)) * rr,
-					dc + Vector2(cos((b0 + b1) * 0.5), sin((b0 + b1) * 0.5)) * rr, dc + Vector2(cos(b1), sin(b1)) * rr]), col2)
-			else:
-				draw_circle(dc, rr, col2)
+	if draw_hazard_warnings:
+		HazardTelegraph.paint(self, _delayed, _t)
 	# v13d P3：法阵（占点）——画在怪下面一层
 	if not zone.is_empty() and bool(zone.get("on", false)):
 		var zc := Vector2(float(zone["x"]), float(zone["y"]))
@@ -6238,25 +6173,3 @@ func _stick(c: Vector2, s: float, col: Color, up: bool) -> void:
 					Color(0.86, 0.84, 0.78), 1.6 * s)
 			_:
 				pass
-
-# 断续笔触：预警区的手绘描边
-func _dashed_line(a: Vector2, b: Vector2, col: Color, w := 2.0, dash := 11.0, gap := 8.0) -> void:
-	var d := b - a
-	var L := d.length()
-	if L < 0.5:
-		return
-	var dir := d / L
-	var t := 0.0
-	while t < L:
-		var t2 := minf(t + dash, L)
-		draw_line(a + dir * t, a + dir * t2, col, w)
-		t = t2 + gap
-
-func _dashed_arc(c: Vector2, r: float, a0: float, a1: float, col: Color, w := 2.0, segs := 24) -> void:
-	var span := a1 - a0
-	for i in segs:
-		if i % 2 == 1:
-			continue
-		var t0 := a0 + span * float(i) / float(segs)
-		var t1 := a0 + span * float(i + 1) / float(segs)
-		draw_arc(c, r, t0, t1, 3, col, w)

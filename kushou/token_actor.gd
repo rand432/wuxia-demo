@@ -28,6 +28,7 @@ var bar_w := 72.0
 var name_col := Color(0.99, 0.94, 0.81)
 var challenge_kind := -1
 var guardian := false
+var boss_warning: Dictionary = {}
 
 var _sprite: Sprite2D
 var _base_scale := 1.0
@@ -207,6 +208,8 @@ func _tick_frame_pose(delta: float, travel: Vector2, moving: bool, pop: float, e
 		frame = 12 if _cast_time > 0.24 else 13
 	elif _attack_time > 0.0 and _attack_time <= 0.14:
 		frame = 10 if _attack_time > 0.075 else 11
+	elif not boss_warning.is_empty():
+		frame = 8 if float(boss_warning["t"]) < float(boss_warning["warn"]) * 0.82 else 9
 	elif _hit_t > 0.0:
 		frame = 14 if role == "player" else (12 if _hit_t > 0.48 else 13)
 	elif _attack_time > 0.0:
@@ -299,6 +302,7 @@ func play_down(recover := false) -> void:
 
 
 func reset_pose() -> void:
+	boss_warning = {}
 	_death_t = -1.0
 	_sink = 0.0
 	_flash = 0.0

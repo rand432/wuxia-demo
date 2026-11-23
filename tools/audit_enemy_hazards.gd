@@ -102,6 +102,23 @@ func _run() -> void:
 	core._delayed_tick(1.0)
 	assert(core.wave == 3 and core._enemy_attack_epoch == epoch)
 	assert(core._delayed.size() == 1 and battle._zhiren == 0 and core.hero["hp"] == 1000.0)
+	# 首领实例必须继承配置里的形态和循环冷却。
+	core.clear_enemy_attacks()
+	core.foes.clear()
+	core._hitstop = 0.0
+	core.start_boss(1, "石甲巨猿")
+	var boss: Dictionary = core._boss_foe()
+	assert(boss["ult_t"] == 15.0 and boss["ult_shape"] == "ring")
+	boss["ult_t"] = 0.0
+	core._process(0.01)
+	assert(boss["ult_t"] == 15.0 and core._delayed.size() == 1)
+	var cast: Dictionary = core._delayed[0]
+	assert(cast["kind"] == "裂地拳" and cast["shape"] == "ring" and is_same(cast["caster"], boss))
+	boss["x"] += 24.0
+	core._delayed_tick(0.1)
+	assert(cast["x"] == boss["x"] and cast["y"] == boss["y"])
+	core.interrupt_cast(boss)
+	assert(core._delayed.is_empty())
 	battle.queue_free()
 	await process_frame
 	print("PASS: pool impact/ticks/expiry/escape/long frames; failed-wave invalidation and paper survival")
