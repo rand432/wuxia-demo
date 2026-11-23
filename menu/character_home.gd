@@ -242,6 +242,7 @@ const CATS2 := ["装备", "材料", "道具"]
 var _scroll: ScrollContainer = null
 var _grid: GridContainer = null
 var _count_lb: Label = null
+var _bag_empty: Label
 
 func _build_bag() -> void:
 	UI.label(self, "背 包", Vector2(24, 770), Vector2(120, 34), 22, P.DIM)
@@ -259,8 +260,10 @@ func _build_bag() -> void:
 			_style_cats()
 			_fill_grid())
 		add_child(b)
+		UI.Motion.bind_button(b)
 		_cats.append(b)
 	_style_cats()
+	UI.panel(self, Rect2(24, 818, 672, 344), Color(0.94, 0.914, 0.86, 0.78), 12, P.LINE, 1)
 	_scroll = ScrollContainer.new()
 	_scroll.position = Vector2(24, 818)
 	_scroll.size = Vector2(660, 348)
@@ -272,6 +275,8 @@ func _build_bag() -> void:
 	_grid.add_theme_constant_override("h_separation", 12)
 	_grid.add_theme_constant_override("v_separation", 12)
 	_scroll.add_child(_grid)
+	_bag_empty = UI.label(self, "该分类暂无物品", Vector2(24, 932), Vector2(672, 58), 22, P.DIM,
+		HORIZONTAL_ALIGNMENT_CENTER)
 	_fill_grid()
 
 func _style_cats() -> void:
@@ -294,8 +299,6 @@ func _fill_grid() -> void:
 	for c in _grid.get_children():
 		_grid.remove_child(c)
 		c.queue_free()
-	if _count_lb != null:
-		_count_lb.text = str(_grid.get_child_count()) + " / " + str(FD.bag.size())
 	var cat: String = str(CATS2[_cat])
 	var list: Array = FD.bag_of(cat)
 	for it_v in list:
@@ -303,6 +306,7 @@ func _fill_grid() -> void:
 		_grid.add_child(_bag_cell(it))
 	if _count_lb != null:
 		_count_lb.text = str(list.size()) + "　件"
+	_bag_empty.visible = list.is_empty()
 
 func _bag_cell(it: Dictionary) -> Control:
 	var root := Panel.new()

@@ -63,6 +63,8 @@ func _build() -> void:
 		tr0.position = Vector2(66, 222)
 		tr0.size = Vector2(76, 80)
 	_anvil = AnvilArt.new()
+	_anvil.item_art = load(art0) as Texture2D if ResourceLoader.exists(art0) else null
+	_anvil.as_weapon = slot_key == "weapon"
 	UI.panel(_panel, Rect2(40, 326, 640, 314), Color(0.22, 0.181, 0.139), 15, Color(0.63, 0.48, 0.29), 2)
 	_anvil.position = Vector2(40, 330)
 	_anvil.size = Vector2(640, 320)
@@ -316,16 +318,24 @@ func _close() -> void:
 # ============================================================
 class AnvilArt extends Control:
 	const P := preload("res://shared/ui_pal.gd")
+	const SCENE_ART := "res://assets/art/ui/forge_workbench_v1.webp"
 	var trance := false
 	var empty := false
+	var item_art: Texture2D
+	var as_weapon := false
+	var _scene_art: Texture2D
 	var _t := 0.0
 	func _ready() -> void:
+		if ResourceLoader.exists(SCENE_ART):
+			_scene_art = load(SCENE_ART) as Texture2D
 		set_process(true)
 	func _process(d: float) -> void:
 		if trance:
 			_t += d
 			queue_redraw()
 	func _draw() -> void:
+		if _scene_art != null:
+			draw_texture_rect(_scene_art, Rect2(8, 4, size.x - 16, size.y - 22), false)
 		var ox := 0.0
 		var oy := 0.0
 		if trance and not empty:
@@ -335,6 +345,14 @@ class AnvilArt extends Control:
 					Color(1.0, 0.84, 0.46, 0.020 + 0.016 * float(i) * (0.7 + 0.5 * pulse)))
 			draw_arc(Vector2(320 + ox, 150 + oy), 250.0 + 12.0 * pulse, 0, TAU, 64,
 				Color(1.0, 0.90, 0.62, 0.16 + 0.14 * pulse), 3.0, true)
+		if _scene_art != null:
+			if not empty and item_art != null:
+				var extent := item_art.get_size()
+				var fit := extent * ((232.0 if as_weapon else 126.0) / maxf(extent.x, extent.y))
+				draw_set_transform(Vector2(318, 108), PI * 0.5 if as_weapon else 0.0)
+				draw_texture_rect(item_art, Rect2(-fit * 0.5, fit), false, Color(1.0, 0.91, 0.76))
+				draw_set_transform(Vector2.ZERO)
+			return
 		var body := Color(0.39, 0.34, 0.28)
 		draw_rect(Rect2(100 + ox, 96 + oy, 384, 32), body)
 		draw_colored_polygon(PackedVector2Array([

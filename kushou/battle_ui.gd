@@ -823,12 +823,12 @@ class StageAir extends Node2D:
 			mote.position = Vector2(start + 38.0 * fade + 14.0 * sin(fade * TAU), y - 65.0 * fade)
 			mote.modulate.a = sin(fade * PI) * (0.42 if lantern else 0.31)
 
-func _chip(x: float, width: float, kind: String, value: String, cap: String) -> Label:
+func _chip(hud: Control, x: float, width: float, kind: String, value: String, cap: String) -> Label:
 	var chip := Control.new()
 	chip.position = Vector2(x, 12)
 	chip.size = Vector2(width, 52)
 	chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(chip)
+	hud.add_child(chip)
 	_panel(Rect2(Vector2.ZERO, chip.size), Color(0.125, 0.102, 0.082), 8, Color(0.54, 0.42, 0.29), 1, chip)
 	var ic := Ico.new()
 	ic.kind = kind
@@ -870,30 +870,34 @@ func _on_chip_click(cap: String) -> void:
 				_toast("文钱 %d · 强化一次 %d" % [_wen, cost])
 
 func _build_hud() -> void:
-	_panel(Rect2(8, 4, 704, 132), Color(0.20, 0.157, 0.115), 12, Color(0.64, 0.48, 0.29), 2)
+	var hud := Control.new()
+	hud.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hud.z_index = 11
+	add_child(hud)
+	_panel(Rect2(8, 4, 704, 132), Color(0.20, 0.157, 0.115), 12, Color(0.64, 0.48, 0.29), 2, hud)
 	var show_crystal := LevelState.show_button("crystal")
 	var width := 162.0 if show_crystal else 220.0
 	var step := width + 12.0
-	_coin_lb = _chip(18, width, "coin", "0", "文钱")
-	_crystal_lb = _chip(18 + step, width, "crystal", "100", "灵晶")
+	_coin_lb = _chip(hud, 18, width, "coin", "0", "文钱")
+	_crystal_lb = _chip(hud, 18 + step, width, "crystal", "100", "灵晶")
 	_chips["灵晶"].visible = show_crystal
-	_kill_lb = _chip(18 + step * (2 if show_crystal else 1), width, "kill", "0", "杀敌")
-	_life_lb = _chip(18 + step * (3 if show_crystal else 2), width, "heart", "100", "命")
+	_kill_lb = _chip(hud, 18 + step * (2 if show_crystal else 1), width, "kill", "0", "杀敌")
+	_life_lb = _chip(hud, 18 + step * (3 if show_crystal else 2), width, "heart", "100", "命")
 	var well := Color(0.096, 0.078, 0.063)
-	_wave_lb = _lbl("", Vector2(22, 75), Vector2(143, 29), 22, LIGHT)
-	_panel(Rect2(23, 111, WAVE_TRACK_WIDTH, 6), well, 3)
-	_wave_fill = _panel(Rect2(23, 111, 0, 6), GOLD, 3)
+	_wave_lb = _lbl("", Vector2(22, 75), Vector2(143, 29), 22, LIGHT, hud)
+	_panel(Rect2(23, 111, WAVE_TRACK_WIDTH, 6), well, 3, Color.TRANSPARENT, 0, hud)
+	_wave_fill = _panel(Rect2(23, 111, 0, 6), GOLD, 3, Color.TRANSPARENT, 0, hud)
 	_refresh_wave_hud(1)
-	_lbl("气血", Vector2(182, 75), Vector2(56, 24), 17, LIGHT)
-	_lbl("内力", Vector2(182, 102), Vector2(56, 24), 17, LIGHT)
-	_panel(Rect2(234, 83, VITAL_TRACK_WIDTH, 10), well, 4)
-	_panel(Rect2(234, 110, VITAL_TRACK_WIDTH, 10), well, 4)
-	_hp_fill = _panel(Rect2(234, 83, VITAL_TRACK_WIDTH, 10), Color(0.76, 0.30, 0.24), 4)
-	_mp_bar = _panel(Rect2(234, 110, VITAL_TRACK_WIDTH, 10), Color(0.32, 0.63, 0.65), 4)
-	_hp_lb = _lbl("200/200", Vector2(407, 75), Vector2(128, 24), 16, LIGHT)
-	_mp_lb = _lbl("100/100", Vector2(407, 102), Vector2(128, 24), 16, LIGHT)
-	_tot_btn = _btn("总计", Rect2(542, 79, 73, 44), 17, Color(0.13, 0.106, 0.081), LIGHT, func(): _show_totals())
-	_btn("退出", Rect2(625, 79, 73, 44), 17, Color(0.13, 0.106, 0.081), LIGHT, func(): _show_exit(true))
+	_lbl("气血", Vector2(182, 75), Vector2(56, 24), 17, LIGHT, hud)
+	_lbl("内力", Vector2(182, 102), Vector2(56, 24), 17, LIGHT, hud)
+	_panel(Rect2(234, 83, VITAL_TRACK_WIDTH, 10), well, 4, Color.TRANSPARENT, 0, hud)
+	_panel(Rect2(234, 110, VITAL_TRACK_WIDTH, 10), well, 4, Color.TRANSPARENT, 0, hud)
+	_hp_fill = _panel(Rect2(234, 83, VITAL_TRACK_WIDTH, 10), Color(0.76, 0.30, 0.24), 4, Color.TRANSPARENT, 0, hud)
+	_mp_bar = _panel(Rect2(234, 110, VITAL_TRACK_WIDTH, 10), Color(0.32, 0.63, 0.65), 4, Color.TRANSPARENT, 0, hud)
+	_hp_lb = _lbl("200/200", Vector2(407, 75), Vector2(128, 24), 16, LIGHT, hud)
+	_mp_lb = _lbl("100/100", Vector2(407, 102), Vector2(128, 24), 16, LIGHT, hud)
+	_tot_btn = _btn("总计", Rect2(542, 79, 73, 44), 17, well, LIGHT, _show_totals, hud)
+	_btn("退出", Rect2(625, 79, 73, 44), 17, well, LIGHT, func(): _show_exit(true), hud)
 
 func _refresh_wave_hud(wave: int, complete := false) -> void:
 	if _wave_lb == null:
@@ -1060,7 +1064,7 @@ func _build_field() -> void:
 	add_child(_boss_bar)
 	_fly_layer = FlyLayer.new()
 	_fly_layer.size = Vector2(720, 1280)
-	_fly_layer.z_index = 9
+	_fly_layer.z_index = 12
 	add_child(_fly_layer)
 	_fly = _fly_layer.dots
 	_build_card_detail()
@@ -6038,11 +6042,11 @@ const SKILL_SFX := {
 	"真实": [["heartbeat", -10.0, 0.90], ["tension", -13.0, 1.00]],
 }
 
-func _skill_fx(dtype: String, world_pos: Vector2, big := false) -> void:
+func _skill_fx(dtype: String, world_pos: Vector2, big := false, scale_mul := 1.0) -> void:
 	var e: Array = SKILL_FX.get(dtype, [])
 	if e.is_empty():
 		return
-	_spawn_pfx(str(e[0]), world_pos, float(e[2]) * (1.35 if big else 1.0), str(e[1]), 1.9, 1.0)
+	_spawn_pfx(str(e[0]), world_pos, float(e[2]) * (1.35 if big else 1.0) * scale_mul, str(e[1]), 1.9, 1.0)
 	if not big:
 		var layers: Array = SKILL_SFX.get(dtype, [])
 		for one in layers:
@@ -6090,7 +6094,10 @@ func _cast_skill(i: int) -> void:
 		var times := 1
 		if _baicao:
 			times = _baicao_times()
-		_skill_fx("木系", _hero_screen())
+		var has_aura := float(md0.get("aura", 0.0)) > 0.0
+		var center := _hero_screen() - (Vector2.ZERO if has_aura else Vector2(0, 32))
+		var visual_scale := (AURA_BASE_R + float(md0.get("radius_add", 0.0))) / 49.0 if has_aura else 1.0
+		_skill_fx("木系", center, false, visual_scale)
 		for _i in times:
 			if not _skill_batch_active(epoch): return
 			_cast_heal(float(sk["mul"]), aid0)
@@ -7695,25 +7702,7 @@ func _cast_heal(mul: float, aid := "liuqingqing") -> void:
 		if vuln > 0.0:
 			f["vuln_t"] = maxf(float(f.get("vuln_t", 0.0)), dur)   # 只刷新，不叠层
 			f["vuln_pct"] = vuln
-	# 绿色环波
-	_heal_ring(rad)
 	Aud.sfx("enlighten", -10.0)
-
-func _heal_ring(rad: float) -> void:
-	var r := ColorRect.new()
-	r.color = Color(0.45, 0.85, 0.42, 0.35)
-	r.size = Vector2(60, 60)
-	r.position = _core.position + Vector2(_core.hero_pos.x - 30.0, _core.hero_pos.y - 30.0)
-	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	r.z_index = 8
-	add_child(r)
-	var target := rad * 2.0
-	var tw := create_tween()
-	tw.set_parallel(true)
-	tw.tween_property(r, "size", Vector2(target, target), 0.45)
-	tw.tween_property(r, "position", _core.position + Vector2(_core.hero_pos.x - target * 0.5, _core.hero_pos.y - target * 0.5), 0.45)
-	tw.tween_property(r, "modulate:a", 0.0, 0.45)
-	tw.chain().tween_callback(func() -> void: r.queue_free())
 
 func _tick_poison(dt: float) -> void:
 	if _core == null:

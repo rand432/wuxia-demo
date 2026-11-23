@@ -54,9 +54,8 @@ var _walk_blend := 0.0
 var _frame_atlas: Texture2D
 var _frame_index := -1
 var _frame_clock := 0.0
+var _frame_cell := 128.0
 const DEATH_DURATION := 0.38
-const FRAME_CELL := 128
-const FRAME_GROUND := 116
 
 
 func setup(tex: Texture2D, r: float, ring: Color, crop: bool, frames: Texture2D = null) -> void:
@@ -105,8 +104,9 @@ func _refresh_sprite() -> void:
 		_sprite.texture = _frame_atlas
 		_sprite.region_enabled = true
 		_sprite.region_filter_clip_enabled = true
-		_base_scale = radius * (2.02 if role == "player" and round_mask else 3.15) / 101.0
-		_art_height = 108.0 * _base_scale
+		_frame_cell = float(_frame_atlas.get_width()) / 4.0
+		_base_scale = radius * (2.02 if role == "player" and round_mask else 3.15) / (_frame_cell * 101.0 / 128.0)
+		_art_height = (_frame_cell * 108.0 / 128.0) * _base_scale
 		_sprite.scale = Vector2.ONE * _base_scale
 		_sprite.position.y = _frame_center_y()
 		_show_frame(0)
@@ -132,13 +132,13 @@ func _refresh_sprite() -> void:
 		_sprite.material = null
 
 func _frame_center_y() -> float:
-	return -(FRAME_GROUND - FRAME_CELL * 0.5) * _base_scale
+	return -_frame_cell * (116.0 / 128.0 - 0.5) * _base_scale
 
 func _show_frame(index: int) -> void:
 	if _frame_atlas == null or index == _frame_index:
 		return
 	_frame_index = index
-	_sprite.region_rect = Rect2((index % 4) * FRAME_CELL, floori(index / 4.0) * FRAME_CELL, FRAME_CELL, FRAME_CELL)
+	_sprite.region_rect = Rect2((index % 4) * _frame_cell, floori(index / 4.0) * _frame_cell, _frame_cell, _frame_cell)
 
 
 func _process(delta: float) -> void:
