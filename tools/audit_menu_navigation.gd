@@ -144,6 +144,12 @@ func _run() -> void:
 	assert(battle._entry_cards_ready and battle._entry_art.is_empty())
 	assert(battle._hero_token._frame_atlas != null and battle._skill_frame_art != null)
 	assert(battle._draw_art_cache.values().any(func(art): return art != null))
+	for key in ["jiuyou_mojun", "xuehai_luocha", "wanqu_chongmu", "qian", "jing", "shu"]:
+		assert(battle._foe_tex_cache[key].resource_path.ends_with("foe_%s.png" % key))
+	assert(battle._foe_animation_cache[battle.FINAL_BEAST_FRAME_ID] != null)
+	assert(not battle._foe_tex_cache.has("shuangtou_shi"))
+	assert(battle._chal_btns[0].art == battle._foe_tex_cache["qian"])
+	assert(battle._chal_btns[3].art == battle._foe_animation_cache["challenge_mimic"])
 	var eligible := LS.god_ids()
 	assert(battle._god_portraits.size() == eligible.size())
 	for aid in eligible:
@@ -192,5 +198,5 @@ func _run() -> void:
 	await process_frame
 	await process_frame
 	await create_timer(0.5).timeout # 等场景切换/音频的延迟清理完成后再退出引擎。
-	print("PASS: loading recovery, staged panels, and all six god portraits reused on first open and refresh")
+	print("PASS: loading recovery, staged panels, ready challenge and boss textures, and all six god portraits reused")
 	Audio.quit_cleanly()

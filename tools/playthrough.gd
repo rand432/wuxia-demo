@@ -3,7 +3,7 @@ const BATTLE := preload("res://kushou/battle_ui.tscn")
 const LS := preload("res://shared/level_state.gd")
 const GS := preload("res://shared/game_state.gd")
 const CurioData := preload("res://shared/curio_data.gd")
-const LOG_PATH := "res://tools/playthrough.log"
+const LOG_PATH := "user://playthrough.log"
 
 var b = null
 var lv := 1

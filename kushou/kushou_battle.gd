@@ -249,6 +249,7 @@ const BOSS_TIER := [
 # v18c（用户："不同难度不同 boss"）：**这一个难度点名的那只 boss**（空 = 老行为：阶内随机）。
 #   外壳每局开局用 set_stage_boss() 设进来；挑战叫出来的 boss 也走它 ——
 #   同一个难度只有一只 boss，不管从哪条路叫下来。
+const BOSSES_PER_TIER := 4
 var stage_boss := ""
 var stage_btier := 0
 
@@ -267,9 +268,13 @@ func _boss_index(nm: String) -> int:
 # v14g：每阶随机挑一只出场（词缀/大招各不相同）
 func _boss_pick(tier: int) -> Dictionary:
 	# v17y：改成 **4 阶 × 4 只**（表已按阶排好：0-3 一阶 / 4-7 二阶 / 8-11 三阶 / 12-15 四阶）
-	var lo := (tier - 1) * 4
-	var idx := lo + (randi() % 4)
+	var lo := (tier - 1) * BOSSES_PER_TIER
+	var idx := lo + (randi() % BOSSES_PER_TIER)
 	return BOSS_TIER[clampi(idx, 0, BOSS_TIER.size() - 1)]
+
+static func boss_tier_entries(tier: int) -> Array:
+	var first := (tier - 1) * BOSSES_PER_TIER
+	return BOSS_TIER.slice(first, first + BOSSES_PER_TIER)
 const FOE_NAMES := ["狱狼", "疯牛", "毒蝎", "牢鼠"]
 
 var hide_units := true
@@ -696,7 +701,7 @@ func start_boss(tier: int, boss_name := "") -> void:
 	var d: Dictionary = {}
 	if idx >= 0:
 		d = BOSS_TIER[idx]
-		tier = idx / 4 + 1                   # 表里位置 → 阶（0-3 一阶 / 4-7 二阶 / 8-11 三阶 / 12-15 四阶）
+		tier = idx / BOSSES_PER_TIER + 1
 	else:
 		if stage_btier > 0:
 			tier = stage_btier               # 点名了但表里没有（防手滑）：阶至少跟着关卡走

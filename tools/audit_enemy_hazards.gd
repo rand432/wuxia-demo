@@ -12,6 +12,62 @@ func _initialize() -> void:
 func _pool(core) -> void:
 	core.queue_delayed(core.hero_pos.x, core.hero_pos.y, 70.0, 20.0, "真实", 1.0, "pool test", "pool", Vector2.RIGHT, 0.0, 0.0, 0, 0.0, 3.0)
 
+func _audit_guard_dog() -> bool:
+	LS.current_level = 1
+	var battle = Battle.instantiate()
+	var path := "res://assets/gen/enemies/frames/kanmen_quan_v1.png"
+	assert(path in battle.prepare_entry_art())
+	root.add_child(battle)
+	battle.set_process(false)
+	var core = battle._core
+	core.set_process(false)
+	core.start_boss(1, "看门恶犬")
+	var dog: Dictionary = core._boss_foe()
+	dog.merge({"x": 290.0, "y": 290.0}, true)
+	battle._process(0.0)
+	var token = battle._foe_tokens[dog["_tid"]]
+	token.set_process(false)
+	assert(token.guardian and token._frame_atlas.resource_path == path)
+	token._process(0.1)
+	assert(token._frame_index in range(4))
+	dog["x"] += 5.0
+	battle._process(0.0)
+	token._process(0.1)
+	assert(token._frame_index in range(4, 8))
+	core.intro_wait = 0.0
+	core._hitstop = 0.0
+	dog["ult_t"] = 0.0
+	core._process(0.016)
+	assert(core._delayed.size() == 1 and core._delayed[0]["kind"] == "狂吠震地")
+	battle._process(0.0)
+	token._process(0.016)
+	assert(token._frame_index == 8)
+	core._delayed_tick(1.04)
+	battle._process(0.0)
+	token._process(0.016)
+	assert(token._frame_index == 9)
+	core._delayed_tick(0.18)
+	token._process(0.016)
+	assert(token._frame_index == 10)
+	token._process(0.065)
+	assert(token._frame_index == 11)
+	core._apply_dmg(dog, float(dog["hp"]) * 0.08, "真实")
+	battle._process(0.0)
+	token._process(0.065)
+	assert(token._frame_index == 12)
+	token._process(0.03)
+	assert(token._frame_index == 13)
+	dog["hp"] = 0.0
+	core._kill_foe(dog)
+	token._process(0.08)
+	assert(token._frame_index == 14)
+	token._process(0.18)
+	assert(token._frame_index == 15 and token.visible)
+	token._process(0.2)
+	assert(token.death_finished() and not token.visible)
+	battle.queue_free()
+	return true
+
 func _run() -> void:
 	LS.ensure_loaded()
 	LS.current_level = 6
@@ -178,5 +234,7 @@ func _run() -> void:
 	assert(core._spawn_foe().is_empty() and float(sentinel["y"]) > 320.0)
 	battle.queue_free()
 	await process_frame
-	print("PASS: chronological impacts and pool ticks, interruption, paper survival, wave invalidation and bounded boss summons")
+	assert(_audit_guard_dog())
+	await process_frame
+	print("PASS: hazard chronology, wave invalidation, bounded summons and live guard-dog pose transitions")
 	Audio.quit_cleanly()

@@ -32,7 +32,6 @@ const BATTLE_FRAMES_PATH := "res://assets/art/fx/battle_bursts_v1.png"
 const SKILL_FRAMES_PATH := "res://assets/art/fx/skill_bursts_v1.png"
 const DRAGON_FRAMES_PATH := "res://assets/gen/allies/river_dragon.png"
 const DRAGON_WAVE_PATH := "res://assets/art/fx/dragon_wave_v1.png"
-const ENTRY_ELITE_FRAME_IDS := ["shijia_yuan", "challenge_mimic", "challenge_chief"]
 const FINAL_BEAST_FRAME_ID := "kunshou_zhongyan_v1"
 var _entry_art: Dictionary = {}
 var _entry_cards_ready := false
@@ -62,7 +61,7 @@ const FOE_ART := {
 var _foe_tex_cache := {}
 var _foe_animation_cache := {}
 const FOE_FRAME_PATH := {
-	"狱狼": "yulang", "石甲巨猿": "shijia_yuan",
+	"狱狼": "yulang", "石甲巨猿": "shijia_yuan", "看门恶犬": "kanmen_quan_v1",
 	"山匪弓手": "archer", "符杖术士": "talisman_mage",
 	"宝箱大怪": "challenge_mimic", "挑战匪首": "challenge_chief",
 	"困兽·终焉": FINAL_BEAST_FRAME_ID,
@@ -77,12 +76,12 @@ func _foe_art(nm: String) -> Texture2D:
 		return null
 	if _foe_tex_cache.has(key):
 		return _foe_tex_cache[key] as Texture2D
-	var p := "res://assets/gen/enemies/foe_%s.png" % key
-	var t: Texture2D = null
-	if ResourceLoader.exists(p):
-		t = load(p) as Texture2D
+	var t := _entry_texture(_foe_art_path(key))
 	_foe_tex_cache[key] = t
 	return t
+
+func _foe_art_path(key: String) -> String:
+	return "res://assets/gen/enemies/foe_%s.png" % key
 
 const INK := Color(0.13, 0.12, 0.11)
 const PAPER := Color(0.93, 0.90, 0.82)
@@ -347,6 +346,8 @@ func prepare_entry_art() -> Array[String]:
 		paths.append(HERO_SKILL_FRAMES_PATH)
 	for frame_id in _entry_enemy_frame_ids():
 		paths.append(_foe_frame_path(frame_id))
+	for key in _entry_enemy_art_keys():
+		paths.append(_foe_art_path(key))
 	for id in _pool:
 		var card: Dictionary = _card_db.get(id, {})
 		var frame := CardFrame.texture_path(int(card.get("quality", 3)))
@@ -381,10 +382,28 @@ func _foe_frame_path(frame_id: String) -> String:
 	return "res://assets/gen/enemies/frames/%s.png" % frame_id
 
 func _entry_enemy_frame_ids() -> Array:
-	var ids := ENTRY_ELITE_FRAME_IDS + CROWD_FRAME_PATH.values()
-	if LevelState.boss_tier() == 4:
-		ids.append(FINAL_BEAST_FRAME_ID)
+	var ids := CROWD_FRAME_PATH.values()
+	for name in _entry_named_foes():
+		var frame_id := str(FOE_FRAME_PATH.get(name, ""))
+		if not frame_id.is_empty():
+			ids.append(frame_id)
 	return ids
+
+func _entry_named_foes() -> Array[String]:
+	var names: Array[String] = []
+	for entry in BattleCore.boss_tier_entries(LevelState.boss_tier()):
+		names.append(str(entry["name"]))
+	if LevelState.show_button("challenge"):
+		names.append_array(BattleCore.CHAL_FOE_NAME)
+	return names
+
+func _entry_enemy_art_keys() -> Array[String]:
+	var keys: Array[String] = []
+	for name in _entry_named_foes():
+		var key := str(FOE_ART.get(name, ""))
+		if not key.is_empty() and not FOE_FRAME_PATH.has(name):
+			keys.append(key)
+	return keys
 
 func _ready() -> void:
 	GameState.ensure_loaded()
@@ -405,6 +424,10 @@ func _ready() -> void:
 		_dragon_wave_art = _entry_texture(DRAGON_WAVE_PATH)
 		for frame_id in _entry_enemy_frame_ids():
 			_foe_animation_cache[frame_id] = _entry_texture(_foe_frame_path(frame_id))
+		for key in _entry_enemy_art_keys():
+			var path := _foe_art_path(key)
+			if _entry_art.has(path):
+				_foe_tex_cache[key] = _entry_art[path]
 		_build_bg()
 	if not _no_ui:
 		_build_hud()
