@@ -76,6 +76,9 @@ func _run() -> void:
 	home._start_level()
 	assert(LS.current_level == stage and not home.is_inside_tree())
 	var role = await _scene("res://menu/character_home.tscn")
+	var hero_portrait := role.find_child("HeroPortrait", true, false) as TextureRect
+	var hero_portrait_path := hero_portrait.texture.resource_path
+	assert(hero_portrait_path.ends_with("portrait_zhujue_ink_v2.webp"))
 	FD.equipped["weapon"] = {"name": "导航审查剑", "quality": 1, "plus": 0}
 	role._on_slot("weapon")
 	var detail = null
@@ -109,6 +112,13 @@ func _run() -> void:
 	UI.open_settings(role)
 	assert(_snapshot() == resources and is_equal_approx(Audio.bgm_volume(), changed))
 	var partner = await _scene("res://menu/partner_home.tscn")
+	var portrait = partner._cards[1].motion
+	assert(portrait.character_id == "zhujue" and portrait._demo_left == 0.0)
+	assert(portrait.texture.resource_path == hero_portrait_path)
+	partner._on_card_click(2)
+	assert(portrait.character_id == "chenshi" and portrait._demo_left > 0.0)
+	partner._on_card_click(0)
+	assert(portrait.character_id == "zhujue" and portrait._demo_left > 0.0)
 	partner._on_dock("curio")
 	partner._on_dock("start")
 	var curio = await _scene("res://menu/curio_home.tscn")
@@ -145,7 +155,7 @@ func _run() -> void:
 	var god_panel: Control = battle._god_layer
 	assert(god_panel.visible and not draw_panel.visible and battle._god_root.get_child_count() > 0)
 	var god = battle._god_root.get_child(0)
-	assert(god.portrait.resource_path.ends_with("portrait_chenshi.jpg") and god.skill_art != god.portrait)
+	assert(god.portrait.resource_path.ends_with("portrait_chenshi_ink_v2.webp") and god.skill_art != god.portrait)
 	assert(not battle._entry_god_portraits.has(god.aid))
 	battle._trea_charge = 1
 	battle._trea_tile.pressed.emit()

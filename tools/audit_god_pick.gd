@@ -24,7 +24,14 @@ func _run() -> void:
 		assert(card.aid != "chenshi")
 		assert(card.portrait.resource_path.ends_with("portrait_liuqingqing_ink_v1.png"))
 		assert(card.skill_art.resource_path.ends_with("skill_liuqingqing.png"))
+	var picked = battle._god_root.get_child(0)
+	picked.pressed.emit()
+	var apparition = battle._invocation_portrait
+	assert(apparition.spectral and apparition._demo_left > 0.0)
+	assert(apparition.character_id == picked.aid and apparition.texture == picked.portrait)
+	await create_timer(1.25).timeout
+	assert(not is_instance_valid(apparition))
 	battle.queue_free()
 	await process_frame
-	print("PASS: new god hand excludes owned; duplicate pick free; current Liu portrait and separate skill seal")
+	print("PASS: duplicate excluded; Liu portrait preserved; accepted pick shares portrait and plays a fading apparition")
 	quit()

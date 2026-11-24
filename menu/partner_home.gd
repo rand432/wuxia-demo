@@ -7,6 +7,8 @@ const Audio := preload("res://shared/audio.gd")
 const LevelState := preload("res://shared/level_state.gd")
 const UI := preload("res://shared/ui_kit.gd")
 const GodPortraits := preload("res://shared/god_portraits.gd")
+const PortraitMotion := preload("res://shared/god_portrait_motion.gd")
+const ROLE_VOICE := {"zhujue": "player_01.ogg", "chenshi": "chenshi_01.ogg", "qingluan": "qingluan_01.ogg"}
 # 每个技能自己的描述 + 伤害倍率（跟 battle_ui 的 SKILL_DEFS 保持一份数据）
 const SKILL_DEFS := {
 	"zl": {"name": "天雷道术", "dtype": "金系", "mul": 1.6, "cd": 10.0, "mp": 260.0, "targets": 3,
@@ -55,6 +57,7 @@ var _skill_levels: Array[Label] = []
 var _portraits := {}
 var _skill_icons := {}
 var _pop: Control = null
+var _preview_voice: AudioStreamPlayer
 
 func _ready() -> void:
 	GameState.ensure_loaded()
@@ -64,6 +67,7 @@ func _ready() -> void:
 		_ids.append(str(aid))
 	if not _ids.has("zhujue"):
 		_ids.append("zhujue")
+	_sel = _ids.find("zhujue")
 	for aid in _ids:
 		_stars[aid] = clampi(int(GameState.stars.get(aid, 0)), 0, GameState.ROLE_STAR_MAX)
 		var path := GodPortraits.path_for(aid)
@@ -74,6 +78,8 @@ func _ready() -> void:
 	_build_slots()
 	_build_hot()
 	UI.dock(self, "god", _on_dock)
+	_preview_voice = AudioStreamPlayer.new()
+	add_child(_preview_voice)
 
 func _build_backdrop() -> void:
 	var ground := ColorRect.new()
@@ -107,6 +113,12 @@ func _build_carousel() -> void:
 		mount.size = box.size
 		mount.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		add_child(mount)
+		if i == 1:
+			var backing := UI.panel(mount, Rect2(Vector2.ZERO, box.size), INSET, 10)
+			var style := backing.get_theme_stylebox("panel") as StyleBoxFlat
+			style.shadow_color = Color(0.025, 0.021, 0.017, 0.8)
+			style.shadow_size = 8
+			style.shadow_offset = Vector2(0, 4)
 		var card := GodArt.new()
 		card.size = box.size
 		card.featured = i == 1
@@ -128,6 +140,7 @@ func _refresh_carousel(slide := 0) -> void:
 			_set_portrait(card, _ids[order[i]])
 	if slide != 0:
 		UI.Motion.pop(_cards[1].get_parent() as Control, false, 0.0, Vector2.INF, 0.018 * float(slide))
+		_demonstrate_selected()
 	_refresh_slots()
 
 func _set_portrait(card: GodArt, aid: String) -> void:
@@ -137,8 +150,19 @@ func _set_portrait(card: GodArt, aid: String) -> void:
 	card.quality = int(role["quality"])
 	card.stars = int(_stars[aid])
 	card.art = _portraits[aid] as Texture2D
+	if card.motion != null:
+		card.motion.set_portrait(card.art, aid)
 	card.tooltip_text = card.god_name
 	card.queue_redraw()
+
+func _demonstrate_selected() -> void:
+	var aid := _ids[_sel]
+	_cards[1].motion.demonstrate()
+	_preview_voice.stop()
+	if ROLE_VOICE.has(aid) and Audio.sfx_volume() > 0.0:
+		_preview_voice.stream = load("res://assets/voice/" + str(ROLE_VOICE[aid])) as AudioStream
+		_preview_voice.volume_db = linear_to_db(Audio.sfx_volume()) - 8.0
+		_preview_voice.play()
 
 func _on_card_click(i: int) -> void:
 	if i == 1:
@@ -240,6 +264,7 @@ func _show_skill_detail(i: int) -> void:
 	if _sel != i:
 		_sel = i
 		_refresh_carousel()
+		_demonstrate_selected()
 	var aid := _ids[i]
 	var role: Dictionary = AD.ANCESTORS[aid]
 	var panel := _open_panel(Rect2(74, 314, 572, 550), "SkillPanel")
@@ -411,6 +436,7 @@ class GodArt extends Button:
 	var featured := false
 	var art_only := false
 	var art: Texture2D
+	var motion: PortraitMotion
 
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_IGNORE if art_only else Control.MOUSE_FILTER_STOP
@@ -418,6 +444,12 @@ class GodArt extends Button:
 		var blank := StyleBoxEmpty.new()
 		for state in ["normal", "hover", "pressed", "focus"]:
 			add_theme_stylebox_override(state, blank)
+		if featured:
+			motion = PortraitMotion.new()
+			motion.show_behind_parent = true
+			motion.position = Vector2(5, 5)
+			motion.size = size - Vector2(10, 10)
+			add_child(motion)
 		if not art_only:
 			UI.Motion.bind_button(self)
 			mouse_entered.connect(queue_redraw)
@@ -429,17 +461,17 @@ class GodArt extends Button:
 		if is_hovered():
 			rim = rim.lightened(0.18)
 		var frame := StyleBoxFlat.new()
-		frame.bg_color = INSET
+		frame.bg_color = Color.TRANSPARENT if motion != null and art != null else INSET
 		frame.set_corner_radius_all(10)
 		frame.border_color = rim
 		frame.set_border_width_all(2)
 		frame.shadow_color = Color(0.025, 0.021, 0.017, 0.8)
-		frame.shadow_size = 8 if featured else 3
+		frame.shadow_size = 0 if featured else 3
 		frame.shadow_offset = Vector2(0, 4)
 		draw_style_box(frame, Rect2(Vector2.ZERO, size))
 		var inset := 5.0
 		var image := Rect2(Vector2.ONE * inset, size - Vector2.ONE * inset * 2.0)
-		if art != null:
+		if art != null and motion == null:
 			var asset_size := art.get_size()
 			var source_size := image.size / maxf(image.size.x / asset_size.x, image.size.y / asset_size.y)
 			var anchor := Vector2(0.5, 0.24 if art_only else 0.32)

@@ -22,7 +22,12 @@ const BlackMarket := preload("res://kushou/black_market.gd")
 const MenuUI := preload("res://shared/ui_kit.gd")
 const CardFrame := preload("res://kushou/card_frame.gd")
 const GodPortraits := preload("res://shared/god_portraits.gd")
+const PortraitMotion := preload("res://shared/god_portrait_motion.gd")
 const HERO_FRAMES_PATH := "res://assets/char/player_battle_frames.png"
+const HERO_SKILL_FRAMES_PATH := "res://assets/char/player_skill_poses_v1.png"
+const HERO_SKILL_ROWS := {"chenshi": 0, "liuqingqing": 1, "qingluan": 2, "gundilong": 3}
+var _invocation_portrait: PortraitMotion
+var _skill_pose_direction := Vector2.ZERO
 const BATTLE_FRAMES_PATH := "res://assets/art/fx/battle_bursts_v1.png"
 const SKILL_FRAMES_PATH := "res://assets/art/fx/skill_bursts_v1.png"
 const DRAGON_FRAMES_PATH := "res://assets/gen/allies/river_dragon.png"
@@ -338,6 +343,8 @@ func prepare_entry_art() -> Array[String]:
 		_entry_cards_ready = true
 	var paths: Array[String] = [HERO_FRAMES_PATH, BATTLE_FRAMES_PATH, SKILL_FRAMES_PATH,
 		DRAGON_FRAMES_PATH, DRAGON_WAVE_PATH, BgArt.path_for(LevelState.current_level - 1)]
+	if LevelState.has_feature("god"):
+		paths.append(HERO_SKILL_FRAMES_PATH)
 	for frame_id in _entry_enemy_frame_ids():
 		paths.append(_foe_frame_path(frame_id))
 	for id in _pool:
@@ -1164,6 +1171,8 @@ func _build_field() -> void:
 	_hero_token.round_mask = false
 	_hero_token.setup(PLAYER_TEX, 44.0, Color(0.96, 0.74, 0.30), false, _entry_texture(HERO_FRAMES_PATH))
 	_hero_token.set_role("player")
+	if LevelState.has_feature("god"):
+		_hero_token.skill_atlas = _entry_texture(HERO_SKILL_FRAMES_PATH)
 	_hero_token.set_weapon("sword")
 	_hero_token.show_bar = false          # 主角血条只看顶部 HUD，不再挂漂浮血条
 	_hero_token.bar_w = 0.0
@@ -5258,9 +5267,9 @@ const SKILL_TINT := {
 	"真实": Color(0.72, 0.52, 0.88),
 }
 
-func _skill_cast_juice() -> void:
+func _skill_cast_juice(aid: String = "") -> void:
 	if _hero_token != null:
-		_hero_token.play_cast()
+		_hero_token.play_skill_cast(int(HERO_SKILL_ROWS.get(aid, -1)), _skill_pose_direction)
 	var tint: Color = SKILL_TINT.get(_cast_dtype, Color(1.0, 0.94, 0.80))
 	if _fx_front != null:
 		_fx_front.spawn_cast_seal(_hero_screen() - FIELD_POS, tint)
@@ -6442,7 +6451,7 @@ func _tick_skills(dt: float) -> void:
 					_curio_mana_regen_left = 2.0
 				if i < _skill_slots.size():
 					_skill_slots[i].flash = 1.0
-				_skill_cast_juice()
+				_skill_cast_juice(str(sk["aid"]))
 	_refresh_skill_slots(dt)
 	_core.hero["mp"] = _mp
 
@@ -6511,6 +6520,7 @@ func _cast_skill(i: int) -> void:
 	var epoch: int = _core._enemy_attack_epoch
 	if not _skill_batch_active(epoch):
 		return
+	_skill_pose_direction = Vector2.ZERO
 	_cast_dtype = str(_skills[i].get("dtype", ""))
 	var sk: Dictionary = _skills[i]
 	var aid0 := str(sk["aid"])
@@ -6603,6 +6613,8 @@ func _cast_skill(i: int) -> void:
 		return da < db)
 	var base := float(_core.hero.get("atk", 12.0)) * float(sk["mul"]) * (1.0 + dmg_pct / 100.0)
 	var n := mini(int(sk["targets"]) + int(m.get("tgt_add", 0.0)), foes.size())
+	if n > 0:
+		_skill_pose_direction = Vector2(float(foes[0]["x"]), float(foes[0]["y"])) - hp0
 	for k in n:
 		if not _skill_batch_active(epoch):
 			return
@@ -6946,7 +6958,31 @@ func _on_god_card(card: GodCard) -> void:
 	_pick_god(card.aid)
 	if _draw_charge < charge:
 		var slot: SkillSlot = _skill_slots[old_size] if _skills.size() > old_size and old_size < _skill_slots.size() else null
+		_show_invocation_portrait(card.portrait, card.aid)
 		_fly_god_seal(card.skill_art, from, slot)
+
+func _show_invocation_portrait(art: Texture2D, aid: String) -> void:
+	if art == null or _hero_token == null:
+		return
+	if is_instance_valid(_invocation_portrait):
+		_invocation_portrait.queue_free()
+	var shade := PortraitMotion.new()
+	shade.name = "GodInvocationPortrait"
+	shade.spectral = true
+	shade.size = Vector2(210, 290)
+	var feet := _hero_screen()
+	shade.position = Vector2(clampf(feet.x + (16.0 if feet.x < W * 0.5 else -212.0), 10.0, W - 220.0),
+		clampf(feet.y - 305.0, 148.0, 574.0))
+	shade.z_index = 14
+	shade.modulate.a = 0.92
+	add_child(shade)
+	shade.set_portrait(art, aid)
+	shade.demonstrate()
+	_invocation_portrait = shade
+	var fade := create_tween().bind_node(shade).set_parallel(true)
+	fade.tween_property(shade, "position:y", shade.position.y - 20.0, PortraitMotion.DEMO_TIME).set_trans(Tween.TRANS_SINE)
+	fade.tween_property(shade, "modulate:a", 0.0, PortraitMotion.DEMO_TIME).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+	fade.chain().tween_callback(shade.queue_free)
 
 func _god_skill_icon(aid: String) -> String:
 	var icon_key := str(SKILL_ICON_ALIAS.get(aid, aid))
@@ -7116,8 +7152,7 @@ class GodCard extends Button:
 	const F := preload("res://fonts/ink.ttf")
 	const P := preload("res://shared/ui_pal.gd")
 	const Motion := preload("res://shared/ui_motion.gd")
-	const PORTRAIT_CROP := {"chenshi": 0.20, "liuqingqing": 0.26, "qingluan": 0.65,
-		"xiaoqier": 0.45, "gundilong": 0.40, "mingzhu": 0.64}
+	const PORTRAIT_CROP := {"liuqingqing": 0.26}
 	const ELEMENT_TONES := {"木系": Color(0.58, 0.76, 0.57), "真实": Color(0.83, 0.74, 0.62),
 		"物理": Color(0.73, 0.76, 0.83), "火系": Color(0.94, 0.64, 0.43)}
 	signal picked
@@ -7932,6 +7967,7 @@ func _charge_ram() -> void:
 	var f0: Dictionary = foes[0]
 	var hp0 := Vector2(_core.hero_pos)
 	var dir := (Vector2(float(f0["x"]), float(f0["y"])) - hp0)
+	_skill_pose_direction = dir
 	if dir.length() < 1.0:
 		dir = Vector2(0, -1)
 	dir = dir.normalized()
@@ -8119,6 +8155,7 @@ func _cast_feiren(mul: float) -> void:
 	var base := float(_core.hero.get("atk", 12.0)) * mul * (1.0 + dmg_pct / 100.0)
 	var hp0 := Vector2(_core.hero_pos)
 	var dir := (Vector2(float(foes[0]["x"]), float(foes[0]["y"])) - hp0)
+	_skill_pose_direction = dir
 	if dir.length() < 1.0:
 		dir = Vector2(0, -1)
 	dir = dir.normalized()

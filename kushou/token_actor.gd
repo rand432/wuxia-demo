@@ -38,6 +38,9 @@ var _art_height := 0.0
 var _attack_time := 0.0
 var _boss_impact := false
 var _cast_time := 0.0
+var skill_atlas: Texture2D
+var _skill_row := -1
+const SKILL_POSE_TIME := 0.36
 var _windup := 0.0
 var _attack_direction := Vector2.RIGHT
 var _attack_reach := 13.0
@@ -150,6 +153,11 @@ func _show_frame(index: int) -> void:
 	_frame_index = index
 	_sprite.region_rect = Rect2((index % 4) * _frame_cell, floori(index / 4.0) * _frame_cell, _frame_cell, _frame_cell)
 
+func _use_frame_atlas(atlas: Texture2D) -> void:
+	if _sprite.texture != atlas:
+		_sprite.texture = atlas
+		_frame_index = -1
+
 
 func _process(delta: float) -> void:
 	if _death_t >= 0.0:
@@ -163,6 +171,7 @@ func _process(delta: float) -> void:
 			play_spawn()
 			return
 		if _frame_atlas != null:
+			_use_frame_atlas(_frame_atlas)
 			_show_frame(14 if role != "player" and p < 0.38 else 15)
 			modulate = Color(0.88, 0.83, 0.77, 1.0 - smoothstep(0.44, 1.0, p))
 			_apply_visual_pose(Vector2.ONE, _hit_dir * p * 9.0)
@@ -218,7 +227,11 @@ func _process(delta: float) -> void:
 func _tick_frame_pose(delta: float, travel: Vector2, moving: bool, pop: float, enter: float, recoil: float) -> void:
 	_frame_clock += delta
 	var frame := 0
-	if _cast_time > 0.0:
+	var skill_pose := _cast_time > 0.0 and _skill_row >= 0 and skill_atlas != null
+	_use_frame_atlas(skill_atlas if skill_pose else _frame_atlas)
+	if skill_pose:
+		frame = _skill_row * 4 + clampi(int((SKILL_POSE_TIME - _cast_time) * 4.0 / SKILL_POSE_TIME), 0, 3)
+	elif _cast_time > 0.0:
 		frame = 12 if _cast_time > 0.24 else 13
 	elif _boss_impact:
 		frame = 10 if _attack_time > 0.075 else 11
@@ -315,9 +328,16 @@ func play_hit(direction := Vector2.RIGHT, strong := false) -> void:
 func play_cast(direction := Vector2.ZERO) -> void:
 	if role not in ["player", "dragon"] or _frame_atlas == null or _death_t >= 0.0:
 		return
-	if absf(direction.x) > 1.0:
+	if absf(direction.x) > 0.05:
 		face(1 if direction.x > 0.0 else -1)
+	_skill_row = -1
 	_cast_time = 0.32
+
+func play_skill_cast(row: int, direction: Vector2) -> void:
+	play_cast(direction)
+	if role == "player" and row >= 0 and skill_atlas != null and _death_t < 0.0:
+		_skill_row = row
+		_cast_time = SKILL_POSE_TIME
 
 
 func play_dodge() -> void:
@@ -350,6 +370,7 @@ func reset_pose() -> void:
 	_attack_time = 0.0
 	_boss_impact = false
 	_cast_time = 0.0
+	_skill_row = -1
 	_ready_time = 0.0
 	_recover_after_down = false
 	_discard_after_down = false

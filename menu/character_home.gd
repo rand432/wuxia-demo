@@ -7,6 +7,8 @@ const UI := preload("res://shared/ui_kit.gd")
 const P := preload("res://shared/ui_pal.gd")
 const FD := preload("res://shared/forge_data.gd")
 const CharArt := preload("res://shared/char_art.gd")
+const GodPortraits := preload("res://shared/god_portraits.gd")
+const PortraitMotion := preload("res://shared/god_portrait_motion.gd")
 const GameState := preload("res://shared/game_state.gd")
 const Audio := preload("res://shared/audio.gd")
 
@@ -58,7 +60,8 @@ func _rebuild() -> void:
 # ---------------- 立绘 + 四槽 ----------------
 func _build_figure() -> void:
 	UI.panel(self, Rect2(22, 154, 676, 452), Color(0.90, 0.865, 0.79), 14, P.LINE, 1)
-	var tex := CharArt.full("player")
+	var path := GodPortraits.path_for("zhujue")
+	var tex := load(path) as Texture2D if ResourceLoader.exists(path) else CharArt.full("player")
 	if tex != null:
 		var clip := Control.new()
 		clip.position = Vector2(196, 152)
@@ -67,14 +70,12 @@ func _build_figure() -> void:
 		clip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		add_child(clip)
 		UI.panel(clip, Rect2(0, 4, 328, 440), Color(0.15, 0.16, 0.145), 12, Color(0.66, 0.51, 0.32), 2)
-		var tr := TextureRect.new()
-		tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		tr.texture = tex
-		tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var tr := PortraitMotion.new()
+		tr.name = "HeroPortrait"
 		clip.add_child(tr)
 		tr.position = Vector2(6, 10)
 		tr.size = clip.size - Vector2(12, 20)
+		tr.set_portrait(tex, "zhujue")
 	for s in SLOTS:
 		_build_slot(str(s["key"]), s["rect"])
 
