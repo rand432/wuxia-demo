@@ -1465,21 +1465,45 @@ func _process(delta: float) -> void:
 
 # 怪和怪不重合：按战斗牌半径把叠在一起的推开（每帧一次，轻推）
 func _separate_foes() -> void:
-	var n := foes.size()
-	for i in range(n):
-		var a: Dictionary = foes[i]
-		if float(a.get("dying", 0.0)) > 0.0:
+	if foes.size() < 2:
+		return
+	var active: Array[Dictionary] = []
+	var xs := PackedFloat64Array()
+	var ys := PackedFloat64Array()
+	var radii := PackedFloat64Array()
+	xs.resize(foes.size())
+	ys.resize(foes.size())
+	radii.resize(foes.size())
+	for foe: Dictionary in foes:
+		if float(foe.get("dying", 0.0)) > 0.0:
 			continue
-		var ra := 36.0 if bool(a.get("boss", false)) else 26.0
+		var i := active.size()
+		active.append(foe)
+		xs[i] = float(foe["x"])
+		ys[i] = float(foe["y"])
+		radii[i] = 36.0 if bool(foe.get("boss", false)) else 26.0
+	var n := active.size()
+	if n < 2:
+		return
+	var moved := PackedByteArray()
+	moved.resize(n)
+	var right := size.x - 30.0
+	var bottom := size.y - 20.0
+	# 顺序更新坐标，下一个配对读取本轮已经推开的位置。
+	for i in range(n - 1):
+		var ax := xs[i]
+		var ay := ys[i]
+		var ra := radii[i]
 		for j in range(i + 1, n):
-			var b: Dictionary = foes[j]
-			if float(b.get("dying", 0.0)) > 0.0:
+			var bx := xs[j]
+			var by := ys[j]
+			var dx := bx - ax
+			var dy := by - ay
+			var distance_sq := dx * dx + dy * dy
+			var min_d := ra + radii[j] + 4.0
+			if distance_sq > min_d * min_d:
 				continue
-			var rb := 36.0 if bool(b.get("boss", false)) else 26.0
-			var dx := float(b["x"]) - float(a["x"])
-			var dy := float(b["y"]) - float(a["y"])
-			var d := sqrt(dx * dx + dy * dy)
-			var min_d := ra + rb + 4.0
+			var d := sqrt(distance_sq)
 			if d >= min_d:
 				continue
 			if d < 0.001:
@@ -1489,10 +1513,18 @@ func _separate_foes() -> void:
 			var push := (min_d - d) * 0.5
 			var ux := dx / d
 			var uy := dy / d
-			a["x"] = clampf(float(a["x"]) - ux * push, 30.0, size.x - 30.0)
-			a["y"] = clampf(float(a["y"]) - uy * push, 20.0, size.y - 20.0)
-			b["x"] = clampf(float(b["x"]) + ux * push, 30.0, size.x - 30.0)
-			b["y"] = clampf(float(b["y"]) + uy * push, 20.0, size.y - 20.0)
+			ax = clampf(ax - ux * push, 30.0, right)
+			ay = clampf(ay - uy * push, 20.0, bottom)
+			xs[j] = clampf(bx + ux * push, 30.0, right)
+			ys[j] = clampf(by + uy * push, 20.0, bottom)
+			moved[i] = 1
+			moved[j] = 1
+		xs[i] = ax
+		ys[i] = ay
+	for i in range(n):
+		if moved[i] != 0:
+			active[i]["x"] = xs[i]
+			active[i]["y"] = ys[i]
 
 # ============================================================
 # v16a（用户："技能和大招可以做成那种延迟形 比如群攻的火雨 先是地上会出现逐渐变红的红圈

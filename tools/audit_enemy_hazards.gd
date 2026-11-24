@@ -1,5 +1,6 @@
 extends SceneTree
 const Battle := preload("res://kushou/battle_ui.tscn")
+const Core := preload("res://kushou/kushou_battle.gd")
 const LS := preload("res://shared/level_state.gd")
 const Audio := preload("res://shared/audio.gd")
 
@@ -11,6 +12,32 @@ func _initialize() -> void:
 
 func _pool(core) -> void:
 	core.queue_delayed(core.hero_pos.x, core.hero_pos.y, 70.0, 20.0, "真实", 1.0, "pool test", "pool", Vector2.RIGHT, 0.0, 0.0, 0, 0.0, 3.0)
+
+func _audit_spacing() -> bool:
+	var core := Core.new()
+	core.size = Vector2(680, 720)
+	core.foes = [
+		{"x": 100, "y": 180}, {"x": 140, "y": 180},
+		{"x": 170, "y": 180, "dying": 0.15}, {"x": 190, "y": 180, "boss": true},
+		{"x": 600, "y": 300}, {"x": 656, "y": 300},
+	]
+	core._separate_foes()
+	assert(core.foes.map(func(foe: Dictionary): return int(foe["x"])) == [92, 136, 170, 202, 600, 656])
+	assert(typeof(core.foes[2]["x"]) == TYPE_INT and typeof(core.foes[5]["x"]) == TYPE_INT)
+	seed(2211)
+	var dx := randf_range(-1.0, 1.0)
+	var dy := randf_range(-1.0, 1.0)
+	var next := randi()
+	var distance := maxf(0.001, sqrt(dx * dx + dy * dy))
+	var push := (56.0 - distance) * 0.5
+	seed(2211)
+	core.foes = [{"x": 30.0, "y": 20.0}, {"x": 30.0, "y": 20.0}]
+	core._separate_foes()
+	assert(is_equal_approx(core.foes[0]["x"], maxf(30.0, 30.0 - dx / distance * push)))
+	assert(is_equal_approx(core.foes[1]["y"], maxf(20.0, 20.0 + dy / distance * push)))
+	assert(randi() == next)
+	core.free()
+	return true
 
 func _audit_guard_dog() -> bool:
 	LS.current_level = 1
@@ -235,6 +262,7 @@ func _run() -> void:
 	battle.queue_free()
 	await process_frame
 	assert(_audit_guard_dog())
+	assert(_audit_spacing())
 	await process_frame
-	print("PASS: hazard chronology, wave invalidation, bounded summons and live guard-dog pose transitions")
+	print("PASS: hazard chronology, bounded summons, guard-dog poses and ordered crowd separation")
 	Audio.quit_cleanly()

@@ -1,7 +1,7 @@
 extends Node
 # ============================================================
-# tools/bench.gd —— 战斗帧率基准（一次跑 15 秒，结果追加到 .shots/bench_runs.txt）
-#   用法：Godot --path <proj> res://tools/bench.tscn
+# tools/bench.gd —— 战斗帧率基准（一次跑 15 秒，结果写入隔离档案）
+#   用法：Godot --path <隔离项目> res://tools/bench.tscn -- stress full-field noboss trace
 #   场景：6 秒预热（不计）→ 采样第 4 秒放首领 → 共测 15 秒
 # ============================================================
 class BenchmarkBattle extends "res://kushou/battle_ui.gd":
@@ -17,7 +17,48 @@ class BenchmarkBattle extends "res://kushou/battle_ui.gd":
 		if disable_pfx: return null
 		return super._spawn_pfx(effect, pos, scale_value, pal, lig, spd, flip)
 
+class FrameTrace extends Node:
+	var sampling := false
+	var _begin := 0
+	var _process_end := 0
+	var _draw_begin := 0
+	var _draw_end := 0
+	var _frames: Array[Vector4i] = []
+
+	func _ready() -> void:
+		process_priority = 1000
+		get_tree().process_frame.connect(_begin_frame)
+		RenderingServer.frame_pre_draw.connect(_begin_draw)
+		RenderingServer.frame_post_draw.connect(_end_draw)
+
+	func _begin_frame() -> void:
+		if not sampling:
+			_begin = 0
+			return
+		var now := Time.get_ticks_usec()
+		if _begin > 0 and _process_end >= _begin and _draw_begin >= _process_end and _draw_end >= _draw_begin:
+			_frames.append(Vector4i(now - _begin, _process_end - _begin,
+				_draw_begin - _process_end, _draw_end - _draw_begin))
+		_begin = now
+
+	func _process(_delta: float) -> void:
+		_process_end = Time.get_ticks_usec()
+
+	func _begin_draw() -> void:
+		_draw_begin = Time.get_ticks_usec()
+
+	func _end_draw() -> void:
+		_draw_end = Time.get_ticks_usec()
+
+	func report() -> void:
+		_frames.sort_custom(func(a: Vector4i, b: Vector4i) -> bool: return a.x > b.x)
+		for sample in _frames.slice(0, 8):
+			var gap := sample.x - sample.y - sample.z - sample.w
+			print("[FRAME] wall_us=%d process_callbacks_us=%d before_draw_us=%d draw_us=%d after_draw_us=%d"
+				% [sample.x, sample.y, sample.z, sample.w, gap])
+
 var _ui = null
+var _trace: FrameTrace
 var _dts: Array = []
 var _on := false
 var _boss_t := 0.0
@@ -39,10 +80,13 @@ func _process(delta: float) -> void:
 	if _ui != null and _ui._tut != null and _ui._tut.visible:
 		_ui._tut._on_pressed()
 	if _ui != null and _flags.has("stress"):
-		for attempt in range(24):
-			if _ui._core.live_foes() >= 24 or _ui._core.foes.size() >= _ui._core.MAX_FOES:
+		var full_field := _flags.has("full-field")
+		var cap: int = _ui._core.MAX_FIELD_FOES if full_field else _ui._core.MAX_FOES
+		var target := cap if full_field else 24
+		for attempt in range(target):
+			if _ui._core.foes.size() >= cap or _ui._core.live_foes() >= target:
 				break
-			_ui._core._spawn_foe("normal", 1000.0, 1.0)
+			_ui._core._spawn_foe("normal", 1000.0, 1.0, false, 1, "", cap)
 	if not _on:
 		return
 	_t += delta
@@ -92,6 +136,10 @@ func _ready() -> void:
 	get_window().size = Vector2i(720, 1280)
 	await get_tree().create_timer(0.3).timeout
 	_flags = OS.get_cmdline_user_args()
+	if _flags.has("trace"):
+		_trace = FrameTrace.new()
+		add_child(_trace)
+		print("[FRAME] vsync=", DisplayServer.window_get_vsync_mode())
 	_ui = BenchmarkBattle.new()
 	_ui.disable_pfx = _flags.has("nopfx")
 	add_child(_ui)
@@ -117,9 +165,14 @@ func _ready() -> void:
 	_initial_casts = _ui.successful_casts
 	_last_frame_usec = Time.get_ticks_usec()
 	_on = true
+	if _trace != null:
+		_trace.sampling = true
 	await get_tree().create_timer(15.0).timeout
 	_on = false
 	_report()
+	if _trace != null:
+		_trace.sampling = false
+		_trace.report()
 	preload("res://shared/audio.gd").quit_cleanly()
 
 func _report() -> void:
@@ -142,12 +195,13 @@ func _report() -> void:
 		str(_flags),
 		n, avg, p95, mx, spikes, int(_ui._kills)]
 	_cpu_ms.sort()
-	line += " process_p95_ms=%.2f peak_foes=%d" % [float(_cpu_ms[clampi(int(_cpu_ms.size() * 0.95), 0, _cpu_ms.size() - 1)]), _peak_foes]
+	line += " process_monitor_p95_ms=%.2f peak_foes=%d" % [float(_cpu_ms[clampi(int(_cpu_ms.size() * 0.95), 0, _cpu_ms.size() - 1)]), _peak_foes]
 	line += " peak_nodes=%d peak_minions=%d skills=%d" % [_peak_nodes, _peak_minions, _ui._skills.size()]
 	line += " casts=%d" % (_ui.successful_casts - _initial_casts)
 	if _flags.has("spring"): line += " motion_steps=%d peak_tweens=%d" % [_motion_step, _peak_tweens]
 	print("[BENCH] " + line + " at=" + str(_spike_at.slice(0, 40)))
-	var f := FileAccess.open("res://.shots/bench_runs.txt", FileAccess.READ_WRITE if FileAccess.file_exists("res://.shots/bench_runs.txt") else FileAccess.WRITE)
+	var path := "user://bench_runs.txt"
+	var f := FileAccess.open(path, FileAccess.READ_WRITE if FileAccess.file_exists(path) else FileAccess.WRITE)
 	if f != null:
 		f.seek_end()
 		f.store_line(line)
