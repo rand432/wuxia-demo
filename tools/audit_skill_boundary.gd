@@ -32,7 +32,7 @@ func _battle(free := false):
 func _foe(c, distance: float, hp: float) -> Dictionary:
 	c._spawn_foe()
 	var f: Dictionary = c.foes.back()
-	f.merge({"hp": hp, "hp_max": 1000.0, "res_wood": 0.0, "shield": false, "x": c.hero_pos.x, "y": c.hero_pos.y - distance}, true)
+	f.merge({"hp": hp, "hp_max": 1000.0, "res_metal": 0.0, "res_wood": 0.0, "res_water": 0.0, "res_earth": 0.0, "vuln_pct": 0.0, "wood_vuln": 0.0, "shield": false, "x": c.hero_pos.x, "y": c.hero_pos.y - distance}, true)
 	return f
 
 func _skill(b, aid: String) -> Dictionary:
@@ -41,6 +41,7 @@ func _skill(b, aid: String) -> Dictionary:
 	return sk
 
 func _run() -> void:
+	seed(20261124)   # 用例依赖随机刷怪类型；固定随机序列避免偶发误报
 	for aid in ["chenshi", "xiaoqier"]:
 		for mode in ["normal", "result", "epoch", "dead", "stopped", "removed"]:
 			var b = _battle()

@@ -30,9 +30,11 @@ func _cast(b, f: Dictionary, aid: String, expected: float) -> void:
 	if aid == "liuqingqing": b._core.hero["hp"] = 100.0
 	b._cast_skill(0)
 	if aid == "liuqingqing": assert(b._core.hero["hp"] == 300.0)
+	print("[DIAG] aid=", aid, " expected=", expected, " got=", 10000.0 - float(f["hp"]))
 	assert(is_equal_approx(f["hp"], 10000.0 - expected))
 
 func _run() -> void:
+	seed(20261124)   # 用例依赖随机刷怪类型；固定随机序列避免偶发误报
 	LS.ensure_loaded()
 	LS.current_level = 7
 	GS.skill_lv = {}
@@ -49,7 +51,7 @@ func _run() -> void:
 	c.foes.clear()
 	c._spawn_foe()
 	var f: Dictionary = c.foes.back()
-	f.merge({"hp": 10000.0, "hp_max": 1000.0, "res_wood": 0.0, "shield": false, "x": c.hero_pos.x, "y": c.hero_pos.y - 40.0}, true)
+	f.merge({"hp": 10000.0, "hp_max": 1000.0, "res_metal": 0.0, "res_wood": 0.0, "res_water": 0.0, "res_earth": 0.0, "vuln_pct": 0.0, "wood_vuln": 0.0, "shield": false, "x": c.hero_pos.x, "y": c.hero_pos.y - 40.0}, true)
 	_basic(c, f, 80.0)
 	var own: Dictionary = AD.ANCESTORS["zhujue"]["tiers"][0]["effects"]
 	b._add_ancestor_effects("zhujue", own)

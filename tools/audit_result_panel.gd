@@ -5,13 +5,35 @@ const Battle := preload("res://kushou/battle_ui.tscn")
 const LS := preload("res://shared/level_state.gd")
 const GS := preload("res://shared/game_state.gd")
 
+
+var _save_backup := {}
+const SAVE_FILES := ["user://progress.cfg", "user://level_state.cfg", "user://curio.cfg", "user://forge.cfg", "user://reward_pending.cfg"]
+
+func _snapshot_saves() -> void:
+	for f in SAVE_FILES:
+		if FileAccess.file_exists(f):
+			_save_backup[f] = FileAccess.get_file_as_bytes(f)
+
+func _restore_saves() -> void:
+	for f in SAVE_FILES:
+		if _save_backup.has(f):
+			var fp := FileAccess.open(f, FileAccess.WRITE)
+			if fp != null:
+				fp.store_buffer(_save_backup[f])
+				fp.close()
+		elif FileAccess.file_exists(f):
+			# 用例跑之前没有这个档：删掉，别把新档留给下一个用例
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(f))
+
 func _initialize() -> void:
 	if not OS.get_user_data_dir().replace("\\", "/").ends_with("wuxia-regression"):
 		quit(2)
 		return
+	_snapshot_saves()
 	call_deferred("_run")
 
 func _fail(msg: String) -> void:
+	_restore_saves()
 	push_error("AUDIT FAIL: " + msg)
 	quit(1)
 
@@ -37,8 +59,10 @@ func _run() -> void:
 	# holder：540×480 的 Control
 	var holder: Control = null
 	for c in layer.get_children():
-		if c is Control and (c as Control).size == Vector2(540, 480):
-			holder = c
+		if c is Control:
+			var cs := (c as Control).size
+			if absf(cs.x - 540.0) < 1.0 and absf(cs.y - 480.0) < 1.0:
+				holder = c
 	if holder == null:
 		_fail("holder 540x480 not found")
 		return
@@ -71,4 +95,5 @@ func _run() -> void:
 		_fail("carry text missing")
 		return
 	print("PASS: result panel layout + carry row")
+	_restore_saves()
 	quit(0)

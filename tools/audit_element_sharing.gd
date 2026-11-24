@@ -30,6 +30,7 @@ func _heal(b, f: Dictionary, expected: float) -> void:
 	assert(f["hp"] == 10000.0 and is_equal_approx(b._core.hero["hp"], 100.0 + expected))
 
 func _run() -> void:
+	seed(20261124)   # 用例依赖随机刷怪类型；固定随机序列避免偶发误报
 	LS.ensure_loaded()
 	LS.current_level = 9
 	GS.skill_lv = {}
@@ -48,7 +49,7 @@ func _run() -> void:
 	c.foes.clear()
 	c._spawn_foe()
 	var f: Dictionary = c.foes.back()
-	f.merge({"hp": 10000.0, "hp_max": 1000.0, "res_wood": 0.0, "res_fire": 0.0, "shield": false, "x": c.hero_pos.x, "y": c.hero_pos.y - 40.0}, true)
+	f.merge({"hp": 10000.0, "hp_max": 1000.0, "res_metal": 0.0, "res_wood": 0.0, "res_water": 0.0, "res_earth": 0.0, "vuln_pct": 0.0, "wood_vuln": 0.0, "res_fire": 0.0, "shield": false, "x": c.hero_pos.x, "y": c.hero_pos.y - 40.0}, true)
 	for aid in ["liuqingqing", "chenshi"]:
 		b._add_ancestor_effects(aid, AD.ANCESTORS[aid]["tiers"][0]["effects"])
 		b._add_ancestor_effects(aid, AD.ANCESTORS[aid]["tiers"][4 if aid == "liuqingqing" else 3]["effects"])

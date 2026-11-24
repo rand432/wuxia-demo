@@ -20,6 +20,9 @@ $names += 'challenge_rewards'
 $names += 'battle_navigation'
 $names += 'equipment_refresh'
 $names += 'result_panel'
+$names += 'treasure_flow'
+$names += 'outgame_loop'
+$names += 'fresh_profile'
 $results = @()
 foreach ($name in $names) {
     $output = & $Godot --headless --path $auditRoot --max-fps 120 --quit-after 3600 --script "res://tools/audit_$name.gd" 2>&1 | Out-String
