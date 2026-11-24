@@ -74,9 +74,9 @@ const FIRST_REWARDS := {
 	5: {"preview": {"forge": 20}, "text": "下一关黑市：锻造石 +20"},
 	6: {"wen": 300, "skill_book": "玄品", "skill_book_n": 2, "text": "文钱 +300 · 玄品技能书 ×2"},
 	7: {"wen": 1000, "equip": 4, "forge_mat": 100, "text": "四件凡品装备 + 文钱 +1000 · 锻造石 ×100"},
-	8: {"wen": 1500, "shards": {"zhujue": 30}, "text": "主角角色碎片 +30 · 文钱 +1500"},
-	9: {"wen": 1000, "curio_shards": 30, "text": "奇物碎片 +30 · 文钱 +1000"},
-	10: {"wen": 300, "new_cards": 1, "text": "新卡组解锁"},
+	8: {"wen": 1500, "shards": {"zhujue":30,"chenshi":30,"liuqingqing":30,"qingluan":30,"xiaoqier":30,"gundilong":30,"mingzhu":30}, "text": "全员角色碎片 +30 · 文钱 +1500"},
+	9: {"wen": 1000, "curio_shards": 30, "shards": {"zhujue":45,"chenshi":45,"liuqingqing":45,"qingluan":45,"xiaoqier":45,"gundilong":45,"mingzhu":45}, "text": "全员角色碎片 +45 · 奇物碎片 +30 · 文钱 +1000"},
+	10: {"wen": 300, "new_cards": 1, "shards": {"zhujue":60,"chenshi":60,"liuqingqing":60,"qingluan":60,"xiaoqier":60,"gundilong":60,"mingzhu":60}, "text": "全员角色碎片 +60 · 新卡组解锁"},
 }
 
 # 请神六位：L5 开 2 位，之后每关 +1，L9 满 6；顺序按设计固定

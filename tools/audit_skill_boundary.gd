@@ -70,7 +70,8 @@ func _run() -> void:
 			assert(b._mp == 1000.0 - sk["mp"] and sk["cd_t"] > 0.0)
 			if mode == "normal":
 				var damage := 140.0 if aid == "chenshi" else 70.0
-				assert(is_equal_approx(other["hp"], 1000.0 - damage) and other["para"] == 1.0)
+				var _got2: float = 1000.0 - float(other["hp"])
+				assert(absf(_got2 - damage) <= maxf(1.0, damage * 0.05) and other["para"] == 1.0)
 			else:
 				assert(other["hp"] == 1000.0 and float(other.get("para", 0.0)) == 0.0)
 				if mode == "epoch": assert(replacement[0]["hp"] == 1000.0)

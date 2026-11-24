@@ -750,12 +750,22 @@ func start_boss(tier: int, boss_name := "") -> void:
 	f["hp"] = float(d["hp"]) * hp_mul * lv_scale
 	f["hp_max"] = float(d["hp"]) * hp_mul * lv_scale
 	f["atk"] = float(d["atk"]) * atk_mul * lv_scale
-	# 安全阀：Boss 单下不超过主角血上限的 5%（约 20 下打死主角）；
-	#         血量不超过主角 20 秒输出（保证打得完）
+	# 安全阀：Boss 单下伤害 ≤ 主角血上限的 N%，血量 ≤ 主角 N 秒输出。
+	# 前十关按关卡放松：L1-6 5%/20s、L7-8 6.5%/25s、L9-10 8%/30s
+	# （原来一律 5%/20s，后期关卡没有威胁感；数值见 docs/数值提案_碎片与Boss_2026-11-24.md）
+	var atk_cap_ratio := 0.05
+	var hp_cap_secs := 20.0
+	var stage_lv := int(LS.current_level)
+	if stage_lv >= 9:
+		atk_cap_ratio = 0.08
+		hp_cap_secs = 30.0
+	elif stage_lv >= 7:
+		atk_cap_ratio = 0.065
+		hp_cap_secs = 25.0
 	var hero_hp := float(hero.get("hp_max", 200.0))
-	f["atk"] = minf(float(f["atk"]), hero_hp * 0.05)
+	f["atk"] = minf(float(f["atk"]), hero_hp * atk_cap_ratio)
 	var dps := float(hero.get("atk", 12.0)) * 1.6
-	f["hp"] = minf(float(f["hp"]), dps * 20.0)
+	f["hp"] = minf(float(f["hp"]), dps * hp_cap_secs)
 	f["hp_max"] = float(f["hp"])
 	f["bname"] = str(d["name"])
 	f["bskill"] = str(d.get("skill", ""))

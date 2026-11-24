@@ -20,7 +20,9 @@ func _basic(c, f: Dictionary, expected: float) -> void:
 	f["hp"] = 10000.0
 	c._heavy = 0
 	c._hero_strike(f)
-	assert(is_equal_approx(f["hp"], 10000.0 - expected))
+	var _got: float = 10000.0 - float(f["hp"])
+	# 伤害有 ±3% 随机浮动；断言校验"只吃一次共享"，给 5% 容差。
+	assert(absf(_got - expected) <= maxf(1.0, absf(expected) * 0.05))
 
 func _cast(b, f: Dictionary, aid: String, expected: float) -> void:
 	var sk: Dictionary = b.SKILL_DEFS[aid].duplicate(true)
@@ -30,8 +32,8 @@ func _cast(b, f: Dictionary, aid: String, expected: float) -> void:
 	if aid == "liuqingqing": b._core.hero["hp"] = 100.0
 	b._cast_skill(0)
 	if aid == "liuqingqing": assert(b._core.hero["hp"] == 300.0)
-	print("[DIAG] aid=", aid, " expected=", expected, " got=", 10000.0 - float(f["hp"]))
-	assert(is_equal_approx(f["hp"], 10000.0 - expected))
+	var _cast_got: float = 10000.0 - float(f["hp"])
+	assert(absf(_cast_got - expected) <= maxf(1.0, absf(expected) * 0.05))
 
 func _run() -> void:
 	seed(20261124)   # 用例依赖随机刷怪类型；固定随机序列避免偶发误报

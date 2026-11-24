@@ -3457,6 +3457,9 @@ func _end_run(win: bool) -> void:
 			GameState.add_coin("wen", _carry_wen)
 			if GameState.save_progress() != OK:
 				_toast("带回文钱保存失败，请勿关闭游戏")
+		if OS.get_environment("DSH_DEBUG") != "":
+			print("[RUN] lv=", LevelState.current_level, " wave=", _max_wave, " kills=", _kills,
+				" wen=", _wen, " carry=", _carry_wen, " crystal=", _crystal)
 	_run_over = true
 	_close_challenge()
 	_hide_god_pick()

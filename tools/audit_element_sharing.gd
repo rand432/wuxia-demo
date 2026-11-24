@@ -18,7 +18,9 @@ func _cast(b, f: Dictionary, aid: String, expected: float) -> void:
 	b._skills = [sk]
 	f["hp"] = 10000.0
 	b._cast_skill(0)
-	assert(is_equal_approx(f["hp"], 10000.0 - expected))
+	var _got: float = 10000.0 - float(f["hp"])
+	# 伤害有 ±3% 随机浮动；断言校验"只吃一次共享"，给 5% 容差。
+	assert(absf(_got - expected) <= maxf(1.0, absf(expected) * 0.05))
 
 func _heal(b, f: Dictionary, expected: float) -> void:
 	var sk: Dictionary = b.SKILL_DEFS["liuqingqing"].duplicate(true)
