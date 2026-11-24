@@ -462,6 +462,8 @@ func _build_entry_dialogs() -> void:
 func _apply_level_preview() -> void:
 	var pv := LevelState.take_preview(LevelState.current_level)
 	if pv.is_empty():
+		if int(LevelState.preview.get("lv", 0)) == LevelState.current_level:
+			_toast("预习奖励保存未完成，下次进入本关时可重试")
 		return
 	if pv.has("crystal"):
 		_crystal += int(pv["crystal"])
@@ -3430,6 +3432,27 @@ func _on_hero_down() -> void:
 # ---- 本局结束：命尽（输） / 通关（赢） ----
 var _result_layer: Control = null
 var _fallen_guardian: TokenActor
+var _unrecorded_clear_level := 0
+
+func _save_result() -> Error:
+	var SaveFile := preload("res://shared/save_file.gd")
+	var err := SaveFile.recover()
+	if err != OK or _unrecorded_clear_level == 0:
+		return err
+	var lv := _unrecorded_clear_level
+	LevelState.ensure_loaded()
+	GameState.ensure_loaded()
+	var reward := LevelState.first_reward(lv)
+	if reward.has("equip") or reward.has("forge_mat"):
+		preload("res://shared/forge_data.gd").load_game()
+	err = SaveFile.begin()
+	if err != OK:
+		return err
+	if LevelState.mark_first_clear(lv):
+		_grant_first_clear(lv)
+	# 提交失败时已有待恢复快照，重试只重放快照，不能再发奖励。
+	_unrecorded_clear_level = 0
+	return SaveFile.commit()
 
 func _end_run(win: bool) -> void:
 	if _run_over:
@@ -3438,15 +3461,9 @@ func _end_run(win: bool) -> void:
 		_refresh_wave_hud(int(_core.wave), win)
 		_refresh_vitals_hud()
 	if win:
-		var SaveFile := preload("res://shared/save_file.gd")
-		if SaveFile.begin() == OK:
-			var first := LevelState.mark_first_clear()
-			if first:
-				_grant_first_clear(LevelState.current_level)
-			if SaveFile.commit() != OK:
-				_toast("首通保存失败，请勿关闭游戏")
-		else:
-			_toast("首通记录恢复失败，请检查存储空间")
+		_unrecorded_clear_level = LevelState.current_level
+		if _save_result() != OK:
+			_toast("首通保存未完成，请留在结算页重试")
 		# 局内文钱不结转：局外是局外（首通奖励单独发，见 _grant_first_clear）。
 		if OS.get_environment("DSH_DEBUG") != "":
 			print("[RUN] lv=", LevelState.current_level, " wave=", _max_wave, " kills=", _kills,
@@ -3579,8 +3596,7 @@ func _fill_result(win: bool, layer: Control) -> void:
 # 结果页按钮同时作为保存重试入口，未保存完成时保留当前场景。
 func _leave_result(replay: bool) -> void:
 	if not _run_over or _result_layer == null or not MenuUI.navigation_available(self): return
-	var SaveFile := preload("res://shared/save_file.gd")
-	if SaveFile.recover() != OK:
+	if _save_result() != OK:
 		_toast("保存未完成，请释放存储空间后再次点击")
 		return
 	if replay:

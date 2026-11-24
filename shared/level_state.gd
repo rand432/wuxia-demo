@@ -114,16 +114,20 @@ static func ensure_loaded() -> void:
 		tutorial_done = {}
 
 static func save() -> void:
+	_write_levels(preview)
+
+static func _write_levels(next_preview: Dictionary, require_immediate := false) -> Error:
 	var cfg := ConfigFile.new()
 	cfg.set_value("levels", "version", SAVE_VERSION)
 	cfg.set_value("levels", "current", current_level)
 	cfg.set_value("levels", "max", max_unlocked)
 	cfg.set_value("levels", "first_clear", first_clear)
 	cfg.set_value("levels", "tutorial_done", tutorial_done)
-	cfg.set_value("levels", "preview", preview)
-	var err := SaveFile.write(cfg, SAVE_PATH)
+	cfg.set_value("levels", "preview", next_preview)
+	var err := SaveFile.write(cfg, SAVE_PATH, require_immediate)
 	if err != OK:
 		push_error("存档保存失败：%s (%s)" % [SAVE_PATH, error_string(err)])
+	return err
 
 static func config(level: int = -1) -> Dictionary:
 	ensure_loaded()
@@ -222,6 +226,8 @@ static func take_preview(level: int) -> Dictionary:
 	var p: Dictionary = preview.duplicate()
 	if p.has("forge"):
 		var ForgeData := preload("res://shared/forge_data.gd")
+		if SaveFile.recover() != OK:
+			return {}
 		ForgeData.load_game()
 		if SaveFile.begin() != OK:
 			return {}
@@ -232,8 +238,10 @@ static func take_preview(level: int) -> Dictionary:
 		if SaveFile.commit() != OK:
 			push_error("开局锻造石奖励保存未完成，将在下次保存时重试")
 	else:
+		# 临时开局加成只能在消费记录落盘后发放，不能挂入尚未提交的事务。
+		if _write_levels({}, true) != OK:
+			return {}
 		preview = {}
-		save()
 	return p
 
 static func mark_tutorial(key: String) -> void:

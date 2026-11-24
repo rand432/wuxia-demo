@@ -2,6 +2,7 @@ extends SceneTree
 const Battle := preload("res://kushou/battle_ui.tscn")
 const LS := preload("res://shared/level_state.gd")
 const GS := preload("res://shared/game_state.gd")
+const Forge := preload("res://shared/forge_data.gd")
 const SaveFile := preload("res://shared/save_file.gd")
 const Audio := preload("res://shared/audio.gd")
 
@@ -79,13 +80,29 @@ func _run() -> void:
 	b._quit() # 旧退出确认不能绕过结果页的保存恢复检查。
 	assert(current_scene == b and b.is_inside_tree())
 	assert(DirAccess.remove_absolute(ProjectSettings.globalize_path(SaveFile.JOURNAL)) == OK)
+	LS.current_level = 7
 	replay.pressed.emit()
 	home.pressed.emit()
 	replay.pressed.emit()
 	b = await _settle("res://kushou/battle_ui.tscn")
 	_freeze_process(b)
-	assert(LS.current_level == 6 and not b._run_over and b._core.running)
-	b._end_run(false)
+	assert(LS.current_level == 7 and not b._run_over and b._core.running)
+	# 首次写入还未开始就被旧日志挡住，修好后仍要保存这一局的胜利。
+	var reward := LS.first_reward(7)
+	var wen: int = GS.coins["wen"]
+	Forge.load_game()
+	var previous_ores := Forge.ores
+	var previous_silver := Forge.silver
+	var previous_tokens := GS.equip_tokens
+	var previous_materials := GS.forge_mat
+	var previous_bag_size := Forge.bag.size()
+	var upgraded := {"name": "铁剑", "slot": "weapon", "quality": 2, "plus": 3}
+	Forge.equipped["weapon"] = upgraded
+	assert(Forge.save_game() == OK)
+	assert(not LS.first_clear.has("7"))
+	assert(journal.save(SaveFile.JOURNAL) == OK)
+	b._end_run(true)
+	assert(not LS.first_clear.has("7") and GS.coins["wen"] == wen and Forge.ores == previous_ores)
 	await process_frame
 	await process_frame
 	assert(not b._tut.visible and not b._tutorial_paused)
@@ -93,10 +110,29 @@ func _run() -> void:
 	replay = _button(b._result_layer, "再来一局")
 	home.pressed.emit()
 	replay.pressed.emit()
+	assert(current_scene == b and not LS.first_clear.has("7"))
+	assert(DirAccess.remove_absolute(ProjectSettings.globalize_path(SaveFile.JOURNAL)) == OK)
 	home.pressed.emit()
+	replay.pressed.emit()
+	home.pressed.emit()
+	assert(LS.first_clear["7"] and GS.coins["wen"] == wen + int(reward["wen"]))
+	assert(GS.equip_tokens == previous_tokens + int(reward["equip"]))
+	assert(GS.forge_mat == previous_materials + int(reward["forge_mat"]))
+	assert(Forge.ores == previous_ores + int(reward["forge_mat"]))
+	assert(Forge.silver == previous_silver + int(reward["forge_mat"]) * 10)
+	assert(Forge.equipped["weapon"] == upgraded and Forge.bag.size() == previous_bag_size + 1)
+	var levels := ConfigFile.new()
+	var progress := ConfigFile.new()
+	var forge := ConfigFile.new()
+	assert(levels.load(LS.SAVE_PATH) == OK and levels.get_value("levels", "first_clear")["7"])
+	assert(progress.load(GS.PROGRESS_SAVE) == OK)
+	assert(progress.get_value("progress", "coins")["wen"] == GS.coins["wen"])
+	assert(progress.get_value("progress", "forge_mat") == GS.forge_mat)
+	assert(forge.load(Forge.SAVE_PATH) == OK and forge.get_value("res", "ores") == Forge.ores)
+	assert(forge.get_value("res", "bag").size() == Forge.bag.size())
 	var page = await _settle("res://menu/main_home.tscn")
 	page.queue_free()
 	current_scene = null
 	await process_frame
-	print("PASS: real abandon/result buttons single-flight; abandoned late rewards/first clear frozen; pending save blocks all exits then retry/replay/home succeeds")
+	print("PASS: result retry saves deferred first clear and rewards once; abandon and both result buttons keep navigation single-flight")
 	Audio.quit_cleanly()
