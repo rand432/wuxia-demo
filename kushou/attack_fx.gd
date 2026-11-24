@@ -197,13 +197,23 @@ func _draw_cast_seal(seal: Dictionary) -> void:
 func _draw_skill_trail(trail: Dictionary) -> void:
 	var progress := clampf(float(trail["age"]) / 0.24, 0.0, 1.0)
 	var alpha := 1.0 - progress
+	if alpha <= 0.001:
+		return
 	var origin: Vector2 = trail["origin"]
 	var target: Vector2 = trail["target"]
 	var tint: Color = trail["tint"]
-	var side := origin.direction_to(target).orthogonal() * float(trail["width"]) * alpha
+	var width := float(trail["width"])
+	var travel := target - origin
+	if travel.length_squared() < 1.0:
+		draw_circle(target, maxf(1.0, width * 0.18) * alpha, Color(tint.lightened(0.42), alpha), true, -1.0, true)
+		return
 	var tail := origin.lerp(target, progress * 0.72)
-	var shoulder := origin.lerp(target, 0.42 + progress * 0.48)
-	draw_colored_polygon(PackedVector2Array([tail, shoulder + side, target, shoulder - side]), Color(tint, alpha * 0.58))
+	var half_width := width * alpha
+	# 贴身命中和淡出末段不提交接近零面积的面。
+	if half_width >= 0.25:
+		var side := travel.normalized().orthogonal() * half_width
+		var shoulder := origin.lerp(target, 0.42 + progress * 0.48)
+		draw_colored_polygon(PackedVector2Array([tail, shoulder + side, target, shoulder - side]), Color(tint, alpha * 0.58))
 	draw_line(tail, target, Color(tint.lightened(0.55), alpha), 2.5 * alpha + 0.7, true)
 
 func _draw_enemy_attack(strike: Dictionary) -> void:

@@ -52,7 +52,7 @@ class FrameTrace extends Node:
 
 	func report() -> void:
 		_frames.sort_custom(func(a: Vector4i, b: Vector4i) -> bool: return a.x > b.x)
-		for sample in _frames.slice(0, 8):
+		for sample: Vector4i in _frames.slice(0, 8):
 			var gap := sample.x - sample.y - sample.z - sample.w
 			print("[FRAME] wall_us=%d process_callbacks_us=%d before_draw_us=%d draw_us=%d after_draw_us=%d"
 				% [sample.x, sample.y, sample.z, sample.w, gap])
