@@ -3516,11 +3516,13 @@ func _fill_result(win: bool, layer: Control) -> void:
 	var has_art := ResourceLoader.exists(panel_art)
 	if has_art:
 		var tr := TextureRect.new()
-		tr.texture = load(panel_art) as Texture2D
-		tr.position = Vector2.ZERO
-		tr.size = Vector2(540, 480)
+		# 先设拉伸模式再挂贴图：反过来会让最小尺寸变成贴图原始尺寸（1024×768），
+		# 面板底图会撑出 540×480 的 holder，整块框错位、文字压到花纹上。
 		tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		tr.stretch_mode = TextureRect.STRETCH_SCALE
+		tr.texture = load(panel_art) as Texture2D
+		tr.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		tr.custom_minimum_size = Vector2.ZERO
 		tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		holder.add_child(tr)
 	_panel(Rect2(0, 0, 540, 480), Color(0.97, 0.93, 0.85, 0.28) if has_art else Color(0.97, 0.93, 0.85, 0.99), 12,
@@ -3555,11 +3557,13 @@ func _fill_result(win: bool, layer: Control) -> void:
 		["羁绊", "%d 条（已成 %d）" % [total_bonds, _bonds_done]],
 		["存活", "%d 分 %02d 秒" % [mins, secs]],
 	]
-	var y := 126.0
+	# 六行必须落在底图内容区 y 112–344 内：起点 120、步进 37，
+	# 末行底边 335；原来的 126/40 会顶到 356，把“羁绊/存活”压到边框花纹上。
+	var y := 120.0
 	for r in rows:
 		_lbl(str(r[0]), Vector2(56, y), Vector2(150, 30), 20, DIM, holder)
 		_lbl(str(r[1]), Vector2(210, y), Vector2(276, 30), 22, INK, holder, HORIZONTAL_ALIGNMENT_RIGHT)
-		y += 40.0
+		y += 37.0
 	_btn("再来一局", Rect2(30, 380, 210, 64), 24, Color(0.86, 0.66, 0.24), Color(0.14, 0.11, 0.08),
 		func() -> void: _leave_result(true), holder)
 	_btn("回主界面", Rect2(300, 380, 210, 64), 24, Color(0.93, 0.89, 0.80), INK,
