@@ -162,8 +162,6 @@ const STR_EVERY := 10              # 每 10 级给一次三选一
 const WEN_KILL_BASE := 12
 const WEN_KILL_WAVE := 3
 const WEN_WAVE_CLEAR := 60
-# 通关带回：本局文钱的 20% 进局外账户（首通奖励吃完后，重复通关仍是唯一持续收入）
-const CARRY_WEN_RATE := 0.20
 var _str_lv := 0
 var _l1_attr_shown := false
 var _l1_aug_shown := false
@@ -311,7 +309,6 @@ const VITAL_TRACK_WIDTH := 166.0
 const WAVE_TRACK_WIDTH := 140.0
 var _hp_lb: Label
 var _wen := 0
-var _carry_wen := 0          # 本局通关带回局外的文钱（结果页展示）
 var _kills := 0
 var _crystal := 100
 var _crystal_lb: Label
@@ -3450,16 +3447,10 @@ func _end_run(win: bool) -> void:
 				_toast("首通保存失败，请勿关闭游戏")
 		else:
 			_toast("首通记录恢复失败，请检查存储空间")
-		# 通关带回：本局文钱按比例进局外账户。
-		# 首通奖励只在第一次给；没有这条，十关打完局外经济就断流（进阶/技能升级无钱可用）。
-		_carry_wen = int(round(float(_wen) * CARRY_WEN_RATE))
-		if _carry_wen > 0:
-			GameState.add_coin("wen", _carry_wen)
-			if GameState.save_progress() != OK:
-				_toast("带回文钱保存失败，请勿关闭游戏")
+		# 局内文钱不结转：局外是局外（首通奖励单独发，见 _grant_first_clear）。
 		if OS.get_environment("DSH_DEBUG") != "":
 			print("[RUN] lv=", LevelState.current_level, " wave=", _max_wave, " kills=", _kills,
-				" wen=", _wen, " carry=", _carry_wen, " crystal=", _crystal)
+				" wen=", _wen, " crystal=", _crystal)
 	_run_over = true
 	_close_challenge()
 	_hide_god_pick()
@@ -3565,7 +3556,7 @@ func _fill_result(win: bool, layer: Control) -> void:
 	var rows := [
 		["到达波数", "%d / %d" % [mini(int(_core.wave), _max_wave), _max_wave]],
 		["击杀", str(_kills)],
-		["文钱", ("%d（带回 %d）" % [_wen, _carry_wen]) if _carry_wen > 0 else str(_wen)],
+		["文钱", str(_wen)],
 		["灵晶", str(_crystal)],
 		["羁绊", "%d 条（已成 %d）" % [total_bonds, _bonds_done]],
 		["存活", "%d 分 %02d 秒" % [mins, secs]],

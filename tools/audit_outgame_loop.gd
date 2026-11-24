@@ -38,7 +38,7 @@ func _run() -> void:
 	LS.ensure_loaded()
 	LS.current_level = 3
 	LS.max_unlocked = 10
-	# 1) 带回的钱能花：技能升级
+	# 1) 局外文钱能花：技能升级
 	GS.coins["wen"] = 1000
 	GS.skill_books["凡品"] = 1
 	var ok1: bool = GS.upgrade_skill("zhujue", "凡品", 200)

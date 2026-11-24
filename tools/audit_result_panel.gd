@@ -1,5 +1,5 @@
 extends SceneTree
-# 结算面板回归：底图必须锁在 540×480，六行文字与按钮不能越出面板。
+# 结算面板回归：底图必须锁在 540×480，六行文字与按钮不能越出面板（文钱不显示带回）。
 # 2026-11-24 修过一次 TextureRect 被贴图原始尺寸（1024×768）顶爆的 bug。
 const Battle := preload("res://kushou/battle_ui.tscn")
 const LS := preload("res://shared/level_state.gd")
@@ -86,13 +86,13 @@ func _run() -> void:
 		if lb.position.x < 0.0 or lb.position.y < 0.0 or right > 541.0 or bottom > 481.0:
 			_fail("label out of panel: '%s' rect=%s,%s" % [lb.text, str(lb.position), str(lb.size)])
 			return
-	# 带回文案
-	var carry_ok := false
+	# 文钱行必须存在（局内文钱不结转，只显示本局）
+	var wen_ok := false
 	for l in holder.find_children("*", "Label", true, false):
-		if str((l as Label).text).find("带回") >= 0:
-			carry_ok = true
-	if not carry_ok:
-		_fail("carry text missing")
+		if str((l as Label).text) == "文钱":
+			wen_ok = true
+	if not wen_ok:
+		_fail("wen row missing")
 		return
 	print("PASS: result panel layout + carry row")
 	_restore_saves()
