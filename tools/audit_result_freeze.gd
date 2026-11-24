@@ -100,6 +100,51 @@ func _guardian_defeat() -> void:
 	battle._process(0.0)
 	var token = battle._foe_tokens[foe["_tid"]]
 	assert(token._frame_atlas.resource_path.ends_with("kunshou_zhongyan_v1.png"))
+	core.hero_pos = Vector2(230, 538)
+	core._hero_cd = 30.0
+	core._hitstop = 0.0
+	foe["ult_t"] = 0.0
+	core._process(0.01)
+	battle._process(0.0)
+	var sweep: Dictionary = core._delayed[0]
+	assert(sweep["shape"] == "sector" and sweep["dir"].x < 0.0)
+	token.play_attack(Vector2.RIGHT)
+	token._process(0.01)
+	assert(token._frame_index == 8 and token._sprite.flip_h)
+	core._delayed_tick(1.40)
+	token._process(0.01)
+	assert(token._frame_index == 10 and token._sprite.flip_h and core._delayed.is_empty())
+	assert(battle._hazard_view._sector_flashes.size() == 1)
+	var flash: Dictionary = battle._hazard_view._sector_flashes[0]
+	assert(is_equal_approx(flash["angle"], Vector2(sweep["dir"]).angle()) and flash["radius"] == sweep["r"])
+	# 两段同帧结算时，第二个预警不能替另一个落点提供形状或方向。
+	core.queue_delayed(310.0, 355.0, 68.0, 0.0, "真实", 0.40, "震荡", "ring")
+	core.queue_delayed(380.0, 385.0, 215.0, 0.0, "真实", 0.50, "横扫", "sector", Vector2.LEFT, 0.0, 1.40)
+	for hazard: Dictionary in core._delayed:
+		hazard["caster"] = foe
+		hazard["boss_attack"] = true
+	battle._process(0.0)
+	assert(token.boss_warning["shape"] == "ring")
+	core._delayed_tick(0.51)
+	assert(core._delayed.is_empty())
+	assert(battle._hazard_view._ring_flashes.back()["radius"] == 94.0)
+	assert(battle._hazard_view._sector_flashes.size() == 2)
+	assert(battle._hazard_view._sector_flashes.back()["radius"] == 215.0)
+	# 下一段预警在当前横扫之后接续，普通起手不能抢掉横扫姿态。
+	core.queue_delayed(380.0, 385.0, 215.0, 0.0, "真实", 0.40, "横扫", "sector", Vector2.LEFT, 0.0, 1.40)
+	core.queue_delayed(380.0, 385.0, 45.0, 0.0, "真实", 0.65, "剑气", "beam", Vector2.RIGHT, 220.0)
+	for hazard: Dictionary in core._delayed:
+		hazard["caster"] = foe
+		hazard["boss_attack"] = true
+	battle._process(0.0)
+	core._delayed_tick(0.41)
+	battle._process(0.0)
+	assert(token.boss_warning["shape"] == "beam")
+	token.prepare_attack(Vector2.RIGHT * 40.0, 0.10)
+	token._process(0.01)
+	assert(token._frame_index == 10 and token._sprite.flip_h)
+	token._process(0.15)
+	assert(token._frame_index == 8 and not token._sprite.flip_h)
 	core._apply_dmg(foe, float(foe["hp"]) + 1.0, "真实")
 	core._kill_foe(foe)
 	battle._process(0.0)

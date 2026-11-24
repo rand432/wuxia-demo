@@ -124,7 +124,7 @@ signal foe_defeated(foe: Dictionary) # 确认死亡后的单次事件，不含�
 signal hero_down()
 signal boss_arrived(tier: int)
 signal delayed_land(pos: Vector2, elem: String)   # 延迟技落点（外壳在这里挂 pixelfx）
-signal boss_impact(caster: Dictionary, pos: Vector2, ring_radius: float)
+signal boss_impact(hazard: Dictionary)
 signal boss_died(pos: Vector2)                    # 首领倒下（外壳做演出）
 signal boss_slain()                              # 所有首领真正死亡（含挑战，不含不死复活）
 signal wood_expired(foe: Dictionary)
@@ -1608,6 +1608,7 @@ func interrupt_cast(foe: Dictionary) -> void:
 	for i in range(_delayed.size() - 1, -1, -1):
 		var cast: Dictionary = _delayed[i]
 		if is_same(cast.get("caster", {}), foe) and not bool(cast.get("landed", false)):
+			cast["interrupted"] = true
 			_delayed.remove_at(i)
 
 # 多段连招：按顺序排同一只 boss 的几招（每段自带延迟，看着就是"连着来"）
@@ -1647,64 +1648,74 @@ func queue_chain(x: float, y: float, r: float, dmg: float, elem: String, kind: S
 		var off := dir.normalized() * (step * float(i))
 		queue_delayed(x + off.x, y + off.y, r, dmg, elem, warn + gap * float(i), kind, "circle")
 
-# 每帧：推进倒计时，到点就砸
+# 帧内按到期时间统一结算落点及持续伤害，避免低帧率改变连招顺序。
 func _delayed_tick(delta: float) -> void:
+	if _delayed.is_empty() or not running:
+		return
 	var epoch := _enemy_attack_epoch
-	for i in range(_delayed.size() - 1, -1, -1):
-		if not running or epoch != _enemy_attack_epoch:
-			return
+	var events: Array[Array] = []
+	var expired: Array[Dictionary] = []
+	for i in _delayed.size():
 		var d: Dictionary = _delayed[i]
-		if bool(d.get("landed", false)):
-			var alive := _tick_damage_pool(d, delta, epoch)
-			if epoch != _enemy_attack_epoch or not running:
-				return
-			if not alive:
-				_delayed.remove_at(i)
+		if bool(d["landed"]):
+			var active := _schedule_pool_ticks(d, 0.0, delta, i, events, expired)
+			_advance_pool_clock(d, active)
 			continue
-		# v16d：跟随型 —— 落下前**一直贴在主角脚下**（追着人跑），最后 0.25 秒才定住
-		if str(d["shape"]) == "follow" and float(d["t"]) < float(d["warn"]) - 0.25:
+		if d["shape"] == "follow" and float(d["t"]) < float(d["warn"]) - 0.25:
 			d["x"] = _enemy_aim_position().x
 			d["y"] = _enemy_aim_position().y - 6.0
 		if bool(d.get("track_caster", false)):
 			var caster: Dictionary = d["caster"]
 			d["x"] = caster["x"]
 			d["y"] = caster["y"]
+		var due := maxf(0.0, float(d["warn"]) - float(d["t"]))
 		d["t"] = float(d["t"]) + delta
 		if float(d["t"]) < float(d["warn"]):
 			continue
-		# v16e：毒圈/火海这类**落下后不消失**，留在地上每秒跳一次
-		if float(d.get("life", 0.0)) > 0.0:
-			_delayed_hit(d)                       # 落点这一下（全额）
-			if epoch != _enemy_attack_epoch or not running:
-				return
-			var elapsed := maxf(0.0, float(d["t"]) - float(d["warn"]))
+		var pool_time := -1.0
+		if float(d["life"]) > 0.0:
+			pool_time = _schedule_pool_ticks(d, due, delta, i, events, expired)
+		else:
+			expired.append(d)
+		events.append([due, i, true, d, pool_time])
+	if events.size() > 1:
+		events.sort_custom(func(a: Array, b: Array): return a[1] < b[1] if a[0] == b[0] else a[0] < b[0])
+	for event in events:
+		var d: Dictionary = event[3]
+		if bool(d.get("interrupted", false)):
+			continue
+		if event[2]:
+			_delayed_hit(d)
+		else:
+			_delayed_hit(d, 0.5, false, false)
+		if epoch != _enemy_attack_epoch or not running:
+			return
+		if event[2] and float(event[4]) >= 0.0 and not bool(d.get("interrupted", false)):
 			d["landed"] = true
 			d["t"] = 0.0
 			d["tick"] = 0.0
-			d["shape"] = "pool"                  # 接下来按持续圈画
-			var alive := _tick_damage_pool(d, elapsed, epoch)
-			if epoch != _enemy_attack_epoch or not running:
-				return
-			if not alive:
-				_delayed.remove_at(i)
-			continue
-		_delayed_hit(d)
-		if epoch != _enemy_attack_epoch or not running:
-			return
-		_delayed.remove_at(i)
+			d["shape"] = "pool"
+			_advance_pool_clock(d, event[4])
+	for d in expired:
+		var index := _delayed.find_custom(func(cast: Dictionary): return is_same(cast, d))
+		if index >= 0:
+			_delayed.remove_at(index)
 
-func _tick_damage_pool(d: Dictionary, delta: float, epoch: int) -> bool:
-	var active := minf(maxf(delta, 0.0), float(d.get("life", 0.0)))
-	d["life"] = maxf(0.0, float(d.get("life", 0.0)) - active)
-	d["t"] = float(d.get("t", 0.0)) + active
-	d["tick"] = float(d.get("tick", 0.0)) + active
-	while float(d["tick"]) + 0.000001 >= 1.0:
-		d["tick"] = maxf(0.0, float(d["tick"]) - 1.0)
-		# 落地后的持续伤害不是新一轮首领预警，不主动消耗五级纸人。
-		_delayed_hit(d, 0.5, false, false)
-		if not running or epoch != _enemy_attack_epoch:
-			return false
-	return float(d["life"]) > 0.000001
+func _schedule_pool_ticks(d: Dictionary, start: float, delta: float, order: int, events: Array[Array], expired: Array[Dictionary]) -> float:
+	var active := minf(maxf(0.0, delta - start), float(d["life"]))
+	var at := 1.0 - float(d["tick"])
+	while at <= active + 0.000001:
+		events.append([start + at, order, false, d])
+		at += 1.0
+	if float(d["life"]) - active <= 0.000001:
+		expired.append(d)
+	return active
+
+func _advance_pool_clock(d: Dictionary, active: float) -> void:
+	d["life"] = maxf(0.0, float(d["life"]) - active)
+	d["t"] = float(d["t"]) + active
+	var elapsed := float(d["tick"]) + active
+	d["tick"] = maxf(0.0, elapsed - floorf(elapsed + 0.000001))
 
 # 落下结算：圈里的主角挨伤害；顺便一圈火 ＋ 震屏
 # 主角在不在这一招的作用范围里（延迟技与持续圈共用这一套判定）
@@ -1783,8 +1794,7 @@ func _delayed_hit(d: Dictionary, damage_scale := 1.0, allow_paper := true, is_im
 	if not running or epoch != _enemy_attack_epoch or float(hero.get("hp", 0.0)) <= 0.0:
 		return
 	if bool(d.get("boss_attack", false)):
-		var ring_radius := r + HazardTelegraph.RING_PADDING if str(d["shape"]) == "ring" else 0.0
-		boss_impact.emit(d.get("caster", {}), c, ring_radius)
+		boss_impact.emit(d)
 		if not running or epoch != _enemy_attack_epoch:
 			return
 	_shake = maxf(_shake, 12.0)

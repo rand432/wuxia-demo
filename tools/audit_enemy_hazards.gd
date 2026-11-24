@@ -62,6 +62,17 @@ func _run() -> void:
 	assert(core.hero["hp"] == 1000.0 and battle._zhiren == 1)
 	core._delayed_tick(1.0)
 	assert(core.hero["hp"] == 990.0 and battle._zhiren == 1)
+	# 同帧到期时，纸人先拦真正先落地的一段。
+	core.clear_enemy_attacks()
+	battle._set_paper_count(1)
+	var hero: Vector2 = core.hero_pos
+	core.queue_delayed(hero.x, hero.y, 70.0, 10.0, "真实", 0.40)
+	core.queue_delayed(hero.x, hero.y, 70.0, 30.0, "真实", 0.60)
+	for attack: Dictionary in core._delayed:
+		attack["boss_attack"] = true
+	core.hero["hp"] = 1000.0
+	core._delayed_tick(0.65)
+	assert(core.hero["hp"] == 970.0 and battle._zhiren == 0)
 	core.clear_enemy_attacks()
 	battle._curio_id = ""
 	battle._set_paper_count(0)
@@ -89,9 +100,16 @@ func _run() -> void:
 	core._delayed_tick(1.0)
 	core.hero["hp"] = 1.0
 	epoch = core._enemy_attack_epoch
+	var late_impacts := []
+	var remember_impact := func(attack: Dictionary): late_impacts.append(attack["kind"])
+	core.boss_impact.connect(remember_impact)
+	core.queue_delayed(core.hero_pos.x, core.hero_pos.y, 70.0, 0.0, "真实", 1.50, "后续落点")
+	core._delayed.back()["boss_attack"] = true
 	core._delayed_tick(3.0)
 	assert(core.wave == 3 and core._enemy_attack_epoch == epoch + 1)
 	assert(core.hero["hp"] == 1000.0 and core._delayed.is_empty() and battle._life == 98)
+	assert(late_impacts.is_empty())
+	core.boss_impact.disconnect(remember_impact)
 	# 真正保命不跳波，其他地面威胁仍按原规则持续存在。
 	battle._curio_id = "zhiren"
 	battle._curio_lv = 1
@@ -119,6 +137,20 @@ func _run() -> void:
 	assert(cast["x"] == boss["x"] and cast["y"] == boss["y"])
 	core.interrupt_cast(boss)
 	assert(core._delayed.is_empty())
+	# 落地回调打断首领时，已经排入本帧的后续攻击也不能继续结算。
+	core.queue_delayed(350.0, 310.0, 50.0, 0.0, "真实", 0.40, "首段")
+	core.queue_delayed(350.0, 310.0, 50.0, 0.0, "真实", 0.60, "次段")
+	for attack: Dictionary in core._delayed:
+		attack["boss_attack"] = true
+		attack["caster"] = boss
+	var impacts := []
+	var interrupt := func(attack: Dictionary):
+		impacts.append(attack["kind"])
+		core.interrupt_cast(boss)
+	core.boss_impact.connect(interrupt)
+	core._delayed_tick(0.70)
+	assert(core._delayed.is_empty() and impacts == ["首段"])
+	core.boss_impact.disconnect(interrupt)
 	# 号令使用首领的额外名额，只移动这轮实际新生的敌人。
 	core.foes.clear()
 	core.start_boss(4, "困兽·终焉")
@@ -146,5 +178,5 @@ func _run() -> void:
 	assert(core._spawn_foe().is_empty() and float(sentinel["y"]) > 320.0)
 	battle.queue_free()
 	await process_frame
-	print("PASS: pool timing, failed-wave invalidation, paper survival and bounded boss summons")
+	print("PASS: chronological impacts and pool ticks, interruption, paper survival, wave invalidation and bounded boss summons")
 	Audio.quit_cleanly()

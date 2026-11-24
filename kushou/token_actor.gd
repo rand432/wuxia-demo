@@ -36,6 +36,7 @@ var _sprite: Sprite2D
 var _base_scale := 1.0
 var _art_height := 0.0
 var _attack_time := 0.0
+var _boss_impact := false
 var _cast_time := 0.0
 var _windup := 0.0
 var _attack_direction := Vector2.RIGHT
@@ -178,6 +179,8 @@ func _process(delta: float) -> void:
 		return
 	_spawn_t = minf(0.26, _spawn_t + delta)
 	_attack_time = maxf(0.0, _attack_time - delta)
+	if _boss_impact and _attack_time == 0.0:
+		_boss_impact = false
 	_cast_time = maxf(0.0, _cast_time - delta)
 	_ready_time = maxf(0.0, _ready_time - delta)
 	_flash = maxf(0.0, _flash - delta * 7.0)
@@ -217,6 +220,8 @@ func _tick_frame_pose(delta: float, travel: Vector2, moving: bool, pop: float, e
 	var frame := 0
 	if _cast_time > 0.0:
 		frame = 12 if _cast_time > 0.24 else 13
+	elif _boss_impact:
+		frame = 10 if _attack_time > 0.075 else 11
 	elif not boss_warning.is_empty():
 		frame = 8 if float(boss_warning["t"]) < float(boss_warning["warn"]) * 0.82 else 9
 		if str(boss_warning.get("shape", "")) in ["sector", "beam"]:
@@ -276,7 +281,7 @@ func play_move(_move_id: String = "", _speed := 1.0) -> void:
 	play_attack(Vector2.RIGHT)
 
 func play_attack(direction: Vector2, windup := 0.0, visual_reach := 13.0) -> void:
-	if _death_t >= 0.0: return
+	if _death_t >= 0.0 or _boss_impact: return
 	_ready_time = 0.0
 	_attack_direction = direction.normalized()
 	if _frame_atlas != null and absf(direction.x) > 1.0:
@@ -285,8 +290,13 @@ func play_attack(direction: Vector2, windup := 0.0, visual_reach := 13.0) -> voi
 	_windup = clampf(windup, 0.0, 0.22)
 	_attack_time = _windup + 0.14
 
+func play_boss_impact(direction: Vector2) -> void:
+	_boss_impact = false
+	play_attack(direction)
+	_boss_impact = _attack_time > 0.0
+
 func prepare_attack(direction: Vector2, duration: float) -> void:
-	if _death_t >= 0.0 or duration <= 0.0: return
+	if _death_t >= 0.0 or _boss_impact or duration <= 0.0: return
 	_attack_direction = direction.normalized()
 	if _frame_atlas != null and absf(direction.x) > 1.0:
 		face(1 if direction.x > 0.0 else -1)
@@ -321,6 +331,7 @@ func play_down(recover := false) -> void:
 	_death_t = 0.0
 	_sink = 0.0
 	_attack_time = 0.0
+	_boss_impact = false
 	_cast_time = 0.0
 	_recover_after_down = recover
 	_flash = 0.0
@@ -337,6 +348,7 @@ func reset_pose() -> void:
 	_sink = 0.0
 	_flash = 0.0
 	_attack_time = 0.0
+	_boss_impact = false
 	_cast_time = 0.0
 	_ready_time = 0.0
 	_recover_after_down = false

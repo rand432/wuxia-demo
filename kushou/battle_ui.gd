@@ -5661,23 +5661,25 @@ func _on_delayed_land(pos: Vector2, elem: String) -> void:
 	var wp: Vector2 = _core.position + pos
 	_spawn_pfx(str(e[0]), wp, float(e[2]), str(e[1]), 1.30)
 
-func _on_boss_impact(caster: Dictionary, pos: Vector2, ring_radius: float) -> void:
+func _on_boss_impact(hazard: Dictionary) -> void:
 	if _run_over:
 		return
-	if ring_radius > 0.0:
-		_hazard_view.flash_ring(pos, ring_radius)
+	var pos := Vector2(float(hazard["x"]), float(hazard["y"]))
+	var shape := str(hazard["shape"])
+	var caster: Dictionary = hazard.get("caster", {})
+	if shape == "ring":
+		_hazard_view.flash_ring(pos, float(hazard["r"]) + HazardTelegraph.RING_PADDING)
+	elif shape == "sector":
+		_hazard_view.flash_sector(pos, Vector2(hazard["dir"]), float(hazard["r"]), float(hazard["spread"]))
+		Aud.sfx("swing", -8.0, 0.72, 180)
 	var token := _foe_tokens.get(int(caster.get("_tid", 0))) as TokenActor
 	if token != null:
 		var direction: Vector2 = _core.position + pos - token.position
-		var warning := token.boss_warning
-		var shape := str(warning.get("shape", ""))
 		if shape == "sector" or shape == "beam":
-			direction = Vector2(warning["dir"]) * 40.0
-		if shape == "sector":
-			_hazard_view.flash_sector(pos, direction, float(warning["r"]), float(warning["spread"]))
-			Aud.sfx("swing", -8.0, 0.72, 180)
-		token.boss_warning = {}
-		token.play_attack(direction)
+			direction = Vector2(hazard["dir"]) * 40.0
+		if is_same(token.boss_warning, hazard):
+			token.boss_warning = {}
+		token.play_boss_impact(direction)
 
 # 首领倒下：白闪 + 大爆 + 金耀 + 重震，配一段很短的慢镜头
 # 纸人 Lv5：在核心那边挡下了首领延迟技
