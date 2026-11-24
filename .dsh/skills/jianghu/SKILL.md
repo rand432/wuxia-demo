@@ -15,6 +15,8 @@ whenToUse: 在本仓库做任何代码、数值、美术接入或文档工作之
 
 历史文档在 `docs/_archive/`，**不代表现状**，不要拿它当实现依据。
 
+改 UI 前另读 `jianghu-ui` 技能；工作室流程层已落地在 `project.yaml` + `.claude/`（`bash .claude/scripts/project-state.sh` 可查阶段）。
+
 ## 铁律
 
 - **不改代码，除非用户明确要求改**。审计/查看任务只读。

@@ -1,0 +1,25 @@
+# 江湖游历 · 项目配置（game-studio 读取；单一事实源）
+schema_version: 1
+
+framework:
+  version: 1.3.0
+  last_upgraded: 2026-11-24
+
+project:
+  name: "江湖游历"
+  stage: Polish            # Concept | Systems Design | Technical Setup | Pre-Production | Production | Polish | Release
+  goal: "把已完成的十关困兽玩法做到可上线的视觉与手感"
+
+engine:
+  name: Godot
+  version: "4.7.2"
+  code_root: "."
+
+modes:
+  rigor: standard
+  automation: assisted
+
+# 说明：
+# - 代码根 = 工程根（menu/ shared/ kushou/ 都在根下）
+# - 阶段取 Polish：玩法与十关已完成，当前重点是视觉、动效、手感
+# - 详细现状见 docs/项目现状总览_2026-11-24.md
