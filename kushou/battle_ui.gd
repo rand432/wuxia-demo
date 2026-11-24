@@ -24,8 +24,8 @@ const CardFrame := preload("res://kushou/card_frame.gd")
 const GodPortraits := preload("res://shared/god_portraits.gd")
 const PortraitMotion := preload("res://shared/god_portrait_motion.gd")
 const HERO_FRAMES_PATH := "res://assets/char/player_battle_frames.png"
-const HERO_SKILL_FRAMES_PATH := "res://assets/char/player_skill_poses_v1.png"
-const HERO_SKILL_ROWS := {"chenshi": 0, "liuqingqing": 1, "qingluan": 2, "gundilong": 3}
+const HERO_SKILL_FRAMES_PATH := "res://assets/char/player_skill_poses_v2.png"
+const HERO_SKILL_ROWS := {"chenshi": 0, "liuqingqing": 1, "qingluan": 2, "gundilong": 3, "xiaoqier": 4}
 var _invocation_portrait: PortraitMotion
 var _skill_pose_direction := Vector2.ZERO
 const BATTLE_FRAMES_PATH := "res://assets/art/fx/battle_bursts_v1.png"
@@ -36,7 +36,7 @@ const ENTRY_ELITE_FRAME_IDS := ["shijia_yuan", "challenge_mimic", "challenge_chi
 const FINAL_BEAST_FRAME_ID := "kunshou_zhongyan_v1"
 var _entry_art: Dictionary = {}
 var _entry_cards_ready := false
-var _entry_god_portraits: Dictionary = {}
+var _god_portraits: Dictionary = {}
 var _draw_art_cache: Dictionary = {}
 var _frame_fx_art: Texture2D
 var _skill_frame_art: Texture2D
@@ -360,14 +360,13 @@ func prepare_entry_art() -> Array[String]:
 		if not paths.has(path):
 			paths.append(path)
 	for aid in LevelState.god_ids():
-		if AncestorData.ANCESTORS.has(aid):
-			var path := _god_skill_path(aid, AncestorData.ANCESTORS[aid]["art"])
-			if not paths.has(path):
+		if not AncestorData.ANCESTORS.has(aid) or SEALED.has(aid):
+			continue
+		var icon := _god_skill_path(aid, AncestorData.ANCESTORS[aid]["art"])
+		var portrait := GodPortraits.path_for(aid)
+		for path in [icon, portrait]:
+			if not path.is_empty() and not paths.has(path):
 				paths.append(path)
-	for aid in LevelState.god_ids().slice(0, 2):
-		var path := GodPortraits.path_for(aid)
-		if not path.is_empty() and not paths.has(path):
-			paths.append(path)
 	return paths
 
 func supply_entry_art(path: String, texture: Texture2D) -> void:
@@ -417,10 +416,10 @@ func _ready() -> void:
 		_q_init()
 		_warm_initial_draw_art()
 		_warm_choice_art()
-		for aid in LevelState.god_ids().slice(0, 2):
+		for aid in LevelState.god_ids():
 			var path := GodPortraits.path_for(aid)
 			if _entry_art.has(path):
-				_entry_god_portraits[aid] = _entry_art[path]
+				_god_portraits[aid] = _entry_art[path]
 		_build_toast()
 	_entry_art.clear()
 	if not _no_ui:
@@ -3478,6 +3477,8 @@ func _end_run(win: bool) -> void:
 			print("[RUN] lv=", LevelState.current_level, " wave=", _max_wave, " kills=", _kills,
 				" wen=", _wen, " crystal=", _crystal)
 	_run_over = true
+	if _hero_token != null:
+		_hero_token.cancel_cast_poses()
 	_close_challenge()
 	_hide_god_pick()
 	if _tut != null:
@@ -5273,7 +5274,8 @@ func _skill_cast_juice(aid: String = "") -> void:
 	var tint: Color = SKILL_TINT.get(_cast_dtype, Color(1.0, 0.94, 0.80))
 	if _fx_front != null:
 		_fx_front.spawn_cast_seal(_hero_screen() - FIELD_POS, tint)
-	for layer: Array in SKILL_SFX.get(_cast_dtype, []):
+	var layers: Array = PICKPOCKET_SFX if aid == "xiaoqier" else SKILL_SFX.get(_cast_dtype, [])
+	for layer: Array in layers:
 		Aud.sfx(str(layer[0]), float(layer[1]), float(layer[2]))
 	_core._shake = maxf(float(_core._shake), 5.0)
 	_core._hitstop = maxf(float(_core._hitstop), 0.045)
@@ -6491,6 +6493,7 @@ const SKILL_SFX := {
 	"物理": [["sword_in_ground", -7.0, 1.00], ["hit_heavy", -10.0, 0.95]],
 	"真实": [["heartbeat", -10.0, 0.90], ["tension", -13.0, 1.00]],
 }
+const PICKPOCKET_SFX := [["dart", -9.0, 1.30], ["swing", -16.0, 1.32]]
 
 func _skill_fx(dtype: String, world_pos: Vector2, scale_mul := 1.0) -> void:
 	if _skill_frame_art != null and SKILL_FRAMES.has(dtype):
@@ -6628,7 +6631,11 @@ func _cast_skill(i: int) -> void:
 		if para_s > 0.0 and float(f.get("hp", 0.0)) > 0.0:
 			f["para"] = maxf(float(f.get("para", 0.0)), para_s)
 		_core._push_float(float(f["x"]), float(f["y"]) - 46.0, str(sk["name"]), sk["col"], true)
-		_skill_fx(dtype, _core.position + Vector2(float(f["x"]), float(f["y"]) - 26.0))
+		var hit_pos: Vector2 = _core.position + Vector2(float(f["x"]), float(f["y"]) - 26.0)
+		if aid == "xiaoqier":
+			_spawn_pfx("impacts/quick-tap", hit_pos, 0.80, "gold", 1.2, 1.15)
+		else:
+			_skill_fx(dtype, hit_pos)
 		if float(f.get("hp", 0.0)) <= 0.0:
 			_core._kill_foe(f)
 			if not _skill_batch_active(epoch):
@@ -6901,11 +6908,9 @@ func _roll_god() -> void:
 		gc.element = str(a.get("dtype", ""))
 		gc.quality = int(a["quality"])
 		gc.skill_art = _god_skill_art(aid, str(a["art"]))
-		if _entry_god_portraits.has(aid):
-			gc.portrait = _entry_god_portraits[aid]
-			_entry_god_portraits.erase(aid)
-		else:
-			gc.portrait = _entry_texture(GodPortraits.path_for(aid))
+		if not _god_portraits.has(aid):
+			_god_portraits[aid] = _entry_texture(GodPortraits.path_for(aid))
+		gc.portrait = _god_portraits[aid]
 		var skill: Dictionary = SKILL_DEFS.get(aid, {})
 		if skill.is_empty():
 			gc.skill_meta = "被动光环" if aid == "mingzhu" else "家传入口入池"
@@ -7582,6 +7587,8 @@ func _backwash() -> void:
 		_q_finish("fail")
 	_core.foes.clear()
 	_core.clear_enemy_attacks()
+	if _hero_token != null:
+		_hero_token.cancel_cast_poses()
 	_core._hero_pending = {}
 	_core._hero_pending_t = -1.0
 	_core.boss_required = false

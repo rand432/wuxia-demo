@@ -5,6 +5,7 @@ const LS := preload("res://shared/level_state.gd")
 const FD := preload("res://shared/forge_data.gd")
 const Audio := preload("res://shared/audio.gd")
 const Detail := preload("res://menu/equip_detail.gd")
+const GodPortraits := preload("res://shared/god_portraits.gd")
 class LoadingProbe extends "res://menu/loading.gd":
 	var requests := 0
 	var fail_request := false
@@ -127,23 +128,26 @@ func _run() -> void:
 	curio._on_equip()
 	assert(GS.curio_id == equipped)
 	home = await _scene("res://menu/main_home.tscn")
-	home._stage = 5
+	home._stage = 9
 	home._start_level()
 	home._stage = 0
 	home._start_level()
 	home._on_dock("role")
-	assert(LS.current_level == 6)
+	assert(LS.current_level == 10)
 	var loading = await _scene("res://menu/loading.tscn")
 	for i in range(600):
 		if loading._battle != null: break
 		await process_frame
 	assert(loading._art_total > 0 and not loading._battle.is_inside_tree())
 	var battle = await _scene("res://kushou/battle_ui.tscn")
-	assert(battle._core != null and LS.current_level == 6)
+	assert(battle._core != null and LS.current_level == 10)
 	assert(battle._entry_cards_ready and battle._entry_art.is_empty())
 	assert(battle._hero_token._frame_atlas != null and battle._skill_frame_art != null)
 	assert(battle._draw_art_cache.values().any(func(art): return art != null))
-	assert(battle._entry_god_portraits.size() == 2 and battle._entry_god_portraits["chenshi"] != null)
+	var eligible := LS.god_ids()
+	assert(battle._god_portraits.size() == eligible.size())
+	for aid in eligible:
+		assert(battle._god_portraits[aid].resource_path == GodPortraits.path_for(aid))
 	assert(battle._draw_layer == null and battle._str_layer == null and battle._trea_layer == null and battle._god_layer == null)
 	battle._tut.cancel()
 	battle._crystal = 40
@@ -156,7 +160,7 @@ func _run() -> void:
 	assert(god_panel.visible and not draw_panel.visible and battle._god_root.get_child_count() > 0)
 	var god = battle._god_root.get_child(0)
 	assert(god.portrait.resource_path.ends_with("portrait_chenshi_ink_v2.webp") and god.skill_art != god.portrait)
-	assert(not battle._entry_god_portraits.has(god.aid))
+	assert(god.portrait == battle._god_portraits[god.aid])
 	battle._trea_charge = 1
 	battle._trea_tile.pressed.emit()
 	var treasure_panel: Control = battle._trea_layer
@@ -170,11 +174,23 @@ func _run() -> void:
 	assert(battle._draw_layer == draw_panel and battle._god_layer == god_panel)
 	assert(battle._trea_layer == treasure_panel and battle._str_layer == augment_panel)
 	assert(augment_panel.visible and battle._exit_layer != null and battle._combined_layer != null)
+	# 剩余两位首次发牌以及刷新，都复用进入战斗时就已持有的纹理。
+	for aid in eligible.slice(0, 4):
+		battle._ancestors[aid] = 0
+	battle._god_hand_charge = -1
+	battle._god_reroll = 1
+	battle._mate_tile.pressed.emit()
+	assert(battle._god_root.get_child_count() == 2)
+	var later = battle._god_root.get_child(0)
+	assert(later.aid == "gundilong" and later.portrait == battle._god_portraits[later.aid])
+	var earlier_texture: Texture2D = later.portrait
+	battle._god_refresh_btn.pressed.emit()
+	assert(battle._god_reroll == 0 and battle._god_root.get_child(0).portrait == earlier_texture)
 	paused = false
 	battle.queue_free()
 	current_scene = null
 	await process_frame
 	await process_frame
 	await create_timer(0.5).timeout # 等场景切换/音频的延迟清理完成后再退出引擎。
-	print("PASS: loading recovery, detached prefetch, immediate first panel opens during staged setup, and late callbacks inert")
+	print("PASS: loading recovery, staged panels, and all six god portraits reused on first open and refresh")
 	Audio.quit_cleanly()

@@ -40,6 +40,52 @@ func _skill(b, aid: String) -> Dictionary:
 	sk.merge({"aid": aid, "cd_t": 0.0}, true)
 	return sk
 
+func _audit_cast_poses() -> bool:
+	var b = _battle()
+	var c = b._core
+	var token = b._hero_token
+	token.set_process(false)
+	_foe(c, 60.0, 100000.0)
+	c.attr_set_base("mp", 1000.0)
+	b._mp = 1000.0
+	var mana_cost := 0.0
+	for aid in ["chenshi", "liuqingqing", "qingluan", "gundilong", "xiaoqier"]:
+		var skill := _skill(b, aid)
+		b._skills.append(skill)
+		mana_cost += float(skill["mp"])
+	b._tick_skills(0.0)
+	assert(is_equal_approx(b._mp, 1000.0 - mana_cost))
+	assert(b._skills.all(func(skill): return skill["cd_t"] > 0.0))
+	assert(token._skill_row == 0 and token._pending_skill_poses.size() == 4)
+	assert(token.skill_atlas.get_size() == Vector2(512, 640))
+	# 普通出剑和朝向变化不覆盖正在播放的专属动作；长帧只消耗旧计时。
+	var frames := {}
+	for tick in range(78):
+		token.play_attack(Vector2.LEFT * 20.0)
+		token._process(1.0 / 60.0)
+		if token._sprite.texture == token.skill_atlas:
+			frames[token._frame_index] = true
+	assert(frames.keys() == range(20) and token._sprite.texture == token._frame_atlas)
+	for boundary in ["long_frame", "down", "backwash", "result"]:
+		token.play_skill_cast(3, Vector2.LEFT)
+		token.play_skill_cast(2, Vector2.RIGHT)
+		token.play_skill_cast(-1, Vector2.RIGHT)
+		token.face(1)
+		token._process(0.01)
+		assert(token._sprite.flip_h and token._skill_row == 3 and token._pending_skill_poses.size() == 1)
+		match boundary:
+			"down":
+				token.play_down(true)
+			"backwash":
+				b._backwash()
+			"result":
+				b._end_run(false)
+		token._process(1.0)
+		assert(token._pending_skill_poses.is_empty() and token._skill_row == -1)
+		assert(token._sprite.texture == token._frame_atlas)
+	b.queue_free()
+	return true
+
 func _run() -> void:
 	seed(20261124)   # 用例依赖随机刷怪类型；固定随机序列避免偶发误报
 	for aid in ["chenshi", "xiaoqier"]:
@@ -109,5 +155,7 @@ func _run() -> void:
 		assert(b._curio_mana_regen_left == 0.0) # 中止后不再启动后续回蓝特效，免费施法临时内力已还原。
 		b.queue_free()
 		await process_frame
-	print("PASS: two current direct skills settle kills once; normal damage/cost preserved; result/death/stop/clear halt old targets and automatic cast batch")
+	assert(_audit_cast_poses())
+	await process_frame
+	print("PASS: cast lifecycle, same-tick mana and cooldowns, all 20 skill frames, facing, and cancel on death/replay/result")
 	Audio.quit_cleanly()

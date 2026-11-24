@@ -12,6 +12,8 @@ extends Node2D
 const CharArt := preload("res://shared/char_art.gd")
 const UI_FONT := preload("res://fonts/ink.ttf")
 const HERO_OUTLINE := preload("res://kushou/hero_outline.gdshader")
+const SKILL_POSE_TIME := 0.36
+const MAX_PENDING_SKILL_POSES := 4
 
 var role := "player"
 var art_tex: Texture2D = null
@@ -40,7 +42,8 @@ var _boss_impact := false
 var _cast_time := 0.0
 var skill_atlas: Texture2D
 var _skill_row := -1
-const SKILL_POSE_TIME := 0.36
+var _skill_facing := 1.0
+var _pending_skill_poses: Array[Vector2i] = [] # 图集行号、水平朝向。
 var _windup := 0.0
 var _attack_direction := Vector2.RIGHT
 var _attack_reach := 13.0
@@ -190,7 +193,7 @@ func _process(delta: float) -> void:
 	_attack_time = maxf(0.0, _attack_time - delta)
 	if _boss_impact and _attack_time == 0.0:
 		_boss_impact = false
-	_cast_time = maxf(0.0, _cast_time - delta)
+	_advance_cast_pose(delta)
 	_ready_time = maxf(0.0, _ready_time - delta)
 	_flash = maxf(0.0, _flash - delta * 7.0)
 	_hit_t = maxf(0.0, _hit_t - delta / 0.16)
@@ -256,6 +259,7 @@ func _tick_frame_pose(delta: float, travel: Vector2, moving: bool, pop: float, e
 	else:
 		frame = posmod(int(_frame_clock * 4.0), 4)
 	_show_frame(frame)
+	_sprite.flip_h = (_skill_facing if skill_pose else _dir) < 0.0
 	_apply_visual_pose(Vector2.ONE * pop, Vector2(0, 18.0 * (1.0 - enter)) + _hit_dir * recoil * 4.0)
 	modulate = Color(1, 1, 1, lerpf(0.35, 1.0, enter))
 	_sprite.modulate = Color(1.0 + 0.25 * _flash, 1.0 - 0.28 * _flash, 1.0 - 0.32 * _flash)
@@ -334,10 +338,46 @@ func play_cast(direction := Vector2.ZERO) -> void:
 	_cast_time = 0.32
 
 func play_skill_cast(row: int, direction: Vector2) -> void:
-	play_cast(direction)
-	if role == "player" and row >= 0 and skill_atlas != null and _death_t < 0.0:
-		_skill_row = row
-		_cast_time = SKILL_POSE_TIME
+	if role != "player" or _frame_atlas == null or _death_t >= 0.0:
+		return
+	var in_skill_pose := _cast_time > 0.0 and _skill_row >= 0
+	if row < 0 or skill_atlas == null:
+		if not in_skill_pose:
+			play_cast(direction)
+		return
+	var facing := int(_dir) if absf(direction.x) <= 0.05 else (1 if direction.x > 0.0 else -1)
+	var pose := Vector2i(row, facing)
+	if not in_skill_pose:
+		_begin_skill_pose(pose)
+	elif _pending_skill_poses.size() < MAX_PENDING_SKILL_POSES:
+		_pending_skill_poses.append(pose)
+
+
+func _begin_skill_pose(pose: Vector2i) -> void:
+	_skill_row = pose.x
+	_skill_facing = float(pose.y)
+	_cast_time = SKILL_POSE_TIME
+
+
+func _advance_cast_pose(delta: float) -> void:
+	while _cast_time > 0.0:
+		# 连续施法时缩短重叠展示，动画计时与伤害、冷却独立。
+		var speed := 1.75 if not _pending_skill_poses.is_empty() else 1.0
+		var seconds_left := _cast_time / speed
+		if delta < seconds_left:
+			_cast_time -= delta * speed
+			return
+		delta -= seconds_left
+		if _pending_skill_poses.is_empty():
+			cancel_cast_poses()
+			return
+		_begin_skill_pose(_pending_skill_poses.pop_front())
+
+
+func cancel_cast_poses() -> void:
+	_cast_time = 0.0
+	_skill_row = -1
+	_pending_skill_poses.clear()
 
 
 func play_dodge() -> void:
@@ -352,7 +392,7 @@ func play_down(recover := false) -> void:
 	_sink = 0.0
 	_attack_time = 0.0
 	_boss_impact = false
-	_cast_time = 0.0
+	cancel_cast_poses()
 	_recover_after_down = recover
 	_flash = 0.0
 
@@ -369,14 +409,14 @@ func reset_pose() -> void:
 	_flash = 0.0
 	_attack_time = 0.0
 	_boss_impact = false
-	_cast_time = 0.0
-	_skill_row = -1
+	cancel_cast_poses()
 	_ready_time = 0.0
 	_recover_after_down = false
 	_discard_after_down = false
 	_anim_t = 0.0
 	_frame_clock = 0.0
 	_walk_blend = 0.0
+	_dir = 1.0
 	_last_feet = position
 	_spawn_t = 0.26
 	_hit_t = 0.0
@@ -385,6 +425,9 @@ func reset_pose() -> void:
 	visible = true
 	modulate = Color(1, 1, 1, 1)
 	if is_instance_valid(_sprite):
+		if _frame_atlas != null:
+			_use_frame_atlas(_frame_atlas)
+			_show_frame(0)
 		_sprite.rotation = 0.0
 		_sprite.flip_h = false
 		_sprite.position = Vector2(0.0, _frame_center_y() if _frame_atlas != null else (-_art_height * 0.5 if _art_height > 0.0 else -radius))
