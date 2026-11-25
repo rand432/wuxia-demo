@@ -13,6 +13,43 @@ func _initialize() -> void:
 func _pool(core) -> void:
 	core.queue_delayed(core.hero_pos.x, core.hero_pos.y, 70.0, 20.0, "真实", 1.0, "pool test", "pool", Vector2.RIGHT, 0.0, 0.0, 0, 0.0, 3.0)
 
+func _audit_unseen_foes() -> bool:
+	LS.current_level = 10
+	var battle = Battle.instantiate()
+	root.add_child(battle)
+	battle.set_process(false)
+	var core = battle._core
+	core.set_process(false)
+	core.foes.clear()
+	core.start_boss(4, "困兽·终焉")
+	var boss: Dictionary = core._boss_foe()
+	core._summon_boss_foes(boss)
+	assert(core.foes.size() == 3)
+	var entering: Dictionary = core.foes[1]
+	var removed: Dictionary = core.foes[2]
+	battle._process(0.0)
+	var entry_id: int = entering["_tid"]
+	var removed_id: int = removed["_tid"]
+	assert(core.live_foes() == 3 and battle._foe_tokens.size() == 1)
+	assert(not battle._foe_tokens.has(entry_id) and not battle._foe_tokens.has(removed_id))
+	entering["hp"] = float(entering["hp_max"]) * 0.5
+	removed["hp"] = 0.0
+	core._kill_foe(removed)
+	removed["y"] = 110.0
+	entering["y"] = battle.MIN_VISIBLE_FOE_Y
+	battle._process(0.0)
+	var token = battle._foe_tokens[entry_id]
+	assert(token.visible and entering["_tid"] == entry_id)
+	assert(token.hp_ratio == 0.5 and token._hit_t == 0.0 and token._spawn_t <= 0.0)
+	assert(not battle._foe_tokens.has(removed_id) and battle._recycle_q.is_empty())
+	core.foes.erase(entering)
+	battle._process(0.0)
+	assert(not battle._foe_tokens.has(entry_id) and battle._recycle_q.size() == 1)
+	battle._process(0.5)
+	assert(battle._foe_pool.has(token) and not token.visible and not token.is_processing())
+	battle.queue_free()
+	return true
+
 func _audit_spacing() -> bool:
 	var core := Core.new()
 	core.size = Vector2(680, 720)
@@ -274,5 +311,7 @@ func _run() -> void:
 		await process_frame
 	assert(_audit_spacing())
 	await process_frame
-	print("PASS: hazard chronology, bounded summons, first-tier guardian poses and ordered crowd separation")
+	assert(_audit_unseen_foes())
+	await process_frame
+	print("PASS: hazard chronology, bounded summons, guardian poses, ordered separation and on-screen token allocation")
 	Audio.quit_cleanly()

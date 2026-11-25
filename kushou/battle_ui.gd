@@ -298,6 +298,7 @@ var _foe_pool: Array = []      # 怪物牌对象池（省掉每只都建 Shader/
 var _recycle_q: Array = []     # 阵亡动画播完再回收
 const DENSE_ROSTER_ENTER := 22
 const DENSE_ROSTER_EXIT := 18
+const MIN_VISIBLE_FOE_Y := 90.0
 var _dense_roster := false
 var _boss_bar_t := 0.0
 var _flash_rect: ColorRect = null  # 技能释放时的整屏微闪
@@ -3265,33 +3266,40 @@ func _process(_delta: float) -> void:
 			if not f.has("_tid"):
 				_foe_seq += 1
 				f["_tid"] = _foe_seq
-				_foe_tokens[_foe_seq] = _make_foe_token(f)
 			var tid: int = int(f["_tid"])
+			var tk := _foe_tokens.get(tid) as TokenActor
+			var y := float(f["y"])
+			var on_field := y >= MIN_VISIBLE_FOE_Y
+			var hp := float(f["hp"])
+			if tk == null and (not on_field or hp <= 0.0 or bool(f.get("_death_settled", false))):
+				continue
+			var ratio := hp / maxf(1.0, float(f["hp_max"]))
+			if tk == null:
+				tk = _make_foe_token(f)
+				tk.hp_ratio = ratio
+				_foe_tokens[tid] = tk
 			active[tid] = true
-			var tk = _foe_tokens.get(tid)
-			if tk != null:
-				tk.position = _core.position + Vector2(float(f["x"]), float(f["y"]))
-				var ordinary := str(f.get("kind", "")) == "normal" and not f.has("rtype")
-				var small_challenge: bool = tk.challenge_kind >= 0 and tk.challenge_kind < 3
-				var compact: bool = _dense_roster and (ordinary or small_challenge)
-				if compact != tk.compact_bar:
-					tk.compact_bar = compact
-					tk.queue_redraw()
-				if bool(f.get("boss", false)):
-					tk.boss_warning = boss_casts.get(tid, {})
-				var hr := float(f["hp"]) / maxf(1.0, float(f["hp_max"]))
-				if hr > 0.0 and hr < float(tk.hp_ratio) - 0.0015 and tk._hit_t <= 0.0:
-					tk.play_hit(tk.position - _hero_token.position)
-				if absf(hr - float(tk.hp_ratio)) > 0.0015:
-					tk.hp_ratio = hr
-					tk.queue_redraw()
-				var uname := _foe_display_name(f)
-				if uname != tk.unit_name:
-					tk.unit_name = uname
-					tk.queue_redraw()
-				if bool(f.get("_death_settled", false)):
-					tk.play_down()
-				tk.visible = float(f.get("y", 0.0)) >= 90.0 and not tk.death_finished()
+			tk.position = _core.position + Vector2(float(f["x"]), y)
+			var ordinary: bool = str(f.get("kind", "")) == "normal" and not f.has("rtype")
+			var small_challenge := tk.challenge_kind >= 0 and tk.challenge_kind < 3
+			var compact := _dense_roster and (ordinary or small_challenge)
+			if compact != tk.compact_bar:
+				tk.compact_bar = compact
+				tk.queue_redraw()
+			if bool(f.get("boss", false)):
+				tk.boss_warning = boss_casts.get(tid, {})
+			if ratio > 0.0 and ratio < tk.hp_ratio - 0.0015 and tk._hit_t <= 0.0:
+				tk.play_hit(tk.position - _hero_token.position)
+			if absf(ratio - tk.hp_ratio) > 0.0015:
+				tk.hp_ratio = ratio
+				tk.queue_redraw()
+			var uname := _foe_display_name(f)
+			if uname != tk.unit_name:
+				tk.unit_name = uname
+				tk.queue_redraw()
+			if bool(f.get("_death_settled", false)):
+				tk.play_down()
+			tk.visible = on_field and not tk.death_finished()
 		for tid in _foe_tokens.keys():
 			if not active.has(tid):
 				var tk = _foe_tokens[tid]
@@ -3308,7 +3316,7 @@ func _update_roster_density() -> void:
 	if _core.foes.size() >= threshold:
 		var visible_count := 0
 		for foe: Dictionary in _core.foes:
-			if float(foe["y"]) >= 90.0 and float(foe["hp"]) > 0.0 and float(foe.get("dying", 0.0)) <= 0.0:
+			if float(foe["y"]) >= MIN_VISIBLE_FOE_Y and float(foe["hp"]) > 0.0 and float(foe.get("dying", 0.0)) <= 0.0:
 				visible_count += 1
 				if visible_count == threshold:
 					_dense_roster = true
@@ -8778,7 +8786,7 @@ func _on_foe_defeated(foe: Dictionary) -> void:
 		if is_instance_valid(token) and token.visible:
 			_fallen_guardian = token
 			token.play_down()
-	if _fx_front != null and float(foe.get("y", 0.0)) >= 90.0:
+	if _fx_front != null and float(foe.get("y", 0.0)) >= MIN_VISIBLE_FOE_Y:
 		var challenge := clampi(int(foe.get("chal", -1)), -1, 4)
 		var large := bool(foe.get("boss", false))
 		var accent: Color = CHALLENGE_RIMS[challenge] if challenge >= 0 else (GOLD if large else Color(0.79, 0.72, 0.57))
