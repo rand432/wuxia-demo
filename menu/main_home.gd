@@ -8,11 +8,19 @@ const P := preload("res://shared/ui_pal.gd")
 const GameState := preload("res://shared/game_state.gd")
 const LevelState := preload("res://shared/level_state.gd")
 const Audio := preload("res://shared/audio.gd")
-const STAGE_1 := preload("res://assets/art/ui/stage_1.png")
-
 const ART_RECT := Rect2(80, 282, 560, 600)
-const STAGES := [
-	{"name": "第 1 关    村口小道", "art": STAGE_1, "power": "—", "reward": "—"},
+# 十关画卷：每关一幅，与战斗背景（kushou/battle_ui.gd 的 BgArt）场景对应
+const STAGE_ART := [
+	preload("res://assets/art/ui/stage_1.png"),   # 1 村口小道
+	preload("res://assets/art/ui/stage_2.png"),   # 2 竹海幽径
+	preload("res://assets/art/ui/stage_3.png"),   # 3 雨中古渡
+	preload("res://assets/art/ui/stage_4.png"),   # 4 石窟藏锋
+	preload("res://assets/art/ui/stage_5.png"),   # 5 雪山绝顶
+	preload("res://assets/art/ui/stage_6.png"),   # 6 夜院回廊
+	preload("res://assets/art/ui/stage_7.png"),   # 7 断崖险关
+	preload("res://assets/art/ui/stage_8.png"),   # 8 地牢深处
+	preload("res://assets/art/ui/stage_9.png"),   # 9 旧村夜战
+	preload("res://assets/art/ui/stage_10.png"),  # 10 竹苑终局
 ]
 
 var _stage := 0
@@ -236,8 +244,8 @@ func _refresh() -> void:
 	var cfg: Dictionary = LevelState.config(_stage + 1)
 	if _title_lb != null:
 		_title_lb.text = str(cfg.get("name", "第 %d 关" % (_stage + 1)))
-	if _art_rect != null:
-		_art_rect.texture = STAGES[0]["art"]
+	if _art_rect != null and not STAGE_ART.is_empty():
+		_art_rect.texture = STAGE_ART[clampi(_stage, 0, STAGE_ART.size() - 1)]
 	if _info_vals.size() == 2:
 		(_info_vals[0] as Label).text = "第 %d 关" % (_stage + 1)
 		(_info_vals[1] as Label).text = "已解锁 %d/10" % n
