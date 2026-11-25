@@ -32,6 +32,8 @@ const BATTLE_FRAMES_PATH := "res://assets/art/fx/battle_bursts_v1.png"
 const SKILL_FRAMES_PATH := "res://assets/art/fx/skill_bursts_v1.png"
 const DRAGON_FRAMES_PATH := "res://assets/gen/allies/river_dragon.png"
 const DRAGON_WAVE_PATH := "res://assets/art/fx/dragon_wave_v1.png"
+const CURIO_DETAIL_FRAME_PATH := "res://assets/ui/detail_frame.png"
+const CURIO_DETAIL_ICON_PATH := "res://assets/gen/icons/curio_%s.png"
 const FINAL_BEAST_FRAME_ID := "kunshou_zhongyan_v1"
 var _entry_art: Dictionary = {}
 var _entry_cards_ready := false
@@ -305,6 +307,8 @@ var _curio_sq = null             # 奇物方块（战场右下，与挑战对称
 var _curio_cd := 0.0             # 奇物冷却剩余
 var _curio_uses := 0             # 本局喝了几次（详情页显示）
 var _curio_detail: Control = null
+var _curio_detail_frame: Texture2D
+var _curio_detail_icon: Texture2D
 var _rare_taken: Dictionary = {}   # 抽到过的稀有单卡（全部唯一）
 var _wave_lb: Label
 var _wave_fill: Panel
@@ -344,6 +348,9 @@ func prepare_entry_art() -> Array[String]:
 		DRAGON_FRAMES_PATH, DRAGON_WAVE_PATH, BgArt.path_for(LevelState.current_level - 1)]
 	if LevelState.has_feature("god"):
 		paths.append(HERO_SKILL_FRAMES_PATH)
+	if LevelState.show_button("curio") and not CurioData.get_curio(GameState.curio_id).is_empty():
+		paths.append(CURIO_DETAIL_FRAME_PATH)
+		paths.append(CURIO_DETAIL_ICON_PATH % GameState.curio_id)
 	for frame_id in _entry_enemy_frame_ids():
 		paths.append(_foe_frame_path(frame_id))
 	for key in _entry_enemy_art_keys():
@@ -1603,6 +1610,8 @@ func _foe_near(pos: Vector2, r: float) -> bool:
 
 func _build_curio() -> void:
 	_curio_init_data()
+	_curio_detail_frame = _entry_art.get(CURIO_DETAIL_FRAME_PATH) as Texture2D
+	_curio_detail_icon = _entry_art.get(CURIO_DETAIL_ICON_PATH % _curio_id) as Texture2D
 	var info := CurioData.get_curio(_curio_id)
 	_curio_sq = CurioSquare.new()
 	_curio_sq.position = Vector2(624, 760)
@@ -2220,8 +2229,8 @@ func _curio_on_boss_slain() -> void:
 		_curio_gain_life(5)
 
 func _show_curio_detail() -> void:
-	if _curio_detail != null:
-		_curio_detail.queue_free()
+	if _run_over or is_instance_valid(_curio_detail):
+		return
 	var info := CurioData.get_curio(_curio_id)
 	var has := not info.is_empty()
 	var layer := Control.new()
@@ -2233,35 +2242,41 @@ func _show_curio_detail() -> void:
 	var dim := ColorRect.new()
 	dim.color = Color(0.05, 0.04, 0.03, 0.58)
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	dim.gui_input.connect(func(event: InputEvent) -> void:
+		if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+			_close_curio_detail(layer))
 	layer.add_child(dim)
 	var holder := Control.new()
+	holder.name = "CurioSheet"
 	holder.position = Vector2(120, 340)
 	holder.size = Vector2(480, 470)
-	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	holder.mouse_filter = Control.MOUSE_FILTER_STOP
 	layer.add_child(holder)
-	var frame_art := "res://assets/ui/detail_frame.png"
-	var has_frame := has and ResourceLoader.exists(frame_art)
+	if has and _curio_detail_frame == null:
+		_curio_detail_frame = _entry_texture(CURIO_DETAIL_FRAME_PATH)
+	var has_frame := has and _curio_detail_frame != null
 	if has_frame:
 		var fr := ArtRect.new()
-		fr.tex = load(frame_art) as Texture2D
+		fr.tex = _curio_detail_frame
 		fr.position = Vector2.ZERO
 		fr.size = Vector2(480, 470)
 		holder.add_child(fr)
 	_panel(Rect2(0, 0, 480, 470), Color(0.97, 0.93, 0.85, 0.20) if has_frame else Color(0.97, 0.93, 0.85, 0.99), 10,
 		Color(0.85, 0.66, 0.23, 0.0) if has_frame else Color(0.85, 0.66, 0.23), 0 if has_frame else 3, holder)
+	_btn("×", Rect2(436, 12, 34, 30), 20, Color(0.97, 0.93, 0.85), DIM, _close_curio_detail.bind(layer), holder)
 	if not has:
 		_lbl("本局没有携带奇物", Vector2(0, 40), Vector2(480, 44), 28, INK, holder, HORIZONTAL_ALIGNMENT_CENTER)
 		_lbl("在局外「奇物」页选择一件再出击", Vector2(0, 96), Vector2(480, 30), 18, DIM, holder, HORIZONTAL_ALIGNMENT_CENTER)
-		_btn("×", Rect2(436, 12, 34, 30), 20, Color(0.97, 0.93, 0.85), DIM,
-			func() -> void: _curio_detail.visible = false, holder)
 		_pop_bounce(holder)
 		return
 	# 圆徽里放物件图标（1024 原图，缩到 110 仍清晰）
-	var icon_path := "res://assets/gen/icons/curio_%s.png" % _curio_id
-	if ResourceLoader.exists(icon_path):
+	var icon_path := CURIO_DETAIL_ICON_PATH % _curio_id
+	if _curio_detail_icon == null or _curio_detail_icon.resource_path != icon_path:
+		_curio_detail_icon = _entry_texture(icon_path)
+	if _curio_detail_icon != null:
 		var ic := ArtRect.new()
-		ic.tex = load(icon_path) as Texture2D
+		ic.tex = _curio_detail_icon
 		ic.position = Vector2(185, 52)
 		ic.size = Vector2(110, 110)
 		holder.add_child(ic)
@@ -2284,10 +2299,16 @@ func _show_curio_detail() -> void:
 		_lbl("下一档：%s" % CurioData.level_text(_curio_id, _curio_lv + 1),
 			Vector2(26, 406), Vector2(430, 22), 15, Color(0.47, 0.41, 0.33), holder)
 	_lbl("全自动使用，玩家不需要点它；点这里只是看详情", Vector2(26, 436), Vector2(430, 22), 14, Color(0.47, 0.41, 0.33), holder)
-	_btn("×", Rect2(436, 12, 34, 30), 20, Color(0.97, 0.93, 0.85), DIM,
-		func() -> void: _curio_detail.visible = false, holder)
 	_pop_bounce(holder)
 	_breathe(holder)
+
+func _close_curio_detail(layer: Control) -> void:
+	if layer == null or layer != _curio_detail:
+		return
+	_curio_detail = null
+	layer.hide()
+	MenuUI.Motion.stop(layer.get_node("CurioSheet") as Control)
+	layer.queue_free()
 
 func _build_card_detail() -> void:
 	_detail_layer = Control.new()
@@ -2794,13 +2815,13 @@ func _show_draw(v: bool) -> void:
 	if v and (_run_over or _draw_anim or _no_ui):
 		return
 	if v:
-		_hide_aug_pick()                     # 进阶页开着一并收掉
-		_hide_trea()                         # 宝物页同理
 		if not _draw_paid:
 			if _pool.is_empty():
+				MenuUI.Motion.reject_button(_draw_tile)
 				_toast("本局卡池已空")
 				return
 			if _crystal < 20:
+				MenuUI.Motion.reject_button(_draw_tile)
 				_toast("灵晶不足，不足以抽卡（一次要 20）")
 				return
 			_build_draw()
@@ -2808,6 +2829,8 @@ func _show_draw(v: bool) -> void:
 			_update_crystal()
 			_roll_draw()
 			_draw_paid = true
+		_hide_aug_pick()
+		_hide_trea()
 		_hide_god_pick()
 		_close_challenge()
 		_draw_open = true
@@ -2816,8 +2839,7 @@ func _show_draw(v: bool) -> void:
 		_draw_layer.move_to_front()
 		_pop_draw_cards()
 	else:
-		if _draw_layer != null:
-			_draw_layer.visible = false
+		_hide_choice_layer(_draw_layer, _draw_cards)
 		_draw_open = false
 	_refresh_draw_tile()
 
@@ -2893,7 +2915,8 @@ func _on_refresh() -> void:
 		return
 	_roll_draw()
 	_draw_anim = false
-	_pop_draw_cards()
+	if _draw_layer.visible:
+		_pop_draw_cards()
 	_toast("刷新：5 灵晶" if paid else "免费刷新")
 
 func _pop_draw_cards() -> void:
@@ -3503,7 +3526,11 @@ func _end_run(win: bool) -> void:
 	if _hero_token != null:
 		_hero_token.cancel_cast_poses()
 	_close_challenge()
+	_show_draw(false)
+	_hide_aug_pick()
+	_hide_trea()
 	_hide_god_pick()
+	_close_curio_detail(_curio_detail)
 	if _tut != null:
 		_tut.cancel()
 	_q_close_popup()
@@ -3790,6 +3817,7 @@ func _on_mate_tile() -> void:
 	if not LevelState.show_button("mate"):
 		return
 	if _draw_charge <= 0:
+		MenuUI.Motion.reject_button(_mate_tile)
 		_toast("升级后可请神")
 		return
 	_show_god_pick()
@@ -3824,6 +3852,7 @@ func _on_str_tile() -> void:
 		return
 	var cost := _str_cost()
 	if _wen < cost:
+		MenuUI.Motion.reject_button(_str_tile)
 		# 跟升级提示一样，在主角头顶飘一行红字
 		if _core != null:
 			_core._push_float(_core.hero_pos.x, _core.hero_pos.y - 70.0,
@@ -4068,8 +4097,7 @@ func _pop_aug_cards() -> void:
 	_pop_option_cards(_aug_cards)
 
 func _hide_aug_pick() -> void:
-	if _str_layer != null:
-		_str_layer.visible = false
+	_hide_choice_layer(_str_layer, _aug_cards)
 
 func _on_aug_card(card: AugCard) -> void:
 	if _run_over or not _str_pending or _str_layer == null or not _str_layer.visible or card == null or not _aug_cards.has(card) or card.o.is_empty():
@@ -4240,9 +4268,11 @@ func _on_trea_tile() -> void:
 		_open_trea()
 		return
 	if _trea_charge <= 0:
+		MenuUI.Motion.reject_button(_trea_tile)
 		_toast("还没攒到宝物机会（每清一波 +1）")
 		return
 	if _bond_pool().is_empty() and _rare_pool().is_empty():
+		MenuUI.Motion.reject_button(_trea_tile)
 		_toast("本局宝物已抽空")
 		return
 	_trea_charge -= 1
@@ -4466,8 +4496,7 @@ func _pop_trea_cards() -> void:
 	_pop_option_cards(_trea_cards)
 
 func _hide_trea() -> void:
-	if _trea_layer != null:
-		_trea_layer.visible = false
+	_hide_choice_layer(_trea_layer, _trea_cards)
 
 func _on_trea_card(card: AugCard) -> void:
 	if _run_over or not _trea_pending or _trea_layer == null or not _trea_layer.visible or card == null or not _trea_cards.has(card) or card.o.is_empty():
@@ -4678,6 +4707,14 @@ func _layer_in(c) -> void:
 	if c == null:
 		return
 	MenuUI.Motion.fade_in(c)
+
+func _hide_choice_layer(layer: Control, cards: Array) -> void:
+	if layer == null or not layer.visible:
+		return
+	layer.hide()
+	MenuUI.Motion.stop(layer)
+	for card: Control in cards:
+		MenuUI.Motion.stop(card)
 
 func _show_totals() -> void:
 	if _no_ui:
@@ -6972,10 +7009,8 @@ func _on_god_abandon() -> void:
 	Aud.sfx("ui_back", -10.0)
 
 func _hide_god_pick() -> void:
-	if _god_layer != null:
-		_god_layer.visible = false
-		for card in _god_root.get_children():
-			MenuUI.Motion.stop(card)
+	if _god_root != null:
+		_hide_choice_layer(_god_layer, _god_root.get_children())
 
 func _on_god_card(card: GodCard) -> void:
 	if _run_over or _god_layer == null or not _god_layer.visible or not is_instance_valid(card) or card.get_parent() != _god_root:

@@ -143,6 +143,9 @@ func _run() -> void:
 	assert(battle._core != null and LS.current_level == 10)
 	assert(battle._entry_cards_ready and battle._entry_art.is_empty())
 	assert(battle._hero_token._frame_atlas != null and battle._skill_frame_art != null)
+	if battle._curio_id == "yuhu":
+		assert(battle._curio_detail_frame.resource_path == battle.CURIO_DETAIL_FRAME_PATH)
+		assert(battle._curio_detail_icon.resource_path == battle.CURIO_DETAIL_ICON_PATH % "yuhu")
 	assert(battle._draw_art_cache.values().any(func(art): return art != null))
 	for key in ["jiuyou_mojun", "xuehai_luocha", "wanqu_chongmu", "qian", "jing", "shu"]:
 		assert(battle._foe_tex_cache[key].resource_path.ends_with("foe_%s.png" % key))

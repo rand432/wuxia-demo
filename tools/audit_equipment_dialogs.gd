@@ -75,8 +75,19 @@ func _run() -> void:
 	_button(ov_cancel, "取 消").pressed.emit()
 	_button(ov_cancel, "确 定").pressed.emit()
 	assert(FD.items["龙鳞"] == 2 and FD.st_of("weapon")["protect"] == 1)
+	var hammer := _button(forge, "锤 一 下")
+	FD.ores = 0
+	var dry := _resources()
+	hammer.pressed.emit()
+	assert(_resources() == dry and forge._anvil._strike_left == 0.0)
+	var feedback = hammer.get_node("PressFeedback")
+	assert(feedback._pulse_color == feedback.REJECT_COLOR)
+	FD.ores = 100
+	hammer.button_down.emit()
+	assert(forge._anvil._raised and not forge._anvil.is_processing())
 	seed(20261120)
-	_button(forge, "锤 一 下").pressed.emit()
+	hammer.pressed.emit()
+	assert(not forge._anvil._raised and forge._anvil._strike_left > 0.0 and forge._anvil.is_processing())
 	assert(FD.ores == 100 - FD.COST_ORE and FD.silver == 1000 - FD.COST_SILVER)
 	assert(not FD.equipped["weapon"].is_empty()) # 龙鳞保护，任何合法随机结果均不销毁。
 	var resources := _resources()

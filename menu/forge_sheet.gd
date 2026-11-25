@@ -6,6 +6,8 @@ const UI := preload("res://shared/ui_kit.gd")
 const P := preload("res://shared/ui_pal.gd")
 const FD := preload("res://shared/forge_data.gd")
 const Audio := preload("res://shared/audio.gd")
+const STRIKE_TONES := {"大": Color(1.0, 0.79, 0.31), "成": Color(0.85, 0.97, 0.68),
+	"维": Color(0.92, 0.70, 0.40), "损": Color(1.0, 0.47, 0.26), "破": Color(0.97, 0.32, 0.23)}
 
 var slot_key := "weapon"
 var _panel: Control = null
@@ -112,6 +114,10 @@ func _build() -> void:
 	_ores_lb = UI.label(_panel, "", Vector2(56, 1086), Vector2(360, 34), 22, P.INK)
 	_hammer_btn = UI.button(_panel, "锤 一 下", Rect2(56, 1130, 414, 78), 32, P.SEAL, Color(0.988, 0.941, 0.839),
 		func() -> void: _hammer(), P.GOLD, 3, 12)
+	_hammer_btn.button_down.connect(func() -> void:
+		if not _closed and is_instance_valid(_anvil): _anvil.set_raised(true))
+	_hammer_btn.button_up.connect(func() -> void:
+		if is_instance_valid(_anvil): _anvil.set_raised(false))
 	UI.button(_panel, "收 下", Rect2(494, 1130, 170, 74), 26, Color(0.22, 0.18, 0.14), Color(0.94, 0.91, 0.85),
 		func() -> void:
 			if _closed or not is_inside_tree() or is_queued_for_deletion(): return
@@ -147,7 +153,7 @@ func _refresh() -> void:
 		(_item_lbs[i] as Label).add_theme_color_override("font_color", P.DIM if n > 0 else Color(0.72, 0.69, 0.65))
 	var capped := int(it.get("plus", 0)) >= FD.cap(q)
 	if capped:
-		_ores_lb.text = "已到 %s 上限 +%d —— 再锻造极可能碎裂，得不偿失" % [FD.qname(q), FD.cap(q)]
+		_ores_lb.text = "已到%s强化上限 +%d" % [FD.qname(q), FD.cap(q)]
 	_hammer_btn.text = "已 满" if capped else "锤 一 下"
 	_hammer_btn.disabled = capped
 	_hammer_btn.modulate = Color(0.82, 0.80, 0.76) if capped else Color(1, 1, 1)
@@ -170,11 +176,19 @@ func _hammer() -> void:
 		return
 	var transaction := FD.hammer(slot_key)
 	if not bool(transaction["ok"]):
+		_anvil.set_raised(false)
+		UI.Motion.reject_button(_hammer_btn)
 		_show_toast(str(transaction["reason"]))
 		return
 	var res := str(transaction["result"])
 	var out: Dictionary = transaction["outcome"]
 	Audio.sfx("forge_hammer", -8.0)
+	var tone: Color = STRIKE_TONES[res]
+	if bool(out["blocked"]):
+		tone = Color(0.58, 0.93, 0.83)
+	elif bool(out["trance"]):
+		tone = STRIKE_TONES["大"]
+	_anvil.strike(tone)
 	match res:
 		"大":
 			_show_toast("大 成 功 ！  +2")
@@ -189,7 +203,7 @@ func _hammer() -> void:
 			Audio.sfx("wood_down", -12.0)
 		"破":
 			if bool(out["blocked"]):
-				_show_toast("龙鳞挡下 —— 剑没碎")
+				_show_toast("龙鳞挡下了破碎")
 				Audio.sfx("arrow_block", -8.0)
 			else:
 				_on_broken()
@@ -214,6 +228,7 @@ func _on_broken() -> void:
 	anvil.empty = true
 	anvil.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_panel.add_child(anvil)
+	anvil.strike(STRIKE_TONES["破"])
 	UI.label(_panel, "砧 上 无 物", Vector2(0, 330), Vector2(720, 40), 26, Color(0.588, 0.541, 0.471), HORIZONTAL_ALIGNMENT_CENTER)
 	UI.button(_panel, "关 闭", Rect2(240, 1100, 240, 78), 26, Color(0.22, 0.18, 0.14), Color(0.94, 0.91, 0.85),
 		func() -> void: _close(), Color(0.47, 0.40, 0.31), 1, 12)
@@ -320,20 +335,59 @@ func _close() -> void:
 class AnvilArt extends Control:
 	const P := preload("res://shared/ui_pal.gd")
 	const SCENE_ART := "res://assets/art/ui/forge_workbench_v1.webp"
-	var trance := false
+	const STRIKE_TIME := 0.34
+	const IMPACT_POINT := Vector2(318, 104)
+	var trance := false:
+		set(value):
+			trance = value
+			_update_processing()
 	var empty := false
 	var item_art: Texture2D
 	var as_weapon := false
 	var _scene_art: Texture2D
 	var _t := 0.0
+	var _raised := false
+	var _strike_left := 0.0
+	var _strike_tone := Color.WHITE
 	func _ready() -> void:
 		if ResourceLoader.exists(SCENE_ART):
 			_scene_art = load(SCENE_ART) as Texture2D
-		set_process(true)
+		_update_processing()
+	func _update_processing() -> void:
+		set_process(trance or _strike_left > 0.0)
+	func set_raised(value: bool) -> void:
+		_raised = value
+		queue_redraw()
+	func strike(tone: Color) -> void:
+		_raised = false
+		_strike_tone = tone
+		_strike_left = STRIKE_TIME
+		_update_processing()
+		queue_redraw()
 	func _process(d: float) -> void:
 		if trance:
 			_t += d
-			queue_redraw()
+		_strike_left = maxf(0.0, _strike_left - d)
+		_update_processing()
+		queue_redraw()
+	func _draw_strike() -> void:
+		var p := 1.0 - _strike_left / STRIKE_TIME
+		var fade := 1.0 - p
+		if _strike_left > 0.0:
+			draw_circle(IMPACT_POINT, 20.0 * fade, Color(_strike_tone, 0.5 * fade), true, -1.0, true)
+			for i in range(9):
+				var ray := Vector2.from_angle(PI + float(i) * PI / 8.0)
+				var from := IMPACT_POINT + ray * (12.0 + p * (46.0 + 5.0 * float(i % 3)))
+				draw_line(from, from + ray * (9.0 + 9.0 * fade), Color(_strike_tone, fade), 1.0 + 1.8 * fade, true)
+		if not empty and (_raised or (_strike_left > 0.0 and p < 0.66)):
+			var lift := 1.0 if _raised else ease(clampf(p / 0.66, 0.0, 1.0), 0.46)
+			var at := IMPACT_POINT + Vector2(55, -66) * lift
+			draw_set_transform(at, -0.8 * lift)
+			draw_line(Vector2(13, -6), Vector2(80, -39), Color(0.31, 0.18, 0.11), 11.0, true)
+			draw_rect(Rect2(-24, -19, 48, 19), Color(0.24, 0.21, 0.18))
+			draw_rect(Rect2(-24, -19, 48, 4), Color(0.67, 0.54, 0.39))
+			draw_rect(Rect2(-24, -19, 48, 19), Color(0.10, 0.075, 0.055), false, 2.0)
+			draw_set_transform(Vector2.ZERO)
 	func _draw() -> void:
 		if _scene_art != null:
 			draw_texture_rect(_scene_art, Rect2(8, 4, size.x - 16, size.y - 22), false)
@@ -353,6 +407,7 @@ class AnvilArt extends Control:
 				draw_set_transform(Vector2(318, 108), PI * 0.5 if as_weapon else 0.0)
 				draw_texture_rect(item_art, Rect2(-fit * 0.5, fit), false, Color(1.0, 0.91, 0.76))
 				draw_set_transform(Vector2.ZERO)
+			_draw_strike()
 			return
 		var body := Color(0.39, 0.34, 0.28)
 		draw_rect(Rect2(100 + ox, 96 + oy, 384, 32), body)
@@ -363,6 +418,7 @@ class AnvilArt extends Control:
 			Vector2(190 + ox, 128 + oy), Vector2(394 + ox, 128 + oy), Vector2(362 + ox, 218 + oy), Vector2(222 + ox, 218 + oy)
 		]), Color(0.31, 0.26, 0.21))
 		if empty:
+			_draw_strike()
 			return
 		if trance:
 			# 剑身：流光彩虹（沿剑身跑色相）
@@ -404,6 +460,7 @@ class AnvilArt extends Control:
 		draw_rect(Rect2(368 + ox, 60 + oy, 12, 44), Color(0.588, 0.471, 0.235))
 		draw_rect(Rect2(380 + ox, 68 + oy, 50, 28), Color(0.361, 0.275, 0.188))
 		draw_circle(Vector2(434 + ox, 82 + oy), 10.0, Color(0.878, 0.678, 0.294))
+		_draw_strike()
 
 class GaugeArt extends Control:
 	const P := preload("res://shared/ui_pal.gd")
