@@ -467,14 +467,17 @@ const HERO_SPD_FAR := 178.0         # 主角"离得远"的追击速度（快）
 const CHASE_FAR := 230.0            # 超过这个距离算"远"，提速追
 const CHASE_NEAR := 96.0            # 进这个距离算"近"，慢下来
 const INTRO_WAIT := 0.0             # 不再开场站桩；进关立刻交手
-const HERO_TOP := 0.10              # 自动追击时主角能到的最高线（原来 0.42 太高，怪在 y=51 时够不到）
-									#   v3j 从 0.40 收到 0.25；两条路都吃它：自动追击 与 点哪走哪
-									#   ⚠ v15j 一度改成 0.30，用户确认 25% 才是原设计 → 已改回
+const HERO_TOP := 0.45              # 自动追击时主角能到的最高线（0.45 = 战场中心略上，留 5% 步幅）
+									#   v20x（用户："主角还是很容易跑上面去，我想尽量在居中战斗"）：
+									#   从 0.10 收回 0.42 —— 以前主角会一路追到最上沿杵着，屏幕下半全空。
+									#   近战怪会自己走下来，远程怪的停距也同步压到攻击圈内（见 _spawn_foe）。
 # v15y（用户："我的意思是主角跑到中间就不跑了就等着怪过来"）：
 #   主角**只走到中间那条线就停住**，然后**等怪自己走下来**（怪会一直往下走到能打到主角）。
 #   这个值就是"怪要贴多近主角才动"：给小了（90）＝基本不追，怪到胸口才侧身一步。
 #   原来没有这个限制，主角会一路追到 25% 的天花板杵着（看着像"一直往前跑"）。
-const HERO_AGGRO := 260.0           # 主角主动追击的范围（原来 90 太小：怪停在高处时主角不追，打不到）
+const HERO_AGGRO := 160.0           # 主角主动追击的范围
+									#   v20x：260 → 160。怪会自己走到 66~116 停距；只有盾兵/大怪需要主角迈几步。
+									#   范围一大，主角就会为了远处刚出生的怪一路往上蹭，交战点被顶到屏幕上半。
 # 主角站哪一行：0.5 ＝ 战场正中（"跑到中间就不跑了，等怪过来"）
 const HERO_MID := 0.50
 const HERO_REACH := 74.0            # 进这个距离就出手
@@ -615,10 +618,10 @@ func _spawn_foe(kind := "normal", hp_mul := 1.0, atk_mul := 1.0, big := false, t
 		var rr := randf()
 		if rr < 0.22:
 			f["ranged"] = true
-			f["stop"] = FOE_REACH + 80.0 + randf() * 30.0      # 弓手：站远（约 150），但留在战场内
+			f["stop"] = FOE_REACH + 10.0 + randf() * 6.0       # 弓手：站 76~82（务必 ≤ HERO_REACH+10）
 		elif rr < 0.40:
 			f["mage"] = true
-			f["stop"] = FOE_REACH + 100.0 + randf() * 30.0      # 法师：站最远（约 170），但留在战场内
+			f["stop"] = FOE_REACH + 12.0 + randf() * 6.0       # 法师：站 78~84（同上，主角居中时也够得到）
 		elif rr < 0.58:
 			f["brute"] = true
 			f["scale"] = 1.22                                  # 壮汉：个头大一圈
@@ -678,7 +681,9 @@ func spawn_challenge(kind_i: int, n: int) -> int:
 		f["chal"] = i                              # 掉什么由这个字段决定（结算侧读它）
 		# v16m 补漏：这里原来写的是 FOE_STOP(150) —— stop 真被读之后就变成"挑战怪隔空打"了，
 		#   跟默认一样改用 FOE_REACH（上面那批我改漏了这一处）。
-		f["stop"] = (FOE_REACH + 60.0 if big else FOE_REACH) + randf() * 20.0
+		# v20x：大怪的停距从 126~146 收到 106~116 —— 主角现在最多只走到战场 45% 线，
+		#   停距超过 (84 + 主角可上移量) 就永远够不到（会卡成"打不死的大怪"）。
+		f["stop"] = (FOE_REACH + 40.0 if big else FOE_REACH) + randf() * 10.0
 	if spawned == 0:
 		return 0
 	_banner = "挑战：" + str(CHAL_FOE_NAME[i])
@@ -1027,6 +1032,9 @@ func _process(delta: float) -> void:
 	#   自动追击仍旧卡在 HERO_TOP（否则它会一路追到怪出生点，屏幕里全是空的）。
 	# v15o：放开的下限从 8.0 收到 HERO_LINE（脚的位置），保证整个小人还在战场框里
 	var top_line := (HERO_LINE if _order_has_pos else size.y * HERO_TOP)
+	# 手动走位不限制；集火"石像"这类站桩目标时放开到 28%（否则主角够不到石像）
+	if not _order_has_pos and not _order_foe.is_empty() and bool(_order_foe.get("still", false)):
+		top_line = size.y * 0.28
 	hero_pos.y = clampf(hero_pos.y, top_line, size.y - HERO_LINE * 0.5)
 	# v13d P3：法阵——站圈里累计，出圈按半速回退
 	if not zone.is_empty() and bool(zone.get("on", false)):
