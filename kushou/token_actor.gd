@@ -39,6 +39,7 @@ var _base_scale := 1.0
 var _art_height := 0.0
 var _attack_time := 0.0
 var _boss_impact := false
+var _boss_impact_pending := false
 var _cast_time := 0.0
 var skill_atlas: Texture2D
 var _skill_row := -1
@@ -190,7 +191,11 @@ func _process(delta: float) -> void:
 		queue_redraw()
 		return
 	_spawn_t = minf(0.26, _spawn_t + delta)
-	_attack_time = maxf(0.0, _attack_time - delta)
+	if _boss_impact_pending:
+		# 结算后的第一帧先画出招姿势，避免前一帧耗时过长直接跳到收势。
+		_boss_impact_pending = false
+	else:
+		_attack_time = maxf(0.0, _attack_time - delta)
 	if _boss_impact and _attack_time == 0.0:
 		_boss_impact = false
 	_advance_cast_pose(delta)
@@ -240,7 +245,7 @@ func _tick_frame_pose(delta: float, travel: Vector2, moving: bool, pop: float, e
 		frame = 10 if _attack_time > 0.075 else 11
 	elif not boss_warning.is_empty():
 		frame = 8 if float(boss_warning["t"]) < float(boss_warning["warn"]) * 0.82 else 9
-		if str(boss_warning.get("shape", "")) in ["sector", "beam"]:
+		if str(boss_warning.get("shape", "")) in ["sector", "beam"] or boss_warning.has("chain_step"):
 			var aim := Vector2(boss_warning["dir"])
 			if aim.x * _dir < -0.05:
 				face(-1 if aim.x < 0.0 else 1)
@@ -311,6 +316,7 @@ func play_boss_impact(direction: Vector2) -> void:
 	_boss_impact = false
 	play_attack(direction)
 	_boss_impact = _attack_time > 0.0
+	_boss_impact_pending = _boss_impact and _frame_atlas != null
 
 func prepare_attack(direction: Vector2, duration: float) -> void:
 	if _death_t >= 0.0 or _boss_impact or duration <= 0.0: return
@@ -392,6 +398,7 @@ func play_down(recover := false) -> void:
 	_sink = 0.0
 	_attack_time = 0.0
 	_boss_impact = false
+	_boss_impact_pending = false
 	cancel_cast_poses()
 	_recover_after_down = recover
 	_flash = 0.0
@@ -409,6 +416,7 @@ func reset_pose() -> void:
 	_flash = 0.0
 	_attack_time = 0.0
 	_boss_impact = false
+	_boss_impact_pending = false
 	cancel_cast_poses()
 	_ready_time = 0.0
 	_recover_after_down = false

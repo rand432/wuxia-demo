@@ -102,7 +102,14 @@ func _audit_guardian(level: int, name: String, atlas_id: String, attack: String,
 	core._hitstop = 0.0
 	foe["ult_t"] = 0.0
 	core._process(0.016)
-	assert(core._delayed.size() == 1 and core._delayed[0]["kind"] == attack and core._delayed[0]["shape"] == shape)
+	var chained := shape == "chain"
+	assert(core._delayed.size() == (5 if chained else 1))
+	assert(core._delayed[0]["kind"] == attack and core._delayed[0]["shape"] == ("circle" if chained else shape))
+	var landed_steps: Array[int] = []
+	if chained:
+		core.boss_impact.connect(func(hazard: Dictionary): landed_steps.append(int(hazard["chain_step"])))
+		for i in core._delayed.size():
+			assert(int(core._delayed[i]["chain_step"]) == i)
 	var warn: float = core._delayed[0]["warn"]
 	battle._process(0.0)
 	token._process(0.016)
@@ -112,12 +119,19 @@ func _audit_guardian(level: int, name: String, atlas_id: String, attack: String,
 	token._process(0.016)
 	assert(token._frame_index == 9)
 	core._delayed_tick(warn * 0.15)
-	token._process(0.016)
+	token._process(0.09)
 	assert(token._frame_index == 10)
 	if name == "毒牙蟒":
 		assert(not battle._fx_front.skill_trails.is_empty())
-	token._process(0.065)
+	token._process(0.085)
 	assert(token._frame_index == 11)
+	if chained:
+		for i in range(1, 5):
+			core._delayed_tick(0.22)
+			battle._process(0.0)
+			token._process(0.22)
+			assert(token.boss_warning.is_empty() and not token._boss_impact and token._frame_index < 8)
+		assert(landed_steps == [0, 1, 2, 3, 4] and core._delayed.is_empty())
 	core._apply_dmg(foe, float(foe["hp"]) * 0.08, "真实")
 	battle._process(0.0)
 	token._process(0.065)
@@ -308,6 +322,8 @@ func _run() -> void:
 		[1, "石甲巨猿", "shijia_yuan", "裂地拳", "ring"],
 		[4, "双头狮", "shuangtou_shi_v1", "狮吼", "sector"],
 		[4, "独眼狱卒", "duyan_yuzu_v1", "铁链横扫", "beam"],
+		[4, "火尾狐妖", "huowei_hu_v1", "焚身爆", "chain"],
+		[4, "赤焰蛟", "chiyan_jiao_v1", "烽火连天", "chain"],
 	]:
 		assert(_audit_guardian(guardian[0], guardian[1], guardian[2], guardian[3], guardian[4]))
 		await process_frame

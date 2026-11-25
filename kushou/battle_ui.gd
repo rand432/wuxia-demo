@@ -66,6 +66,7 @@ const FOE_FRAME_PATH := {
 	"狱狼": "yulang", "石甲巨猿": "shijia_yuan", "看门恶犬": "kanmen_quan_v1",
 	"铁背苍狼": "tiebei_lang_v1", "毒牙蟒": "duya_mang_v1",
 	"双头狮": "shuangtou_shi_v1", "独眼狱卒": "duyan_yuzu_v1",
+	"火尾狐妖": "huowei_hu_v1", "赤焰蛟": "chiyan_jiao_v1",
 	"山匪弓手": "archer", "符杖术士": "talisman_mage",
 	"钱怪": "challenge_coin_v1", "晶怪": "challenge_crystal_v1", "书怪": "challenge_scroll_v1",
 	"宝箱大怪": "challenge_mimic", "挑战匪首": "challenge_chief",
@@ -3249,6 +3250,9 @@ func _process(_delta: float) -> void:
 		for hazard: Dictionary in _core._delayed:
 			if not bool(hazard.get("boss_attack", false)) or bool(hazard.get("landed", false)):
 				continue
+			# 连爆只有首个落点对应首领的蓄力和释放。
+			if int(hazard.get("chain_step", 0)) > 0:
+				continue
 			var caster: Dictionary = hazard.get("caster", {})
 			var id := int(caster.get("_tid", 0))
 			var first: Dictionary = boss_casts.get(id, {})
@@ -5775,7 +5779,7 @@ func _on_delayed_land(pos: Vector2, elem: String) -> void:
 	_spawn_pfx(str(e[0]), wp, float(e[2]), str(e[1]), 1.30)
 
 func _on_boss_impact(hazard: Dictionary) -> void:
-	if _run_over:
+	if _run_over or int(hazard.get("chain_step", 0)) > 0:
 		return
 	var pos := Vector2(float(hazard["x"]), float(hazard["y"]))
 	var shape := str(hazard["shape"])
@@ -5788,7 +5792,7 @@ func _on_boss_impact(hazard: Dictionary) -> void:
 	var token := _foe_tokens.get(int(caster.get("_tid", 0))) as TokenActor
 	if token != null:
 		var direction: Vector2 = _core.position + pos - token.position
-		if shape == "sector" or shape == "beam":
+		if shape == "sector" or shape == "beam" or hazard.has("chain_step"):
 			direction = Vector2(hazard["dir"]) * 40.0
 		if is_same(token.boss_warning, hazard):
 			token.boss_warning = {}

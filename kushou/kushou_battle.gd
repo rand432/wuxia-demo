@@ -1683,7 +1683,8 @@ func queue_chain(x: float, y: float, r: float, dmg: float, elem: String, kind: S
 	dir: Vector2, count: int, step: float, gap: float, warn := 1.2) -> void:
 	for i in maxi(1, count):
 		var off := dir.normalized() * (step * float(i))
-		queue_delayed(x + off.x, y + off.y, r, dmg, elem, warn + gap * float(i), kind, "circle")
+		queue_delayed(x + off.x, y + off.y, r, dmg, elem, warn + gap * float(i), kind, "circle", dir)
+		_delayed.back()["chain_step"] = i
 
 # 帧内按到期时间统一结算落点及持续伤害，避免低帧率改变连招顺序。
 func _delayed_tick(delta: float) -> void:
