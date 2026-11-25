@@ -467,7 +467,7 @@ const HERO_SPD_FAR := 178.0         # 主角"离得远"的追击速度（快）
 const CHASE_FAR := 230.0            # 超过这个距离算"远"，提速追
 const CHASE_NEAR := 96.0            # 进这个距离算"近"，慢下来
 const INTRO_WAIT := 0.0             # 不再开场站桩；进关立刻交手
-const HERO_TOP := 0.45              # 自动追击时主角能到的最高线（0.45 = 战场中心略上，留 5% 步幅）
+const HERO_TOP := 0.72              # 自动追击时主角能到的最高线（0.72 = 允许从站位往上迈 ~58px 接怪）
 									#   v20x（用户："主角还是很容易跑上面去，我想尽量在居中战斗"）：
 									#   从 0.10 收回 0.42 —— 以前主角会一路追到最上沿杵着，屏幕下半全空。
 									#   近战怪会自己走下来，远程怪的停距也同步压到攻击圈内（见 _spawn_foe）。
@@ -475,11 +475,11 @@ const HERO_TOP := 0.45              # 自动追击时主角能到的最高线（
 #   主角**只走到中间那条线就停住**，然后**等怪自己走下来**（怪会一直往下走到能打到主角）。
 #   这个值就是"怪要贴多近主角才动"：给小了（90）＝基本不追，怪到胸口才侧身一步。
 #   原来没有这个限制，主角会一路追到 25% 的天花板杵着（看着像"一直往前跑"）。
-const HERO_AGGRO := 160.0           # 主角主动追击的范围
+const HERO_AGGRO := 200.0           # 主角主动追击的范围（只用来提前迈步，天花板卡住爬升量）
 									#   v20x：260 → 160。怪会自己走到 66~116 停距；只有盾兵/大怪需要主角迈几步。
 									#   范围一大，主角就会为了远处刚出生的怪一路往上蹭，交战点被顶到屏幕上半。
 # 主角站哪一行：0.5 ＝ 战场正中（"跑到中间就不跑了，等怪过来"）
-const HERO_MID := 0.50
+const HERO_MID := 0.80              # 主角站位：战场 80%（整个界面中等偏下，屏幕中线略下）
 const HERO_REACH := 74.0            # 进这个距离就出手
 const FOE_REACH := 66.0             # 怪进这个距离就停下开打
 var _sfx_t := 0.0                   # 距上一次播音效多久（节流用）
@@ -628,7 +628,8 @@ func _spawn_foe(kind := "normal", hp_mul := 1.0, atk_mul := 1.0, big := false, t
 			f["stop"] = FOE_REACH - 18.0 + randf() * 16.0       # 壮汉：贴脸（约 50）
 		elif rr < 0.72:
 			f["shield"] = true
-			f["stop"] = FOE_REACH + 30.0 + randf() * 20.0       # 盾兵：顶在前面（约 105）
+			# v20x：停距必须 ≤ HERO_REACH+10(84)，否则主角被天花板卡住时够不到、会卡住不打
+			f["stop"] = FOE_REACH + 12.0 + randf() * 6.0        # 盾兵：顶在前面（约 78~84）
 	foes.append(f)
 	return f
 
@@ -683,7 +684,7 @@ func spawn_challenge(kind_i: int, n: int) -> int:
 		#   跟默认一样改用 FOE_REACH（上面那批我改漏了这一处）。
 		# v20x：大怪的停距从 126~146 收到 106~116 —— 主角现在最多只走到战场 45% 线，
 		#   停距超过 (84 + 主角可上移量) 就永远够不到（会卡成"打不死的大怪"）。
-		f["stop"] = (FOE_REACH + 40.0 if big else FOE_REACH) + randf() * 10.0
+		f["stop"] = (FOE_REACH + 14.0 if big else FOE_REACH) + randf() * 4.0
 	if spawned == 0:
 		return 0
 	_banner = "挑战：" + str(CHAL_FOE_NAME[i])
@@ -2238,7 +2239,7 @@ func spawn_champion() -> void:
 	f["hp_max"] = 420.0 * mul * early_mul(false)
 	f["atk"] = 12.0 * pow(WAVE_ATK, float(wave - 1)) * early_mul(true)
 	f["scale"] = 1.6
-	f["stop"] = FOE_REACH + 20.0          # v16m：同默认，跟着 FOE_REACH 走
+	f["stop"] = FOE_REACH + 16.0          # v20x：≤84，保证主角卡在天花板时也够得到
 	champion = 1
 	_banner = "单挑：高手来了——" + str(f["name"])
 	_banner_t = 2.8
