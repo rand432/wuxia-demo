@@ -381,8 +381,8 @@ class AnvilArt extends Control:
 				draw_line(from, from + ray * (9.0 + 9.0 * fade), Color(_strike_tone, fade), 1.0 + 1.8 * fade, true)
 		if not empty and (_raised or (_strike_left > 0.0 and p < 0.66)):
 			var lift := 1.0 if _raised else ease(clampf(p / 0.66, 0.0, 1.0), 0.46)
-			var at := IMPACT_POINT + Vector2(55, -66) * lift
-			draw_set_transform(at, -0.8 * lift)
+			var at := IMPACT_POINT + Vector2(70, -34) * lift
+			draw_set_transform(at, -0.28 * lift)
 			draw_line(Vector2(13, -6), Vector2(80, -39), Color(0.31, 0.18, 0.11), 11.0, true)
 			draw_rect(Rect2(-24, -19, 48, 19), Color(0.24, 0.21, 0.18))
 			draw_rect(Rect2(-24, -19, 48, 4), Color(0.67, 0.54, 0.39))

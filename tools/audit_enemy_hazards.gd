@@ -39,53 +39,56 @@ func _audit_spacing() -> bool:
 	core.free()
 	return true
 
-func _audit_guard_dog() -> bool:
+func _audit_guardian(name: String, atlas_id: String, attack: String, shape: String) -> bool:
 	LS.current_level = 1
 	var battle = Battle.instantiate()
-	var path := "res://assets/gen/enemies/frames/kanmen_quan_v1.png"
+	var path := "res://assets/gen/enemies/frames/%s.png" % atlas_id
 	assert(path in battle.prepare_entry_art())
 	root.add_child(battle)
 	battle.set_process(false)
 	var core = battle._core
 	core.set_process(false)
-	core.start_boss(1, "看门恶犬")
-	var dog: Dictionary = core._boss_foe()
-	dog.merge({"x": 290.0, "y": 290.0}, true)
+	core.start_boss(1, name)
+	var foe: Dictionary = core._boss_foe()
+	foe.merge({"x": 290.0, "y": 290.0}, true)
 	battle._process(0.0)
-	var token = battle._foe_tokens[dog["_tid"]]
+	var token = battle._foe_tokens[foe["_tid"]]
 	token.set_process(false)
 	assert(token.guardian and token._frame_atlas.resource_path == path)
 	token._process(0.1)
 	assert(token._frame_index in range(4))
-	dog["x"] += 5.0
+	foe["x"] += 5.0
 	battle._process(0.0)
 	token._process(0.1)
 	assert(token._frame_index in range(4, 8))
 	core.intro_wait = 0.0
 	core._hitstop = 0.0
-	dog["ult_t"] = 0.0
+	foe["ult_t"] = 0.0
 	core._process(0.016)
-	assert(core._delayed.size() == 1 and core._delayed[0]["kind"] == "狂吠震地")
+	assert(core._delayed.size() == 1 and core._delayed[0]["kind"] == attack and core._delayed[0]["shape"] == shape)
+	var warn: float = core._delayed[0]["warn"]
 	battle._process(0.0)
 	token._process(0.016)
 	assert(token._frame_index == 8)
-	core._delayed_tick(1.04)
+	core._delayed_tick(warn * 0.86)
 	battle._process(0.0)
 	token._process(0.016)
 	assert(token._frame_index == 9)
-	core._delayed_tick(0.18)
+	core._delayed_tick(warn * 0.15)
 	token._process(0.016)
 	assert(token._frame_index == 10)
+	if name == "毒牙蟒":
+		assert(not battle._fx_front.skill_trails.is_empty())
 	token._process(0.065)
 	assert(token._frame_index == 11)
-	core._apply_dmg(dog, float(dog["hp"]) * 0.08, "真实")
+	core._apply_dmg(foe, float(foe["hp"]) * 0.08, "真实")
 	battle._process(0.0)
 	token._process(0.065)
 	assert(token._frame_index == 12)
 	token._process(0.03)
 	assert(token._frame_index == 13)
-	dog["hp"] = 0.0
-	core._kill_foe(dog)
+	foe["hp"] = 0.0
+	core._kill_foe(foe)
 	token._process(0.08)
 	assert(token._frame_index == 14)
 	token._process(0.18)
@@ -261,8 +264,15 @@ func _run() -> void:
 	assert(core._spawn_foe().is_empty() and float(sentinel["y"]) > 320.0)
 	battle.queue_free()
 	await process_frame
-	assert(_audit_guard_dog())
+	for guardian in [
+		["看门恶犬", "kanmen_quan_v1", "狂吠震地", "circle"],
+		["铁背苍狼", "tiebei_lang_v1", "冲撞", "beam"],
+		["毒牙蟒", "duya_mang_v1", "毒雾喷吐", "follow"],
+		["石甲巨猿", "shijia_yuan", "裂地拳", "ring"],
+	]:
+		assert(_audit_guardian(guardian[0], guardian[1], guardian[2], guardian[3]))
+		await process_frame
 	assert(_audit_spacing())
 	await process_frame
-	print("PASS: hazard chronology, bounded summons, guard-dog poses and ordered crowd separation")
+	print("PASS: hazard chronology, bounded summons, first-tier guardian poses and ordered crowd separation")
 	Audio.quit_cleanly()

@@ -64,7 +64,9 @@ var _foe_tex_cache := {}
 var _foe_animation_cache := {}
 const FOE_FRAME_PATH := {
 	"狱狼": "yulang", "石甲巨猿": "shijia_yuan", "看门恶犬": "kanmen_quan_v1",
+	"铁背苍狼": "tiebei_lang_v1", "毒牙蟒": "duya_mang_v1",
 	"山匪弓手": "archer", "符杖术士": "talisman_mage",
+	"钱怪": "challenge_coin_v1", "晶怪": "challenge_crystal_v1", "书怪": "challenge_scroll_v1",
 	"宝箱大怪": "challenge_mimic", "挑战匪首": "challenge_chief",
 	"困兽·终焉": FINAL_BEAST_FRAME_ID,
 }
@@ -294,6 +296,8 @@ var _pulses: Dictionary = {}   # 资源格被加钱时的缩放脉冲
 var _boss_bar = null           # 首领血条
 var _foe_pool: Array = []      # 怪物牌对象池（省掉每只都建 Shader/节点的开销）
 var _recycle_q: Array = []     # 阵亡动画播完再回收
+const DENSE_ROSTER_ENTER := 22
+const DENSE_ROSTER_EXIT := 18
 var _dense_roster := false
 var _boss_bar_t := 0.0
 var _flash_rect: ColorRect = null  # 技能释放时的整屏微闪
@@ -3238,7 +3242,7 @@ func _process(_delta: float) -> void:
 				_hero_token.play_hit()
 			_prev_hero_hp = hhp
 		var active := {}
-		_dense_roster = _core.foes.size() >= (22 if _dense_roster else 28)
+		_update_roster_density()
 		var boss_casts := {}
 		for hazard: Dictionary in _core._delayed:
 			if not bool(hazard.get("boss_attack", false)) or bool(hazard.get("landed", false)):
@@ -3267,7 +3271,9 @@ func _process(_delta: float) -> void:
 			var tk = _foe_tokens.get(tid)
 			if tk != null:
 				tk.position = _core.position + Vector2(float(f["x"]), float(f["y"]))
-				var compact: bool = _dense_roster and str(f.get("kind", "")) == "normal" and not f.has("rtype")
+				var ordinary := str(f.get("kind", "")) == "normal" and not f.has("rtype")
+				var small_challenge: bool = tk.challenge_kind >= 0 and tk.challenge_kind < 3
+				var compact: bool = _dense_roster and (ordinary or small_challenge)
 				if compact != tk.compact_bar:
 					tk.compact_bar = compact
 					tk.queue_redraw()
@@ -3296,6 +3302,18 @@ func _process(_delta: float) -> void:
 	var _el := Time.get_ticks_usec() - _t_proc
 	if _el > 50000:
 		print("[SLOW] battle_ui ", _el / 1000.0, " ms")
+
+func _update_roster_density() -> void:
+	var threshold := DENSE_ROSTER_EXIT if _dense_roster else DENSE_ROSTER_ENTER
+	if _core.foes.size() >= threshold:
+		var visible_count := 0
+		for foe: Dictionary in _core.foes:
+			if float(foe["y"]) >= 90.0 and float(foe["hp"]) > 0.0 and float(foe.get("dying", 0.0)) <= 0.0:
+				visible_count += 1
+				if visible_count == threshold:
+					_dense_roster = true
+					return
+	_dense_roster = false
 
 func _on_core_kill(n: int) -> void:
 	if _run_over or _core == null or n <= 0:
@@ -5042,14 +5060,13 @@ func _make_foe_token(f: Dictionary):
 		ring = Color(0.95, 0.62, 0.12)        # Boss：金橙
 	var title := _foe_display_name(f)
 	var frames: Texture2D = null
-	if challenge < 0 or challenge >= 3:
-		if kind == "normal":
-			frames = _foe_animation_cache.get(CROWD_FRAME_PATH.get(title, "")) as Texture2D
-		var frame_id := str(FOE_FRAME_PATH.get(title, ""))
-		if frames == null and not frame_id.is_empty():
-			if not _foe_animation_cache.has(frame_id):
-				_foe_animation_cache[frame_id] = _entry_texture(_foe_frame_path(frame_id))
-			frames = _foe_animation_cache[frame_id] as Texture2D
+	if kind == "normal":
+		frames = _foe_animation_cache.get(CROWD_FRAME_PATH.get(title, "")) as Texture2D
+	var frame_id := str(FOE_FRAME_PATH.get(title, ""))
+	if frames == null and not frame_id.is_empty():
+		if not _foe_animation_cache.has(frame_id):
+			_foe_animation_cache[frame_id] = _entry_texture(_foe_frame_path(frame_id))
+		frames = _foe_animation_cache[frame_id] as Texture2D
 	var foe_tex := _foe_art(str(f.get("name", ""))) if frames == null else null
 	var needs_mark := foe_tex == null and frames == null
 	var fresh := _foe_pool.is_empty()
@@ -5767,6 +5784,9 @@ func _on_boss_impact(hazard: Dictionary) -> void:
 		if is_same(token.boss_warning, hazard):
 			token.boss_warning = {}
 		token.play_boss_impact(direction)
+		if shape == "follow" and caster.get("name", "") == "毒牙蟒" and _fx_front != null:
+			var mouth := token.position - FIELD_POS - Vector2(0, token.radius * 2.0)
+			_fx_front.spawn_skill_trail(mouth, _core.position + pos - FIELD_POS, Color(0.68, 0.84, 0.37), 13.0)
 
 # 首领倒下：白闪 + 大爆 + 金耀 + 重震，配一段很短的慢镜头
 # 纸人 Lv5：在核心那边挡下了首领延迟技

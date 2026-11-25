@@ -468,28 +468,37 @@ func _draw() -> void:
 			var start := c + direction * radius * (0.7 + p * 0.7)
 			draw_line(start, start + direction * (4.0 + 14.0 * p), Color(0.16, 0.15, 0.13, 0.8 * (1.0 - p)), 2.5 * (1.0 - p) + 0.5, true)
 	# 头顶血条（照困兽那只怪：厚一点、带深色描边、绿→黄→红）
-	if show_bar and _death_t < 0.0 and (not compact_bar or hp_ratio < 0.995):
-		var bw := bar_w
+	if show_bar and _death_t < 0.0:
+		var tagged := challenge_kind >= 0 or guardian
+		var show_health := not compact_bar or hp_ratio < 0.995
+		if not show_health and not tagged:
+			return
+		var bw := minf(bar_w, 36.0) if compact_bar else bar_w
 		var bh := 6.0 if compact_bar else 10.0
-		var bx := -bw * 0.5
+		var bx := -bw * 0.5 + (10.0 if compact_bar and tagged else 0.0)
 		var by := -maxf(_art_height, radius * 2.0) - 14.0 + _sink
-		draw_rect(Rect2(bx, by, bw, bh), Color(0.20, 0.18, 0.20))
-		draw_rect(Rect2(bx, by, bw, bh), Color(0.06, 0.05, 0.06), false, 1.5)
-		var rr := clampf(hp_ratio, 0.0, 1.0)
-		var fill := ring_col.lerp(Color(0.89, 0.70, 0.40), 1.0 - rr) if role == "dragon" else _hp_color(rr)
-		draw_rect(Rect2(bx + 1.5, by + 1.5, (bw - 3.0) * rr, bh - 3.0), fill)
+		if show_health:
+			draw_rect(Rect2(bx, by, bw, bh), Color(0.20, 0.18, 0.20))
+			draw_rect(Rect2(bx, by, bw, bh), Color(0.06, 0.05, 0.06), false, 1.5)
+			var rr := clampf(hp_ratio, 0.0, 1.0)
+			var fill := ring_col.lerp(Color(0.89, 0.70, 0.40), 1.0 - rr) if role == "dragon" else _hp_color(rr)
+			draw_rect(Rect2(bx + 1.5, by + 1.5, (bw - 3.0) * rr, bh - 3.0), fill)
 		if not compact_bar and unit_name != "":
 			var fs := 16
 			var tw := UI_FONT.get_string_size(unit_name, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
 			var label_position := Vector2(-tw * 0.5, by - 6.0)
 			draw_string_outline(UI_FONT, label_position, unit_name, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 4, Color(0.10, 0.08, 0.06, 0.9))
 			draw_string(UI_FONT, label_position, unit_name, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, name_col)
-		if challenge_kind >= 0 or guardian:
+		if tagged:
 			var tag: String = ["钱", "晶", "书", "宝", "战"][challenge_kind] if challenge_kind >= 0 else "首"
 			var plaque := Rect2(bx - 24, by - 6, 20, 22)
+			if compact_bar:
+				plaque = Rect2(bx - 20 if show_health else -8.5, by - 5, 17, 17)
 			draw_rect(plaque, Color(0.11, 0.08, 0.05, 0.95))
 			draw_rect(plaque, ring_col, false, 1.3)
-			draw_string(UI_FONT, plaque.position + Vector2(0, 17), tag, HORIZONTAL_ALIGNMENT_CENTER, 20, 15, ring_col)
+			var baseline := 13.0 if compact_bar else 17.0
+			draw_string(UI_FONT, plaque.position + Vector2(0, baseline), tag, HORIZONTAL_ALIGNMENT_CENTER,
+				plaque.size.x, 12 if compact_bar else 15, ring_col)
 
 
 func _hp_color(r: float) -> Color:

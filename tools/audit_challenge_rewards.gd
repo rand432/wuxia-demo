@@ -9,6 +9,89 @@ func _initialize() -> void:
 		return
 	call_deferred("_run")
 
+func _audit_challenge_poses() -> bool:
+	var b = Battle.instantiate()
+	root.add_child(b)
+	b.set_process(false)
+	var core = b._core
+	core.set_process(false)
+	core.foes.clear()
+	core.set_wave(5)
+	for kind in range(3):
+		var count: int = core.foes.size()
+		b._toggle_challenge()
+		b._chal_btns[kind].pressed.emit()
+		assert(core.foes.size() == count + b.CHAL_GROUP[kind])
+		var foe: Dictionary = core.foes.back()
+		foe["y"] = 300.0
+		b._process(0.0)
+		var token = b._foe_tokens[foe["_tid"]]
+		token.set_process(false)
+		assert(token._frame_atlas == b._chal_btns[kind].art and not token.round_mask)
+		assert(token.challenge_kind == kind and token.ring_col == b.CHALLENGE_RIMS[kind])
+		token._process(0.12)
+		assert(token._frame_index in range(4))
+		foe["x"] += 5.0
+		b._process(0.0)
+		token._process(0.12)
+		assert(token._frame_index in range(4, 8))
+		core.foe_windup.emit(foe, core.hero_pos, 0.16)
+		token._process(0.03)
+		assert(token._frame_index == 8)
+		core.foe_attack.emit(foe, core.hero_pos)
+		token._process(0.02)
+		assert(token._frame_index == 10)
+		core._apply_dmg(foe, float(foe["hp"]) * 0.12, "真实")
+		b._process(0.0)
+		token._process(0.13)
+		assert(token._frame_index in [12, 13])
+		foe["hp"] = 0.0
+		core._kill_foe(foe)
+		b._process(0.0)
+		token._process(0.25)
+		assert(token._frame_index == 15)
+	b.queue_free()
+	return true
+
+func _audit_roster_density() -> bool:
+	var b = Battle.instantiate()
+	root.add_child(b)
+	b.set_process(false)
+	var core = b._core
+	core.set_process(false)
+	core.foes.clear()
+	for i in range(18):
+		core._spawn_foe()
+	core.spawn_challenge(0, 2)
+	core.spawn_challenge(3, 1)
+	core.start_boss(2, "双头狮")
+	assert(core.foes.size() == 22)
+	for foe in core.foes:
+		foe["y"] = 300.0
+	core.foes[0]["y"] = 80.0
+	core.foes[6]["rtype"] = "coin"
+	b._process(0.0)
+	assert(not b._dense_roster)
+	core.foes[0]["y"] = 300.0
+	core.foes[0]["dying"] = 0.15
+	b._process(0.0)
+	assert(not b._dense_roster)
+	core.foes[0]["dying"] = 0.0
+	b._process(0.0)
+	assert(b._dense_roster)
+	for i in [1, 6, 18, 20, 21]:
+		var token = b._foe_tokens[core.foes[i]["_tid"]]
+		assert(token.compact_bar == (i in [1, 18]))
+	for i in range(4):
+		core.foes[i]["y"] = 80.0
+	b._process(0.0)
+	assert(b._dense_roster)
+	core.foes[4]["y"] = 80.0
+	b._process(0.0)
+	assert(not b._dense_roster and not b._foe_tokens[core.foes[18]["_tid"]].compact_bar)
+	b.queue_free()
+	return true
+
 func _run() -> void:
 	LS.ensure_loaded()
 	LS.current_level = 6
@@ -74,5 +157,9 @@ func _run() -> void:
 				assert([b._wen, b._crystal, b._trea_charge, b._trea_reroll, b._aug_reroll] == paid)
 				b.queue_free()
 				await process_frame
-	print("PASS: real challenge chest no bonus money; bandit 220 once with wave/boss/gold multipliers; treasure/refresh preserved; revive/reentrant/repeated death never duplicates")
+	assert(_audit_challenge_poses())
+	await process_frame
+	assert(_audit_roster_density())
+	await process_frame
+	print("PASS: challenge rewards, bounded spawning, shared atlases and visible crowd density thresholds")
 	Audio.quit_cleanly()

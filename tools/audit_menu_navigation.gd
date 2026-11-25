@@ -147,11 +147,15 @@ func _run() -> void:
 		assert(battle._curio_detail_frame.resource_path == battle.CURIO_DETAIL_FRAME_PATH)
 		assert(battle._curio_detail_icon.resource_path == battle.CURIO_DETAIL_ICON_PATH % "yuhu")
 	assert(battle._draw_art_cache.values().any(func(art): return art != null))
-	for key in ["jiuyou_mojun", "xuehai_luocha", "wanqu_chongmu", "qian", "jing", "shu"]:
+	for key in ["jiuyou_mojun", "xuehai_luocha", "wanqu_chongmu"]:
 		assert(battle._foe_tex_cache[key].resource_path.ends_with("foe_%s.png" % key))
 	assert(battle._foe_animation_cache[battle.FINAL_BEAST_FRAME_ID] != null)
 	assert(not battle._foe_tex_cache.has("shuangtou_shi"))
-	assert(battle._chal_btns[0].art == battle._foe_tex_cache["qian"])
+	var challenge_atlases := ["challenge_coin_v1", "challenge_crystal_v1", "challenge_scroll_v1"]
+	for i in challenge_atlases.size():
+		var atlas = battle._foe_animation_cache[challenge_atlases[i]]
+		assert(atlas != null and battle._chal_btns[i].art == atlas)
+		assert(battle._chal_btns[i].art_region == Rect2(0, 0, 128, 128))
 	assert(battle._chal_btns[3].art == battle._foe_animation_cache["challenge_mimic"])
 	var eligible := LS.god_ids()
 	assert(battle._god_portraits.size() == eligible.size())
