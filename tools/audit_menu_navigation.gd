@@ -79,7 +79,7 @@ func _run() -> void:
 	var role = await _scene("res://menu/character_home.tscn")
 	var hero_portrait := role.find_child("HeroPortrait", true, false) as TextureRect
 	var hero_portrait_path := hero_portrait.texture.resource_path
-	assert(hero_portrait_path.ends_with("portrait_zhujue_ink_v2.webp"))
+	assert(hero_portrait_path == GodPortraits.path_for("zhujue"))
 	FD.equipped["weapon"] = {"name": "导航审查剑", "quality": 1, "plus": 0}
 	role._on_slot("weapon")
 	var detail = null

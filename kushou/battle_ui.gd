@@ -65,6 +65,7 @@ var _foe_animation_cache := {}
 const FOE_FRAME_PATH := {
 	"狱狼": "yulang", "石甲巨猿": "shijia_yuan", "看门恶犬": "kanmen_quan_v1",
 	"铁背苍狼": "tiebei_lang_v1", "毒牙蟒": "duya_mang_v1",
+	"双头狮": "shuangtou_shi_v1", "独眼狱卒": "duyan_yuzu_v1",
 	"山匪弓手": "archer", "符杖术士": "talisman_mage",
 	"钱怪": "challenge_coin_v1", "晶怪": "challenge_crystal_v1", "书怪": "challenge_scroll_v1",
 	"宝箱大怪": "challenge_mimic", "挑战匪首": "challenge_chief",

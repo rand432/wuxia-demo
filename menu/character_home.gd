@@ -69,7 +69,7 @@ func _build_figure() -> void:
 		clip.clip_contents = true
 		clip.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		add_child(clip)
-		UI.panel(clip, Rect2(0, 4, 328, 440), Color(0.15, 0.16, 0.145), 12, Color(0.66, 0.51, 0.32), 2)
+		UI.panel(clip, Rect2(0, 4, 328, 440), Color(0.934, 0.905, 0.827), 12, Color(0.66, 0.55, 0.37), 1)
 		var tr := PortraitMotion.new()
 		tr.name = "HeroPortrait"
 		clip.add_child(tr)

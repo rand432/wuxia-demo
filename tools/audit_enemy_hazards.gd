@@ -76,8 +76,8 @@ func _audit_spacing() -> bool:
 	core.free()
 	return true
 
-func _audit_guardian(name: String, atlas_id: String, attack: String, shape: String) -> bool:
-	LS.current_level = 1
+func _audit_guardian(level: int, name: String, atlas_id: String, attack: String, shape: String) -> bool:
+	LS.current_level = level
 	var battle = Battle.instantiate()
 	var path := "res://assets/gen/enemies/frames/%s.png" % atlas_id
 	assert(path in battle.prepare_entry_art())
@@ -85,7 +85,7 @@ func _audit_guardian(name: String, atlas_id: String, attack: String, shape: Stri
 	battle.set_process(false)
 	var core = battle._core
 	core.set_process(false)
-	core.start_boss(1, name)
+	core.start_boss(LS.boss_tier(), name)
 	var foe: Dictionary = core._boss_foe()
 	foe.merge({"x": 290.0, "y": 290.0}, true)
 	battle._process(0.0)
@@ -302,12 +302,14 @@ func _run() -> void:
 	battle.queue_free()
 	await process_frame
 	for guardian in [
-		["看门恶犬", "kanmen_quan_v1", "狂吠震地", "circle"],
-		["铁背苍狼", "tiebei_lang_v1", "冲撞", "beam"],
-		["毒牙蟒", "duya_mang_v1", "毒雾喷吐", "follow"],
-		["石甲巨猿", "shijia_yuan", "裂地拳", "ring"],
+		[1, "看门恶犬", "kanmen_quan_v1", "狂吠震地", "circle"],
+		[1, "铁背苍狼", "tiebei_lang_v1", "冲撞", "beam"],
+		[1, "毒牙蟒", "duya_mang_v1", "毒雾喷吐", "follow"],
+		[1, "石甲巨猿", "shijia_yuan", "裂地拳", "ring"],
+		[4, "双头狮", "shuangtou_shi_v1", "狮吼", "sector"],
+		[4, "独眼狱卒", "duyan_yuzu_v1", "铁链横扫", "beam"],
 	]:
-		assert(_audit_guardian(guardian[0], guardian[1], guardian[2], guardian[3]))
+		assert(_audit_guardian(guardian[0], guardian[1], guardian[2], guardian[3], guardian[4]))
 		await process_frame
 	assert(_audit_spacing())
 	await process_frame

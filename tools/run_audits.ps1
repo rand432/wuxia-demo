@@ -31,7 +31,9 @@ foreach ($name in $names) {
     $unexpectedErrors = @($output -split "`n" | Where-Object {
         $_ -match "^ERROR:" -and
         $_ -notmatch "^ERROR: [0-9]+ resources still in use at exit" -and
-        -not ($name -in @("role_advance", "equipment") -and $_ -match "^ERROR: (局外进度保存失败|存档保存失败)")
+        -not ($name -in @("role_advance", "equipment") -and $_ -match "^ERROR: (局外进度保存失败|存档保存失败)") -and
+        # preview_reward 故意留下进行中的事务，并用同名目录阻止临时存档写入。
+        -not ($name -eq "preview_reward" -and $_ -match "^ERROR: 存档保存失败：user://level_state\.cfg \((Busy|Can't open file)\)\r?$")
     })
     $pass = $unexpectedErrors.Count -eq 0 -and $engineExit -eq 0 -and $output.Contains('PASS:') -and $output -notmatch 'SCRIPT ERROR|Assertion failed|Parse Error'
     $diagnostics = ([regex]::Matches($output, '(?m)^(ERROR|WARNING):')).Count

@@ -39,8 +39,9 @@ func _update_crop() -> void:
 	var art_size := texture.get_size()
 	var scale_to_cover := maxf(size.x / art_size.x, size.y / art_size.y)
 	var region := (size / scale_to_cover) / art_size
+	var vertical_anchor := 0.04 if character_id == "zhujue" else 0.32
 	_material.set_shader_parameter("source_scale", region)
-	_material.set_shader_parameter("source_origin", (Vector2.ONE - region) * Vector2(0.5, 0.32))
+	_material.set_shader_parameter("source_origin", (Vector2.ONE - region) * Vector2(0.5, vertical_anchor))
 
 func _process(delta: float) -> void:
 	if texture == null or not is_visible_in_tree():
