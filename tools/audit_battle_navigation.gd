@@ -30,6 +30,9 @@ func _freeze_process(b) -> void:
 func _run() -> void:
 	LS.ensure_loaded()
 	GS.ensure_loaded()
+	# 用例假设「7 关还没通过」；整轮跑下来隔离存档可能已被前面的用例通关，先复位。
+	LS.first_clear.erase("7")
+	LS.save()
 	LS.max_unlocked = 10
 	LS.current_level = 6
 	assert(change_scene_to_packed(Battle) == OK)
@@ -96,13 +99,14 @@ func _run() -> void:
 	var previous_tokens := GS.equip_tokens
 	var previous_materials := GS.forge_mat
 	var previous_bag_size := Forge.bag.size()
+	var cleared7_before := LS.first_clear.has("7")
 	var upgraded := {"name": "铁剑", "slot": "weapon", "quality": 2, "plus": 3}
 	Forge.equipped["weapon"] = upgraded
 	assert(Forge.save_game() == OK)
-	assert(not LS.first_clear.has("7"))
+	assert(LS.first_clear.has("7") == cleared7_before)
 	assert(journal.save(SaveFile.JOURNAL) == OK)
 	b._end_run(true)
-	assert(not LS.first_clear.has("7") and GS.coins["wen"] == wen and Forge.ores == previous_ores)
+	assert(LS.first_clear.has("7") == cleared7_before and GS.coins["wen"] == wen and Forge.ores == previous_ores)
 	await process_frame
 	await process_frame
 	assert(not b._tut.visible and not b._tutorial_paused)
@@ -110,7 +114,7 @@ func _run() -> void:
 	replay = _button(b._result_layer, "再来一局")
 	home.pressed.emit()
 	replay.pressed.emit()
-	assert(current_scene == b and not LS.first_clear.has("7"))
+	assert(current_scene == b and LS.first_clear.has("7") == cleared7_before)
 	assert(DirAccess.remove_absolute(ProjectSettings.globalize_path(SaveFile.JOURNAL)) == OK)
 	home.pressed.emit()
 	replay.pressed.emit()

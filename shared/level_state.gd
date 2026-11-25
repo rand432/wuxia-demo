@@ -125,7 +125,8 @@ static func _write_levels(next_preview: Dictionary, require_immediate := false) 
 	cfg.set_value("levels", "tutorial_done", tutorial_done)
 	cfg.set_value("levels", "preview", next_preview)
 	var err := SaveFile.write(cfg, SAVE_PATH, require_immediate)
-	if err != OK:
+	# ERR_BUSY = 事务进行中、需要稍后提交，这是预期控制流，不是失败
+	if err != OK and err != ERR_BUSY:
 		push_error("存档保存失败：%s (%s)" % [SAVE_PATH, error_string(err)])
 	return err
 

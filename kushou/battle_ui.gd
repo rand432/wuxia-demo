@@ -19,22 +19,14 @@ const AncestorData := preload("res://kushou/ancestor_data.gd")
 const AttackFx := preload("res://kushou/attack_fx.gd")
 const HazardTelegraph := preload("res://kushou/hazard_telegraph.gd")
 const BlackMarket := preload("res://kushou/black_market.gd")
+const BalanceRules := preload("res://kushou/balance_rules.gd")
+const BattleArt := preload("res://kushou/battle_art.gd")
 const MenuUI := preload("res://shared/ui_kit.gd")
 const CardFrame := preload("res://kushou/card_frame.gd")
 const GodPortraits := preload("res://shared/god_portraits.gd")
 const PortraitMotion := preload("res://shared/god_portrait_motion.gd")
-const HERO_FRAMES_PATH := "res://assets/char/player_battle_frames.png"
-const HERO_SKILL_FRAMES_PATH := "res://assets/char/player_skill_poses_v2.png"
-const HERO_SKILL_ROWS := {"chenshi": 0, "liuqingqing": 1, "qingluan": 2, "gundilong": 3, "xiaoqier": 4}
 var _invocation_portrait: PortraitMotion
 var _skill_pose_direction := Vector2.ZERO
-const BATTLE_FRAMES_PATH := "res://assets/art/fx/battle_bursts_v1.png"
-const SKILL_FRAMES_PATH := "res://assets/art/fx/skill_bursts_v1.png"
-const DRAGON_FRAMES_PATH := "res://assets/gen/allies/river_dragon.png"
-const DRAGON_WAVE_PATH := "res://assets/art/fx/dragon_wave_v1.png"
-const CURIO_DETAIL_FRAME_PATH := "res://assets/ui/detail_frame.png"
-const CURIO_DETAIL_ICON_PATH := "res://assets/gen/icons/curio_%s.png"
-const FINAL_BEAST_FRAME_ID := "kunshou_zhongyan_v1"
 var _entry_art: Dictionary = {}
 var _entry_cards_ready := false
 var _god_portraits: Dictionary = {}
@@ -51,43 +43,21 @@ var _impact_sparks: ImpactSparks
 var _hazard_view: HazardTelegraph
 
 # 怪物立绘：名字 → assets/gen/enemies/foe_<key>.png；没有就回退旧的圆牌 + 一个字
-const FOE_ART := {
-	"狱狼": "yulang", "疯牛": "fengniu", "毒蝎": "duxie", "牢鼠": "laoshu",
-	"钱怪": "qian", "晶怪": "jing", "书怪": "shu", "宝箱大怪": "baoxiang", "挑战匪首": "boss",
-	"看门恶犬": "kanmen_quan", "铁背苍狼": "tiebei_lang", "毒牙蟒": "duya_mang", "石甲巨猿": "shijia_yuan",
-	"双头狮": "shuangtou_shi", "独眼狱卒": "duyan_yuzu", "火尾狐妖": "huowei_hu", "赤焰蛟": "chiyan_jiao",
-	"场主亲养·狴犴": "bian", "血手判官": "xueshou_panguan", "困兽之主": "kunshou_zhu",
-	"幽冥判官": "youming_panguan", "九幽魔君": "jiuyou_mojun", "血海罗刹": "xuehai_luocha",
-	"万蛊虫母": "wanqu_chongmu", "困兽·终焉": "kunshou_zhongyan",
-}
 var _foe_tex_cache := {}
 var _foe_animation_cache := {}
-const FOE_FRAME_PATH := {
-	"狱狼": "yulang", "石甲巨猿": "shijia_yuan", "看门恶犬": "kanmen_quan_v1",
-	"铁背苍狼": "tiebei_lang_v1", "毒牙蟒": "duya_mang_v1",
-	"双头狮": "shuangtou_shi_v1", "独眼狱卒": "duyan_yuzu_v1",
-	"火尾狐妖": "huowei_hu_v1", "赤焰蛟": "chiyan_jiao_v1",
-	"山匪弓手": "archer", "符杖术士": "talisman_mage",
-	"钱怪": "challenge_coin_v1", "晶怪": "challenge_crystal_v1", "书怪": "challenge_scroll_v1",
-	"宝箱大怪": "challenge_mimic", "挑战匪首": "challenge_chief",
-	"困兽·终焉": FINAL_BEAST_FRAME_ID,
-}
-const CROWD_FRAME_PATH := {"山匪": "crowd_bandit", "山匪弓手": "crowd_archer", "符杖术士": "crowd_mage"}
 const CHALLENGE_RIMS := [Color(0.99, 0.76, 0.31), Color(0.32, 0.79, 0.91), Color(0.47, 0.79, 0.58),
 	Color(0.98, 0.53, 0.34), Color(0.79, 0.48, 0.94)]
 
 func _foe_art(nm: String) -> Texture2D:
-	var key := str(FOE_ART.get(nm, ""))
+	var key := str(BattleArt.FOE_ART.get(nm, ""))
 	if key == "":
 		return null
 	if _foe_tex_cache.has(key):
 		return _foe_tex_cache[key] as Texture2D
-	var t := _entry_texture(_foe_art_path(key))
+	var t := _entry_texture(BattleArt.foe_art_path(key))
 	_foe_tex_cache[key] = t
 	return t
 
-func _foe_art_path(key: String) -> String:
-	return "res://assets/gen/enemies/foe_%s.png" % key
 
 const INK := Color(0.13, 0.12, 0.11)
 const PAPER := Color(0.93, 0.90, 0.82)
@@ -351,17 +321,17 @@ func prepare_entry_art() -> Array[String]:
 	if not _entry_cards_ready:
 		_init_cards()
 		_entry_cards_ready = true
-	var paths: Array[String] = [HERO_FRAMES_PATH, BATTLE_FRAMES_PATH, SKILL_FRAMES_PATH,
-		DRAGON_FRAMES_PATH, DRAGON_WAVE_PATH, BgArt.path_for(LevelState.current_level - 1)]
+	var paths: Array[String] = [BattleArt.HERO_FRAMES_PATH, BattleArt.BATTLE_FRAMES_PATH, BattleArt.SKILL_FRAMES_PATH,
+		BattleArt.DRAGON_FRAMES_PATH, BattleArt.DRAGON_WAVE_PATH, BgArt.path_for(LevelState.current_level - 1)]
 	if LevelState.has_feature("god"):
-		paths.append(HERO_SKILL_FRAMES_PATH)
+		paths.append(BattleArt.HERO_SKILL_FRAMES_PATH)
 	if LevelState.show_button("curio") and not CurioData.get_curio(GameState.curio_id).is_empty():
-		paths.append(CURIO_DETAIL_FRAME_PATH)
-		paths.append(CURIO_DETAIL_ICON_PATH % GameState.curio_id)
+		paths.append(BattleArt.CURIO_DETAIL_FRAME_PATH)
+		paths.append(BattleArt.CURIO_DETAIL_ICON_PATH % GameState.curio_id)
 	for frame_id in _entry_enemy_frame_ids():
 		paths.append(_foe_frame_path(frame_id))
 	for key in _entry_enemy_art_keys():
-		paths.append(_foe_art_path(key))
+		paths.append(BattleArt.foe_art_path(key))
 	for id in _pool:
 		var card: Dictionary = _card_db.get(id, {})
 		var frame := CardFrame.texture_path(int(card.get("quality", 3)))
@@ -396,9 +366,9 @@ func _foe_frame_path(frame_id: String) -> String:
 	return "res://assets/gen/enemies/frames/%s.png" % frame_id
 
 func _entry_enemy_frame_ids() -> Array:
-	var ids := CROWD_FRAME_PATH.values()
+	var ids := BattleArt.CROWD_FRAME_PATH.values()
 	for name in _entry_named_foes():
-		var frame_id := str(FOE_FRAME_PATH.get(name, ""))
+		var frame_id := str(BattleArt.FOE_FRAME_PATH.get(name, ""))
 		if not frame_id.is_empty():
 			ids.append(frame_id)
 	return ids
@@ -414,8 +384,8 @@ func _entry_named_foes() -> Array[String]:
 func _entry_enemy_art_keys() -> Array[String]:
 	var keys: Array[String] = []
 	for name in _entry_named_foes():
-		var key := str(FOE_ART.get(name, ""))
-		if not key.is_empty() and not FOE_FRAME_PATH.has(name):
+		var key := str(BattleArt.FOE_ART.get(name, ""))
+		if not key.is_empty() and not BattleArt.FOE_FRAME_PATH.has(name):
 			keys.append(key)
 	return keys
 
@@ -432,14 +402,14 @@ func _ready() -> void:
 	if not _no_ui2:
 		if not _entry_cards_ready:
 			_init_cards()
-		_frame_fx_art = _entry_texture(BATTLE_FRAMES_PATH)
-		_skill_frame_art = _entry_texture(SKILL_FRAMES_PATH)
-		_dragon_frame_art = _entry_texture(DRAGON_FRAMES_PATH)
-		_dragon_wave_art = _entry_texture(DRAGON_WAVE_PATH)
+		_frame_fx_art = _entry_texture(BattleArt.BATTLE_FRAMES_PATH)
+		_skill_frame_art = _entry_texture(BattleArt.SKILL_FRAMES_PATH)
+		_dragon_frame_art = _entry_texture(BattleArt.DRAGON_FRAMES_PATH)
+		_dragon_wave_art = _entry_texture(BattleArt.DRAGON_WAVE_PATH)
 		for frame_id in _entry_enemy_frame_ids():
 			_foe_animation_cache[frame_id] = _entry_texture(_foe_frame_path(frame_id))
 		for key in _entry_enemy_art_keys():
-			var path := _foe_art_path(key)
+			var path := BattleArt.foe_art_path(key)
 			if _entry_art.has(path):
 				_foe_tex_cache[key] = _entry_art[path]
 		_build_bg()
@@ -1205,10 +1175,10 @@ func _build_field() -> void:
 	_core.start_run()
 	_hero_token = TokenActor.new()
 	_hero_token.round_mask = false
-	_hero_token.setup(PLAYER_TEX, 44.0, Color(0.96, 0.74, 0.30), false, _entry_texture(HERO_FRAMES_PATH))
+	_hero_token.setup(PLAYER_TEX, 44.0, Color(0.96, 0.74, 0.30), false, _entry_texture(BattleArt.HERO_FRAMES_PATH))
 	_hero_token.set_role("player")
 	if LevelState.has_feature("god"):
-		_hero_token.skill_atlas = _entry_texture(HERO_SKILL_FRAMES_PATH)
+		_hero_token.skill_atlas = _entry_texture(BattleArt.HERO_SKILL_FRAMES_PATH)
 	_hero_token.set_weapon("sword")
 	_hero_token.show_bar = false          # 主角血条只看顶部 HUD，不再挂漂浮血条
 	_hero_token.bar_w = 0.0
@@ -1412,7 +1382,7 @@ func _build_challenge() -> void:
 		card.group = CHAL_GROUP[i]
 		card.accent = CHALLENGE_RIMS[i]
 		var foe_name: String = BattleCore.CHAL_FOE_NAME[i]
-		var atlas := _foe_animation_cache.get(FOE_FRAME_PATH.get(foe_name, "")) as Texture2D
+		var atlas := _foe_animation_cache.get(BattleArt.FOE_FRAME_PATH.get(foe_name, "")) as Texture2D
 		card.art = _foe_art(foe_name) if atlas == null else atlas
 		if atlas != null:
 			var cell := float(atlas.get_width()) / 4.0
@@ -1617,8 +1587,8 @@ func _foe_near(pos: Vector2, r: float) -> bool:
 
 func _build_curio() -> void:
 	_curio_init_data()
-	_curio_detail_frame = _entry_art.get(CURIO_DETAIL_FRAME_PATH) as Texture2D
-	_curio_detail_icon = _entry_art.get(CURIO_DETAIL_ICON_PATH % _curio_id) as Texture2D
+	_curio_detail_frame = _entry_art.get(BattleArt.CURIO_DETAIL_FRAME_PATH) as Texture2D
+	_curio_detail_icon = _entry_art.get(BattleArt.CURIO_DETAIL_ICON_PATH % _curio_id) as Texture2D
 	var info := CurioData.get_curio(_curio_id)
 	_curio_sq = CurioSquare.new()
 	_curio_sq.position = Vector2(624, 760)
@@ -2261,7 +2231,7 @@ func _show_curio_detail() -> void:
 	holder.mouse_filter = Control.MOUSE_FILTER_STOP
 	layer.add_child(holder)
 	if has and _curio_detail_frame == null:
-		_curio_detail_frame = _entry_texture(CURIO_DETAIL_FRAME_PATH)
+		_curio_detail_frame = _entry_texture(BattleArt.CURIO_DETAIL_FRAME_PATH)
 	var has_frame := has and _curio_detail_frame != null
 	if has_frame:
 		var fr := ArtRect.new()
@@ -2278,7 +2248,7 @@ func _show_curio_detail() -> void:
 		_pop_bounce(holder)
 		return
 	# 圆徽里放物件图标（1024 原图，缩到 110 仍清晰）
-	var icon_path := CURIO_DETAIL_ICON_PATH % _curio_id
+	var icon_path := BattleArt.CURIO_DETAIL_ICON_PATH % _curio_id
 	if _curio_detail_icon == null or _curio_detail_icon.resource_path != icon_path:
 		_curio_detail_icon = _entry_texture(icon_path)
 	if _curio_detail_icon != null:
@@ -3142,34 +3112,10 @@ func _process(_delta: float) -> void:
 				return
 		_refresh_wave_hud(int(_core.wave))
 		var hpr := clampf(float(_core.hero.get("hp", 0.0)) / maxf(1.0, float(_core.hero.get("hp_max", 1.0))), 0.0, 1.0)
-		if LevelState.current_level >= 2 and LevelState.current_level <= 4:
-			# 不改怪面板，只偷偷加易伤：成长/家传组合给足，经济/危途给少一点
-			var vuln := _equip_vuln
-			for rec in _combined:
-				var s := str(rec.get("series", ""))
-				if s in ["gold", "crystal", "exp", "bounty"]:
-					vuln += 0.06
-				elif s in ["swarm", "peril"]:
-					vuln += 0.10
-				else:
-					vuln += 0.15
-			vuln += float(_ancestor_combos.size()) * 0.15
-			_core.foe_vuln = minf(0.45, vuln)
-		elif LevelState.current_level == 7:
-			# 第七关：技能升级过，怪偷偷吃更多伤害；没升级也能过，只是吃力
-			var skill_total := 0
-			for v in GameState.skill_lv.values():
-				skill_total += int(v)
-			_core.foe_vuln = minf(0.30, float(skill_total) * 0.015 + _equip_vuln)
-		elif LevelState.current_level == 8:
-			# 第八关：局外装备强化越高，怪偷偷越脆；四件 +20 共 80 级 → 20% 易伤
-			var FD8 := preload("res://shared/forge_data.gd")
-			var plus_total := 0
-			for slot_v in FD8.SLOT_KEYS:
-				plus_total += int((FD8.equipped.get(str(slot_v), {}) as Dictionary).get("plus", 0))
-			_core.foe_vuln = minf(0.35, float(plus_total) * 0.0025 + _equip_vuln)
-		elif _equip_vuln > 0.0:
-			_core.foe_vuln = minf(0.45, _equip_vuln)
+		# 逐关易伤规则集中在 balance_rules.gd（-1 = 本关不覆盖）
+		var level_vuln := BalanceRules.level_vuln(LevelState.current_level, _equip_vuln, _combined, _ancestor_combos)
+		if level_vuln >= 0.0:
+			_core.foe_vuln = level_vuln
 		if int(_core.wave) >= 2 and hpr <= 0.50:
 			if LevelState.current_level == 1 and not _l1_yuhu_shown:
 				_l1_yuhu_shown = true
@@ -5074,8 +5020,8 @@ func _make_foe_token(f: Dictionary):
 	var title := _foe_display_name(f)
 	var frames: Texture2D = null
 	if kind == "normal":
-		frames = _foe_animation_cache.get(CROWD_FRAME_PATH.get(title, "")) as Texture2D
-	var frame_id := str(FOE_FRAME_PATH.get(title, ""))
+		frames = _foe_animation_cache.get(BattleArt.CROWD_FRAME_PATH.get(title, "")) as Texture2D
+	var frame_id := str(BattleArt.FOE_FRAME_PATH.get(title, ""))
 	if frames == null and not frame_id.is_empty():
 		if not _foe_animation_cache.has(frame_id):
 			_foe_animation_cache[frame_id] = _entry_texture(_foe_frame_path(frame_id))
@@ -5360,7 +5306,7 @@ const SKILL_TINT := {
 
 func _skill_cast_juice(aid: String = "") -> void:
 	if _hero_token != null:
-		_hero_token.play_skill_cast(int(HERO_SKILL_ROWS.get(aid, -1)), _skill_pose_direction)
+		_hero_token.play_skill_cast(int(BattleArt.HERO_SKILL_ROWS.get(aid, -1)), _skill_pose_direction)
 	var tint: Color = SKILL_TINT.get(_cast_dtype, Color(1.0, 0.94, 0.80))
 	if _fx_front != null:
 		_fx_front.spawn_cast_seal(_hero_screen() - FIELD_POS, tint)
