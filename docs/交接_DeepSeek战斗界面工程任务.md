@@ -134,4 +134,5 @@
 - 并发验证：runA 无头 + runB 图形同时跑 `battle_navigation`，两者 PASS（各带 `[HEADLESS]` / `[GRAPHICS]` 标记），项目/存档/日志互不覆盖（`.shots/concur_headless.log`、`.shots/concur_graphics.log`）
 - 全量：新入口 **88 / 88，failed=0**（`.shots/audit_batch7.txt`、`audit_batch7c.txt`）
 - 交付说明：`docs/交付_批次7_隔离回归_2026-11-26.md`
+- 提交：`912a87f`
 - 用法更新：单用例先 `run_playthrough.ps1 -PrepareOnly -RunId <id>`，从输出取 `AUDIT_PROJECT`；全量直接 `run_audits.ps1 [-RunId <id>]`；`.shots/audit_project` 仅为“最近一次”的便捷 Junction
