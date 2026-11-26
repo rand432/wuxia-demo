@@ -22,6 +22,7 @@ const BlackMarket := preload("res://kushou/black_market.gd")
 const BalanceRules := preload("res://kushou/balance_rules.gd")
 const BattleArt := preload("res://kushou/battle_art.gd")
 const ResultView := preload("res://kushou/result_view.gd")
+const DrawView := preload("res://kushou/draw_view.gd")
 const MenuUI := preload("res://shared/ui_kit.gd")
 const CardFrame := preload("res://kushou/card_frame.gd")
 const GodPortraits := preload("res://shared/god_portraits.gd")
@@ -73,6 +74,7 @@ var _page := 0
 var _draw_open := false
 var _exit_open := false
 var _draw_layer: Control
+var _draw_view: DrawView = null
 var _chal_layer: Control
 var _detail_layer: Control
 var _detail_name: Label
@@ -2619,35 +2621,21 @@ class Tile extends Button:
 func _build_draw() -> void:
 	if _draw_layer != null:
 		return
-	_draw_layer = Control.new()
-	_draw_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_draw_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_draw_layer.visible = false
-	_draw_layer.z_index = 20
-	add_child(_draw_layer)
-	var banner := Panel.new()
-	banner.position = Vector2(230, 162)
-	banner.size = Vector2(260, 42)
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(0.54, 0.23, 0.10)
-	sb.set_corner_radius_all(4)
-	sb.border_color = Color(0.95, 0.76, 0.36, 0.9)
-	sb.set_border_width_all(2)
-	banner.add_theme_stylebox_override("panel", sb)
-	_draw_layer.add_child(banner)
-	_breathe(banner)
-	_lbl("抽卡 · 20 灵晶", Vector2(0, 0), Vector2(260, 42), 20, Color(0.97, 0.90, 0.74), banner, HORIZONTAL_ALIGNMENT_CENTER)
-	_btn("隐藏", Rect2(620, 162, 72, 32), 17, Color(0.09, 0.08, 0.07, 0.98), GOLD, func(): _show_draw(false), _draw_layer)
-	for i in 3:
-		var d := DrawCard.new()
-		d.position = Vector2(30 + i * 220, 220)
-		d.set_meta("base", d.position)
-		d.pivot_offset = Vector2(100, 150)
-		d.size = Vector2(200, 300)
-		d.picked.connect(func() -> void: _on_draw_pick(d))
-		_draw_layer.add_child(d)
-		_draw_cards.append(d)
-	_draw_refresh_btn = _btn("刷新 · 5 灵晶", Rect2(250, 540, 220, 56), 20, Color(0.09, 0.08, 0.07, 0.98), GOLD, func(): _on_refresh(), _draw_layer)
+	var view := DrawView.new()
+	view.name = "DrawView"
+	view.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	view.visible = false
+	view.z_index = 20
+	view.card_factory = func() -> Control: return DrawCard.new()
+	view.card_picked.connect(func(card) -> void: _on_draw_pick(card))
+	view.refresh_pressed.connect(_on_refresh)
+	view.hide_pressed.connect(func() -> void: _show_draw(false))
+	add_child(view)
+	view.build()
+	_draw_view = view
+	_draw_layer = view
+	_draw_cards = view.cards
+	_draw_refresh_btn = view.refresh_btn
 
 func _warm_initial_draw_art() -> void:
 	# 只预热开局能抽到的卡，避免给家传、炫卡或未解锁卡占内存。
@@ -2812,12 +2800,9 @@ func _show_draw(v: bool) -> void:
 		_hide_god_pick()
 		_close_challenge()
 		_draw_open = true
-		_draw_layer.visible = true
-		_layer_in(_draw_layer)
-		_draw_layer.move_to_front()
-		_pop_draw_cards()
+		_draw_view.open()
 	else:
-		_hide_choice_layer(_draw_layer, _draw_cards)
+		_draw_view.close()
 		_draw_open = false
 	_refresh_draw_tile()
 
@@ -2831,32 +2816,19 @@ func _on_draw_pick(card: DrawCard) -> void:
 		_toast("卡组已满（10 格）")
 		return
 	_draw_anim = true
-	var target := card.position
+	var target: Vector2 = card.position
 	if not _slots.is_empty():
 		var slot: CardSlot = _slots[_cards.size() % _slots.size()]
 		_page = _cards.size() / _slots.size()
 		_refresh_deck()
 		target = _draw_layer.get_global_transform().affine_inverse() * slot.get_global_rect().get_center() - card.size * 0.5
-	for other in _draw_cards:
-		MenuUI.Motion.stop(other)
-		if other != card:
-			other.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			var tw0 := create_tween()
-			tw0.tween_property(other, "modulate:a", 0.28, 0.18)
-	card.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	card.z_index = 3
-	var tw := create_tween()
-	tw.set_parallel(true)
-	tw.tween_property(card, "position", target, 0.34).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
-	tw.tween_property(card, "scale", Vector2(0.32, 0.32), 0.34)
-	tw.tween_property(card, "rotation", 0.0, 0.34)
-	tw.tween_property(card, "modulate:a", 0.42, 0.34)
-	tw.chain().tween_callback(func() -> void:
+	var on_fly_done := func() -> void:
 		_draw_anim = false
 		if _run_over:
 			return
 		_add_card(id)
-		_zhongli_try(id))
+		_zhongli_try(id)
+	_draw_view.fly_card(card, target, on_fly_done)
 
 func _refresh_draw_btn() -> void:
 	if _draw_refresh_btn != null:
@@ -2881,12 +2853,7 @@ func _on_refresh() -> void:
 		_update_crystal()
 	_refresh_draw_btn()
 	_draw_anim = true
-	for card in _draw_cards:
-		MenuUI.Motion.stop(card)
-		var tw := create_tween()
-		tw.set_parallel(true)
-		tw.tween_property(card, "scale", Vector2(0.72, 0.72), 0.16)
-		tw.tween_property(card, "modulate:a", 0.0, 0.16)
+	_draw_view.fade_cards_out()
 	await get_tree().create_timer(0.2).timeout
 	if _run_over:
 		_draw_anim = false
@@ -2898,12 +2865,8 @@ func _on_refresh() -> void:
 	_toast("刷新：5 灵晶" if paid else "免费刷新")
 
 func _pop_draw_cards() -> void:
-	for i in _draw_cards.size():
-		var card: DrawCard = _draw_cards[i]
-		var base: Vector2 = card.get_meta("base", Vector2(30 + i * 220, 220))
-		card.visible = true
-		card.mouse_filter = Control.MOUSE_FILTER_STOP
-		MenuUI.Motion.pop(card, true, i * 0.055, base, (i - 1) * 0.025)
+	if _draw_view != null:
+		_draw_view.pop_cards()
 
 # ---------------- 属性 ----------------
 # v6：详细属性页（kushou/attr_panel.gd），懒加载一次，之后复用
