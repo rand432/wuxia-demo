@@ -138,6 +138,17 @@ func _audit_guardian(level: int, name: String, atlas_id: String, attack: String,
 	assert(token._frame_index == 12)
 	token._process(0.03)
 	assert(token._frame_index == 13)
+	if int(foe.get("boss_summon", 0)) > 0:
+		var before: int = core.foes.size()
+		core._hitstop = 0.0
+		foe["boss_summon_t"] = 0.0
+		core._process(0.016)
+		assert(core.foes.size() == before + 2 and foe["boss_summon_t"] == 12.0)
+	if int(foe.get("boss_revive", 0)) > 0:
+		foe["hp"] = 0.0
+		core._kill_foe(foe)
+		assert(foe["hp"] == float(foe["hp_max"]) * 0.5 and foe["boss_revive"] == 0)
+		assert(is_same(core._boss_foe(), foe) and token._death_t < 0.0)
 	foe["hp"] = 0.0
 	core._kill_foe(foe)
 	token._process(0.08)
@@ -324,6 +335,14 @@ func _run() -> void:
 		[4, "独眼狱卒", "duyan_yuzu_v1", "铁链横扫", "beam"],
 		[4, "火尾狐妖", "huowei_hu_v1", "焚身爆", "chain"],
 		[4, "赤焰蛟", "chiyan_jiao_v1", "烽火连天", "chain"],
+		[7, "场主亲养·狴犴", "bian_v1", "断罪一击", "sector"],
+		[7, "血手判官", "xueshou_panguan_v1", "血海", "chain"],
+		[7, "困兽之主", "kunshou_zhu_v1", "万兽奔踏", "beam"],
+		[7, "幽冥判官", "youming_panguan_v1", "幽冥斩", "sector"],
+		[10, "九幽魔君", "jiuyou_mojun_v1", "九幽落雷", "chain"],
+		[10, "血海罗刹", "xuehai_luocha_v1", "血浪滔天", "ring"],
+		[10, "万蛊虫母", "wanqu_chongmu_v1", "万蛊噬心", "follow"],
+		[10, "困兽·终焉", "kunshou_zhongyan_v1", "万兽终章", "sector"],
 	]:
 		assert(_audit_guardian(guardian[0], guardian[1], guardian[2], guardian[3], guardian[4]))
 		await process_frame
