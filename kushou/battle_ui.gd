@@ -25,6 +25,7 @@ const ResultView := preload("res://kushou/result_view.gd")
 const DrawView := preload("res://kushou/draw_view.gd")
 const CurioDetailView := preload("res://kushou/curio_detail_view.gd")
 const TreasureView := preload("res://kushou/treasure_view.gd")
+const AugView := preload("res://kushou/aug_view.gd")
 const MenuUI := preload("res://shared/ui_kit.gd")
 const CardFrame := preload("res://kushou/card_frame.gd")
 const GodPortraits := preload("res://shared/god_portraits.gd")
@@ -155,6 +156,7 @@ var _l5_mate_shown := false
 var _str_round := 0
 var _str_pending := false
 var _str_layer: Control = null
+var _aug_view: AugView = null
 var _str_tile = null
 # 进阶页（和抽卡同一套：三张卡浮在战场，不遮不暂停；只有［刷新 · 次数］和［隐藏］）
 var _aug_cards: Array = []
@@ -3789,21 +3791,23 @@ const AUG_ART := {
 func _build_str() -> void:
 	if _str_layer != null:
 		return
-	_str_layer = Control.new()
-	_str_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_str_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE     # 空白处放行给战场
-	_str_layer.visible = false
-	_str_layer.z_index = 21
-	add_child(_str_layer)
-	var chrome := _build_choice_chrome(_str_layer, "进阶", _hide_aug_pick, _on_aug_refresh, _on_aug_abandon)
-	_str_ban_lb = chrome[0]
-	_aug_refresh_btn = chrome[1]
-	for i in 3:
-		var card := AugCard.new()
-		card.size = Vector2(176, 335)
-		card.picked.connect(func(): _on_aug_card(card))
-		_str_layer.add_child(card)
-		_aug_cards.append(card)
+	var view := AugView.new()
+	view.name = "AugView"
+	view.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	view.visible = false
+	view.z_index = 21
+	view.card_factory = func() -> Control: return AugCard.new()
+	view.hide_pressed.connect(_hide_aug_pick)
+	view.refresh_pressed.connect(_on_aug_refresh)
+	view.abandon_pressed.connect(_on_aug_abandon)
+	view.card_picked.connect(func(card) -> void: _on_aug_card(card as AugCard))
+	add_child(view)
+	view.build()
+	_aug_view = view
+	_str_layer = view
+	_aug_cards = view.cards
+	_aug_refresh_btn = view.refresh_btn
+	_str_ban_lb = view.caption
 
 func _open_aug_pick() -> void:
 	if _run_over or not _str_pending or _no_ui:
@@ -3825,10 +3829,7 @@ func _open_aug_pick() -> void:
 		_roll_aug()
 	if _str_ban_lb != null:
 		_str_ban_lb.text = "强化 %d 级" % _str_lv
-	_str_layer.visible = true
-	_layer_in(_str_layer)
-	_str_layer.move_to_front()
-	_pop_aug_cards()
+	_aug_view.open()
 	Aud.sfx("ui_open", -8.0)
 
 # 掷三张：品阶随轮次升（良→玄→地→天），数值 ×(1+0.4×(轮-1))
@@ -3920,10 +3921,12 @@ func _on_aug_abandon() -> void:
 
 # 三张卡一起弹出来（跟抽卡一样的手感）
 func _pop_aug_cards() -> void:
-	_pop_option_cards(_aug_cards)
+	if _aug_view != null:
+		_aug_view.pop_cards()
 
 func _hide_aug_pick() -> void:
-	_hide_choice_layer(_str_layer, _aug_cards)
+	if _aug_view != null:
+		_aug_view.close()
 
 func _on_aug_card(card: AugCard) -> void:
 	if _run_over or not _str_pending or _str_layer == null or not _str_layer.visible or card == null or not _aug_cards.has(card) or card.o.is_empty():
