@@ -90,3 +90,10 @@
 - 图形（`--resolution 450x800`）：PASS，打印 `[GRAPHICS] real click replay/home/save-fail/double-click/delayed-release PASS`
 - 全量：88 / 88（`.shots/audit_batch4.txt`）
 - 提交：0c76904
+
+## 最终汇总（三批全量与十关）
+
+- 全量回归：批次 4/5/6 各跑一次 `run_all_audits.ps1`，均为 **88 / 88，FAILED_COUNT=0**（`.shots/audit_batch4.txt` / `batch5.txt` / `batch6.txt`）
+- 十关隔离通关（最终）：L1–L10 全 WIN，用时 75/144/201/327/300/367/359/330/380/453 秒；存档 `max=10`、`first_clear` 1~10 全 true、碎片七人各 135（主角 195）（`.shots/run_tenlevel_final.txt`）
+- 证据汇总：`docs/交付_总报告_批次4-6_2026-11-26.md`
+- 提交：批次 4 `0c76904`、批次 5 `2b78b9f`、批次 6 代码随 `1078ded`（文档 `68b2561`）
