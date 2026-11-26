@@ -27,6 +27,24 @@ func _freeze_process(b) -> void:
 	b.set_process(false)
 	b._core.set_process(false)
 
+func _new_battle():
+	assert(change_scene_to_packed(Battle) == OK)
+	var s = await _settle("res://kushou/battle_ui.tscn")
+	_freeze_process(s)
+	return s
+
+# 按控件的实际全局矩形发鼠标按下/抬起，走 GUI 命中（不是 pressed.emit）
+func _click_control(btn: Control) -> void:
+	var point := btn.get_global_transform() * (btn.size * 0.5)
+	for pressed in [true, false]:
+		var event := InputEventMouseButton.new()
+		event.position = point
+		event.global_position = point
+		event.button_index = MOUSE_BUTTON_LEFT
+		event.button_mask = MOUSE_BUTTON_MASK_LEFT if pressed else 0
+		event.pressed = pressed
+		root.push_input(event, true)
+
 func _run() -> void:
 	LS.ensure_loaded()
 	GS.ensure_loaded()
@@ -138,5 +156,66 @@ func _run() -> void:
 	page.queue_free()
 	current_scene = null
 	await process_frame
+	if DisplayServer.get_name() != "headless":
+		await _audit_real_input()
+	else:
+		print("[HEADLESS] real-input branch skipped (run without --headless on a graphics device)")
 	print("PASS: result retry saves deferred first clear and rewards once; abandon and both result buttons keep navigation single-flight")
 	Audio.quit_cleanly()
+
+
+# ---- 图形分支：真实鼠标点击与延迟揭幕释放（仅在非 headless 下执行） ----
+func _audit_real_input() -> void:
+	# 1) 胜：真实点击「再来一局」
+	var b = await _new_battle()
+	b._end_run(true)
+	await create_timer(0.45).timeout
+	var replay := _button(b._result_layer, "再来一局")
+	_click_control(replay)
+	await create_timer(0.4).timeout
+	assert(current_scene != b and current_scene.scene_file_path.ends_with("battle_ui.tscn"))
+	var b2 = current_scene
+	_freeze_process(b2)
+	# 2) 败：真实点击「回主界面」
+	b2._end_run(false)
+	await create_timer(0.45).timeout
+	var home := _button(b2._result_layer, "回主界面")
+	_click_control(home)
+	await create_timer(0.4).timeout
+	assert(current_scene != b2 and current_scene.scene_file_path == "res://menu/main_home.tscn")
+	# 3) 快速连点：只发起一次场景切换
+	var b3 = await _new_battle()
+	b3._end_run(true)
+	await create_timer(0.45).timeout
+	var replay3 := _button(b3._result_layer, "再来一局")
+	_click_control(replay3)
+	_click_control(replay3)
+	await create_timer(0.45).timeout
+	assert(current_scene != b3 and current_scene.scene_file_path.ends_with("battle_ui.tscn"))
+	# 4) 保存失败：真实点击留在当前页；恢复后再次点击只切一次
+	var b4 = await _new_battle()
+	var journal := ConfigFile.new()
+	journal.set_value("transaction", "files", {})
+	assert(journal.save(SaveFile.JOURNAL) == OK)
+	b4._end_run(true)
+	await create_timer(0.45).timeout
+	var home4 := _button(b4._result_layer, "回主界面")
+	_click_control(home4)
+	await create_timer(0.25).timeout
+	assert(current_scene == b4 and b4.is_inside_tree())
+	assert(DirAccess.remove_absolute(ProjectSettings.globalize_path(SaveFile.JOURNAL)) == OK)
+	_click_control(home4)
+	await create_timer(0.4).timeout
+	assert(current_scene != b4 and current_scene.scene_file_path == "res://menu/main_home.tscn")
+	# 5) 延迟揭幕建立后立即释放：不得有残留、迟到特效或脚本错误
+	var b5 = await _new_battle()
+	b5._build_result(true, 0.5)
+	await process_frame
+	b5.queue_free()
+	await create_timer(0.8).timeout
+	assert(not is_instance_valid(b5))
+	var b6 = await _new_battle()
+	await process_frame
+	assert(b6.is_inside_tree() and b6._core != null)
+	print("[GRAPHICS] real click replay/home/save-fail/double-click/delayed-release PASS")
+
