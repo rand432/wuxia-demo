@@ -266,6 +266,33 @@ func _audit_crowd_melee(flag: String, title: String, atlas_id: String) -> bool:
 	battle.queue_free()
 	return true
 
+func _audit_draw_does_not_change_spawn() -> void:
+	var core := Core.new()
+	core.size = Vector2(680, 720)
+	root.add_child(core)
+	core.set_process(false)
+	core.hide_units = false
+	core._shake = 4.0
+	var shocked := core._spawn_foe()
+	shocked.merge({"x": 300.0, "y": 280.0, "para": 1.0, "flash": 0.2}, true)
+	var draw_count := [0]
+	core.draw.connect(func(): draw_count[0] += 1)
+	await RenderingServer.frame_post_draw
+	seed(477)
+	var expected := core._spawn_foe()
+	core.foes.erase(expected)
+	seed(477)
+	var draws_before: int = draw_count[0]
+	for i in range(3):
+		core.queue_redraw()
+		await RenderingServer.frame_post_draw
+	assert(draw_count[0] == draws_before + 3)
+	var actual := core._spawn_foe()
+	assert(actual == expected, "Rendering shake, sparks or hit flash changed the next generated enemy")
+	core.queue_free()
+	await process_frame
+	print("[GRAPHICS] repeated redraw preserves generated enemy identity and position")
+
 func _run() -> void:
 	LS.ensure_loaded()
 	LS.current_level = 6
@@ -466,5 +493,7 @@ func _run() -> void:
 	await process_frame
 	assert(_audit_crowd_melee("shield", "山匪盾兵", "crowd_shield_v1"))
 	await process_frame
+	if DisplayServer.get_name() != "headless":
+		await _audit_draw_does_not_change_spawn()
 	print("PASS: hazard chronology, bounded summons, guardian and crowd melee poses, shield guard, separation and token allocation")
 	Audio.quit_cleanly()

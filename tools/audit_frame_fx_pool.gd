@@ -19,6 +19,23 @@ func _run() -> void:
 	battle._tut.cancel()
 	battle.set_process(false)
 	battle._core.set_process(false)
+	var field_clip: Control = battle._cam.get_parent()
+	var frame := field_clip.get_global_rect()
+	assert(field_clip.clip_contents and field_clip.mouse_filter == Control.MOUSE_FILTER_IGNORE)
+	var impact := Vector2(210, 412)
+	battle._spawn_hit_fx(impact, 20.0, 61, false, false, false)
+	battle._fx_back.spawn_swing(impact - battle.FIELD_POS, Vector2(420, 400), 30.0, 0.08)
+	var hit_point: Vector2 = battle._fx_front.hits.back()["p"]
+	var sword_point: Vector2 = battle._fx_back.swings.back()["a"]
+	battle._cam_zoom_to(1.16, 0.04)
+	await create_timer(0.25).timeout
+	await process_frame
+	assert(battle._cam.scale.is_equal_approx(Vector2.ONE * 1.16))
+	var world: Transform2D = battle._cam.get_global_transform()
+	assert((battle._fx_front.get_global_transform() * hit_point).is_equal_approx(world * (impact - Vector2(0, 20))))
+	assert((battle._fx_back.get_global_transform() * sword_point).is_equal_approx(world * impact))
+	assert(field_clip.get_global_rect() == frame)
+	battle._cam.scale = Vector2.ONE
 	var effects: Array[Sprite2D] = []
 	for i in battle.FRAME_FX_AMBIENT_LIMIT:
 		effects.append(battle._spawn_frame_burst(0, Vector2(i, 300), 1.0, 0.2))
@@ -44,5 +61,5 @@ func _run() -> void:
 	battle.queue_free()
 	await process_frame
 	assert(reused.all(func(effect): return not is_instance_valid(effect)))
-	print("PASS: skill frames retain four slots under saturation; 16 sprites reuse safely and release on scene exit")
+	print("PASS: hit and swing effects track camera zoom inside the fixed field; 16 skill sprites reuse and release")
 	Audio.quit_cleanly()

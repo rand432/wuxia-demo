@@ -3,6 +3,7 @@ extends Control
 const BATTLE := "res://kushou/battle_ui.tscn"
 const FONT := preload("res://fonts/ink.ttf")
 const UI := preload("res://shared/ui_kit.gd")
+const ART_LOAD_LIMIT := 4
 var _fill: ColorRect = null
 var _pct: Label = null
 var _tip: Label = null
@@ -10,6 +11,7 @@ var _done := false
 var _requesting := false
 var _recovery: HBoxContainer
 var _battle: Control
+var _art_queue: Array[String] = []
 var _art_pending: Array[String] = []
 var _art_total := 0
 
@@ -125,28 +127,22 @@ func _process(_delta: float) -> void:
 			return
 		_battle = instance
 		var paths: Array[String] = _battle.prepare_entry_art()
+		var seen := {}
 		for path in paths:
-			if ResourceLoader.exists(path) and ResourceLoader.load_threaded_request(path, "Texture2D") == OK:
-				_art_pending.append(path)
-		_art_total = _art_pending.size()
+			if not seen.has(path) and ResourceLoader.exists(path):
+				seen[path] = true
+				_art_queue.append(path)
+		_art_queue.reverse()
+		_art_total = _art_queue.size()
+		_start_art_batch()
 		_tip.text = "正在准备战场和卡牌…"
-		_show_progress(1.0 if _art_pending.is_empty() else 0.45)
+		_show_progress(1.0 if _art_total == 0 else 0.45)
 	elif st == ResourceLoader.THREAD_LOAD_FAILED or st == ResourceLoader.THREAD_LOAD_INVALID_RESOURCE:
 		if st == ResourceLoader.THREAD_LOAD_FAILED:
 			ResourceLoader.load_threaded_get(BATTLE)
 		_loading_failed()
 
 func _poll_art() -> void:
-	if _art_pending.is_empty():
-		_done = true
-		_requesting = false
-		# 切换场景时当前页会先退出，提前转交新节点的所有权。
-		var battle := _battle
-		_battle = null
-		if UI.navigate_instance(self, battle) != OK:
-			battle.free()
-			_loading_failed()
-		return
 	for i in range(_art_pending.size() - 1, -1, -1):
 		var path := _art_pending[i]
 		var status := ResourceLoader.load_threaded_get_status(path)
@@ -155,7 +151,26 @@ func _poll_art() -> void:
 		if status == ResourceLoader.THREAD_LOAD_LOADED or status == ResourceLoader.THREAD_LOAD_FAILED:
 			_battle.supply_entry_art(path, ResourceLoader.load_threaded_get(path) as Texture2D)
 		_art_pending.remove_at(i)
-	_show_progress(1.0 - 0.55 * float(_art_pending.size()) / float(_art_total))
+	_start_art_batch()
+	var remaining := _art_queue.size() + _art_pending.size()
+	if remaining > 0:
+		_show_progress(1.0 - 0.55 * float(remaining) / float(_art_total))
+		return
+	_show_progress(1.0)
+	_done = true
+	_requesting = false
+	# 切换场景时当前页会先退出，提前转交新节点的所有权。
+	var battle := _battle
+	_battle = null
+	if UI.navigate_instance(self, battle) != OK:
+		battle.free()
+		_loading_failed()
+
+func _start_art_batch() -> void:
+	for i in mini(_art_queue.size(), ART_LOAD_LIMIT - _art_pending.size()):
+		var path: String = _art_queue.pop_back()
+		if ResourceLoader.load_threaded_request(path, "Texture2D") == OK:
+			_art_pending.append(path)
 
 func _show_progress(value: float) -> void:
 	var fraction := clampf(value, 0.0, 1.0)

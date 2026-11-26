@@ -52,6 +52,55 @@ func _audit_statue_focus(battle) -> void:
 			break
 	assert(statue.get("_death_settled", false) and core.statues_left() == 2)
 
+func _audit_automatic_orders(battle) -> void:
+	var core = battle._core
+	core.foes.clear()
+	core.hero_pos = Vector2(100, 290)
+	Audio._last_sfx_msec.erase("ui_click")
+	battle._q_activate(_quest(battle, "zd"))
+	battle._q_ai(0.30)
+	assert(core._order_has_pos and core._order_fx.size() == 1)
+	core._order_t = 0.24
+	battle._q_ai(0.30)
+	assert(core._order_t == 0.24 and core._order_fx.size() == 1)
+	core.hero_pos = core._order_pos + Vector2(0, 42)
+	core._order_has_pos = false
+	battle._q_ai(0.30)
+	assert(not core._order_has_pos and core._order_fx.size() == 1)
+	battle._q_finish("fail")
+	assert(core._order_fx.is_empty())
+	battle._q_activate(_quest(battle, "sy"))
+	var first: Dictionary = core.foes[0]
+	var second: Dictionary = core.foes[1]
+	battle._q_ai(0.30)
+	assert(is_same(core._order_foe, first))
+	core._banner_t = 0.2
+	battle._q_ai(0.30)
+	assert(core._banner_t == 0.2)
+	first["hp"] = 0.0
+	first["dying"] = 0.2
+	battle._q_ai(0.30)
+	assert(is_same(core._order_foe, second))
+	battle._q_finish("fail")
+	assert(core._order_foe.is_empty() and not Audio._last_sfx_msec.has("ui_click"))
+
+	# 跑实际移动和占点帧，覆盖到达后重新受自动站位约束的情形。
+	core.hero_pos = Vector2(100, 290)
+	var completed: int = battle._q_done
+	battle._q_activate(_quest(battle, "zd"))
+	var walk_orders := 0
+	for frame in range(1080):
+		var was_walking: bool = core._order_has_pos
+		battle._q_tick(1.0 / 60.0)
+		if core._order_has_pos and not was_walking:
+			walk_orders += 1
+		core._process(1.0 / 60.0)
+		if battle._q_cur.is_empty():
+			break
+	assert(walk_orders == 1 and battle._q_done == completed + 1)
+	assert(core.zone.is_empty() and not core._order_has_pos and core._order_fx.is_empty())
+	assert(not Audio._last_sfx_msec.has("ui_click"))
+
 func _run() -> void:
 	LS.ensure_loaded()
 	LS.current_level = 6
@@ -120,8 +169,9 @@ func _run() -> void:
 	field.set_process(false)
 	field._core.set_process(false)
 	_audit_statue_focus(field)
+	_audit_automatic_orders(field)
 	field.queue_free()
 	battle.queue_free()
 	await process_frame
-	print("PASS: bell tier targets and timers; quest reentry, clearwave, elite corpses, statue focus and result guard")
+	print("PASS: quest timers, rewards, stage clearing, statue focus, and stable quiet automatic orders")
 	Audio.quit_cleanly()

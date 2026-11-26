@@ -36,8 +36,15 @@ func _case(win: bool) -> void:
 	battle._bm.warehouse = [{"type": "道具", "effect": "wen", "value": 100}, {"name": "test", "type": "装备", "stats": {"atk": 5.0}}]
 	battle._bm.stock = [{"base": 1, "item": {"kind": "equipment", "name": "test"}}]
 	battle._bm.open_panel()
+	battle._cam_pulse(1.14, 0.42)
 	battle._end_run(win)
 	assert(not battle._bm.visible)
+	assert(battle._cam.scale == Vector2.ONE)
+	await create_timer(0.18).timeout
+	assert(battle._cam.scale == Vector2.ONE, "Old camera animation moved the result scene")
+	battle._cam_zoom_to(1.16, 0.07)
+	await create_timer(0.18).timeout
+	assert(battle._cam.scale == Vector2.ONE)
 	var rewards := _rewards(battle)
 	for i in range(3):
 		battle._core.coin.emit(100)
@@ -75,9 +82,30 @@ func _case(win: bool) -> void:
 func _run() -> void:
 	await _case(false)
 	await _case(true)
+	await _camera_transitions()
 	await _guardian_defeat()
-	print("PASS: win/loss freezes rewards and actions; guardian finishes visual defeat before result reveal")
+	print("PASS: result freezes rewards and camera; overlapping camera cues settle correctly; guardian defeat precedes result")
 	Audio.quit_cleanly()
+
+func _camera_transitions() -> void:
+	var battle = Battle.instantiate()
+	root.add_child(battle)
+	battle._tut.cancel()
+	battle.set_process(false)
+	battle._core.set_process(false)
+	battle._cam_zoom_to(1.05, 0.08)
+	await create_timer(0.2).timeout
+	assert(battle._cam.scale.is_equal_approx(Vector2.ONE * 1.05))
+	battle._cam_pulse(1.12, 0.16)
+	await create_timer(0.68).timeout
+	assert(battle._cam.scale.is_equal_approx(Vector2.ONE * 1.05))
+	battle._cam_pulse(1.18, 0.42)
+	await create_timer(0.12).timeout
+	battle._cam_zoom_to(1.07, 0.12)
+	await create_timer(0.92).timeout
+	assert(battle._cam.scale.is_equal_approx(Vector2.ONE * 1.07))
+	battle.queue_free()
+	await process_frame
 
 func _guardian_defeat() -> void:
 	LS.current_level = 10

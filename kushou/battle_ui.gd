@@ -1054,18 +1054,28 @@ func _set_vital_hud(fill: Panel, caption: Label, value: float, maximum: float) -
 # ---------------- 战场 ----------------
 # 镜头容器：战场内容都挂在它下面，做推进（zoom）时整体一起缩放
 var _cam: Control = null
+var _camera_tween: Tween
+var _camera_base_scale := Vector2.ONE
 const LampField := preload("res://kushou/lamp_field.gd")
 var _lamp_field: LampField
 
 func _build_field() -> void:
+	var field_clip := Control.new()
+	field_clip.position = FIELD_POS
+	field_clip.size = Vector2(704, 720)
+	field_clip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	field_clip.clip_contents = true
+	add_child(field_clip)
 	_cam = Control.new()
+	# 用固定战场裁切框，镜头内仍沿用整个界面的坐标。
+	_cam.position = -FIELD_POS
 	_cam.size = Vector2(720, 1280)
 	_cam.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_cam.pivot_offset = Vector2(360, 510)   # 以战场中心为缩放中心
-	add_child(_cam)
+	field_clip.add_child(_cam)
 	_core = BattleCore.new()
-	_core.position = Vector2(8, 150)
-	_core.size = Vector2(704, 720)
+	_core.position = FIELD_POS
+	_core.size = field_clip.size
 	_core.mouse_filter = Control.MOUSE_FILTER_IGNORE   # 战斗没有手动：点击穿透
 	_core.modulate = Color(1, 1, 1, 0.25)
 	_core.show_combo_counter = false
@@ -1221,14 +1231,14 @@ func _build_field() -> void:
 	_fx_back.size = Vector2(704, 720)
 	_fx_back.z_index = 4
 	_fx_back.clip_contents = true
-	add_child(_fx_back)
+	_cam.add_child(_fx_back)
 	_fx_front = AttackFx.new()
 	_fx_front.front = true
 	_fx_front.position = FIELD_POS
 	_fx_front.size = Vector2(704, 720)
 	_fx_front.z_index = 7
 	_fx_front.clip_contents = true
-	add_child(_fx_front)
+	_cam.add_child(_fx_front)
 	_hero_name_lb = _lbl("少侠", _hero_token.position + HERO_NAME_OFFSET, Vector2(120, 24),
 		17, LIGHT, _cam, HORIZONTAL_ALIGNMENT_CENTER)
 	_hero_name_lb.add_theme_color_override("font_outline_color", Color(0.10, 0.08, 0.06, 0.85))
@@ -2883,6 +2893,7 @@ func _quit() -> void:
 	if MenuUI.navigate(self, "res://menu/main_home.tscn") == OK:
 		# 场景会延迟释放；离树后立即拒绝旧奖励和结算回调。
 		_run_over = true
+		_reset_camera()
 		_clear_lamp_field()
 		if _core != null:
 			_core.running = false
@@ -3389,8 +3400,7 @@ func _end_run(win: bool) -> void:
 			token.boss_warning = {}
 			token.set_frost(0, false, false)
 			token.set_poisoned(false)
-	if _cam != null:
-		_cam.scale = Vector2.ONE
+	_reset_camera()
 	# 结算前的"定格式"反馈：一闪 + 长顿帧，然后才弹面板
 	_screen_flash(Color(1.0, 0.96, 0.82) if win else Color(0.52, 0.17, 0.13), 0.34 if win else 0.28, 0.5)
 	if _core != null:
@@ -5083,20 +5093,38 @@ func _spawn_fly(from: Vector2, to: Vector2, col: Color, n: int) -> void:
 
 # 整屏微闪（技能释放/大事件用）：暖纸色一闪，不刺眼
 # 镜头推进（缩放战场内容，不动 HUD）
-# 收尾镜头：推近 → 停一下 → 退回
+# 临时推镜结束后回到首领战或普通战斗的当前机位。
 func _cam_pulse(s: float, hold: float) -> void:
-	if _cam == null:
+	if _cam == null or _run_over:
 		return
-	_cam_zoom_to(s, 0.26)
-	var tw := create_tween().bind_node(_cam)
-	tw.tween_interval(hold)
-	tw.tween_property(_cam, "scale", Vector2.ONE, 0.42).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	var tw := _begin_camera_tween()
+	var approach := minf(0.26, hold)
+	tw.tween_property(_cam, "scale", Vector2.ONE * s, approach)
+	if hold > approach:
+		tw.tween_interval(hold - approach)
+	tw.tween_property(_cam, "scale", _camera_base_scale, 0.42)
 
 func _cam_zoom_to(s: float, dur: float) -> void:
-	if _cam == null:
+	if _cam == null or _run_over:
 		return
-	var tw := create_tween().bind_node(_cam)
-	tw.tween_property(_cam, "scale", Vector2(s, s), dur).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	_camera_base_scale = Vector2.ONE * s
+	_begin_camera_tween().tween_property(_cam, "scale", _camera_base_scale, dur)
+
+func _begin_camera_tween() -> Tween:
+	_cancel_camera_tween()
+	_camera_tween = create_tween().bind_node(_cam).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	return _camera_tween
+
+func _cancel_camera_tween() -> void:
+	if _camera_tween != null and _camera_tween.is_valid():
+		_camera_tween.kill()
+	_camera_tween = null
+
+func _reset_camera() -> void:
+	_cancel_camera_tween()
+	_camera_base_scale = Vector2.ONE
+	if _cam != null:
+		_cam.scale = _camera_base_scale
 
 func _screen_flash(col: Color, a: float, dur := 0.16) -> void:
 	if _flash_rect == null:
@@ -8975,7 +9003,11 @@ func _roll_bell_treasure() -> bool:
 func _q_cleanup(q: Dictionary) -> void:
 	if _core == null or q.is_empty():
 		return
-	match str(q.get("kind", "")):
+	var kind := str(q.get("kind", ""))
+	if kind in ["statue", "zone", "guard", "champion", "elite"]:
+		_core.clear_order()
+		_core._order_fx.clear()
+	match kind:
 		"statue":
 			_core.clear_statues()
 		"zone":
@@ -9185,6 +9217,10 @@ func _q_tick(dt: float) -> void:
 	_q_refresh()
 	_q_ai(dt)
 
+func _q_focus(target: Dictionary) -> void:
+	if not is_same(_core._order_foe, target):
+		_core.order_focus(target, false)
+
 func _q_ai(dt: float) -> void:
 	if not _q_can_act():
 		return
@@ -9194,22 +9230,24 @@ func _q_ai(dt: float) -> void:
 	_q_ai_t = 0.0
 	if _run_over or _core == null or _q_cur.is_empty():
 		return
-	match str(_q_cur.get("kind", "")):
+	var kind := str(_q_cur.get("kind", ""))
+	match kind:
 		"statue":
 			var target: Dictionary = {}
 			for f_v in _core.foes:
 				var f: Dictionary = f_v
-				if not bool(f.get("still", false)) or float(f.get("dying", 0.0)) > 0.0:
+				if not bool(f.get("still", false)) or float(f.get("dying", 0.0)) > 0.0 or float(f.get("hp", 0.0)) <= 0.0:
 					continue
 				if target.is_empty() or _core.hero_pos.distance_to(Vector2(float(f["x"]), float(f["y"]))) < _core.hero_pos.distance_to(Vector2(float(target["x"]), float(target["y"]))):
 					target = f
 			if not target.is_empty():
-				_core.order_focus(target)
+				_q_focus(target)
 				return
 		"zone":
 			var z: Dictionary = _core.zone
 			if not z.is_empty() and float(z.get("prog", 0.0)) < float(z.get("goal", 12.0)):
-				_core.order_move(Vector2(float(z["x"]), float(z["y"])))
+				if not _core._order_has_pos and not _core._in_zone():
+					_core.order_move(Vector2(float(z["x"]), float(z["y"])), false)
 				return
 		"guard":
 			var g: Dictionary = _core.guard
@@ -9218,26 +9256,19 @@ func _q_ai(dt: float) -> void:
 				var bd := 1e9
 				for f_v2 in _core.foes:
 					var f2: Dictionary = f_v2
-					if float(f2.get("hp", 0.0)) <= 0.0 or bool(f2.get("still", false)):
+					if float(f2.get("hp", 0.0)) <= 0.0 or float(f2.get("dying", 0.0)) > 0.0 or bool(f2.get("still", false)):
 						continue
 					var dd := Vector2(float(f2["x"]), float(f2["y"])).distance_to(Vector2(float(g["x"]), float(g["y"])))
 					if dd < bd:
 						bd = dd
 						best = f2
 				if not best.is_empty():
-					_core.order_focus(best)
+					_q_focus(best)
 					return
-		"champion":
-			for f_v3 in _core.foes:
-				var f3: Dictionary = f_v3
-				if str(f3.get("kind", "")) == "champion":
-					_core.order_focus(f3)
-					return
-		"elite":
-			for f_v4 in _core.foes:
-				var f4: Dictionary = f_v4
-				if str(f4.get("kind", "")) == "elite":
-					_core.order_focus(f4)
+		"champion", "elite":
+			for foe: Dictionary in _core.foes:
+				if str(foe.get("kind", "")) == kind and float(foe.get("hp", 0.0)) > 0.0 and float(foe.get("dying", 0.0)) <= 0.0:
+					_q_focus(foe)
 					return
 	_core.clear_order()
 

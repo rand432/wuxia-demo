@@ -140,6 +140,19 @@ func _run() -> void:
 		if loading._battle != null: break
 		await process_frame
 	assert(loading._art_total > 0 and not loading._battle.is_inside_tree())
+	assert(loading._art_pending.size() <= 4, "First-screen art started %d jobs in one frame" % loading._art_pending.size())
+	assert(not loading._art_queue.is_empty())
+	var total_art: int = loading._art_total
+	var peak_art: int = loading._art_pending.size()
+	var progress_width: float = loading._fill.size.x
+	for i in range(600):
+		await process_frame
+		if not is_instance_valid(loading) or not loading.is_inside_tree():
+			break
+		peak_art = maxi(peak_art, loading._art_pending.size())
+		assert(peak_art <= 4 and loading._fill.size.x >= progress_width)
+		progress_width = loading._fill.size.x
+	print("[LOAD] first-screen textures=%d peak_pending=%d" % [total_art, peak_art])
 	var battle = await _scene("res://kushou/battle_ui.tscn")
 	assert(battle._core != null and LS.current_level == 10)
 	assert(battle._entry_cards_ready and battle._entry_art.is_empty())

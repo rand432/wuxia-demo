@@ -3,6 +3,7 @@ const LS := preload("res://shared/level_state.gd")
 const FD := preload("res://shared/forge_data.gd")
 const SaveFile := preload("res://shared/save_file.gd")
 const Battle := preload("res://kushou/battle_ui.tscn")
+const Audio := preload("res://shared/audio.gd")
 func _initialize() -> void:
 	if not OS.get_user_data_dir().replace("\\", "/").ends_with("wuxia-regression"):
 		quit(2)
@@ -55,4 +56,4 @@ func _run() -> void:
 	battle.queue_free()
 	await process_frame
 	print("PASS: preview forge reward persists once; battle bonus waits for a durable save and does not repeat")
-	quit()
+	Audio.quit_cleanly()

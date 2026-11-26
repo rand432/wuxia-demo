@@ -2077,7 +2077,7 @@ func tap_at(p: Vector2) -> void:
 	else:
 		order_move(p)
 
-func order_move(p: Vector2) -> void:
+func order_move(p: Vector2, input_sound := true) -> void:
 	_order_foe = {}
 	_order_has_pos = true
 	_order_t = 0.0
@@ -2091,15 +2091,17 @@ func order_move(p: Vector2) -> void:
 	_order_pos = Vector2(clampf(p.x, 70.0, size.x - 70.0),
 		clampf(p.y, HERO_LINE, size.y - HERO_LINE * 0.5))
 	_order_fx.append({"x": _order_pos.x, "y": _order_pos.y, "t": 0.0})
-	Audio.sfx("ui_click", -12.0)
+	if input_sound:
+		Audio.sfx("ui_click", -12.0)
 
-func order_focus(f: Dictionary) -> void:
+func order_focus(f: Dictionary, input_sound := true) -> void:
 	_order_foe = f
 	_order_has_pos = false
 	_order_t = 0.0
 	_banner = "集火 · " + str(f.get("name", "怪"))
 	_banner_t = 1.4
-	Audio.sfx("ui_click", -8.0)
+	if input_sound:
+		Audio.sfx("ui_click", -8.0)
 
 func clear_order() -> void:
 	if not _order_has_pos and _order_foe.is_empty():
@@ -5689,6 +5691,9 @@ func _process_end_log(_t0: int) -> void:
 	if _el > 50000:
 		print("[SLOW] core process ", _el / 1000.0, " ms")
 
+# 重绘次数由渲染决定，震动和闪光使用自己的随机序列，避免消耗战斗随机数。
+var _draw_rng := RandomNumberGenerator.new()
+
 func _draw() -> void:
 	var _t_draw := Time.get_ticks_usec()
 	var w := size.x
@@ -5696,7 +5701,7 @@ func _draw() -> void:
 	# 抖屏：整幅画先按震动量偏一下（打击感的第一层）——记下偏移，画完宠物要还原回来
 	var shk := Vector2.ZERO
 	if _shake > 0.05:
-		shk = Vector2(randf_range(-1.0, 1.0) * _shake, randf_range(-1.0, 1.0) * _shake)
+		shk = Vector2(_draw_rng.randf_range(-1.0, 1.0), _draw_rng.randf_range(-1.0, 1.0)) * _shake
 	draw_set_transform(shk)
 	draw_rect(Rect2(0, 0, w, 46), Color(1, 1, 1, 0.030))
 	draw_rect(Rect2(0, h - 84.0, w, 84), Color(1, 1, 1, 0.045))
@@ -5757,8 +5762,8 @@ func _draw() -> void:
 		if float(f.get("para", 0.0)) > 0.0 or (not hide_units and float(f.get("cold_freeze_t", 0.0)) > 0.0):
 			var pp2 := Vector2(float(f["x"]), float(f["y"]) - 46.0 * sc)
 			for k in 2:
-				var off := Vector2(randf_range(-12.0, 12.0), randf_range(-10.0, 10.0))
-				draw_line(pp2 + off, pp2 + off + Vector2(randf_range(-8.0, 8.0), randf_range(-8.0, 8.0)),
+				var off := Vector2(_draw_rng.randf_range(-12.0, 12.0), _draw_rng.randf_range(-10.0, 10.0))
+				draw_line(pp2 + off, pp2 + off + Vector2(_draw_rng.randf_range(-8.0, 8.0), _draw_rng.randf_range(-8.0, 8.0)),
 					Color(0.92, 0.96, 1.0, 0.85), 2.0)
 		if hide_units:
 			continue
@@ -5777,7 +5782,7 @@ func _draw() -> void:
 		var bw := 72.0 * sc
 		var bh := 11.0 * sc
 		var by := float(f["y"]) - 62.0 * sc
-		var bx := float(f["x"]) - bw * 0.5 + (randf_range(-2.0, 2.0) if flash > 0.0 else 0.0)
+		var bx := float(f["x"]) - bw * 0.5 + (_draw_rng.randf_range(-2.0, 2.0) if flash > 0.0 else 0.0)
 		draw_rect(Rect2(bx, by, bw, bh), Color(0.20, 0.18, 0.20))          # 底槽
 		draw_rect(Rect2(bx, by, bw, bh), Color(0.06, 0.05, 0.06), false, 1.5)  # 描边
 		var ratio := clampf(float(f["hp"]) / maxf(1.0, float(f["hp_max"])), 0.0, 1.0)
