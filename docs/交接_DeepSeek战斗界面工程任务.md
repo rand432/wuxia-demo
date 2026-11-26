@@ -192,3 +192,13 @@
 - 设备：adb devices 为空，安装/启动/触控/帧率未执行
 - 交付说明：`docs/交付_批次8_AndroidQA_2026-11-26.md`
 - 提交：6d762ce
+
+## 第九批交付（2026-11-26）
+
+- 文件：`tools/playthrough.gd`（`[SEED]`/`[SCENARIO]`/`[WAVE]`/`[PACE]`/`[WALL]` 与 `--seed`、`--restrict-strength`）、`tools/run_playthrough.ps1`（透传 `-Seed`/`-RestrictStrength`，新增 `-Windowed`）
+- 四组固定种子：L6 自动 WIN 377.2s（20/20）、L6 限制强化 TIMEOUT 600s（15/20）、L10 自动 WIN 285.2s（18/18）、L10 限制强化 LOSE 354.2s
+- 三条节奏问题：①清尾占总时长 76–80%（等怪仅 20–24%）；②L6 第 13 波 58.8s 单点尖峰（占全关 15.6%）；③无强化时 L6 卡在 15/20 波（`spawned=44/quota=52 live=36`）、L10 败于首领战
+- 录屏：`.shots/pace_l6_wave13_crop.mp4`（22s，裁到游戏窗口）、截图 `.shots/pace_l6_wave13_crop_frame.png`
+- 全量：**88 / 88，failed=0**（`.shots/audit_batch9.txt`）
+- 交付说明：`docs/交付_批次9_节奏数据_2026-11-26.md`
+- 提交：`34bb54f`（自动存档收录本批代码）
