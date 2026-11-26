@@ -248,3 +248,14 @@
 - 全量：**88 / 88，failed=0**（`.shots/audit_batch14.txt`）
 - 交付说明：`docs/交付_批次14_QA路径保护_2026-11-27.md`
 - 提交：c354205
+## 第十批交付（2026-11-27）
+
+- 文件：`tools/run_playthrough.ps1`、`tools/run_audits.ps1`
+- 隔离：RunId 白名单；运行目录原子创建，重复编号退出 9；`-ReuseExisting` 显式续用；`-NoLink` 跳过便捷 Junction；真实目录占位退出 7 并保留文件
+- 校验：`-AuditRoot` 必须带 `wuxia-audits/<id>/wuxia-regression` 标记，正式工程路径退出 6；`run_audits` 结果目录必须在该运行目录内
+- 编码：引擎输出改用 Godot `--log-file` UTF-8 日志判定，`role_advance` / `equipment` 不再误报（均 passed=True）
+- 并发：同 RunId 两份 prepare 一份 0 一份 9；无头 + 图形 battle_navigation 同时 PASS（`.shots/par_h3.log`、`par_g3.log`），各自存档存在
+- 失败：临时审计退出 1，`FAILED_COUNT=1`，日志 `.shots/runs/failtest10/results/zz_fail_tmp.log`
+- 全量：**88 / 88，failed=0**（`.shots/audit_batch10.txt`）
+- 交付说明：`docs/交付_批次10_隔离边界_2026-11-27.md`
+- 提交：__HASH__
