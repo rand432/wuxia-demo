@@ -24,9 +24,8 @@ const BattleArt := preload("res://kushou/battle_art.gd")
 const ResultView := preload("res://kushou/result_view.gd")
 const DrawView := preload("res://kushou/draw_view.gd")
 const CurioDetailView := preload("res://kushou/curio_detail_view.gd")
-const TreasureView := preload("res://kushou/treasure_view.gd")
 const DrawCard := preload("res://kushou/draw_card.gd")
-const AugView := preload("res://kushou/aug_view.gd")
+const ChoicePanelView := preload("res://kushou/choice_panel_view.gd")
 const MenuUI := preload("res://shared/ui_kit.gd")
 const CardFrame := preload("res://kushou/card_frame.gd")
 const GodPortraits := preload("res://shared/god_portraits.gd")
@@ -157,7 +156,7 @@ var _l5_mate_shown := false
 var _str_round := 0
 var _str_pending := false
 var _str_layer: Control = null
-var _aug_view: AugView = null
+var _aug_view: ChoicePanelView = null
 var _str_tile = null
 # 进阶页（和抽卡同一套：三张卡浮在战场，不遮不暂停；只有［刷新 · 次数］和［隐藏］）
 var _aug_cards: Array = []
@@ -185,7 +184,7 @@ var _trea_charge := TREA_CHARGE_START
 var _trea_reroll := 3
 var _trea_pending := false
 var _trea_layer: Control = null
-var _trea_view: TreasureView = null
+var _trea_view: ChoicePanelView = null
 var _trea_cards: Array = []
 var _trea_refresh_btn: Button = null
 var _trea_tile = null
@@ -1021,6 +1020,11 @@ func _build_hud() -> void:
 	_mp_lb = _lbl("100/100", Vector2(407, 102), Vector2(128, 24), 16, LIGHT, hud)
 	_tot_btn = _btn("总计", Rect2(542, 79, 73, 44), 17, well, LIGHT, _show_totals, hud)
 	_btn("退出", Rect2(625, 79, 73, 44), 17, well, LIGHT, func(): _show_exit(true), hud)
+	_boss_bar = BossBar.new()
+	_boss_bar.size = Vector2(684, 20)
+	_boss_bar.position = Vector2(18, FIELD_POS.y - _boss_bar.size.y)
+	_boss_bar.hide()
+	hud.add_child(_boss_bar)
 
 func _refresh_wave_hud(wave: int, complete := false) -> void:
 	if _wave_lb == null:
@@ -1194,12 +1198,6 @@ func _build_field() -> void:
 	_flash_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_flash_rect.z_index = 20
 	add_child(_flash_rect)
-	_boss_bar = BossBar.new()
-	_boss_bar.position = Vector2(110, 192)
-	_boss_bar.size = Vector2(500, 22)
-	_boss_bar.visible = false
-	_boss_bar.z_index = 6
-	add_child(_boss_bar)
 	_fly_layer = FlyLayer.new()
 	_fly_layer.size = Vector2(720, 1280)
 	_fly_layer.z_index = 12
@@ -2339,35 +2337,34 @@ func _tile(x: float, y: float, s: float, kind: String, label: String, hot: bool)
 # 首领血条：顶部横条，带"掉血残影"（ghost 慢慢追上来）
 class BossBar extends Control:
 	const F := preload("res://fonts/ink.ttf")
+	const NAME_WIDTH := 164.0
 	var ratio := 1.0
 	var ghost := 1.0
 	var bname := ""
+	var _backing := StyleBoxFlat.new()
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_backing.bg_color = Color(0.14, 0.11, 0.08)
+		_backing.set_corner_radius_all(5)
+		_backing.border_color = Color(0.62, 0.50, 0.32)
+		_backing.set_border_width_all(1)
 	func _draw() -> void:
-		var sb := StyleBoxFlat.new()
-		sb.bg_color = Color(0.14, 0.11, 0.08, 0.90)
-		sb.set_corner_radius_all(7)
-		sb.border_color = Color(0.62, 0.50, 0.32, 0.95)
-		sb.set_border_width_all(2)
-		draw_style_box(sb, Rect2(Vector2.ZERO, size))
-		var inner := Rect2(3, 3, size.x - 6, size.y - 6)
+		draw_style_box(_backing, Rect2(Vector2.ZERO, size))
+		var inner := Rect2(NAME_WIDTH + 8.0, 5.0, size.x - NAME_WIDTH - 16.0, size.y - 10.0)
+		draw_rect(inner, Color(0.076, 0.055, 0.044))
 		# 残影（掉下去的那一截，慢慢缩）
 		draw_rect(Rect2(inner.position, Vector2(inner.size.x * clampf(ghost, 0.0, 1.0), inner.size.y)),
 			Color(0.88, 0.66, 0.36, 0.38))
 		# 当前血量
 		draw_rect(Rect2(inner.position, Vector2(inner.size.x * clampf(ratio, 0.0, 1.0), inner.size.y)),
-			Color(0.70, 0.15, 0.11, 0.98))
+			Color(0.78, 0.24, 0.17))
 		# 四等分刻度（看得出还剩几段）
 		for i in range(1, 4):
 			var tx := inner.position.x + inner.size.x * float(i) / 4.0
 			draw_line(Vector2(tx, inner.position.y), Vector2(tx, inner.position.y + inner.size.y),
 				Color(0.10, 0.08, 0.06, 0.35), 1.0)
-		# 名字（先描一层暗影，红底/金底上都看得清）
-		draw_string(F, Vector2(1, size.y * 0.5 + 6), bname,
-			HORIZONTAL_ALIGNMENT_CENTER, size.x, 14, Color(0.0, 0.0, 0.0, 0.55))
-		draw_string(F, Vector2(0, size.y * 0.5 + 5), bname,
-			HORIZONTAL_ALIGNMENT_CENTER, size.x, 14, Color(0.98, 0.94, 0.85))
+		draw_string(F, Vector2(8, size.y * 0.5 + 5), bname,
+			HORIZONTAL_ALIGNMENT_CENTER, NAME_WIDTH, 15, Color(0.98, 0.94, 0.85))
 
 # 资源飞行层：击杀掉的金币/晶石飞向右上角资源条（割草的正反馈）
 class FlyLayer extends Control:
@@ -3716,7 +3713,8 @@ const AUG_ART := {
 func _build_str() -> void:
 	if _str_layer != null:
 		return
-	var view := AugView.new()
+	var view := ChoicePanelView.new()
+	view.configure("进阶", "")
 	view.name = "AugView"
 	view.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	view.visible = false
@@ -3973,7 +3971,8 @@ const RARE_CHANCE := 0.30
 func _build_trea() -> void:
 	if _trea_layer != null:
 		return
-	var view := TreasureView.new()
+	var view := ChoicePanelView.new()
+	view.configure("宝物", "选择一件")
 	view.name = "TreasureView"
 	view.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	view.visible = false
@@ -5500,17 +5499,28 @@ func _on_delayed_land(pos: Vector2, elem: String) -> void:
 	var wp: Vector2 = _core.position + pos
 	_spawn_pfx(str(e[0]), wp, float(e[2]), str(e[1]), 1.30)
 
+const BOSS_IMPACT_SOUNDS := {
+	"sector": "boss_impact_sweep",
+	"beam": "boss_impact_charge",
+	"follow": "boss_impact_tracker",
+}
+
 func _on_boss_impact(hazard: Dictionary) -> void:
-	if _run_over or int(hazard.get("chain_step", 0)) > 0:
+	if _run_over:
+		return
+	if int(hazard.get("chain_step", 0)) > 0:
+		# 慢帧内补结算多个落点时，音效池只放一次短爆。
+		Aud.sfx("boss_chain_pop", -17.0, 1.0, 100)
 		return
 	var pos := Vector2(float(hazard["x"]), float(hazard["y"]))
 	var shape := str(hazard["shape"])
 	var caster: Dictionary = hazard.get("caster", {})
+	var sound := "boss_impact_chain" if hazard.has("chain_step") else str(BOSS_IMPACT_SOUNDS.get(shape, "boss_impact_ground"))
+	Aud.sfx(sound, -8.0, 1.0, 140)
 	if shape == "ring":
 		_hazard_view.flash_ring(pos, float(hazard["r"]) + HazardTelegraph.RING_PADDING)
 	elif shape == "sector":
 		_hazard_view.flash_sector(pos, Vector2(hazard["dir"]), float(hazard["r"]), float(hazard["spread"]))
-		Aud.sfx("swing", -8.0, 0.72, 180)
 	var token := _foe_tokens.get(int(caster.get("_tid", 0))) as TokenActor
 	if token != null:
 		var direction: Vector2 = _core.position + pos - token.position

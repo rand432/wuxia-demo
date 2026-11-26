@@ -1,10 +1,13 @@
 extends Control
 # ============================================================
-# kushou/aug_view.gd —— 强化（进阶）面板（批次 3 · 第三块）
+# kushou/choice_panel_view.gd —— 宝物 / 强化共用的选卡面板
 #
-#   负责：遮罩渐变、双层纸框、标题「进阶」、等级说明、隐藏/刷新/放弃按钮、
-#         三张选项卡的位置与出场动画。
-#   不负责：池子筛选、数值、品质、选后应用（都在战斗层）。
+#   合并自 treasure_view.gd 与 aug_view.gd 的相同部分：
+#   遮罩渐变、双层纸框、标题区、三张卡挂载、隐藏/刷新/放弃按钮、
+#   三张卡的弹出与关闭。差异由两个配置项承载：
+#     · title（"宝物" / "进阶"）
+#     · caption 初值（"选择一件" / 空，强化由战斗层写"强化 N 级"）
+#   抽取池、品质、数值、选后结算、刷新费与按钮可用状态仍由战斗层负责。
 #   卡牌控件（AugCard）由战斗层通过 card_factory 注入。
 # ============================================================
 signal hide_pressed
@@ -22,9 +25,18 @@ var refresh_btn: Button = null
 var caption: Label = null
 var card_factory: Callable = Callable()
 
+var _title := "宝物"
+var _caption_text := ""
+var _built := false
+
+func configure(title: String, caption_text: String) -> void:
+	_title = title
+	_caption_text = caption_text
+
 func build() -> void:
-	if refresh_btn != null:
+	if _built:
 		return
+	_built = true
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var ink_wash := Gradient.new()
 	var shade_color := Color(0.10, 0.08, 0.06)
@@ -47,8 +59,8 @@ func build() -> void:
 	var brass := Color(0.87, 0.73, 0.49)
 	_panel(Rect2(52, 166, 616, 498), Color(0.19, 0.15, 0.11, 0.98), 14, rim, 2, self)
 	_panel(Rect2(65, 228, 590, 365), ink, 10, Color(0.39, 0.28, 0.18), 1, self)
-	_lbl("进阶", Vector2(75, 179), Vector2(152, 43), 32, LIGHT, self)
-	caption = _lbl("", Vector2(223, 182), Vector2(274, 40), 22, brass, self, HORIZONTAL_ALIGNMENT_CENTER)
+	_lbl(_title, Vector2(75, 179), Vector2(152, 43), 32, LIGHT, self)
+	caption = _lbl(_caption_text, Vector2(223, 182), Vector2(274, 40), 22, brass, self, HORIZONTAL_ALIGNMENT_CENTER)
 	_btn("隐藏", Rect2(562, 180, 84, 40), 19, ink, LIGHT, func() -> void: hide_pressed.emit(), self, rim, 1)
 	refresh_btn = _btn("刷新 · 0 次", Rect2(106, 602, 240, 47), 20,
 		Color(0.30, 0.22, 0.14), LIGHT, func() -> void: refresh_pressed.emit(), self, rim, 1)

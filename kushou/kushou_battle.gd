@@ -1596,7 +1596,8 @@ func queue_delayed(x: float, y: float, r: float, dmg: float, elem: String, warn 
 		"dmg": dmg, "elem": elem, "kind": kind, "shape": shape, "dir": dir, "len": len,
 		"spread": spread, "count": count, "gap": gap, "life": life, "tick": 0.0, "push": push,
 		"caster": caster, "landed": false})
-	Audio.sfx("heartbeat", -10.0)
+	# 同批连爆会一次排入多个落点，预警声只播放一次。
+	Audio.sfx("enemy_warning", -12.0, 1.0, 140)
 
 func foe_move_speed(foe: Dictionary) -> float:
 	var slow := 0.45 if float(foe.get("slow_t", 0.0)) > 0.0 else 0.0

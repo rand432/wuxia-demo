@@ -13,6 +13,24 @@ func _initialize() -> void:
 func _pool(core) -> void:
 	core.queue_delayed(core.hero_pos.x, core.hero_pos.y, 70.0, 20.0, "真实", 1.0, "pool test", "pool", Vector2.RIGHT, 0.0, 0.0, 0, 0.0, 3.0)
 
+func _active_sound_count(key: String) -> int:
+	var count := 0
+	for player in Audio._sfx_active:
+		if is_instance_valid(player) and player.stream != null and player.stream.resource_path.ends_with("/" + key + ".ogg"):
+			count += 1
+	return count
+
+func _audit_chain_audio(core) -> bool:
+	core.queue_chain(60.0, 70.0, 60.0, 0.0, "真实", "连爆测试", Vector2.RIGHT, 5, 110.0, 0.22)
+	assert(_active_sound_count("enemy_warning") == 1 and core._delayed.size() == 5)
+	for cast in core._delayed:
+		cast["boss_attack"] = true
+	core._delayed_tick(3.0)
+	assert(core._delayed.is_empty())
+	assert(_active_sound_count("boss_impact_chain") == 1 and _active_sound_count("boss_chain_pop") == 1)
+	core._hitstop = 0.0
+	return true
+
 func _audit_unseen_foes() -> bool:
 	LS.current_level = 10
 	var battle = Battle.instantiate()
@@ -89,6 +107,9 @@ func _audit_guardian(level: int, name: String, atlas_id: String, attack: String,
 	var foe: Dictionary = core._boss_foe()
 	foe.merge({"x": 290.0, "y": 290.0}, true)
 	battle._process(0.0)
+	var boss_bar: Control = battle._boss_bar
+	assert(boss_bar.visible and boss_bar.bname == name and boss_bar.ratio == 1.0)
+	assert(boss_bar.get_global_rect().end.y <= battle.FIELD_POS.y)
 	var token = battle._foe_tokens[foe["_tid"]]
 	token.set_process(false)
 	assert(token.guardian and token._frame_atlas.resource_path == path)
@@ -134,6 +155,7 @@ func _audit_guardian(level: int, name: String, atlas_id: String, attack: String,
 		assert(landed_steps == [0, 1, 2, 3, 4] and core._delayed.is_empty())
 	core._apply_dmg(foe, float(foe["hp"]) * 0.08, "真实")
 	battle._process(0.0)
+	assert(boss_bar.ratio < 1.0 and boss_bar.ghost > boss_bar.ratio)
 	token._process(0.065)
 	assert(token._frame_index == 12)
 	token._process(0.03)
@@ -172,6 +194,7 @@ func _run() -> void:
 	core.hero["hp"] = 1000.0
 	battle._curio_id = ""
 	battle._bm.slots.clear()
+	assert(_audit_chain_audio(core))
 	_pool(core)
 	core._delayed_tick(0.5)
 	assert(core.hero["hp"] == 1000.0)
