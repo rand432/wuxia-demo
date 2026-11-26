@@ -123,3 +123,15 @@
 - 这一批只改测试和证据输出。关卡波数、怪物生命、奖励、卡池、存档规则及正式场景接线沿用当前版本。交付时列出最多三条有证据的节奏问题，供下一轮选择调参。
 
 第七至九批的验收报告继续追加到本文件。每批附上对应提交、命令、实际日志路径和验证范围。
+
+---
+
+## 第七批交付（2026-11-26）
+
+- 文件：`tools/run_playthrough.ps1`、`tools/run_audits.ps1`、`.shots/run_all_audits.ps1`
+- 每次运行独立：项目 `.shots/runs/<runId>/audit_project`、user `wuxia-audits/<runId>/wuxia-regression`、结果 `.shots/runs/<runId>/results`
+- 输出：`AUDIT_RUN_ID` / `AUDIT_PROJECT` / `AUDIT_USER_DIR` / `AUDIT_RESULTS`；保留 `-PrepareOnly`；新增 `-RunId`、`-AuditRoot`、`-ResultRoot`
+- 并发验证：runA 无头 + runB 图形同时跑 `battle_navigation`，两者 PASS（各带 `[HEADLESS]` / `[GRAPHICS]` 标记），项目/存档/日志互不覆盖（`.shots/concur_headless.log`、`.shots/concur_graphics.log`）
+- 全量：新入口 **88 / 88，failed=0**（`.shots/audit_batch7.txt`、`audit_batch7c.txt`）
+- 交付说明：`docs/交付_批次7_隔离回归_2026-11-26.md`
+- 用法更新：单用例先 `run_playthrough.ps1 -PrepareOnly -RunId <id>`，从输出取 `AUDIT_PROJECT`；全量直接 `run_audits.ps1 [-RunId <id>]`；`.shots/audit_project` 仅为“最近一次”的便捷 Junction
