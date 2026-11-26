@@ -191,4 +191,4 @@
 - 错误路径：`-Godot Z:\\nope\\godot.exe` → `ERROR: Godot 不存在`，退出码 2
 - 设备：adb devices 为空，安装/启动/触控/帧率未执行
 - 交付说明：`docs/交付_批次8_AndroidQA_2026-11-26.md`
-- 提交：__HASH__
+- 提交：6d762ce
