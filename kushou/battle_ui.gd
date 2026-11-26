@@ -24,6 +24,7 @@ const BattleArt := preload("res://kushou/battle_art.gd")
 const ResultView := preload("res://kushou/result_view.gd")
 const DrawView := preload("res://kushou/draw_view.gd")
 const CurioDetailView := preload("res://kushou/curio_detail_view.gd")
+const TreasureView := preload("res://kushou/treasure_view.gd")
 const MenuUI := preload("res://shared/ui_kit.gd")
 const CardFrame := preload("res://kushou/card_frame.gd")
 const GodPortraits := preload("res://shared/god_portraits.gd")
@@ -181,6 +182,7 @@ var _trea_charge := TREA_CHARGE_START
 var _trea_reroll := 3
 var _trea_pending := false
 var _trea_layer: Control = null
+var _trea_view: TreasureView = null
 var _trea_cards: Array = []
 var _trea_refresh_btn: Button = null
 var _trea_tile = null
@@ -4043,23 +4045,23 @@ const RARE_CHANCE := 0.30
 func _build_trea() -> void:
 	if _trea_layer != null:
 		return
-	_trea_layer = Control.new()
-	_trea_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_trea_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_trea_layer.visible = false
-	_trea_layer.z_index = 22
-	add_child(_trea_layer)
-	var chrome := _build_choice_chrome(_trea_layer, "宝物", _hide_trea, _on_trea_refresh, _on_trea_abandon)
-	chrome[0].text = "选择一件"
-	_trea_refresh_btn = chrome[1]
-	for i in 3:
-		var card := AugCard.new()
-		card.size = Vector2(176, 335)
-		card.picked.connect(func(): _on_trea_card(card))
-		_trea_layer.add_child(card)
-		_trea_cards.append(card)
+	var view := TreasureView.new()
+	view.name = "TreasureView"
+	view.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	view.visible = false
+	view.z_index = 22
+	view.card_factory = func() -> Control: return AugCard.new()
+	view.hide_pressed.connect(_hide_trea)
+	view.refresh_pressed.connect(_on_trea_refresh)
+	view.abandon_pressed.connect(_on_trea_abandon)
+	view.card_picked.connect(func(card) -> void: _on_trea_card(card as AugCard))
+	add_child(view)
+	view.build()
+	_trea_view = view
+	_trea_layer = view
+	_trea_cards = view.cards
+	_trea_refresh_btn = view.refresh_btn
 
-# 品质随波数升：1-2 良 · 3 玄 · 4-5 地 · 6+ 天
 func _trea_quality() -> int:
 	var w := 1
 	if _core != null:
@@ -4114,10 +4116,7 @@ func _open_trea() -> void:
 		_show_draw(false)
 	_hide_aug_pick()
 	_hide_god_pick()
-	_trea_layer.visible = true
-	_layer_in(_trea_layer)
-	_trea_layer.move_to_front()
-	_pop_trea_cards()
+	_trea_view.open()
 	Aud.sfx("ui_open", -8.0)
 
 # 现在能抽到的羁绊：已解锁 且 还没结过
@@ -4317,10 +4316,12 @@ func _refresh_trea_btn() -> void:
 		_trea_refresh_btn.disabled = _trea_reroll <= 0
 
 func _pop_trea_cards() -> void:
-	_pop_option_cards(_trea_cards)
+	if _trea_view != null:
+		_trea_view.pop_cards()
 
 func _hide_trea() -> void:
-	_hide_choice_layer(_trea_layer, _trea_cards)
+	if _trea_view != null:
+		_trea_view.close()
 
 func _on_trea_card(card: AugCard) -> void:
 	if _run_over or not _trea_pending or _trea_layer == null or not _trea_layer.visible or card == null or not _trea_cards.has(card) or card.o.is_empty():
