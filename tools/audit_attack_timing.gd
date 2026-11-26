@@ -35,6 +35,40 @@ func _audit_trails() -> bool:
 		image.get_pixel(180, 80).b > 0.4 and image.get_pixel(180, 120).b > 0.4 and \
 		image.get_pixel(240, 160).b < 0.12
 
+func _audit_number_edges() -> bool:
+	var viewport := SubViewport.new()
+	viewport.size = Vector2i(320, 200)
+	viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
+	root.add_child(viewport)
+	var fx := AttackFx.new()
+	fx.front = true
+	fx.size = Vector2(viewport.size)
+	fx.clip_contents = true
+	viewport.add_child(fx)
+	fx.set_process(false)
+	fx.spawn_hit(Vector2(1, 49), 36, 172560, false, true)
+	fx.spawn_hit(Vector2(319, 65), 36, 9864321, true)
+	assert(fx.nums.size() == 2)
+	fx.hits.clear()
+	for number in fx.nums:
+		number["t"] = 0.27
+	await RenderingServer.frame_post_draw
+	var image := viewport.get_texture().get_image()
+	viewport.queue_free()
+	var left_count := 0
+	var right_count := 0
+	for y in 75:
+		for x in viewport.size.x:
+			if image.get_pixel(x, y).r < 0.55:
+				continue
+			if y < 4 or x < 4 or x >= viewport.size.x - 4:
+				return false
+			if x < viewport.size.x / 2:
+				left_count += 1
+			else:
+				right_count += 1
+	return left_count > 70 and right_count > 70
+
 func _run() -> void:
 	for scenario in [{"aspd": 1.0}, {"aspd": 2.0}, {"aspd": 5.0}, {"aspd": 5.0, "boost": true}]:
 		var multiplier: float = scenario["aspd"]
@@ -76,4 +110,6 @@ func _run() -> void:
 		var trail_visible := await _audit_trails()
 		assert(trail_visible)
 		print("PASS: short skill glints, filled trails, thin edges and fade in the rendered viewport")
+		assert(await _audit_number_edges())
+		print("PASS: critical and hero damage numbers stay inside the rendered battlefield edges")
 	Audio.quit_cleanly()

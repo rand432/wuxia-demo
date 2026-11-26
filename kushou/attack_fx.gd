@@ -310,14 +310,19 @@ func _draw_num(n: Dictionary) -> void:
 	var pop := lerpf(0.72, 1.12, minf(1.0, p / 0.16)) if p < 0.16 else lerpf(1.12, 1.0, minf(1.0, (p - 0.16) / 0.18))
 	var fsz := int(round(float(n["size"]) * pop))
 	var w := FONT.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fsz).x
-	var base := Vector2(pos.x - w * 0.5, pos.y)
 	var strong := bool(n["gold"])
+	var outline := 5 if strong else 4
+	var inset := float(outline) + 2.0
+	# 依据回弹后的实际字宽和基线限制描边，避免长数字被战场裁切。
+	var base := Vector2(
+		clampf(pos.x - w * 0.5, inset, maxf(inset, size.x - w - inset)),
+		clampf(pos.y, FONT.get_ascent(fsz) + inset, size.y - FONT.get_descent(fsz) - inset))
 	var color := Color(1.0, 0.79, 0.30, a) if strong else Color(1.0, 0.95, 0.82, a)
 	if bool(n["heavy"]) and not strong:
 		color = Color(1.0, 0.64, 0.37, a)
 	if bool(n["hero"]):
 		color = Color(1.0, 0.51, 0.45, a)
-	draw_string_outline(FONT, base, txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fsz, 5 if strong else 4, Color(0.16, 0.095, 0.055, a))
+	draw_string_outline(FONT, base, txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fsz, outline, Color(0.16, 0.095, 0.055, a))
 	draw_string(FONT, base, txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fsz, color)
 
 func _draw_swing(s: Dictionary) -> void:
