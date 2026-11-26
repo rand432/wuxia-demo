@@ -247,4 +247,4 @@
 - 资源核对新增：`portrait_zhujue_ink_v3.webp`、`player_battle_frames.png`、`player_skill_poses_v2.png`、`crowd_brute_v1` / `crowd_shield_v1`、`enemy_warning` / `fall_down`、`result_view` / `card_frame`，并要求导入副本；排除 `tools/audit_*` / `tools/playthrough*`
 - 全量：**88 / 88，failed=0**（`.shots/audit_batch14.txt`）
 - 交付说明：`docs/交付_批次14_QA路径保护_2026-11-27.md`
-- 提交：__HASH__
+- 提交：c354205
