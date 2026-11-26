@@ -282,6 +282,7 @@ const MIN_VISIBLE_FOE_Y := 90.0
 var _dense_roster := false
 var _boss_bar_t := 0.0
 var _flash_rect: ColorRect = null  # 技能释放时的整屏微闪
+var _flash_tween: Tween
 var _cast_dtype := ""              # 最近一次释放的技能属性（决定闪光颜色）
 var _boss_veil: ColorRect = null   # 首领登场：压暗
 var _boss_spot: Sprite2D = null    # 首领登场：聚光
@@ -1106,6 +1107,7 @@ func _build_field() -> void:
 	_core.champion_down.connect(func() -> void: _q_done_kind("champion"))
 	_core.hero_attack.connect(_on_hero_attack)
 	_core.foe_attack.connect(_on_foe_attack)
+	_core.foe_missed.connect(_on_foe_missed)
 	_core.foe_windup.connect(_on_foe_windup)
 	_core.foe_blocked.connect(_on_foe_blocked)
 	_core.hero_strike_resolved.connect(_hero_slash_frames)
@@ -1211,8 +1213,8 @@ func _build_field() -> void:
 	add_child(_boss_name_lb)
 	_flash_rect = ColorRect.new()
 	_flash_rect.color = Color(1.0, 0.96, 0.85, 0.0)
-	_flash_rect.position = Vector2(0, 150)
-	_flash_rect.size = Vector2(720, 720)   # 只闪战场，不染 HUD
+	_flash_rect.position = FIELD_POS
+	_flash_rect.size = _core.size
 	_flash_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_flash_rect.z_index = 20
 	add_child(_flash_rect)
@@ -2894,6 +2896,8 @@ func _quit() -> void:
 		# 场景会延迟释放；离树后立即拒绝旧奖励和结算回调。
 		_run_over = true
 		_reset_camera()
+		_clear_invocation_portrait()
+		_clear_field_flash()
 		_clear_lamp_field()
 		if _core != null:
 			_core.running = false
@@ -3378,6 +3382,7 @@ func _end_run(win: bool) -> void:
 			print("[RUN] lv=", LevelState.current_level, " wave=", _max_wave, " kills=", _kills,
 				" wen=", _wen, " crystal=", _crystal)
 	_run_over = true
+	_clear_invocation_portrait()
 	_clear_lamp_field()
 	if _hero_token != null:
 		_hero_token.cancel_cast_poses()
@@ -5129,9 +5134,17 @@ func _reset_camera() -> void:
 func _screen_flash(col: Color, a: float, dur := 0.16) -> void:
 	if _flash_rect == null:
 		return
+	_clear_field_flash()
 	_flash_rect.color = Color(col.r, col.g, col.b, a)
-	var tw := create_tween().bind_node(_flash_rect)
-	tw.tween_property(_flash_rect, "color:a", 0.0, dur)
+	_flash_tween = create_tween().bind_node(_flash_rect)
+	_flash_tween.tween_property(_flash_rect, "color:a", 0.0, dur)
+
+func _clear_field_flash() -> void:
+	if _flash_tween != null and _flash_tween.is_valid():
+		_flash_tween.kill()
+	_flash_tween = null
+	if _flash_rect != null:
+		_flash_rect.color.a = 0.0
 
 # 技能释放的整体反馈：微闪 + 轻震 + 顿帧
 # 每系一个闪光颜色：火橙、金金、木绿、召唤紫、真实暗紫、物理纸
@@ -5618,6 +5631,8 @@ func _on_paper_blocked(pos: Vector2) -> void:
 		_spawn_pfx("holy/heal", _core.position + pos, 1.0, "heal", 1.5)
 
 func _on_boss_died(pos: Vector2) -> void:
+	if _run_over or _core == null:
+		return
 	var wp: Vector2 = _core.position + pos
 	wp.x = clampf(wp.x, 90.0, 630.0)
 	wp.y = clampf(wp.y, 210.0, 800.0)
@@ -6211,7 +6226,11 @@ func _on_foe_attack(foe: Dictionary, target: Vector2) -> void:
 			origin.x += token.radius * 0.84 * side
 			if kind == "mage":
 				origin.y -= token.radius * 0.26
-		_fx_front.spawn_enemy_attack(origin, destination - Vector2(0, 26) - FIELD_POS, kind)
+		_fx_front.spawn_enemy_attack(origin, destination - Vector2(0, 26) - FIELD_POS, kind, int(foe.get("_tid", 0)))
+
+func _on_foe_missed(foe: Dictionary) -> void:
+	if not _run_over and _fx_front != null:
+		_fx_front.mark_enemy_attack_missed(int(foe.get("_tid", 0)))
 
 func _on_foe_blocked(foe: Dictionary) -> void:
 	var token := _foe_tokens.get(int(foe.get("_tid", 0))) as TokenActor
@@ -6864,10 +6883,9 @@ func _on_god_card(card: GodCard) -> void:
 		_fly_god_seal(card.skill_art, from, slot)
 
 func _show_invocation_portrait(art: Texture2D, aid: String) -> void:
-	if art == null or _hero_token == null:
+	if _run_over or art == null or _hero_token == null:
 		return
-	if is_instance_valid(_invocation_portrait):
-		_invocation_portrait.queue_free()
+	_clear_invocation_portrait()
 	var shade := PortraitMotion.new()
 	shade.name = "GodInvocationPortrait"
 	shade.spectral = true
@@ -6877,7 +6895,7 @@ func _show_invocation_portrait(art: Texture2D, aid: String) -> void:
 		clampf(feet.y - 305.0, 148.0, 574.0))
 	shade.z_index = 14
 	shade.modulate.a = 0.92
-	add_child(shade)
+	_cam.add_child(shade)
 	shade.set_portrait(art, aid)
 	shade.demonstrate()
 	_invocation_portrait = shade
@@ -6885,6 +6903,12 @@ func _show_invocation_portrait(art: Texture2D, aid: String) -> void:
 	fade.tween_property(shade, "position:y", shade.position.y - 20.0, PortraitMotion.DEMO_TIME).set_trans(Tween.TRANS_SINE)
 	fade.tween_property(shade, "modulate:a", 0.0, PortraitMotion.DEMO_TIME).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
 	fade.chain().tween_callback(shade.queue_free)
+
+func _clear_invocation_portrait() -> void:
+	if is_instance_valid(_invocation_portrait):
+		_invocation_portrait.hide()
+		_invocation_portrait.queue_free()
+	_invocation_portrait = null
 
 func _god_skill_icon(aid: String) -> String:
 	var icon_key := str(SKILL_ICON_ALIAS.get(aid, aid))
@@ -9351,3 +9375,7 @@ func _play_video_after_beat(v: VideoStreamPlayer, was_running: bool) -> void:
 		_shiny_video_busy = false
 		if _core != null and was_running:
 			_core.running = true)
+
+
+func _exit_tree() -> void:
+	Aud.stop_all_sfx()

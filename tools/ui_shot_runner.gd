@@ -42,6 +42,8 @@ func _ready() -> void:
 	holder.add_child(node)
 	if node is Control:
 		(node as Control).set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	if scene_path.find("forge_sheet") >= 0 and node.has_method("open"):
+		node.open("weapon")
 	if node.has_method("_show_draw") and node.get("_tut") != null:
 		var tut = node.get("_tut")
 		tut.cancel()

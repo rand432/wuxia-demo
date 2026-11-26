@@ -123,13 +123,28 @@ func spawn_defeat(feet: Vector2, radius: float, accent: Color, important: bool) 
 		"important": important, "t": 0.0, "dur": 0.39 if important else 0.30})
 	queue_redraw()
 
-func spawn_enemy_attack(origin: Vector2, target: Vector2, kind: String) -> void:
+func spawn_enemy_attack(origin: Vector2, target: Vector2, kind: String, foe_id := 0) -> void:
 	if origin.distance_squared_to(target) < 9.0:
 		return
 	if enemy_attacks.size() >= 24:
 		enemy_attacks.pop_front()
-	enemy_attacks.append({"origin": origin, "target": target, "kind": kind, "age": 0.0})
+	enemy_attacks.append({"origin": origin, "target": target, "kind": kind, "age": 0.0, "foe_id": foe_id})
 	queue_redraw()
+
+func mark_enemy_attack_missed(foe_id: int) -> void:
+	if foe_id <= 0:
+		return
+	for i in range(enemy_attacks.size() - 1, -1, -1):
+		var strike := enemy_attacks[i]
+		if strike["foe_id"] != foe_id or float(strike["age"]) > 0.0:
+			continue
+		var path: Vector2 = strike["target"] - strike["origin"]
+		var direction := path.normalized()
+		var normal := direction.orthogonal() * (1.0 if foe_id % 2 == 0 else -1.0)
+		strike["target"] += normal * 42.0 + direction * 13.0
+		strike["missed"] = true
+		queue_redraw()
+		return
 
 func spawn_poison_ring(feet: Vector2, radius: float) -> void:
 	spawn_cast_seal(feet, Color(0.60, 0.89, 0.48), radius, 1.0, true)
@@ -248,6 +263,8 @@ func _draw_enemy_attack(strike: Dictionary) -> void:
 	var target: Vector2 = strike["target"]
 	var progress := clampf(float(strike["age"]) / 0.18, 0.0, 1.0)
 	var opacity := 1.0 - progress
+	if strike.get("missed", false):
+		opacity *= 0.72
 	var direction := origin.direction_to(target)
 	match str(strike["kind"]):
 		"bow":

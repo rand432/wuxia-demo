@@ -323,6 +323,25 @@ static var _last_sfx_msec := {}
 const SFX_POOL_MAX := 16
 const SFX_ACTIVE_MAX := 32
 
+# 批次13：只读统计，便于回归核对“请求 / 实际播出 / 被间隔合并 / 并发峰值”。
+static var _sfx_requested := 0
+static var _sfx_played := 0
+static var _sfx_skipped_gap := 0
+static var _sfx_peak := 0
+static var _sfx_per_key := {}
+
+static func reset_sfx_stats() -> void:
+	_sfx_requested = 0
+	_sfx_played = 0
+	_sfx_skipped_gap = 0
+	_sfx_peak = 0
+	_sfx_per_key = {}
+
+static func sfx_stats() -> Dictionary:
+	return {"requested": _sfx_requested, "played": _sfx_played, "skipped_gap": _sfx_skipped_gap,
+		"peak_active": _sfx_peak, "active": _sfx_active.size(), "pool": _sfx_pool.size(),
+		"per_key": _sfx_per_key.duplicate()}
+
 static func _acquire_sfx_player() -> AudioStreamPlayer:
 	_sfx_active = _sfx_active.filter(func(p): return is_instance_valid(p))
 	if _sfx_active.size() >= SFX_ACTIVE_MAX:
@@ -332,6 +351,19 @@ static func _acquire_sfx_player() -> AudioStreamPlayer:
 		if is_instance_valid(q):
 			return q
 	return ManagedPlayer.new()
+
+static func _prune_sfx_players() -> void:
+	for p in _sfx_active.duplicate():
+		if not is_instance_valid(p):
+			_sfx_active.erase(p)
+		elif not p.playing:
+			_release_sfx_player(p)
+
+# 离场清口：战斗/页面关闭时把尚未结束的音效停掉并归还池，避免 active 残留。
+static func stop_all_sfx() -> void:
+	for p in _sfx_active.duplicate():
+		_release_sfx_player(p)
+	_sfx_active.clear()
 
 static func _release_sfx_player(p: AudioStreamPlayer) -> void:
 	if p == null or not is_instance_valid(p) or not _sfx_active.has(p):
@@ -345,9 +377,12 @@ static func _release_sfx_player(p: AudioStreamPlayer) -> void:
 		p.queue_free()
 
 static func sfx(key: String, vol_db := -6.0, pitch := 1.0, min_gap_ms := 0) -> void:
+	_prune_sfx_players()
 	var gap := maxi(min_gap_ms, 45 if key == "ui_click" else 0)
 	var now := Time.get_ticks_msec()
+	_sfx_requested += 1
 	if gap > 0 and now - int(_last_sfx_msec.get(key, -gap)) < gap:
+		_sfx_skipped_gap += 1
 		return
 	var root := _root()
 	if root == null:
@@ -362,6 +397,10 @@ static func sfx(key: String, vol_db := -6.0, pitch := 1.0, min_gap_ms := 0) -> v
 	if gap > 0:
 		_last_sfx_msec[key] = now
 	_sfx_active.append(p)
+	_sfx_played += 1
+	_sfx_per_key[key] = int(_sfx_per_key.get(key, 0)) + 1
+	if _sfx_active.size() > _sfx_peak:
+		_sfx_peak = _sfx_active.size()
 	p.stream = s
 	p.volume_db = vol_db + _vol_db(_sfx_vol)
 	p.pitch_scale = clampf(pitch, 0.5, 2.0)

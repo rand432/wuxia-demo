@@ -37,9 +37,13 @@ func _case(win: bool) -> void:
 	battle._bm.stock = [{"base": 1, "item": {"kind": "equipment", "name": "test"}}]
 	battle._bm.open_panel()
 	battle._cam_pulse(1.14, 0.42)
+	battle._screen_flash(Color.ORANGE, 0.7, 0.9)
 	battle._end_run(win)
 	assert(not battle._bm.visible)
 	assert(battle._cam.scale == Vector2.ONE)
+	var result_flash: Color = battle._flash_rect.color
+	battle._on_boss_died(Vector2(320, 380))
+	assert(battle._flash_rect.color == result_flash, "A late boss cue replaced the result flash")
 	await create_timer(0.18).timeout
 	assert(battle._cam.scale == Vector2.ONE, "Old camera animation moved the result scene")
 	battle._cam_zoom_to(1.16, 0.07)
@@ -76,6 +80,8 @@ func _case(win: bool) -> void:
 	assert(foe["hp"] == hp and battle._cards.size() == cards)
 	assert(not battle._core.running)
 	assert(_rewards(battle) == rewards)
+	await create_timer(0.27).timeout
+	assert(battle._flash_rect.color.a == 0.0, "An older flash returned after the result flash faded")
 	battle.queue_free()
 	await process_frame
 
@@ -83,8 +89,9 @@ func _run() -> void:
 	await _case(false)
 	await _case(true)
 	await _camera_transitions()
+	await _flash_transitions()
 	await _guardian_defeat()
-	print("PASS: result freezes rewards and camera; overlapping camera cues settle correctly; guardian defeat precedes result")
+	print("PASS: result freezes rewards and camera; scene flashes cannot return or override results; guardian defeat precedes result")
 	Audio.quit_cleanly()
 
 func _camera_transitions() -> void:
@@ -104,6 +111,20 @@ func _camera_transitions() -> void:
 	battle._cam_zoom_to(1.07, 0.12)
 	await create_timer(0.92).timeout
 	assert(battle._cam.scale.is_equal_approx(Vector2.ONE * 1.07))
+	battle.queue_free()
+	await process_frame
+
+func _flash_transitions() -> void:
+	var battle = Battle.instantiate()
+	root.add_child(battle)
+	battle._tut.cancel()
+	battle.set_process(false)
+	battle._core.set_process(false)
+	battle._screen_flash(Color.ORANGE, 0.65, 0.8)
+	await create_timer(0.09).timeout
+	battle._screen_flash(Color.CYAN, 0.25, 0.07)
+	await create_timer(0.22).timeout
+	assert(battle._flash_rect.color.a == 0.0, "An older flash returned after a shorter cue faded")
 	battle.queue_free()
 	await process_frame
 

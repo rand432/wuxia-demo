@@ -1,6 +1,7 @@
 extends SceneTree
 const BATTLE := preload("res://kushou/battle_ui.tscn")
 const LS := preload("res://shared/level_state.gd")
+const Audio := preload("res://shared/audio.gd")
 func _initialize() -> void:
 	if not OS.get_user_data_dir().replace("\\", "/").ends_with("wuxia-regression"):
 		quit(2)
@@ -29,9 +30,20 @@ func _run() -> void:
 	var apparition = battle._invocation_portrait
 	assert(apparition.spectral and apparition._demo_left > 0.0)
 	assert(apparition.character_id == picked.aid and apparition.texture == picked.portrait)
+	assert(apparition.get_parent() == battle._cam)
+	var art: Texture2D = picked.portrait
 	await create_timer(1.25).timeout
 	assert(not is_instance_valid(apparition))
+	battle._show_invocation_portrait(art, "liuqingqing")
+	var outgoing = battle._invocation_portrait
+	battle._show_invocation_portrait(art, "liuqingqing")
+	var incoming = battle._invocation_portrait
+	assert(outgoing != incoming and not outgoing.visible and outgoing.is_queued_for_deletion())
+	battle._end_run(false)
+	assert(battle._invocation_portrait == null and not incoming.visible and incoming.is_queued_for_deletion())
+	battle._show_invocation_portrait(art, "liuqingqing")
+	assert(battle._invocation_portrait == null)
 	battle.queue_free()
 	await process_frame
-	print("PASS: duplicate excluded; Liu portrait preserved; accepted pick shares portrait and plays a fading apparition")
-	quit()
+	print("PASS: portrait apparition matches the picked role, follows the camera and clears on replacement or result")
+	Audio.quit_cleanly()

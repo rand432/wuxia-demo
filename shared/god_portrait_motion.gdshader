@@ -22,6 +22,7 @@ void fragment() {
 	if (spectral) {
 		float edge = length((UV - vec2(0.5, 0.42)) * vec2(1.60, 0.80));
 		art.a *= 1.0 - smoothstep(0.31, 0.67, edge);
+		art.a *= smoothstep(0.0, 0.16, UV.y);
 		art.a *= 1.0 - smoothstep(0.56, 0.98, UV.y);
 		art.rgb += vec3(0.045, 0.11, 0.15) * (0.65 + glow * 0.35);
 	}

@@ -266,6 +266,54 @@ func _audit_crowd_melee(flag: String, title: String, atlas_id: String) -> bool:
 	battle.queue_free()
 	return true
 
+func _audit_ranged_miss(flag: String, kind: String) -> bool:
+	LS.current_level = 6
+	var battle = Battle.instantiate()
+	root.add_child(battle)
+	battle._tut.cancel()
+	battle.set_process(false)
+	var core = battle._core
+	core.set_process(false)
+	core.hero["hp"] = 10000.0
+	core.hero["hp_max"] = 10000.0
+	core.intro_wait = 0.0
+	core._hero_cd = 999.0
+	core._last_quota_wave = core.wave
+	core._wave_spawned = core._wave_quota
+	core._spawn_left = 0
+	var foe: Dictionary = core._spawn_foe()
+	var hero: Vector2 = core.hero_pos
+	foe.merge({"x": hero.x - 40.0, "y": hero.y - 40.0, "stop": 78.0,
+		"ranged": flag == "ranged", "mage": flag == "mage", "brute": false, "shield": false}, true)
+	battle._process(0.0)
+	var impact := hero - Vector2(0, 26)
+	var effects: Array = battle._fx_front.enemy_attacks
+	var missed := false
+	for given_seed in range(1, 32):
+		effects.clear()
+		seed(given_seed)
+		foe["blind_t"] = 1.0
+		foe["t"] = 1.0 / float(core.FOE_ASPD)
+		core._hitstop = 0.0
+		var before: float = core.hero["hp"]
+		core._process(0.016)
+		if core.hero["hp"] == before:
+			var trail: Dictionary = effects.back()
+			assert(trail["kind"] == kind and trail["missed"] and trail["foe_id"] == foe["_tid"])
+			assert(Vector2(trail["target"]).distance_to(impact) > 40.0)
+			missed = true
+			break
+	assert(missed)
+	foe.erase("blind_t")
+	foe["t"] = 1.0 / float(core.FOE_ASPD)
+	var before: float = core.hero["hp"]
+	core._process(0.016)
+	var hit: Dictionary = effects.back()
+	assert(core.hero["hp"] < before and hit["kind"] == kind and not hit.has("missed"))
+	assert(Vector2(hit["target"]).is_equal_approx(impact))
+	battle.queue_free()
+	return true
+
 func _audit_draw_does_not_change_spawn() -> void:
 	var core := Core.new()
 	core.size = Vector2(680, 720)
@@ -493,6 +541,11 @@ func _run() -> void:
 	await process_frame
 	assert(_audit_crowd_melee("shield", "山匪盾兵", "crowd_shield_v1"))
 	await process_frame
+	assert(_audit_ranged_miss("ranged", "bow"))
+	await process_frame
+	assert(_audit_ranged_miss("mage", "mage"))
+	await process_frame
+	print("[RANGED] blinded bow and spell attacks miss visually without damage; unblinded attacks hit the hero")
 	if DisplayServer.get_name() != "headless":
 		await _audit_draw_does_not_change_spawn()
 	print("PASS: hazard chronology, bounded summons, guardian and crowd melee poses, shield guard, separation and token allocation")

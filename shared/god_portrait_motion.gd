@@ -25,6 +25,7 @@ func set_portrait(art: Texture2D, aid: String) -> void:
 	if character_id != aid:
 		_demo_left = 0.0
 		_elapsed = 0.0
+		_apply_pose()
 	character_id = aid
 	texture = art
 	_update_crop()
@@ -32,6 +33,7 @@ func set_portrait(art: Texture2D, aid: String) -> void:
 func demonstrate() -> void:
 	_elapsed = 0.0
 	_demo_left = DEMO_TIME
+	_apply_pose()
 
 func _update_crop() -> void:
 	if texture == null or size.x <= 0.0 or size.y <= 0.0:
@@ -48,6 +50,9 @@ func _process(delta: float) -> void:
 		return
 	_elapsed += delta
 	_demo_left = maxf(0.0, _demo_left - delta)
+	_apply_pose()
+
+func _apply_pose() -> void:
 	var progress := 1.0 - _demo_left / DEMO_TIME
 	var emphasis := sin(PI * progress) if _demo_left > 0.0 else 0.0
 	var shift: Vector2 = GESTURES.get(character_id, Vector2(0.45, -0.28))

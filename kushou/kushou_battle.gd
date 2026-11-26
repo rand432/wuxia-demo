@@ -136,6 +136,7 @@ signal paper_blocked(pos: Vector2)                # 奇物·纸人替身挡下�
 signal hero_attack()
 signal foe_windup(foe: Dictionary, target: Vector2, seconds: float)
 signal foe_attack(foe: Dictionary, target: Vector2)
+signal foe_missed(foe: Dictionary)
 signal foe_blocked(foe: Dictionary)
 signal hero_strike_resolved(primary: Dictionary)
 signal hero_hit()
@@ -1285,9 +1286,11 @@ func _process(delta: float) -> void:
 				# v15w 更夫「报更」：被致盲的怪有 35% 概率打空
 				if float(f.get("blind_t", 0.0)) > 0.0 and randf() < 0.35:
 					_push_float(hero_pos.x, hero_pos.y - 70.0, "打空", Color(0.86, 0.86, 0.62))
+					foe_missed.emit(f)
 					continue
 				if randf() < HERO_DODGE:                              # v6：闪避下线 → 永不进这个分支
 					_push_float(size.x * 0.5, size.y - HERO_LINE - 40.0, "闪", Color(0.60, 0.80, 0.90))
+					foe_missed.emit(f)
 				else:
 					# 防御与奇物减伤已在hero_in_dmg结算，不能重复乘旧hero.cut。
 					# v4o：先扣护盾（法度·怒目金刚），盾破了才动血
