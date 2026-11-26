@@ -259,3 +259,13 @@
 - 全量：**88 / 88，failed=0**（`.shots/audit_batch10.txt`）
 - 交付说明：`docs/交付_批次10_隔离边界_2026-11-27.md`
 - 提交：e516dcf
+## 第十一批交付（2026-11-27）
+
+- 新增：`tools/perf_runner.gd` / `.tscn`，固定种子 20261116、720×1280、`gl_compatibility`，真实 `_spawn_foe` 出怪路径；三场景 normal / swarm / boss，预热 4s 采样 30s
+- 结果（GTX 1050 Ti）：P95 分别为 16.80 / 16.82 / 16.80ms，>33.3ms 帧均为 0；活怪峰值 12 / 40 / 35；节点峰值 281 / 341 / 327；FX 池峰值 2 / 0 / 1；加载 490 / 415 / 409ms
+- 无可重复热点，本轮未改战斗代码；normal 首轮一次 119ms 尖峰重跑未复现
+- 必跑 6 项审计全部通过（`.shots/audit_batch11.txt`）
+- 录屏：`.shots/perf_swarm.mp4`（约 10s，含音频），抽帧 `.shots/perf_swarm_frame.png`
+- QA 导出排除追加 `tools/perf_*`
+- 交付说明：`docs/交付_批次11_帧时间_2026-11-27.md`
+- 提交：__HASH__

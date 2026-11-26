@@ -79,7 +79,7 @@ $config = $config.Replace('config/name="江湖游历"', 'config/name="江湖游�
 $preset = [IO.File]::ReadAllText((Join-Path $projectRoot 'export_presets.cfg'))
 $preset = $preset.Replace('package/unique_name="com.wuxia.demo"', 'package/unique_name="com.wuxia.demo.qa"')
 $preset = $preset.Replace('export_path="../wuxia-export/wuxia.apk"', ('export_path="' + ($outFull -replace '\\','/') + '"'))
-$preset = $preset.Replace('exclude_filter="', 'exclude_filter="tools/audit_*, tools/_probe*, tools/qa_*, tools/playthrough*, .qa/*, ')
+$preset = $preset.Replace('exclude_filter="', 'exclude_filter="tools/audit_*, tools/_probe*, tools/qa_*, tools/playthrough*, tools/perf_*, .qa/*, ')
 [IO.File]::WriteAllText((Join-Path $qaProject 'export_presets.cfg'), $preset)
 Write-Output "QA_RUN_ID=$RunId"
 Write-Output "QA_PROJECT=$qaProject"
