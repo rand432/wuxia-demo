@@ -23,6 +23,7 @@ const BalanceRules := preload("res://kushou/balance_rules.gd")
 const BattleArt := preload("res://kushou/battle_art.gd")
 const ResultView := preload("res://kushou/result_view.gd")
 const DrawView := preload("res://kushou/draw_view.gd")
+const CurioDetailView := preload("res://kushou/curio_detail_view.gd")
 const MenuUI := preload("res://shared/ui_kit.gd")
 const CardFrame := preload("res://kushou/card_frame.gd")
 const GodPortraits := preload("res://shared/god_portraits.gd")
@@ -2213,82 +2214,30 @@ func _show_curio_detail() -> void:
 		return
 	var info := CurioData.get_curio(_curio_id)
 	var has := not info.is_empty()
-	var layer := Control.new()
-	layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	layer.mouse_filter = Control.MOUSE_FILTER_STOP
-	layer.z_index = 32
-	add_child(layer)
-	_curio_detail = layer
-	var dim := ColorRect.new()
-	dim.color = Color(0.05, 0.04, 0.03, 0.58)
-	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	dim.mouse_filter = Control.MOUSE_FILTER_STOP
-	dim.gui_input.connect(func(event: InputEvent) -> void:
-		if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-			_close_curio_detail(layer))
-	layer.add_child(dim)
-	var holder := Control.new()
-	holder.name = "CurioSheet"
-	holder.position = Vector2(120, 340)
-	holder.size = Vector2(480, 470)
-	holder.mouse_filter = Control.MOUSE_FILTER_STOP
-	layer.add_child(holder)
 	if has and _curio_detail_frame == null:
 		_curio_detail_frame = _entry_texture(BattleArt.CURIO_DETAIL_FRAME_PATH)
-	var has_frame := has and _curio_detail_frame != null
-	if has_frame:
-		var fr := ArtRect.new()
-		fr.tex = _curio_detail_frame
-		fr.position = Vector2.ZERO
-		fr.size = Vector2(480, 470)
-		holder.add_child(fr)
-	_panel(Rect2(0, 0, 480, 470), Color(0.97, 0.93, 0.85, 0.20) if has_frame else Color(0.97, 0.93, 0.85, 0.99), 10,
-		Color(0.85, 0.66, 0.23, 0.0) if has_frame else Color(0.85, 0.66, 0.23), 0 if has_frame else 3, holder)
-	_btn("×", Rect2(436, 12, 34, 30), 20, Color(0.97, 0.93, 0.85), DIM, _close_curio_detail.bind(layer), holder)
-	if not has:
-		_lbl("本局没有携带奇物", Vector2(0, 40), Vector2(480, 44), 28, INK, holder, HORIZONTAL_ALIGNMENT_CENTER)
-		_lbl("在局外「奇物」页选择一件再出击", Vector2(0, 96), Vector2(480, 30), 18, DIM, holder, HORIZONTAL_ALIGNMENT_CENTER)
-		_pop_bounce(holder)
-		return
-	# 圆徽里放物件图标（1024 原图，缩到 110 仍清晰）
-	var icon_path := BattleArt.CURIO_DETAIL_ICON_PATH % _curio_id
-	if _curio_detail_icon == null or _curio_detail_icon.resource_path != icon_path:
-		_curio_detail_icon = _entry_texture(icon_path)
-	if _curio_detail_icon != null:
-		var ic := ArtRect.new()
-		ic.tex = _curio_detail_icon
-		ic.position = Vector2(185, 52)
-		ic.size = Vector2(110, 110)
-		holder.add_child(ic)
-	_lbl(str(info.get("name", "")), Vector2(0, 176), Vector2(480, 40), 30, INK, holder, HORIZONTAL_ALIGNMENT_CENTER)
-	_panel(Rect2(148, 220, 184, 26), Color(0.62, 0.44, 0.12, 0.92), 5, Color(0.62, 0.44, 0.12), 0, holder)
-	_lbl("奇物 · Lv %d" % _curio_lv, Vector2(148, 222), Vector2(184, 22), 14, Color(0.99, 0.95, 0.87), holder, HORIZONTAL_ALIGNMENT_CENTER)
-	var cdv := float(info.get("cd", 0.0))
-	var rows := [
-		["当前", CurioData.level_text(_curio_id, _curio_lv)],
-		["触发", str(info.get("trig", ""))],
-		["冷却", ("%d 秒（自动使用，不用操作）" % int(cdv)) if cdv > 0.0 else "被动 · 常驻"],
-		["本局", "已触发 %d 次" % _curio_uses],
-	]
-	var y := 262.0
-	for r in rows:
-		_lbl(str(r[0]), Vector2(26, y), Vector2(70, 22), 14, Color(0.47, 0.41, 0.33), holder)
-		_lbl(str(r[1]), Vector2(92, y - 3), Vector2(360, 24), 17, INK, holder)
-		y += 38.0
-	if _curio_lv < 5:
-		_lbl("下一档：%s" % CurioData.level_text(_curio_id, _curio_lv + 1),
-			Vector2(26, 406), Vector2(430, 22), 15, Color(0.47, 0.41, 0.33), holder)
-	_lbl("全自动使用，玩家不需要点它；点这里只是看详情", Vector2(26, 436), Vector2(430, 22), 14, Color(0.47, 0.41, 0.33), holder)
-	_pop_bounce(holder)
-	_breathe(holder)
+	var icon: Texture2D = null
+	if has:
+		var icon_path := BattleArt.CURIO_DETAIL_ICON_PATH % _curio_id
+		if _curio_detail_icon == null or _curio_detail_icon.resource_path != icon_path:
+			_curio_detail_icon = _entry_texture(icon_path)
+		icon = _curio_detail_icon
+	var view := CurioDetailView.new()
+	view.name = "CurioDetailView"
+	view.present(info, _curio_id, _curio_lv, _curio_uses, _curio_detail_frame if has else null, icon)
+	view.closed.connect(func() -> void: _close_curio_detail(view))
+	add_child(view)
+	_curio_detail = view
 
 func _close_curio_detail(layer: Control) -> void:
 	if layer == null or layer != _curio_detail:
 		return
 	_curio_detail = null
-	layer.hide()
-	MenuUI.Motion.stop(layer.get_node("CurioSheet") as Control)
-	layer.queue_free()
+	if layer is CurioDetailView:
+		(layer as CurioDetailView).close()
+	else:
+		layer.hide()
+		layer.queue_free()
 
 func _build_card_detail() -> void:
 	_detail_layer = Control.new()
