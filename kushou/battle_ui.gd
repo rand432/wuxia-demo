@@ -21,6 +21,7 @@ const HazardTelegraph := preload("res://kushou/hazard_telegraph.gd")
 const BlackMarket := preload("res://kushou/black_market.gd")
 const BalanceRules := preload("res://kushou/balance_rules.gd")
 const BattleArt := preload("res://kushou/battle_art.gd")
+const ResultView := preload("res://kushou/result_view.gd")
 const MenuUI := preload("res://shared/ui_kit.gd")
 const CardFrame := preload("res://kushou/card_frame.gd")
 const GodPortraits := preload("res://shared/god_portraits.gd")
@@ -3534,101 +3535,35 @@ func _end_run(win: bool) -> void:
 	_build_result(win, reveal_delay)
 
 func _build_result(win: bool, reveal_delay := 0.0) -> void:
-	var layer := Control.new()
-	layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	layer.mouse_filter = Control.MOUSE_FILTER_STOP
-	layer.z_index = 40
-	add_child(layer)
-	_result_layer = layer
+	var view := ResultView.new()
+	view.name = "ResultView"
+	view.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	view.mouse_filter = Control.MOUSE_FILTER_STOP
+	view.z_index = 40
+	add_child(view)
+	_result_layer = view
+	view.replay_pressed.connect(func() -> void: _leave_result(true))
+	view.home_pressed.connect(func() -> void: _leave_result(false))
+	# 结局面特效仍由战斗舞台播放（特效系统不搬进视图）
+	view.on_presented = func(fx: String, pos: Vector2) -> void:
+		_spawn_pfx(fx, pos, 1.9, "holy" if win else "shadow", 1.8)
+	var payload := {
+		"win": win,
+		"wave": int(_core.wave) if _core != null else 0,
+		"max_wave": _max_wave,
+		"kills": _kills,
+		"wen": _wen,
+		"crystal": _crystal,
+		"bonds": _bonds.size(),
+		"bonds_done": _bonds_done,
+		"run_time": _run_time,
+	}
 	if reveal_delay > 0.0:
-		var reveal := create_tween().bind_node(layer)
+		var reveal := create_tween().bind_node(view)
 		reveal.tween_interval(reveal_delay)
-		reveal.tween_callback(_fill_result.bind(win, layer))
+		reveal.tween_callback(view.present.bind(payload))
 	else:
-		_fill_result(win, layer)
-
-func _fill_result(win: bool, layer: Control) -> void:
-	Aud.sfx("win" if win else "lose", -6.0)
-	# 结局 CG 当全屏背景（有图才加，缺图保持原来的纯色压暗）
-	var cg_path := "res://assets/art/cg/ending_win.png" if win else "res://assets/art/cg/ending_lose.png"
-	var has_cg := ResourceLoader.exists(cg_path)
-	if has_cg:
-		var cg := ArtRect.new()
-		cg.tex = load(cg_path) as Texture2D
-		cg.cover = true
-		cg.position = Vector2.ZERO
-		cg.size = Vector2(720, 1280)
-		layer.add_child(cg)
-	var dim := ColorRect.new()
-	dim.color = Color(0.05, 0.04, 0.03, 0.42 if has_cg else 0.62)
-	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	dim.mouse_filter = Control.MOUSE_FILTER_STOP
-	layer.add_child(dim)
-	var holder := Control.new()
-	holder.position = Vector2(90, 320)
-	holder.size = Vector2(540, 480)
-	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	layer.add_child(holder)
-	# 结算面板底图（有图就用图，没有回退原来的纯色面板）
-	var panel_art := "res://assets/ui/panel_win.png" if win else "res://assets/ui/panel_lose.png"
-	var has_art := ResourceLoader.exists(panel_art)
-	if has_art:
-		var tr := TextureRect.new()
-		# 先设拉伸模式再挂贴图：反过来会让最小尺寸变成贴图原始尺寸（1024×768），
-		# 面板底图会撑出 540×480 的 holder，整块框错位、文字压到花纹上。
-		tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		tr.stretch_mode = TextureRect.STRETCH_SCALE
-		tr.texture = load(panel_art) as Texture2D
-		tr.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		tr.custom_minimum_size = Vector2.ZERO
-		tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		holder.add_child(tr)
-	_panel(Rect2(0, 0, 540, 480), Color(0.97, 0.93, 0.85, 0.28) if has_art else Color(0.97, 0.93, 0.85, 0.99), 12,
-		Color(0.85, 0.66, 0.23, 0.0) if has_art else (Color(0.85, 0.66, 0.23) if win else Color(0.64, 0.22, 0.15)),
-		0 if has_art else 3, holder)
-	if has_art:
-		# 内容区压一层纸色，压住框内花边，保证文字清楚
-		var content_bg := ColorRect.new()
-		content_bg.position = Vector2(48, 112)
-		content_bg.size = Vector2(444, 232)
-		content_bg.color = Color(0.972, 0.948, 0.896, 0.90)
-		content_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		holder.add_child(content_bg)
-		var title_bg := ColorRect.new()
-		title_bg.position = Vector2(0, 56)
-		title_bg.size = Vector2(540, 60)
-		title_bg.color = Color(0.972, 0.948, 0.896, 0.88)
-		title_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		holder.add_child(title_bg)
-	_lbl("通　关" if win else "命　尽", Vector2(0, 66), Vector2(540, 58), 42,
-		Color(0.62, 0.44, 0.12) if win else Color(0.62, 0.20, 0.14), holder, HORIZONTAL_ALIGNMENT_CENTER)
-	if has_art:
-		MenuUI.deco(holder, "divider", Rect2(140, 106, 260, 14), 0.9)
-	var mins := int(_run_time) / 60
-	var secs := int(_run_time) % 60
-	var total_bonds := _bonds.size() + _bonds_done
-	var rows := [
-		["到达波数", "%d / %d" % [mini(int(_core.wave), _max_wave), _max_wave]],
-		["击杀", str(_kills)],
-		["文钱", str(_wen)],
-		["灵晶", str(_crystal)],
-		["羁绊", "%d 条（已成 %d）" % [total_bonds, _bonds_done]],
-		["存活", "%d 分 %02d 秒" % [mins, secs]],
-	]
-	# 六行必须落在底图内容区 y 112–344 内：起点 120、步进 37，
-	# 末行底边 335；原来的 126/40 会顶到 356，把“羁绊/存活”压到边框花纹上。
-	var y := 120.0
-	for r in rows:
-		_lbl(str(r[0]), Vector2(56, y), Vector2(150, 30), 20, DIM, holder)
-		_lbl(str(r[1]), Vector2(210, y), Vector2(276, 30), 22, INK, holder, HORIZONTAL_ALIGNMENT_RIGHT)
-		y += 37.0
-	_btn("再来一局", Rect2(30, 380, 210, 64), 24, Color(0.86, 0.66, 0.24), Color(0.14, 0.11, 0.08),
-		func() -> void: _leave_result(true), holder)
-	_btn("回主界面", Rect2(300, 380, 210, 64), 24, Color(0.93, 0.89, 0.80), INK,
-		func() -> void: _leave_result(false), holder)
-	_pop_bounce(holder)
-	_breathe(holder)
-	_spawn_pfx("holy/sunburst" if win else "shadow/dark-explosion", Vector2(360, 235), 1.9, "holy" if win else "shadow", 1.8)
+		view.present(payload)
 
 # 结果页按钮同时作为保存重试入口，未保存完成时保留当前场景。
 func _leave_result(replay: bool) -> void:

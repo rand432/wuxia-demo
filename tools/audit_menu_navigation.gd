@@ -148,8 +148,9 @@ func _run() -> void:
 		assert(battle._curio_detail_frame.resource_path == BattleArt.CURIO_DETAIL_FRAME_PATH)
 		assert(battle._curio_detail_icon.resource_path == BattleArt.CURIO_DETAIL_ICON_PATH % "yuhu")
 	assert(battle._draw_art_cache.values().any(func(art): return art != null))
-	for key in ["jiuyou_mojun", "xuehai_luocha", "wanqu_chongmu"]:
-		assert(battle._foe_tex_cache[key].resource_path.ends_with("foe_%s.png" % key))
+	for name in ["九幽魔君", "血海罗刹", "万蛊虫母"]:
+		var atlas_id: String = BattleArt.FOE_FRAME_PATH[name]
+		assert(battle._foe_animation_cache[atlas_id].resource_path.ends_with("/frames/%s.png" % atlas_id))
 	assert(battle._foe_animation_cache[BattleArt.FINAL_BEAST_FRAME_ID] != null)
 	assert(not battle._foe_tex_cache.has("shuangtou_shi"))
 	var challenge_atlases := ["challenge_coin_v1", "challenge_crystal_v1", "challenge_scroll_v1"]
