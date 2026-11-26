@@ -73,4 +73,4 @@
 - 无头：PASS，打印 `[HEADLESS] real-input branch skipped`
 - 图形（`--resolution 450x800`）：PASS，打印 `[GRAPHICS] real click replay/home/save-fail/double-click/delayed-release PASS`
 - 全量：88 / 88（`.shots/audit_batch4.txt`）
-- 提交：__COMMIT__
+- 提交：0c76904
