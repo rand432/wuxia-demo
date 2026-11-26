@@ -237,3 +237,14 @@
 
 - 给出每关清尾最慢的三波。附第一只怪进入交战区、最后一只正常或奖励怪刷出、普通怪数峰值、清尾剩余怪的种类和首领阶段时间。报表核对各分段之和等于已记录总跨度，允许一位小数舍入误差。
 - 若连续两组在同一波异常，从桌面回放区分清尾寻路、控制、构筑强度和出怪队列。提交复现命令、短录屏、证据和建议调整项。另核对每次胜利的首通和解锁写入独立测试档。
+
+## 第十四批交付（2026-11-27）
+
+- 文件：`tools/export_android_qa.ps1`（重写）
+- 路径保护全部在写文件前：限制 `.shots/qa/<runId>/` 内、拒绝正式包路径、拒绝联接父级/文件、拒绝非法 RunId；临时导出 + 校验通过后才替换旧 QA 包
+- 成功：`.shots/qa/qa14_success/wuxia_qa_android.apk`，`com.wuxia.demo.qa` / 江湖游历 QA / minSdk 24 / arm64-v8a / SHA-256 `62934E41…AA21BA` / 300,137,328 字节；日志 `.shots/qa14_success.log`
+- 拒绝：错误 SDK 退出 2；正式包路径退出 5 且 SHA 未变；联接逃逸退出 5；导出失败退出 3 且旧 QA SHA 不变
+- 资源核对新增：`portrait_zhujue_ink_v3.webp`、`player_battle_frames.png`、`player_skill_poses_v2.png`、`crowd_brute_v1` / `crowd_shield_v1`、`enemy_warning` / `fall_down`、`result_view` / `card_frame`，并要求导入副本；排除 `tools/audit_*` / `tools/playthrough*`
+- 全量：**88 / 88，failed=0**（`.shots/audit_batch14.txt`）
+- 交付说明：`docs/交付_批次14_QA路径保护_2026-11-27.md`
+- 提交：__HASH__
