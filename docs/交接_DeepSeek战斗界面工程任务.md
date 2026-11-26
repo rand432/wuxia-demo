@@ -280,3 +280,13 @@
 - 录音：`.shots/audio_swarm.mp4`（10s，含音频），mean -29.0 dB / max -11.8 dB，无削波
 - 交付说明：`docs/交付_批次13_音效召回_2026-11-27.md`
 - 提交：42750e6（音效主体随自动存档 `784722d`）
+## 第十六批交付（2026-11-27）
+
+- 文件：`tools/playthrough.gd`（`[WAVE]` 增加 reward_done / normal_peak / statues / kinds；`[PACE]` 增加 seg_sum / drift；`[BREAK]` 记录破阵）
+- 矩阵：L6/L10 × auto/restrict × seed 20261116/20261117 共 8 组；L6 全 WIN（329/531/415/458s），L10 auto WIN（315/386s），L10 restrict LOSE（365/341s，首领未击杀）
+- 分段完整性：逐波最大偏差 0.000s，`[PACE] drift` 全 0.00
+- 最慢波：L6 auto n9 24.5s / n13 30.3s；L6 restrict n11 36.2s（唯一破阵 statues=3）；L10 auto n9 24.5s / n13 30.3s；L10 restrict 首领波未击杀
+- 无“连续两组同波异常”，未触发回放；本轮无超时失败
+- 胜利存档已核对：`first_clear[关卡]=true` 均在各自隔离目录
+- 交付说明：`docs/交付_批次16_节奏矩阵_2026-11-27.md`
+- 提交：__HASH__

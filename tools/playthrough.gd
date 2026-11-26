@@ -219,7 +219,8 @@ func _track_wave(now: float) -> void:
 			_log_wave(wave_cur)
 			waves.append(wave_cur)
 		wave_cur = {"wave": w, "start": now, "first_engage": -1.0, "last_spawn": -1.0,
-			"cleared": -1.0, "boss_in": -1.0, "boss_out": -1.0}
+			"cleared": -1.0, "boss_in": -1.0, "boss_out": -1.0,
+			"normal_peak": 0, "reward_done": -1.0, "kinds": {}, "statues": 0}
 		tracked_wave = w
 	# 第一只怪进入交战区（与主角距离 <= 120）
 	if float(wave_cur["first_engage"]) < 0.0:
@@ -231,9 +232,29 @@ func _track_wave(now: float) -> void:
 			if fp.distance_to(hp) <= 120.0:
 				wave_cur["first_engage"] = now
 				break
+	# 普通怪峰值 / 剩余种类 / 奖励怪也刷完
+	var kinds := {}
+	var normals := 0
+	for f in b._core.foes:
+		if float(f.get("hp", 0.0)) <= 0.0:
+			continue
+		var k := str(f.get("kind", "normal"))
+		kinds[k] = int(kinds.get(k, 0)) + 1
+		if k == "normal":
+			normals += 1
+	if normals > int(wave_cur["normal_peak"]):
+		wave_cur["normal_peak"] = normals
+	if not kinds.is_empty():
+		wave_cur["kinds"] = kinds
+	if int(wave_cur["statues"]) == 0 and b._core.has_method("statues_left") and b._core.statues_left() > 0:
+		wave_cur["statues"] = b._core.statues_left()
+		_log("[BREAK] L%d wave=%d statues=%d" % [lv, w, int(wave_cur["statues"])])
 	# 本波刷怪完成
 	if float(wave_cur["last_spawn"]) < 0.0 and b._core.wave_spawn_complete():
 		wave_cur["last_spawn"] = now
+	if float(wave_cur["last_spawn"]) >= 0.0 and float(wave_cur["reward_done"]) < 0.0:
+		if int(b._core._queued_coin_foes) == 0 and int(b._core._queued_crystal_foes) == 0:
+			wave_cur["reward_done"] = now
 	# 首领入场 / 死亡
 	if bool(b._core.boss_alive) and float(wave_cur["boss_in"]) < 0.0:
 		wave_cur["boss_in"] = now
@@ -252,10 +273,11 @@ func _finalize_wave(now: float, win: bool, timed_out: bool) -> void:
 	wave_cur = {}
 
 func _log_wave(d: Dictionary) -> void:
-	_log("[WAVE] L%d n=%d start=%.1f first_engage=%.1f last_spawn=%.1f cleared=%.1f boss_in=%.1f boss_out=%.1f" % [
+	_log("[WAVE] L%d n=%d start=%.1f first_engage=%.1f last_spawn=%.1f reward_done=%.1f cleared=%.1f boss_in=%.1f boss_out=%.1f normal_peak=%d statues=%d kinds=%s" % [
 		lv, int(d.get("wave", 0)), float(d.get("start", 0.0)), float(d.get("first_engage", -1.0)),
-		float(d.get("last_spawn", -1.0)), float(d.get("cleared", -1.0)),
-		float(d.get("boss_in", -1.0)), float(d.get("boss_out", -1.0))])
+		float(d.get("last_spawn", -1.0)), float(d.get("reward_done", -1.0)), float(d.get("cleared", -1.0)),
+		float(d.get("boss_in", -1.0)), float(d.get("boss_out", -1.0)),
+		int(d.get("normal_peak", 0)), int(d.get("statues", 0)), str(d.get("kinds", {}))])
 
 func _log_pace(total: float, win: bool) -> void:
 	var spawn_wait := 0.0
@@ -287,8 +309,9 @@ func _log_pace(total: float, win: bool) -> void:
 		span += end_t - start_t
 	if b != null and b._max_wave != null and waves.size() != int(b._max_wave):
 		complete = false
-	_log("[PACE] L%d spawn_wait=%.1f engage=%.1f clear_tail=%.1f boss_fight=%.1f after_boss=%.1f span=%.1f total=%.1f waves=%d/%d complete=%s" % [
-		lv, spawn_wait, engage, clear_tail, boss_fight, after_boss, span, total, waves.size(),
+	var seg_sum := spawn_wait + engage + clear_tail + boss_fight + after_boss
+	_log("[PACE] L%d spawn_wait=%.1f engage=%.1f clear_tail=%.1f boss_fight=%.1f after_boss=%.1f span=%.1f seg_sum=%.1f drift=%.2f total=%.1f waves=%d/%d complete=%s" % [
+		lv, spawn_wait, engage, clear_tail, boss_fight, after_boss, span, seg_sum, seg_sum - span, total, waves.size(),
 		int(b._max_wave) if b != null else -1, str(complete)])
 
 func _choose_draw_card():
