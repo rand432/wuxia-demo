@@ -9,6 +9,47 @@ func _initialize() -> void:
 		return
 	call_deferred("_run")
 
+func _audit_frost_presentation() -> void:
+	var battle = Battle.instantiate()
+	root.add_child(battle)
+	battle._tut.cancel()
+	battle.set_process(false)
+	var core = battle._core
+	core.set_process(false)
+	battle._curio_id = "hanyu"
+	battle._curio_lv = 5
+	var foe: Dictionary = core._spawn_foe()
+	foe.merge({"x": 300.0, "y": 300.0, "hp_max": 1000.0, "hp": 1000.0}, true)
+	battle._process(0.0)
+	var tk = battle._foe_tokens[foe["_tid"]]
+	tk.set_process(false)
+	for stacks in [1, 2, 3]:
+		battle._curio_on_crit(foe)
+		battle._process(0.0)
+		assert(tk.frost_chilled and tk.frost_layers == (0 if stacks == 3 else stacks))
+		assert(tk.frost_frozen == (stacks == 3))
+	var held_frame: int = tk._frame_index
+	tk._process(0.4)
+	assert(tk._frame_index == held_frame and tk._sprite.modulate.b > 1.0)
+	core._tick_cold_control(foe, 0.81)
+	battle._process(0.0)
+	assert(not tk.frost_frozen and tk.frost_chilled)
+	var burst: Dictionary = battle._fx_front.hits.back()
+	assert(burst["ice_burst"] and burst["r"] == 70.0 and burst["p"] == Vector2(300, 300))
+	tk._process(0.03)
+	assert(tk._sprite.modulate.b <= 1.0)
+	core._tick_cold_control(foe, 3.0)
+	battle._process(0.0)
+	assert(not tk.frost_chilled and tk.frost_layers == 0)
+	for i in range(3):
+		battle._curio_on_crit(foe)
+	battle._process(0.0)
+	assert(tk.frost_frozen)
+	core._kill_foe(foe)
+	battle._process(0.0)
+	assert(not tk.frost_frozen and not tk.frost_chilled and tk.frost_layers == 0)
+	battle.queue_free()
+
 func _run() -> void:
 	LS.ensure_loaded()
 	LS.current_level = 6
@@ -104,5 +145,7 @@ func _run() -> void:
 	assert(near["hp"] == 1000.0)
 	battle.queue_free()
 	await process_frame
-	print("PASS: cold levels/slow stacks/freeze-only vulnerability/expiry burst/range/hitstop/boss/result")
+	_audit_frost_presentation()
+	await process_frame
+	print("PASS: cold mechanics, stacks, frozen pose, visible ice burst, and death/result cleanup")
 	Audio.quit_cleanly()

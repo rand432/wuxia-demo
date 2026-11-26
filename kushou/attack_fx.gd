@@ -60,6 +60,12 @@ func spawn_guard(feet: Vector2, radius: float, side: float) -> void:
 		"t": 0.0, "dur": 0.18, "guard_side": side})
 	queue_redraw()
 
+func spawn_ice_burst(feet: Vector2, radius: float) -> void:
+	if hits.size() >= MAX_HITS:
+		hits.pop_front()
+	hits.append({"p": feet, "r": radius, "t": 0.0, "dur": 0.26, "ice_burst": true})
+	queue_redraw()
+
 func _place_number(anchor: Vector2, dmg: int, hero_hit: bool, crit: bool, heavy: bool) -> void:
 	var important := hero_hit or crit or heavy
 	var crowded := 0
@@ -279,6 +285,9 @@ func _draw_hit(h: Dictionary) -> void:
 		return
 	var c: Vector2 = h["p"]
 	var r := float(h["r"])
+	if h.has("ice_burst"):
+		_draw_ice_burst(c, r, p, a)
+		return
 	if h.has("guard_side"):
 		var angle := 0.0 if float(h["guard_side"]) > 0.0 else PI
 		var edge := r * (0.45 + p * 0.62)
@@ -298,6 +307,18 @@ func _draw_hit(h: Dictionary) -> void:
 	for i in range(2 + intensity * 2):
 		var direction := Vector2.from_angle(-0.65 + float(i) * 1.55)
 		draw_line(c + direction * (3.0 + p * 9.0), c + direction * (9.0 + spread), Color(accent, a), (2.0 + intensity * 0.5) * a + 0.5, true)
+
+func _draw_ice_burst(center: Vector2, radius: float, progress: float, alpha: float) -> void:
+	var frost := Color(0.57, 0.86, 1.0, alpha)
+	var rim := radius * lerpf(0.30, 1.0, ease(progress, 0.42))
+	draw_arc(center, radius, 0.0, TAU, 40, Color(frost, alpha * 0.26), 1.2, true)
+	draw_arc(center, rim, 0.0, TAU, 36, frost, 1.0 + 2.2 * alpha, true)
+	for i in range(7):
+		var direction := Vector2.from_angle(TAU * float(i) / 7.0 + 0.27)
+		var base := center + direction * rim * (0.42 + float(i % 3) * 0.15)
+		var tip := base + direction * (10.0 + 12.0 * alpha) + Vector2(0.0, -8.0 * alpha)
+		var edge := direction.orthogonal() * (1.2 + 3.0 * alpha)
+		draw_colored_polygon(PackedVector2Array([base + edge, tip, base - edge]), Color(0.76, 0.93, 1.0, alpha * 0.85))
 
 func _draw_defeat(entry: Dictionary) -> void:
 	var progress := float(entry["t"]) / float(entry["dur"])

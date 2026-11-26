@@ -32,6 +32,10 @@ var bar_w := 72.0
 var name_col := Color(0.99, 0.94, 0.81)
 var challenge_kind := -1
 var guardian := false
+var lamp_lit := false
+var frost_layers := 0
+var frost_chilled := false
+var frost_frozen := false
 var boss_warning: Dictionary = {}
 
 var _sprite: Sprite2D
@@ -59,6 +63,8 @@ var _dir := 1.0
 var _spawn_t := 0.26
 var _hit_t := 0.0
 var _guard_time := 0.0
+var _lamp_pull_time := 0.0
+var _lamp_pull_offset := Vector2.ZERO
 var _hit_dir := Vector2.RIGHT
 var _hit_strength := 1.0
 var _anim_t := 0.0
@@ -71,6 +77,7 @@ var _frame_cell := 128.0
 var _visual_pose_applied := false
 const DEATH_DURATION := 0.38
 const GUARD_DURATION := 0.14
+const LAMP_PULL_DURATION := 0.18
 
 
 func setup(tex: Texture2D, r: float, ring: Color, crop: bool, frames: Texture2D = null) -> void:
@@ -205,6 +212,8 @@ func _process(delta: float) -> void:
 	_flash = maxf(0.0, _flash - delta * 7.0)
 	_hit_t = maxf(0.0, _hit_t - delta / 0.16)
 	_guard_time = maxf(0.0, _guard_time - delta)
+	if _lamp_pull_time > 0.0:
+		_lamp_pull_time = maxf(0.0, _lamp_pull_time - delta)
 	var enter := clampf(_spawn_t / 0.26, 0.0, 1.0)
 	var ease := 1.0 + 2.70158 * pow(enter - 1.0, 3.0) + 1.70158 * pow(enter - 1.0, 2.0)
 	var pop := lerpf(0.68, 1.0, ease)
@@ -231,7 +240,7 @@ func _process(delta: float) -> void:
 	_apply_visual_pose(Vector2(sx, sy), Vector2(0, 18.0 * (1.0 - enter) + beat) + _hit_dir * recoil * 7.0 + _attack_direction * atk * _attack_reach, 0.12 * atk * _attack_direction.x)
 	modulate = Color(1, 1, 1, lerpf(0.35, 1.0, enter))
 	if is_instance_valid(_sprite):
-		_sprite.modulate = Color(1.0 + 0.40 * _flash, 1.0 - 0.38 * _flash, 1.0 - 0.47 * _flash)
+		_sprite.modulate = Color(0.75, 0.94, 1.18) if frost_frozen else Color(1.0 + 0.40 * _flash, 1.0 - 0.38 * _flash, 1.0 - 0.47 * _flash)
 	if enter < 1.0 or _flash > 0.0 or _hit_t > 0.0 or _attack_time > 0.0:
 		queue_redraw()
 
@@ -240,7 +249,9 @@ func _tick_frame_pose(delta: float, travel: Vector2, moving: bool, pop: float, e
 	var frame := 0
 	var skill_pose := _cast_time > 0.0 and _skill_row >= 0 and skill_atlas != null
 	_use_frame_atlas(skill_atlas if skill_pose else _frame_atlas)
-	if skill_pose:
+	if frost_frozen:
+		frame = clampi(_frame_index, 0, 13)
+	elif skill_pose:
 		frame = _skill_row * 4 + clampi(int((SKILL_POSE_TIME - _cast_time) * 4.0 / SKILL_POSE_TIME), 0, 3)
 	elif _cast_time > 0.0:
 		frame = 12 if _cast_time > 0.24 else 13
@@ -256,6 +267,8 @@ func _tick_frame_pose(delta: float, travel: Vector2, moving: bool, pop: float, e
 		frame = 10 if _attack_time > 0.075 else 11
 	elif _guard_time > 0.0:
 		frame = 9
+	elif _lamp_pull_time > 0.0:
+		frame = 12 if _lamp_pull_time > LAMP_PULL_DURATION * 0.44 else 13
 	elif _hit_t > 0.0:
 		frame = 14 if role == "player" else (12 if _hit_t > 0.48 else 13)
 	elif _attack_time > 0.0:
@@ -272,7 +285,9 @@ func _tick_frame_pose(delta: float, travel: Vector2, moving: bool, pop: float, e
 	_sprite.flip_h = (_skill_facing if skill_pose else _dir) < 0.0
 	_apply_visual_pose(Vector2.ONE * pop, Vector2(0, 18.0 * (1.0 - enter)) + _hit_dir * recoil * 4.0)
 	modulate = Color(1, 1, 1, lerpf(0.35, 1.0, enter))
-	if _guard_time > 0.0:
+	if frost_frozen:
+		_sprite.modulate = Color(0.72, 0.94, 1.24)
+	elif _guard_time > 0.0:
 		var light := _guard_time / GUARD_DURATION
 		_sprite.modulate = Color(1.0 + 0.07 * light, 1.0 + 0.24 * light, 1.0 + 0.43 * light)
 	else:
@@ -281,6 +296,8 @@ func _tick_frame_pose(delta: float, travel: Vector2, moving: bool, pop: float, e
 		queue_redraw()
 
 func _apply_visual_pose(visual_scale: Vector2, offset: Vector2, angle := 0.0) -> void:
+	if _lamp_pull_time > 0.0:
+		offset += _lamp_pull_offset * smoothstep(0.0, LAMP_PULL_DURATION, _lamp_pull_time)
 	var changed := visual_scale != Vector2.ONE or offset != Vector2.ZERO or angle != 0.0
 	if not changed and not _visual_pose_applied:
 		return
@@ -351,6 +368,29 @@ func play_guard(direction: Vector2) -> void:
 	if absf(direction.x) > 1.0 and _attack_time <= 0.0:
 		face(1 if direction.x > 0.0 else -1)
 
+func set_lamp_lit(active: bool) -> void:
+	if lamp_lit != active:
+		lamp_lit = active
+		queue_redraw()
+
+func play_lamp_pull(displacement: Vector2) -> void:
+	if _death_t >= 0.0:
+		return
+	_lamp_pull_offset = -displacement
+	_lamp_pull_time = LAMP_PULL_DURATION
+	_last_feet += displacement
+
+func clear_lamp_pull() -> void:
+	_lamp_pull_time = 0.0
+
+func set_frost(layers: int, chilled: bool, frozen: bool) -> void:
+	if frost_layers == layers and frost_chilled == chilled and frost_frozen == frozen:
+		return
+	frost_layers = layers
+	frost_chilled = chilled
+	frost_frozen = frozen
+	queue_redraw()
+
 func play_cast(direction := Vector2.ZERO) -> void:
 	if role not in ["player", "dragon"] or _frame_atlas == null or _death_t >= 0.0:
 		return
@@ -412,6 +452,9 @@ func play_down(recover := false) -> void:
 		return
 	_death_t = 0.0
 	_sink = 0.0
+	set_lamp_lit(false)
+	clear_lamp_pull()
+	set_frost(0, false, false)
 	_guard_time = 0.0
 	_attack_time = 0.0
 	_boss_impact = false
@@ -428,6 +471,9 @@ func retire() -> void:
 
 func reset_pose() -> void:
 	boss_warning = {}
+	set_lamp_lit(false)
+	clear_lamp_pull()
+	set_frost(0, false, false)
 	_death_t = -1.0
 	_sink = 0.0
 	_flash = 0.0
@@ -467,6 +513,11 @@ func _draw() -> void:
 	draw_set_transform(off + Vector2(0.0, -4.0), 0.0, Vector2(1.0, 0.34))
 	draw_circle(Vector2.ZERO, radius * 0.76, Color(0.10, 0.09, 0.08, 0.30))
 	draw_circle(Vector2.ZERO, radius * 0.44, Color(0.07, 0.06, 0.05, 0.22))
+	if lamp_lit:
+		for side: float in [0.0, PI]:
+			draw_arc(Vector2.ZERO, radius * 0.86, side - 0.83, side + 0.83, 10, Color(1.0, 0.79, 0.47, 0.82), 2.2, true)
+	if frost_chilled:
+		draw_arc(Vector2.ZERO, radius * 0.92, 0.10, PI - 0.10, 16, Color(0.61, 0.87, 1.0, 0.72), 2.2, true)
 	if (challenge_kind >= 0 or guardian or role == "dragon") and _death_t < 0.0:
 		var color := ring_col
 		var ring_radius := radius * 0.98
@@ -475,6 +526,8 @@ func _draw() -> void:
 		if guardian or challenge_kind >= 3:
 			draw_arc(Vector2.ZERO, radius * 1.12, 0, TAU, 36, Color(color, 0.45), 1.7, true)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	if frost_chilled or frost_frozen:
+		_draw_frost()
 	# 圆牌底 + 金边（怪物：有立绘时省掉圆牌，直接站人）
 	var c := Vector2(0.0, -radius) + off
 	var show_plate := (art_tex == null and _frame_atlas == null) or round_mask
@@ -526,6 +579,20 @@ func _draw() -> void:
 			draw_string(UI_FONT, plaque.position + Vector2(0, baseline), tag, HORIZONTAL_ALIGNMENT_CENTER,
 				plaque.size.x, 12 if compact_bar else 15, ring_col)
 
+
+func _draw_frost() -> void:
+	if frost_frozen:
+		for side: float in [-1.0, 1.0]:
+			var foot := Vector2(side * radius * 0.67, -2.0)
+			var tip := foot + Vector2(side * radius * 0.34, -radius * 1.16)
+			var inner := foot + Vector2(-side * radius * 0.34, -radius * 0.28)
+			var edge := foot + Vector2(side * radius * 0.45, -radius * 0.20)
+			draw_colored_polygon(PackedVector2Array([tip, inner, foot, edge]), Color(0.38, 0.72, 0.94, 0.52))
+			draw_polyline(PackedVector2Array([inner, tip, edge]), Color(0.80, 0.96, 1.0, 0.9), 1.5, true)
+	for i in range(frost_layers):
+		var marker := Vector2((float(i) - float(frost_layers - 1) * 0.5) * 9.0, 13.0)
+		draw_circle(marker, 4.0, Color(0.10, 0.22, 0.34, 0.92), true, -1.0, true)
+		draw_circle(marker, 2.7, Color(0.65, 0.91, 1.0), true, -1.0, true)
 
 func _hp_color(r: float) -> Color:
 	var green := Color(0.32, 0.60, 0.26)

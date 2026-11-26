@@ -34,6 +34,78 @@ func _pull(b) -> void:
 	seed(pull_seed)
 	b._tick_aura(1.0)
 
+func _audit_lamp_field() -> void:
+	var b = _battle()
+	var c = b._core
+	b._tut.cancel()
+	b._mingzhu = false
+	b._anc_mod.erase("mingzhu")
+	var inside := _foe(c, 180.0)
+	var outside := _foe(c, 181.0)
+	b._process(0.0)
+	var near_token = b._foe_tokens[inside["_tid"]]
+	var far_token = b._foe_tokens[outside["_tid"]]
+	var field = b._lamp_field
+	assert(not field.visible and not field.is_processing() and not near_token.lamp_lit)
+	b._draw_charge = 1
+	b._pick_god("mingzhu")
+	assert(not b._has_skill("mingzhu"))
+	b._process(0.0)
+	assert(field.visible and field.is_processing() and field.center == c.hero_pos and field.radius == 180.0)
+	assert(near_token.lamp_lit and inside["slow_t"] > 0.0)
+	assert(not far_token.lamp_lit and outside["slow_t"] == 0.0)
+	b._anc_mod["mingzhu"] = {"radius_add": 40.0}
+	b._process(0.0)
+	assert(field.radius == 220.0 and far_token.lamp_lit and outside["slow_t"] > 0.0)
+	c.hero_pos.y += 50.0
+	b._process(0.0)
+	assert(field.center == c.hero_pos and not near_token.lamp_lit and not far_token.lamp_lit)
+	c.hero_pos.y -= 50.0
+	b._process(0.0)
+	assert(near_token.lamp_lit)
+	c.running = false
+	b._process(0.0)
+	assert(not field.visible and not field.is_processing() and not near_token.lamp_lit)
+	c.running = true
+	b._process(0.0)
+	assert(field.visible and far_token.lamp_lit)
+	c.hero["hp"] = 0.0
+	b._process(0.0)
+	assert(not field.visible and not far_token.lamp_lit)
+	c.hero["hp"] = c.hero["hp_max"]
+	b._process(0.0)
+	assert(field.visible)
+	b._end_run(false)
+	assert(not field.visible and not near_token.lamp_lit and not far_token.lamp_lit)
+	b.queue_free()
+
+func _audit_pull_feedback() -> void:
+	var b = _battle()
+	var c = b._core
+	b._tut.cancel()
+	var foe := _foe(c, 150.0)
+	b._process(0.0)
+	var token = b._foe_tokens[foe["_tid"]]
+	var field = b._lamp_field
+	var origin := Vector2(foe["x"], foe["y"])
+	_pull(b)
+	var destination := Vector2(foe["x"], foe["y"])
+	assert(origin.distance_to(destination) == 120.0 and field._pull_traces.size() == 1)
+	assert(field._pull_traces.front()["origin"] == origin and field._pull_traces.front()["destination"] == destination)
+	assert(token._lamp_pull_offset == origin - destination and token._lamp_pull_time == token.LAMP_PULL_DURATION)
+	b._process(0.0)
+	token._process(0.064)
+	assert(token.position == c.position + destination and token._frame_index == 12 and token._lamp_pull_time > 0.0)
+	token._process(0.14)
+	field._process(field.PULL_TRACE_DURATION)
+	assert(token._lamp_pull_time == 0.0 and field._pull_traces.is_empty())
+	for i in range(25):
+		field.show_pull(origin, destination)
+	assert(field._pull_traces.size() == field.PULL_TRACE_LIMIT)
+	b._end_run(false)
+	assert(field._pull_traces.is_empty() and not field.is_processing())
+	b.queue_free()
+
 func _run() -> void:
 	for candidate in range(1, 101):
 		seed(candidate)
@@ -83,5 +155,9 @@ func _run() -> void:
 		assert(b._kills == kills + 1)
 		b.queue_free()
 		await process_frame
-	print("PASS: aura pull clamps at center; range/damage preserved; dead/result/stopped guards; immediate once-only kill and callback boundaries")
+	_audit_lamp_field()
+	await process_frame
+	_audit_pull_feedback()
+	await process_frame
+	print("PASS: aura range/damage, once-only kill, and synchronized lamp field, markers and pull feedback")
 	Audio.quit_cleanly()

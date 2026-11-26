@@ -1054,6 +1054,9 @@ func _set_vital_hud(fill: Panel, caption: Label, value: float, maximum: float) -
 # ---------------- 战场 ----------------
 # 镜头容器：战场内容都挂在它下面，做推进（zoom）时整体一起缩放
 var _cam: Control = null
+const LampField := preload("res://kushou/lamp_field.gd")
+var _lamp_field: LampField
+
 func _build_field() -> void:
 	_cam = Control.new()
 	_cam.size = Vector2(720, 1280)
@@ -1069,6 +1072,10 @@ func _build_field() -> void:
 	_core.show_basic_hit_numbers = false
 	_core.draw_hazard_warnings = false
 	_cam.add_child(_core)
+	_lamp_field = LampField.new()
+	_lamp_field.position = _core.position
+	_lamp_field.size = _core.size
+	_cam.add_child(_lamp_field)
 	_hazard_view = HazardTelegraph.new()
 	_hazard_view.core = _core
 	_hazard_view.position = _core.position
@@ -2048,8 +2055,7 @@ func _curio_on_crit(tgt: Dictionary) -> void:
 		tgt["cold_dmg"] = 0.25
 	_curio_uses += 1
 	_curio_flash()
-	_spawn_pfx("impacts/crit-hit", _core.position + Vector2(float(tgt["x"]), float(tgt["y"]) - 16.0), 0.8, "", 1.4)
-	Aud.sfx("bell", -12.0, 1.3)
+	Aud.sfx("bell", -12.0, 1.3, 120)
 
 func _curio_on_cold_expired(tgt: Dictionary) -> void:
 	var boom := bool(tgt.get("cold_boom", false))
@@ -2061,14 +2067,17 @@ func _curio_on_cold_expired(tgt: Dictionary) -> void:
 		return
 	if boom and float(tgt.get("hp", 0.0)) > 0.0 and float(tgt.get("dying", 0.0)) <= 0.0:
 		var at := Vector2(float(tgt["x"]), float(tgt["y"]))
-		_spawn_pfx("impacts/crit-hit", _core.position + at, 1.0, "", 1.4)
+		const BURST_RADIUS := 70.0
+		if _fx_front != null and at.y >= MIN_VISIBLE_FOE_Y:
+			_fx_front.spawn_ice_burst(_core.position + at - FIELD_POS, BURST_RADIUS)
+			Aud.sfx("slash_light2", -16.0, 1.32, 140)
 		for o_v in _core.foes.duplicate():
 			if not _skill_batch_active(epoch):
 				return
 			var o: Dictionary = o_v
 			if not _core.foes.has(o) or o == tgt or bool(o.get("_death_settled", false)) or float(o.get("dying", 0.0)) > 0.0 or float(o.get("hp", 0.0)) <= 0.0:
 				continue
-			if at.distance_to(Vector2(float(o["x"]), float(o["y"]))) > 70.0:
+			if at.distance_squared_to(Vector2(float(o["x"]), float(o["y"]))) > BURST_RADIUS * BURST_RADIUS:
 				continue
 			_core._apply_dmg(o, float(_core.hero.get("atk", 12.0)) * 0.6, "物理")
 			if float(o.get("hp", 0.0)) <= 0.0:
@@ -2874,6 +2883,7 @@ func _quit() -> void:
 	if MenuUI.navigate(self, "res://menu/main_home.tscn") == OK:
 		# 场景会延迟释放；离树后立即拒绝旧奖励和结算回调。
 		_run_over = true
+		_clear_lamp_field()
 		if _core != null:
 			_core.running = false
 		if _tut != null:
@@ -2913,6 +2923,12 @@ func _process(_delta: float) -> void:
 		_tick_fly(_delta)
 		_tick_pulses(_delta)
 		return
+	var lamp_radius := _aura_radius() if _aura_active() else 0.0
+	var lamp_radius_squared := lamp_radius * lamp_radius
+	if lamp_radius > 0.0:
+		_lamp_field.update_field(_core.hero_pos, lamp_radius)
+	elif _lamp_field != null and _lamp_field.visible:
+		_clear_lamp_field()
 	var _t_proc := Time.get_ticks_usec()
 	var t := Time.get_ticks_msec() / 1000.0
 	for i in _enemies.size():
@@ -3073,7 +3089,15 @@ func _process(_delta: float) -> void:
 				tk.hp_ratio = ratio
 				_foe_tokens[tid] = tk
 			active[tid] = true
-			tk.position = _core.position + Vector2(float(f["x"]), y)
+			var feet := Vector2(float(f["x"]), y)
+			tk.position = _core.position + feet
+			if f.has("cold_t") or tk.frost_chilled or tk.frost_frozen:
+				var alive := hp > 0.0 and float(f.get("dying", 0.0)) <= 0.0
+				var chilled := alive and float(f.get("cold_t", 0.0)) > 0.0
+				tk.set_frost(int(f.get("cold", 0)) if chilled else 0, chilled, alive and float(f.get("cold_freeze_t", 0.0)) > 0.0)
+			if lamp_radius > 0.0:
+				tk.set_lamp_lit(on_field and hp > 0.0 and float(f.get("dying", 0.0)) <= 0.0
+					and feet.distance_squared_to(_core.hero_pos) <= lamp_radius_squared)
 			if new_token or density_changed:
 				# 类型在生成时确定，密度跨阈值时才重新计算血条样式。
 				var ordinary: bool = f.get("kind", "") == "normal" and not f.has("rtype")
@@ -3341,6 +3365,7 @@ func _end_run(win: bool) -> void:
 			print("[RUN] lv=", LevelState.current_level, " wave=", _max_wave, " kills=", _kills,
 				" wen=", _wen, " crystal=", _crystal)
 	_run_over = true
+	_clear_lamp_field()
 	if _hero_token != null:
 		_hero_token.cancel_cast_poses()
 	_close_challenge()
@@ -3360,6 +3385,7 @@ func _end_run(win: bool) -> void:
 	for token in _foe_tokens.values():
 		if is_instance_valid(token):
 			token.boss_warning = {}
+			token.set_frost(0, false, false)
 	if _cam != null:
 		_cam.scale = Vector2.ONE
 	# 结算前的"定格式"反馈：一闪 + 长顿帧，然后才弹面板
@@ -8254,8 +8280,19 @@ func _aura_radius() -> float:
 		r += 40.0
 	return r
 
+func _aura_active() -> bool:
+	return _mingzhu and _core != null and not _run_over and _core.running and float(_core.hero.get("hp", 0.0)) > 0.0
+
+func _clear_lamp_field() -> void:
+	if _lamp_field == null or not _lamp_field.visible:
+		return
+	_lamp_field.update_field(Vector2.ZERO, 0.0)
+	for token: TokenActor in _foe_tokens.values():
+		token.set_lamp_lit(false)
+		token.clear_lamp_pull()
+
 func _tick_aura(dt: float) -> void:
-	if not _mingzhu or _core == null or _run_over or not _core.running or float(_core.hero.get("hp", 0.0)) <= 0.0:
+	if not _aura_active():
 		return
 	var epoch: int = _core._enemy_attack_epoch
 	var m: Dictionary = _anc_mod.get("mingzhu", {})
@@ -8277,18 +8314,25 @@ func _tick_aura(dt: float) -> void:
 		var f: Dictionary = f_v
 		if float(f.get("hp", 0.0)) <= 0.0 or float(f.get("dying", 0.0)) > 0.0:
 			continue
-		var d := Vector2(float(f["x"]), float(f["y"])) - hp0
-		if d.length() > rad:
+		var feet := Vector2(float(f["x"]), float(f["y"]))
+		var offset := feet - hp0
+		var distance := offset.length()
+		if distance > rad:
 			continue
 		f["slow_t"] = maxf(float(f.get("slow_t", 0.0)), 0.3)      # 持续减速
 		if vuln > 0.0:
 			f["vuln_t"] = maxf(float(f.get("vuln_t", 0.0)), 0.3)
 			f["vuln_pct"] = vuln
 		if pull and do_pull and randf() < 0.20:
-			var dir := (-d).normalized()
-			var step := minf(AURA_PULL_STEP, d.length())
-			f["x"] = float(f["x"]) + dir.x * step
-			f["y"] = float(f["y"]) + dir.y * step
+			var destination := feet.move_toward(hp0, AURA_PULL_STEP)
+			f["x"] = destination.x
+			f["y"] = destination.y
+			var token := _foe_tokens.get(int(f.get("_tid", 0))) as TokenActor
+			if token != null and token.visible and destination.y >= MIN_VISIBLE_FOE_Y:
+				if feet.distance_squared_to(destination) > 1.0:
+					token.play_lamp_pull(destination - feet)
+				_lamp_field.show_pull(feet, destination)
+				Aud.sfx("bell", -21.0, 1.12, 220)
 			var dmg := float(_core.hero.get("atk", 12.0)) * 0.15 * (rad / AURA_R_BASE)
 			_core._apply_dmg(f, dmg, "木系")
 			_core._push_float(float(f["x"]), float(f["y"]) - 30.0, "聚", Color(0.95, 0.85, 0.55))

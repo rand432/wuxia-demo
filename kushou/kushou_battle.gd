@@ -5749,7 +5749,7 @@ func _draw() -> void:
 			draw_circle(Vector2(float(f["x"]) + 14.0, float(f["y"]) - 50.0 * sc), 5.0 + sin(_t * 6.0) * 1.2, dc)
 			draw_circle(Vector2(float(f["x"]) + 14.0, float(f["y"]) - 50.0 * sc), 8.0, Color(dc.r, dc.g, dc.b, 0.25))
 		# 麻痹：头顶跳两下电花（一眼看出"这只动不了"）
-		if float(f.get("para", 0.0)) > 0.0 or float(f.get("cold_freeze_t", 0.0)) > 0.0:
+		if float(f.get("para", 0.0)) > 0.0 or (not hide_units and float(f.get("cold_freeze_t", 0.0)) > 0.0):
 			var pp2 := Vector2(float(f["x"]), float(f["y"]) - 46.0 * sc)
 			for k in 2:
 				var off := Vector2(randf_range(-12.0, 12.0), randf_range(-10.0, 10.0))
