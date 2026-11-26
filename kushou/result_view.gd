@@ -73,9 +73,9 @@ func present(p: Dictionary) -> void:
 		tr.custom_minimum_size = Vector2.ZERO
 		tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		holder.add_child(tr)
-	_panel(Rect2(0, 0, 540, 480), Color(0.97, 0.93, 0.85, 0.28) if has_art else Color(0.97, 0.93, 0.85, 0.99), 12,
-		Color(0.85, 0.66, 0.23, 0.0) if has_art else (Color(0.85, 0.66, 0.23) if win else Color(0.64, 0.22, 0.15)),
-		0 if has_art else 3, holder)
+	else:
+		_panel(Rect2(0, 0, 540, 480), Color(0.97, 0.93, 0.85, 0.99), 12,
+			Color(0.85, 0.66, 0.23) if win else Color(0.64, 0.22, 0.15), 3, holder)
 	if has_art:
 		# 内容区压一层纸色，压住框内花边，保证文字清楚
 		var content_bg := ColorRect.new()
@@ -85,8 +85,8 @@ func present(p: Dictionary) -> void:
 		content_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		holder.add_child(content_bg)
 		var title_bg := ColorRect.new()
-		title_bg.position = Vector2(0, 56)
-		title_bg.size = Vector2(540, 60)
+		title_bg.position = Vector2(48, 56)
+		title_bg.size = Vector2(444, 60)
 		title_bg.color = Color(0.972, 0.948, 0.896, 0.88)
 		title_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		holder.add_child(title_bg)

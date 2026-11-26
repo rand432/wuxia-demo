@@ -14,7 +14,12 @@ static func tex_of(quality: int) -> Texture2D:
 	var path := texture_path(quality)
 	var t: Texture2D = null
 	if ResourceLoader.exists(path):
-		t = load(path) as Texture2D
+		var art := load(path) as Texture2D
+		if art != null:
+			var frame := CanvasTexture.new()
+			frame.diffuse_texture = art
+			frame.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+			t = frame
 	_cache[q] = t
 	return t
 
