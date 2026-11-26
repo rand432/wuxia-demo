@@ -9,6 +9,34 @@ func _initialize() -> void:
 		return
 	call_deferred("_run")
 
+func _audit_defeat_audio() -> bool:
+	var battle = Battle.instantiate()
+	root.add_child(battle)
+	battle.set_process(false)
+	var core = battle._core
+	core.set_process(false)
+	core.foes.clear()
+	for i in 28:
+		core._spawn_foe()
+	for kind in range(4):
+		assert(core.spawn_challenge(kind, 1) == 1)
+	for player in Audio._sfx_active.duplicate():
+		player.finished.emit()
+	var foes: Array = core.foes.duplicate()
+	for foe in foes:
+		core._kill_foe(foe)
+	assert(core.kills_total == foes.size())
+	var cues := {}
+	for player in Audio._sfx_active:
+		if player.stream != null:
+			var key: String = player.stream.resource_path.get_file().get_basename()
+			cues[key] = int(cues.get(key, 0)) + 1
+	for key in ["foe_down", "combo_mark", "coin", "challenge_coin_drop", "bell", "paper", "chest"]:
+		assert(cues.get(key, 0) == 1, "%s: %s" % [key, str(cues)])
+	assert(not cues.has("fall_down"))
+	battle.queue_free()
+	return true
+
 func _audit_challenge_poses() -> bool:
 	var b = Battle.instantiate()
 	root.add_child(b)
@@ -95,6 +123,8 @@ func _audit_roster_density() -> bool:
 func _run() -> void:
 	LS.ensure_loaded()
 	LS.current_level = 6
+	assert(_audit_defeat_audio())
+	await process_frame
 	var cap_test = Battle.instantiate()
 	root.add_child(cap_test)
 	cap_test.set_process(false)
@@ -161,5 +191,5 @@ func _run() -> void:
 	await process_frame
 	assert(_audit_roster_density())
 	await process_frame
-	print("PASS: challenge rewards, bounded spawning, shared atlases and visible crowd density thresholds")
+	print("PASS: challenge rewards, bounded spawning, shared atlases, crowd density and layered defeat audio")
 	Audio.quit_cleanly()

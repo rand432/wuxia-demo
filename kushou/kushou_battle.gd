@@ -2252,38 +2252,35 @@ func clear_champion() -> void:
 		if str((foes[i] as Dictionary).get("kind", "")) == "champion":
 			foes.remove_at(i)
 	champion = 0
-# v2p（用户："怪物死亡也有音效"）：死亡音效**分层 ＋ 随机音高**——
-#   原来只有一声 -7dB 的 fall_down，被 BGM(-12dB) 和刀声盖住，听着就像"没响"。
-#   现在：一记"闷响"（hit_heavy，音高随机）＋ 一声"倒下"（fall_down）；
-#   各类挑战怪再叠一个"自己的音色"（钱怪叮当 / 晶怪钟声 / 甲士装备声 / 宝箱怪开箱声）；
-#   boss 死是另一套：低音闷响 ＋ 鼓 ＋ 长倒下。同时节流，一群怪一起死不会糊成一片。
+const CHALLENGE_DEFEAT_SOUNDS := ["challenge_coin_drop", "bell", "paper", "chest"]
 var _death_sfx_t := 0.0
-var _coin_sfx_frame := -1
 
-func _death_sfx(kind: String, is_boss: bool) -> void:
+func _death_sfx(foe: Dictionary) -> void:
 	# 连杀递进：连得越多，死的音越高（割草时一串往上走的音阶）；再加一点随机免得机械
 	var pt := clampf(0.92 + float(mini(_combo, 14)) * 0.035, 0.92, 1.42) * randf_range(0.99, 1.03)
 	if _combo > 0 and _combo % 10 == 0:
-		Audio.sfx("bell", -10.0, clampf(1.0 + 0.06 * float(_combo / 10), 1.0, 1.8))
-	if is_boss:
-		Audio.sfx("hit_heavy", -1.0, 0.72)
-		# v16o（用户："背景喊杀声太多了 其实没必要有喊杀声"）：已去掉喊杀/战鼓声
-		Audio.sfx("fall_down", -3.0, 0.8)
+		Audio.sfx("combo_mark", -10.0, clampf(1.0 + 0.06 * float(_combo / 10), 1.0, 1.8), 220)
+	var challenge := int(foe.get("chal", -1))
+	if bool(foe.get("boss", false)) and (challenge < 0 or challenge == 4):
+		Audio.sfx("hit_heavy", -1.0, 0.72, 120)
+		Audio.sfx("fall_down", -3.0, 0.8, 120)
 		return
-	if _death_sfx_t > 0.0:
-		return                                  # 同一瞬间死一片时只留第一声"闷响"
-	_death_sfx_t = 0.085
-	Audio.sfx("hit_heavy", -11.0, pt)
-	Audio.sfx("fall_down", -8.0, pt)
-	match kind:
+	if _death_sfx_t <= 0.0:
+		_death_sfx_t = 0.085
+		Audio.sfx("foe_down", -8.0, pt, 85)
+	# 类型声单独节流，挑战怪夹在普通怪之间倒下时也能听见。
+	if challenge >= 0 and challenge < CHALLENGE_DEFEAT_SOUNDS.size():
+		Audio.sfx(CHALLENGE_DEFEAT_SOUNDS[challenge], -12.0, pt, 180)
+		return
+	match str(foe["kind"]):
 		"coin":
-			Audio.sfx("coin", -5.0, pt + 0.1)
+			Audio.sfx("challenge_coin_drop", -12.0, pt + 0.1, 180)
 		"crystal":
-			Audio.sfx("bell", -6.0, pt + 0.05)
+			Audio.sfx("bell", -12.0, pt + 0.05, 180)
 		"gear":
-			Audio.sfx("equip", -5.0, pt)
+			Audio.sfx("equip", -11.0, pt, 180)
 		"treasure":
-			Audio.sfx("chest", -4.0, pt)
+			Audio.sfx("chest", -10.0, pt, 180)
 
 # 死：不立刻消失——先"被打飞"半秒（碎片＋淡出＋上飘），爽感全在这一下
 # v9h：挑战怪死亡 —— 外壳按类型发奖（文钱/灵晶/经验/宝物）
@@ -2404,7 +2401,7 @@ func _kill_foe(f: Dictionary) -> void:
 	_on_kill_partner()                       # 肝：持续期间杀敌涨生命上限
 	_shake = maxf(_shake, 6.0 + minf(6.0, float(_combo) * 0.4))
 	_hitstop = maxf(_hitstop, 0.05)
-	_death_sfx(str(f["kind"]), bool(f.get("boss", false)))
+	_death_sfx(f)
 	if _shards.size() < FX_SHARDS_MAX:      # 外壳已有脚边特效，保留少量过渡碎屑。
 		for i in (4 if hide_units else 7):
 			_shards.append({"x": float(f["x"]), "y": float(f["y"]) - 20.0,
@@ -2451,10 +2448,8 @@ func _kill_foe(f: Dictionary) -> void:
 		boss_died.emit(Vector2(float(f["x"]), float(f["y"])))
 	coin_drop.emit(coins, Vector2(float(f["x"]), float(f["y"])))
 	# 连杀不再在每只怪头上飘字（那是刷屏）：只留屏幕中上那行大字
-	var audio_frame := Engine.get_process_frames()
-	if coins > 0 and _coin_sfx_frame != audio_frame:
-		_coin_sfx_frame = audio_frame
-		Audio.sfx("coin", -10.0)
+	if coins > 0:
+		Audio.sfx("coin", -17.0, 1.0, 105)
 	if kind != "normal" and kind != "coin":
 		special.emit(kind, coins, Vector2(float(f["x"]), float(f["y"])))
 	kill.emit(1)
@@ -5893,13 +5888,19 @@ func _draw() -> void:
 			var ang3 := TAU * float(k2) / 8.0 + float(bu["t"]) * 3.0
 			draw_line(bp + Vector2(cos(ang3), sin(ang3)) * 12.0 * bs,
 				bp + Vector2(cos(ang3), sin(ang3)) * 40.0 * bs, Color(bc.r, bc.g, bc.b, ba), 3.5)
-	# 死亡碎屑
-	for sh_v in _shards:
-		var sh: Dictionary = sh_v
-		var a2 := 1.0 - float(sh["t"]) / 0.45
-		draw_line(Vector2(float(sh["x"]), float(sh["y"])),
-			Vector2(float(sh["x"]) - float(sh["vx"]) * 0.03, float(sh["y"]) - float(sh["vy"]) * 0.03),
-			Color(0.86, 0.80, 0.72, a2), 3.0)
+	# 所有碎屑线宽相同。合批绘制仍为每段保留自己的位置和透明度。
+	if not _shards.is_empty():
+		var points := PackedVector2Array()
+		var colors := PackedColorArray()
+		points.resize(_shards.size() * 2)
+		colors.resize(_shards.size())
+		for i in _shards.size():
+			var shard: Dictionary = _shards[i]
+			var start := Vector2(float(shard["x"]), float(shard["y"]))
+			points[2 * i] = start
+			points[2 * i + 1] = start - Vector2(float(shard["vx"]), float(shard["vy"])) * 0.03
+			colors[i] = Color(0.86, 0.80, 0.72, 1.0 - float(shard["t"]) / 0.45)
+		draw_multiline_colors(points, colors, 3.0)
 	# 飘字
 	for fl_v in _floats:
 		var fl: Dictionary = fl_v
@@ -5921,8 +5922,8 @@ func _draw() -> void:
 	# v2i（用户："boss到场时 可以显示的血条可以再战斗画面的上方"）：
 	#   boss 活着的时候，**战场最上面**挂一条专属血条（名字 ＋ 阶 ＋ 大红条），
 	#   头顶那条小血条照旧留着（看得清它在哪）。入场横幅往下让开 62，不跟血条叠。
-	var bo := _boss_foe()
-	if not hide_units and not bo.is_empty():
+	var bo := {} if hide_units else _boss_foe()
+	if not bo.is_empty():
 		var bw3 := minf(620.0, w - 60.0)
 		var bx3 := (w - bw3) * 0.5
 		draw_rect(Rect2(bx3, 8.0, bw3, 30.0), Color(0.12, 0.10, 0.10, 0.92))

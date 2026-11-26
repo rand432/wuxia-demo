@@ -3030,7 +3030,9 @@ func _process(_delta: float) -> void:
 				_hero_token.play_hit()
 			_prev_hero_hp = hhp
 		var active := {}
+		var was_dense := _dense_roster
 		_update_roster_density()
+		var density_changed := was_dense != _dense_roster
 		var boss_casts := {}
 		for hazard: Dictionary in _core._delayed:
 			if not bool(hazard.get("boss_attack", false)) or bool(hazard.get("landed", false)):
@@ -3064,28 +3066,27 @@ func _process(_delta: float) -> void:
 			if tk == null and (not on_field or hp <= 0.0 or bool(f.get("_death_settled", false))):
 				continue
 			var ratio := hp / maxf(1.0, float(f["hp_max"]))
-			if tk == null:
+			var new_token := tk == null
+			if new_token:
 				tk = _make_foe_token(f)
 				tk.hp_ratio = ratio
 				_foe_tokens[tid] = tk
 			active[tid] = true
 			tk.position = _core.position + Vector2(float(f["x"]), y)
-			var ordinary: bool = str(f.get("kind", "")) == "normal" and not f.has("rtype")
-			var small_challenge := tk.challenge_kind >= 0 and tk.challenge_kind < 3
-			var compact := _dense_roster and (ordinary or small_challenge)
-			if compact != tk.compact_bar:
-				tk.compact_bar = compact
-				tk.queue_redraw()
+			if new_token or density_changed:
+				# 类型在生成时确定，密度跨阈值时才重新计算血条样式。
+				var ordinary: bool = f.get("kind", "") == "normal" and not f.has("rtype")
+				var small_challenge := tk.challenge_kind >= 0 and tk.challenge_kind < 3
+				var compact := _dense_roster and (ordinary or small_challenge)
+				if compact != tk.compact_bar:
+					tk.compact_bar = compact
+					tk.queue_redraw()
 			if bool(f.get("boss", false)):
 				tk.boss_warning = boss_casts.get(tid, {})
 			if ratio > 0.0 and ratio < tk.hp_ratio - 0.0015 and tk._hit_t <= 0.0:
 				tk.play_hit(tk.position - _hero_token.position)
 			if absf(ratio - tk.hp_ratio) > 0.0015:
 				tk.hp_ratio = ratio
-				tk.queue_redraw()
-			var uname := _foe_display_name(f)
-			if uname != tk.unit_name:
-				tk.unit_name = uname
 				tk.queue_redraw()
 			if bool(f.get("_death_settled", false)):
 				tk.play_down()
