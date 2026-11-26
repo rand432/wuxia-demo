@@ -258,4 +258,4 @@
 - 失败：临时审计退出 1，`FAILED_COUNT=1`，日志 `.shots/runs/failtest10/results/zz_fail_tmp.log`
 - 全量：**88 / 88，failed=0**（`.shots/audit_batch10.txt`）
 - 交付说明：`docs/交付_批次10_隔离边界_2026-11-27.md`
-- 提交：__HASH__
+- 提交：e516dcf
