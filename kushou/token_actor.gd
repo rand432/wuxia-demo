@@ -200,6 +200,9 @@ func _process(delta: float) -> void:
 		visible = p < 1.0
 		queue_redraw()
 		return
+	# 贴图闪白和身体偏移由 Sprite 与画布变换负责。只有脚边入场弧与圆牌闪光需要重绘。
+	if _spawn_t < 0.26 or (_flash > 0.0 and (round_mask or (_frame_atlas == null and art_tex == null))):
+		queue_redraw()
 	_spawn_t = minf(0.26, _spawn_t + delta)
 	if _boss_impact_pending:
 		# 结算后的第一帧先画出招姿势，避免前一帧耗时过长直接跳到收势。
@@ -242,8 +245,6 @@ func _process(delta: float) -> void:
 	modulate = Color(1, 1, 1, lerpf(0.35, 1.0, enter))
 	if is_instance_valid(_sprite):
 		_sprite.modulate = Color(0.75, 0.94, 1.18) if frost_frozen else Color(1.0 + 0.40 * _flash, 1.0 - 0.38 * _flash, 1.0 - 0.47 * _flash)
-	if enter < 1.0 or _flash > 0.0 or _hit_t > 0.0 or _attack_time > 0.0:
-		queue_redraw()
 
 func _tick_frame_pose(delta: float, travel: Vector2, moving: bool, pop: float, enter: float, recoil: float) -> void:
 	_frame_clock += delta
@@ -293,8 +294,6 @@ func _tick_frame_pose(delta: float, travel: Vector2, moving: bool, pop: float, e
 		_sprite.modulate = Color(1.0 + 0.07 * light, 1.0 + 0.24 * light, 1.0 + 0.43 * light)
 	else:
 		_sprite.modulate = Color(1.0 + 0.25 * _flash, 1.0 - 0.28 * _flash, 1.0 - 0.32 * _flash)
-	if enter < 1.0 or _flash > 0.0:
-		queue_redraw()
 
 func _apply_visual_pose(visual_scale: Vector2, offset: Vector2, angle := 0.0) -> void:
 	if _lamp_pull_time > 0.0:

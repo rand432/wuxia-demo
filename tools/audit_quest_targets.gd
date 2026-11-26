@@ -20,6 +20,38 @@ func _quest(battle, id: String) -> Dictionary:
 	assert(false, "missing quest")
 	return {}
 
+func _audit_statue_focus(battle) -> void:
+	var core = battle._core
+	core.foes.clear()
+	core.clear_order()
+	core.hero_pos = Vector2(core.size.x * 0.5, core.size.y * core.HERO_MID)
+	core.intro_wait = 0.0
+	core._hero_cd = 0.0
+	core._last_quota_wave = core.wave
+	core._wave_spawned = core._wave_quota
+	core._spawn_left = 0
+	core.hero["atk"] = 500.0
+	seed(327)
+	core.spawn_statues()
+	var statue: Dictionary = core.foes[1]
+	var normal: Dictionary = core._spawn_foe()
+	normal.merge({"x": core.hero_pos.x, "y": 111.0, "hp": 10.0, "hp_max": 10.0}, true)
+	assert(is_same(core._order_target(), normal), "Auto-targeting latched onto a stationary quest statue")
+	for frame in range(720):
+		core._process(1.0 / 60.0)
+		if normal.get("_death_settled", false):
+			break
+	assert(normal.get("_death_settled", false) and core.statues_left() == 3,
+		"Auto clear: foe hp=%s, foe y=%s, hero=%s, statues=%s" % [normal["hp"], normal["y"], core.hero_pos, core.statues_left()])
+	assert(core.wave_cleared())
+	core.tap_at(Vector2(statue["x"], statue["y"]))
+	assert(is_same(core._order_target(), statue))
+	for frame in range(240):
+		core._process(1.0 / 60.0)
+		if statue.get("_death_settled", false):
+			break
+	assert(statue.get("_death_settled", false) and core.statues_left() == 2)
+
 func _run() -> void:
 	LS.ensure_loaded()
 	LS.current_level = 6
@@ -82,7 +114,14 @@ func _run() -> void:
 	before = battle._crystal
 	battle._q_finish("done")
 	assert(battle._crystal == before and battle._q_done == 4)
+	var field := Probe.new()
+	root.add_child(field)
+	field._tut.cancel()
+	field.set_process(false)
+	field._core.set_process(false)
+	_audit_statue_focus(field)
+	field.queue_free()
 	battle.queue_free()
 	await process_frame
-	print("PASS: bell tier targets/timers/template isolation; quest reentry, clearwave, elite corpses and result guard")
+	print("PASS: bell tier targets and timers; quest reentry, clearwave, elite corpses, statue focus and result guard")
 	Audio.quit_cleanly()

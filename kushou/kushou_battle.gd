@@ -38,9 +38,10 @@ func _buffs_tick(delta: float) -> void:
 			hero[k] = maxf(0.0, float(hero[k]) - delta)
 	for f_v in foes:
 		var f: Dictionary = f_v
-		for k2 in ["armor_break_t", "blind_t", "slow_t"]:
-			if float(f.get(k2, 0.0)) > 0.0:
-				f[k2] = maxf(0.0, float(f[k2]) - delta)
+		for k2 in ["armor_break_t", "blind_t", "slow_t", "lamp_slow_t"]:
+			var remaining := float(f.get(k2, 0.0))
+			if remaining > 0.0:
+				f[k2] = maxf(0.0, remaining - delta)
 
 # 返回整刀结算伤害供飘字使用；吸血和dmg_done只计实际扣血，包含致命一击时的上限。
 func _apply_dmg(f: Dictionary, amount: float, dtype: String, crit_result: int = -1, vuln_multiplier: float = -1.0) -> float:
@@ -1009,7 +1010,7 @@ func _process(delta: float) -> void:
 		else:
 			hero_pos += (_order_pos - hero_pos).normalized() * minf(HERO_SPD_FAR * delta, od)
 			_hero_step += delta * 8.0
-	elif not target.is_empty() and (dist <= HERO_AGGRO or bool(target.get("ranged", false)) or bool(target.get("mage", false))):
+	elif not target.is_empty() and (dist <= HERO_AGGRO or bool(target.get("ranged", false)) or bool(target.get("mage", false)) or bool(target.get("still", false))):
 		# v16o（用户："比如这种的 我集火他不过去"）：
 		#   ⚠ 弓手/法师现在会停在 250~290 外**不动**，而 HERO_AGGRO=90 让主角"怪远就不追"
 		#     → 它们永远走不过来、主角也永远不过去 = **远程怪打不到**。
@@ -1606,6 +1607,8 @@ func queue_delayed(x: float, y: float, r: float, dmg: float, elem: String, warn 
 
 func foe_move_speed(foe: Dictionary) -> float:
 	var slow := 0.45 if float(foe.get("slow_t", 0.0)) > 0.0 else 0.0
+	if float(foe.get("lamp_slow_t", 0.0)) > 0.0:
+		slow = maxf(slow, 0.25)
 	if float(foe.get("cold_t", 0.0)) > 0.0:
 		slow = maxf(slow, float(foe.get("cold_slow", 0.0)))
 	return FOE_SPD * (1.0 + float(foe.get("boss_spd", 0.0))) * (1.0 - clampf(slow, 0.0, 1.0))
@@ -2001,7 +2004,7 @@ func _nearest_n(n: int) -> Array:
 		live.resize(n)
 	return live
 
-func _nearest() -> Dictionary:
+func _nearest(include_statues := true) -> Dictionary:
 	var best: Dictionary = {}
 	# 挑**离主角最近**的那只（原来是按"最靠下"，主角会走位之后要按距离）
 	var bd := 1.0e9
@@ -2015,6 +2018,8 @@ func _nearest() -> Dictionary:
 		var f: Dictionary = f_v
 		if float(f.get("dying", 0.0)) > 0.0:
 			continue                             # 已经躺了的不再补刀
+		if not include_statues and bool(f.get("still", false)):
+			continue                             # 破阵石像通过点选集火，自动普攻继续处理本波敌人
 		if in_zone and Vector2(float(f["x"]), float(f["y"])).distance_to(zc) > float(zone["r"]):
 			continue                             # 圈外的先不管
 		var d := hero_pos.distance_to(Vector2(float(f["x"]), float(f["y"])))
@@ -2123,7 +2128,7 @@ func _order_target() -> Dictionary:
 			if Vector2(float(_auto_foe["x"]), float(_auto_foe["y"])).distance_to(zc) > float(zone["r"]):
 				_auto_foe = {}
 	if _auto_foe.is_empty():
-		_auto_foe = _nearest()
+		_auto_foe = _nearest(false)
 	return _auto_foe
 
 # 点战场下指令（弹窗开着时点击被弹窗吃掉，这里收不到）

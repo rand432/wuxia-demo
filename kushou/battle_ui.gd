@@ -8324,7 +8324,7 @@ func _tick_aura(dt: float) -> void:
 		var distance := offset.length()
 		if distance > rad:
 			continue
-		f["slow_t"] = maxf(float(f.get("slow_t", 0.0)), 0.3)      # 持续减速
+		f["lamp_slow_t"] = 0.3 # 独立计时，离开灯照后不延长其他来源的减速。
 		if vuln > 0.0:
 			f["vuln_t"] = maxf(float(f.get("vuln_t", 0.0)), 0.3)
 			f["vuln_pct"] = vuln

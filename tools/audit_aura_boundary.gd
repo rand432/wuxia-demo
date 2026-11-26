@@ -42,6 +42,7 @@ func _audit_lamp_field() -> void:
 	b._anc_mod.erase("mingzhu")
 	var inside := _foe(c, 180.0)
 	var outside := _foe(c, 181.0)
+	var normal_speed: float = c.foe_move_speed(inside)
 	b._process(0.0)
 	var near_token = b._foe_tokens[inside["_tid"]]
 	var far_token = b._foe_tokens[outside["_tid"]]
@@ -52,14 +53,25 @@ func _audit_lamp_field() -> void:
 	assert(not b._has_skill("mingzhu"))
 	b._process(0.0)
 	assert(field.visible and field.is_processing() and field.center == c.hero_pos and field.radius == 180.0)
-	assert(near_token.lamp_lit and inside["slow_t"] > 0.0)
-	assert(not far_token.lamp_lit and outside["slow_t"] == 0.0)
+	assert(near_token.lamp_lit and is_equal_approx(c.foe_move_speed(inside), normal_speed * 0.75))
+	assert(not far_token.lamp_lit and not outside.has("lamp_slow_t"))
 	b._anc_mod["mingzhu"] = {"radius_add": 40.0}
 	b._process(0.0)
-	assert(field.radius == 220.0 and far_token.lamp_lit and outside["slow_t"] > 0.0)
+	assert(field.radius == 220.0 and far_token.lamp_lit and outside["lamp_slow_t"] > 0.0)
+	inside["slow_t"] = 0.10
+	b._process(0.0)
+	assert(inside["slow_t"] == 0.10 and is_equal_approx(c.foe_move_speed(inside), normal_speed * 0.55))
+	c._buffs_tick(0.11)
+	assert(is_equal_approx(c.foe_move_speed(inside), normal_speed * 0.75))
+	inside.merge({"cold_t": 1.0, "cold_slow": 0.30}, true)
+	assert(is_equal_approx(c.foe_move_speed(inside), normal_speed * 0.70))
 	c.hero_pos.y += 50.0
 	b._process(0.0)
 	assert(field.center == c.hero_pos and not near_token.lamp_lit and not far_token.lamp_lit)
+	c._buffs_tick(0.30)
+	assert(inside["lamp_slow_t"] == 0.0 and is_equal_approx(c.foe_move_speed(inside), normal_speed * 0.70))
+	c._tick_cold_control(inside, 1.0)
+	assert(is_equal_approx(c.foe_move_speed(inside), normal_speed))
 	c.hero_pos.y -= 50.0
 	b._process(0.0)
 	assert(near_token.lamp_lit)
@@ -134,7 +146,7 @@ func _run() -> void:
 		else: c.running = false
 		var hp: float = c.hero["hp"]
 		_pull(b)
-		assert(c.hero["hp"] == hp and b._mp == 0.0 and f["hp"] == 1000.0 and f["slow_t"] == 0.0)
+		assert(c.hero["hp"] == hp and b._mp == 0.0 and f["hp"] == 1000.0 and not f.has("lamp_slow_t"))
 		b.queue_free()
 		await process_frame
 	# 致死聚灯当场结算一次；回调换波/结算后不再给旧目标加状态。
@@ -150,7 +162,7 @@ func _run() -> void:
 			else: c.clear_enemy_attacks())
 		_pull(b)
 		assert(f.get("_death_settled", false) and b._kills == kills + 1)
-		assert(untouched["hp"] == 1000.0 and untouched["slow_t"] == 0.0)
+		assert(untouched["hp"] == 1000.0 and not untouched.has("lamp_slow_t"))
 		c._kill_foe(f)
 		assert(b._kills == kills + 1)
 		b.queue_free()
@@ -159,5 +171,5 @@ func _run() -> void:
 	await process_frame
 	_audit_pull_feedback()
 	await process_frame
-	print("PASS: aura range/damage, once-only kill, and synchronized lamp field, markers and pull feedback")
+	print("PASS: aura range/damage, independent 25% slow, stronger slow priority, and synchronized lamp feedback")
 	Audio.quit_cleanly()

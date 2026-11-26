@@ -34,7 +34,6 @@ func _ready() -> void:
 		push_error("请通过 tools/run_playthrough.ps1 运行隔离测试")
 		get_tree().quit(2)
 		return
-	seed(audit_seed)
 	LS.ensure_loaded()
 	lv = 1
 	for arg in OS.get_cmdline_user_args():
@@ -58,6 +57,7 @@ func _ready() -> void:
 			audit_seed = int(arg.get_slice("=", 1))
 		if arg.begins_with("--restrict-strength="):
 			restrict_strength = arg.get_slice("=", 1).to_lower() == "true"
+	seed(audit_seed)
 	GS.ensure_loaded()
 	GS.skill_lv["zhujue"] = audit_basic_skill_level # 仅隔离测试，可保存到本次隔离目录。
 	GS.stars["zhujue"] = audit_basic_family_stars
@@ -125,7 +125,7 @@ func _process(dt: float) -> void:
 		done = true
 		var win: bool = b._run_cleared
 		_finalize_wave(t, win, false)
-		_log_pace(t)
+		_log_pace(t, win)
 		_log("[WALL] L%d %dms" % [lv, Time.get_ticks_msec() - wall_start])
 		_log("[END] L%d %s t=%.0fs wave=%d/%d kills=%d hp=%d/%d unlock=%d" % [
 			lv, "WIN" if win else "LOSE", t, int(b._core.wave), b._max_wave, int(b._kills),
@@ -143,7 +143,7 @@ func _process(dt: float) -> void:
 		done = true
 		failures += 1
 		_finalize_wave(t, false, true)
-		_log_pace(t)
+		_log_pace(t, false)
 		_log("[WALL] L%d %dms" % [lv, Time.get_ticks_msec() - wall_start])
 		_log("[STATE] cards=%s wen=%d crystal=%d pending=%s god=%s ancestors=%s running=%s processing=%s" % [str(b._cards), b._wen, b._crystal, str(b._str_pending), str(b._god_layer.visible), str(b._ancestors.keys()), str(b._core.running), str(b._core.is_processing())])
 		_log("[CORE] hero=%s pos=%s spawned=%s quota=%s live=%s cd=%s" % [str(b._core.hero), str(b._core.hero_pos), str(b._core._wave_spawned), str(b._core._wave_quota), str(b._core.live_foes()), str(b._core._hero_cd)])
@@ -225,14 +225,14 @@ func _track_wave(now: float) -> void:
 	if float(wave_cur["first_engage"]) < 0.0:
 		var hp: Vector2 = b._core.hero_pos
 		for f in b._core.foes:
-			if float(f.get("hp", 0.0)) <= 0.0:
+			if float(f.get("hp", 0.0)) <= 0.0 or bool(f.get("still", false)):
 				continue
 			var fp := Vector2(float(f.get("x", 0.0)), float(f.get("y", 0.0)))
 			if fp.distance_to(hp) <= 120.0:
 				wave_cur["first_engage"] = now
 				break
 	# 本波刷怪完成
-	if float(wave_cur["last_spawn"]) < 0.0 and int(b._core._wave_spawned) >= int(b._core._wave_quota) and int(b._core._wave_quota) > 0:
+	if float(wave_cur["last_spawn"]) < 0.0 and b._core.wave_spawn_complete():
 		wave_cur["last_spawn"] = now
 	# 首领入场 / 死亡
 	if bool(b._core.boss_alive) and float(wave_cur["boss_in"]) < 0.0:
@@ -257,13 +257,14 @@ func _log_wave(d: Dictionary) -> void:
 		float(d.get("last_spawn", -1.0)), float(d.get("cleared", -1.0)),
 		float(d.get("boss_in", -1.0)), float(d.get("boss_out", -1.0))])
 
-func _log_pace(total: float) -> void:
+func _log_pace(total: float, win: bool) -> void:
 	var spawn_wait := 0.0
 	var engage := 0.0
 	var clear_tail := 0.0
 	var boss_fight := 0.0
+	var after_boss := 0.0
 	var span := 0.0
-	var complete := true
+	var complete := win
 	for d in waves:
 		var start_t := float(d.get("start", 0.0))
 		var fe := float(d.get("first_engage", -1.0))
@@ -273,17 +274,21 @@ func _log_pace(total: float) -> void:
 		var bo := float(d.get("boss_out", -1.0))
 		if fe < 0.0 or ls < 0.0 or cl < 0.0:
 			complete = false
-			continue
-		spawn_wait += maxf(0.0, fe - start_t)
-		engage += maxf(0.0, ls - fe)
-		clear_tail += maxf(0.0, cl - ls)
-		span += maxf(0.0, cl - start_t)
-		if bi >= 0.0 and bo >= 0.0:
-			boss_fight += maxf(0.0, bo - bi)
+		var end_t := maxf(start_t, cl)
+		var engaged_at := clampf(fe, start_t, end_t) if fe >= 0.0 else end_t
+		var tail_start := clampf(ls, engaged_at, end_t) if ls >= 0.0 else end_t
+		var boss_start := clampf(bi, tail_start, end_t) if bi >= 0.0 else end_t
+		var boss_end := clampf(bo, boss_start, end_t) if bo >= 0.0 else end_t
+		spawn_wait += engaged_at - start_t
+		engage += tail_start - engaged_at
+		clear_tail += boss_start - tail_start
+		boss_fight += boss_end - boss_start
+		after_boss += end_t - boss_end
+		span += end_t - start_t
 	if b != null and b._max_wave != null and waves.size() != int(b._max_wave):
 		complete = false
-	_log("[PACE] L%d spawn_wait=%.1f engage=%.1f clear_tail=%.1f boss_fight=%.1f span=%.1f total=%.1f waves=%d/%d complete=%s" % [
-		lv, spawn_wait, engage, clear_tail, boss_fight, span, total, waves.size(),
+	_log("[PACE] L%d spawn_wait=%.1f engage=%.1f clear_tail=%.1f boss_fight=%.1f after_boss=%.1f span=%.1f total=%.1f waves=%d/%d complete=%s" % [
+		lv, spawn_wait, engage, clear_tail, boss_fight, after_boss, span, total, waves.size(),
 		int(b._max_wave) if b != null else -1, str(complete)])
 
 func _choose_draw_card():
