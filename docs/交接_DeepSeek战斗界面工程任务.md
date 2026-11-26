@@ -66,6 +66,14 @@
 
 ## 交付记录
 
+### 第六批 · 宝物/强化共用选卡面板（2026-11-26）
+
+- 文件：新增 `kushou/choice_panel_view.gd`；删除 `treasure_view.gd` / `aug_view.gd`；`battle_ui.gd` 改型并分别 `configure("宝物","选择一件")` / `configure("进阶","")`
+- 交付说明：`docs/交付_批次6_共用选卡面板_2026-11-26.md`
+- 对照：同尺寸 596×1061，标题带/按钮带像素差 **0**（宝物、强化各一组）
+- 验证：treasure_flow、aug_limits、choice_boundary（无头+图形）、menu_navigation、result_freeze、battle_lifecycle 全 PASS；全量 88/88（`.shots/audit_batch6.txt`）
+- 提交：`1078ded`（自动存档一并收录；本批内容在该提交内）
+
 ### 第五批 · DrawCard 迁出（2026-11-26）
 
 - 文件：`kushou/draw_card.gd`（新增 81 行）；`battle_ui.gd` 删除内部类 75 行
