@@ -53,6 +53,13 @@ func spawn_hit(pos: Vector2, radius: float, dmg: int, hero_hit: bool, crit := fa
 	queue_redraw()
 	_place_number(pos + Vector2(24, -radius - 11), dmg, hero_hit, crit, heavy)
 
+func spawn_guard(feet: Vector2, radius: float, side: float) -> void:
+	if hits.size() >= MAX_HITS:
+		hits.pop_front()
+	hits.append({"p": feet + Vector2(side * radius * 0.56, -radius), "r": radius,
+		"t": 0.0, "dur": 0.18, "guard_side": side})
+	queue_redraw()
+
 func _place_number(anchor: Vector2, dmg: int, hero_hit: bool, crit: bool, heavy: bool) -> void:
 	var important := hero_hit or crit or heavy
 	var crowded := 0
@@ -272,6 +279,17 @@ func _draw_hit(h: Dictionary) -> void:
 		return
 	var c: Vector2 = h["p"]
 	var r := float(h["r"])
+	if h.has("guard_side"):
+		var angle := 0.0 if float(h["guard_side"]) > 0.0 else PI
+		var edge := r * (0.45 + p * 0.62)
+		var steel := Color(0.58, 0.84, 0.98, a)
+		draw_arc(c, edge, angle - 1.0, angle + 1.0, 12, steel, 3.0 * a + 0.5, true)
+		draw_arc(c, edge - 3.0, angle - 0.68, angle + 0.68, 8, Color(0.94, 0.99, 1.0, a), 1.6, true)
+		for offset: float in [-0.92, 0.0, 0.82]:
+			var direction := Vector2.from_angle(angle + offset)
+			var start := c + direction * (edge + 3.0)
+			draw_line(start, start + direction * (4.0 + 8.0 * p), steel, 2.0 * a + 0.5, true)
+		return
 	var intensity := int(h["intensity"])
 	var accent: Color = h["accent"]
 	var spread := r * (0.45 + p * 1.3)

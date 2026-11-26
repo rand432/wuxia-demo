@@ -182,6 +182,90 @@ func _audit_guardian(level: int, name: String, atlas_id: String, attack: String,
 	battle.queue_free()
 	return true
 
+func _audit_crowd_melee(flag: String, title: String, atlas_id: String) -> bool:
+	LS.current_level = 6
+	var battle = Battle.instantiate()
+	var path := "res://assets/gen/enemies/frames/%s.png" % atlas_id
+	assert(path in battle.prepare_entry_art())
+	root.add_child(battle)
+	battle._tut.cancel()
+	battle.set_process(false)
+	var core = battle._core
+	core.set_process(false)
+	seed(186)
+	var foe: Dictionary = {}
+	for attempt in range(64):
+		core.foes.clear()
+		foe = core._spawn_foe()
+		if bool(foe.get(flag, false)):
+			break
+	assert(bool(foe.get(flag, false)))
+	var origin: Vector2 = core.hero_pos
+	foe.merge({"x": origin.x + 24.0, "y": origin.y - 36.0}, true)
+	battle._process(0.0)
+	var token = battle._foe_tokens[foe["_tid"]]
+	token.set_process(false)
+	assert(token.unit_name == title and token._frame_atlas.resource_path == path)
+	assert(token.challenge_kind == -1 and not token.guardian and not token.round_mask)
+	token._process(0.1)
+	assert(token._frame_index in range(4))
+	foe["x"] += 3.0
+	battle._process(0.0)
+	token._process(0.1)
+	assert(token._frame_index in range(4, 8))
+	core.running = true
+	core.intro_wait = 0.0
+	core._hero_cd = 10.0
+	core._hitstop = 0.0
+	var interval := 1.0 / float(core.FOE_ASPD)
+	foe["t"] = interval - 0.17
+	core._process(0.02)
+	token._process(0.02)
+	assert(token._frame_index == 8)
+	core._process(0.16)
+	token._process(0.016)
+	assert(token._frame_index == 10)
+	token._process(0.06)
+	assert(token._frame_index == 11)
+	token._process(0.09)
+	core._apply_dmg(foe, float(foe["hp"]) * 0.08, "真实")
+	battle._process(0.0)
+	token._process(0.016)
+	assert(token._frame_index == 12 and token.hp_ratio < 1.0)
+	if flag == "shield":
+		var feet := Vector2(float(foe["x"]), float(foe["y"]))
+		var hp_before: float = foe["hp"]
+		core.hero_pos = feet + Vector2(40, 30)
+		var blocked: float = core._apply_dmg(foe, 20.0, "物理", 0)
+		battle._process(0.0)
+		token._process(0.016)
+		assert(token._frame_index == 9 and token._sprite.modulate.b > 1.0)
+		var guard_fx: Dictionary = battle._fx_front.hits.back()
+		assert(guard_fx["guard_side"] == 1.0)
+		var effect_count: int = battle._fx_front.hits.size()
+		token._process(0.17)
+		assert(token._guard_time == 0.0 and token._frame_index != 9)
+		foe["hp"] = hp_before
+		core.hero_pos = feet + Vector2(40, -30)
+		var rear: float = core._apply_dmg(foe, 20.0, "物理", 0)
+		assert(is_equal_approx(blocked, rear * 0.55))
+		assert(token._guard_time == 0.0 and battle._fx_front.hits.size() == effect_count)
+		core.hero_pos = feet + Vector2(40, 30)
+		core._apply_dmg(foe, 5.0, "真实", 0)
+		assert(token._guard_time == 0.0 and battle._fx_front.hits.size() == effect_count)
+	core._apply_dmg(foe, float(foe["hp"]) * 2.0, "真实")
+	core._process(0.016)
+	assert(bool(foe.get("_death_settled", false)))
+	battle._process(0.0)
+	token._process(0.08)
+	assert(token._frame_index == 14)
+	token._process(0.18)
+	assert(token._frame_index == 15)
+	token._process(0.2)
+	assert(token.death_finished() and not token.visible)
+	battle.queue_free()
+	return true
+
 func _run() -> void:
 	LS.ensure_loaded()
 	LS.current_level = 6
@@ -326,6 +410,7 @@ func _run() -> void:
 	core.foes.clear()
 	core.start_boss(4, "困兽·终焉")
 	boss = core._boss_foe()
+	boss["x"] = 60.0
 	core.intro_wait = 0.0
 	for i in range(core.MAX_FOES - 1):
 		assert(not core._spawn_foe().is_empty())
@@ -335,8 +420,12 @@ func _run() -> void:
 	boss["boss_summon_t"] = 0.0
 	core._process(0.01)
 	assert(core.foes.size() == core.MAX_FOES + 2 and float(sentinel["y"]) > 320.0)
-	assert(core.foes[-2]["y"] == -30.0 and core.foes[-1]["y"] == -70.0)
+	assert(core.foes[-2]["y"] == -30.0 and core.foes[-1]["y"] == -70.0,
+		"Summons should remain at their entry positions during their spawn tick: %s" % str(core.foes.slice(-2)))
 	assert(core._banner.contains("2 只") and boss["boss_summon_t"] == 12.0)
+	var first_summon: Dictionary = core.foes[-2]
+	core._process(0.016)
+	assert(float(first_summon["y"]) > -30.0 and float(first_summon["y"]) < -20.0)
 	while core.foes.size() < core.BOSS_SUMMON_FIELD_CAP - 1:
 		assert(not core._spawn_foe("chal").is_empty())
 	boss["boss_summon_t"] = 0.0
@@ -373,5 +462,9 @@ func _run() -> void:
 	await process_frame
 	assert(_audit_unseen_foes())
 	await process_frame
-	print("PASS: hazard chronology, bounded summons, guardian poses, ordered separation and on-screen token allocation")
+	assert(_audit_crowd_melee("brute", "山匪壮汉", "crowd_brute_v1"))
+	await process_frame
+	assert(_audit_crowd_melee("shield", "山匪盾兵", "crowd_shield_v1"))
+	await process_frame
+	print("PASS: hazard chronology, bounded summons, guardian and crowd melee poses, shield guard, separation and token allocation")
 	Audio.quit_cleanly()

@@ -58,6 +58,7 @@ var _sink := 0.0
 var _dir := 1.0
 var _spawn_t := 0.26
 var _hit_t := 0.0
+var _guard_time := 0.0
 var _hit_dir := Vector2.RIGHT
 var _hit_strength := 1.0
 var _anim_t := 0.0
@@ -69,6 +70,7 @@ var _frame_clock := 0.0
 var _frame_cell := 128.0
 var _visual_pose_applied := false
 const DEATH_DURATION := 0.38
+const GUARD_DURATION := 0.14
 
 
 func setup(tex: Texture2D, r: float, ring: Color, crop: bool, frames: Texture2D = null) -> void:
@@ -202,6 +204,7 @@ func _process(delta: float) -> void:
 	_ready_time = maxf(0.0, _ready_time - delta)
 	_flash = maxf(0.0, _flash - delta * 7.0)
 	_hit_t = maxf(0.0, _hit_t - delta / 0.16)
+	_guard_time = maxf(0.0, _guard_time - delta)
 	var enter := clampf(_spawn_t / 0.26, 0.0, 1.0)
 	var ease := 1.0 + 2.70158 * pow(enter - 1.0, 3.0) + 1.70158 * pow(enter - 1.0, 2.0)
 	var pop := lerpf(0.68, 1.0, ease)
@@ -251,6 +254,8 @@ func _tick_frame_pose(delta: float, travel: Vector2, moving: bool, pop: float, e
 				face(-1 if aim.x < 0.0 else 1)
 	elif _attack_time > 0.0 and _attack_time <= 0.14:
 		frame = 10 if _attack_time > 0.075 else 11
+	elif _guard_time > 0.0:
+		frame = 9
 	elif _hit_t > 0.0:
 		frame = 14 if role == "player" else (12 if _hit_t > 0.48 else 13)
 	elif _attack_time > 0.0:
@@ -267,7 +272,11 @@ func _tick_frame_pose(delta: float, travel: Vector2, moving: bool, pop: float, e
 	_sprite.flip_h = (_skill_facing if skill_pose else _dir) < 0.0
 	_apply_visual_pose(Vector2.ONE * pop, Vector2(0, 18.0 * (1.0 - enter)) + _hit_dir * recoil * 4.0)
 	modulate = Color(1, 1, 1, lerpf(0.35, 1.0, enter))
-	_sprite.modulate = Color(1.0 + 0.25 * _flash, 1.0 - 0.28 * _flash, 1.0 - 0.32 * _flash)
+	if _guard_time > 0.0:
+		var light := _guard_time / GUARD_DURATION
+		_sprite.modulate = Color(1.0 + 0.07 * light, 1.0 + 0.24 * light, 1.0 + 0.43 * light)
+	else:
+		_sprite.modulate = Color(1.0 + 0.25 * _flash, 1.0 - 0.28 * _flash, 1.0 - 0.32 * _flash)
 	if enter < 1.0 or _flash > 0.0:
 		queue_redraw()
 
@@ -335,6 +344,13 @@ func play_hit(direction := Vector2.RIGHT, strong := false) -> void:
 	_hit_dir = direction.normalized() if direction.length_squared() > 0.001 else Vector2.RIGHT
 	_hit_strength = 1.5 if strong else 1.0
 
+func play_guard(direction: Vector2) -> void:
+	if _death_t >= 0.0 or _frame_atlas == null:
+		return
+	_guard_time = GUARD_DURATION
+	if absf(direction.x) > 1.0 and _attack_time <= 0.0:
+		face(1 if direction.x > 0.0 else -1)
+
 func play_cast(direction := Vector2.ZERO) -> void:
 	if role not in ["player", "dragon"] or _frame_atlas == null or _death_t >= 0.0:
 		return
@@ -396,6 +412,7 @@ func play_down(recover := false) -> void:
 		return
 	_death_t = 0.0
 	_sink = 0.0
+	_guard_time = 0.0
 	_attack_time = 0.0
 	_boss_impact = false
 	_boss_impact_pending = false
@@ -428,6 +445,7 @@ func reset_pose() -> void:
 	_last_feet = position
 	_spawn_t = 0.26
 	_hit_t = 0.0
+	_guard_time = 0.0
 	_hit_dir = Vector2.RIGHT
 	_hit_strength = 1.0
 	visible = true

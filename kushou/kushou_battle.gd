@@ -100,6 +100,8 @@ func _apply_dmg(f: Dictionary, amount: float, dtype: String, crit_result: int = 
 		heal_hero(ls)
 	dmg_done += dealt
 	f["last_dtype"] = dtype
+	if blocked:
+		foe_blocked.emit(f)
 	return final
 
 var _last_crit := false
@@ -133,6 +135,7 @@ signal paper_blocked(pos: Vector2)                # 奇物·纸人替身挡下�
 signal hero_attack()
 signal foe_windup(foe: Dictionary, target: Vector2, seconds: float)
 signal foe_attack(foe: Dictionary, target: Vector2)
+signal foe_blocked(foe: Dictionary)
 signal hero_strike_resolved(primary: Dictionary)
 signal hero_hit()
 signal hero_damaged(amount: float, attacker: Dictionary)
@@ -1194,7 +1197,9 @@ func _process(delta: float) -> void:
 			# Boss 圆牌更大（半径 52），四周留出更多边距，保证整个圆牌都在战场内
 			var edge := 60.0 if bool(f.get("boss", false)) else 40.0
 			f["x"] = clampf(float(f["x"]) + mv.x, edge, size.x - edge)
-			f["y"] = clampf(float(f["y"]) + mv.y, 70.0 if not bool(f.get("boss", false)) else 96.0, size.y - edge)
+			var top := 96.0 if bool(f.get("boss", false)) else 70.0
+			# 边缘刷出的援兵逐帧进场，跨过上界后再受场内边界限制。
+			f["y"] = clampf(float(f["y"]) + mv.y, minf(float(f["y"]), top), size.y - edge)
 		else:
 			# v9i：被雷麻痹的怪，出手计时清零（麻痹 1 秒）
 			# v17g（用户："调整 boss不吃硬控"）：
@@ -1484,7 +1489,7 @@ func _separate_foes() -> void:
 	ys.resize(foes.size())
 	radii.resize(foes.size())
 	for foe: Dictionary in foes:
-		if float(foe.get("dying", 0.0)) > 0.0:
+		if float(foe.get("dying", 0.0)) > 0.0 or float(foe["y"]) < 20.0:
 			continue
 		var i := active.size()
 		active.append(foe)

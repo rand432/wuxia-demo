@@ -28,7 +28,13 @@ const FOE_FRAME_PATH := {
 	"宝箱大怪": "challenge_mimic", "挑战匪首": "challenge_chief",
 	"困兽·终焉": FINAL_BEAST_FRAME_ID,
 }
-const CROWD_FRAME_PATH := {"山匪": "crowd_bandit", "山匪弓手": "crowd_archer", "符杖术士": "crowd_mage"}
+const CROWD_FRAME_PATH := {
+	"山匪": "crowd_bandit",
+	"山匪弓手": "crowd_archer",
+	"符杖术士": "crowd_mage",
+	"山匪壮汉": "crowd_brute_v1",
+	"山匪盾兵": "crowd_shield_v1",
+}
 
 const HERO_FRAMES_PATH := "res://assets/char/player_battle_frames.png"
 const HERO_SKILL_FRAMES_PATH := "res://assets/char/player_skill_poses_v2.png"

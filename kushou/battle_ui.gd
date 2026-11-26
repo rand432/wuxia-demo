@@ -1090,6 +1090,7 @@ func _build_field() -> void:
 	_core.hero_attack.connect(_on_hero_attack)
 	_core.foe_attack.connect(_on_foe_attack)
 	_core.foe_windup.connect(_on_foe_windup)
+	_core.foe_blocked.connect(_on_foe_blocked)
 	_core.hero_strike_resolved.connect(_hero_slash_frames)
 	_core.hero_strike_resolved.connect(_hero_extra_hits)
 	_core.hero_hit.connect(_on_hero_hit)
@@ -4767,6 +4768,10 @@ func _foe_display_name(foe: Dictionary) -> String:
 			return "符杖术士"
 		if bool(foe.get("ranged", false)):
 			return "山匪弓手"
+		if bool(foe.get("brute", false)):
+			return "山匪壮汉"
+		if bool(foe.get("shield", false)):
+			return "山匪盾兵"
 		if _foe_animation_cache.get("crowd_bandit") != null:
 			return "山匪"
 	return str(foe.get("name", ""))
@@ -4797,6 +4802,8 @@ func _make_foe_token(f: Dictionary):
 	var frames: Texture2D = null
 	if kind == "normal":
 		frames = _foe_animation_cache.get(BattleArt.CROWD_FRAME_PATH.get(title, "")) as Texture2D
+		if frames == null:
+			frames = _foe_animation_cache.get(BattleArt.CROWD_FRAME_PATH["山匪"]) as Texture2D
 	var frame_id := str(BattleArt.FOE_FRAME_PATH.get(title, ""))
 	if frames == null and not frame_id.is_empty():
 		if not _foe_animation_cache.has(frame_id):
@@ -6148,6 +6155,16 @@ func _on_foe_attack(foe: Dictionary, target: Vector2) -> void:
 			if kind == "mage":
 				origin.y -= token.radius * 0.26
 		_fx_front.spawn_enemy_attack(origin, destination - Vector2(0, 26) - FIELD_POS, kind)
+
+func _on_foe_blocked(foe: Dictionary) -> void:
+	var token := _foe_tokens.get(int(foe.get("_tid", 0))) as TokenActor
+	if _run_over or token == null or not token.visible:
+		return
+	var direction: Vector2 = _core.position + _core.hero_pos - token.position
+	token.play_guard(direction)
+	if _fx_front != null:
+		var side := signf(direction.x) if absf(direction.x) > 1.0 else token._dir
+		_fx_front.spawn_guard(token.position - FIELD_POS, token.radius, side)
 
 func _on_hero_foe_hit(tgt: Dictionary, dmg: float, crit: bool, heavy: bool) -> void:
 	if _core == null:
