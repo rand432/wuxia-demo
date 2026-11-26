@@ -268,4 +268,4 @@
 - 录屏：`.shots/perf_swarm.mp4`（约 10s，含音频），抽帧 `.shots/perf_swarm_frame.png`
 - QA 导出排除追加 `tools/perf_*`
 - 交付说明：`docs/交付_批次11_帧时间_2026-11-27.md`
-- 提交：__HASH__
+- 提交：fa18fb1
