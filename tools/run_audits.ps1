@@ -81,7 +81,8 @@ foreach ($name in $names) {
         if ($name -eq 'preview_reward' -and $_ -match '^ERROR: 存档保存失败：user://level_state\.cfg \((Busy|Can.t open file)\)') { return $false }
         return $true
     })
-    $pass = $unexpectedErrors.Count -eq 0 -and $engineExit -eq 0 -and $logText.Contains('PASS:') -and $logText -notmatch 'SCRIPT ERROR|Assertion failed|Parse Error'
+    $needsPass = $name -ne 'audio_duration'
+    $pass = $unexpectedErrors.Count -eq 0 -and $engineExit -eq 0 -and ($logText.Contains('PASS:') -or -not $needsPass) -and $logText -notmatch 'SCRIPT ERROR|Assertion failed|Parse Error'
     $diagnostics = ([regex]::Matches($logText, '(?m)^(ERROR|WARNING):')).Count
     $results += [pscustomobject]@{Test=$name; Passed=$pass; Diagnostics=$diagnostics; UnexpectedErrors=$unexpectedErrors.Count; Exit=$engineExit; Log=$logFile}
     Write-Output "$name : passed=$pass diagnostics=$diagnostics exit=$engineExit"

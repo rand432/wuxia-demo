@@ -368,6 +368,9 @@ static func stop_all_sfx() -> void:
 static func _release_sfx_player(p: AudioStreamPlayer) -> void:
 	if p == null or not is_instance_valid(p) or not _sfx_active.has(p):
 		return
+	var cb := _release_sfx_player.bind(p)
+	if p.finished.is_connected(cb):
+		p.finished.disconnect(cb)
 	_sfx_active.erase(p)
 	p.stop()
 	p.stream = null

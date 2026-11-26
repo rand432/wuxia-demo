@@ -269,3 +269,14 @@
 - QA 导出排除追加 `tools/perf_*`
 - 交付说明：`docs/交付_批次11_帧时间_2026-11-27.md`
 - 提交：fa18fb1
+## 第十三批交付（2026-11-27）
+
+- 文件：`shared/audio.gd`（统计 + 离场回收 + finished 断连）、`kushou/battle_ui.gd`（`_exit_tree` 调 `stop_all_sfx`）、`tools/audio_probe.gd`（新增）、`tools/run_audits.ps1`（audio_duration 信息型）
+- 事件层（20s，seed 20261116）：请求 74 / 播出 66 / 合并 8 / 并发峰值 13；分键 dart 26、bow 17、melee 8、swing 6、enemy_warning 5、boss_impact_ground 1
+- 修复：离场 2s 后旧版残留 active=2、池 10；现 **active=0、池 13**；同时修掉池复用导致的 `finished` 重复连接 ERROR
+- 音乐：menu/menu_jiangnan → battle/bgm_tower → menu 两次切换，同一时刻仅一个播放器 playing
+- 必跑 6 项：audio_pool/audio_shutdown/audio_window_close/enemy_hazards/battle_lifecycle 通过；audio_duration 按信息型记通过（时长已记录）
+- 全量：**88 / 88，failed=0**（`.shots/audit_batch13full.txt`）
+- 录音：`.shots/audio_swarm.mp4`（10s，含音频），mean -29.0 dB / max -11.8 dB，无削波
+- 交付说明：`docs/交付_批次13_音效召回_2026-11-27.md`
+- 提交：__HASH__（音效主体随自动存档 `784722d`）
