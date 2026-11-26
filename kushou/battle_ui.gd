@@ -3095,6 +3095,8 @@ func _process(_delta: float) -> void:
 				var alive := hp > 0.0 and float(f.get("dying", 0.0)) <= 0.0
 				var chilled := alive and float(f.get("cold_t", 0.0)) > 0.0
 				tk.set_frost(int(f.get("cold", 0)) if chilled else 0, chilled, alive and float(f.get("cold_freeze_t", 0.0)) > 0.0)
+			if f.has("poison") or tk.poisoned:
+				tk.set_poisoned(hp > 0.0 and float(f.get("dying", 0.0)) <= 0.0 and float(f.get("poison", 0.0)) > 0.0)
 			if lamp_radius > 0.0:
 				tk.set_lamp_lit(on_field and hp > 0.0 and float(f.get("dying", 0.0)) <= 0.0
 					and feet.distance_squared_to(_core.hero_pos) <= lamp_radius_squared)
@@ -3386,6 +3388,7 @@ func _end_run(win: bool) -> void:
 		if is_instance_valid(token):
 			token.boss_warning = {}
 			token.set_frost(0, false, false)
+			token.set_poisoned(false)
 	if _cam != null:
 		_cam.scale = Vector2.ONE
 	# 结算前的"定格式"反馈：一闪 + 长顿帧，然后才弹面板
@@ -6416,10 +6419,9 @@ func _cast_skill(i: int) -> void:
 		var times := 1
 		if _baicao:
 			times = _baicao_times()
-		var has_aura := float(md0.get("aura", 0.0)) > 0.0
-		var center := _hero_screen() - (Vector2.ZERO if has_aura else Vector2(0, 32))
-		var visual_scale := (AURA_BASE_R + float(md0.get("radius_add", 0.0))) / 49.0 if has_aura else 1.0
-		_skill_fx("木系", center, visual_scale)
+		_skill_fx("木系", _hero_screen() - Vector2(0, 32))
+		if _fx_front != null and float(md0.get("aura", 0.0)) > 0.0:
+			_fx_front.spawn_poison_ring(_hero_screen() - FIELD_POS, _poison_radius(md0))
 		for _i in times:
 			if not _skill_batch_active(epoch): return
 			_cast_heal(float(sk["mul"]), aid0)
@@ -8116,6 +8118,9 @@ const AURA_BASE_R := 110.0
 func _wood_pct() -> float:
 	return _core.type_amp("木系") * 100.0 if _core != null else 0.0
 
+func _poison_radius(mods: Dictionary) -> float:
+	return AURA_BASE_R + float(mods.get("radius_add", 0.0))
+
 func _cast_heal(mul: float, aid := "liuqingqing") -> void:
 	if _core == null or not _skill_batch_active(_core._enemy_attack_epoch):
 		return
@@ -8126,7 +8131,7 @@ func _cast_heal(mul: float, aid := "liuqingqing") -> void:
 	heal = _core.heal_hero(heal)
 	if heal > 0.0:
 		_core._push_float(_core.hero_pos.x, _core.hero_pos.y - 60.0, "%+.1f" % heal if heal < 1.0 else "+%d" % int(heal), Color(0.42, 0.85, 0.40), true)
-	var rad := AURA_BASE_R + float(m.get("radius_add", 0.0))
+	var rad := _poison_radius(m)
 	var dur := 4.0 + float(m.get("poison_dur", 0.0))
 	var vuln := float(m.get("vuln", 0.0))
 	var hp0 := Vector2(_core.hero_pos)
@@ -8147,7 +8152,7 @@ func _cast_heal(mul: float, aid := "liuqingqing") -> void:
 		if vuln > 0.0:
 			f["vuln_t"] = maxf(float(f.get("vuln_t", 0.0)), dur)   # 只刷新，不叠层
 			f["vuln_pct"] = vuln
-	Aud.sfx("enlighten", -10.0)
+	Aud.sfx("enlighten", -10.0, 1.0, 90)
 
 func _tick_poison(dt: float) -> void:
 	if _core == null:

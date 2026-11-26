@@ -58,6 +58,7 @@ func _run() -> void:
 	b._mp = 500.0
 	b._cast_skill(index)
 	assert(c.hero["hp"] == 300.0 and b._mp == 420.0 and target["hp"] == 10000.0 and not target.has("poison"))
+	assert(b._fx_front.cast_seals.is_empty())
 	# 真实六档家传，毒圈解锁、范围/费用/共享/持续时间均读取同一角色。
 	for tier in range(6):
 		for part in range(3): b._add_card("liuqingqing_t%d_%d" % [tier, part])
@@ -68,6 +69,8 @@ func _run() -> void:
 	b._mp = 500.0
 	b._cast_skill(index)
 	assert(is_equal_approx(c.hero["hp"], 430.0) and b._mp == 440.0 and is_equal_approx(b._skills[index]["cd_t"], 10.56))
+	var ring: Dictionary = b._fx_front.cast_seals.back()
+	assert(ring["poison"] and ring["radius"] == 150.0 and ring["p"] == c.hero_pos)
 	assert(target["poison"] == 1.0 and edge["poison"] == 1.0 and not outside.has("poison"))
 	assert(target["poison_t"] == 6.0 and target["vuln_pct"] == 10.0)
 	b._cast_skill(index)
@@ -93,6 +96,15 @@ func _run() -> void:
 	var mana: float = b._mp
 	b._cast_skill(index)
 	assert(c.hero["hp"] == 0.0 and b._mp == mana and target["poison"] == 6.0)
+	c.hero["hp"] = c.hero["hp_max"]
+	b._tut.cancel()
+	b._process(0.0)
+	var poisoned_actor = b._foe_tokens[target["_tid"]]
+	assert(poisoned_actor.poisoned and b._foe_tokens[edge["_tid"]].poisoned)
+	assert(not b._foe_tokens[outside["_tid"]].poisoned)
+	b._tick_poison(6.01)
+	b._process(0.0)
+	assert(not poisoned_actor.poisoned)
 	b.queue_free()
 	await process_frame
 	# 长帧只结算实际持续时间，层数逐层衰减，毒击杀当场且清场后不追击旧目标。

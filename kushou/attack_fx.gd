@@ -131,10 +131,13 @@ func spawn_enemy_attack(origin: Vector2, target: Vector2, kind: String) -> void:
 	enemy_attacks.append({"origin": origin, "target": target, "kind": kind, "age": 0.0})
 	queue_redraw()
 
-func spawn_cast_seal(feet: Vector2, tint: Color, radius := 54.0, flatten := 0.36) -> void:
+func spawn_poison_ring(feet: Vector2, radius: float) -> void:
+	spawn_cast_seal(feet, Color(0.60, 0.89, 0.48), radius, 1.0, true)
+
+func spawn_cast_seal(feet: Vector2, tint: Color, radius := 54.0, flatten := 0.36, poison := false) -> void:
 	if cast_seals.size() >= 3:
 		cast_seals.pop_front()
-	cast_seals.append({"p": feet, "tint": tint, "age": 0.0, "radius": radius, "flatten": flatten})
+	cast_seals.append({"p": feet, "tint": tint, "age": 0.0, "radius": radius, "flatten": flatten, "poison": poison})
 	queue_redraw()
 
 func spawn_skill_trail(origin: Vector2, target: Vector2, tint: Color, width: float) -> void:
@@ -201,7 +204,18 @@ func _draw_cast_seal(seal: Dictionary) -> void:
 	var progress := clampf(float(seal["age"]) / 0.24, 0.0, 1.0)
 	var tone: Color = seal["tint"]
 	var center: Vector2 = seal["p"]
-	var radius := float(seal["radius"]) * lerpf(0.44, 1.0, ease(progress, 0.44))
+	var extent := float(seal["radius"])
+	var radius := extent * lerpf(0.44, 1.0, ease(progress, 0.44))
+	if seal["poison"]:
+		var opacity := 1.0 - progress
+		draw_arc(center, extent, 0.0, TAU, 56, Color(tone, opacity * 0.67), 1.7, true)
+		draw_arc(center, radius, 0.0, TAU, 48, Color(tone.lightened(0.28), opacity), 3.2, true)
+		for i in range(8):
+			var angle := TAU * float(i) / 8.0 + progress * 0.33
+			var direction := Vector2.from_angle(angle)
+			var at := center + direction * radius
+			draw_line(at - direction * 11.0, at, Color(tone, opacity), 2.4, true)
+		return
 	draw_set_transform(center, 0.0, Vector2(1.0, float(seal["flatten"])))
 	draw_arc(Vector2.ZERO, radius, 0.0, TAU, 32, Color(tone, 0.85 * (1.0 - progress)), 2.8, true)
 	draw_arc(Vector2.ZERO, radius * 0.74, 0.0, TAU, 26, Color(tone, 0.36 * (1.0 - progress)), 1.2, true)

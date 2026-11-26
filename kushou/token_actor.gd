@@ -36,6 +36,7 @@ var lamp_lit := false
 var frost_layers := 0
 var frost_chilled := false
 var frost_frozen := false
+var poisoned := false
 var boss_warning: Dictionary = {}
 
 var _sprite: Sprite2D
@@ -391,6 +392,11 @@ func set_frost(layers: int, chilled: bool, frozen: bool) -> void:
 	frost_frozen = frozen
 	queue_redraw()
 
+func set_poisoned(active: bool) -> void:
+	if poisoned != active:
+		poisoned = active
+		queue_redraw()
+
 func play_cast(direction := Vector2.ZERO) -> void:
 	if role not in ["player", "dragon"] or _frame_atlas == null or _death_t >= 0.0:
 		return
@@ -455,6 +461,7 @@ func play_down(recover := false) -> void:
 	set_lamp_lit(false)
 	clear_lamp_pull()
 	set_frost(0, false, false)
+	set_poisoned(false)
 	_guard_time = 0.0
 	_attack_time = 0.0
 	_boss_impact = false
@@ -474,6 +481,7 @@ func reset_pose() -> void:
 	set_lamp_lit(false)
 	clear_lamp_pull()
 	set_frost(0, false, false)
+	set_poisoned(false)
 	_death_t = -1.0
 	_sink = 0.0
 	_flash = 0.0
@@ -528,6 +536,13 @@ func _draw() -> void:
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	if frost_chilled or frost_frozen:
 		_draw_frost()
+	if poisoned:
+		var marker := Vector2(radius * 1.12, -radius * 0.65)
+		var leaf := PackedVector2Array([marker + Vector2(2, -7), marker + Vector2(5, 1),
+			marker + Vector2(0, 6), marker + Vector2(-5, 1)])
+		draw_colored_polygon(leaf, Color(0.21, 0.43, 0.24, 0.95))
+		leaf.append(leaf[0])
+		draw_polyline(leaf, Color(0.65, 0.91, 0.53), 1.4, true)
 	# 圆牌底 + 金边（怪物：有立绘时省掉圆牌，直接站人）
 	var c := Vector2(0.0, -radius) + off
 	var show_plate := (art_tex == null and _frame_atlas == null) or round_mask
