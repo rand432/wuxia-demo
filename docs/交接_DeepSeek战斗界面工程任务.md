@@ -66,6 +66,14 @@
 
 ## 交付记录
 
+### 第五批 · DrawCard 迁出（2026-11-26）
+
+- 文件：`kushou/draw_card.gd`（新增 81 行）；`battle_ui.gd` 删除内部类 75 行
+- 交付说明：`docs/交付_批次5_DrawCard迁出_2026-11-26.md`
+- 对照：固定种子 seed(20261126)，静止/炫卡/飞入三帧卡面区域像素差 **0**
+- 验证：choice_boundary（无头+图形）、draw_claim、menu_navigation、battle_lifecycle 全 PASS；全量 88/88（`.shots/audit_batch5.txt`）
+- 提交：2b78b9f
+
 ### 第四批 · 结算页真实输入与生命周期（2026-11-26）
 
 - 文件：`tools/audit_battle_navigation.gd`（新增 `_click_control` 与图形分支 `_audit_real_input`）
