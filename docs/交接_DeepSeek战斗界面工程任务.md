@@ -582,4 +582,4 @@
 - 桌面：全量 88/88、图形手势 15/15、battle_navigation 图形 PASS（`.shots/audit_batch27full.txt`、`final_gestures.log`、`final_batnav.log`）
 - 真机：adb 0 设备，安装/触控/安全区/帧率待接入
 - 交付说明：`docs/交付_批次27_候选发布_2026-11-28.md`
-- 提交：__H27__
+- 提交：5b41a7e
