@@ -574,3 +574,12 @@
 - 新增 `[BOSS]`/`[BOSS_END]` 跟踪（playthrough.gd），记录首领血量、有效命中、伤害、主角血量、强化等级与卡组
 - 交付说明：`docs/交付_批次26_L10受限失败_2026-11-28.md`
 - 提交：0e62a23
+## 第二十七批交付（2026-11-28）
+
+- 构建来源：Godot 4.7.2、`9f1ff36` 后干净树 + 导出排除规则；`qa27b` 重导
+- APK：`.shots/qa/qa27b/wuxia_qa_android.apk`，`com.wuxia.demo.qa` / minSdk 24 / arm64，SHA-256 `3F02CA5F…14360D`，300,145,679 字节
+- 包内 1622 项，测试/探针/地图文件 0；结算/卡框/立绘/音效仍在
+- 桌面：全量 88/88、图形手势 15/15、battle_navigation 图形 PASS（`.shots/audit_batch27full.txt`、`final_gestures.log`、`final_batnav.log`）
+- 真机：adb 0 设备，安装/触控/安全区/帧率待接入
+- 交付说明：`docs/交付_批次27_候选发布_2026-11-28.md`
+- 提交：__H27__
