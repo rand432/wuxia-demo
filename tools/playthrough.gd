@@ -141,6 +141,7 @@ func _process(dt: float) -> void:
 		_log("[END] L%d %s t=%.0fs wave=%d/%d kills=%d hp=%d/%d unlock=%d" % [
 			lv, "WIN" if win else "LOSE", t, int(b._core.wave), b._max_wave, int(b._kills),
 			int(float(b._core.hero.get("hp", 0.0))), int(float(b._core.hero.get("hp_max", 1.0))), LS.max_unlocked])
+		_log("[DECISION] L%d str=%d draws=%d gods=%d trea=%d enc_done=%d wen_in=%d wen_out=%d cards=%d" % [lv, int(b._str_lv), int(b._dbg_draws), int(b._dbg_gods), int(b._trea_charge), int(b._q_done), int(b._dbg_wen_in), int(b._dbg_wen_out), b._cards.size()])
 		_log("[FAMILY] L%d combos=%d shiny=%s" % [lv, b._ancestor_combos.size(), str(b._family_shiny_done)])
 		_log("[BASIC_FAMILY] L%d stars=%d tiers=%s" % [lv, audit_basic_family_stars, str(b._ancestor_combos.filter(func(ar): return str(ar.get("ancestor", "")) == "zhujue").map(func(ar): return int(ar["tier"])))])
 		_log("[QUEST_RESULT] L%d done=%d fail=%d giveup=%d" % [lv, b._q_done, b._q_fail, b._q_giveup])

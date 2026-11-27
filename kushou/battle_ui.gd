@@ -150,6 +150,10 @@ const WEN_KILL_BASE := 12
 const WEN_KILL_WAVE := 3
 const WEN_WAVE_CLEAR := 60
 var _str_lv := 0
+var _dbg_draws := 0
+var _dbg_gods := 0
+var _dbg_wen_in := 0
+var _dbg_wen_out := 0
 var _l1_attr_shown := false
 var _l1_aug_shown := false
 var _l1_yuhu_shown := false
@@ -2764,6 +2768,7 @@ func _on_draw_pick(card: DrawCard) -> void:
 	if _cards.size() >= 10:
 		_toast("卡组已满（10 格）")
 		return
+	_dbg_draws += 1
 	_draw_anim = true
 	var target: Vector2 = card.position
 	if not _slots.is_empty():
@@ -3030,10 +3035,10 @@ func _build_toast() -> void:
 func _wave_interval() -> float:
 	var lv := int(LevelState.current_level)
 	if lv <= 1:
-		return 12.0
+		return 18.0
 	if lv <= 5:
 		return 14.0
-	return 16.0
+	return 14.0
 
 func _blocking_panel_open() -> bool:
 	if _draw_open or _exit_open:
@@ -3067,13 +3072,13 @@ func _schedule_tick(dt: float) -> void:
 	# 已排定刷完的波，场上清零才结算清波奖励（每波一次，与换波解耦）。
 	for k in _wave_issued.keys():
 		var i := int(k)
-		if _wave_settled.has(i) or _withdrawn_waves.has(i):
+		if i >= _max_wave or _wave_settled.has(i) or _withdrawn_waves.has(i):
 			continue
 		if i <= w and _core.wave_alive(i) == 0:
 			_wave_settled[i] = true
 			_on_wave_clear(i)
 	# 第一关首次教学保留原来的“清空才过波”。
-	if int(LevelState.current_level) == 1 and not LevelState.tutorial_l1_done():
+	if int(LevelState.current_level) == 1 and w <= 1 and not LevelState.tutorial_l1_done():
 		if _core.wave_cleared():
 			if w < _max_wave:
 				_core.set_wave(w + 1)
@@ -3485,15 +3490,20 @@ func _on_hero_down() -> void:
 	if _bm != null and _bm.try_prevent_death():
 		_core.running = true
 		return
+	var failed_wave := int(_core.wave)
+	_withdrawn_waves[failed_wave] = true
 	var loss := 0
 	for f_v in _core.foes:
 		var f: Dictionary = f_v
 		if float(f.get("hp", 0.0)) > 0.0:
 			loss += _foe_life_weight(f)
+			var foe_wave := int(f.get("wave_tag", -1))
+			if float(f.get("dying", 0.0)) <= 0.0 and _wave_issued.has(foe_wave) and not _wave_settled.has(foe_wave):
+				_withdrawn_waves[foe_wave] = true
 	loss = maxi(1, loss)
 	_life = maxi(0, _life - loss)
 	if _hero_token != null:
-		_hero_token.play_down(_life > 0 and int(_core.wave) < _max_wave)
+		_hero_token.play_down(_life > 0 and failed_wave < _max_wave)
 	_refresh_life_ui()
 	_core.foes.clear()               # 怪全清：不掉落、不给经验
 	_core.clear_enemy_attacks()       # 旧预警/地面伤害不能追到复活后的下一波
@@ -3504,14 +3514,13 @@ func _on_hero_down() -> void:
 	_core.running = true
 	Aud.sfx("ui_back", -4.0)
 	# 这一波直接判负：不给奖励，立刻进下一波（最后一波打输 = 本局结束）
-	var cleared_wave := int(_core.wave)
-	if cleared_wave < _max_wave:
-		_toast("第 %d 波没打下来 · 命 -%d" % [cleared_wave, loss])
-		_core.set_wave(cleared_wave + 1)
+	_toast("第 %d 波没打下来 · 命 -%d" % [failed_wave, loss])
+	if failed_wave < _max_wave:
+		_core.set_wave(failed_wave + 1)
 		_core.wave_reset_quota()
 		_spawn_typed_foes()
+		_wave_clock = 0.0
 	else:
-		_toast("第 %d 波没打下来 · 命 -%d" % [cleared_wave, loss])
 		_end_run(false)
 	if _life <= 0:
 		_end_run(false)
@@ -3844,6 +3853,7 @@ func _on_str_tile() -> void:
 				"无法强化 · 需要 %d 文钱" % cost, Color(0.94, 0.42, 0.32), true)
 		return
 	_wen -= cost
+	_dbg_wen_out += cost
 	if _coin_lb != null:
 		_coin_lb.text = str(_wen)
 	_str_lv += 1
@@ -3904,6 +3914,7 @@ func _str_batch_upgrade() -> void:
 		_toast("批升需要 %d 文钱（现有 %d）" % [total, _wen])
 		return
 	_wen -= total
+	_dbg_wen_out += total
 	if _coin_lb != null:
 		_coin_lb.text = str(_wen)
 	for i in n:
@@ -5322,6 +5333,7 @@ func _on_core_coin(n: int) -> void:
 
 # v6：一切文钱收入都走这里（好让［强化］的价钱灯跟着亮/灭）
 func _add_wen(raw: int) -> void:
+	_dbg_wen_in += maxi(0, raw)
 	if LevelState.current_level == 1:
 		raw = int(round(float(raw) * 1.8))   # 第一关文钱加速：10 级进阶要 840，两波内攒得出来
 
@@ -7134,6 +7146,7 @@ func _hide_god_pick() -> void:
 		_hide_choice_layer(_god_layer, _god_root.get_children())
 
 func _on_god_card(card: GodCard) -> void:
+	_dbg_gods += 1
 	if _run_over or _god_layer == null or not _god_layer.visible or not is_instance_valid(card) or card.get_parent() != _god_root:
 		return
 	var from: Vector2 = get_global_transform().affine_inverse() * (card.get_global_transform() * card.seal_center())
