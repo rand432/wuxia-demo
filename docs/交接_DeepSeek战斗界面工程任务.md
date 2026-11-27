@@ -729,4 +729,4 @@
 - 素材：`merge3_450x800.png`/`merge4_450x800.png`、`merge3_450x1000.png`/`merge4_450x1000.png`、`merge3_clip.avi`/`merge4_clip.avi`
 - 全量 91/91；交付说明：`docs/交付_批次34_合成演出_2026-11-28.md`
 - 已知：结果卡只用首张 art；真机待测
-- 提交：__H34__
+- 提交：8dc140d
