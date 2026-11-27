@@ -26,6 +26,9 @@ func _initialize() -> void:
 	LS.current_level = 6
 	GS.ensure_loaded()
 	Audio.reset_sfx_stats()
+	_begin_probe.call_deferred()
+
+func _begin_probe() -> void:
 	b = BATTLE.instantiate()
 	root.add_child(b)
 	_dismiss()
