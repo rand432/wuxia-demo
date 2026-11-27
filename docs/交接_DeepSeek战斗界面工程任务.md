@@ -362,4 +362,4 @@
 - QA 重导：`.shots/qa/qa19/wuxia_qa_android.apk`，`com.wuxia.demo.qa` / minSdk 24 / arm64-v8a，SHA-256 `80C508B3…E60874`，300,195,441 字节，日志 `.shots/qa19_export.log`
 - 真机：adb 无设备，安装/触控/帧率待第十五批
 - 交付说明：`docs/交付_批次19_候选版本实战_2026-11-28.md`
-- 提交：__H19__
+- 提交：9be7221
