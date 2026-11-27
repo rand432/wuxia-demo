@@ -18,8 +18,6 @@ var draw_before_crystal := -1
 var draw_before_cards := -1
 var god_before_charge := -1
 var god_before_skills := -1
-var cancel_before_crystal := -1
-var cancel_before_charge := -1
 var draw_opened := false
 var draw_selected := false
 var draw_cancel_ok := false
@@ -57,10 +55,12 @@ func _flow() -> void:
 		return
 	await _enter_level(10)
 	await _battle_checks(10)
-	_verify()
+	if failures.is_empty():
+		_pass("候选流程 L6/L10 主界面入口、抽卡/请神真实选择、结算返回")
 	_finish()
 
 func _enter_level(lv: int) -> void:
+	b = null
 	level = lv
 	LS.current_level = lv
 	change_scene_to_file("res://menu/main_home.tscn")
@@ -95,10 +95,10 @@ func _battle_checks(lv: int) -> void:
 	if b == null:
 		return
 	await _run_segment("L" + str(lv) + "_normal", 30.0 if not short else 20.0, false)
+	_verify_gesture_detail()
 	if not negative:
 		await _run_segment("L" + str(lv) + "_peak", 30.0 if not short else 6.0, true)
 	if short and lv == 6:
-		_verify_gesture_detail()
 		return
 	print("[CAND][TEST] 强制失败结算 _end_run(false)")
 	b._end_run(false)
@@ -122,8 +122,18 @@ func _run_segment(seg: String, secs: float, peak: bool) -> void:
 	peak_fx = 0
 	boss_primed = false
 	last_us = Time.get_ticks_usec()
+	var kills_at_start: int = b._kills
 	if peak:
 		print("[CAND][TEST] 受控补怪：30 普通怪 + 1 首领（固定种子 20261116）")
+	else:
+		draw_opened = false
+		draw_selected = false
+		draw_cost_ok = false
+		draw_cancel_ok = false
+		god_opened = false
+		god_selected = false
+		god_cancel_ok = false
+		esc_ok = false
 	var t := 0.0
 	var fired := {}
 	while t < secs:
@@ -134,30 +144,24 @@ func _run_segment(seg: String, secs: float, peak: bool) -> void:
 		last_us = now
 		t += dt
 		if b != null and b._core != null:
-			peak_live = maxi(peak_live, b._core.foes.size())
-			if b._frame_fx_pool != null:
-				peak_fx = maxi(peak_fx, b._frame_fx_pool.size())
+			peak_live = maxi(peak_live, b._core.live_foes())
+			peak_fx = maxi(peak_fx, b._frame_fx_live)
 			if peak:
 				_prime_peak()
 			else:
 				_gesture_tick(t, fired)
-	_report(seg)
+	_report(seg, int(b._kills) - kills_at_start)
 
 func _gesture_tick(t: float, fired: Dictionary) -> void:
-	if negative:
-		if t > 6.0 and not fired.has("neg"):
-			fired["neg"] = true
-			_click(b.get("_draw_tile"))
-			await process_frame
-			if b._draw_layer != null and b._draw_layer.visible:
-				b._show_draw(false)
-		return
 	if t > 6.0 and not fired.has("draw_open"):
 		fired["draw_open"] = true
+		print("[CAND][ACTION] L%d %.2fs draw_open" % [level, t])
 		draw_before_crystal = b._crystal
 		draw_before_cards = b._cards.size()
 		_click(b.get("_draw_tile"))
 		await process_frame
+		if negative and b._draw_layer != null and b._draw_layer.visible:
+			b._show_draw(false)
 		draw_opened = (b._draw_layer != null and b._draw_layer.visible)
 		draw_after_open_crystal = b._crystal
 		draw_cost_ok = (draw_after_open_crystal == draw_before_crystal - 20)
@@ -174,12 +178,13 @@ func _gesture_tick(t: float, fired: Dictionary) -> void:
 		draw_cancel_ok = (b._crystal == draw_after_open_crystal)
 	if t > 9.0 and fired.has("draw_reopen_check") and not fired.has("draw_pick"):
 		fired["draw_pick"] = true
-		draw_selected = true
+		print("[CAND][ACTION] L%d %.2fs draw_pick" % [level, t])
 		_click(_first_card(b._draw_cards))
-		await process_frame
-		_pass("抽卡关闭/重开不重复扣费并选中一张")
+		await _wait(0.6)
+		draw_selected = b._cards.size() > draw_before_cards and not b._draw_paid
 	if t > 11.0 and not fired.has("god_open"):
 		fired["god_open"] = true
+		print("[CAND][ACTION] L%d %.2fs god_open" % [level, t])
 		god_before_charge = b._draw_charge
 		god_before_skills = b._skills.size()
 		_click(b.get("_mate_tile"))
@@ -199,12 +204,13 @@ func _gesture_tick(t: float, fired: Dictionary) -> void:
 		god_cancel_ok = (b._draw_charge == god_after_open_charge)
 	if t > 14.0 and fired.has("god_reopen_check") and not fired.has("god_pick"):
 		fired["god_pick"] = true
-		god_selected = true
+		print("[CAND][ACTION] L%d %.2fs god_pick" % [level, t])
 		_click(_first_card(b._god_root.get_children()))
 		await process_frame
-		_pass("请神关闭/重开不扣次数并选中一张")
+		god_selected = b._draw_charge == god_before_charge - 1 and b._skills.size() > god_before_skills
 	if t > 15.5 and not fired.has("esc"):
 		fired["esc"] = true
+		print("[CAND][ACTION] L%d %.2fs back" % [level, t])
 		var ev := InputEventKey.new()
 		ev.physical_keycode = KEY_ESCAPE
 		ev.keycode = KEY_ESCAPE
@@ -234,33 +240,15 @@ func _verify_gesture_detail() -> void:
 	if not draw_opened: _fail("抽卡面板未打开")
 	if not draw_selected: _fail("抽卡没有实际选中")
 	if not draw_cost_ok: _fail("抽卡未扣 20 灵晶")
-	if draw_before_cards >= 0 and b != null and b._cards.size() <= draw_before_cards:
-		_fail("抽卡后卡组未增加")
 	if not draw_cancel_ok: _fail("抽卡关闭/重开后重复扣费")
 	if not god_opened: _fail("请神面板未打开")
 	if not god_selected: _fail("请神没有实际选中")
-	if god_before_charge >= 0 and b != null and b._draw_charge >= god_before_charge:
-		_fail("请神后次数未扣减")
-	if god_before_skills >= 0 and b != null and b._skills.size() <= god_before_skills:
-		_fail("请神后技能栏未变化")
 	if not god_cancel_ok: _fail("请神关闭/重开后次数变化")
 	if not esc_ok: _fail("桌面 Esc 未打开退出面板")
 	if failures.size() == before_fail:
-		_pass("抽卡/请神选中、隐藏取消与 Esc 均已核对")
+		_pass("L%d 抽卡/请神选中、隐藏重开与 Esc 均已核对" % level)
 
-func _verify() -> void:
-	if failures.is_empty():
-		_pass("候选流程 L6/L10 主界面入口、抽卡/请神真实选择、结算返回")
-	_verify_flags()
-
-func _verify_flags() -> void:
-	if not draw_selected: _fail("抽卡未实际选中")
-	if not god_selected: _fail("请神未实际选中")
-	if not draw_cancel_ok: _fail("抽卡取消未核对")
-	if not god_cancel_ok: _fail("请神取消未核对")
-	if not esc_ok: _fail("Esc 未核对")
-
-func _report(seg: String) -> void:
+func _report(seg: String, kills: int) -> void:
 	var sorted := samples.duplicate()
 	sorted.sort()
 	var over := 0
@@ -273,7 +261,8 @@ func _report(seg: String) -> void:
 		p50 = float(sorted[int(float(sorted.size()) * 0.5)])
 		p95 = float(sorted[int(float(sorted.size()) * 0.95)])
 		p99 = float(sorted[int(float(sorted.size()) * 0.99)])
-	print("[CAND] " + seg + " frames=" + str(samples.size()) + " p50=%.2f p95=%.2f p99=%.2f over33=%d live_peak=%d fx_peak=%d" % [p50, p95, p99, over, peak_live, peak_fx])
+	print("[CAND] %s frames=%d p50=%.2f p95=%.2f p99=%.2f max=%.2f over33=%d live_peak=%d fx_peak=%d kills=%d" % [
+		seg, samples.size(), p50, p95, p99, float(sorted.back()) if not sorted.is_empty() else 0.0, over, peak_live, peak_fx, kills])
 
 func _dismiss() -> void:
 	if b == null: return

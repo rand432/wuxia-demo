@@ -62,6 +62,7 @@ $names += 'outgame_loop'
 $names += 'fresh_profile'
 $names += 'continuous'
 $names += 'decisions'
+$names += 'station'
 if ($Only.Count -gt 0) { $names = $Only }
 $results = @()
 foreach ($name in $names) {

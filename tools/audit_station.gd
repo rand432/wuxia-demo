@@ -33,6 +33,7 @@ func _process(dt: float) -> bool:
 		b._core.set_process(true)
 	if phase == 0 and t > 0.5:
 		b._core.intro_wait = 0.0
+		_check_reachable_target()
 		b._core.tap_at(Vector2(120, 300))
 		phase = 1
 	if phase == 1 and t > 1.3:
@@ -100,6 +101,24 @@ func _damaged(ref, hp0: float) -> bool:
 	if not b._core.foes.has(ref):
 		return true
 	return float(ref.get("hp", 0.0)) < hp0 - 0.1
+
+func _check_reachable_target() -> void:
+	var core = b._core
+	core.foes.clear()
+	var far: Dictionary = core._spawn_foe()
+	far["x"] = core._home.x
+	far["y"] = core._home.y - 200.0
+	core._order_target() # 先形成自动锁定，再让一只近怪进场。
+	var near: Dictionary = core._spawn_foe()
+	near["x"] = core._home.x
+	near["y"] = core._home.y - 54.0
+	_check("自动索敌不等着远处旧目标", is_same(core._order_target(), near))
+	core.order_focus(far, false)
+	_check("集火目标未到时先打近怪", is_same(core._order_target(), near) and is_same(core._order_foe, far))
+	far["y"] = core._home.y - 70.0
+	_check("原集火进射程后恢复优先", is_same(core._order_target(), far))
+	core.clear_order()
+	core.foes.clear()
 
 func _check(name: String, ok: bool) -> void:
 	print(("[STATION] PASS " if ok else "[STATION] FAIL ") + name)

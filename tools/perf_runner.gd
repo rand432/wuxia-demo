@@ -14,7 +14,8 @@ var samples: Array[float] = []
 var first_samples: Array[float] = []
 var peak_live := 0
 var peak_nodes := 0
-var peak_fx := 0
+var peak_fx_live := 0
+var peak_fx_pool := 0
 var load_ms := 0.0
 var done := false
 var prime_cd := 0.0
@@ -30,7 +31,11 @@ func _notification(what: int) -> void:
 		print("[PERF] predelete")
 
 func _ready() -> void:
-	seed(run_seed)
+	var isolation_error := Iso.verify()
+	if not isolation_error.is_empty():
+		print("[PERF] REJECT " + isolation_error)
+		get_tree().quit(2)
+		return
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--scenario="): scenario = arg.get_slice("=", 1)
 		if arg.begins_with("--duration="): duration = clampf(float(arg.get_slice("=", 1)), 5.0, 120.0)
@@ -68,13 +73,6 @@ func _process(dt: float) -> void:
 	t += dt
 	if b._core.hero != null and float(b._core.hero.get("hp", 0.0)) < 900000.0:
 		b._core.hero["hp"] = float(b._core.hero["hp_max"])
-	if int(b._core.foes.size()) > peak_live: peak_live = int(b._core.foes.size())
-	var nodes := _count_nodes(b)
-	if nodes > peak_nodes: peak_nodes = nodes
-	var fx_n: int = 0
-	if b._frame_fx_pool != null:
-		fx_n = b._frame_fx_pool.size()
-	if fx_n > peak_fx: peak_fx = fx_n
 	if get_tree().paused:
 		get_tree().paused = false
 	if Engine.get_process_frames() % 60 == 0:
@@ -86,6 +84,10 @@ func _process(dt: float) -> void:
 	if first_samples.size() < 60:
 		first_samples.append(frame_ms)
 	samples.append(frame_ms)
+	peak_live = maxi(peak_live, b._core.live_foes())
+	peak_nodes = maxi(peak_nodes, get_tree().get_node_count())
+	peak_fx_live = maxi(peak_fx_live, b._frame_fx_live)
+	peak_fx_pool = maxi(peak_fx_pool, b._frame_fx_pool.size())
 	if not scenario.is_empty() and scenario != "normal":
 		prime_cd -= dt
 		if prime_cd <= 0.0:
@@ -121,12 +123,6 @@ func _prime() -> void:
 		_:
 			pass
 
-func _count_nodes(node: Node) -> int:
-	var n := 1
-	for c in node.get_children():
-		n += _count_nodes(c)
-	return n
-
 func _pct(arr: Array[float], p: float) -> float:
 	if arr.is_empty(): return 0.0
 	var a := arr.duplicate()
@@ -149,5 +145,5 @@ func _report() -> void:
 	print("[PERF] frames=%d p50=%.2f p95=%.2f p99=%.2f max=%.2f max_at=%.1fs over33=%d over50=%d first60_max=%.2f load_ms=%.1f" % [
 		samples.size(), _pct(samples, 0.50), _pct(samples, 0.95), _pct(samples, 0.99),
 		_pct(samples, 1.0), warm + float(max_i) / 60.0, over, over50, _pct(first_samples, 1.0), load_ms])
-	print("[PERF] peak_live=%d peak_nodes=%d peak_fx_pool=%d core_wave=%d kills=%d" % [
-		peak_live, peak_nodes, peak_fx, int(b._core.wave), int(b._kills)])
+	print("[PERF] peak_live=%d peak_nodes=%d peak_fx_live=%d peak_fx_pool=%d core_wave=%d kills=%d" % [
+		peak_live, peak_nodes, peak_fx_live, peak_fx_pool, int(b._core.wave), int(b._kills)])

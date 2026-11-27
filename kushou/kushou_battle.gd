@@ -2042,7 +2042,7 @@ func _nearest_n(n: int) -> Array:
 func _nearest(include_statues := true) -> Dictionary:
 	var best: Dictionary = {}
 	# 挑**离主角最近**的那只（原来是按"最靠下"，主角会走位之后要按距离）
-	var bd := 1.0e9
+	var bd := INF
 	# v13d P3：占点时只认**圈里的怪**——不然主角会追出圈，进度就白站了
 	var zc := Vector2.ZERO
 	var in_zone := false
@@ -2051,13 +2051,14 @@ func _nearest(include_statues := true) -> Dictionary:
 		in_zone = hero_pos.distance_to(zc) <= float(zone["r"])
 	for f_v in foes:
 		var f: Dictionary = f_v
-		if float(f.get("dying", 0.0)) > 0.0:
+		if float(f.get("dying", 0.0)) > 0.0 or float(f.get("hp", 0.0)) <= 0.0:
 			continue                             # 已经躺了的不再补刀
 		if not include_statues and bool(f.get("still", false)):
 			continue                             # 破阵石像通过点选集火，自动普攻继续处理本波敌人
-		if in_zone and Vector2(float(f["x"]), float(f["y"])).distance_to(zc) > float(zone["r"]):
+		var foe_pos := Vector2(float(f["x"]), float(f["y"]))
+		if in_zone and foe_pos.distance_to(zc) > float(zone["r"]):
 			continue                             # 圈外的先不管
-		var d := hero_pos.distance_to(Vector2(float(f["x"]), float(f["y"])))
+		var d := hero_pos.distance_squared_to(foe_pos)
 		if d < bd:
 			bd = d
 			best = f
@@ -2155,12 +2156,17 @@ func clear_order() -> void:
 	_banner = "回到自动战斗"
 	_banner_t = 1.2
 
-# 取目标：**集火优先**（到死为止）；死了/没了自动回自动索敌
+func _in_hero_reach(foe: Dictionary) -> bool:
+	return hero_pos.distance_squared_to(Vector2(float(foe["x"]), float(foe["y"]))) <= (HERO_REACH + 10.0) ** 2
+
+# 驻点时先处理射程内的威胁，手动集火会在目标进入射程后继续优先。
 func _order_target() -> Dictionary:
 	if not _order_foe.is_empty():
 		if foes.has(_order_foe) and float(_order_foe.get("dying", 0.0)) <= 0.0 				and float(_order_foe.get("hp", 0.0)) > 0.0:
-			return _order_foe
-		_order_foe = {}
+			if not station_mode or _in_hero_reach(_order_foe):
+				return _order_foe
+		else:
+			_order_foe = {}
 	if not _auto_foe.is_empty():
 		if not foes.has(_auto_foe) 				or float(_auto_foe.get("dying", 0.0)) > 0.0 				or float(_auto_foe.get("hp", 0.0)) <= 0.0:
 			_auto_foe = {}
@@ -2168,7 +2174,7 @@ func _order_target() -> Dictionary:
 			var zc := Vector2(float(zone["x"]), float(zone["y"]))
 			if Vector2(float(_auto_foe["x"]), float(_auto_foe["y"])).distance_to(zc) > float(zone["r"]):
 				_auto_foe = {}
-	if _auto_foe.is_empty():
+	if _auto_foe.is_empty() or (station_mode and not _in_hero_reach(_auto_foe)):
 		_auto_foe = _nearest(false)
 	return _auto_foe
 
@@ -2605,7 +2611,20 @@ func _fx_trim() -> void:
 		_floats = _floats.slice(_floats.size() - FX_FLOATS_MAX)
 
 func _push_float(x: float, y: float, txt: String, col: Color, big := false) -> void:
-	_floats.append({"x": x, "y": y, "txt": txt, "col": col, "t": 0.0, "big": big})
+	var fy := y
+	# 同一时刻附近的飘字向上错开，避免「格挡/盾破/挑战」叠成一团。
+	for _n in 3:
+		var conflict := false
+		for fl_v in _floats:
+			var fl: Dictionary = fl_v
+			if float(fl.get("t", 1.0)) < 0.30 and absf(float(fl.get("x", 0.0)) - x) < 95.0 \
+					and absf(float(fl.get("y", 0.0)) - fy) < 40.0:
+				conflict = true
+				break
+		if not conflict:
+			break
+		fy -= 38.0
+	_floats.append({"x": x, "y": fy, "txt": txt, "col": col, "t": 0.0, "big": big})
 
 # ============================================================
 # 技能：基础剑法（**普攻本体**）—— 见 docs/困兽_技能设计稿.md
@@ -5596,12 +5615,16 @@ func wave_cleared() -> bool:
 		boss_ok = boss_spawned_once and not boss_alive
 	return wave_spawn_complete() and live_foes() <= 0 and boss_ok
 
-func wave_alive(w: int) -> int:
+func wave_alive(w: int, stop_after := 0, include_boss := true) -> int:
 	var n := 0
 	for f_v in foes:
 		var f: Dictionary = f_v
 		if int(f.get("wave_tag", -1)) == w and float(f.get("hp", 0.0)) > 0.0 and float(f.get("dying", 0.0)) <= 0.0:
+			if not include_boss and bool(f.get("boss", false)):
+				continue
 			n += 1
+			if n == stop_after:
+				break
 	return n
 
 func wave_spawn_complete() -> bool:

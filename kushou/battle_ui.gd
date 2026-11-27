@@ -3078,7 +3078,7 @@ func _schedule_tick(dt: float) -> void:
 		var i := int(k)
 		if i >= _max_wave or _wave_settled.has(i) or _withdrawn_waves.has(i):
 			continue
-		if i <= w and _core.wave_alive(i) == 0:
+		if i <= w and _core.wave_alive(i, 1) == 0:
 			_wave_settled[i] = true
 			_on_wave_clear(i)
 	# 第一关首次教学保留原来的“清空才过波”。
@@ -3095,17 +3095,13 @@ func _schedule_tick(dt: float) -> void:
 		return
 	if w >= _max_wave:
 		_core.boss_required = true
-		var normal_alive := 0
-		for f_v in _core.foes:
-			var f: Dictionary = f_v
-			if int(f.get("wave_tag", -1)) == w and not bool(f.get("boss", false)) \
-					and float(f.get("hp", 0.0)) > 0.0 and float(f.get("dying", 0.0)) <= 0.0:
-				normal_alive += 1
-		if not _boss_spawned and _core.wave_spawn_complete() and normal_alive <= 6:
-			_boss_spawned = true
-			print("[SCHED] boss wave=%d normal_alive=%d live=%d" % [w, normal_alive, _core.live_foes()])
-			_core.start_boss(LevelState.boss_tier(), "")
-		if _boss_spawned and not _core.boss_alive and _core.wave_alive(w) == 0:
+		if not _boss_spawned and _core.wave_spawn_complete():
+			var normal_alive: int = _core.wave_alive(w, 7, false)
+			if normal_alive <= 6:
+				_boss_spawned = true
+				print("[SCHED] boss wave=%d normal_alive=%d live=%d" % [w, normal_alive, _core.live_foes()])
+				_core.start_boss(LevelState.boss_tier(), "")
+		if _boss_spawned and not _core.boss_alive and _core.wave_alive(w, 1) == 0:
 			if not _wave_settled.has(w):
 				_wave_settled[w] = true
 				_on_wave_clear(w)
@@ -3135,6 +3131,8 @@ func _process(_delta: float) -> void:
 	if not _tutorial_paused and _core != null:
 		_core.set_process(not blocked)
 	if blocked or (_core != null and not _core.running):
+		if _lamp_field != null and _lamp_field.visible:
+			_clear_lamp_field()
 		_tick_fly(_delta)
 		_tick_pulses(_delta)
 		return
@@ -7794,7 +7792,7 @@ func _backwash() -> void:
 		_q_finish("fail")
 	for k in _wave_issued.keys():
 		var wi := int(k)
-		if not _wave_settled.has(wi) and _core.wave_alive(wi) > 0:
+		if not _wave_settled.has(wi) and _core.wave_alive(wi, 1) > 0:
 			_withdrawn_waves[wi] = true
 	_core.foes.clear()
 	_core.clear_enemy_attacks()
