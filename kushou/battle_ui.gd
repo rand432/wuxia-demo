@@ -240,6 +240,8 @@ const MAX_ASPD := 5.0
 # v10 抽取功能未做 → 天品祖宗暂时封印（不进三选一）
 const SEALED := ["zl", "cuisanniang", "jicanghai"]   # 最强的三位封印；其余六位可按关解锁
 var _combined: Array = []
+var _merge_layers: Array = []
+var _merge_pending: Array[Dictionary] = []
 var _stats := {"atk": 0.0, "def": 0.0, "hp": 0.0}
 # v6：卡池「防御」换算成固定减免的系数（1 点防御 = 3%，按 100 伤等效对齐旧手感）
 const EquipmentStats := preload("res://shared/equipment_stats.gd")
@@ -3621,6 +3623,12 @@ func _save_result() -> Error:
 	return SaveFile.commit()
 
 func _end_run(win: bool) -> void:
+	for l in _merge_layers:
+		if is_instance_valid(l):
+			l.hide()
+			l.queue_free()
+	_merge_layers.clear()
+	_merge_pending.clear()
 	_hero_visual_offset = Vector2.ZERO
 	if _hero_dash_tween != null and _hero_dash_tween.is_valid():
 		_hero_dash_tween.kill()
@@ -5365,8 +5373,7 @@ func _activate_ancestor_set(sid: String, first: Dictionary, ids: Array) -> void:
 		arc["art"] = str(c0.get("art", ""))
 		arc["quality"] = int(c0.get("quality", 2))
 	_ancestor_combos.append(arc)
-	# 家传组合也播三合一动画
-	_play_merge_fx(arc)
+	_play_merge_fx(arc, ids)
 	if LevelState.current_level == 5 and _ancestor_combos.size() == 2 and not _family_shiny_done:
 		_family_shiny_ready = true   # 第五关是请神引导：第二组家传后必出一张炫彩
 	_add_ancestor_effects(ai, first.get("effects", {}))
@@ -5646,59 +5653,80 @@ func _check_sets() -> void:
 				changed = true
 				break
 
-# 三合一动画：三张卡向中间汇聚，淡出后再生成一张，飞向顶栏「总计」并打开
-func _play_merge_fx(rec: Dictionary) -> void:
+# 合成结算立即生效，演出按触发顺序播放。
+func _play_merge_fx(rec: Dictionary, ids: Array) -> void:
+	if _run_over or ids.is_empty():
+		return
+	var result_art := str(rec.get("art", ""))
+	var source_art: Array[String] = []
+	for id in ids:
+		var card: Dictionary = _card_db.get(str(id), {})
+		source_art.append(str(card.get("art", result_art)))
+	_merge_pending.append({"result_art": result_art, "source_art": source_art})
+	_start_next_merge_fx()
+
+func _start_next_merge_fx() -> void:
+	if _run_over or not _merge_layers.is_empty() or _merge_pending.is_empty():
+		return
+	var next: Dictionary = _merge_pending.pop_front()
+	var source_art: Array[String] = next["source_art"]
 	var layer := Control.new()
 	layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layer.z_index = 150
 	add_child(layer)
-	var ap := str(rec.get("art", ""))
-	var tex: Texture2D = null
-	if ap != "" and ResourceLoader.exists(ap):
-		tex = load(ap)
+	_merge_layers.append(layer)
+	var n := source_art.size()
+	var tex := _draw_art(str(next["result_art"]))
 	var center := Vector2(360, 470)
-	for i in 3:
+	var gap := 160.0 if n <= 3 else 120.0
+	for i in n:
 		var t := TextureRect.new()
-		t.texture = tex
+		t.texture = _draw_art(source_art[i])
+		t.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		t.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		t.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 		t.size = Vector2(92, 124)
-		t.position = center + Vector2(-160.0 + float(i) * 160.0, 0.0) - t.size * 0.5
+		t.pivot_offset = t.size * 0.5
+		t.position = center + Vector2((float(i) - float(n - 1) * 0.5) * gap, 0.0) - t.size * 0.5
 		t.modulate.a = 0.0
+		t.scale = Vector2.ONE * 0.86
 		layer.add_child(t)
-		var tw := create_tween()
-		tw.set_parallel(false)
-		tw.tween_property(t, "modulate:a", 1.0, 0.12).set_delay(float(i) * 0.05)
-		tw.parallel().tween_property(t, "position", center - t.size * 0.5, 0.30).set_delay(0.18 + float(i) * 0.05).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
+		var delay := float(i) * 0.05
+		var tw := layer.create_tween().set_parallel(true)
+		tw.tween_property(t, "modulate:a", 1.0, 0.12).set_delay(delay)
+		tw.tween_property(t, "scale", Vector2.ONE, 0.18).set_delay(delay).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		tw.tween_property(t, "position", center - t.size * 0.5, 0.30).set_delay(0.18 + delay).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
 		tw.chain().tween_property(t, "modulate:a", 0.0, 0.10)
 	# 汇聚完成后：合成一张，飞向「总计」
-	var tw2 := create_tween()
-	tw2.tween_interval(0.62)
+	var tw2 := layer.create_tween()
+	tw2.tween_interval(0.58 + float(n - 1) * 0.05)
 	tw2.tween_callback(func() -> void: _fly_to_totals(layer, tex, center))
 
 func _fly_to_totals(layer: Control, tex: Texture2D, from: Vector2) -> void:
 	var t := TextureRect.new()
 	t.texture = tex
+	t.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	t.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	t.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	t.size = Vector2(92, 124)
 	t.position = from - t.size * 0.5
 	t.pivot_offset = t.size * 0.5
 	layer.add_child(t)
-	var twg := create_tween()
+	var twg := layer.create_tween()
 	twg.tween_property(t, "modulate", Color(1.6, 1.35, 0.7), 0.08)
 	twg.tween_property(t, "modulate", Color(1, 1, 1), 0.12)
 	var target := Vector2(604, 109)
 	if _tot_btn != null:
-		target = _tot_btn.global_position + _tot_btn.size * 0.5
-	var tw := create_tween()
+		target = layer.get_global_transform().affine_inverse() * _tot_btn.get_global_rect().get_center()
+	var tw := layer.create_tween()
 	tw.set_parallel(true)
 	tw.tween_property(t, "position", target - t.size * 0.5, 0.46).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
 	tw.tween_property(t, "scale", Vector2(0.28, 0.28), 0.46)
 	tw.tween_property(t, "modulate:a", 0.0, 0.14).set_delay(0.34)
 	tw.chain().tween_callback(func() -> void:
 		if is_instance_valid(layer):
+			_merge_layers.erase(layer)
 			layer.queue_free()
 		# 本局第一次组合：压暗屏幕 + 高亮「总计」，引导玩家去查看
 		if not _tot_hint_shown and LevelState.has_feature("draw") and not LevelState.has_feature("treasure"):
@@ -5706,7 +5734,8 @@ func _fly_to_totals(layer: Control, tex: Texture2D, from: Vector2) -> void:
 			_l1_tutorial("l1_tot", _tot_btn, "合成后的卡组可以在此处查看",
 				func() -> void: _show_totals())
 		else:
-			_pulse_tot_btn())
+			_pulse_tot_btn()
+		_start_next_merge_fx())
 
 # 单卡飞向总计（炫卡被吞噬时用）
 func _fly_card_to_totals(art_path: String) -> void:
@@ -5763,8 +5792,7 @@ func _activate_set(sid: String) -> void:
 	if str(first["combo_key"]) in ["count_flat", "coin_count", "crystal_count", "treasure_pct", "boss_pct", "devour_n", "killnum_pct"]:
 		_apply_combo(rec)
 	_toast_card(str(rec["name"]), int(rec["quality"]), "组合激活，" + str(rec["size"]) + " 张已清空")
-	# 三合一表现：三张卡汇聚 → 合成一张 → 飞进「总计」
-	_play_merge_fx(rec)
+	_play_merge_fx(rec, ids)
 	# v8 成长系彩蛋：合成 攻击/防御/气血/内力 时 5% 掷「回潮」（一局一次）
 	# v13 重利：合成经济系（文钱/灵晶）时 3% 入池
 	if str(first["series"]) in ["gold", "crystal"] and not _zhongli_rolled and randf() < 0.03:

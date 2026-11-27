@@ -70,6 +70,21 @@ func _ready() -> void:
 		node.set("_tut", null)
 		node._tutorial_pause(false)
 	await _wait(600)
+	if action.begins_with("merge"):
+		var msize := int(action.substr(5))
+		var ids: Array = []
+		for sid in node._set_cards.keys():
+			var cand: Array = node._set_cards[sid]
+			if cand.size() == msize and int((node._card_db.get(str(cand[0]), {}) as Dictionary).get("set_size", 0)) == msize:
+				ids = cand.duplicate()
+				break
+		for cid in ids:
+			node._cards.append(str(cid))
+		node._check_sets()
+		await _wait(180)
+		await _capture(vp, out_path)
+		get_tree().quit(0)
+		return
 	if action in ["b32", "b32_calm"]:
 		var core = node._core
 		node._no_ui = false if node.get("_no_ui") == null else node._no_ui
@@ -90,6 +105,7 @@ func _ready() -> void:
 		await _capture(vp, out_path)
 		get_tree().quit(0)
 		return
+
 	if action == "strmenu":
 		node._str_tile.visible = true
 		node._wen = 5000
