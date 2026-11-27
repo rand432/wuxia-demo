@@ -313,18 +313,10 @@ static func load_game() -> void:
 		return
 	ores = int(cf.get_value("res", "ores", ores))
 	silver = int(cf.get_value("res", "silver", silver))
-	var it_v = cf.get_value("res", "items", null)
-	if it_v is Dictionary:
-		items = it_v
-	var eq_v = cf.get_value("res", "equipped", null)
-	if eq_v is Dictionary:
-		equipped = eq_v
-	var bg_v = cf.get_value("res", "bag", null)
-	if bg_v is Array:
-		bag = bg_v
-	var st_v = cf.get_value("res", "state", null)
-	if st_v is Dictionary:
-		state = st_v
+	items = cf.get_value("res", "items", items)
+	equipped = cf.get_value("res", "equipped", equipped)
+	bag = cf.get_value("res", "bag", bag)
+	state = cf.get_value("res", "state", state)
 	refresh_icons()
 
 # 旧存档里的装备图标还是旧素材；按名字重新对一遍新图标。

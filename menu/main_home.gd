@@ -8,6 +8,8 @@ const P := preload("res://shared/ui_pal.gd")
 const GameState := preload("res://shared/game_state.gd")
 const LevelState := preload("res://shared/level_state.gd")
 const Audio := preload("res://shared/audio.gd")
+const SaveFile := preload("res://shared/save_file.gd")
+const ForgeData := preload("res://shared/forge_data.gd")
 const ART_RECT := Rect2(80, 282, 560, 600)
 # 十关画卷：每关一幅，与战斗背景（kushou/battle_ui.gd 的 BgArt）场景对应
 const STAGE_ART := [
@@ -32,6 +34,7 @@ var _arrow_l: Control = null
 var _arrow_r: Control = null
 var _tabs: Array = []
 var _settings: Control = null
+var _save_warning: Label
 
 func _ready() -> void:
 	GameState.ensure_loaded()
@@ -51,10 +54,8 @@ func _ready() -> void:
 	UI.dock(self, "start", _on_dock)
 	_refresh()
 	_unroll(0.0)
-	var SaveFile := preload("res://shared/save_file.gd")
-	if not SaveFile._read_failures.is_empty():
-		_start_btn.disabled = true
-		UI.label(self, "存档读取异常，已暂停开始游戏以保护进度。", Vector2(24, 228), Vector2(672, 44), 19, P.SEAL, HORIZONTAL_ALIGNMENT_CENTER)
+	_save_warning = UI.label(self, "", Vector2(24, 228), Vector2(672, 44), 19, P.SEAL, HORIZONTAL_ALIGNMENT_CENTER)
+	_check_save_before_start()
 
 # ---------------- 页头：只剩关名 ----------------
 func _build_head() -> void:
@@ -202,11 +203,25 @@ func _build_start_btn() -> void:
 		_start_btn.z_index = 20
 
 func _start_level() -> void:
-	if not UI.navigation_available(self): return
+	if not UI.navigation_available(self) or not _check_save_before_start():
+		return
 	Audio.sfx("ui_click", -6.0)
 	LevelState.ensure_loaded()
 	LevelState.current_level = _stage + 1
 	UI.navigate(self, "res://menu/loading.tscn")
+
+func _check_save_before_start() -> bool:
+	var recovered := SaveFile.recover() == OK
+	if recovered:
+		GameState.ensure_loaded()
+		LevelState.ensure_loaded()
+		ForgeData.load_game()
+	var ready := recovered and not SaveFile.has_read_failures()
+	_start_btn.disabled = not ready
+	_save_warning.visible = not ready
+	if not ready:
+		_save_warning.text = "存档读取异常，已暂停开始游戏以保护进度。" if recovered else "首通奖励待恢复，已暂停开始游戏以保护进度。"
+	return ready
 
 # 底栏「开始」在主界面只提醒：已经在关卡界面，用下方大按钮开始
 func _pulse_start_btn() -> void:

@@ -122,14 +122,15 @@ static func ensure_loaded() -> void:
 		return
 	player_name = str(cfg.get_value("progress", "player_name", player_name))
 	for key in ["coins", "skill_lv", "skill_books", "shards", "stars"]:
-		var value = cfg.get_value("progress", key, null)
-		if value is Dictionary:
-			match key:
-				"coins": coins.merge(value, true)
-				"skill_lv": skill_lv = value.duplicate(true)
-				"skill_books": skill_books.merge(value, true)
-				"shards": shards = value.duplicate(true)
-				"stars": stars = value.duplicate(true)
+		if not cfg.has_section_key("progress", key):
+			continue
+		var value: Dictionary = cfg.get_value("progress", key)
+		match key:
+			"coins": coins.merge(value, true)
+			"skill_lv": skill_lv = value.duplicate(true)
+			"skill_books": skill_books.merge(value, true)
+			"shards": shards = value.duplicate(true)
+			"stars": stars = value.duplicate(true)
 	skill_mat = int(cfg.get_value("progress", "skill_mat", skill_mat))
 	forge_mat = int(cfg.get_value("progress", "forge_mat", forge_mat))
 	equip_tokens = int(cfg.get_value("progress", "equip_tokens", equip_tokens))

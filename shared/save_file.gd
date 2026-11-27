@@ -32,6 +32,9 @@ static var _read_failures: Dictionary = {}
 static var _batch := false
 static var _pending: Dictionary = {}
 
+static func has_read_failures() -> bool:
+	return not _read_failures.is_empty()
+
 static func _write_direct(cfg: ConfigFile, path: String) -> Error:
 	var temporary := path + ".tmp"
 	var err := cfg.save(temporary)
@@ -53,7 +56,7 @@ static func write(cfg: ConfigFile, path: String, require_immediate := false) -> 
 	return _write_direct(cfg, path)
 
 static func begin() -> Error:
-	if not _read_failures.is_empty():
+	if has_read_failures():
 		return ERR_FILE_CORRUPT
 	if _batch:
 		return ERR_BUSY

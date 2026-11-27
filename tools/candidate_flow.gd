@@ -226,7 +226,8 @@ func _prime_peak() -> void:
 		b._core._spawn_foe("normal", 1.0, 1.0)
 	elif not boss_primed:
 		boss_primed = true
-		b._core._spawn_foe("boss", 1.0, 1.0, true, 18, "候选版本首领")
+		var boss_name := "困兽·终焉" if level == 10 else "赤焰蛟"
+		b._core.start_boss(LS.boss_tier(level), boss_name)
 
 func _verify_gesture_detail() -> void:
 	var before_fail := failures.size()

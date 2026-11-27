@@ -182,7 +182,7 @@ func _hammer() -> void:
 		return
 	var res := str(transaction["result"])
 	var out: Dictionary = transaction["outcome"]
-	Audio.sfx("forge_hammer", -8.0)
+	Audio.sfx("forge_hammer", -12.0)
 	var tone: Color = STRIKE_TONES[res]
 	if bool(out["blocked"]):
 		tone = Color(0.58, 0.93, 0.83)
