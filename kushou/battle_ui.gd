@@ -3343,9 +3343,10 @@ func _on_hero_down() -> void:
 		_end_run(false)
 
 # ---- 本局结束：命尽（输） / 通关（赢） ----
-var _result_layer: Control = null
+var _result_layer: ResultView = null
 var _fallen_guardian: TokenActor
 var _unrecorded_clear_level := 0
+var _result_save_pending := false
 
 func _save_result() -> Error:
 	var SaveFile := preload("res://shared/save_file.gd")
@@ -3375,8 +3376,7 @@ func _end_run(win: bool) -> void:
 		_refresh_vitals_hud()
 	if win:
 		_unrecorded_clear_level = LevelState.current_level
-		if _save_result() != OK:
-			_toast("首通保存未完成，请留在结算页重试")
+		_result_save_pending = _save_result() != OK
 		# 局内文钱不结转：局外是局外（首通奖励单独发，见 _grant_first_clear）。
 		if OS.get_environment("DSH_DEBUG") != "":
 			print("[RUN] lv=", LevelState.current_level, " wave=", _max_wave, " kills=", _kills,
@@ -3426,6 +3426,7 @@ func _build_result(win: bool, reveal_delay := 0.0) -> void:
 	view.z_index = 40
 	add_child(view)
 	_result_layer = view
+	view.set_save_blocked(_result_save_pending)
 	view.replay_pressed.connect(func() -> void: _leave_result(true))
 	view.home_pressed.connect(func() -> void: _leave_result(false))
 	# 结局面特效仍由战斗舞台播放（特效系统不搬进视图）
@@ -3452,13 +3453,24 @@ func _build_result(win: bool, reveal_delay := 0.0) -> void:
 # 结果页按钮同时作为保存重试入口，未保存完成时保留当前场景。
 func _leave_result(replay: bool) -> void:
 	if not _run_over or _result_layer == null or not MenuUI.navigation_available(self): return
-	if _save_result() != OK:
-		_toast("保存未完成，请释放存储空间后再次点击")
+	if not _try_save_result_before_exit():
 		return
 	if replay:
 		MenuUI.navigate(self, scene_file_path)
 	else:
 		MenuUI.navigate(self, "res://menu/main_home.tscn")
+
+func prepare_window_close() -> bool:
+	# 正常关闭窗口时，给仍在内存里的首通结果一次保存机会。
+	return not _result_save_pending or _try_save_result_before_exit()
+
+func _try_save_result_before_exit() -> bool:
+	var saved := _save_result() == OK
+	if saved:
+		_result_save_pending = false
+	if is_instance_valid(_result_layer):
+		_result_layer.set_save_blocked(not saved)
+	return saved
 
 func _grant_first_clear(lv: int) -> void:
 	var stored_equipment := 0
@@ -9378,4 +9390,4 @@ func _play_video_after_beat(v: VideoStreamPlayer, was_running: bool) -> void:
 
 
 func _exit_tree() -> void:
-	Aud.stop_all_sfx()
+	Aud.stop_battle_sfx()

@@ -17,6 +17,13 @@ const DIM := Color(0.42, 0.38, 0.32)
 
 # 战斗层可选注入：present 完成后回放结局面特效（特效系统仍属于战斗舞台）
 var on_presented: Callable = Callable()
+var _save_blocked := false
+var _save_notice: Label
+
+func set_save_blocked(blocked: bool) -> void:
+	_save_blocked = blocked
+	if is_instance_valid(_save_notice):
+		_save_notice.visible = blocked
 
 class CoverRect extends Control:
 	# 按比例裁切填满（全屏 CG 用）
@@ -113,6 +120,13 @@ func present(p: Dictionary) -> void:
 		_lbl(str(r[0]), Vector2(56, y), Vector2(150, 30), 20, DIM, holder)
 		_lbl(str(r[1]), Vector2(210, y), Vector2(276, 30), 22, INK, holder, HORIZONTAL_ALIGNMENT_RIGHT)
 		y += 37.0
+	_save_notice = _lbl("保存未完成 · 请检查存储空间和权限", Vector2(48, 346), Vector2(444, 30),
+		19, Color(0.62, 0.20, 0.14), holder, HORIZONTAL_ALIGNMENT_CENTER)
+	var notice_paper := StyleBoxFlat.new()
+	notice_paper.bg_color = Color(0.972, 0.948, 0.896, 0.97)
+	notice_paper.set_corner_radius_all(5)
+	_save_notice.add_theme_stylebox_override("normal", notice_paper)
+	_save_notice.visible = _save_blocked
 	_btn("再来一局", Rect2(30, 380, 210, 64), 24, Color(0.86, 0.66, 0.24), Color(0.14, 0.11, 0.08),
 		func() -> void: replay_pressed.emit(), holder)
 	_btn("回主界面", Rect2(300, 380, 210, 64), 24, Color(0.93, 0.89, 0.80), INK,

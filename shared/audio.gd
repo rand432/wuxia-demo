@@ -2,6 +2,8 @@ extends RefCounted
 
 # 离树时先释放播放流，避免退出时混音线程仍持有 Ogg 播放资源。
 class ManagedPlayer extends AudioStreamPlayer:
+	var sfx_key := ""
+
 	func _exit_tree() -> void:
 		stop()
 		stream = null
@@ -78,7 +80,7 @@ static func _root() -> Node:
 		if not _quit_hook_installed:
 			_quit_hook_installed = true
 			(ml as SceneTree).auto_accept_quit = false
-			(ml as SceneTree).root.close_requested.connect(quit_cleanly.bind(0))
+			(ml as SceneTree).root.close_requested.connect(_on_window_close_requested)
 		return (ml as SceneTree).root
 	return null
 
@@ -162,11 +164,12 @@ static func _ensure_playing(p: AudioStreamPlayer) -> void:
 	var ml := Engine.get_main_loop()
 	if not (ml is SceneTree):
 		return
+	var stream := p.stream
 	for i in 3:
-		if _shutting_down or not is_instance_valid(p) or p.playing:
+		if _shutting_down or not is_instance_valid(p) or p.playing or p.stream != stream:
 			return
 		await (ml as SceneTree).process_frame
-		if not _shutting_down and is_instance_valid(p) and not p.playing:
+		if not _shutting_down and is_instance_valid(p) and p.is_inside_tree() and p.stream == stream and not p.playing:
 			p.play()
 
 # ============================================================
@@ -322,6 +325,7 @@ static var _sfx_active: Array = []
 static var _last_sfx_msec := {}
 const SFX_POOL_MAX := 16
 const SFX_ACTIVE_MAX := 32
+const SCENE_TRANSITION_SFX := ["ui_click", "ui_back", "ui_close"]
 
 # 批次13：只读统计，便于回归核对“请求 / 实际播出 / 被间隔合并 / 并发峰值”。
 static var _sfx_requested := 0
@@ -342,10 +346,19 @@ static func sfx_stats() -> Dictionary:
 		"peak_active": _sfx_peak, "active": _sfx_active.size(), "pool": _sfx_pool.size(),
 		"per_key": _sfx_per_key.duplicate()}
 
-static func _acquire_sfx_player() -> AudioStreamPlayer:
-	_sfx_active = _sfx_active.filter(func(p): return is_instance_valid(p))
+static func _is_priority_sfx(key: String) -> bool:
+	return key.begins_with("ui_") or key.begins_with("boss_impact_") or key in ["enemy_warning", "win", "lose"]
+
+static func _acquire_sfx_player(key: String) -> ManagedPlayer:
 	if _sfx_active.size() >= SFX_ACTIVE_MAX:
-		return null
+		if not _is_priority_sfx(key):
+			return null
+		for player: ManagedPlayer in _sfx_active:
+			if not _is_priority_sfx(player.sfx_key):
+				_release_sfx_player(player)
+				break
+		if _sfx_active.size() >= SFX_ACTIVE_MAX:
+			return null
 	while not _sfx_pool.is_empty():
 		var q = _sfx_pool.pop_back()
 		if is_instance_valid(q):
@@ -359,11 +372,13 @@ static func _prune_sfx_players() -> void:
 		elif not p.playing:
 			_release_sfx_player(p)
 
-# 离场清口：战斗/页面关闭时把尚未结束的音效停掉并归还池，避免 active 残留。
-static func stop_all_sfx() -> void:
+# 清掉尚未播完的战斗音效，离场按钮的反馈继续播完。
+static func stop_battle_sfx() -> void:
 	for p in _sfx_active.duplicate():
-		_release_sfx_player(p)
-	_sfx_active.clear()
+		if not is_instance_valid(p):
+			_sfx_active.erase(p)
+		elif p.sfx_key not in SCENE_TRANSITION_SFX:
+			_release_sfx_player(p)
 
 static func _release_sfx_player(p: AudioStreamPlayer) -> void:
 	if p == null or not is_instance_valid(p) or not _sfx_active.has(p):
@@ -380,7 +395,6 @@ static func _release_sfx_player(p: AudioStreamPlayer) -> void:
 		p.queue_free()
 
 static func sfx(key: String, vol_db := -6.0, pitch := 1.0, min_gap_ms := 0) -> void:
-	_prune_sfx_players()
 	var gap := maxi(min_gap_ms, 45 if key == "ui_click" else 0)
 	var now := Time.get_ticks_msec()
 	_sfx_requested += 1
@@ -394,7 +408,8 @@ static func sfx(key: String, vol_db := -6.0, pitch := 1.0, min_gap_ms := 0) -> v
 	if s == null:
 		return
 	_ensure_loaded()
-	var p := _acquire_sfx_player()
+	_prune_sfx_players()
+	var p := _acquire_sfx_player(key)
 	if p == null:
 		return
 	if gap > 0:
@@ -404,6 +419,7 @@ static func sfx(key: String, vol_db := -6.0, pitch := 1.0, min_gap_ms := 0) -> v
 	_sfx_per_key[key] = int(_sfx_per_key.get(key, 0)) + 1
 	if _sfx_active.size() > _sfx_peak:
 		_sfx_peak = _sfx_active.size()
+	p.sfx_key = key
 	p.stream = s
 	p.volume_db = vol_db + _vol_db(_sfx_vol)
 	p.pitch_scale = clampf(pitch, 0.5, 2.0)
@@ -424,15 +440,15 @@ static func sfx(key: String, vol_db := -6.0, pitch := 1.0, min_gap_ms := 0) -> v
 	else:
 		if need_add:
 			root.add_child.call_deferred(p)
-		_play_when_free.call_deferred(p)
+		_play_when_free.call_deferred(p, s)
 
 # v15h：延迟起播（父节点建完子节点之后再入树＋播放）
-static func _play_when_free(p: AudioStreamPlayer) -> void:
+static func _play_when_free(p: AudioStreamPlayer, stream: AudioStream) -> void:
 	if _shutting_down:
 		return
 	if p == null or not is_instance_valid(p):
 		return
-	if not p.is_inside_tree():
+	if not p.is_inside_tree() or p.stream != stream:
 		return
 	p.play()
 	_ensure_playing(p)
@@ -465,6 +481,17 @@ static func shutdown() -> void:
 	var until := Time.get_ticks_msec() + 100
 	while Time.get_ticks_msec() < until:
 		await tree.process_frame
+
+static func _on_window_close_requested() -> void:
+	if _shutting_down:
+		return
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree == null:
+		return
+	var scene := tree.current_scene
+	if scene != null and scene.has_method("prepare_window_close") and not scene.call("prepare_window_close"):
+		return
+	quit_cleanly()
 
 static func quit_cleanly(code: int = 0) -> void:
 	if _shutting_down: return

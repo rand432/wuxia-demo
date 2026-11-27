@@ -1492,6 +1492,10 @@ func _process(delta: float) -> void:
 	_process_end_log(_t_proc)
 
 # 怪和怪不重合：按战斗牌半径把叠在一起的推开（每帧一次，轻推）
+const FOE_SPACING_RADIUS := 26.0
+const BOSS_SPACING_RADIUS := 36.0
+const FOE_SPACING_GAP := 4.0
+
 func _separate_foes() -> void:
 	if foes.size() < 2:
 		return
@@ -1509,7 +1513,7 @@ func _separate_foes() -> void:
 		active.append(foe)
 		xs[i] = float(foe["x"])
 		ys[i] = float(foe["y"])
-		radii[i] = 36.0 if bool(foe.get("boss", false)) else 26.0
+		radii[i] = BOSS_SPACING_RADIUS if bool(foe.get("boss", false)) else FOE_SPACING_RADIUS
 	var n := active.size()
 	if n < 2:
 		return
@@ -1521,15 +1525,21 @@ func _separate_foes() -> void:
 	for i in range(n - 1):
 		var ax := xs[i]
 		var ay := ys[i]
-		var ra := radii[i]
+		var ra_with_gap := radii[i] + FOE_SPACING_GAP
+		# 水平距离超过最大间距时，不必再读取另一只怪的纵坐标和半径。
+		var max_d := ra_with_gap + BOSS_SPACING_RADIUS
+		var max_d_sq := max_d * max_d
 		for j in range(i + 1, n):
 			var bx := xs[j]
-			var by := ys[j]
 			var dx := bx - ax
+			var dx_sq := dx * dx
+			if dx_sq >= max_d_sq:
+				continue
+			var by := ys[j]
 			var dy := by - ay
-			var distance_sq := dx * dx + dy * dy
-			var min_d := ra + radii[j] + 4.0
-			if distance_sq > min_d * min_d:
+			var distance_sq := dx_sq + dy * dy
+			var min_d := ra_with_gap + radii[j]
+			if distance_sq >= min_d * min_d:
 				continue
 			var d := sqrt(distance_sq)
 			if d >= min_d:

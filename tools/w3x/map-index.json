@@ -1,0 +1,4701 @@
+[
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(10)DustwallowKeys.w3m",
+  "size": 307149,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 18
+  },
+  "w3i": 615,
+  "name": "TRIGSTR_000",
+  "author": "TRIGSTR_003",
+  "desc": "TRIGSTR_002",
+  "version": 18,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(12)DivideAndConquer.w3m",
+  "size": 349273,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 18
+  },
+  "w3i": 736,
+  "name": "TRIGSTR_000",
+  "author": "TRIGSTR_003",
+  "desc": "TRIGSTR_002",
+  "version": 18,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(12)IceCrown.w3m",
+  "size": 324901,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 736,
+  "name": "TRIGSTR_000",
+  "author": "TRIGSTR_003",
+  "desc": "TRIGSTR_002",
+  "version": 18,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(2)BootyBay.w3m",
+  "size": 125180,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 263,
+  "name": "TRIGSTR_003",
+  "author": "TRIGSTR_006",
+  "desc": "TRIGSTR_005",
+  "version": 18,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(2)Harrow.w3m",
+  "size": 90991,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 296,
+  "name": "TRIGSTR_000",
+  "author": "TRIGSTR_003",
+  "desc": "TRIGSTR_002",
+  "version": 18,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(2)HillsOfGlory.w3m",
+  "size": 95539,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 263,
+  "name": "TRIGSTR_000",
+  "author": "TRIGSTR_003",
+  "desc": "TRIGSTR_002",
+  "version": 18,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(2)OgreMound.w3m",
+  "size": 80833,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 296,
+  "name": "TRIGSTR_000",
+  "author": "TRIGSTR_003",
+  "desc": "TRIGSTR_002",
+  "version": 18,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(2)PlunderIsle.w3m",
+  "size": 119627,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 296,
+  "name": "TRIGSTR_000",
+  "author": "TRIGSTR_003",
+  "desc": "TRIGSTR_002",
+  "version": 18,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(3)Forestwalk.w3m",
+  "size": 204358,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 340,
+  "name": "TRIGSTR_000",
+  "author": "TRIGSTR_003",
+  "desc": "TRIGSTR_002",
+  "version": 18,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(3)IsleOfDread.w3m",
+  "size": 167857,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 307,
+  "name": "TRIGSTR_000",
+  "author": "TRIGSTR_003",
+  "desc": "TRIGSTR_002",
+  "version": 18,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(3)Nighthaven.w3m",
+  "size": 89831,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 307,
+  "name": "TRIGSTR_000",
+  "author": "TRIGSTR_003",
+  "desc": "TRIGSTR_002",
+  "version": 18,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(4)Adrenaline.w3m",
+  "size": 65362,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 384,
+  "name": "TRIGSTR_000",
+  "author": "TRIGSTR_003",
+  "desc": "TRIGSTR_002",
+  "version": 18,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(4)Borderlands.w3m",
+  "size": 103883,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 371,
+  "name": "TRIGSTR_000",
+  "author": "TRIGSTR_003",
+  "desc": "TRIGSTR_002",
+  "version": 18,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(4)Deadwaterdrop.w3m",
+  "size": 94710,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 351,
+  "name": "TRIGSTR_000",
+  "author": "TRIGSTR_003",
+  "desc": "TRIGSTR_002",
+  "version": 18,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(4)DragonMountain.w3m",
+  "size": 143289,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 384,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_005",
+  "desc": "TRIGSTR_003",
+  "version": 18,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(4)Duskwood.w3m",
+  "size": 199226,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 384,
+  "name": "TRIGSTR_000",
+  "author": "TRIGSTR_003",
+  "desc": "TRIGSTR_002",
+  "version": 18,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(4)Frostsabre.w3m",
+  "size": 212733,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 351,
+  "name": "TRIGSTR_000",
+  "author": "TRIGSTR_003",
+  "desc": "TRIGSTR_002",
+  "version": 18,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(4)HarvestMoon.w3m",
+  "size": 196807,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 351,
+  "name": "TRIGSTR_005",
+  "author": "TRIGSTR_008",
+  "desc": "TRIGSTR_007",
+  "version": 18,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(4)HeartToHeart.w3m",
+  "size": 127355,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 351,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_003",
+  "version": 18,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(4)Legends.w3m",
+  "size": 185734,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 384,
+  "name": "TRIGSTR_000",
+  "author": "TRIGSTR_003",
+  "desc": "TRIGSTR_002",
+  "version": 18,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(4)LostTemple.w3m",
+  "size": 245236,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 451,
+  "name": "TRIGSTR_010",
+  "author": "TRIGSTR_013",
+  "desc": "TRIGSTR_012",
+  "version": 18,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(4)MysticIsles.w3m",
+  "size": 195047,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 351,
+  "name": "TRIGSTR_005",
+  "author": "TRIGSTR_008",
+  "desc": "TRIGSTR_007",
+  "version": 18,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(4)TranquilPaths.w3m",
+  "size": 253860,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 1562,
+  "name": "TRIGSTR_010",
+  "author": "TRIGSTR_013",
+  "desc": "TRIGSTR_012",
+  "version": 18,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(4)TurtleRock~3.w3x",
+  "size": 146647,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 487,
+  "name": "TRIGSTR_020",
+  "author": "TRIGSTR_023",
+  "desc": "TRIGSTR_022",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(5)TheGlaive.w3m",
+  "size": 150987,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 18
+  },
+  "w3i": 395,
+  "name": "TRIGSTR_000",
+  "author": "TRIGSTR_003",
+  "desc": "TRIGSTR_002",
+  "version": 18,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(6)DarkForest.w3m",
+  "size": 241772,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 539,
+  "name": "TRIGSTR_012",
+  "author": "TRIGSTR_015",
+  "desc": "TRIGSTR_014",
+  "version": 18,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(6)DragonFire.w3m",
+  "size": 220023,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 472,
+  "name": "TRIGSTR_000",
+  "author": "TRIGSTR_003",
+  "desc": "TRIGSTR_002",
+  "version": 18,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(6)DrywaterGulch.w3m",
+  "size": 224185,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 18
+  },
+  "w3i": 439,
+  "name": "TRIGSTR_000",
+  "author": "TRIGSTR_003",
+  "desc": "TRIGSTR_002",
+  "version": 18,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(6)GnollWood.w3m",
+  "size": 244291,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 439,
+  "name": "TRIGSTR_007",
+  "author": "TRIGSTR_010",
+  "desc": "TRIGSTR_009",
+  "version": 18,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(6)Moonglade.w3m",
+  "size": 152115,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 439,
+  "name": "TRIGSTR_000",
+  "author": "TRIGSTR_003",
+  "desc": "TRIGSTR_002",
+  "version": 18,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(6)ScorchedBasin.w3m",
+  "size": 147983,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 18
+  },
+  "w3i": 572,
+  "name": "TRIGSTR_010",
+  "author": "TRIGSTR_013",
+  "desc": "TRIGSTR_012",
+  "version": 18,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(6)Stromguarde.w3m",
+  "size": 222280,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 18
+  },
+  "w3i": 439,
+  "name": "TRIGSTR_007",
+  "author": "TRIGSTR_010",
+  "desc": "TRIGSTR_009",
+  "version": 18,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(6)SwampOfSorrows.w3m",
+  "size": 218946,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 439,
+  "name": "TRIGSTR_000",
+  "author": "TRIGSTR_003",
+  "desc": "TRIGSTR_002",
+  "version": 18,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(6)TimbermawHold.w3m",
+  "size": 173063,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 439,
+  "name": "TRIGSTR_000",
+  "author": "TRIGSTR_003",
+  "desc": "TRIGSTR_002",
+  "version": 18,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(8)Battleground.w3m",
+  "size": 227337,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 627,
+  "name": "TRIGSTR_000",
+  "author": "TRIGSTR_003",
+  "desc": "TRIGSTR_002",
+  "version": 18,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(8)BlastedLands.w3m",
+  "size": 185828,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 527,
+  "name": "TRIGSTR_000",
+  "author": "TRIGSTR_003",
+  "desc": "TRIGSTR_002",
+  "version": 18,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(8)BloodvenomFalls.w3m",
+  "size": 233302,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 527,
+  "name": "TRIGSTR_000",
+  "author": "TRIGSTR_003",
+  "desc": "TRIGSTR_002",
+  "version": 18,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(8)GardenOfWar.w3m",
+  "size": 208823,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 527,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_003",
+  "version": 18,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(8)GolemsInTheMist.w3m",
+  "size": 237783,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 627,
+  "name": "TRIGSTR_014",
+  "author": "TRIGSTR_017",
+  "desc": "TRIGSTR_016",
+  "version": 18,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(8)PetrifiedForest.w3m",
+  "size": 278223,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 527,
+  "name": "TRIGSTR_000",
+  "author": "TRIGSTR_003",
+  "desc": "TRIGSTR_002",
+  "version": 18,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(8)Plaguelands.w3m",
+  "size": 255719,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 527,
+  "name": "TRIGSTR_010",
+  "author": "TRIGSTR_013",
+  "desc": "TRIGSTR_012",
+  "version": 18,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(8)PlainsOfSnow.w3m",
+  "size": 239128,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 527,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_003",
+  "desc": "TRIGSTR_013",
+  "version": 18,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(8)TheCrucible.w3m",
+  "size": 225644,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 627,
+  "name": "TRIGSTR_000",
+  "author": "TRIGSTR_003",
+  "desc": "TRIGSTR_002",
+  "version": 18,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(9)Riverrun.w3m",
+  "size": 314615,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 571,
+  "name": "TRIGSTR_000",
+  "author": "TRIGSTR_003",
+  "desc": "TRIGSTR_002",
+  "version": 18,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\Download\\beibaobang\\C_背包帮演示地图.w3m",
+  "size": 94060,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 18
+  },
+  "w3i": 635,
+  "name": "背包帮魔兽演示图",
+  "author": "My国宝",
+  "desc": "没有说明",
+  "version": 18,
+  "wtsCount": 16
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\Download\\beibaobang\\New_生化围城v1.5.65.w3x",
+  "size": 6036344,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 512,
+   "block": 507
+  },
+  "w3i": 769,
+  "name": "|c00747474生化围城 |c00E80000v1.5.65",
+  "author": "FearStarter & May",
+  "desc": "",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\Download\\DotA_IMBA_3.83.w3x",
+  "size": 7421124,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 2048,
+   "block": 1463
+  },
+  "w3i": 733,
+  "name": "|cffffff00IMBA 3.83 AI|r",
+  "author": "Mimya",
+  "desc": "DotA IMBA\r\nimbalance in balance\r\nby 米米亚\r\n\r\n|cffffff00imba.dota.cc|r",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\Download\\DotA_IMBA_3.83c_AI.w3x",
+  "size": 7442059,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 2048,
+   "block": 1469
+  },
+  "w3i": 734,
+  "name": "|cffffff00IMBA 3.83c AI|r",
+  "author": "Mimya",
+  "desc": "DotA IMBA\r\nimbalance in balance\r\nby 米米亚\r\n\r\n|cffffff00imba.dota.cc|r",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\Download\\IMBA_3.83f_AI.w3x",
+  "size": 7643775,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 2048,
+   "block": 1473
+  },
+  "w3i": 734,
+  "name": "|cffffff00IMBA 3.83f AI|r",
+  "author": "Mimya",
+  "desc": "DotA IMBA\r\nimbalance in balance\r\nby 米米亚\r\n\r\n|cffffff00imba.dota.cc|r",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\Download\\NaRuTo_RZCDZ[3.16]beta3.w3x",
+  "size": 7377658,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 1024,
+   "block": 736
+  },
+  "w3i": 878,
+  "name": "NaRuTo:忍者村大战[3.16]beta3",
+  "author": "晟晟  (欢迎研究本地图)",
+  "desc": "|cffffff00还原一个忍者的世界,请尝试3人小组的忍者激战吧！|r\r\n\r\n            for 1.24-1.26               ",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\Download\\new_神之墓地3.0.3贺岁版.w3x",
+  "size": 2533304,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 256,
+   "block": 161
+  },
+  "w3i": 1028,
+  "name": "|cff00ffff神之墓地3.0.3贺岁版|r",
+  "author": "神死魔灭",
+  "desc": "右下角有野兽掉落价值较高的物品。左下角有螃蟹掉落前期适用的物品，旁边有旺财掉落融合符文。\r\n|cff00ffff贺岁版可在墓地中领取一份新年礼物。|r\r\n",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\Download\\人族大逃亡.w3n",
+  "size": 14963657,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 18
+  },
+  "w3i": null
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\Download\\侏罗纪公园1.5.w3x",
+  "size": 3940206,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 256,
+   "block": 164
+  },
+  "w3i": 770,
+  "name": "侏罗纪公园1.5",
+  "author": "",
+  "desc": "",
+  "version": 25,
+  "wtsCount": 412
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\Download\\僵尸岛6(完整版).w3x",
+  "size": 83650,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 18
+  },
+  "w3i": null
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\Download\\僵尸岛6.0之混沌的世界.w3x",
+  "size": 83650,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 18
+  },
+  "w3i": null
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\Download\\卢沟桥保卫战.w3x",
+  "size": 2603687,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 128,
+   "block": 92
+  },
+  "w3i": 1086,
+  "name": "|c0000FF00保卫芦沟桥 9.18纪念版",
+  "author": "未知的",
+  "desc": "为纪念抗日战争胜利60周年。",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\Download\\守卫剑阁-降龙伏虎3.0T(C)1.24EMM版.w3x",
+  "size": 5506625,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 512,
+   "block": 425
+  },
+  "w3i": 1800,
+  "name": "|cFFFF6600守卫剑阁-降龙伏虎3.0T(C)MM",
+  "author": "dir_wang（逍遥）",
+  "desc": "|cffffdead三国后期，魏国大举进攻蜀国；剑阁是蜀国最后的屏障，一旦失守，蜀国就将灭亡！你需要成功防守敌人的26波进攻，并且战胜最后的BOSS，才能获得胜",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\Download\\澄海3C-AI版.w3x",
+  "size": 483882,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 32,
+   "block": 27
+  },
+  "w3i": null
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\Download\\神之墓地3.0.3贺岁无CDP闪版.w3x",
+  "size": 3050465,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 256,
+   "block": 162
+  },
+  "w3i": 772,
+  "name": "|cff00ffff神之墓地3.0.3贺岁无CDP闪版|r",
+  "author": "神死魔灭",
+  "desc": "右下角有野兽掉落价值较高的物品。左下角有螃蟹掉落前期适用的物品，旁边有旺财掉落融合符文。\r\n|cff00ffff贺岁版可在墓地中领取一份新年礼物。|r\r\n",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\Download\\羊羊快跑v4.34.w3x",
+  "size": 405022,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 128,
+   "block": 66
+  },
+  "w3i": 1794,
+  "name": "羊羊快跑4.34|CFF1FBF00最终正式版",
+  "author": "GM",
+  "desc": "这是一张讲述的是羊羊和狼狼之间的斗争！\r\n20分钟内要是羊羊全被抓住了，羊羊就输了！\r\n而狼狼要是在20分钟内没有吧羊羊全抓住，狼狼就输了！\r\n[GM系列羊图最",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\02F1BC90034151C73D394A115FCAA2E8.w3x",
+  "size": 5911729,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 512,
+   "block": 451
+  },
+  "w3i": 653,
+  "name": "丧尸禁区 3.5.1 BETA ",
+  "author": "坚果csshx@tom.com",
+  "desc": "一款僵尸射击合作过关类游戏",
+  "version": 25,
+  "wtsCount": 499
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\060E5FCEA346370029FDAAE526338564.w3x",
+  "size": 135218560,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 2048,
+   "block": 1030
+  },
+  "w3i": 987,
+  "name": "小兵的梦想3-绝望哀嚎V1.5.002",
+  "author": "KAOA",
+  "desc": "更新了新存档：技能树\r\n更新了二周目的新装备合成公式（彩蛋系列）\r\n修复了宝石未保存的BUG",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\08101A24A6BDA69BEBBB61DF9506B3DA.w3x",
+  "size": 8389169,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 512,
+   "block": 403
+  },
+  "w3i": 1852,
+  "name": "|cffffcc00三国群英传之崛起1.3.4正式版|r",
+  "author": "疯云追鹭， 欧拉 ，独上楼台",
+  "desc": "|c00FF00FF\r\n滚滚长江东逝水，浪花淘尽英雄。是非成败转头空。\r\n青山依旧在，几度夕阳红。\r\n白发渔樵江渚上，惯看秋月春风。\r\n一壶浊酒喜相逢。古今多少",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\0938ED7AB568E2230C16003DAC7FB5A4.w3x",
+  "size": 392208739,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 8192,
+   "block": 3585
+  },
+  "w3i": 455,
+  "name": "哈基米大冒险",
+  "author": "没有说明",
+  "desc": "没有说明",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\0F2A31AB42FC1B0B86CBD5DEBE6A7E81.w3x",
+  "size": 42670766,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 1024,
+   "block": 849
+  },
+  "w3i": 822,
+  "name": "三国志英雄的黎明",
+  "author": "爱&傻猪@",
+  "desc": "作者：爱&傻猪@\r\n东汉全面战争|cff1ce6b9[325546169]|r\r\n中华全面战争|cff1ce6b9[144933520]|r",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\163A5C95BA4F5184DEE0AA2EFA47D559.w3x",
+  "size": 118678636,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 2048,
+   "block": 1603
+  },
+  "w3i": 836,
+  "name": "璀璨年华",
+  "author": "傲娇小龙人",
+  "desc": "在一个村庄里，日复一日的劳作，乏味的日子让我难以煎熬，直到我在村外看见了那个...\r\n我发现....这个世界并不简单....",
+  "version": 25,
+  "wtsCount": 1145
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\1724725700FB683E1FAA5B4105D8B22D.w3x",
+  "size": 270850440,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 8192,
+   "block": 5620
+  },
+  "w3i": 740,
+  "name": "幻梦之扉OVA",
+  "author": "",
+  "desc": "幻梦之扉OVA",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\178B17FDA5D445BA130F922ECC4F48BD.w3x",
+  "size": 180097418,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 512,
+   "block": 462
+  },
+  "w3i": 1795,
+  "name": "黑海岸战役",
+  "author": "魔兽世界部落卫计委",
+  "desc": "",
+  "version": 25,
+  "wtsCount": 570
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\17B2286FCC6C405A9B37EFF21DA8395F.w3x",
+  "size": 94233113,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 4096,
+   "block": 2634
+  },
+  "w3i": 1147,
+  "name": "火 - 3.7 ",
+  "author": "泪痕",
+  "desc": "|cffff0000在进入游戏之前，请把模型纹理全部调高。|R\r\n\r\n全新系统，全新装备，全新英雄，我们等你一起来战！\r\n\r\n它就在远方，不要停止追寻着它！",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\17D24173EFCD6022CA5DEE1EAB62D207.w3x",
+  "size": 522157043,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 8192,
+   "block": 7413
+  },
+  "w3i": 794,
+  "name": "无限重开",
+  "author": "咕咕咕",
+  "desc": "没有说明",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\186EF3A08F5358FD44C1F1EB0AC15E13.w3x",
+  "size": 472607038,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 8192,
+   "block": 4882
+  },
+  "w3i": 704,
+  "name": "|CFFFF0000燃烧之乡",
+  "author": "木瓜也要知己",
+  "desc": "",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\1A0AEA999AB1C7B6DB939898206B2450.w3x",
+  "size": 439564752,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 4096,
+   "block": 3890
+  },
+  "w3i": 1014,
+  "name": "守护小天使正式版v1.0.419",
+  "author": "艾拉吃布丁",
+  "desc": "没有说明",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\1A5F8717FC8E692E1C06B36AF8472CA0.w3x",
+  "size": 87856584,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 1024,
+   "block": 824
+  },
+  "w3i": null
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\1BB3A78937999AAC4AA965FE855392FD.w3x",
+  "size": 134743244,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 4096,
+   "block": 4014
+  },
+  "w3i": 1167,
+  "name": "|cff00ccff梦幻之夜 v1.99s Fix2",
+  "author": "我叫喵子",
+  "desc": "F2——强化技能\r\nF3——分配点数&支援系统\r\n熟练使用支援系统对战斗会有很大帮助\r\n装备材料不齐但只要剩余金钱足够就能直接合成\r\n\r\n第一次游戏的玩家建议先",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\1C3400D7022A30275DEED9D064EF31EB.w3x",
+  "size": 571636,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 32,
+   "block": 26
+  },
+  "w3i": null
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\1EB6293225F6FA28E6A4EB20C0C0CE24.w3x",
+  "size": 396277675,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 4096,
+   "block": 3219
+  },
+  "w3i": 985,
+  "name": "守护小天使正式版v1.0.259",
+  "author": "艾拉吃布丁",
+  "desc": "没有说明",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\221C00DC9CCD0B7BF0546656DEAF7C6E.w3x",
+  "size": 368846001,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 8192,
+   "block": 2795
+  },
+  "w3i": 603,
+  "name": "肉鸽地牢",
+  "author": "未知",
+  "desc": "没有说明",
+  "version": 25,
+  "wtsCount": 164
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\2274A0F166715F25E9ED9F3D50238FB9.w3x",
+  "size": 271263009,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 8192,
+   "block": 5629
+  },
+  "w3i": 740,
+  "name": "幻梦之扉OVA",
+  "author": "",
+  "desc": "幻梦之扉OVA",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\24487248E63930724F16E6DB00E5F39B.w3x",
+  "size": 64031377,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 4096,
+   "block": 1962
+  },
+  "w3i": 1161,
+  "name": "|cFF008000动漫混乱战争 Ver 109 FIX",
+  "author": "汉化：零月汉化组",
+  "desc": "|cFF00CCFF各种人物随机混乱的战争\r\n上手容易，简单易懂，娱乐休闲~\r\n此图为娱乐图，不是一张严格意义上的对抗图\r\n地图作者:Loc_Izumu\r\n汉化",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\26E317B067508625BA12A6513E272BCE.w3x",
+  "size": 47308343,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 2048,
+   "block": 1235
+  },
+  "w3i": 1683,
+  "name": "TRIGSTR_003",
+  "author": "Tovio",
+  "desc": "浠庨偑鎭剁殑浜＄伒鎵嬩腑瑙ｆ斁濉旀媺灏�, 鎭㈠鍩庡競鐨勬様鏃ヨ崳鍏�!",
+  "version": 25,
+  "wtsCount": 520
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\2C79F675B9190360F15F6725CA296D98.w3x",
+  "size": 300804615,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 4096,
+   "block": 3560
+  },
+  "w3i": 641,
+  "name": "AH动漫英雄战",
+  "author": "Mszh",
+  "desc": "",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\34613756ACF5EDD695A4BA8AABE53020.w3x",
+  "size": 4850641,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 128,
+   "block": 69
+  },
+  "w3i": null
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\36CD6E786667AAD0309671EFD10C5192.w3x",
+  "size": 252668483,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 4096,
+   "block": 2314
+  },
+  "w3i": 572,
+  "name": "无人之境",
+  "author": "小艾伦",
+  "desc": "没有说明",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\38ADA6289452B5C68B33E6404B703C52.w3x",
+  "size": 17513367,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 512,
+   "block": 353
+  },
+  "w3i": 818,
+  "name": "魔戒史事2.0正式版",
+  "author": "垃圾998",
+  "desc": "魔戒史事",
+  "version": 25,
+  "wtsCount": 369
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\39C3946148E415962CE98666341B46B8.w3x",
+  "size": 4797376,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 512,
+   "block": 265
+  },
+  "w3i": 861,
+  "name": "自定义终结战",
+  "author": "闭月°",
+  "desc": "一时兴起做的地图~\r\n开始制作时间：2015年8月5日",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\3AC91886A4186FD8F928B19576AFBC01.w3x",
+  "size": 424220030,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 16384,
+   "block": 5221
+  },
+  "w3i": 529,
+  "name": "终之空v0.0.72",
+  "author": "未知的",
+  "desc": "没有描述",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\3C11A9110A26FDD61F404F1D1264EB07.w3x",
+  "size": 448036575,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 16384,
+   "block": 7390
+  },
+  "w3i": 711,
+  "name": "神隐の世界",
+  "author": "九条艾莉莎",
+  "desc": "",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\4024BFA06669F52AAC13E9194965A8A3.w3x",
+  "size": 3891767,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 128,
+   "block": 84
+  },
+  "w3i": 682,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_003",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\41AA013D52D2584A2C0B5679891AC077.w3x",
+  "size": 6036344,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 512,
+   "block": 507
+  },
+  "w3i": 769,
+  "name": "|c00747474生化围城 |c00E80000v1.5.65",
+  "author": "FearStarter & May",
+  "desc": "",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\4A6F56C138F8C557C72D142F23A1C44D.w3x",
+  "size": 355132830,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 4096,
+   "block": 1921
+  },
+  "w3i": 593,
+  "name": "丁真只抽电子烟0.128",
+  "author": "未知",
+  "desc": "没有说明",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\4B9A32F5CE0BE788DF9043506B1C7C82.w3x",
+  "size": 68178375,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 2048,
+   "block": 1361
+  },
+  "w3i": 711,
+  "name": "失落的曙光（序篇）1.34最终版",
+  "author": "战国战神吕布",
+  "desc": "|CFFFF0000“希望之后即是绝望”|R",
+  "version": 25,
+  "wtsCount": 8010
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\4FF138D3E5BD37ABAE0BEF903A434DFD.w3x",
+  "size": 448569050,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 8192,
+   "block": 6620
+  },
+  "w3i": 490,
+  "name": "|CFFFF8000蓬莱之旅5.88正式版|r",
+  "author": "未知",
+  "desc": "",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\503A8CD66EA2A91CDF24375200994261.w3x",
+  "size": 155513262,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 2048,
+   "block": 1561
+  },
+  "w3i": 830,
+  "name": "英雄的远征V1.00正式版",
+  "author": "Q小东子",
+  "desc": "国王寻求长生不老的秘密而发布了全境的通告，为国王找到这个秘密的会获得国王丰富的报酬，但是随着事情的推进，探险者们发现事情并没有那么简单...",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\557631CDA86CE32D6ACFCD22170C4B5D.w3x",
+  "size": 77107949,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 2048,
+   "block": 1475
+  },
+  "w3i": 732,
+  "name": "联盟斗兽场",
+  "author": "峰哥哥",
+  "desc": "没有说明",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\56CD9B195551C2904060D78632DF1121.w3x",
+  "size": 63358188,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 512,
+   "block": 504
+  },
+  "w3i": 1306,
+  "name": "通天古河",
+  "author": "QQ 3027332769",
+  "desc": "",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\599383D310A76B017D878CA72A588402.w3x",
+  "size": 765224000,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 16384,
+   "block": 12130
+  },
+  "w3i": 744,
+  "name": "[万华镜v0.1772修复版]",
+  "author": "未知",
+  "desc": "没有说明",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\5B9AB343289C40C054FE32669C279594.w3x",
+  "size": 335183057,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 8192,
+   "block": 4134
+  },
+  "w3i": 951,
+  "name": "不可能的BOSS4",
+  "author": "重置版作者：疑 /原作：超级小金",
+  "desc": "2022年了,感谢你们~ \r\n该版本为重置版本 不更新完100层绝不罢工,圆老玩家们当年的梦\r\n版权归属:Jeddah",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\5C5508E391CDB3D3CA29C603F6EDF0D4.w3m",
+  "size": 87422228,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 2048,
+   "block": 1489
+  },
+  "w3i": 656,
+  "name": "失落的旋律1.09",
+  "author": "战国战神吕布",
+  "desc": "被阳光与温暖所弃之海路过的载具无条件解体，浪潮仿佛有意的将受害者卷入岛上，进行循环无止的死亡游戏。当你睁开眼，看到的是如莺般的少女----与队友一同探索和冒险，",
+  "version": 25,
+  "wtsCount": 6554
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\5CE373646BA198ECC14CB62D479049E5.w3x",
+  "size": 39188205,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 1024,
+   "block": 997
+  },
+  "w3i": 993,
+  "name": "西方世界的劫难2：人族的荣耀",
+  "author": "漆黑之牙",
+  "desc": "西方世界的劫难",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\5DBAE38C16613428A1C0142F4BB0F989.w3x",
+  "size": 188550948,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 2048,
+   "block": 1264
+  },
+  "w3i": null
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\5DDEBAF28B886BAECA453879A996C16A.w3x",
+  "size": 799946,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 32,
+   "block": 27
+  },
+  "w3i": 861,
+  "name": "巴林之墓 重制版 2.6",
+  "author": "暗境使者",
+  "desc": "红色/Teal = 范围输出\r\n蓝色/Purple = 指挥官\r\n黄色/Orange = 毒药专家\r\n绿色/Grey = 单一目标输出\r\n蓝绿色 = 治疗",
+  "version": 25,
+  "wtsCount": 78
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\62368548334DD0CECFF1AF037128C741.w3x",
+  "size": 314015547,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 8192,
+   "block": 2202
+  },
+  "w3i": 594,
+  "name": "这其实不是丁真0.765",
+  "author": "未知",
+  "desc": "没有说明",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\6706BD1B77AE3A0D462EE3C9B787DCF9.w3x",
+  "size": 29893157,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 2048,
+   "block": 1454
+  },
+  "w3i": 1061,
+  "name": "迷你教师の瑞包恩0.8",
+  "author": "迎风&秋天",
+  "desc": "本图剧情图，不知道接下来干嘛的可以按F9查询\r\n作者：迎风&秋天\r\n本图大部分模型来源：罪与罚\r\nQQ群：536646816",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\69E27B9D1994E95F092D6DE0BD862E93.w3x",
+  "size": 26023026,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 2048,
+   "block": 1236
+  },
+  "w3i": null
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\6B3EFE7FFDA8C8B9C9279235108DB8DB.w3x",
+  "size": 312436549,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 8192,
+   "block": 5649
+  },
+  "w3i": 585,
+  "name": "神树幻想",
+  "author": "花邑RPG",
+  "desc": "release-1179-2023-0417-1101",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\6F5D4A51AB8A9159E213AF3FB820A867.w3x",
+  "size": 33905324,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 2048,
+   "block": 1887
+  },
+  "w3i": 2866,
+  "name": "生与死",
+  "author": "arhiman1995",
+  "desc": "原作者：arhiman1995\r\n汉化：BloodKnight\r\nVK 组：TimeOfDragons/LOTR. ORPG\r\n支持项目：MasterCard.",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\70082AB4C954AB852BF3D519C4DEA483.w3x",
+  "size": 295716760,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 4096,
+   "block": 2941
+  },
+  "w3i": 598,
+  "name": "AA2鸽皇地牢122020202KK",
+  "author": "小电狗",
+  "desc": "（2026年1月28号发布）",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\703840E7B04DF2EF58855D444C93B938.w3x",
+  "size": 315503159,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 8192,
+   "block": 2014
+  },
+  "w3i": 603,
+  "name": "肉鸽地牢",
+  "author": "未知",
+  "desc": "没有说明",
+  "version": 25,
+  "wtsCount": 301
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\714296D2B8D8366989FCF82C12137372.w3x",
+  "size": 272535853,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 8192,
+   "block": 4884
+  },
+  "w3i": 1102,
+  "name": "誓约的复仇4复仇之魂",
+  "author": "红尘雪",
+  "desc": "何为成王的理由？",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\7151C79D3A2BA9856D9C098343D8B2EB.w3x",
+  "size": 319829898,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 8192,
+   "block": 2211
+  },
+  "w3i": 594,
+  "name": "这其实不是丁真0.771",
+  "author": "未知",
+  "desc": "没有说明",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\7316A41A44B311144A0F191A72282170.w3x",
+  "size": 2668570,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 256,
+   "block": 110
+  },
+  "w3i": null
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\772AC98AC16A955B5CB41F3F8BE79E75.w3x",
+  "size": 406958644,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 8192,
+   "block": 2152
+  },
+  "w3i": 594,
+  "name": "丁真只抽电子烟0.1681",
+  "author": "未知",
+  "desc": "没有说明",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\77B96F56432FCF5228C5598A62433BBA.w3x",
+  "size": 19963456,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 512,
+   "block": 261
+  },
+  "w3i": 1813,
+  "name": "亡灵复生第二章正式版",
+  "author": "相濡以美",
+  "desc": "在人类最后的光明堡阵地，城主德哈听到来自前线的种种坏消息，现在骷髅帝国已经兵临城下，而且最重要的是，他们的英雄回来了，但是一个预言中的梦，让五位人族英雄聚集到了",
+  "version": 25,
+  "wtsCount": 93
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\79723A9671249852DFFD3F699D2FA392.w3x",
+  "size": 268632096,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 4096,
+   "block": 3904
+  },
+  "w3i": 583,
+  "name": "梦世界2_1.0.50",
+  "author": "幽暗深渊",
+  "desc": "新世界重塑亿万年的漫长岁月里，爱丽丝的肉体也接近消亡，混沌在爱丽丝的生命结束前最脆弱之时胁迫其灵魂进入安娜的空躯......此后，巨大的迷宫突然出现原梦之国废墟",
+  "version": 25,
+  "wtsCount": 1
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\7A3735E1598DC427AE32A5D28A04D76F.w3x",
+  "size": 11768046,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 2048,
+   "block": 1327
+  },
+  "w3i": 873,
+  "name": "肥羊镇最后的30分钟(EX.26.5)",
+  "author": "Lorit",
+  "desc": "|cFFFF5800Hero Defence, RPG|r\r\n|cFFFF00FF魔兽争霸肥羊群：678590998或208820667|r",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\7A820C8637B59767863A3166F0B419A9.w3x",
+  "size": 391005976,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 4096,
+   "block": 3188
+  },
+  "w3i": 985,
+  "name": "守护小天使正式版v1.0.247",
+  "author": "艾拉吃布丁",
+  "desc": "没有说明",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\82B6150F9D54395700EB696FA74441ED.w3x",
+  "size": 73886974,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 1024,
+   "block": 948
+  },
+  "w3i": 991,
+  "name": "白晶王冠",
+  "author": "蜃楼",
+  "desc": "一下情况可以避免后期文字乱码:\r\n1.游戏开始前将魔兽分辨率调成|cffffcc001360x768|r，还不行就调成|cffffcc001024*768|r\r",
+  "version": 25,
+  "wtsCount": 3
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\8695BE8A6C018DE5BF2B971AB2DA1909.w3x",
+  "size": 439563605,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 4096,
+   "block": 3890
+  },
+  "w3i": 1014,
+  "name": "守护小天使正式版v1.0.420",
+  "author": "艾拉吃布丁",
+  "desc": "没有说明",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\882A38B8F693A3E97AC34A71B90519C6.w3x",
+  "size": 218165355,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 4096,
+   "block": 3812
+  },
+  "w3i": 854,
+  "name": "|Cff0080C0天灾来临IV_2.9.12",
+  "author": "Koko",
+  "desc": "这是一个探索的世界，需要勇气和配合，才能顺利通关，你准备好接受挑战了么？",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\889E61C04024B668D67335CE64BA7BB5.w3x",
+  "size": 72982317,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 1024,
+   "block": 988
+  },
+  "w3i": 538,
+  "name": "after Battle",
+  "author": "酱油丶",
+  "desc": "",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\8AB44ADD2FE36966193D9FE56A620253.w3x",
+  "size": 84248391,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 2048,
+   "block": 1638
+  },
+  "w3i": null
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\8B422820D51DBD34C743AFA3F5A5FC47.w3x",
+  "size": 53222351,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 4096,
+   "block": 3506
+  },
+  "w3i": 938,
+  "name": "|c00FF0000新翼之梦优化版1.0|r",
+  "author": "|c00FF0000小黑|r",
+  "desc": "|c00FF0000由于世界之树被邪恶力量吞噬，世界之树的光彩完全消失，人类为了保卫世界之树，向邪恶力量做出了调查，发现邪恶力量控制了守护神，向人间界发动了进攻",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\8BA1E56E22758A702750EBACF82A07B1.w3x",
+  "size": 63769476,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 2048,
+   "block": 1799
+  },
+  "w3i": null
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\8EC71E065D48F501AD939395CF75143F.w3x",
+  "size": 7438619,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 512,
+   "block": 474
+  },
+  "w3i": 815,
+  "name": "|c00FEBA0E安神的世界V1.05正式版|r",
+  "author": "未知",
+  "desc": "生存下去，不要让英雄死亡。",
+  "version": 25,
+  "wtsCount": 94
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\941EA65137F56952CE6226EE74765DB2.w3x",
+  "size": 271264767,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 8192,
+   "block": 5629
+  },
+  "w3i": 740,
+  "name": "幻梦之扉OVA",
+  "author": "",
+  "desc": "幻梦之扉OVA",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\9593F4FEB55687D0F0F691FDD5EEC8C2.w3x",
+  "size": 605621,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 44
+  },
+  "w3i": null
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\969405E2B6C9E7A9A163F74416043232.w3x",
+  "size": 439708729,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 4096,
+   "block": 3896
+  },
+  "w3i": 1014,
+  "name": "守护小天使正式版v1.0.421",
+  "author": "艾拉吃布丁",
+  "desc": "没有说明",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\96D1472E35778F8F7945A31F2EAB2DC9.w3x",
+  "size": 515967167,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 8192,
+   "block": 7695
+  },
+  "w3i": 514,
+  "name": "ACG BOSS战 v0.142",
+  "author": "Aaaaaya/神隐/七罪",
+  "desc": "没有说明",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\9A9BDE2B1B10574E909244109B7501DA.w3x",
+  "size": 195505631,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 2048,
+   "block": 1306
+  },
+  "w3i": 950,
+  "name": "英灵之座·起源 v4.0.0",
+  "author": "天怒",
+  "desc": "    人理被颠覆的背后隐藏着哪些真相，是什么蒙蔽了你的双眼，圣杯的背后的秘密正在不断的被揭开。\r\n    回到最初，追溯到魔法的时代，这就是——起源。",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\9F26E7EB8BADBC49BAB9EEF10B04BD98.w3x",
+  "size": 245525120,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 8192,
+   "block": 5964
+  },
+  "w3i": 762,
+  "name": "|cFF00FFFF动漫明星乱斗v7.5",
+  "author": "六翼 修",
+  "desc": "动漫明星乱斗，本作强调的就是无厘头的多人大混战，时下热门的动漫角色悉数登场，作品包含了《火影忍者》、《死神》、《海贼王》等动漫中的主角，其他角色将会在日后的更新",
+  "version": 25,
+  "wtsCount": 1
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\A02C2567CFE1A45DB7A7662DEBD2594F.w3x",
+  "size": 87911548,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 4096,
+   "block": 3355
+  },
+  "w3i": 832,
+  "name": "人族传说",
+  "author": "队长",
+  "desc": "问题建议抖音chen907374840",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\A07ED991CAE0617558B14F1B9CC09A65.w3x",
+  "size": 11094093,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 2048,
+   "block": 1759
+  },
+  "w3i": null
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\A4678E15DACBAB52BCAE2ABF6BFE44B6.w3x",
+  "size": 46524779,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 256,
+   "block": 209
+  },
+  "w3i": 743,
+  "name": "末日者的自我救赎",
+  "author": "未知",
+  "desc": "没有说明",
+  "version": 25,
+  "wtsCount": 306
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\AA02D49D96F62EC382551F73511792E1.w3x",
+  "size": 4593780,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 512,
+   "block": 257
+  },
+  "w3i": 737,
+  "name": "风暴探险之将军冢V1.01",
+  "author": "LC光明",
+  "desc": "地图由LC光明制作，如果你觉得地图还算有意思的话，欢迎评论支持。",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\AD26252B68F322F7DE2947987C89A6BC.w3x",
+  "size": 7333587,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 1024,
+   "block": 646
+  },
+  "w3i": null
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\AF6DE7486C5D03FEFC3590D6D3FB1AF3.w3x",
+  "size": 517775731,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 16384,
+   "block": 11400
+  },
+  "w3i": 570,
+  "name": "终の空v2.4.91",
+  "author": "未知的",
+  "desc": "没有描述",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\B165E45E2CFA086FF1C2B3976968087D.w3x",
+  "size": 439849850,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 4096,
+   "block": 3904
+  },
+  "w3i": 1014,
+  "name": "守护小天使正式版v1.0.422",
+  "author": "艾拉吃布丁",
+  "desc": "没有说明",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\B45C7EE883EB239BE336B1CA68B3F2CF.w3x",
+  "size": 6358767,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 512,
+   "block": 321
+  },
+  "w3i": 758,
+  "name": "TRIGSTR_795",
+  "author": "TRIGSTR_798",
+  "desc": "TRIGSTR_797",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\B98DCCFF99EC2B0440A7B551C5BB1AF3.w3x",
+  "size": 331976033,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 2048,
+   "block": 1911
+  },
+  "w3i": 862,
+  "name": "守护小天使v1.0.041 绯红の命运",
+  "author": "艾拉吃布丁",
+  "desc": "没有说明",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\BF8ED9F9A65B56F4DBC8AE6BA1660B5A.w3x",
+  "size": 141372846,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 4096,
+   "block": 2238
+  },
+  "w3i": 772,
+  "name": "无限恐怖之再现1.839",
+  "author": "Johnny",
+  "desc": "以“无限恐怖”小说为蓝本制作的RPG地图",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\C01DBAC3FA3CB2FA7DDAC9194B492F91.w3x",
+  "size": 74584134,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 4096,
+   "block": 3325
+  },
+  "w3i": 1117,
+  "name": "|c00FF0000日常special2.6狂欢版|r",
+  "author": "小黑",
+  "desc": "突然有一天世界各地出现了怪物和神秘的组织“堕天使”、“神”，人类击杀怪物后意外的发现竟然有金币掉落，这个时候出现了新的职业“怪物猎人”，看似日常非平常的战斗一幕",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\C549D4660E60740D67E87DEC20087708.w3x",
+  "size": 440015000,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 4096,
+   "block": 3913
+  },
+  "w3i": 1014,
+  "name": "守护小天使正式版v1.0.425",
+  "author": "艾拉吃布丁",
+  "desc": "没有说明",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\C5CA305227EB437DEF19842846FD82A8.w3x",
+  "size": 36823506,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 512,
+   "block": 416
+  },
+  "w3i": 783,
+  "name": "僵尸末日",
+  "author": "邪魔-冰狐",
+  "desc": "",
+  "version": 25,
+  "wtsCount": 210
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\CA0BD0BF7F65B63D748C5B85EFF6AF24.w3x",
+  "size": 11364978,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 128,
+   "block": 112
+  },
+  "w3i": 1142,
+  "name": "战斗农民v2.74",
+  "author": "老师：QQ281633505",
+  "desc": "战斗农民是一款合作与生存的游戏，以魔兽人族农民为主角英雄。和队友一起帮助村民击败最上面的恶魔吧！\r\n\r\n正式版2.7.4\r\n\r\n界面来自\"暗黑破坏神\"",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\CF40190F1A9B1F1B6B5086BEE752B787.w3x",
+  "size": 396288717,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 4096,
+   "block": 3220
+  },
+  "w3i": 985,
+  "name": "守护小天使正式版v1.0.263",
+  "author": "艾拉吃布丁",
+  "desc": "没有说明",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\D2970AA1B88A02B89310C6960E277FB1.w3x",
+  "size": 43986625,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 1024,
+   "block": 588
+  },
+  "w3i": 931,
+  "name": "末日尸岛0.2.2",
+  "author": "邪魔-冰狐",
+  "desc": "",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\D4E019EEBA147055DB017FD161E5868A.w3x",
+  "size": 75004188,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 512,
+   "block": 380
+  },
+  "w3i": 774,
+  "name": "永盛之宴1.5.71「朝暮时空」",
+  "author": "魔球",
+  "desc": "",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\D57DA60A3EEDE54E38209B1E3B6C86B1.w3x",
+  "size": 1201680,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 128,
+   "block": 41
+  },
+  "w3i": 1786,
+  "name": "RPG邪恶阴影 1.14 正式版",
+  "author": "无尘的剑(14901643@qq.com)",
+  "desc": "伟大的英雄们苏醒并崛起的时刻来临了...\r\n\r\n地图制作 by |c32ff0000无尘的剑|r\r\nQQ14901643  QQ群320264224\r\n更新时间",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\D862BFB35C5CED1620EEF6EC17028EE7.w3x",
+  "size": 179229934,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 4096,
+   "block": 2229
+  },
+  "w3i": 723,
+  "name": "|cFFF00000求魂7.8.6",
+  "author": "资深巫师",
+  "desc": "这是一个以夺舍身体为主要玩法的特殊防守地图\r\n◆作者：资深巫师\r\n|cffffff00Q群:164748166|r",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\DCDC4E21FF6F0CA5F2D4CB02A35EC7C9.w3x",
+  "size": 13125973,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 256,
+   "block": 174
+  },
+  "w3i": 1016,
+  "name": "求生时刻IIv1.5.1",
+  "author": "未知",
+  "desc": "",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\DE4B8608A8D0F02C42AC20D94700D0EB.w3x",
+  "size": 391006118,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 4096,
+   "block": 3188
+  },
+  "w3i": 985,
+  "name": "守护小天使正式版v1.0.246",
+  "author": "艾拉吃布丁",
+  "desc": "没有说明",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\DE911B71C3F3A1F1363249DC6B320505.w3x",
+  "size": 81794615,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 1024,
+   "block": 887
+  },
+  "w3i": 763,
+  "name": "折光0.104fix2",
+  "author": "月见草",
+  "desc": "作者：月见草",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\DEB5D6BFCA06C766F6424D70D78FB06B.w3x",
+  "size": 23762102,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 512,
+   "block": 213
+  },
+  "w3i": 2705,
+  "name": "亡灵复生第三章",
+  "author": "相濡以美",
+  "desc": "在光明堡一战后，大墓主意识到只靠亡灵的力量恐怕难以复兴，所以派出了血族来帮助我们，现在他们要前往森林之地获得可以唤醒骷髅军队的魔法之力量....",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\DFB5EEAE74D19F3A12058078516F657B.w3x",
+  "size": 212788742,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 8192,
+   "block": 3117
+  },
+  "w3i": 570,
+  "name": "无限流肉鸽",
+  "author": "天才9",
+  "desc": "交流群1群：822815779",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\E14E5130FA037F6A195BC7D352203C30.w3x",
+  "size": 439458217,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 4096,
+   "block": 3885
+  },
+  "w3i": 1014,
+  "name": "守护小天使正式版v1.0.418",
+  "author": "艾拉吃布丁",
+  "desc": "没有说明",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\E281830FEF76DA71DAE26FE932DD74E7.w3x",
+  "size": 15868238,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 512,
+   "block": 504
+  },
+  "w3i": 794,
+  "name": "TRIGSTR_005",
+  "author": "TRIGSTR_008",
+  "desc": "TRIGSTR_007",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\E731E9062D1A74BF0C7CAE886DB172A1.w3x",
+  "size": 127261239,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 4096,
+   "block": 2505
+  },
+  "w3i": 583,
+  "name": "TRIGSTR_018",
+  "author": "TRIGSTR_021",
+  "desc": "",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\E97F0C5D1496ED9F0DCE0203DFFF0C0B.w3x",
+  "size": 445786771,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 4096,
+   "block": 2857
+  },
+  "w3i": 1042,
+  "name": "神铸遗物之争（测试26.51）",
+  "author": "高贵的DDT",
+  "desc": "你猜",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\EA826C5706A2BFD55BDDA9E59D31820D.w3x",
+  "size": 4534372,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 256,
+   "block": 142
+  },
+  "w3i": 1562,
+  "name": "|cffffcc00惊骇之夜 1.5正式版",
+  "author": "|cFFF77700霜の哀しみ 与 Gr",
+  "desc": "|cffffcc00你参加了一次令人惊骇的旅行......",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\EC7A93BF665C3A11CBD635AADAA9E685.w3x",
+  "size": 7976714,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 1024,
+   "block": 508
+  },
+  "w3i": null
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\EF32B7A0721E591A44350B80F9771F40.w3x",
+  "size": 53639465,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 2048,
+   "block": 1280
+  },
+  "w3i": 750,
+  "name": "尸潮之城",
+  "author": "痞子",
+  "desc": "",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\F0154BF465F432618792ACF301954208.w3x",
+  "size": 68401579,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 1024,
+   "block": 563
+  },
+  "w3i": 807,
+  "name": "A杀戮地牢",
+  "author": "晨光and小电狗",
+  "desc": "没有说明",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\F4EC64E68794665642D8B58207E5FF82.w3x",
+  "size": 483810552,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 16384,
+   "block": 8812
+  },
+  "w3i": 623,
+  "name": "梦迹沙河0",
+  "author": "泡泡星宴",
+  "desc": "梦迹沙河0",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\F547B8CF73A67A4D2CAEEF600CBCE58F.w3x",
+  "size": 71770871,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 4096,
+   "block": 3164
+  },
+  "w3i": 1109,
+  "name": "|c00FF0000日常special2.75|r",
+  "author": "小黑",
+  "desc": "突然有一天世界各地出现了怪物和神秘的组织“堕天使”、“神”，人类击杀怪物后意外的发现竟然有金币掉落，这个时候出现了新的职业“怪物猎人”，看似日常非平常的战斗一幕",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\F70A0AF4F61BEB603B723479DE61A84F.w3x",
+  "size": 450583142,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 16384,
+   "block": 5491
+  },
+  "w3i": 529,
+  "name": "终之空v0.0.83",
+  "author": "未知的",
+  "desc": "没有描述",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\FBE56CAAEB7DA0C668C495C6D49F4C1E.w3x",
+  "size": 258349910,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 8192,
+   "block": 1830
+  },
+  "w3i": 603,
+  "name": "肉鸽地牢",
+  "author": "未知",
+  "desc": "没有说明",
+  "version": 25,
+  "wtsCount": 302
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\FCEA400187D0D86351CFB5C4187D0BB7.w3x",
+  "size": 440228302,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 4096,
+   "block": 3568
+  },
+  "w3i": 774,
+  "name": "无限恐怖之再现2.227nz",
+  "author": "Johnny",
+  "desc": "以“无限恐怖”小说为蓝本制作的RPG地图",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\丧尸禁区 3.6.1 BETA.w3x",
+  "size": 5921586,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 512,
+   "block": 451
+  },
+  "w3i": 653,
+  "name": "丧尸禁区 3.6.1 BETA ",
+  "author": "坚果csshx@tom.com",
+  "desc": "一款僵尸射击合作过关类游戏",
+  "version": 25,
+  "wtsCount": 516
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\终之空.w3x",
+  "size": 450583142,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 16384,
+   "block": 5491
+  },
+  "w3i": 529,
+  "name": "终之空v0.0.83",
+  "author": "未知的",
+  "desc": "没有描述",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\rpg\\西西里之夜1.4.w3x",
+  "size": 3891767,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 128,
+   "block": 84
+  },
+  "w3i": 682,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_003",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\丁真只抽电子烟0.128.w3x",
+  "size": 355132830,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 4096,
+   "block": 1921
+  },
+  "w3i": 593,
+  "name": "丁真只抽电子烟0.128",
+  "author": "未知",
+  "desc": "没有说明",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\丁真只抽电子烟0.1681.w3x",
+  "size": 406958644,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 8192,
+   "block": 2152
+  },
+  "w3i": 594,
+  "name": "丁真只抽电子烟0.1681",
+  "author": "未知",
+  "desc": "没有说明",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\守护小天使v1.0.041 绯红の命运.w3x",
+  "size": 331976033,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 2048,
+   "block": 1911
+  },
+  "w3i": 862,
+  "name": "守护小天使v1.0.041 绯红の命运",
+  "author": "艾拉吃布丁",
+  "desc": "没有说明",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\异世回响0.1.1.w3x",
+  "size": 322885074,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 16384,
+   "block": 8939
+  },
+  "w3i": 804,
+  "name": "异世界转身录",
+  "author": "未知",
+  "desc": "没有说明",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\无限恐怖之再现1.8.39.w3x",
+  "size": 141372846,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 4096,
+   "block": 2238
+  },
+  "w3i": 772,
+  "name": "无限恐怖之再现1.839",
+  "author": "Johnny",
+  "desc": "以“无限恐怖”小说为蓝本制作的RPG地图",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\神铸遗物之争（测试26.51）.w3x",
+  "size": 445786771,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 4096,
+   "block": 2857
+  },
+  "w3i": 1042,
+  "name": "神铸遗物之争（测试26.51）",
+  "author": "高贵的DDT",
+  "desc": "你猜",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\终之空v0.0.72.w3x",
+  "size": 424220030,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 16384,
+   "block": 5221
+  },
+  "w3i": 529,
+  "name": "终之空v0.0.72",
+  "author": "未知的",
+  "desc": "没有描述",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\dz\\降临r v1.3.2 汉化版 (1.29).w3x",
+  "size": 87856584,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 1024,
+   "block": 824
+  },
+  "w3i": null
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(10)RagingStream.w3x",
+  "size": 199646,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 651,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_016",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(12)EmeraldGardens.w3x",
+  "size": 319283,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 739,
+  "name": "TRIGSTR_014",
+  "author": "TRIGSTR_017",
+  "desc": "TRIGSTR_016",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(2)BanditRidge.w3x",
+  "size": 169319,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 18
+  },
+  "w3i": 299,
+  "name": "TRIGSTR_004",
+  "author": "TRIGSTR_007",
+  "desc": "TRIGSTR_006",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(2)Circumvention.w3x",
+  "size": 99676,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 18
+  },
+  "w3i": 608,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_003",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(2)EchoIsles.w3x",
+  "size": 117404,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 299,
+  "name": "TRIGSTR_004",
+  "author": "TRIGSTR_007",
+  "desc": "TRIGSTR_006",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(2)GlacialThaw.w3x",
+  "size": 164555,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 299,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_003",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(2)Korea.w3x",
+  "size": 125670,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 299,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_003",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(2)MeltingValley.w3x",
+  "size": 167685,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 19
+  },
+  "w3i": 299,
+  "name": "TRIGSTR_004",
+  "author": "TRIGSTR_007",
+  "desc": "TRIGSTR_006",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(2)RoadToStratholme.w3x",
+  "size": 164444,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 18
+  },
+  "w3i": 299,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_003",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(2)SecretValley.w3x",
+  "size": 220892,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 19
+  },
+  "w3i": 299,
+  "name": "TRIGSTR_004",
+  "author": "TRIGSTR_007",
+  "desc": "TRIGSTR_006",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(2)ShrineOfTheAncients.w3x",
+  "size": 143412,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 18
+  },
+  "w3i": 303,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_003",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(2)TerenasStand.w3x",
+  "size": 100879,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 299,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_003",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(2)TheTwoRivers.w3x",
+  "size": 106135,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 299,
+  "name": "TRIGSTR_003",
+  "author": "TRIGSTR_006",
+  "desc": "TRIGSTR_005",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(2)TirisfalGlades.w3x",
+  "size": 100921,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 299,
+  "name": "TRIGSTR_004",
+  "author": "TRIGSTR_007",
+  "desc": "TRIGSTR_006",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)Adrenaline.w3x",
+  "size": 67126,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 420,
+  "name": "TRIGSTR_000",
+  "author": "TRIGSTR_003",
+  "desc": "TRIGSTR_002",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)Avalanche.w3x",
+  "size": 146235,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 487,
+  "name": "TRIGSTR_010",
+  "author": "TRIGSTR_013",
+  "desc": "TRIGSTR_012",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)BridgeTooNear.w3x",
+  "size": 175159,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 18
+  },
+  "w3i": 387,
+  "name": "TRIGSTR_006",
+  "author": "TRIGSTR_009",
+  "desc": "TRIGSTR_008",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)BrokenShard.w3x",
+  "size": 170507,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 387,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_003",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)CentaurGrove.w3x",
+  "size": 182056,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 948,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_003",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)ColdHeart.w3x",
+  "size": 134788,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 18
+  },
+  "w3i": 420,
+  "name": "TRIGSTR_000",
+  "author": "TRIGSTR_003",
+  "desc": "TRIGSTR_019",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)Deathrose.w3x",
+  "size": 360584,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 391,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_003",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)DesertStrife.w3x",
+  "size": 96713,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 387,
+  "name": "TRIGSTR_006",
+  "author": "TRIGSTR_009",
+  "desc": "TRIGSTR_008",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)DevilsCauldron.w3x",
+  "size": 145424,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 387,
+  "name": "TRIGSTR_000",
+  "author": "TRIGSTR_003",
+  "desc": "TRIGSTR_002",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)ExcavationSite.w3x",
+  "size": 255079,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 387,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_003",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)FloodPlains.w3x",
+  "size": 211237,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 387,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_003",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)FloodPlains1v1.w3x",
+  "size": 220760,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 18
+  },
+  "w3i": 387,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_003",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)FrozenClover.w3x",
+  "size": 220970,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 387,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_003",
+  "desc": "TRIGSTR_009",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)Goldshire.w3x",
+  "size": 190856,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 387,
+  "name": "TRIGSTR_003",
+  "author": "TRIGSTR_006",
+  "desc": "TRIGSTR_005",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)HailStone.w3x",
+  "size": 192291,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 387,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_003",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)HearthglenHills.w3x",
+  "size": 229304,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 387,
+  "name": "TRIGSTR_003",
+  "author": "TRIGSTR_006",
+  "desc": "TRIGSTR_005",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)Hellfire.w3x",
+  "size": 110973,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 387,
+  "name": "TRIGSTR_005",
+  "author": "TRIGSTR_008",
+  "desc": "TRIGSTR_007",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)IceFlow.w3x",
+  "size": 107260,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 18
+  },
+  "w3i": 387,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_003",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)IceForge.w3x",
+  "size": 132491,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 387,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_003",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)Islands.w3x",
+  "size": 171309,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 387,
+  "name": "TRIGSTR_006",
+  "author": "TRIGSTR_008",
+  "desc": "TRIGSTR_009",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)LostTemple.w3x",
+  "size": 246345,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 487,
+  "name": "TRIGSTR_010",
+  "author": "TRIGSTR_013",
+  "desc": "TRIGSTR_012",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)ParadiseIslands.w3x",
+  "size": 182615,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 18
+  },
+  "w3i": 387,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_003",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)PhantomGrove.w3x",
+  "size": 208119,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 387,
+  "name": "TRIGSTR_003",
+  "author": "TRIGSTR_006",
+  "desc": "TRIGSTR_005",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)Predators.w3x",
+  "size": 220452,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 387,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_003",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)Roundabout.w3x",
+  "size": 238962,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 18
+  },
+  "w3i": 420,
+  "name": "TRIGSTR_000",
+  "author": "TRIGSTR_003",
+  "desc": "TRIGSTR_015",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)Ruins.w3x",
+  "size": 185418,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 387,
+  "name": "TRIGSTR_008",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_009",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)StoneColdMountain.w3x",
+  "size": 189514,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 387,
+  "name": "TRIGSTR_003",
+  "author": "TRIGSTR_006",
+  "desc": "TRIGSTR_005",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)Tanaris.w3x",
+  "size": 153798,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 387,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_003",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)TidewaterGlades.w3x",
+  "size": 210857,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 18
+  },
+  "w3i": 387,
+  "name": "TRIGSTR_006",
+  "author": "TRIGSTR_009",
+  "desc": "TRIGSTR_008",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)TurtleRock.w3x",
+  "size": 146648,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 487,
+  "name": "TRIGSTR_020",
+  "author": "TRIGSTR_023",
+  "desc": "TRIGSTR_022",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)TwistedMeadows.w3x",
+  "size": 213920,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 387,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_003",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)Venetia.w3x",
+  "size": 83260,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 18
+  },
+  "w3i": 387,
+  "name": "TRIGSTR_006",
+  "author": "TRIGSTR_009",
+  "desc": "TRIGSTR_008",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)Wetlands.w3x",
+  "size": 110414,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 387,
+  "name": "TRIGSTR_006",
+  "author": "TRIGSTR_009",
+  "desc": "TRIGSTR_008",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)Whirlwind.w3x",
+  "size": 119016,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 387,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_003",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)WindyWaste.w3x",
+  "size": 86539,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 387,
+  "name": "TRIGSTR_006",
+  "author": "TRIGSTR_009",
+  "desc": "TRIGSTR_008",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)Andorhal.w3x",
+  "size": 170676,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 475,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_003",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)BloodstoneMesa.w3x",
+  "size": 159459,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 475,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_003",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)CopperCanyon.w3x",
+  "size": 180792,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 475,
+  "name": "TRIGSTR_008",
+  "author": "TRIGSTR_011",
+  "desc": "TRIGSTR_010",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)Demon'sCrossing.w3x",
+  "size": 227613,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 475,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_003",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)DragonBlight.w3x",
+  "size": 276516,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 475,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_003",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)Duststorm.w3x",
+  "size": 211409,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 475,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_003",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)EmeraldShores.w3x",
+  "size": 198365,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 479,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_003",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)EnakrosWay.w3x",
+  "size": 230143,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 475,
+  "name": "TRIGSTR_008",
+  "author": "TRIGSTR_011",
+  "desc": "TRIGSTR_010",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)Everfrost.w3x",
+  "size": 225983,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 475,
+  "name": "TRIGSTR_003",
+  "author": "TRIGSTR_006",
+  "desc": "TRIGSTR_005",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)GnollWood.w3x",
+  "size": 249565,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 475,
+  "name": "TRIGSTR_007",
+  "author": "TRIGSTR_010",
+  "desc": "TRIGSTR_009",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)HavenOfTheDamned.w3x",
+  "size": 167262,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 475,
+  "name": "TRIGSTR_003",
+  "author": "TRIGSTR_006",
+  "desc": "TRIGSTR_012",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)Highperch.w3x",
+  "size": 235476,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 475,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_003",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)HinterlandRaid.w3x",
+  "size": 182931,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 475,
+  "name": "TRIGSTR_003",
+  "author": "TRIGSTR_006",
+  "desc": "TRIGSTR_005",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)Jack-o-Lantern.w3x",
+  "size": 172345,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 475,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_003",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)JungleFever.w3x",
+  "size": 202616,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 18
+  },
+  "w3i": 1206,
+  "name": "TRIGSTR_012",
+  "author": "TRIGSTR_015",
+  "desc": "TRIGSTR_014",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)Monsoon.w3x",
+  "size": 228596,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 18
+  },
+  "w3i": 508,
+  "name": "TRIGSTR_007",
+  "author": "TRIGSTR_010",
+  "desc": "TRIGSTR_009",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)Moonglade.w3x",
+  "size": 153259,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 475,
+  "name": "TRIGSTR_000",
+  "author": "TRIGSTR_003",
+  "desc": "TRIGSTR_002",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)RiceFields.w3x",
+  "size": 191400,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 1530,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_003",
+  "desc": "TRIGSTR_011",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)RiverOfSouls.w3x",
+  "size": 222529,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 475,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_003",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)RollingHills.w3x",
+  "size": 210536,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 475,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_003",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)RuinsOfStratholme.w3x",
+  "size": 195038,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 475,
+  "name": "TRIGSTR_010",
+  "author": "TRIGSTR_013",
+  "desc": "TRIGSTR_012",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)SavageStorm.w3x",
+  "size": 238545,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 514,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_003",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)ScorchedBasin.w3x",
+  "size": 151910,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 18
+  },
+  "w3i": 608,
+  "name": "TRIGSTR_010",
+  "author": "TRIGSTR_013",
+  "desc": "TRIGSTR_012",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)SilverpineForest.w3x",
+  "size": 257501,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 475,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_003",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)StranglethornVale.w3x",
+  "size": 174041,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 18
+  },
+  "w3i": 475,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_003",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)SunrockCove.w3x",
+  "size": 273866,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 18
+  },
+  "w3i": 475,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_012",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)ThunderLake.w3x",
+  "size": 280493,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 475,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_003",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)TimbermawHold.w3x",
+  "size": 173815,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 475,
+  "name": "TRIGSTR_000",
+  "author": "TRIGSTR_003",
+  "desc": "TRIGSTR_002",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)Typhoon.w3x",
+  "size": 163706,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 475,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_003",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)UpperKingdom.w3x",
+  "size": 236885,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 475,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_003",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)Wellspring.w3x",
+  "size": 106323,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 475,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_003",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)WheelofChaos.w3x",
+  "size": 150982,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 18
+  },
+  "w3i": 475,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_003",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)WizardsRetreat.w3x",
+  "size": 142652,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 475,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_003",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(8)Battleground.w3x",
+  "size": 231724,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 663,
+  "name": "TRIGSTR_000",
+  "author": "TRIGSTR_003",
+  "desc": "TRIGSTR_002",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(8)Cherryville.w3x",
+  "size": 278784,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 563,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_003",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(8)Deadlands.w3x",
+  "size": 182529,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 563,
+  "name": "TRIGSTR_010",
+  "author": "TRIGSTR_013",
+  "desc": "TRIGSTR_012",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(8)Deadlock.w3x",
+  "size": 274333,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 563,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_003",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(8)Deathknell.w3x",
+  "size": 255316,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 563,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_003",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(8)DragonFalls.w3x",
+  "size": 235010,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 563,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_003",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(8)Feralas.w3x",
+  "size": 229774,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 563,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_003",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(8)Friends.w3x",
+  "size": 236702,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 563,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_003",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(8)FullScaleAssault.w3x",
+  "size": 320967,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 563,
+  "name": "TRIGSTR_010",
+  "author": "TRIGSTR_013",
+  "desc": "TRIGSTR_012",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(8)GardenOfWar.w3x",
+  "size": 202937,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 563,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_003",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(8)GoldRush.w3x",
+  "size": 379328,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 563,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_003",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(8)HurricaneIsle.w3x",
+  "size": 337743,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 567,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_003",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(8)LastManStanding.w3x",
+  "size": 310289,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 563,
+  "name": "TRIGSTR_010",
+  "author": "TRIGSTR_013",
+  "desc": "TRIGSTR_014",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(8)MarketSquare.w3x",
+  "size": 185326,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 18
+  },
+  "w3i": 563,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_014",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(8)Mur'gulOasis.w3x",
+  "size": 252617,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 563,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_003",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(8)Northshire.w3x",
+  "size": 240673,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 563,
+  "name": "TRIGSTR_010",
+  "author": "TRIGSTR_013",
+  "desc": "TRIGSTR_012",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(8)PlainsOfSnow.w3x",
+  "size": 243600,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 563,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_003",
+  "desc": "TRIGSTR_013",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(8)RockQuarry.w3x",
+  "size": 367918,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 563,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_003",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(8)Sanctuary.w3x",
+  "size": 207796,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 563,
+  "name": "TRIGSTR_010",
+  "author": "TRIGSTR_013",
+  "desc": "TRIGSTR_012",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(8)ShamrockReef.w3x",
+  "size": 258721,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 563,
+  "name": "TRIGSTR_010",
+  "author": "TRIGSTR_013",
+  "desc": "TRIGSTR_014",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(8)Slalom.w3x",
+  "size": 238361,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 563,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_003",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(8)SpiderFalls.w3x",
+  "size": 243355,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 563,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_003",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(8)TheCrossroads.w3x",
+  "size": 213747,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 563,
+  "name": "TRIGSTR_003",
+  "author": "TRIGSTR_006",
+  "desc": "TRIGSTR_005",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(8)TwilightRuins.w3x",
+  "size": 314726,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 17
+  },
+  "w3i": 563,
+  "name": "TRIGSTR_010",
+  "author": "TRIGSTR_013",
+  "desc": "TRIGSTR_012",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(9)RoundVillage.w3x",
+  "size": 278661,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 18
+  },
+  "w3i": 607,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_015",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\Scenario\\(10)ExtremeCandyWar2004.w3x",
+  "size": 2738444,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 128,
+   "block": 69
+  },
+  "w3i": 783,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_003",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\Scenario\\(10)Skibi'sCastleTD.w3x",
+  "size": 1743754,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 128,
+   "block": 84
+  },
+  "w3i": 878,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_003",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\Scenario\\(12)WormWar.w3x",
+  "size": 385985,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 38
+  },
+  "w3i": 739,
+  "name": "TRIGSTR_015",
+  "author": "TRIGSTR_018",
+  "desc": "TRIGSTR_017",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\Scenario\\(4)Monolith.w3x",
+  "size": 1924908,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 45
+  },
+  "w3i": 2763,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_003",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\Scenario\\(6)BlizzardTD.w3x",
+  "size": 1022852,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 128,
+   "block": 84
+  },
+  "w3i": 733,
+  "name": "TRIGSTR_003",
+  "author": "TRIGSTR_006",
+  "desc": "TRIGSTR_047",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\Scenario\\(6)BomberCommand.w3x",
+  "size": 619417,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 46
+  },
+  "w3i": 611,
+  "name": "TRIGSTR_003",
+  "author": "TRIGSTR_006",
+  "desc": "TRIGSTR_005",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\Scenario\\(8)AzerothGrandPrix.w3x",
+  "size": 1248279,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 54
+  },
+  "w3i": 627,
+  "name": "TRIGSTR_003",
+  "author": "TRIGSTR_006",
+  "desc": "TRIGSTR_005",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\Scenario\\(8)AzureTowerDefense.w3x",
+  "size": 305562,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 22
+  },
+  "w3i": 921,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_003",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\Scenario\\(8)FunnyBunnysEggHunt.w3x",
+  "size": 2420002,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 256,
+   "block": 136
+  },
+  "w3i": 671,
+  "name": "TRIGSTR_001",
+  "author": "TRIGSTR_004",
+  "desc": "TRIGSTR_003",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\NaRuTo_RZCDZ[3.2]beta2.w3x",
+  "size": 8374480,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 1024,
+   "block": 843
+  },
+  "w3i": 877,
+  "name": "NaRuTo:忍者村大战[3.2]beta2",
+  "author": "晟晟  (欢迎研究本地图)",
+  "desc": "|cffffff00还原一个忍者的世界,请尝试3人小组的忍者激战吧！|r\r\n\r\n            for 1.24-1.26               ",
+  "version": 25,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\Scenario\\(1)TheDeathSheep.w3m",
+  "size": 59915,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 19
+  },
+  "w3i": 360,
+  "name": "TRIGSTR_011",
+  "author": "TRIGSTR_019",
+  "desc": "TRIGSTR_018",
+  "version": 18,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\Scenario\\(4)WarChasers.w3m",
+  "size": 235927,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 19
+  },
+  "w3i": 640,
+  "name": "TRIGSTR_004",
+  "author": "TRIGSTR_007",
+  "desc": "TRIGSTR_006",
+  "version": 18,
+  "wtsCount": 0
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\Scenario\\(6)BlizzardTD.w3x",
+  "size": 975125,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 128,
+   "block": 83
+  },
+  "w3i": 733,
+  "name": "Blizzard's Tower Defense",
+  "author": "Blizzard Entertainment",
+  "desc": "The most hardened criminals in the universe are held here, in a jail devised by ",
+  "version": 25,
+  "wtsCount": 1092
+ },
+ {
+  "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\Scenario\\(8)AzureTowerDefense.w3x",
+  "size": 296434,
+  "hdr": {
+   "base": 512,
+   "fmt": 0,
+   "hash": 64,
+   "block": 21
+  },
+  "w3i": 921,
+  "name": "Azure Tower Defense",
+  "author": "Blizzard Entertainment",
+  "desc": "Cruel magic has demented this forest's denizens beyond any hope of healing. Now ",
+  "version": 25,
+  "wtsCount": 372
+ }
+]

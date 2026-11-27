@@ -161,7 +161,38 @@ func _run() -> void:
 	else:
 		print("[HEADLESS] real-input branch skipped (run without --headless on a graphics device)")
 	print("PASS: result retry saves deferred first clear and rewards once; abandon and both result buttons keep navigation single-flight")
-	Audio.quit_cleanly()
+	await _audit_window_close_with_pending_reward()
+
+func _audit_window_close_with_pending_reward() -> void:
+	const level := 8
+	LS.first_clear.erase(str(level))
+	LS.max_unlocked = level
+	LS.current_level = level
+	LS.save()
+	var b = await _new_battle()
+	var coins_before := int(GS.coins["wen"])
+	var reward := LS.first_reward(level)
+	var journal_tmp := ProjectSettings.globalize_path(SaveFile.JOURNAL + ".tmp")
+	assert(DirAccess.make_dir_absolute(journal_tmp) == OK)
+	b._end_run(true)
+	assert(b._result_save_pending and b._result_layer._save_notice.visible)
+	assert(LS.first_clear[str(level)] and not FileAccess.file_exists(SaveFile.JOURNAL))
+	assert(int(GS.coins["wen"]) == coins_before + int(reward["wen"]))
+	var disk := ConfigFile.new()
+	assert(disk.load(LS.SAVE_PATH) == OK and not disk.get_value("levels", "first_clear").has(str(level)))
+	root.close_requested.emit()
+	await create_timer(0.18).timeout
+	assert(current_scene == b and not paused and not Audio._shutting_down)
+	assert(b._result_layer._save_notice.visible)
+	assert(DirAccess.remove_absolute(journal_tmp) == OK)
+	root.close_requested.emit()
+	assert(Audio._shutting_down and not b._result_save_pending)
+	assert(disk.load(LS.SAVE_PATH) == OK and disk.get_value("levels", "first_clear")[str(level)])
+	assert(int(disk.get_value("levels", "max")) == level + 1)
+	assert(disk.load(GS.PROGRESS_SAVE) == OK)
+	assert(int(disk.get_value("progress", "coins")["wen"]) == coins_before + int(reward["wen"]))
+	assert(not FileAccess.file_exists(SaveFile.JOURNAL))
+	print("PASS: close request protects a pending first clear and saves unlock and reward exactly once")
 
 
 # ---- 图形分支：真实鼠标点击与延迟揭幕释放（仅在非 headless 下执行） ----
@@ -180,7 +211,12 @@ func _audit_real_input() -> void:
 	b2._end_run(false)
 	await create_timer(0.45).timeout
 	var home := _button(b2._result_layer, "回主界面")
+	Audio.sfx("melee")
+	Audio.sfx("ui_click", -13.0)
+	assert(Audio._sfx_active.any(func(p): return p.sfx_key == "ui_click" and p.playing))
 	_click_control(home)
+	assert(Audio._sfx_active.any(func(p): return p.sfx_key == "ui_click" and p.playing))
+	assert(not Audio._sfx_active.any(func(p): return p.sfx_key == "melee"))
 	await create_timer(0.4).timeout
 	assert(current_scene != b2 and current_scene.scene_file_path == "res://menu/main_home.tscn")
 	# 3) 快速连点：只发起一次场景切换
@@ -203,6 +239,9 @@ func _audit_real_input() -> void:
 	_click_control(home4)
 	await create_timer(0.25).timeout
 	assert(current_scene == b4 and b4.is_inside_tree())
+	assert(b4._result_layer._save_notice.visible)
+	await RenderingServer.frame_post_draw
+	assert(root.get_texture().get_image().save_png("res://battle_result_save_pending.png") == OK)
 	assert(DirAccess.remove_absolute(ProjectSettings.globalize_path(SaveFile.JOURNAL)) == OK)
 	_click_control(home4)
 	await create_timer(0.4).timeout
@@ -217,5 +256,5 @@ func _audit_real_input() -> void:
 	var b6 = await _new_battle()
 	await process_frame
 	assert(b6.is_inside_tree() and b6._core != null)
-	print("[GRAPHICS] real click replay/home/save-fail/double-click/delayed-release PASS")
+	print("[GRAPHICS] real click replay/home/save-fail/double-click/delayed-release and transition sound PASS")
 

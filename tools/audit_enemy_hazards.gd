@@ -79,6 +79,10 @@ func _audit_spacing() -> bool:
 	core._separate_foes()
 	assert(core.foes.map(func(foe: Dictionary): return int(foe["x"])) == [92, 136, 170, 202, 600, 656])
 	assert(typeof(core.foes[2]["x"]) == TYPE_INT and typeof(core.foes[5]["x"]) == TYPE_INT)
+	# 第一对推开后，原本不相交的第三只进入间距范围。
+	core.foes = [{"x": 100, "y": 180}, {"x": 130, "y": 180}, {"x": 35, "y": 180}]
+	core._separate_foes()
+	assert(core.foes.map(func(foe: Dictionary): return int(foe["x"])) == [89, 143, 33])
 	seed(2211)
 	var dx := randf_range(-1.0, 1.0)
 	var dy := randf_range(-1.0, 1.0)

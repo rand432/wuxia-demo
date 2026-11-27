@@ -5,6 +5,14 @@ func _initialize() -> void:
 func _run() -> void:
 	for i in range(100): Audio.sfx("melee")
 	assert(Audio._sfx_active.size() == Audio.SFX_ACTIVE_MAX)
+	Audio.sfx("enemy_warning", -12.0)
+	Audio.sfx("boss_impact_ground", -8.0)
+	Audio.sfx("ui_click", -13.0)
+	assert(Audio.sfx_stats()["per_key"].get("enemy_warning", 0) == 1)
+	assert(Audio.sfx_stats()["per_key"].get("boss_impact_ground", 0) == 1)
+	assert(Audio.sfx_stats()["per_key"].get("ui_click", 0) == 1)
+	assert(Audio._sfx_active.size() == Audio.SFX_ACTIVE_MAX)
+	assert(Audio._sfx_active.filter(func(p): return p.sfx_key == "melee").size() == Audio.SFX_ACTIVE_MAX - 3)
 	for player in Audio._sfx_active:
 		assert(player.get_parent() == root)
 	# 模拟结束回调，检查回收、重复回调和下一批播放。
@@ -40,5 +48,5 @@ func _run() -> void:
 	AudioServer.remove_bus_effect(0, effect_index)
 	assert(peak > 0.03 and peak < 0.95, "enemy warning mixer peak %f" % peak)
 	print("PASS: enemy warning reaches the master mixer without clipping, peak=", peak)
-	print("PASS: bounded audio pool, natural completion and reuse; dense volley is throttled; separate forge strike")
+	print("PASS: warnings, boss impacts and clicks play at capacity; bounded pool, natural completion and reuse; separate forge strike")
 	quit()
