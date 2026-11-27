@@ -2253,7 +2253,7 @@ var champion := 0
 # 摆一辆牢车（守护任务）
 func spawn_guard() -> void:
 	var hp := maxf(200.0, _foe_atk() * 180.0)
-	guard = {"x": _home.x, "y": _home.y + 80.0, "hp": hp, "hp_max": hp, "flash": 0.0, "on": true}
+	guard = {"x": _home.x, "y": _home.y + 40.0, "hp": hp, "hp_max": hp, "flash": 0.0, "on": true}
 	_banner = "守护：别让牢车被砸碎"
 	_banner_t = 2.6
 	Audio.sfx("chest", -6.0)

@@ -29,6 +29,8 @@ func _process(dt: float) -> bool:
 		b._tut.cancel(); b._tut.queue_free(); b.set("_tut", null); b._tutorial_pause(false)
 	b._core.intro_wait = 0.0
 	b._core.set_process(true)
+	b._core.hero["hp_max"] = 100000.0
+	b._core.hero["hp"] = 100000.0
 	if phase == 0 and t > 0.8:
 		done0 = b._q_done
 		_quest("pz", "破阵", "statue", 3, 20.0, 30.0)
@@ -45,7 +47,7 @@ func _process(dt: float) -> bool:
 		phase = 2
 	if phase == 2 and t > 21.0:
 		_check("占点任务完成", b._q_done > done0 + 1)
-		_quest("sh", "守护", "guard", 0, 30.0, 6.0)
+		_quest("sh", "守护", "guard", 0, 6.0, 0)
 		phase = 3
 	if phase == 3 and t > 30.0:
 		_check("守护任务完成（牢车未碎）", b._q_done > done0 + 2 and not (b._core.guard as Dictionary).is_empty())
@@ -60,6 +62,9 @@ func _process(dt: float) -> bool:
 func _quest(id: String, n: String, kind: String, need: float, lim: float, _unused: float) -> void:
 	var q := {"id": id, "n": n, "tier": 1, "kind": kind, "need": need, "lim": lim, "desc": "", "r": {}}
 	b._q_activate(q)
+	if not b._q_cur.is_empty():
+		b._q_cur["lim"] = lim
+		b._q_cur["t"] = lim
 	print("[TASKS] activate ", id, " cur=", b._q_cur.get("id", ""))
 
 func _check(name: String, ok: bool) -> void:
