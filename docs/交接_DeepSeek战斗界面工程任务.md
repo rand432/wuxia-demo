@@ -352,4 +352,4 @@
 - 模拟 ADB 六场景：无设备 0、初装 0、覆盖一致 0、覆盖变化 1（10→9 / true→false）、安装失败 1、启动失败 1（4 PASS/7 FAIL）
 - 本机真实无设备：`.shots/android_qa_device/realcheck/20261128_015625/report.md`，DEVICE=0 / SKIP
 - 交付说明：`docs/交付_批次18_AndroidQA报告_2026-11-28.md`
-- 提交：__H18__
+- 提交：e3ed6f0
