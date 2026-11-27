@@ -90,10 +90,10 @@ func present(p: Dictionary) -> void:
 		title_bg.color = Color(0.972, 0.948, 0.896, 0.88)
 		title_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		holder.add_child(title_bg)
+	if has_art:
+		UI.deco(holder, "divider", Rect2(140, 112, 260, 8), 0.9)
 	_lbl("通　关" if win else "命　尽", Vector2(0, 66), Vector2(540, 58), 42,
 		Color(0.62, 0.44, 0.12) if win else Color(0.62, 0.20, 0.14), holder, HORIZONTAL_ALIGNMENT_CENTER)
-	if has_art:
-		UI.deco(holder, "divider", Rect2(140, 106, 260, 14), 0.9)
 	var secs_total := int(float(p.get("run_time", 0.0)))
 	var mins := secs_total / 60
 	var secs := secs_total % 60

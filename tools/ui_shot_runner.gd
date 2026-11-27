@@ -31,7 +31,11 @@ func _ready() -> void:
 	vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	vp.transparent_bg = false
 	add_child(vp)
-	var node = load(scene_path).instantiate()
+	var node = null
+	if scene_path == "result":
+		node = load("res://kushou/result_view.gd").new()
+	else:
+		node = load(scene_path).instantiate()
 	var holder := Control.new()
 	holder.size = Vector2(720, 1280)
 	if emulate_window:
@@ -44,6 +48,10 @@ func _ready() -> void:
 		(node as Control).set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	if scene_path.find("forge_sheet") >= 0 and node.has_method("open"):
 		node.open("weapon")
+	if node.has_method("_show_god_pick"):
+		node._draw_charge = 3
+		node._trea_charge = 3
+		node._crystal = 999
 	if node.has_method("present"):
 		node.present({"win": true, "run_time": 228, "wave": 18, "max_wave": 18, "kills": 688,
 			"wen": 1234, "crystal": 56, "bonds": 3, "bonds_done": 1})
