@@ -345,3 +345,11 @@
 - 验证：`audit_ui_gestures` 15/15、`choice_boundary`/`result_panel` 通过、`battle_navigation` 图形 PASS（`.shots/ui17_gestures.log`、`.shots/ui17_batnav.log`）；全量 **88/88**（`.shots/audit_batch17full2.txt`，首跑一次 menu_navigation 偶发 dummy 渲染误报）
 - 交付说明：`docs/交付_批次17_小窗清晰度_2026-11-28.md`
 - 提交：cc254b9
+## 第十八批交付（2026-11-28）
+
+- `tools/android_qa_device.ps1` 重写：初装/覆盖分列；覆盖前记录 `max_unlocked`、`first_clear[关卡]` 实际值，安装后比对（变化 FAIL、缺档/缺字段 SKIP）；安装失败落诊断并返回非零
+- 「命令发出」与「进程/前台」分开三阶段检查（冷启动、HOME 返回、force-stop 重开），每次运行独立目录，含 report/results/截图/logcat
+- 模拟 ADB 六场景：无设备 0、初装 0、覆盖一致 0、覆盖变化 1（10→9 / true→false）、安装失败 1、启动失败 1（4 PASS/7 FAIL）
+- 本机真实无设备：`.shots/android_qa_device/realcheck/20261128_015625/report.md`，DEVICE=0 / SKIP
+- 交付说明：`docs/交付_批次18_AndroidQA报告_2026-11-28.md`
+- 提交：__H18__
