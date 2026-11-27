@@ -547,4 +547,4 @@
 - 片段：`.shots/mix_forge_before.mp4` / `mix_forge_after.mp4`；记录 `mix_battle*.avi`、`mix_forge*.avi`、`mix_menu2.avi`
 - 音频审计 6/6（`.shots/audit_batch23.txt`）
 - 交付说明：`docs/交付_批次23_混音余量_2026-11-28.md`
-- 提交：__H23__（锻造音量随自动存档 `4c62e09`）
+- 提交：7072575（锻造音量随自动存档 `4c62e09`）
