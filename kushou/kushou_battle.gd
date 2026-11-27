@@ -460,6 +460,7 @@ var _bursts: Array = []             # 命中炸开（溅射/剑气用）：{x,y,
 #   宠物跟在主角后面一点，也会上去咬（伤害是主角的 35%）。
 var hero_pos := Vector2(352.0, 608.0)
 var _home := Vector2(352.0, 608.0)
+var station_mode := true
 var _facing := -1.0                 # -1 ＝ 朝上（打上面的怪）
 # v2k（用户："宠物打怪也要有动画 这里的宠物不是装饰品"）：
 #   宠物是**打架的**——扑咬有整套动作：蓄力（往后坐）→ 前扑（朝目标窜出去）→ 张口 → 收势；
@@ -1008,6 +1009,8 @@ func _process(delta: float) -> void:
 	#   并且留一点回滞（>REACH+10 才重新起步），边界上就不会抖了。
 	if intro_wait > 0.0:
 		pass                                    # 开场等待：站着不动（但怪照常走进来）
+	elif station_mode:
+		hero_pos = _home
 	elif _order_has_pos:
 		# v13b P1：**走位指令优先**（自动追怪让位）——走到点、或 6 秒后自动撤销
 		var od := hero_pos.distance_to(_order_pos)
@@ -2109,6 +2112,10 @@ func tap_at(p: Vector2) -> void:
 		order_move(p)
 
 func order_move(p: Vector2, input_sound := true) -> void:
+	if station_mode:
+		_order_foe = {}
+		_order_has_pos = false
+		return
 	_order_foe = {}
 	_order_has_pos = true
 	_order_t = 0.0
@@ -2198,8 +2205,10 @@ func spawn_statues(n := 3) -> void:
 	clear_statues()
 	var hp := _foe_hp()
 	for i in n:
-		var x := 150.0 + float(i) * ((size.x - 300.0) / maxf(1.0, float(n - 1)))
-		foes.append({"x": x, "y": size.y * 0.30, "hp": hp, "hp_max": hp, "atk": 0.0, "t": 0.0,
+		var ang := -PI * 0.5 + (float(i) - float(n - 1) * 0.5) * 0.55
+		var x := _home.x + cos(ang) * 70.0
+		var sy := _home.y + sin(ang) * 70.0
+		foes.append({"x": x, "y": sy, "hp": hp, "hp_max": hp, "atk": 0.0, "t": 0.0,
 			"kind": "statue", "boss": false, "tier": 1, "name": "石像", "scale": 1.15,
 			"still": true, "stop": 0.0, "flash": 0.0})
 	_banner = "破阵：打碎 " + str(n) + " 座石像（它们在给怪加成）"
@@ -2213,7 +2222,7 @@ func clear_statues() -> void:
 
 # 开一个法阵（占点）：goal ＝ 要累计多少秒
 func spawn_zone(r := 150.0, goal := 12.0) -> void:
-	zone = {"x": size.x * 0.5, "y": size.y * 0.66, "r": r, "goal": goal, "prog": 0.0, "on": true}
+	zone = {"x": _home.x, "y": _home.y, "r": r, "goal": goal, "prog": 0.0, "on": true}
 	_banner = "占点：站进法阵（离开会回退）"
 	_banner_t = 2.6
 	Audio.sfx("bell", -6.0)
@@ -2244,7 +2253,7 @@ var champion := 0
 # 摆一辆牢车（守护任务）
 func spawn_guard() -> void:
 	var hp := maxf(200.0, _foe_atk() * 180.0)
-	guard = {"x": size.x * 0.5, "y": size.y * 0.42, "hp": hp, "hp_max": hp, "flash": 0.0, "on": true}
+	guard = {"x": _home.x, "y": _home.y + 80.0, "hp": hp, "hp_max": hp, "flash": 0.0, "on": true}
 	_banner = "守护：别让牢车被砸碎"
 	_banner_t = 2.6
 	Audio.sfx("chest", -6.0)

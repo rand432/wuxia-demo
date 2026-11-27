@@ -144,7 +144,7 @@ func _guardian_defeat() -> void:
 	core.start_boss(LS.boss_tier(), "困兽·终焉")
 	battle._boss_spawned = true
 	var foe: Dictionary = core._boss_foe(false)
-	foe["x"] = 350.0
+	foe["x"] = 440.0
 	foe["y"] = 380.0
 	battle._process(0.0)
 	var token = battle._foe_tokens[foe["_tid"]]

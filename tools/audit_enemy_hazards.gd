@@ -286,7 +286,8 @@ func _audit_ranged_miss(flag: String, kind: String) -> bool:
 	core._wave_spawned = core._wave_quota
 	core._spawn_left = 0
 	var foe: Dictionary = core._spawn_foe()
-	var hero: Vector2 = core.hero_pos
+	var hero: Vector2 = core._home
+	core.hero_pos = hero
 	foe.merge({"x": hero.x - 40.0, "y": hero.y - 40.0, "stop": 78.0,
 		"ranged": flag == "ranged", "mage": flag == "mage", "brute": false, "shield": false}, true)
 	battle._process(0.0)

@@ -311,6 +311,8 @@ var _draw_paid := false
 var _draw_anim := false
 var _draw_refresh_btn: Button = null
 var _hero_token = null
+var _hero_visual_offset := Vector2.ZERO
+var _hero_dash_tween: Tween = null
 var _foe_tokens := {}
 var _no_tokens := false   # 对照测试用：不创建/不更新怪的本体
 var _no_ui := false       # 对照测试用：不创建 UI 面板
@@ -3129,7 +3131,7 @@ func _process(_delta: float) -> void:
 		if not _tick_battle_effects(_delta):
 			return
 		if _hero_token != null:
-			_hero_token.position = _core.position + _core.hero_pos
+			_hero_token.position = _core.position + _core.hero_pos + _hero_visual_offset
 			var hpr_tok := float(_core.hero.get("hp", 0.0)) / maxf(1.0, float(_core.hero.get("hp_max", 1.0)))
 			if absf(hpr_tok - float(_hero_token.hp_ratio)) > 0.0015:
 				_hero_token.hp_ratio = hpr_tok
@@ -3452,6 +3454,9 @@ func _save_result() -> Error:
 	return SaveFile.commit()
 
 func _end_run(win: bool) -> void:
+	_hero_visual_offset = Vector2.ZERO
+	if _hero_dash_tween != null and _hero_dash_tween.is_valid():
+		_hero_dash_tween.kill()
 	if _run_over:
 		return
 	if _core != null:
@@ -7990,6 +7995,7 @@ func _charge_ram() -> void:
 		return
 	var f0: Dictionary = foes[0]
 	var hp0 := Vector2(_core.hero_pos)
+	_start_hero_dash(Vector2(float(f0["x"]), float(f0["y"])) - hp0)
 	var dir := (Vector2(float(f0["x"]), float(f0["y"])) - hp0)
 	_skill_pose_direction = dir
 	if dir.length() < 1.0:
@@ -8017,6 +8023,17 @@ func _charge_ram() -> void:
 	f0["_ram_ctx"] = ctx
 	_core.Shake_add(7.0)
 	Aud.sfx("hit_heavy", -6.0)
+
+func _start_hero_dash(delta: Vector2) -> void:
+	if delta.length() < 1.0:
+		return
+	if _hero_dash_tween != null and _hero_dash_tween.is_valid():
+		_hero_dash_tween.kill()
+	_hero_visual_offset = Vector2.ZERO
+	var off := delta.normalized() * minf(delta.length() * 0.55, 96.0)
+	_hero_dash_tween = create_tween()
+	_hero_dash_tween.tween_property(self, "_hero_visual_offset", off, 0.12).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	_hero_dash_tween.tween_property(self, "_hero_visual_offset", Vector2.ZERO, 0.18).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 
 func _ram_streak(a: Vector2, b: Vector2) -> void:
 	if _fx_front != null:
