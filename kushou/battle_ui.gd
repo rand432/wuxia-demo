@@ -174,7 +174,7 @@ var _str_ban_lb: Label = null
 #   · 三个按钮：刷新 · N 次（次数型）/ 隐藏（收起来，这一手还在）/ 放弃（+1 刷新，这手作废）
 #   · ［放弃］进阶页也有：放弃这一轮进阶，换 1 次刷新
 # ============================================================
-const TREA_CHARGE_START := 1
+const TREA_CHARGE_START := 0
 var _bonds: Array = []          # 身上的羁绊（凑齐就消耗掉，所以不设上限）
 var _bond_unlocked := {}        # 已解锁的羁绊名（只有这些会出现在三选一里）
 var _bond_taken := {}           # 已经结过的羁绊名（不重复出现）
@@ -182,6 +182,8 @@ var _crystal_lock := false      # 「倾囊」之后：灵晶收入归零
 var _rare_buffs: Array = []     # 限时 buff：{raw_atk, t}，记录属性增幅前的固定攻击。
 var _bonds_done := 0            # 这一局已经成过几张
 var _trea_charge := TREA_CHARGE_START
+var _trea_milestones := 0
+var _str_menu: Control = null
 var _trea_reroll := 3
 var _trea_pending := false
 var _trea_layer: Control = null
@@ -3026,10 +3028,32 @@ func _wave_interval() -> float:
 		return 14.0
 	return 16.0
 
+func _blocking_panel_open() -> bool:
+	if _draw_open or _exit_open:
+		return true
+	for panel in [_god_layer, _trea_layer, _str_layer, _chal_layer, _q_pop, _bm, _curio_detail,
+			_combined_layer, _combined_detail, _detail_layer, _str_menu]:
+		if _is_open_panel(panel):
+			return true
+	return false
+
+func _grant_treasure_milestones(w: int) -> void:
+	var lv := int(LevelState.current_level)
+	if lv < 3 or _max_wave <= 0:
+		return
+	var marks: Array[float] = [0.25, 0.65] if lv <= 5 else [0.20, 0.50, 0.78]
+	var frac := float(w) / float(_max_wave)
+	while _trea_milestones < marks.size() and frac >= marks[_trea_milestones] + 0.0001:
+		_trea_milestones += 1
+		_trea_charge += 1
+		_refresh_trea_tile()
+		_toast("宝物 · 第 %d 次机会已到账" % _trea_milestones)
+
 func _schedule_tick(dt: float) -> void:
 	if _run_over or _core == null:
 		return
 	var w := int(_core.wave)
+	_grant_treasure_milestones(w)
 	if not _wave_issued.has(w) and _core.wave_spawn_complete():
 		_wave_issued[w] = true
 	# 已排定刷完的波，场上清零才结算清波奖励（每波一次，与换波解耦）。
@@ -3087,6 +3111,13 @@ func _toast_card(name: String, quality: int, tail: String) -> void:
 
 func _process(_delta: float) -> void:
 	if _run_over:
+		_tick_fly(_delta)
+		_tick_pulses(_delta)
+		return
+	var blocked := _blocking_panel_open()
+	if not _tutorial_paused and _core != null:
+		_core.set_process(not blocked)
+	if blocked:
 		_tick_fly(_delta)
 		_tick_pulses(_delta)
 		return
@@ -3665,8 +3696,6 @@ func _on_wave_clear(cleared_wave: int) -> void:
 	_add_exp(50)                            # v2：清一波 +50 经验
 	_add_wen(WEN_WAVE_CLEAR * cleared_wave)  # v6：清一波给一笔文钱
 	_curio_on_wave_clear(cleared_wave)       # 奇物：聚宝盆 / 续命灯
-	_trea_charge += 1                      # v8：清一波给一次宝物机会
-	_refresh_trea_tile()
 	_toast("第 %d 波清空" % cleared_wave)
 	if cleared_wave == 1:
 		# 所有关卡：清完第 1 波亮出强化
@@ -8911,7 +8940,7 @@ func _devour_keep(n: int) -> void:
 #   接受后才开始计时 / 布置战场；**战斗中途不能放弃**
 #   待接或进行中不储存下一条，结束/放弃后重新计时。
 # ============================================================
-const Q_TICK := 180.0             # 奇遇每 180 秒一次（旧版 75s，按新节奏拉长）
+const Q_TICK := 300.0             # 奇遇每 180 秒一次（旧版 75s，按新节奏拉长）
 const Q_TIER_CN := ["简单", "普通", "困难", "特殊"]
 const Q_TIER_W := [[45.0, 55.0, 0.0, 0.0], [20.0, 50.0, 30.0, 0.0], [10.0, 35.0, 40.0, 15.0]]
 const Q_TIER_COL := [Color(0.40, 0.46, 0.34), Color(0.40, 0.36, 0.24), Color(0.52, 0.30, 0.16), Color(0.52, 0.18, 0.16)]
