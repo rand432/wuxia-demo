@@ -39,11 +39,19 @@ func _run() -> void:
 	battle._show_invocation_portrait(art, "liuqingqing")
 	var incoming = battle._invocation_portrait
 	assert(outgoing != incoming and not outgoing.visible and outgoing.is_queued_for_deletion())
+	battle._life = 100
+	battle._core.hero["hp"] = 0.0
+	battle._core.running = false
+	battle._on_hero_down()
+	assert(not battle._run_over and battle._invocation_portrait == null and not incoming.visible,
+		"A surviving run must clear the summon portrait when the hero is defeated")
+	battle._show_invocation_portrait(art, "liuqingqing")
+	incoming = battle._invocation_portrait
 	battle._end_run(false)
 	assert(battle._invocation_portrait == null and not incoming.visible and incoming.is_queued_for_deletion())
 	battle._show_invocation_portrait(art, "liuqingqing")
 	assert(battle._invocation_portrait == null)
 	battle.queue_free()
 	await process_frame
-	print("PASS: portrait apparition matches the picked role, follows the camera and clears on replacement or result")
+	print("PASS: portrait apparition follows the picked role and clears on replacement, defeat, or result")
 	Audio.quit_cleanly()

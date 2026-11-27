@@ -89,6 +89,23 @@ func _audit_automatic_orders(battle) -> void:
 	assert(core._order_foe.is_empty() and not Audio._last_sfx_msec.has("ui_click"))
 	assert(core.hero_pos.distance_to(core._home) < 2.0)
 
+func _audit_guard_timer(battle) -> void:
+	var core = battle._core
+	battle._q_activate(_quest(battle, "sh"))
+	assert(core.guard_hp_ratio() == 1.0)
+	var completed: int = battle._q_done
+	battle._q_cur["t"] = 0.025
+	battle._process(0.02)
+	assert(not battle._q_cur.is_empty() and battle._q_done == completed)
+	battle._process(0.02)
+	assert(battle._q_cur.is_empty() and battle._q_done == completed + 1 and core.guard.is_empty())
+
+	battle._q_activate(_quest(battle, "sh"))
+	var failed: int = battle._q_fail
+	core._break_guard()
+	battle._process(0.02)
+	assert(battle._q_cur.is_empty() and battle._q_fail == failed + 1 and battle._q_done == completed + 1)
+
 func _run() -> void:
 	LS.ensure_loaded()
 	LS.current_level = 6
@@ -129,13 +146,27 @@ func _run() -> void:
 	assert(battle._q_done == 1)
 	battle._q_tick(0.02)
 	assert(battle._q_cur.is_empty() and battle._q_done == 2)
-	# 清道夫通过真实清波入口完成，重复回调不再奖励。
+	# 清道夫按已出完的普通批次结算，别波怪物和主动挑战仍可留场。
 	battle._q_activate(_quest(battle, "qdf"))
 	var before: int = battle._crystal
-	battle._on_wave_clear(1)
+	var core = battle._core
+	core.foes.clear()
+	core.set_wave(2); core.wave_reset_quota()
+	var batch_foe: Dictionary = core._spawn_foe()
+	core._wave_spawned = core._wave_quota
+	assert(core.spawn_challenge(0, 1) == 1)
+	var challenge: Dictionary = core.foes.back()
+	battle._schedule_tick(0.0)
+	assert(not battle._q_cur.is_empty(), "A live batch member must delay the sweep reward")
+	core.set_wave(3); core.wave_reset_quota()
+	var next_foe: Dictionary = core._spawn_foe()
+	batch_foe["hp"] = 0.0
+	battle._schedule_tick(0.0)
+	assert(battle._q_cur.is_empty(), "An optional challenge must not block the cleared batch")
 	assert(battle._q_cur.is_empty() and battle._q_done == 3)
 	assert(battle._crystal == before + 65)
-	battle._on_wave_clear(1)
+	assert(core.foes.has(challenge) and core.foes.has(next_foe))
+	battle._schedule_tick(0.0)
 	assert(battle._crystal == before + 65)
 	# 精英尸体仍播放死亡动画时，也应该视为击杀完成。
 	battle._q_activate(_quest(battle, "sy"))
@@ -158,8 +189,9 @@ func _run() -> void:
 	field._core.set_process(false)
 	_audit_statue_focus(field)
 	_audit_automatic_orders(field)
+	_audit_guard_timer(field)
 	field.queue_free()
 	battle.queue_free()
 	await process_frame
-	print("PASS: quest timers, rewards, stage clearing, statue focus, and stable quiet automatic orders")
+	print("PASS: quest timers, rewards, batch clearing, guard results, statue focus, and automatic orders")
 	Audio.quit_cleanly()

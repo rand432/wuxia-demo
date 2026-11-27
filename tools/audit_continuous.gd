@@ -59,16 +59,24 @@ func _process(_dt: float) -> bool:
 	_check("撤怪不计击杀", int(b._kills) == kills0)
 	_check("回潮标记撤怪波次", bool(b._withdrawn_waves.get(5, false)))
 	_check("撤怪不发清波奖", not bool(b._rewarded_waves.get(5, false)))
-	# C2. 死亡清场不补发清波奖
+	# C2. 倒地后跳波时，留场的旧怪和当波怪都被撤下。
+	core.foes.clear()
 	core.set_wave(6); core.wave_reset_quota()
 	core._spawn_foe("normal", 1.0, 1.0)
 	core._wave_spawned = core._wave_quota
 	b._wave_issued.erase(6); b._rewarded_waves.erase(6)
 	b._schedule_tick(0.0)
-	b._end_run(false)
+	_check("旧波已排定且怪物留场", b._wave_issued.has(6) and core.wave_alive(6) == 1)
+	core.set_wave(7); core.wave_reset_quota()
+	core._spawn_foe("normal", 1.0, 1.0)
+	b._wave_clock = 12.0
+	b._life = 100
+	b._on_hero_down()
+	_check("倒地后进下一波并重新计时", not b._run_over and int(core.wave) == 8 and b._wave_clock == 0.0)
+	_check("倒地撤下旧波和当波的怪", b._withdrawn_waves.has(6) and b._withdrawn_waves.has(7))
+	var wen_after_down: int = b._wen
 	b._schedule_tick(0.0)
-	_check("死亡清场不补发清波奖", not bool(b._rewarded_waves.get(6, false)))
-	b._run_over = false
+	_check("死亡清场不补发旧波奖", not b._rewarded_waves.has(6) and b._wen == wen_after_down)
 	# D. 末波首领 ≤6
 	var wmax := int(b._max_wave)
 	core.foes.clear(); core.set_wave(wmax); core.wave_reset_quota()
@@ -88,6 +96,16 @@ func _process(_dt: float) -> bool:
 			killed += 1
 	b._schedule_tick(0.0)
 	_check("末波 ≤6 杂兵出首领", bool(b._boss_spawned) and bool(core.boss_alive))
+	# D2. 杂兵同时清完，调度同一帧才生成首领。
+	core.foes.clear()
+	core.boss_alive = false; core.boss_spawned_once = false
+	b._boss_spawned = false
+	b._schedule_tick(0.0)
+	_check("末波杂兵先清完仍等首领", core.boss_alive and not b._rewarded_waves.has(wmax) and not b._run_over)
+	core.foes.clear()
+	core.boss_alive = false
+	b._schedule_tick(0.0)
+	_check("末波首领击败后结算", b._run_cleared and b._rewarded_waves.has(wmax))
 	for s in fails: print("[CONT] FAIL " + s)
 	print("PASS: continuous advance, settle-once, withdrawal and boss threshold" if fails.is_empty() else ("FAIL: " + str(fails)))
 	quit(0 if fails.is_empty() else 1)

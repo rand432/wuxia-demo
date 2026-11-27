@@ -98,5 +98,23 @@ func _run() -> void:
 		if mode == "result": assert(b._q_pop == null)
 		b.queue_free()
 		await process_frame
-	print("PASS: live sacrifice/reward preserved; stale popup callbacks isolated; dead/stopped/result entry and timer/reward boundaries")
+	# 真实倒地会清掉任务目标并推进下一波，剩余目标不能被算作击杀。
+	for id in ["pz", "zd", "dt", "sy", "yx", "xj"]:
+		b = _battle()
+		c = b._core
+		b._life = 100
+		c.set_wave(3)
+		b._q_activate(_quest(b, id))
+		assert(not b._q_cur.is_empty())
+		crystal = b._crystal
+		c.hero["hp"] = 0.0
+		c.running = false
+		b._on_hero_down()
+		b._q_tick(0.0)
+		assert(b._q_cur.is_empty() and b._q_fail == 1 and b._q_done == 0 and b._crystal == crystal,
+			"A hero defeat must fail encounter %s without rewards" % id)
+		assert(c.zone.is_empty() and c.champion == 0)
+		b.queue_free()
+		await process_frame
+	print("PASS: encounter actions, reward boundaries, and interruption on actual hero defeat")
 	Audio.quit_cleanly()

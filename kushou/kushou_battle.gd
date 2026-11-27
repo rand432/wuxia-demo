@@ -614,7 +614,7 @@ func _spawn_foe(kind := "normal", hp_mul := 1.0, atk_mul := 1.0, big := false, t
 		# v16m：⚠ 停距默认值原来是 FOE_STOP(150)，但改之前**根本没人读它**，
 		#   走位用的是 FOE_REACH(66)。现在 stop 真被读了，默认必须跟原来一致，
 		#   否则**所有近战怪都变成隔空打**（探针实测：普通怪停在 118~169）。
-		"wave_tag": wave,
+		"wave_tag": wave if kind == "normal" or kind == "boss" else -1,
 		"stop": (FOE_REACH - 6.0 if big else FOE_REACH - 10.0) + randf() * 12.0,   # 必须 < HERO_REACH+10（84），否则主角够不到
 	}
 	# v16h/i（用户："小怪可以有些弓箭手啊之类的 不能全是火柴人" → "还有法师怪 肌肉壮汉啊 等等"）：

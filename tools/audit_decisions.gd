@@ -41,6 +41,8 @@ func _process(_dt: float) -> bool:
 	var clock0: float = b._wave_clock
 	var q0: float = b._q_t
 	b._show_draw(true)
+	b._open_attr_page()
+	_check("抽卡期间不叠开属性页", b._attr_page == null)
 	b._process(0.6)
 	_check("开抽卡暂停核心", not core.is_processing())
 	_check("开抽卡暂停调度钟", is_equal_approx(b._wave_clock, clock0))
@@ -48,6 +50,31 @@ func _process(_dt: float) -> bool:
 	b._show_draw(false)
 	b._process(0.2)
 	_check("关抽卡恢复核心", core.is_processing())
+	# 满屏属性页也暂停，返回只关闭属性页。
+	b._open_attr_page()
+	var time0: float = b._run_time
+	clock0 = b._wave_clock
+	q0 = b._q_t
+	b._chal_cd[0] = 12.0
+	b._process(0.6)
+	_check("属性页暂停战斗和计时", not core.is_processing() and b._run_time == time0
+		and b._wave_clock == clock0 and b._q_t == q0 and b._chal_cd[0] == 12.0)
+	b.handle_back_request()
+	_check("返回关闭属性页而不打开退出确认", not b._attr_page.visible and not b._exit_open)
+	b._process(0.2)
+	_check("关闭属性页恢复战斗和挑战冷却", core.is_processing() and b._run_time > time0 and b._chal_cd[0] < 12.0)
+	# 核心主动停战期间，外层运行仍只刷新界面，等待核心恢复。
+	core.running = false
+	time0 = b._run_time
+	clock0 = b._wave_clock
+	q0 = b._q_t
+	b._curio_cd = 10.0
+	b._process(0.8)
+	_check("核心停战时所有战斗计时保持", core.is_processing() and b._run_time == time0
+		and b._wave_clock == clock0 and b._q_t == q0 and b._curio_cd == 10.0)
+	core.running = true
+	b._process(0.2)
+	_check("核心恢复时继续计时", b._run_time > time0 and b._wave_clock > clock0 and b._curio_cd < 10.0)
 	# 强化批升
 	b._wen = 10000
 	b._str_lv = 0
@@ -57,6 +84,9 @@ func _process(_dt: float) -> bool:
 	var expect: int = int(b._str_batch_cost())
 	b._open_str_menu()
 	_check("强化菜单打开", b._str_menu != null and b._str_menu.visible)
+	b.handle_back_request()
+	_check("返回关闭强化菜单而不打开退出确认", not b._str_menu.visible and not b._exit_open)
+	b._open_str_menu()
 	b._str_batch_upgrade()
 	_check("批升到下一节点", b._str_lv == 10)
 	_check("批升扣总价", b._wen == wen0 - expect)

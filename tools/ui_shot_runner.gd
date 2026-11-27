@@ -62,6 +62,23 @@ func _ready() -> void:
 		node.set("_tut", null)
 		node._tutorial_pause(false)
 	await _wait(600)
+	if action == "b32":
+		var core = node._core
+		node._no_ui = false if node.get("_no_ui") == null else node._no_ui
+		for i in 26:
+			core._spawn_foe("normal", 1.0, 1.0)
+		if core.has_method("spawn_challenge"):
+			core.spawn_challenge(1, 1)
+			core.spawn_challenge(4, 1)
+		core.start_boss(LS.boss_tier(), "困兽·终焉")
+		node._boss_spawned = true
+		core._push_float(core.hero_pos.x + 40.0, core.hero_pos.y - 90.0, "格挡", Color(0.72, 0.82, 0.94))
+		core._push_float(core.hero_pos.x - 60.0, core.hero_pos.y - 120.0, "盾破！", Color(0.96, 0.82, 0.50), true)
+		node._start_hero_dash(Vector2(120, -40))
+		await _wait(70)
+		await _capture(vp, out_path)
+		get_tree().quit(0)
+		return
 	if action == "strmenu":
 		node._str_tile.visible = true
 		node._wen = 5000

@@ -173,7 +173,7 @@ var _str_ban_lb: Label = null
 # ============================================================
 # ---------------- 宝物（v8）----------------
 #   用户："宝物的抽取界面也和抽卡一致 【刷新次数/隐藏/放弃【增加一次刷新 对 这个进阶也要】】"
-#   · 每清一波 +1 次宝物机会；开一次三张，挑一张带走
+#   · 关卡进度、挑战和奇遇可提供宝物机会，开一次三张，挑一张带走
 #   · 最多带 3 件；品质随波数升（1-2 良 / 3 玄 / 4 地 / 6+ 天）
 #   · 三个按钮：刷新 · N 次（次数型）/ 隐藏（收起来，这一手还在）/ 放弃（+1 刷新，这手作废）
 #   · ［放弃］进阶页也有：放弃这一轮进阶，换 1 次刷新
@@ -2827,7 +2827,7 @@ func _pop_draw_cards() -> void:
 var _attr_page = null
 
 func _open_attr_page() -> void:
-	if _core == null:
+	if _core == null or _run_over or _blocking_panel_open():
 		return
 	if _attr_page == null:
 		_attr_page = load("res://kushou/attr_panel.gd").new()
@@ -2964,6 +2964,8 @@ func handle_back_request() -> void:
 		return
 	if _exit_open:
 		_show_exit(false)
+	elif _is_open_panel(_attr_page):
+		_attr_page.close()
 	elif _is_open_panel(_curio_detail):
 		_close_curio_detail(_curio_detail)
 	elif _is_open_panel(_q_pop):
@@ -2972,6 +2974,8 @@ func handle_back_request() -> void:
 		_bm.go_back()
 	elif _is_open_panel(_god_layer):
 		_hide_god_pick()
+	elif _is_open_panel(_str_menu):
+		_hide_str_menu()
 	elif _is_open_panel(_combined_detail):
 		_combined_detail.hide()
 	elif _is_open_panel(_combined_layer):
@@ -3043,7 +3047,7 @@ func _wave_interval() -> float:
 func _blocking_panel_open() -> bool:
 	if _draw_open or _exit_open:
 		return true
-	for panel in [_god_layer, _trea_layer, _str_layer, _chal_layer, _q_pop, _bm, _curio_detail,
+	for panel in [_god_layer, _trea_layer, _str_layer, _chal_layer, _q_pop, _bm, _curio_detail, _attr_page,
 			_combined_layer, _combined_detail, _detail_layer, _str_menu]:
 		if _is_open_panel(panel):
 			return true
@@ -3063,7 +3067,7 @@ func _grant_treasure_milestones(w: int) -> void:
 		_toast("宝物 · 第 %d 次机会已到账" % _trea_milestones)
 
 func _schedule_tick(dt: float) -> void:
-	if _run_over or _core == null:
+	if _run_over or _core == null or not _core.running:
 		return
 	var w := int(_core.wave)
 	_grant_treasure_milestones(w)
@@ -3130,7 +3134,7 @@ func _process(_delta: float) -> void:
 	var blocked := _blocking_panel_open()
 	if not _tutorial_paused and _core != null:
 		_core.set_process(not blocked)
-	if blocked:
+	if blocked or (_core != null and not _core.running):
 		_tick_fly(_delta)
 		_tick_pulses(_delta)
 		return
@@ -3154,6 +3158,8 @@ func _process(_delta: float) -> void:
 			_trigger_combos("每波")
 		# 连续进攻调度：按战斗时间换波，旧怪留场；首领等末波排定且杂兵 ≤6 再入场。
 		_schedule_tick(_delta)
+		if _run_over:
+			return
 		_run_time += _delta
 		_combo_t += _delta
 		if _combo_t >= 6.0:
@@ -3490,6 +3496,7 @@ func _on_hero_down() -> void:
 	if _bm != null and _bm.try_prevent_death():
 		_core.running = true
 		return
+	_clear_invocation_portrait()
 	var failed_wave := int(_core.wave)
 	_withdrawn_waves[failed_wave] = true
 	var loss := 0
@@ -3512,6 +3519,9 @@ func _on_hero_down() -> void:
 	_core._shake = maxf(float(_core._shake), 12.0)
 	_core.hero["hp"] = float(_core.hero.get("hp_max", 1.0))   # 满血站起来（不做浴血）
 	_core.running = true
+	# 清场会撤掉待打的任务目标。生存和占点也在本次倒地时中断。
+	if str(_q_cur.get("kind", "")) in ["statue", "zone", "champion", "elite", "survive"]:
+		_q_finish("fail")
 	Aud.sfx("ui_back", -4.0)
 	# 这一波直接判负：不给奖励，立刻进下一波（最后一波打输 = 本局结束）
 	_toast("第 %d 波没打下来 · 命 -%d" % [failed_wave, loss])
@@ -4341,7 +4351,7 @@ func _on_trea_tile() -> void:
 		return
 	if _trea_charge <= 0:
 		MenuUI.Motion.reject_button(_trea_tile)
-		_toast("还没攒到宝物机会（每清一波 +1）")
+		_toast("暂无宝物机会 · 继续推进关卡")
 		return
 	if _bond_pool().is_empty() and _rare_pool().is_empty():
 		MenuUI.Motion.reject_button(_trea_tile)
@@ -4829,7 +4839,7 @@ func _refresh_tot_bond() -> void:
 	_lbl("羁绊 %d 张（已成 %d）　·　已解锁 %d/%d　·　点图标看详情" % [_bonds.size(), _bonds_done, _bond_unlocked.size(), BOND_POOL.size()],
 		Vector2(0, 0), Vector2(600, 26), 16, DIM, _tot_bond_root)
 	if _bonds.is_empty():
-		_lbl("还没有羁绊 —— 每清一波有 1 次宝物机会", Vector2(0, 40), Vector2(600, 30), 20,
+		_lbl("还没有羁绊 · 推进关卡可获得宝物机会", Vector2(0, 40), Vector2(600, 30), 20,
 			Color(0.55, 0.48, 0.36), _tot_bond_root)
 		return
 	for i in mini(_bonds.size(), 12):
@@ -9053,7 +9063,7 @@ const QUEST_POOL := [
 	{"id": "pz", "n": "破阵", "tier": 1, "kind": "statue", "need": 3, "lim": 60.0, "desc": "打碎 3 座石像", "r": {"crystal": 60}},
 	{"id": "sg", "n": "升格", "tier": 1, "kind": "count", "key": "lv", "need": 2, "lim": 0.0, "desc": "连升 2 级", "r": {"crystal": 50, "aug_rr": 1}},
 	{"id": "ky", "n": "苦役", "tier": 1, "kind": "restrain", "key": "chal", "lim": 30.0, "desc": "30 秒内不用挑战", "r": {"crystal": 50}},
-	{"id": "qdf", "n": "清道夫", "tier": 1, "kind": "count", "key": "clearwave", "need": 1, "lim": 0.0, "desc": "一波结束时场上无怪", "r": {"crystal": 50, "trea_rr": 1}},
+	{"id": "qdf", "n": "清道夫", "tier": 1, "kind": "count", "key": "clearwave", "need": 1, "lim": 0.0, "desc": "击溃任意一波普通进攻", "r": {"crystal": 50, "trea_rr": 1}},
 
 	{"id": "sh", "n": "守护", "tier": 2, "kind": "guard", "need": 0, "lim": 60.0, "desc": "牢车不碎", "r": {"crystal": 100, "trea_rr": 2}},
 	{"id": "zd", "n": "占点", "tier": 2, "kind": "zone", "need": 12, "lim": 45.0, "desc": "站住法阵 12 秒", "r": {"crystal": 90, "aug_rr": 2}},

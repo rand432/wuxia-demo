@@ -208,7 +208,7 @@ static func mark_first_clear(level: int = -1) -> bool:
 	ensure_loaded()
 	var lv := current_level if level < 0 else level
 	var key := str(lv)
-	if first_clear.has(key):
+	if bool(first_clear.get(key, false)):
 		return false
 	first_clear[key] = true
 	max_unlocked = maxi(max_unlocked, mini(lv + 1, LEVELS.size()))
