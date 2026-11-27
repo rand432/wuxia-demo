@@ -62,7 +62,19 @@ func _ready() -> void:
 		node.set("_tut", null)
 		node._tutorial_pause(false)
 	await _wait(600)
-	if action != "still":
+	if action == "float":
+		if node.get("_core") != null:
+			for i in 20:
+				node._core._spawn_foe("normal", 1.0, 1.0)
+			var fc = node._core.foes[0]
+			node._core._push_float(float(fc["x"]), float(fc["y"]) - 44.0, "格挡", Color(0.72, 0.82, 0.94))
+			await _wait(120)
+			await _capture(vp, out_path.get_basename() + "_mid.png")
+			await _wait(200)
+			await _capture(vp, out_path.get_basename() + "_end.png")
+		if node.get("_core") != null:
+			pass
+	elif action != "still":
 		_trigger(node)
 		await _wait(120)
 		await _capture(vp, out_path.get_basename() + "_mid.png")

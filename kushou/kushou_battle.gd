@@ -286,6 +286,7 @@ var hide_units := true
 var show_combo_counter := true # 接入战斗外壳时使用外壳的清晰连斩读数。
 var show_basic_hit_numbers := true # 外壳已有普攻飘字时不重复绘制。
 var draw_hazard_warnings := true
+var draw_floats := true
 # v6：闪避下线（设计稿）—— 怪打人必中；命中率补偿见 BASE_FOE_ATK
 var hero := {"atk": 12.0, "hp": 200.0, "hp_max": 200.0, "mp": 100.0, "mp_max": 100.0,
 	"aspd": 1.0, "crit": 0.05, "cut": 0.0, "dmg_pct": 0.0}
@@ -5990,17 +5991,18 @@ func _draw() -> void:
 			colors[i] = Color(0.86, 0.80, 0.72, 1.0 - float(shard["t"]) / 0.45)
 		draw_multiline_colors(points, colors, 3.0)
 	# 飘字
-	for fl_v in _floats:
-		var fl: Dictionary = fl_v
-		var ft := float(fl["t"])
-		var a := 1.0 - ft / 0.75
-		var c: Color = fl["col"]
-		var big := bool(fl.get("big", false))
-		# 飘字弹一下：冒头时放大，然后收回正常大小
-		var pop := 1.0 + (0.75 * (1.0 - ft / 0.14) if ft < 0.14 else 0.0)
-		var fs := int(round((34.0 if big else 24.0) * pop))
-		draw_string(ThemeDB.fallback_font, Vector2(float(fl["x"]) - 60.0, float(fl["y"])), str(fl["txt"]),
-			HORIZONTAL_ALIGNMENT_CENTER, 120.0, fs, Color(c.r, c.g, c.b, a))
+	if draw_floats:
+		for fl_v in _floats:
+			var fl: Dictionary = fl_v
+			var ft := float(fl["t"])
+			var a := 1.0 - ft / 0.75
+			var c: Color = fl["col"]
+			var big := bool(fl.get("big", false))
+			# 飘字弹一下：冒头时放大，然后收回正常大小
+			var pop := 1.0 + (0.75 * (1.0 - ft / 0.14) if ft < 0.14 else 0.0)
+			var fs := int(round((34.0 if big else 24.0) * pop))
+			draw_string(ThemeDB.fallback_font, Vector2(float(fl["x"]) - 60.0, float(fl["y"])), str(fl["txt"]),
+				HORIZONTAL_ALIGNMENT_CENTER, 120.0, fs, Color(c.r, c.g, c.b, a))
 	# 连杀：屏幕中上那行大字（3 连以上才喊）
 	if show_combo_counter and _combo >= 3 and _combo_t > 0.0:
 		var k := clampf(_combo_t / COMBO_WINDOW, 0.0, 1.0)

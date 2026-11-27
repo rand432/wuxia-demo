@@ -548,3 +548,13 @@
 - 音频审计 6/6（`.shots/audit_batch23.txt`）
 - 交付说明：`docs/交付_批次23_混音余量_2026-11-28.md`
 - 提交：7072575（锻造音量随自动存档 `4c62e09`）
+## 第二十四批交付（2026-11-28）
+
+- 复现：战斗飘字由 core 直接绘制，敌人 Token 在其上层，堆怪时「格挡」被完全遮住（450×800 `crop_float_before2.png` 空白）
+- 修正：core 增加 `draw_floats` 开关；battle_ui 新增 z_index 50 的 `FloatLayer`，逐帧读取 `_floats` 绘制并加 2–3px 深色描边，位于所有 Token 之上；攻击时点/飘字时长未改
+- 修正后三档：`float_after3_450x800_mid.png`、`float_after3_720x1280_mid.png`、`float_after3_450x1000_mid.png`，局部 `crop_float_after3.png`
+- 破盾/宝箱/匪首蓄力等同属飘字层；地面预警圈保持地面层（设计如此）
+- 卡框细纹仍偏软，给美术建议：源图有效线宽 ≥3px（450 显示约 116px 宽）或另出 512 宽卡框
+- 回归：手势 15/15、battle_navigation 图形 PASS、全量 88/88（`.shots/audit_batch24full.txt`）
+- 交付说明：`docs/交付_批次24_小窗提示_2026-11-28.md`
+- 提交：__H24__

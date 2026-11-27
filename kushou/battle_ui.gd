@@ -46,6 +46,7 @@ var _frame_fx_live := 0
 var _frame_fx_pool: Array[FrameBurst] = []
 var _impact_sparks: ImpactSparks
 var _hazard_view: HazardTelegraph
+var _float_layer: Control = null
 
 # 怪物立绘：名字 → assets/gen/enemies/foe_<key>.png；没有就回退旧的圆牌 + 一个字
 var _foe_tex_cache := {}
@@ -397,6 +398,31 @@ func _entry_enemy_art_keys() -> Array[String]:
 		if not key.is_empty() and not BattleArt.FOE_FRAME_PATH.has(name):
 			keys.append(key)
 	return keys
+
+class FloatLayer extends Control:
+	var core = null
+	func _ready() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+		set_process(true)
+	func _process(_dt: float) -> void:
+		queue_redraw()
+	func _draw() -> void:
+		if core == null:
+			return
+		for fl_v in core._floats:
+			var fl: Dictionary = fl_v
+			var ft := float(fl["t"])
+			var a := 1.0 - ft / 0.75
+			var col: Color = fl["col"]
+			var big := bool(fl.get("big", false))
+			var pop := 1.0 + (0.75 * (1.0 - ft / 0.14) if ft < 0.14 else 0.0)
+			var fs := int(round((34.0 if big else 24.0) * pop))
+			var pos := Vector2(float(fl["x"]) - 60.0, float(fl["y"]))
+			var fcol := Color(col.r, col.g, col.b, a)
+			var ocol := Color(0.05, 0.04, 0.03, minf(1.0, a * 0.92))
+			var owidth := 3 if big else 2
+			draw_string_outline(ThemeDB.fallback_font, pos, str(fl["txt"]), HORIZONTAL_ALIGNMENT_CENTER, 120.0, fs, owidth, ocol)
+			draw_string(ThemeDB.fallback_font, pos, str(fl["txt"]), HORIZONTAL_ALIGNMENT_CENTER, 120.0, fs, fcol)
 
 func _ready() -> void:
 	GameState.ensure_loaded()
@@ -1086,6 +1112,13 @@ func _build_field() -> void:
 	_core.show_basic_hit_numbers = false
 	_core.draw_hazard_warnings = false
 	_cam.add_child(_core)
+	_float_layer = FloatLayer.new()
+	_float_layer.z_index = 50
+	_float_layer.size = Vector2(720, 1280)
+	_float_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_float_layer.core = _core
+	_cam.add_child(_float_layer)
+	_core.draw_floats = false
 	_lamp_field = LampField.new()
 	_lamp_field.position = _core.position
 	_lamp_field.size = _core.size
