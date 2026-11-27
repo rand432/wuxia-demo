@@ -42,13 +42,14 @@ static var curio_id := "yuhu"   # 默认带玉壶（原来每局必有的那件�
 static var curio_lv := {}
 static var _curio_loaded := false
 const CURIO_SAVE := "user://curio.cfg"
+const CURIO_SCHEMA := {"curio": {"id": TYPE_STRING, "lv": SaveFile.COUNTERS}}
 
 static func _curio_ensure() -> void:
 	if _curio_loaded:
 		return
 	_curio_loaded = true
 	var cfg := ConfigFile.new()
-	if SaveFile.read(cfg, CURIO_SAVE, {"curio": {"lv": TYPE_DICTIONARY}}) != OK:
+	if SaveFile.read(cfg, CURIO_SAVE, CURIO_SCHEMA) != OK:
 		return
 	curio_id = str(cfg.get_value("curio", "id", curio_id))
 	var d = cfg.get_value("curio", "lv", {})
@@ -117,7 +118,7 @@ static func ensure_loaded() -> void:
 	_progress_loaded = true
 	_curio_ensure()
 	var cfg := ConfigFile.new()
-	if SaveFile.read(cfg, PROGRESS_SAVE, {"progress": {"coins": TYPE_DICTIONARY, "skill_lv": TYPE_DICTIONARY, "skill_books": TYPE_DICTIONARY, "shards": TYPE_DICTIONARY, "stars": TYPE_DICTIONARY}}) != OK:
+	if SaveFile.read(cfg, PROGRESS_SAVE, SaveFile.PROGRESS_SCHEMA) != OK:
 		return
 	player_name = str(cfg.get_value("progress", "player_name", player_name))
 	for key in ["coins", "skill_lv", "skill_books", "shards", "stars"]:

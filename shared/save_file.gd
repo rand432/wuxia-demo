@@ -12,18 +12,20 @@ const FORGE_SCHEMA := {"res": {
 	"equipped": {"type": TYPE_DICTIONARY, "values": ITEM_SCHEMA},
 	"bag": {"type": TYPE_ARRAY, "items": ITEM_SCHEMA},
 	"state": {"type": TYPE_DICTIONARY, "values": FORGE_STATE_SCHEMA}}}
+const LEVEL_SCHEMA := {"levels": {
+	"version": TYPE_FLOAT, "current": TYPE_FLOAT, "max": TYPE_FLOAT,
+	"first_clear": {"type": TYPE_DICTIONARY, "values": TYPE_BOOL},
+	"tutorial_done": {"type": TYPE_DICTIONARY, "values": TYPE_BOOL},
+	"preview": COUNTERS}}
+const PROGRESS_SCHEMA := {"progress": {
+	"player_name": TYPE_STRING, "coins": COUNTERS, "skill_mat": TYPE_FLOAT,
+	"forge_mat": TYPE_FLOAT, "equip_tokens": TYPE_FLOAT, "advance_tokens": TYPE_FLOAT,
+	"new_cards_unlocked": TYPE_BOOL, "new_curio_unlocked": TYPE_BOOL,
+	"skill_lv": COUNTERS, "skill_books": COUNTERS, "shards": COUNTERS,
+	"curio_shards": TYPE_FLOAT, "stars": COUNTERS}}
 const REWARD_SCHEMAS := {
-	"user://level_state.cfg": {"levels": {
-		"version": TYPE_FLOAT, "current": TYPE_FLOAT, "max": TYPE_FLOAT,
-		"first_clear": {"type": TYPE_DICTIONARY, "values": TYPE_BOOL},
-		"tutorial_done": {"type": TYPE_DICTIONARY, "values": TYPE_BOOL},
-		"preview": COUNTERS}},
-	"user://progress.cfg": {"progress": {
-		"player_name": TYPE_STRING, "coins": COUNTERS, "skill_mat": TYPE_FLOAT,
-		"forge_mat": TYPE_FLOAT, "equip_tokens": TYPE_FLOAT, "advance_tokens": TYPE_FLOAT,
-		"new_cards_unlocked": TYPE_BOOL, "new_curio_unlocked": TYPE_BOOL,
-		"skill_lv": COUNTERS, "skill_books": COUNTERS, "shards": COUNTERS,
-		"curio_shards": TYPE_FLOAT, "stars": COUNTERS}},
+	"user://level_state.cfg": LEVEL_SCHEMA,
+	"user://progress.cfg": PROGRESS_SCHEMA,
 	"user://forge.cfg": FORGE_SCHEMA,
 }
 static var _read_failures: Dictionary = {}

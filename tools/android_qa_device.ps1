@@ -3,7 +3,8 @@
   [string]$Apk = '',
   [string]$Serial = '',
   [string]$OutDir = '',
-  [int]$CheckLevel = 6
+  [int]$CheckLevel = 6,
+  [string]$Aapt2 = ''
 )
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
@@ -32,19 +33,28 @@ function Add-Result {
     $lines.Add('- ' + $UseCase + ': **' + $Status + '** — ' + $Detail)
 }
 
+function Get-LevelsBlock {
+    param([string]$Text)
+    $m = [regex]::Match($Text, '(?ms)^\[levels\]\s*(.*?)(?=^\[|\z)')
+    if ($m.Success) { return $m.Groups[1].Value }
+    return ''
+}
+
 function Get-CfgValue {
     param([string]$Text, [string]$Name)
-    $m = [regex]::Match($Text, '(?m)^' + [regex]::Escape($Name) + '=(\d+)')
+    $block = Get-LevelsBlock $Text
+    $m = [regex]::Match($block, '(?m)^' + [regex]::Escape($Name) + '=(\d+)')
     if ($m.Success) { return $m.Groups[1].Value }
     return ''
 }
 
 function Get-FirstClearValue {
     param([string]$Text, [int]$Level)
-    $block = [regex]::Match($Text, 'first_clear=\{[^}]*\}')
-    if (-not $block.Success) { return '' }
-    $m = [regex]::Match($block.Value, '"' + $Level + '":\s*(true|false)')
-    if ($m.Success) { return $m.Groups[1].Value }
+    $block = Get-LevelsBlock $Text
+    $m = [regex]::Match($block, '(?s)first_clear=\{(.*?)\}')
+    if (-not $m.Success) { return '' }
+    $m2 = [regex]::Match($m.Groups[1].Value, '"' + $Level + '":\s*(true|false)')
+    if ($m2.Success) { return $m2.Groups[1].Value }
     return ''
 }
 
@@ -75,6 +85,21 @@ if (-not $Apk -or -not (Test-Path $Apk)) { Write-Output 'ERROR: 找不到 QA APK
 $apkSha = (Get-FileHash $Apk -Algorithm SHA256).Hash
 $lines.Add('- APK: `' + $Apk + '`')
 $lines.Add('- APK SHA-256: `' + $apkSha + '`')
+if (-not $Aapt2) {
+    $btRoot = [IO.Path]::Combine('D:/Android', 'build-tools')
+    if ([IO.Directory]::Exists($btRoot)) {
+        $bt = Get-ChildItem $btRoot -Directory | Sort-Object Name -Descending | Select-Object -First 1
+        if ($bt) { $Aapt2 = [IO.Path]::Combine($bt.FullName, 'aapt2.exe') }
+    }
+}
+if (-not $Aapt2 -or -not [IO.File]::Exists($Aapt2)) { Write-Output 'ERROR: aapt2 缺失，无法核验 APK 包名'; exit 2 }
+$prevEap = $ErrorActionPreference
+$ErrorActionPreference = 'Continue'
+$badging = & $Aapt2 dump badging $Apk 2>&1 | Out-String
+$ErrorActionPreference = $prevEap
+$apkPkg = [regex]::Match($badging, "package: name='([^']+)'").Groups[1].Value
+if ($apkPkg -ne 'com.wuxia.demo.qa') { Write-Output ('ERROR: APK 包名不符: ' + $apkPkg); exit 2 }
+$lines.Add('- 包名核验: `com.wuxia.demo.qa`')
 
 $devOut = Invoke-Adb @('devices')
 $devices = @($devOut -split '\r?\n' | Where-Object { $_ -match '\sdevice$' } | ForEach-Object { ($_ -split '\s+')[0] })
@@ -128,13 +153,16 @@ if (-not $wasInstalled) {
 } elseif ($beforeSave.Trim().Length -eq 0) {
     Add-Result '覆盖安装存档保留' 'SKIP' '安装前测试档缺失，覆盖存档用例未执行'
 } else {
-    $bMax = Get-CfgValue $beforeSave 'max_unlocked'
-    $aMax = Get-CfgValue $afterSave 'max_unlocked'
+    $bMax = Get-CfgValue $beforeSave 'max'
+    $aMax = Get-CfgValue $afterSave 'max'
     $bFc = Get-FirstClearValue $beforeSave $CheckLevel
     $aFc = Get-FirstClearValue $afterSave $CheckLevel
-    $detail = ('max_unlocked ' + $bMax + ' -> ' + $aMax + '；first_clear[' + $CheckLevel + '] ' + $bFc + ' -> ' + $aFc)
-    if ($bMax -eq '' -or $bFc -eq '' -or $aMax -eq '' -or $aFc -eq '') {
-        Add-Result '覆盖安装存档保留' 'SKIP' ('字段缺失，覆盖存档用例未执行；' + $detail)
+    $readFail = ($afterSave.Trim().Length -eq 0)
+    $detail = ('[levels] max ' + $bMax + ' -> ' + $aMax + '；first_clear[' + $CheckLevel + '] ' + $bFc + ' -> ' + $aFc)
+    if ($bMax -eq '' -or $bFc -eq '') {
+        Add-Result '覆盖安装存档保留' 'SKIP' ('安装前样本缺字段，覆盖存档用例未执行；' + $detail)
+    } elseif ($readFail -or $aMax -eq '' -or $aFc -eq '') {
+        Add-Result '覆盖安装存档保留' 'FAIL' ('覆盖后读取失败或字段缺失；' + $detail)
     } elseif ($bMax -eq $aMax -and $bFc -eq $aFc) {
         Add-Result '覆盖安装存档保留' 'PASS' $detail
     } else {
