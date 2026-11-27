@@ -1,4 +1,5 @@
 extends Control
+const Iso := preload("res://tools/test_isolation.gd")
 const BATTLE := preload("res://kushou/battle_ui.tscn")
 const LS := preload("res://shared/level_state.gd")
 const GS := preload("res://shared/game_state.gd")

@@ -1,4 +1,5 @@
 extends SceneTree
+const Iso := preload("res://tools/test_isolation.gd")
 const BATTLE := preload("res://kushou/battle_ui.tscn")
 const LS := preload("res://shared/level_state.gd")
 const GS := preload("res://shared/game_state.gd")
@@ -15,6 +16,11 @@ var click_sent := false
 var dismissed := false
 
 func _initialize() -> void:
+	var iso_err := Iso.verify()
+	if iso_err != "":
+		print("[ISOLATION] REJECT " + iso_err)
+		quit(2)
+		return
 	seed(20261116)
 	LS.ensure_loaded()
 	LS.current_level = 6
