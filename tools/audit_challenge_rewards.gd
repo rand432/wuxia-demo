@@ -37,6 +37,27 @@ func _audit_defeat_audio() -> bool:
 	battle.queue_free()
 	return true
 
+func _audit_guardian_intro() -> void:
+	var battle = Battle.instantiate()
+	root.add_child(battle)
+	battle.set_process(false)
+	var core = battle._core
+	core.set_process(false)
+	assert(core.spawn_challenge(4, 1) == 1)
+	var challenger: Dictionary = core.foes.back()
+	challenger["x"] = 40.0
+	assert(not battle._boss_name_lb.visible)
+	Audio.reset_sfx_stats()
+	core.start_boss(4, "困兽·终焉")
+	var guardian: Dictionary = core._boss_foe(false)
+	assert(battle._boss_name_lb.text == guardian["name"], "The earlier challenger must not receive the stage boss title")
+	var expected: float = clampf(core.position.x + float(guardian["x"]), 90.0, 630.0)
+	assert(is_equal_approx(battle._boss_spot.position.x, expected))
+	var intro_cues: Dictionary = Audio.sfx_stats()["per_key"]
+	assert(intro_cues.get("drum", 0) == 1 and intro_cues.get("tension", 0) == 1,
+		"A stage boss arrival must play one drum beat and one tension cue: %s" % intro_cues)
+	battle.queue_free()
+
 func _audit_challenge_poses() -> bool:
 	var b = Battle.instantiate()
 	root.add_child(b)
@@ -238,6 +259,7 @@ func _run() -> void:
 				b.queue_free()
 				await process_frame
 	assert(_audit_challenge_poses())
+	_audit_guardian_intro()
 	_audit_large_challenge_attacks()
 	await process_frame
 	assert(_audit_roster_density())

@@ -75,26 +75,29 @@ func open(target: Node, text: String, on_done: Callable, on_pause := Callable(),
 	_on_done = on_done
 	_on_pause = on_pause
 	_on_resume = on_resume
-	var gr := _target_rect(target)
-	_ring.position = gr.position - Vector2(8, 8)
-	_ring.size = gr.size + Vector2(16, 16)
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(0, 0, 0, 0)
 	sb.border_color = Color(1.0, 0.82, 0.30, 0.95)
 	sb.set_border_width_all(4)
 	sb.set_corner_radius_all(10)
 	_ring.add_theme_stylebox_override("panel", sb)
+	_lbl.text = text
+	reposition()
+	visible = true
+	if _on_pause.is_valid():
+		_on_pause.call()
+
+func reposition() -> void:
+	var gr := get_global_transform().affine_inverse() * _target_rect(_target)
+	_ring.position = gr.position - Vector2(8, 8)
+	_ring.size = gr.size + Vector2(16, 16)
 	_hit.position = gr.position - Vector2(8, 8)
 	_hit.size = gr.size + Vector2(16, 16)
-	_lbl.text = text
 	var ly := gr.position.y - 76.0
 	if ly < 20.0:
 		ly = gr.position.y + gr.size.y + 26.0
 	_lbl.position = Vector2(24, ly)
 	_lbl.size = Vector2(672, 52)
-	visible = true
-	if _on_pause.is_valid():
-		_on_pause.call()
 
 func _target_rect(t: Node) -> Rect2:
 	if t is Control:

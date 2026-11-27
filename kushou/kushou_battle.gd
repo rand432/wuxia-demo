@@ -110,7 +110,7 @@ var _last_lucky := false
 # v2h（用户："打斗的音效和战斗音乐 以及 boss 登场的音乐也得要"）：
 #   全部走工程已有的音频总管 shared/audio.gd（BGM 交叉淡入＋音效一发），
 #   音效库是现成的（hit_slash / hit_heavy / coin / levelup / drum / fall_down…），不新增素材；
-#   boss 登场那一首是这一轮新做的 assets/audio/bgm_boss_intro.ogg（取不到就退回 drum＋tension）。
+#   首领入场保留战斗音乐，叠一声鼓点和较轻的紧张音。
 const Audio := preload("res://shared/audio.gd")
 const HazardTelegraph := preload("res://kushou/hazard_telegraph.gd")
 const SFX_MIN_GAP := 0.09           # 音效最短间隔（免得一群怪一起打的时候"炸音"）
@@ -673,7 +673,7 @@ func chal_crystal_mul() -> float:
 func chal_exp_mul() -> float:
 	return 1.0 + CHAL_EXP_RAMP * float(maxi(0, wave - 1))
 
-func spawn_challenge(kind_i: int, n: int) -> int:
+func spawn_challenge(kind_i: int, n: int, show_banner := true) -> int:
 	var i := clampi(kind_i, 0, 4)
 	var big := i >= 3
 	var spawned := 0
@@ -697,10 +697,11 @@ func spawn_challenge(kind_i: int, n: int) -> int:
 		f["stop"] = (FOE_REACH + 14.0 if big else FOE_REACH) + randf() * 4.0
 	if spawned == 0:
 		return 0
-	_banner = "挑战：" + str(CHAL_FOE_NAME[i])
-	if not big:
-		_banner += "　一群 " + str(spawned) + " 只"
-	_banner_t = 2.0
+	if show_banner:
+		_banner = "挑战：" + str(CHAL_FOE_NAME[i])
+		if not big:
+			_banner += "　一群 " + str(spawned) + " 只"
+		_banner_t = 2.0
 	Audio.sfx("bell", -8.0)
 	return spawned
 	# v16o（用户："背景喊杀声太多了 其实没必要有喊杀声"）：
@@ -799,15 +800,9 @@ func start_boss(tier: int, boss_name := "") -> void:
 	boss_spawned_once = true
 	_banner = ["", "一阶首领", "二阶首领", "三阶首领", "四阶首领"][tt] + "　" + str(d["name"])
 	_banner_t = 2.4
-	# v226：入场一记闷鼓 + 震一下；bgm_boss_intro 随后接上
-	Audio.sfx("drum", -5.0, 0.82)
-	_shake = maxf(_shake, 9.0)
+	Audio.sfx("drum", -7.0, 0.82)
+	Audio.sfx("tension", -14.0, 0.95)
 	_push_float(hero_pos.x + 80.0, hero_pos.y - 120.0, str(d.get("affix", "")), Color(0.96, 0.72, 0.42), true)
-	# v16o（用户："背景喊杀声太多了 其实没必要有喊杀声"）：已去掉喊杀/战鼓声
-	if ResourceLoader.exists("res://assets/audio/bgm_boss_intro.ogg"):
-		Audio.sfx("bgm_boss_intro", 0.0)
-	else:
-		Audio.sfx("heartbeat", -4.0)
 	_shake = 14.0
 	_hitstop = 0.16
 	boss_arrived.emit(tt)
@@ -6053,7 +6048,7 @@ func _draw() -> void:
 	# v2i（用户："boss到场时 可以显示的血条可以再战斗画面的上方"）：
 	#   boss 活着的时候，**战场最上面**挂一条专属血条（名字 ＋ 阶 ＋ 大红条），
 	#   头顶那条小血条照旧留着（看得清它在哪）。入场横幅往下让开 62，不跟血条叠。
-	var bo := {} if hide_units else _boss_foe()
+	var bo := {} if hide_units else _boss_foe(false)
 	if not bo.is_empty():
 		var bw3 := minf(620.0, w - 60.0)
 		var bx3 := (w - bw3) * 0.5

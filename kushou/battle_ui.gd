@@ -444,6 +444,8 @@ var _portrait_window: Window
 var _portrait_window_size := Vector2i.ZERO
 var _portrait_original_aspect := Window.CONTENT_SCALE_ASPECT_KEEP
 var _battle_background: BgArt
+var _upper_hud: Control
+var _lower_hud: Control
 
 func _ready() -> void:
 	GameState.ensure_loaded()
@@ -469,11 +471,13 @@ func _ready() -> void:
 			if _entry_art.has(path):
 				_foe_tex_cache[key] = _entry_art[path]
 		_build_bg()
-	_setup_portrait_window()
 	if not _no_ui:
 		_build_hud()
 	_build_field()
 	if not _no_ui:
+		_lower_hud = Control.new()
+		_lower_hud.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		add_child(_lower_hud)
 		if LevelState.show_button("draw"):
 			_build_deck()
 		_build_bottom()
@@ -503,6 +507,7 @@ func _ready() -> void:
 	_refresh_deck()
 	_apply_level_preview()
 	_refresh_vitals_hud()
+	_setup_portrait_window()
 	_maybe_level_button_tutorial.call_deferred()
 	var fade := ColorRect.new()
 	fade.color = Color(0.03, 0.03, 0.04, 1.0)
@@ -538,12 +543,25 @@ func _layout_portrait_window() -> void:
 	offset_right = W * 0.5
 	offset_top = -H * 0.5
 	offset_bottom = H * 0.5
-	_battle_background.portrait_margin = extra * 0.5 + (1.0 if extra > 0.0 else 0.0)
+	var margin := extra * 0.5
+	if _upper_hud != null:
+		_upper_hud.position.y = -margin
+	if _lower_hud != null:
+		_lower_hud.position.y = margin
+	_battle_background.portrait_margin = margin
 	_battle_background.queue_redraw()
+	if is_instance_valid(_tut) and _tut.visible:
+		_tut.reposition()
 
 func _physics_process(_delta: float) -> void:
 	if _portrait_window.size != _portrait_window_size:
 		_layout_portrait_window()
+	if _upper_hud != null and _lower_hud != null:
+		var modal := _battle_background.portrait_margin > 0.0 and (_run_over or _tutorial_paused or _blocking_panel_open())
+		var mouse_mode := Control.MOUSE_BEHAVIOR_DISABLED if modal else Control.MOUSE_BEHAVIOR_INHERITED
+		if _upper_hud.mouse_behavior_recursive != mouse_mode:
+			_upper_hud.mouse_behavior_recursive = mouse_mode
+			_lower_hud.mouse_behavior_recursive = mouse_mode
 
 func _entry_dialog_builders() -> Array[Callable]:
 	return [_build_exit, _build_draw, _build_combined, _build_god_pick, _build_str, _build_trea]
@@ -705,19 +723,7 @@ class BgArt extends Control:
 		final_court = path == FINAL_COURT and art != null
 		tex = art
 	func _draw() -> void:
-		if portrait_margin > 0.0:
-			var edge := Color(0.15, 0.12, 0.09)
-			if courtyard:
-				edge = Color(0.14, 0.13, 0.105)
-			elif cliff_pass:
-				edge = Color(0.17, 0.16, 0.15)
-			elif final_court:
-				edge = Color(0.125, 0.13, 0.10)
-			elif not village_yard:
-				edge = Color(0.72, 0.68, 0.60)
-			var outer := edge.darkened(0.38)
-			_fade_band(-portrait_margin, 0.0, outer, edge)
-			_fade_band(H, H + portrait_margin, edge, outer)
+		var backdrop := Rect2(0, -portrait_margin, W, H + portrait_margin * 2.0)
 		if village_yard and tex != null:
 			var surround := Color(0.15, 0.12, 0.09)
 			var clear := Color(surround, 0.0)
@@ -725,10 +731,10 @@ class BgArt extends Control:
 			var source_size := tex.get_size()
 			var scale_to_cover := maxf(field.size.x / source_size.x, field.size.y / source_size.y)
 			var crop_size := field.size / scale_to_cover
-			draw_rect(Rect2(Vector2.ZERO, size), surround)
-			draw_texture_rect_region(tex, field, Rect2((source_size - crop_size) * 0.5, crop_size))
-			_fade_band(102, 190, surround, clear)
-			_fade_band(1010, 1192, clear, surround)
+			draw_rect(backdrop, surround)
+			draw_texture_rect_region(tex, _extend_field(field), Rect2((source_size - crop_size) * 0.5, crop_size))
+			_fade_band(102 - portrait_margin, 190 - portrait_margin, surround, clear)
+			_fade_band(1010 + portrait_margin, 1192 + portrait_margin, clear, surround)
 			return
 		if cliff_pass or final_court:
 			var surround := Color(0.125, 0.13, 0.10) if final_court else Color(0.17, 0.16, 0.15)
@@ -738,30 +744,29 @@ class BgArt extends Control:
 			var scale_to_source := tex.get_size().y / ARENA_FIELD.size.y
 			var crop_start := Vector2(0.0, COURT_Y_OFFSET * scale_to_source if final_court else 0.0)
 			var source_size := Vector2(tex.get_size().x, field.size.y * scale_to_source)
-			draw_rect(Rect2(0, 0, W, ARENA_FIELD.position.y), surround)
-			draw_texture_rect_region(tex, field, Rect2(crop_start, source_size))
-			_fade_band(ARENA_FIELD.position.y, 162.0, surround, clear)
-			_fade_band(834.0, bottom, clear, surround)
-			draw_rect(Rect2(0, bottom, W, H - bottom), surround)
+			draw_rect(backdrop, surround)
+			draw_texture_rect_region(tex, _extend_field(field), Rect2(crop_start, source_size))
+			_fade_band(ARENA_FIELD.position.y - portrait_margin, 162.0 - portrait_margin, surround, clear)
+			_fade_band(834.0 + portrait_margin, bottom + portrait_margin, clear, surround)
 			return
 		if courtyard and tex != null:
 			var surround := Color(0.14, 0.13, 0.105)
 			var clear := Color(surround, 0.0)
-			draw_rect(Rect2(Vector2.ZERO, size), surround)
-			draw_texture_rect(tex, Rect2(0, 140, 720, 750), false)
-			_fade_band(140, 220, surround, clear)
-			_fade_band(804, 890, clear, surround)
+			draw_rect(backdrop, surround)
+			draw_texture_rect(tex, _extend_field(Rect2(0, 140, 720, 750)), false)
+			_fade_band(140 - portrait_margin, 220 - portrait_margin, surround, clear)
+			_fade_band(804 + portrait_margin, 890 + portrait_margin, clear, surround)
 			return
-		draw_rect(Rect2(0, 0, 720, 1280), Color(0.93, 0.90, 0.82))
+		draw_rect(backdrop, Color(0.93, 0.90, 0.82))
 		if tex != null:
-			var s := maxf(size.x / float(tex.get_width()), size.y / float(tex.get_height()))
+			var s := maxf(W / float(tex.get_width()), backdrop.size.y / float(tex.get_height()))
 			var w := float(tex.get_width()) * s
 			var h := float(tex.get_height()) * s
-			draw_texture_rect(tex, Rect2((size.x - w) * 0.5, (size.y - h) * 0.5, w, h), false)
+			draw_texture_rect(tex, Rect2((W - w) * 0.5, (H - h) * 0.5, w, h), false)
 			# 压纸色：中部战斗区轻、上下 UI 区重，保证文字可读
-			draw_rect(Rect2(0, 0, 720, 1280), Color(0.965, 0.945, 0.90, 0.26))
-			draw_rect(Rect2(0, 0, 720, 160), Color(0.965, 0.945, 0.90, 0.72))
-			draw_rect(Rect2(0, 850, 720, 430), Color(0.965, 0.945, 0.90, 0.80))
+			draw_rect(backdrop, Color(0.965, 0.945, 0.90, 0.26))
+			draw_rect(Rect2(0, -portrait_margin, W, 160), Color(0.965, 0.945, 0.90, 0.72))
+			draw_rect(Rect2(0, 850 + portrait_margin, W, 430), Color(0.965, 0.945, 0.90, 0.80))
 			return
 		# 纸纹/山
 		var pts := [
@@ -774,6 +779,8 @@ class BgArt extends Control:
 		# 淡墨点
 		for i in 6:
 			draw_circle(Vector2(60 + i * 118, 200 + (i % 3) * 150), 46.0, Color(0.45, 0.38, 0.30, 0.025))
+	func _extend_field(field: Rect2) -> Rect2:
+		return Rect2(field.position - Vector2(0, portrait_margin), field.size + Vector2(0, portrait_margin * 2.0))
 	func _fade_band(top: float, bottom: float, start: Color, end: Color) -> void:
 		draw_polygon(PackedVector2Array([Vector2(0, top), Vector2(720, top), Vector2(720, bottom), Vector2(0, bottom)]), PackedColorArray([start, start, end, end]))
 
@@ -1088,6 +1095,7 @@ func _on_chip_click(cap: String) -> void:
 
 func _build_hud() -> void:
 	var hud := Control.new()
+	_upper_hud = hud
 	hud.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hud.z_index = 11
 	add_child(hud)
@@ -1300,15 +1308,15 @@ func _build_field() -> void:
 	_boss_spot.visible = false
 	_cam.add_child(_boss_spot)
 	_boss_name_lb = Label.new()
-	_boss_name_lb.size = Vector2(720, 70)
-	_boss_name_lb.position = Vector2(0, 468)
+	_boss_name_lb.size = Vector2(480, 48)
+	_boss_name_lb.position = Vector2(120, FIELD_POS.y + 10.0)
 	_boss_name_lb.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_boss_name_lb.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_boss_name_lb.add_theme_font_override("font", FONT)
-	_boss_name_lb.add_theme_font_size_override("font_size", 44)
-	_boss_name_lb.add_theme_color_override("font_color", Color(0.42, 0.12, 0.08))
-	_boss_name_lb.add_theme_color_override("font_outline_color", Color(0.99, 0.94, 0.84, 0.95))
-	_boss_name_lb.add_theme_constant_override("outline_size", 8)
+	_boss_name_lb.add_theme_font_size_override("font_size", 30)
+	_boss_name_lb.add_theme_color_override("font_color", Color(0.98, 0.85, 0.62))
+	_boss_name_lb.add_theme_color_override("font_outline_color", Color(0.15, 0.10, 0.075, 0.95))
+	_boss_name_lb.add_theme_constant_override("outline_size", 5)
 	_boss_name_lb.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_boss_name_lb.z_index = 16
 	_boss_name_lb.visible = false
@@ -1523,7 +1531,7 @@ func _chal_press(i: int, automatic := false) -> void:
 		_toast("「%s」冷却中 %.0f 秒" % [str(CHAL_NAMES[i]), ceil(float(_chal_cd[i]))])
 		return
 	var group := int(CHAL_GROUP[i])
-	var spawned: int = _core.spawn_challenge(i, group)
+	var spawned: int = _core.spawn_challenge(i, group, false)
 	if spawned == 0:
 		if not automatic:
 			_toast("场上怪物已满，击败部分后再挑战")
@@ -2335,21 +2343,21 @@ func _build_card_detail() -> void:
 
 # ---------------- 卡组 ----------------
 func _build_deck() -> void:
-	var tray := _panel(Rect2(8, 882, 704, 175), Color(0.20, 0.157, 0.115), 12, Color(0.64, 0.48, 0.29), 2)
+	var tray := _panel(Rect2(8, 882, 704, 175), Color(0.20, 0.157, 0.115), 12, Color(0.64, 0.48, 0.29), 2, _lower_hud)
 	tray.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var rail := _panel(Rect2(16, 921, 688, 123), Color(0.13, 0.106, 0.081), 8, Color(0.39, 0.28, 0.18), 1)
+	var rail := _panel(Rect2(16, 921, 688, 123), Color(0.13, 0.106, 0.081), 8, Color(0.39, 0.28, 0.18), 1, _lower_hud)
 	rail.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_deck_count_lb = _lbl("卡组 0/10", Vector2(24, 888), Vector2(160, 30), 20, LIGHT)
-	_page_lb = _lbl("1/2", Vector2(624, 889), Vector2(60, 28), 17, LIGHT, self, HORIZONTAL_ALIGNMENT_RIGHT)
-	_btn("‹", Rect2(12, 958, 36, 50), 24, Color(0.19, 0.15, 0.11), GOLD, func(): _flip(-1))
-	_btn("›", Rect2(672, 958, 36, 50), 24, Color(0.19, 0.15, 0.11), GOLD, func(): _flip(1))
+	_deck_count_lb = _lbl("卡组 0/10", Vector2(24, 888), Vector2(160, 30), 20, LIGHT, _lower_hud)
+	_page_lb = _lbl("1/2", Vector2(624, 889), Vector2(60, 28), 17, LIGHT, _lower_hud, HORIZONTAL_ALIGNMENT_RIGHT)
+	_btn("‹", Rect2(12, 958, 36, 50), 24, Color(0.19, 0.15, 0.11), GOLD, func(): _flip(-1), _lower_hud)
+	_btn("›", Rect2(672, 958, 36, 50), 24, Color(0.19, 0.15, 0.11), GOLD, func(): _flip(1), _lower_hud)
 	for i in 5:
 		var s := CardSlot.new()
 		s.position = Vector2(56 + i * 127, 933)
 		s.size = Vector2(100, 100)
 		s.idx = ""
 		s.pressed.connect(func(): _pick_card(str(s.idx)))
-		add_child(s)
+		_lower_hud.add_child(s)
 		_slots.append(s)
 
 func _flip(d: int) -> void:
@@ -2409,16 +2417,16 @@ func _pick_card(id: String) -> void:
 func _build_bottom() -> void:
 	var village := LevelState.current_level == 1
 	var base_rect := Rect2(8, 1144, 704, 128) if village else Rect2(8, 1071, 704, 209)
-	_panel(base_rect, Color(0.20, 0.157, 0.115), 12, Color(0.64, 0.48, 0.29), 2)
+	_panel(base_rect, Color(0.20, 0.157, 0.115), 12, Color(0.64, 0.48, 0.29), 2, _lower_hud)
 	if not village:
-		_panel(Rect2(16, 1114, 688, 154), Color(0.13, 0.106, 0.081), 8, Color(0.39, 0.28, 0.18), 1)
+		_panel(Rect2(16, 1114, 688, 154), Color(0.13, 0.106, 0.081), 8, Color(0.39, 0.28, 0.18), 1, _lower_hud)
 	var track := Rect2(24, 1218, 672, 16) if village else Rect2(96, 1090, 600, 16)
 	var level_pos := Vector2(24, 1181) if village else Vector2(22, 1088)
 	var exp_pos := Vector2(604, 1184) if village else Vector2(600, 1088)
-	_lv_lb = _lbl("Lv 1", level_pos, Vector2(70, 28), 18, GOLD)
-	_exp_track = _panel(track, Color(0.93, 0.90, 0.82, 0.16), 8)
-	_exp_bar = _panel(Rect2(track.position, Vector2(4, track.size.y)), Color(0.85, 0.66, 0.23), 8)
-	_exp_lb = _lbl("0/100", exp_pos, Vector2(92, 20), 15, Color(0.88, 0.82, 0.70), self, HORIZONTAL_ALIGNMENT_RIGHT)
+	_lv_lb = _lbl("Lv 1", level_pos, Vector2(70, 28), 18, GOLD, _lower_hud)
+	_exp_track = _panel(track, Color(0.93, 0.90, 0.82, 0.16), 8, Color.TRANSPARENT, 0, _lower_hud)
+	_exp_bar = _panel(Rect2(track.position, Vector2(4, track.size.y)), Color(0.85, 0.66, 0.23), 8, Color.TRANSPARENT, 0, _lower_hud)
+	_exp_lb = _lbl("0/100", exp_pos, Vector2(92, 20), 15, Color(0.88, 0.82, 0.70), _lower_hud, HORIZONTAL_ALIGNMENT_RIGHT)
 	_market_tile = _tile(24, 1128, 124, "market", "黑市", false)
 	_market_tile.visible = LevelState.show_button("market")
 	_trea_tile = _tile(158, 1128, 124, "treasure", "宝物", false)
@@ -2430,7 +2438,7 @@ func _build_bottom() -> void:
 	_str_tile.visible = false
 	_str_tile.hot = false
 	_str_batch_btn = _btn("批升", Rect2(_str_tile.position.x + 6, _str_tile.position.y - 52, _str_tile.size.x - 12, 40), 18,
-		Color(0.20, 0.17, 0.13), Color(0.92, 0.82, 0.52), _open_str_menu)
+		Color(0.20, 0.17, 0.13), Color(0.92, 0.82, 0.52), _open_str_menu, _lower_hud)
 	_str_batch_btn.visible = false
 	_draw_tile = _tile(560, 1116, 136, "draw", "抽卡", true)
 	_draw_tile.visible = LevelState.show_button("draw")
@@ -2457,7 +2465,7 @@ func _tile(x: float, y: float, s: float, kind: String, label: String, hot: bool)
 			"skill": _on_str_tile()
 			_: _toast(label)
 	t.pressed.connect(hit)
-	add_child(t)
+	_lower_hud.add_child(t)
 	return t
 
 # 奇物方块：跟「挑战」一样 96×96，冷却时压暗 + 显示秒数
@@ -4040,7 +4048,7 @@ func _str_pop(txt: String) -> void:
 	l.add_theme_color_override("font_color", Color(0.95, 0.82, 0.42))
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	l.z_index = 30
-	add_child(l)
+	(_lower_hud if _lower_hud != null else self).add_child(l)
 	var tw := create_tween()
 	tw.set_parallel(true)
 	tw.tween_property(l, "position:y", l.position.y - 40.0, 0.62).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
@@ -5417,7 +5425,7 @@ func _chip_target(key: String) -> Vector2:
 	var chip := _chips.get(key) as Control
 	if chip == null or not chip.is_visible_in_tree():
 		return Vector2.INF
-	return chip.position + Vector2(24, 25)
+	return get_global_transform().affine_inverse() * (chip.get_global_transform() * Vector2(24, 25))
 
 # 撒一把飞向資源条的小点（金币金、灵晶蓝）
 func _spawn_fly(from: Vector2, to: Vector2, col: Color, n: int) -> void:
@@ -5851,7 +5859,7 @@ func _apply_own(s: Dictionary) -> void:
 # 首领登场：暗红炸开 + 重震 + 鼓
 func _on_boss_arrived(_tier: int) -> void:
 	var p := Vector2(360, 250)
-	var b: Dictionary = _core._boss_foe() if _core != null else {}
+	var b: Dictionary = _core._boss_foe(false) if _core != null else {}
 	if not b.is_empty():
 		p = _core.position + Vector2(float(b["x"]), float(b["y"]) - 24.0)
 	# 别糊到顶部 HUD 上：压回战场内
@@ -5859,8 +5867,7 @@ func _on_boss_arrived(_tier: int) -> void:
 	p.y = clampf(p.y, 210.0, 800.0)
 	_spawn_pfx("shadow/dark-explosion", p, 1.7, "shadow", 1.9)
 	_core._shake = maxf(float(_core._shake), 15.0)
-	Aud.sfx("drum", -6.0, 0.85)
-	Aud.sfx("tension", -14.0, 0.95)
+	_core._banner_t = 0.0 # 入场名牌已由战斗界面显示。
 	_boss_intro_show(p, str(b.get("name", "首领")) if not b.is_empty() else "首领")
 	_cam_zoom_to(1.05, 0.75)     # 首领战：镜头推近，压场
 
@@ -5887,14 +5894,14 @@ func _boss_intro_show(at: Vector2, nm: String) -> void:
 	t2.chain().tween_callback(func() -> void: _boss_spot.visible = false)
 	_boss_name_lb.text = nm
 	_boss_name_lb.visible = true
-	_boss_name_lb.pivot_offset = Vector2(360, 35)
-	_boss_name_lb.scale = Vector2(1.5, 1.5)
+	_boss_name_lb.pivot_offset = _boss_name_lb.size * 0.5
+	_boss_name_lb.scale = Vector2(1.15, 1.15)
 	_boss_name_lb.modulate.a = 0.0
 	var t3 := create_tween().bind_node(_boss_name_lb)
 	t3.set_parallel(true)
 	t3.tween_property(_boss_name_lb, "scale", Vector2.ONE, 0.38).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	t3.tween_property(_boss_name_lb, "modulate:a", 1.0, 0.22)
-	t3.chain().tween_interval(0.95)
+	t3.chain().tween_interval(0.70)
 	t3.chain().tween_property(_boss_name_lb, "modulate:a", 0.0, 0.45)
 	t3.chain().tween_callback(func() -> void: _boss_name_lb.visible = false)
 

@@ -29,6 +29,8 @@ func _initialize() -> void:
 	b = BATTLE.instantiate()
 	root.add_child(b)
 	_dismiss()
+	b._draw_charge = maxi(1, b._draw_charge)
+	b._pick_god("liuqingqing")
 
 func _dismiss() -> void:
 	if b == null:
@@ -113,7 +115,7 @@ func _prime(dt: float) -> void:
 			b._core._spawn_foe("normal", 1.0, 1.0)
 		elif not boss_done and t > 4.0:
 			boss_done = true
-			b._core._spawn_foe("boss", 1.0, 1.0, true, 18, "音频压力首领")
+			b._core.start_boss(LS.boss_tier(), "")
 	skill_t -= dt
 	if skill_t <= 0.0:
 		skill_t = 2.0
