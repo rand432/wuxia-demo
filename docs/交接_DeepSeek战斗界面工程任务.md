@@ -353,3 +353,13 @@
 - 本机真实无设备：`.shots/android_qa_device/realcheck/20261128_015625/report.md`，DEVICE=0 / SKIP
 - 交付说明：`docs/交付_批次18_AndroidQA报告_2026-11-28.md`
 - 提交：e3ed6f0
+## 第十九批交付（2026-11-28）
+
+- 新增 `tools/candidate_flow.gd`：真实主界面→开始→loading→L6/L10；每关 normal/peak 各 30s；真实抽卡/请神点击；`_end_run(false)` 走结算并点「回主界面」返回；10 项检查全 PASS
+- 帧时间：L6 normal P95 17.00 / peak 17.16；L10 normal 16.84 / peak 16.82；>33.3ms 仅 L10 normal 1 帧；活怪峰值 12/31，FX 池 2
+- 录像：`.shots/cand19.mp4`（short 模式，含主界面→战斗→抽卡/请神），volumedetect mean -23.0 dB / max -1.0 dB（无削波，余量 1 dB）
+- 全量 88/88（`.shots/audit_batch19full.txt`）；图形手势 15/15（`.shots/cand19_gestures.log`）
+- QA 重导：`.shots/qa/qa19/wuxia_qa_android.apk`，`com.wuxia.demo.qa` / minSdk 24 / arm64-v8a，SHA-256 `80C508B3…E60874`，300,195,441 字节，日志 `.shots/qa19_export.log`
+- 真机：adb 无设备，安装/触控/帧率待第十五批
+- 交付说明：`docs/交付_批次19_候选版本实战_2026-11-28.md`
+- 提交：__H19__
