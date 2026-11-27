@@ -80,3 +80,5 @@ tools/spine-bake/
 assets/gen/char/
 # ---- pixelfx 预览任务文件（工具临时输入）----
 .pfx_job.json
+# w3x 解包产出（原始数据，勿提交）
+w3x-out/

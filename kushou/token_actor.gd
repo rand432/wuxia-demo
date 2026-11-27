@@ -201,7 +201,8 @@ func _process(delta: float) -> void:
 		queue_redraw()
 		return
 	# 贴图闪白和身体偏移由 Sprite 与画布变换负责。只有脚边入场弧与圆牌闪光需要重绘。
-	if _spawn_t < 0.26 or (_flash > 0.0 and (round_mask or (_frame_atlas == null and art_tex == null))):
+	if _spawn_t < 0.26 or (_flash > 0.0 and (round_mask or (_frame_atlas == null and art_tex == null))) \
+			or (challenge_kind >= 3 and _ready_time > 0.0):
 		queue_redraw()
 	_spawn_t = minf(0.26, _spawn_t + delta)
 	if _boss_impact_pending:
@@ -330,6 +331,8 @@ func play_move(_move_id: String = "", _speed := 1.0) -> void:
 
 func play_attack(direction: Vector2, windup := 0.0, visual_reach := 13.0) -> void:
 	if _death_t >= 0.0 or _boss_impact: return
+	if challenge_kind >= 3 and _ready_time > 0.0:
+		queue_redraw()
 	_ready_time = 0.0
 	_attack_direction = direction.normalized()
 	if _frame_atlas != null and absf(direction.x) > 1.0:
@@ -352,6 +355,8 @@ func prepare_attack(direction: Vector2, duration: float) -> void:
 	_attack_reach = 10.0
 	_ready_duration = duration
 	_ready_time = duration
+	if challenge_kind >= 3:
+		queue_redraw()
 
 
 func play_hit(direction := Vector2.RIGHT, strong := false) -> void:
@@ -533,6 +538,8 @@ func _draw() -> void:
 		if guardian or challenge_kind >= 3:
 			draw_arc(Vector2.ZERO, radius * 1.12, 0, TAU, 36, Color(color, 0.45), 1.7, true)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	if challenge_kind >= 3 and _ready_time > 0.0 and _death_t < 0.0:
+		_draw_challenge_windup()
 	if frost_chilled or frost_frozen:
 		_draw_frost()
 	if poisoned:
@@ -593,6 +600,19 @@ func _draw() -> void:
 			draw_string(UI_FONT, plaque.position + Vector2(0, baseline), tag, HORIZONTAL_ALIGNMENT_CENTER,
 				plaque.size.x, 12 if compact_bar else 15, ring_col)
 
+
+func _draw_challenge_windup() -> void:
+	var progress := 1.0 - _ready_time / _ready_duration
+	var angle := _attack_direction.angle()
+	var center := Vector2(0.0, -radius * 0.86)
+	var edge := radius * (1.65 - 0.30 * progress)
+	var glow := Color(ring_col.lightened(0.48), 0.55 + 0.45 * progress)
+	if challenge_kind == 3:
+		for side: float in [-1.0, 1.0]:
+			var arc_angle := angle + side * lerpf(1.14, 0.63, progress)
+			draw_arc(center, edge, arc_angle - 0.32, arc_angle + 0.32, 12, glow, 4.5, true)
+	else:
+		draw_arc(center, edge, angle - 1.16, angle - 1.16 + 2.32 * maxf(0.15, progress), 20, glow, 4.5, true)
 
 func _draw_frost() -> void:
 	if frost_frozen:

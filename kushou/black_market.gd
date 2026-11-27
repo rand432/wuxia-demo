@@ -164,6 +164,15 @@ func close_panel() -> void:
 	selected_i = -1
 	queue_redraw()
 
+func go_back() -> void:
+	if view == "shop":
+		close_panel()
+		return
+	view = "shop"
+	selected_kind = ""
+	selected_i = -1
+	queue_redraw()
+
 func add_kill(n: int) -> void:
 	if ui != null and ui._run_over:
 		return
@@ -529,10 +538,7 @@ func _gui_input(event: InputEvent) -> void:
 		else:
 			if _close_rect.has_point(p) or _back_rect.has_point(p):
 				Audio.sfx("ui_back", -11.0)
-				view = "shop"
-				selected_kind = ""
-				selected_i = -1
-				queue_redraw()
+				go_back()
 				return
 			for i in _slot_rects.size():
 				if (_slot_rects[i] as Rect2).has_point(p):

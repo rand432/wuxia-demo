@@ -15,6 +15,7 @@ const MAX_NUMBERS := 12
 const MAX_CLUSTER_NUMBERS := 6
 const NUMBER_CLUSTER_RADIUS_SQ := 156.0 * 156.0
 const MAX_DEFEATS := 14
+const MAX_ENEMY_ATTACKS := 24
 const NUMBER_OFFSETS := [Vector2.ZERO, Vector2(33, -23), Vector2(-36, -23), Vector2(0, -45)]
 
 var front := false
@@ -123,12 +124,15 @@ func spawn_defeat(feet: Vector2, radius: float, accent: Color, important: bool) 
 		"important": important, "t": 0.0, "dur": 0.39 if important else 0.30})
 	queue_redraw()
 
-func spawn_enemy_attack(origin: Vector2, target: Vector2, kind: String, foe_id := 0) -> void:
+func spawn_enemy_attack(origin: Vector2, target: Vector2, kind: String, foe_id := 0, important := false) -> void:
 	if origin.distance_squared_to(target) < 9.0:
 		return
-	if enemy_attacks.size() >= 24:
-		enemy_attacks.pop_front()
-	enemy_attacks.append({"origin": origin, "target": target, "kind": kind, "age": 0.0, "foe_id": foe_id})
+	if enemy_attacks.size() >= MAX_ENEMY_ATTACKS:
+		var ordinary := enemy_attacks.find_custom(func(entry: Dictionary) -> bool: return not bool(entry["important"]))
+		if ordinary < 0 and not important:
+			return
+		enemy_attacks.remove_at(maxi(0, ordinary))
+	enemy_attacks.append({"origin": origin, "target": target, "kind": kind, "age": 0.0, "foe_id": foe_id, "important": important})
 	queue_redraw()
 
 func mark_enemy_attack_missed(foe_id: int) -> void:

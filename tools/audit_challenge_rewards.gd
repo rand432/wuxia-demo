@@ -81,6 +81,56 @@ func _audit_challenge_poses() -> bool:
 	b.queue_free()
 	return true
 
+func _audit_large_challenge_attacks() -> void:
+	var b = Battle.instantiate()
+	root.add_child(b)
+	b.set_process(false)
+	b._tut.cancel()
+	var core = b._core
+	core.set_process(false)
+	core.running = true
+	core.intro_wait = 0.0
+	core._hero_cd = 999.0
+	core._last_quota_wave = core.wave
+	core._wave_spawned = core._wave_quota
+	core._spawn_left = 0
+	core.hero["hp_max"] = 10000.0
+	core.hero["hp"] = 10000.0
+	var fx = b._fx_front
+	var interval: float = 1.0 / core.FOE_ASPD
+	for kind in [3, 4]:
+		core.foes.clear()
+		assert(core.spawn_challenge(kind, 1) == 1)
+		var foe: Dictionary = core.foes.back()
+		var windup: float = 0.24 if kind == 3 else 0.32
+		foe.merge({"x": core.hero_pos.x, "y": core.hero_pos.y - 65.0,
+			"t": interval - windup - 0.01}, true)
+		b._process(0.0)
+		var token = b._foe_tokens[foe["_tid"]]
+		var hp_before: float = core.hero["hp"]
+		core._process(0.02)
+		assert(is_equal_approx(token._ready_duration, windup - 0.01))
+		assert(core.hero["hp"] == hp_before)
+		token._process(0.03)
+		assert(token._frame_index == 8)
+		fx.enemy_attacks.clear()
+		for i in fx.MAX_ENEMY_ATTACKS:
+			fx.spawn_enemy_attack(Vector2.ZERO, Vector2(40, 0), "melee", i + 1)
+		Audio.reset_sfx_stats()
+		foe["t"] = interval - 0.01
+		core._process(0.02)
+		assert(core.hero["hp"] < hp_before and token._ready_time == 0.0)
+		token._process(0.02)
+		assert(token._frame_index == 10)
+		var sound := "wood_down" if kind == 3 else "boss_impact_sweep"
+		assert(Audio.sfx_stats()["per_key"].get(sound, 0) == 1)
+		var attack: Dictionary = fx.enemy_attacks.back()
+		assert(attack["kind"] == ("snap" if kind == 3 else "cleaver") and attack["important"])
+		for i in fx.MAX_ENEMY_ATTACKS:
+			fx.spawn_enemy_attack(Vector2.ZERO, Vector2(40, 0), "melee", i + 100)
+		assert(fx.enemy_attacks.size() == fx.MAX_ENEMY_ATTACKS and fx.enemy_attacks.has(attack))
+	b.queue_free()
+
 func _audit_roster_density() -> bool:
 	var b = Battle.instantiate()
 	root.add_child(b)
@@ -188,8 +238,9 @@ func _run() -> void:
 				b.queue_free()
 				await process_frame
 	assert(_audit_challenge_poses())
+	_audit_large_challenge_attacks()
 	await process_frame
 	assert(_audit_roster_density())
 	await process_frame
-	print("PASS: challenge rewards, bounded spawning, shared atlases, crowd density and layered defeat audio")
+	print("PASS: challenge rewards, bounded spawning, large windups and attack cues, crowd density and layered defeat audio")
 	Audio.quit_cleanly()

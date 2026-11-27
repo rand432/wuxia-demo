@@ -32,6 +32,7 @@ static var _music_context := ""
 static var _bgm_request := 0
 static var _shutting_down := false
 static var _quit_hook_installed := false
+static var _quit_on_unhandled_back := true
 static var _amb: AudioStreamPlayer = null   # v230：循环环境音（风/雨）
 static var _amb_key := ""
 static var _bgm_a: AudioStreamPlayer = null
@@ -77,11 +78,15 @@ static func _root() -> Node:
 		return null
 	var ml := Engine.get_main_loop()
 	if ml is SceneTree:
+		var tree := ml as SceneTree
 		if not _quit_hook_installed:
 			_quit_hook_installed = true
-			(ml as SceneTree).auto_accept_quit = false
-			(ml as SceneTree).root.close_requested.connect(_on_window_close_requested)
-		return (ml as SceneTree).root
+			tree.auto_accept_quit = false
+			tree.root.close_requested.connect(_on_window_close_requested)
+			_quit_on_unhandled_back = tree.quit_on_go_back
+			tree.quit_on_go_back = false
+			tree.root.go_back_requested.connect(_on_go_back_requested)
+		return tree.root
 	return null
 
 static func _stream(path: String) -> AudioStream:
@@ -296,7 +301,7 @@ static func play_battle_music(fade := 0.55) -> void:
 	play_bgm(battle_track(), fade)
 
 static func play_bgm(key: String, fade := 1.2) -> void:
-	if key == _cur_bgm:
+	if _root() == null or key == _cur_bgm:
 		return
 	# v71e（用户报的「主界面没有 BGM，但游历里有声音」）：**真凶就是下面这一步的时机**。
 	#   主界面是**开场第一帧**的 _ready 里调过来的，那时候资源系统/音频设备都还没就绪：
@@ -481,6 +486,18 @@ static func shutdown() -> void:
 	var until := Time.get_ticks_msec() + 100
 	while Time.get_ticks_msec() < until:
 		await tree.process_frame
+
+static func _on_go_back_requested() -> void:
+	if _shutting_down:
+		return
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree == null:
+		return
+	var scene := tree.current_scene
+	if scene != null and scene.has_method("handle_back_request"):
+		scene.call("handle_back_request")
+	elif _quit_on_unhandled_back:
+		_on_window_close_requested()
 
 static func _on_window_close_requested() -> void:
 	if _shutting_down:

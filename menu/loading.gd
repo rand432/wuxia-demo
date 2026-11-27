@@ -14,8 +14,12 @@ var _battle: Control
 var _art_queue: Array[String] = []
 var _art_pending: Array[String] = []
 var _art_total := 0
+var _art_load_limit := ART_LOAD_LIMIT
 
 func _ready() -> void:
+	# 无头渲染器的纹理存储在多条载入线程下偶发初始化错误。
+	if DisplayServer.get_name() == "headless":
+		_art_load_limit = 1
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var bg := ColorRect.new()
 	bg.color = Color(0.055, 0.048, 0.040, 1.0)
@@ -87,7 +91,7 @@ func _start_loading() -> void:
 		_loading_failed()
 
 func _request_battle() -> Error:
-	return ResourceLoader.load_threaded_request(BATTLE, "", true)
+	return ResourceLoader.load_threaded_request(BATTLE, "", _art_load_limit > 1)
 
 func _return_home() -> void:
 	if not _done or not _recovery.visible: return
@@ -167,7 +171,7 @@ func _poll_art() -> void:
 		_loading_failed()
 
 func _start_art_batch() -> void:
-	for i in mini(_art_queue.size(), ART_LOAD_LIMIT - _art_pending.size()):
+	for i in mini(_art_queue.size(), _art_load_limit - _art_pending.size()):
 		var path: String = _art_queue.pop_back()
 		if ResourceLoader.load_threaded_request(path, "Texture2D") == OK:
 			_art_pending.append(path)

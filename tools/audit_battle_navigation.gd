@@ -27,6 +27,12 @@ func _freeze_process(b) -> void:
 	b.set_process(false)
 	b._core.set_process(false)
 
+func _settle_replay():
+	await _settle("res://menu/loading.tscn")
+	var battle = await _settle("res://kushou/battle_ui.tscn")
+	assert(battle._entry_cards_ready and battle._hero_token._frame_atlas != null)
+	return battle
+
 func _new_battle():
 	assert(change_scene_to_packed(Battle) == OK)
 	var s = await _settle("res://kushou/battle_ui.tscn")
@@ -45,6 +51,33 @@ func _click_control(btn: Control) -> void:
 		event.pressed = pressed
 		root.push_input(event, true)
 
+func _audit_back_panels(b) -> void:
+	assert(not quit_on_go_back and root.go_back_requested.has_connections())
+	b._tut.cancel()
+	b._crystal = 100
+	b._show_draw(true)
+	var after_draw: int = b._crystal
+	assert(b._draw_layer.visible and b._draw_paid)
+	root.go_back_requested.emit()
+	assert(not b._draw_layer.visible and not b._exit_open and b._draw_paid)
+	b._show_draw(true)
+	assert(b._draw_layer.visible and b._crystal == after_draw)
+	var escape := InputEventKey.new()
+	escape.keycode = KEY_ESCAPE
+	escape.pressed = true
+	root.push_input(escape)
+	assert(not b._draw_layer.visible and not b._exit_open)
+	b._bm.open_panel()
+	b._bm.view = "warehouse"
+	root.go_back_requested.emit()
+	assert(b._bm.visible and b._bm.view == "shop")
+	root.go_back_requested.emit()
+	assert(not b._bm.visible and not b._exit_open)
+	root.go_back_requested.emit()
+	assert(b._exit_open and b._exit_layer.visible and b._core.running)
+	root.go_back_requested.emit()
+	assert(not b._exit_open and b._core.running and current_scene == b)
+
 func _run() -> void:
 	LS.ensure_loaded()
 	GS.ensure_loaded()
@@ -56,6 +89,7 @@ func _run() -> void:
 	assert(change_scene_to_packed(Battle) == OK)
 	var b = await _settle("res://kushou/battle_ui.tscn")
 	_freeze_process(b)
+	_audit_back_panels(b)
 	b._show_exit(true)
 	var leave := _button(b._exit_layer, "退出")
 	var before := [b._wen, b._crystal, b._kills, b._exp, LS.first_clear.duplicate(true), GS.coins.duplicate(true)]
@@ -105,7 +139,7 @@ func _run() -> void:
 	replay.pressed.emit()
 	home.pressed.emit()
 	replay.pressed.emit()
-	b = await _settle("res://kushou/battle_ui.tscn")
+	b = await _settle_replay()
 	_freeze_process(b)
 	assert(LS.current_level == 7 and not b._run_over and b._core.running)
 	# 首次写入还未开始就被旧日志挡住，修好后仍要保存这一局的胜利。
@@ -132,9 +166,10 @@ func _run() -> void:
 	replay = _button(b._result_layer, "再来一局")
 	home.pressed.emit()
 	replay.pressed.emit()
+	root.go_back_requested.emit()
 	assert(current_scene == b and LS.first_clear.has("7") == cleared7_before)
 	assert(DirAccess.remove_absolute(ProjectSettings.globalize_path(SaveFile.JOURNAL)) == OK)
-	home.pressed.emit()
+	root.go_back_requested.emit()
 	replay.pressed.emit()
 	home.pressed.emit()
 	assert(LS.first_clear["7"] and GS.coins["wen"] == wen + int(reward["wen"]))
@@ -160,7 +195,7 @@ func _run() -> void:
 		await _audit_real_input()
 	else:
 		print("[HEADLESS] real-input branch skipped (run without --headless on a graphics device)")
-	print("PASS: result retry saves deferred first clear and rewards once; abandon and both result buttons keep navigation single-flight")
+	print("PASS: Back closes panels or confirms exit; result Back retries save and rewards once; navigation stays single-flight")
 	await _audit_window_close_with_pending_reward()
 
 func _audit_window_close_with_pending_reward() -> void:
@@ -203,9 +238,8 @@ func _audit_real_input() -> void:
 	await create_timer(0.45).timeout
 	var replay := _button(b._result_layer, "再来一局")
 	_click_control(replay)
-	await create_timer(0.4).timeout
-	assert(current_scene != b and current_scene.scene_file_path.ends_with("battle_ui.tscn"))
-	var b2 = current_scene
+	var b2 = await _settle_replay()
+	assert(current_scene != b)
 	_freeze_process(b2)
 	# 2) 败：真实点击「回主界面」
 	b2._end_run(false)
@@ -226,8 +260,8 @@ func _audit_real_input() -> void:
 	var replay3 := _button(b3._result_layer, "再来一局")
 	_click_control(replay3)
 	_click_control(replay3)
-	await create_timer(0.45).timeout
-	assert(current_scene != b3 and current_scene.scene_file_path.ends_with("battle_ui.tscn"))
+	await _settle_replay()
+	assert(current_scene != b3)
 	# 4) 保存失败：真实点击留在当前页；恢复后再次点击只切一次
 	var b4 = await _new_battle()
 	var journal := ConfigFile.new()

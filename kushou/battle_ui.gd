@@ -474,8 +474,11 @@ func _entry_dialog_builders() -> Array[Callable]:
 	return [_build_exit, _build_draw, _build_combined, _build_god_pick, _build_str, _build_trea]
 
 func _build_entry_dialogs() -> void:
+	if _run_over or not MenuUI.navigation_available(self):
+		return
+	var tree := get_tree()
 	for build in _entry_dialog_builders():
-		await get_tree().process_frame
+		await tree.process_frame
 		if _run_over or not MenuUI.navigation_available(self):
 			return
 		build.call()
@@ -2699,7 +2702,8 @@ func _show_draw(v: bool) -> void:
 		_draw_open = true
 		_draw_view.open()
 	else:
-		_draw_view.close()
+		if _draw_view != null:
+			_draw_view.close()
 		_draw_open = false
 	_refresh_draw_tile()
 
@@ -2889,6 +2893,52 @@ func _show_exit(v: bool) -> void:
 	_exit_layer.visible = v
 	if v:
 		_exit_layer.move_to_front()
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("ui_cancel"):
+		get_viewport().set_input_as_handled()
+		handle_back_request()
+
+func handle_back_request() -> void:
+	if _no_ui or not MenuUI.navigation_available(self):
+		return
+	if _run_over:
+		if is_instance_valid(_result_layer) and _result_layer.get_child_count() > 0:
+			Aud.sfx("ui_back", -11.0)
+			_leave_result(false)
+		return
+	if is_instance_valid(_tut) and _tut.visible:
+		return
+	if _exit_open:
+		_show_exit(false)
+	elif _is_open_panel(_curio_detail):
+		_close_curio_detail(_curio_detail)
+	elif _is_open_panel(_q_pop):
+		_q_close_popup()
+	elif _is_open_panel(_bm):
+		_bm.go_back()
+	elif _is_open_panel(_god_layer):
+		_hide_god_pick()
+	elif _is_open_panel(_combined_detail):
+		_combined_detail.hide()
+	elif _is_open_panel(_combined_layer):
+		_show_combined(false)
+	elif _is_open_panel(_detail_layer):
+		_detail_layer.hide()
+	elif _is_open_panel(_str_layer):
+		_hide_aug_pick()
+	elif _is_open_panel(_trea_layer):
+		_hide_trea()
+	elif _is_open_panel(_draw_layer):
+		_show_draw(false)
+	elif _is_open_panel(_chal_layer):
+		_close_challenge()
+	else:
+		_show_exit(true)
+	Aud.sfx("ui_back", -11.0)
+
+func _is_open_panel(panel: Control) -> bool:
+	return is_instance_valid(panel) and panel.is_visible_in_tree()
 
 func _quit() -> void:
 	if _run_over or not MenuUI.navigation_available(self): return
@@ -3456,7 +3506,7 @@ func _leave_result(replay: bool) -> void:
 	if not _try_save_result_before_exit():
 		return
 	if replay:
-		MenuUI.navigate(self, scene_file_path)
+		MenuUI.navigate(self, "res://menu/loading.tscn")
 	else:
 		MenuUI.navigate(self, "res://menu/main_home.tscn")
 
@@ -6238,7 +6288,8 @@ func _on_foe_attack(foe: Dictionary, target: Vector2) -> void:
 			origin.x += token.radius * 0.84 * side
 			if kind == "mage":
 				origin.y -= token.radius * 0.26
-		_fx_front.spawn_enemy_attack(origin, destination - Vector2(0, 26) - FIELD_POS, kind, int(foe.get("_tid", 0)))
+		var important: bool = token.guardian or token.challenge_kind >= 3
+		_fx_front.spawn_enemy_attack(origin, destination - Vector2(0, 26) - FIELD_POS, kind, int(foe.get("_tid", 0)), important)
 
 func _on_foe_missed(foe: Dictionary) -> void:
 	if not _run_over and _fx_front != null:

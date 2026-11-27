@@ -1,6 +1,7 @@
 
 import fs from "node:fs";
 import zlib from "node:zlib";
+import { explode } from "./pkw.mjs";
 
 const cryptTable = new Uint32Array(0x500);
 {
@@ -259,6 +260,7 @@ export class MPQ {
     }
     try {
       if (type === 0x02) return zlib.inflateSync(body);
+      if (type === 0x08) return explode(body);
       if (type === 0x00) return body;
     } catch {}
     try { return zlib.inflateRawSync(data); } catch {}

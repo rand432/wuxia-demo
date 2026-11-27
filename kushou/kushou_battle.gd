@@ -685,6 +685,8 @@ func spawn_challenge(kind_i: int, n: int) -> int:
 		var f: Dictionary = foes[foes.size() - 1]
 		f["scale"] = float(CHAL_FOE_SCALE[i])
 		f["chal"] = i                              # 掉什么由这个字段决定（结算侧读它）
+		if big:
+			f["attack_windup"] = 0.24 if i == 3 else 0.32
 		# v16m 补漏：这里原来写的是 FOE_STOP(150) —— stop 真被读之后就变成"挑战怪隔空打"了，
 		#   跟默认一样改用 FOE_REACH（上面那批我改漏了这一处）。
 		# v20x：大怪的停距从 126~146 收到 106~116 —— 主角现在最多只走到战场 45% 线，
@@ -1225,7 +1227,8 @@ func _process(delta: float) -> void:
 			# v14r：boss 词缀"疾风"——出手更频（原来 boss_aspd 只存着没人读）
 			var faspd := FOE_ASPD * (1.0 + float(f.get("boss_aspd", 0.0)))
 			var attack_interval := 1.0 / (faspd * (STATUE_ASPD if float(f.get("buff", 0.0)) > 0.0 else 1.0))
-			if previous_attack_time < attack_interval - 0.16 and float(f["t"]) >= attack_interval - 0.16 and float(f["t"]) < attack_interval:
+			var windup_start := attack_interval - float(f.get("attack_windup", 0.16))
+			if previous_attack_time < windup_start and float(f["t"]) >= windup_start and float(f["t"]) < attack_interval:
 				foe_windup.emit(f, ftgt, attack_interval - float(f["t"]))
 			if float(f["t"]) >= attack_interval:
 				f["t"] = 0.0
@@ -1285,7 +1288,10 @@ func _process(delta: float) -> void:
 				elif bool(f.get("shield", false)):
 					Audio.sfx("swing", -15.0, 0.91, 95)          # 盾兵：钝器一挥
 				else:
-					Audio.sfx("melee", -17.0, 1.0, 105)          # 普通怪：轻挥
+					match int(f.get("chal", -1)):
+						3: Audio.sfx("wood_down", -12.0, 1.15, 140)
+						4: Audio.sfx("boss_impact_sweep", -11.0, 1.03, 140)
+						_: Audio.sfx("melee", -17.0, 1.0, 105)
 				if hit_decoy:
 					_mirror_decoy["hits"] = int(_mirror_decoy.get("hits", 0)) + 1
 					_push_float(ftgt.x, ftgt.y - 26.0, "镜影", Color(0.72, 0.70, 0.90))

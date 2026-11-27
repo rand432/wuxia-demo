@@ -9,11 +9,11 @@
    "block": 18
   },
   "w3i": 615,
-  "name": "TRIGSTR_000",
-  "author": "TRIGSTR_003",
-  "desc": "TRIGSTR_002",
+  "name": "Dustwallow Keys",
+  "author": "暴雪娱乐",
+  "desc": "这片沙地矿藏丰富，但是完全处于半人马的控制之下。该军团人口分布稠密，准备一次血腥的战斗吧！",
   "version": 18,
-  "wtsCount": 0
+  "wtsCount": 15
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(12)DivideAndConquer.w3m",
@@ -25,11 +25,11 @@
    "block": 18
   },
   "w3i": 736,
-  "name": "TRIGSTR_000",
-  "author": "TRIGSTR_003",
-  "desc": "TRIGSTR_002",
+  "name": "Divide and Conquer",
+  "author": "暴雪娱乐",
+  "desc": "巨魔和傀儡控制着这片美丽的森林。快速扩展，让敌人的血在河水中流淌吧！",
   "version": 18,
-  "wtsCount": 0
+  "wtsCount": 20
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(12)IceCrown.w3m",
@@ -41,11 +41,11 @@
    "block": 17
   },
   "w3i": 736,
-  "name": "TRIGSTR_000",
-  "author": "TRIGSTR_003",
-  "desc": "TRIGSTR_002",
+  "name": "Ice Crown",
+  "author": "暴雪娱乐",
+  "desc": "这片冰冻的森林承受着鬼魂的折磨，被亡灵族以黑暗的魔法奴役着。结束他们的痛苦吧。",
   "version": 18,
-  "wtsCount": 0
+  "wtsCount": 18
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(2)BootyBay.w3m",
@@ -57,11 +57,11 @@
    "block": 17
   },
   "w3i": 263,
-  "name": "TRIGSTR_003",
-  "author": "TRIGSTR_006",
-  "desc": "TRIGSTR_005",
+  "name": "Booty Bay",
+  "author": "暴雪娱乐",
+  "desc": "海盗曾一度将他们的船只停泊在这片宁静的港湾里。现在，这一带被残忍的占用者践踏。在你的对手之前在这些岛屿上建立你的王国吧！",
   "version": 18,
-  "wtsCount": 0
+  "wtsCount": 7
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(2)Harrow.w3m",
@@ -73,11 +73,11 @@
    "block": 17
   },
   "w3i": 296,
-  "name": "TRIGSTR_000",
-  "author": "TRIGSTR_003",
-  "desc": "TRIGSTR_002",
+  "name": "Harrow",
+  "author": "暴雪娱乐",
+  "desc": "第一场雪已经降临了，资源变的有限，没有时间可以浪费了！",
   "version": 18,
-  "wtsCount": 0
+  "wtsCount": 10
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(2)HillsOfGlory.w3m",
@@ -89,11 +89,11 @@
    "block": 17
   },
   "w3i": 263,
-  "name": "TRIGSTR_000",
-  "author": "TRIGSTR_003",
-  "desc": "TRIGSTR_002",
+  "name": "Hills of Glory",
+  "author": "暴雪娱乐",
+  "desc": "这片翠绿的山丘上居住着令人厌恶的生物。而海岸被两头龙守卫着，因为它们早就发现，常来的船只能给他们提供美味的食物。",
   "version": 18,
-  "wtsCount": 0
+  "wtsCount": 7
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(2)OgreMound.w3m",
@@ -105,11 +105,11 @@
    "block": 17
   },
   "w3i": 296,
-  "name": "TRIGSTR_000",
-  "author": "TRIGSTR_003",
-  "desc": "TRIGSTR_002",
+  "name": "Ogre Mound",
+  "author": "暴雪娱乐",
+  "desc": "这块岛屿金矿资源丰富，但它们都由食人魔守护着。",
   "version": 18,
-  "wtsCount": 0
+  "wtsCount": 10
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(2)PlunderIsle.w3m",
@@ -121,11 +121,11 @@
    "block": 17
   },
   "w3i": 296,
-  "name": "TRIGSTR_000",
-  "author": "TRIGSTR_003",
-  "desc": "TRIGSTR_002",
+  "name": "Plunder Isle",
+  "author": "暴雪娱乐",
+  "desc": "迄今为止，食人魔们抵挡着狼人并占据着富有的资源。击碎他们，还有你的敌人，让他们跪倒在你的脚下吧！",
   "version": 18,
-  "wtsCount": 0
+  "wtsCount": 10
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(3)Forestwalk.w3m",
@@ -137,11 +137,11 @@
    "block": 17
   },
   "w3i": 340,
-  "name": "TRIGSTR_000",
-  "author": "TRIGSTR_003",
-  "desc": "TRIGSTR_002",
+  "name": "Forestwalk",
+  "author": "暴雪娱乐",
+  "desc": "凌乱的蜘蛛网悬挂于每一颗树上，显然蜘蛛是这里的统治种族。恶魔之血惊惧了大地，久久缠绕于这些生物之上。",
   "version": 18,
-  "wtsCount": 0
+  "wtsCount": 11
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(3)IsleOfDread.w3m",
@@ -153,11 +153,11 @@
    "block": 17
   },
   "w3i": 307,
-  "name": "TRIGSTR_000",
-  "author": "TRIGSTR_003",
-  "desc": "TRIGSTR_002",
+  "name": "Isle of Dread",
+  "author": "暴雪娱乐",
+  "desc": "与青龙，半人马和睦相处是这片岛屿的守则。建立一支够强的军队再开始作战吧。",
   "version": 18,
-  "wtsCount": 0
+  "wtsCount": 8
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(3)Nighthaven.w3m",
@@ -169,11 +169,11 @@
    "block": 17
   },
   "w3i": 307,
-  "name": "TRIGSTR_000",
-  "author": "TRIGSTR_003",
-  "desc": "TRIGSTR_002",
+  "name": "Nighthaven",
+  "author": "暴雪娱乐",
+  "desc": "曾一度有一座光明与生命的神庙建造于此，然而现在，这里已经荒废成一片布满岩石与荆棘的沼泽。空气充满了致病的毒气。砍掉树木以找到你的敌人吧。\r\n",
   "version": 18,
-  "wtsCount": 0
+  "wtsCount": 8
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(4)Adrenaline.w3m",
@@ -185,11 +185,11 @@
    "block": 17
   },
   "w3i": 384,
-  "name": "TRIGSTR_000",
-  "author": "TRIGSTR_003",
-  "desc": "TRIGSTR_002",
+  "name": "Adrenaline",
+  "author": "暴雪娱乐",
+  "desc": "得砍穿树林以扩展基地和找到你的对手，但是要小心，传言有一只红龙以此为家。",
   "version": 18,
-  "wtsCount": 0
+  "wtsCount": 12
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(4)Borderlands.w3m",
@@ -201,11 +201,11 @@
    "block": 17
   },
   "w3i": 371,
-  "name": "TRIGSTR_000",
-  "author": "TRIGSTR_003",
-  "desc": "TRIGSTR_002",
+  "name": "Borderlands",
+  "author": "暴雪娱乐",
+  "desc": "这片荫翳的森林中有无数的黑暗巨魔，他们以守卫中间山脉的长鳞的怪兽为美食。夷平树林，找到敌军。",
   "version": 18,
-  "wtsCount": 0
+  "wtsCount": 10
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(4)Deadwaterdrop.w3m",
@@ -217,11 +217,11 @@
    "block": 17
   },
   "w3i": 351,
-  "name": "TRIGSTR_000",
-  "author": "TRIGSTR_003",
-  "desc": "TRIGSTR_002",
+  "name": "Deadwater Drop",
+  "author": "暴雪娱乐",
+  "desc": "这片数量中金矿丰富，但竞争性也很强，占据神圣的夜行者之泉吧！",
   "version": 18,
-  "wtsCount": 0
+  "wtsCount": 9
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(4)DragonMountain.w3m",
@@ -233,11 +233,11 @@
    "block": 17
   },
   "w3i": 384,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_005",
-  "desc": "TRIGSTR_003",
+  "name": "Dragon Mountain",
+  "author": "暴雪娱乐",
+  "desc": "巨龙占据了山脉。联合起来去夺取它们的宝物吧，否则你没有机会。",
   "version": 18,
-  "wtsCount": 0
+  "wtsCount": 12
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(4)Duskwood.w3m",
@@ -249,11 +249,11 @@
    "block": 17
   },
   "w3i": 384,
-  "name": "TRIGSTR_000",
-  "author": "TRIGSTR_003",
-  "desc": "TRIGSTR_002",
+  "name": "Duskwood",
+  "author": "暴雪娱乐",
+  "desc": "绿色外表使它们在浓密的矮林中难以被发现，但是不要小看这些占据丛林的野兽，准备一场激战吧。",
   "version": 18,
-  "wtsCount": 0
+  "wtsCount": 12
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(4)Frostsabre.w3m",
@@ -265,11 +265,11 @@
    "block": 17
   },
   "w3i": 351,
-  "name": "TRIGSTR_000",
-  "author": "TRIGSTR_003",
-  "desc": "TRIGSTR_002",
+  "name": "Frostsabre",
+  "author": "暴雪娱乐",
+  "desc": "据说此岛屿上的巨龙们会帮助它们认为有足够勇气的值得帮助的人。又据谣言说，它们的气息，比坟墓更加寒冷。\r\n",
   "version": 18,
-  "wtsCount": 0
+  "wtsCount": 9
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(4)HarvestMoon.w3m",
@@ -281,11 +281,11 @@
    "block": 17
   },
   "w3i": 351,
-  "name": "TRIGSTR_005",
-  "author": "TRIGSTR_008",
-  "desc": "TRIGSTR_007",
+  "name": "Harvest Moon",
+  "author": "暴雪娱乐",
+  "desc": "快速发展，杀向地图中央，打败那里的食人魔能得到巨大的财富。",
   "version": 18,
-  "wtsCount": 0
+  "wtsCount": 9
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(4)HeartToHeart.w3m",
@@ -297,11 +297,11 @@
    "block": 17
   },
   "w3i": 351,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_003",
+  "name": "Heart to Heart",
+  "author": "Blizzard Entertainment",
+  "desc": "一位兽族战士在保护他心爱的女子时英勇地死去了。他们的名字都已经被人们所遗忘，但是他临死时形成的那股强大的魔法力量却将大地化成了心的形状，作为对爱人爱的象征。",
   "version": 18,
-  "wtsCount": 0
+  "wtsCount": 9
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(4)Legends.w3m",
@@ -313,11 +313,11 @@
    "block": 17
   },
   "w3i": 384,
-  "name": "TRIGSTR_000",
-  "author": "TRIGSTR_003",
-  "desc": "TRIGSTR_002",
+  "name": "Legends",
+  "author": "暴雪娱乐",
+  "desc": "丰富的资源和财宝，这片森林是建立一个王国的好地方。",
   "version": 18,
-  "wtsCount": 0
+  "wtsCount": 12
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(4)LostTemple.w3m",
@@ -329,11 +329,11 @@
    "block": 17
   },
   "w3i": 451,
-  "name": "TRIGSTR_010",
-  "author": "TRIGSTR_013",
-  "desc": "TRIGSTR_012",
+  "name": "Lost Temple",
+  "author": "暴雪娱乐",
+  "desc": "被众多金矿环绕着，生命之泉在向你招手。快速发展，否则会有被对手冲跨的危险。",
   "version": 18,
-  "wtsCount": 0
+  "wtsCount": 14
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(4)MysticIsles.w3m",
@@ -345,11 +345,11 @@
    "block": 17
   },
   "w3i": 351,
-  "name": "TRIGSTR_005",
-  "author": "TRIGSTR_008",
-  "desc": "TRIGSTR_007",
+  "name": "Mystic Isles",
+  "author": "暴雪娱乐",
+  "desc": "岁月和海洋蹂躏了这些岛屿。很快，连上面的魔法空间门也会被无尽的蓝色所淹没。",
   "version": 18,
-  "wtsCount": 0
+  "wtsCount": 9
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(4)TranquilPaths.w3m",
@@ -361,11 +361,11 @@
    "block": 17
   },
   "w3i": 1562,
-  "name": "TRIGSTR_010",
-  "author": "TRIGSTR_013",
-  "desc": "TRIGSTR_012",
+  "name": "Tranquil Paths",
+  "author": "暴雪娱乐",
+  "desc": "危机之下你只能打破这片大陆的宁静，在河流之外，是无尽的宝藏。",
   "version": 18,
-  "wtsCount": 0
+  "wtsCount": 14
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(4)TurtleRock~3.w3x",
@@ -377,11 +377,11 @@
    "block": 17
   },
   "w3i": 487,
-  "name": "TRIGSTR_020",
-  "author": "TRIGSTR_023",
-  "desc": "TRIGSTR_022",
+  "name": "Turtle Rock",
+  "author": "Blizzard Entertainment",
+  "desc": "曾经是一座流亡者的岛屿，而今对追求宝物的人来说，是财富之岛。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 14
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(5)TheGlaive.w3m",
@@ -393,11 +393,11 @@
    "block": 18
   },
   "w3i": 395,
-  "name": "TRIGSTR_000",
-  "author": "TRIGSTR_003",
-  "desc": "TRIGSTR_002",
+  "name": "The Glaive",
+  "author": "暴雪娱乐",
+  "desc": "只有一位无畏的地精商人敢在个岛屿上展开贸易，而且当一群龙觉得这是好地方后，他的生意一向不怎么好。",
   "version": 18,
-  "wtsCount": 0
+  "wtsCount": 10
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(6)DarkForest.w3m",
@@ -409,11 +409,11 @@
    "block": 17
   },
   "w3i": 539,
-  "name": "TRIGSTR_012",
-  "author": "TRIGSTR_015",
-  "desc": "TRIGSTR_014",
+  "name": "Dark Forest",
+  "author": "暴雪娱乐",
+  "desc": "把入侵者从这片古大陆上清除出去吧。小心无魂的石之守护者，所取得的财宝可以逆转战争的形势。",
   "version": 18,
-  "wtsCount": 0
+  "wtsCount": 16
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(6)DragonFire.w3m",
@@ -425,11 +425,11 @@
    "block": 17
   },
   "w3i": 472,
-  "name": "TRIGSTR_000",
-  "author": "TRIGSTR_003",
-  "desc": "TRIGSTR_002",
+  "name": "Dragon Fire",
+  "author": "暴雪娱乐",
+  "desc": "秋季的这里有点热的出奇，空气中充满硫磺的气味。显然，巨龙居住在这片覆盖灰尘的平原上。",
   "version": 18,
-  "wtsCount": 0
+  "wtsCount": 14
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(6)DrywaterGulch.w3m",
@@ -441,11 +441,11 @@
    "block": 18
   },
   "w3i": 439,
-  "name": "TRIGSTR_000",
-  "author": "TRIGSTR_003",
-  "desc": "TRIGSTR_002",
+  "name": "Drywater Gulch",
+  "author": "暴雪娱乐",
+  "desc": "闪电在无云的天空中划过。灼热的太阳和贫瘠的大地把当地居民变成了可怕的敌人。",
   "version": 18,
-  "wtsCount": 0
+  "wtsCount": 11
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(6)GnollWood.w3m",
@@ -457,11 +457,11 @@
    "block": 17
   },
   "w3i": 439,
-  "name": "TRIGSTR_007",
-  "author": "TRIGSTR_010",
-  "desc": "TRIGSTR_009",
+  "name": "Gnoll Wood",
+  "author": "暴雪娱乐",
+  "desc": "赶快准备你的防御，敌人已经逼近了。小心侦察河流的边缘，因为傀儡们潜伏在山丘中。",
   "version": 18,
-  "wtsCount": 0
+  "wtsCount": 11
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(6)Moonglade.w3m",
@@ -473,11 +473,11 @@
    "block": 17
   },
   "w3i": 439,
-  "name": "TRIGSTR_000",
-  "author": "TRIGSTR_003",
-  "desc": "TRIGSTR_002",
+  "name": "Moonglade",
+  "author": "暴雪娱乐",
+  "desc": "这片迄今仍未被燃烧军团污染的沼泽地上，居住着一个熊人部落，他们不欢迎入侵者。",
   "version": 18,
-  "wtsCount": 0
+  "wtsCount": 11
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(6)ScorchedBasin.w3m",
@@ -489,11 +489,11 @@
    "block": 18
   },
   "w3i": 572,
-  "name": "TRIGSTR_010",
-  "author": "TRIGSTR_013",
-  "desc": "TRIGSTR_012",
+  "name": "Scorched Basin",
+  "author": "暴雪娱乐",
+  "desc": "堕落而又可爱的鹰身女妖已经开始向这里的沙地迁徙，并开始于半人马和剑鬃猪人竞争资源。",
   "version": 18,
-  "wtsCount": 0
+  "wtsCount": 19
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(6)Stromguarde.w3m",
@@ -505,11 +505,11 @@
    "block": 18
   },
   "w3i": 439,
-  "name": "TRIGSTR_007",
-  "author": "TRIGSTR_010",
-  "desc": "TRIGSTR_009",
+  "name": "Stromguarde",
+  "author": "暴雪娱乐",
+  "desc": "这座城市由一群强盗和术士控制着。夜间擅入而不挣大眼睛的话，你的性命难保。",
   "version": 18,
-  "wtsCount": 0
+  "wtsCount": 11
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(6)SwampOfSorrows.w3m",
@@ -521,11 +521,11 @@
    "block": 17
   },
   "w3i": 439,
-  "name": "TRIGSTR_000",
-  "author": "TRIGSTR_003",
-  "desc": "TRIGSTR_002",
+  "name": "Swamp of Sorrows",
+  "author": "暴雪娱乐",
+  "desc": "一个熊人部落顽强的监守在此，与一群邪恶的入侵生物战斗，但是，他们似乎不能坚持太久了。",
   "version": 18,
-  "wtsCount": 0
+  "wtsCount": 11
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(6)TimbermawHold.w3m",
@@ -537,11 +537,11 @@
    "block": 17
   },
   "w3i": 439,
-  "name": "TRIGSTR_000",
-  "author": "TRIGSTR_003",
-  "desc": "TRIGSTR_002",
+  "name": "Timbermaw Hold",
+  "author": "暴雪娱乐",
+  "desc": "数个世纪前，当半羊人肆虐时，巨龙放弃了这片土地。赶走邪恶并重新占据它吧。",
   "version": 18,
-  "wtsCount": 0
+  "wtsCount": 11
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(8)Battleground.w3m",
@@ -553,11 +553,11 @@
    "block": 17
   },
   "w3i": 627,
-  "name": "TRIGSTR_000",
-  "author": "TRIGSTR_003",
-  "desc": "TRIGSTR_002",
+  "name": "Battleground",
+  "author": "暴雪娱乐",
+  "desc": "冬天的严寒已经开始降临这片被战争撕碎的土地。收集你所能找到的黄金，因为霜冻即将到来。",
   "version": 18,
-  "wtsCount": 0
+  "wtsCount": 18
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(8)BlastedLands.w3m",
@@ -569,11 +569,11 @@
    "block": 17
   },
   "w3i": 527,
-  "name": "TRIGSTR_000",
-  "author": "TRIGSTR_003",
-  "desc": "TRIGSTR_002",
+  "name": "Blasted Lands",
+  "author": "暴雪娱乐",
+  "desc": "这片贫瘠的土地尽是杂乱的矿藏和泛滥的半人马。团结起来，在为血腥的战斗做好准备之前不要擅自走出基地。",
   "version": 18,
-  "wtsCount": 0
+  "wtsCount": 13
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(8)BloodvenomFalls.w3m",
@@ -585,11 +585,11 @@
    "block": 17
   },
   "w3i": 527,
-  "name": "TRIGSTR_000",
-  "author": "TRIGSTR_003",
-  "desc": "TRIGSTR_002",
+  "name": "Bloodvenom Falls",
+  "author": "暴雪娱乐",
+  "desc": "黑暗力量入侵了这片沼泽地，连树人都被其邪恶印象所扭曲。看来你需要盟友的协助。",
   "version": 18,
-  "wtsCount": 0
+  "wtsCount": 13
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(8)GardenOfWar.w3m",
@@ -601,11 +601,11 @@
    "block": 17
   },
   "w3i": 527,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_003",
+  "name": "Garden of War",
+  "author": "暴雪娱乐",
+  "desc": "快准备好一场真正的挑战。大批大批的怪物让这片森林陷入了无尽的痛苦和磨难之中，可怕的食人魔也占据着那些重要的金矿资源。",
   "version": 18,
-  "wtsCount": 0
+  "wtsCount": 13
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(8)GolemsInTheMist.w3m",
@@ -617,11 +617,11 @@
    "block": 17
   },
   "w3i": 627,
-  "name": "TRIGSTR_014",
-  "author": "TRIGSTR_017",
-  "desc": "TRIGSTR_016",
+  "name": "Golems in the Mist",
+  "author": "暴雪娱乐",
+  "desc": "与盟友一起去击败敌人吧，丛林深处隐藏着财富和危险.",
   "version": 18,
-  "wtsCount": 0
+  "wtsCount": 18
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(8)PetrifiedForest.w3m",
@@ -633,11 +633,11 @@
    "block": 17
   },
   "w3i": 527,
-  "name": "TRIGSTR_000",
-  "author": "TRIGSTR_003",
-  "desc": "TRIGSTR_002",
+  "name": "Petrified Forest",
+  "author": "暴雪娱乐",
+  "desc": "半羊人清理了大多数当地居民以企图独占岛上的巨大财富。只有两个地精商店依然在提供他们的服务，然而他们似乎得不到太多利益。",
   "version": 18,
-  "wtsCount": 0
+  "wtsCount": 13
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(8)Plaguelands.w3m",
@@ -649,11 +649,11 @@
    "block": 17
   },
   "w3i": 527,
-  "name": "TRIGSTR_010",
-  "author": "TRIGSTR_013",
-  "desc": "TRIGSTR_012",
+  "name": "Plaguelands",
+  "author": "暴雪娱乐",
+  "desc": "与你的盟友合作展开进攻，否则你们机会渺茫。使用最近的空间门在敌人发现你之前来侦察他们。",
   "version": 18,
-  "wtsCount": 0
+  "wtsCount": 13
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(8)PlainsOfSnow.w3m",
@@ -665,11 +665,11 @@
    "block": 17
   },
   "w3i": 527,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_003",
-  "desc": "TRIGSTR_013",
+  "name": "Plains of Snow",
+  "author": "暴雪娱乐",
+  "desc": "北极大陆闪亮而美丽，但也同样无情。没有厚厚的皮毛或魔力的帮助，任何生物都不能在这里生存。",
   "version": 18,
-  "wtsCount": 0
+  "wtsCount": 13
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(8)TheCrucible.w3m",
@@ -681,11 +681,11 @@
    "block": 17
   },
   "w3i": 627,
-  "name": "TRIGSTR_000",
-  "author": "TRIGSTR_003",
-  "desc": "TRIGSTR_002",
+  "name": "The Crucible",
+  "author": "暴雪娱乐",
+  "desc": "准备好在强盗四伏的林中战斗吧。茂盛的森林中掩隐着两处散发魔力的泉水。",
   "version": 18,
-  "wtsCount": 0
+  "wtsCount": 18
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\(9)Riverrun.w3m",
@@ -697,11 +697,11 @@
    "block": 17
   },
   "w3i": 571,
-  "name": "TRIGSTR_000",
-  "author": "TRIGSTR_003",
-  "desc": "TRIGSTR_002",
+  "name": "Riverrun",
+  "author": "暴雪娱乐",
+  "desc": "作为燃烧军团的走卒，半羊人清理岛上所有的桥梁通道。去做他们不敢做的事吧！",
   "version": 18,
-  "wtsCount": 0
+  "wtsCount": 14
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\Download\\beibaobang\\C_背包帮演示地图.w3m",
@@ -2772,11 +2772,11 @@
    "block": 17
   },
   "w3i": 651,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_016",
+  "name": "Raging Stream",
+  "author": "Blizzard Entertainment",
+  "desc": "这个城镇有着丰富的资源，但是很久以前，一场水灾几乎杀死了这里所有的居民。和你的盟友好好合作，争取成为第一支战胜激流的队伍。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 15
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(12)EmeraldGardens.w3x",
@@ -2788,11 +2788,11 @@
    "block": 17
   },
   "w3i": 739,
-  "name": "TRIGSTR_014",
-  "author": "TRIGSTR_017",
-  "desc": "TRIGSTR_016",
+  "name": "Emerald Gardens",
+  "author": "Blizzard Entertainment",
+  "desc": "在茂盛的树木下面隐藏的是一个古代城镇的遗迹。由于这里的资源非常丰富，因而这里的平静被打破了，尤其是现在这个资源匮乏的时代。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 17
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(2)BanditRidge.w3x",
@@ -2804,11 +2804,11 @@
    "block": 18
   },
   "w3i": 299,
-  "name": "TRIGSTR_004",
-  "author": "TRIGSTR_007",
-  "desc": "TRIGSTR_006",
+  "name": "Bandit Ridge",
+  "author": "Blizzard Entertainment",
+  "desc": "在这个盗贼出没的山脊里有一条鹅卵石路。在晚上，成群的盗贼活跃于此，将路人的头颅砍下去献给他们的食人魔和巨魔同盟。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 7
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(2)Circumvention.w3x",
@@ -2820,11 +2820,11 @@
    "block": 18
   },
   "w3i": 608,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_003",
+  "name": "Circumvention",
+  "author": "Blizzard Entertainment",
+  "desc": "这湖是几英里以内所有地区的供水来源。中立英雄都进入了这片地区以谋取金钱上的利益。你自己都可要小心了。危险就在眼前。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 7
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(2)EchoIsles.w3x",
@@ -2836,11 +2836,11 @@
    "block": 17
   },
   "w3i": 299,
-  "name": "TRIGSTR_004",
-  "author": "TRIGSTR_007",
-  "desc": "TRIGSTR_006",
+  "name": "Echo Isles",
+  "author": "暴雪娱乐",
+  "desc": "虽然这些岛屿的周围都是深不可测和能激起惊涛骇浪的汪洋大海。但是这里也饱受着战争的困扰。这里的许多生物都是战争的避难者。你不要在这里期望得到什么热情的接待。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 7
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(2)GlacialThaw.w3x",
@@ -2852,11 +2852,11 @@
    "block": 17
   },
   "w3i": 299,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_003",
+  "name": "Glacial Thaw",
+  "author": "Blizzard Entertainment",
+  "desc": "自从巫妖到来之后，冬日就主宰了这个城镇。现在，寒冰终于开始融化了。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 7
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(2)Korea.w3x",
@@ -2868,11 +2868,11 @@
    "block": 17
   },
   "w3i": 299,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_003",
+  "name": "Korea",
+  "author": "暴雪娱乐有限公司",
+  "desc": "在这个国家你所选择的热土上进行战斗吧，无论是在农地还是在高地，你都要为了荣耀而战。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 7
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(2)MeltingValley.w3x",
@@ -2884,11 +2884,11 @@
    "block": 19
   },
   "w3i": 299,
-  "name": "TRIGSTR_004",
-  "author": "TRIGSTR_007",
-  "desc": "TRIGSTR_006",
+  "name": "溶雪山谷",
+  "author": "暴雪娱乐",
+  "desc": "暴风雪后，积雪逐渐消融，山谷却仍然笼罩在冰天雪地之中。鱼人觊觎着食人魔、豺狼人和巨魔的财宝，在山谷中定居了下來。现在是你该查探一下环境、活动活动筋骨的时候了，我",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 7
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(2)RoadToStratholme.w3x",
@@ -2900,11 +2900,11 @@
    "block": 18
   },
   "w3i": 299,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_003",
+  "name": "斯坦索姆之路",
+  "author": "暴雪娱乐",
+  "desc": "昔日熙熙攘攘的贸易要道如今已变成了饱受雨水侵淫的沼泽，沦为了盗匪与混血狗头人的地盘。你要在这里获得一席之地并占领重要的战略点。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 7
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(2)SecretValley.w3x",
@@ -2916,11 +2916,11 @@
    "block": 19
   },
   "w3i": 299,
-  "name": "TRIGSTR_004",
-  "author": "TRIGSTR_007",
-  "desc": "TRIGSTR_006",
+  "name": "Secret Valley",
+  "author": "Blizzard Entertainment",
+  "desc": "Since ages past, there is a story told in the taverns about a secret, flooded va",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 7
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(2)ShrineOfTheAncients.w3x",
@@ -2932,11 +2932,11 @@
    "block": 18
   },
   "w3i": 303,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_003",
+  "name": "Shrine of the Ancients",
+  "author": "Blizzard Entertainment",
+  "desc": "过去曾有一座奉祀往昔古老神祇的祭坛，但如今只剩下碎石、黄沙、与瓦砾。不过，此地仍然谣传着有来自深海的生物，会浮出水面来保护上个世纪的遗产。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 7
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(2)TerenasStand.w3x",
@@ -2948,11 +2948,11 @@
    "block": 17
   },
   "w3i": 299,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_003",
+  "name": "Terenas Stand",
+  "author": "Blizzard Entertainment",
+  "desc": "「我高贵的同胞，邪恶正在考验我们。 黑暗降临到我们海岸。 奋起吧，杀死那些敌人…攻击，我们要攻击，让其它人能够安居乐业。 温柔的美德不应该为黑夜所隐没…我们要活",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 7
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(2)TheTwoRivers.w3x",
@@ -2964,11 +2964,11 @@
    "block": 17
   },
   "w3i": 299,
-  "name": "TRIGSTR_003",
-  "author": "TRIGSTR_006",
-  "desc": "TRIGSTR_005",
+  "name": "The Two Rivers",
+  "author": "Blizzard Entertainment",
+  "desc": "在你和你的敌人之间，只有两座小桥把你们隔离了开来。但是或许你可以去寻找一艘地精飞艇来帮助你防御或者进行突袭。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 7
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(2)TirisfalGlades.w3x",
@@ -2980,11 +2980,11 @@
    "block": 17
   },
   "w3i": 299,
-  "name": "TRIGSTR_004",
-  "author": "TRIGSTR_007",
-  "desc": "TRIGSTR_006",
+  "name": "Tirisfal Glades",
+  "author": "Blizzard Entertainment",
+  "desc": "不死族的人经常在这里的东西方向间进行游荡，但是这里的大雨似乎把他们带来的腐朽气息都清洗一空了。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 7
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)Adrenaline.w3x",
@@ -2996,11 +2996,11 @@
    "block": 17
   },
   "w3i": 420,
-  "name": "TRIGSTR_000",
-  "author": "TRIGSTR_003",
-  "desc": "TRIGSTR_002",
+  "name": "Adrenaline",
+  "author": "Blizzard Entertainment",
+  "desc": "从树林中砍出一条路来接近你的敌人，但是你要小心了。传说中，有一条巨大的红龙将这里当成了它自己的家园。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 12
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)Avalanche.w3x",
@@ -3012,11 +3012,11 @@
    "block": 17
   },
   "w3i": 487,
-  "name": "TRIGSTR_010",
-  "author": "TRIGSTR_013",
-  "desc": "TRIGSTR_012",
+  "name": "Avalanche",
+  "author": "Blizzard Entertainment",
+  "desc": "为了权力，在北方和南方之间展开了一场争斗。厮杀的战场就在这白雪覆盖的山顶。 你也想加入这场战斗？那么就请赶快吧。每个队伍都有自己的泉水，但是小酒馆可仍旧是兵家必",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 14
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)BridgeTooNear.w3x",
@@ -3028,11 +3028,11 @@
    "block": 18
   },
   "w3i": 387,
-  "name": "TRIGSTR_006",
-  "author": "TRIGSTR_009",
-  "desc": "TRIGSTR_008",
+  "name": "Bridge Too Near",
+  "author": "Blizzard Entertainment",
+  "desc": "四座岛屿被中央的一处大陆连接在了一起。跨过那木桥来攻击敌人的城镇。但是同时也不要忘记保护好你自己的城镇。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 9
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)BrokenShard.w3x",
@@ -3044,11 +3044,11 @@
    "block": 17
   },
   "w3i": 387,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_003",
+  "name": "Broken Shard",
+  "author": "Blizzard Entertainment",
+  "desc": "在这个极地的中央，有一个小酒馆。在那里你可以雇用各类中立英雄。有了他们的帮助，你或许可以轻松地击败你的敌人。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 9
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)CentaurGrove.w3x",
@@ -3060,11 +3060,11 @@
    "block": 17
   },
   "w3i": 948,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_003",
+  "name": "半人马树林",
+  "author": "暴雪娱乐",
+  "desc": "半人马顽强地保护着信仰中的神圣草原。神秘的传送门能让你在该地带快速地穿梭。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 12
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)ColdHeart.w3x",
@@ -3076,11 +3076,11 @@
    "block": 18
   },
   "w3i": 420,
-  "name": "TRIGSTR_000",
-  "author": "TRIGSTR_003",
-  "desc": "TRIGSTR_019",
+  "name": "Cold Heart",
+  "author": "Blizzard Entertainment",
+  "desc": "在严寒的极地，寒冷，饥饿将很多人都逼到了绝望的边缘。任何的忠诚都被标上了价格的标签。所以你前往那里的话最好手中有足够的钱。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 12
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)Deathrose.w3x",
@@ -3092,11 +3092,11 @@
    "block": 17
   },
   "w3i": 391,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_003",
+  "name": "Deathrose",
+  "author": "Blizzard Entertainment",
+  "desc": "死亡玫瑰是一种很稀有的花朵，只生长在梣谷最深、最黑暗的沼泽里。 在炼金术大师的手里，这种花朵的花瓣可以用来制造一种阿济洛斯大陆上最致命的毒药。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 9
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)DesertStrife.w3x",
@@ -3108,11 +3108,11 @@
    "block": 17
   },
   "w3i": 387,
-  "name": "TRIGSTR_006",
-  "author": "TRIGSTR_009",
-  "desc": "TRIGSTR_008",
+  "name": "Desert Strife",
+  "author": "Blizzard Entertainment",
+  "desc": "每个玩家开始的位置都是在绝壁之上，到达对方的途径只能依靠地精飞艇的帮忙。因此，在这个地区，你可以看见到处都有着地精飞艇在你的头上飞来飞去。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 9
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)DevilsCauldron.w3x",
@@ -3124,11 +3124,11 @@
    "block": 17
   },
   "w3i": 387,
-  "name": "TRIGSTR_000",
-  "author": "TRIGSTR_003",
-  "desc": "TRIGSTR_002",
+  "name": "Devil's Cauldron",
+  "author": "Blizzard Entertainment",
+  "desc": "没有什么能从那无比的灼热中逃生。许多恶魔在这种环境下很好地生存了下来。但是恐怕你就不行了。快去找那生命之泉吧或者去雇用一支野兽盟友军团。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 9
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)ExcavationSite.w3x",
@@ -3140,11 +3140,11 @@
    "block": 17
   },
   "w3i": 387,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_003",
+  "name": "Excavation Site",
+  "author": "暴雪娱乐",
+  "desc": "在那些工程师的帮助下，我们在多伦塔的附近发现了一座秘密城市。快去占领地图中心的金矿。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 9
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)FloodPlains.w3x",
@@ -3156,11 +3156,11 @@
    "block": 17
   },
   "w3i": 387,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_003",
+  "name": "Floodplains",
+  "author": "Blizzard Entertainment",
+  "desc": "沿着溪流就能找到敌人的基地， 但要小心…溪谷里居住着食人魔。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 9
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)FloodPlains1v1.w3x",
@@ -3172,11 +3172,11 @@
    "block": 18
   },
   "w3i": 387,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_003",
+  "name": "Floodplains 1v1 Version",
+  "author": "Blizzard Entertainment",
+  "desc": "沿着溪流就能找到敌人的基地， 但要小心…溪谷里居住着食人魔。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 9
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)FrozenClover.w3x",
@@ -3188,11 +3188,11 @@
    "block": 17
   },
   "w3i": 387,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_003",
-  "desc": "TRIGSTR_009",
+  "name": "Frozen Clover",
+  "author": "Blizzard Entertainment",
+  "desc": "能有四片叶子的三叶草被看成是好运的象征。当然如果你不冒险的话，那么世界上所有的好运也帮不了你。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 9
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)Goldshire.w3x",
@@ -3204,11 +3204,11 @@
    "block": 17
   },
   "w3i": 387,
-  "name": "TRIGSTR_003",
-  "author": "TRIGSTR_006",
-  "desc": "TRIGSTR_005",
+  "name": "Goldshire",
+  "author": "暴雪娱乐",
+  "desc": "战争和饥饿将不安带入了原本平静的艾尔文森林，让闪金镇处于巨大的危险之中。快去消除这个危险，以便让工匠们能开始建造暴风城。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 9
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)HailStone.w3x",
@@ -3220,11 +3220,11 @@
    "block": 17
   },
   "w3i": 387,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_003",
+  "name": "Hail Stone",
+  "author": "Blizzard Entertainment",
+  "desc": "在雪松林深处，一群惟利是图的地精正在利用该地的冲突来赚钱。不要再犹豫了，赶快前去吧。因为对他们而言，你对手的黄金远不如放在自己口袋中的。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 9
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)HearthglenHills.w3x",
@@ -3236,11 +3236,11 @@
    "block": 17
   },
   "w3i": 387,
-  "name": "TRIGSTR_003",
-  "author": "TRIGSTR_006",
-  "desc": "TRIGSTR_005",
+  "name": "Hearthglen Hills",
+  "author": "Blizzard Entertainment",
+  "desc": "心之高地曾经一度是一个繁忙的矿地，现在却到处充满了那些贪婪的怪兽。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 9
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)Hellfire.w3x",
@@ -3252,11 +3252,11 @@
    "block": 17
   },
   "w3i": 387,
-  "name": "TRIGSTR_005",
-  "author": "TRIGSTR_008",
-  "desc": "TRIGSTR_007",
+  "name": "Hellfire",
+  "author": "Blizzard Entertainment",
+  "desc": "在魔法力量的破坏下，兽族的家园变得支离破碎。只有那些意志坚强的人才能征服那地狱火大军。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 9
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)IceFlow.w3x",
@@ -3268,11 +3268,11 @@
    "block": 18
   },
   "w3i": 387,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_003",
+  "name": "Ice Flow",
+  "author": "Blizzard Entertainment",
+  "desc": "在强壮的盟友的帮助下，冰巨魔毫不费劲的控制着这片北极土地已经有一段漫长的岁月了。在对力量的自满中，他们开始变得麻痹而失去了戒心，这正是开始征服这片土地的好时机。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 9
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)IceForge.w3x",
@@ -3284,11 +3284,11 @@
    "block": 17
   },
   "w3i": 387,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_003",
+  "name": "Ice Forge",
+  "author": "Blizzard Entertainment",
+  "desc": "在冰冻的大地之上，邪恶的力量和武器正在慢慢地形成。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 9
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)Islands.w3x",
@@ -3300,11 +3300,11 @@
    "block": 17
   },
   "w3i": 387,
-  "name": "TRIGSTR_006",
-  "author": "TRIGSTR_008",
-  "desc": "TRIGSTR_009",
+  "name": "Islands",
+  "author": "Blizzard Entertaiment",
+  "desc": "曾有一个伟大的文明居住在这片阳光群岛上。而今，穆格尔霸占了船坞，更宝贵的资源则被一只巨大的龙龟及其子孙守卫着。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 9
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)LostTemple.w3x",
@@ -3316,11 +3316,11 @@
    "block": 17
   },
   "w3i": 487,
-  "name": "TRIGSTR_010",
-  "author": "TRIGSTR_013",
-  "desc": "TRIGSTR_012",
+  "name": "Lost Temple",
+  "author": "Blizzard Entertainment",
+  "desc": "地处中央的生命之泉四周被多个金矿所包围。你在这张地图上要么快速地占领地盘进行扩张，要不等待你的只有失败。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 14
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)ParadiseIslands.w3x",
@@ -3332,11 +3332,11 @@
    "block": 18
   },
   "w3i": 387,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_003",
+  "name": "Paradise Islands",
+  "author": "Blizzard Entertainment",
+  "desc": "这片绿色的大地上的敌人和它所拥有的资源一样的多。带着你的部队进入这片神秘的领地吧。对那些神庙遗迹附近的法师也要多加小心。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 9
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)PhantomGrove.w3x",
@@ -3348,11 +3348,11 @@
    "block": 17
   },
   "w3i": 387,
-  "name": "TRIGSTR_003",
-  "author": "TRIGSTR_006",
-  "desc": "TRIGSTR_005",
+  "name": "Phantom Grove",
+  "author": "Blizzard Entertainment",
+  "desc": "一个古老的传说在森林里传送着，即使是那些最勇敢的战士也会为之而感到恐惧。那些幻想着成为英雄的勇士进来寻求着冒险和理想。但是却没有人活着回去过。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 9
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)Predators.w3x",
@@ -3364,11 +3364,11 @@
    "block": 17
   },
   "w3i": 387,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_003",
+  "name": "Predators",
+  "author": "暴雪娱乐",
+  "desc": "几千年以来，在这里发生过无数次酣畅淋漓的大战。那些死去的亡灵在这里永远地守候着。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 9
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)Roundabout.w3x",
@@ -3380,11 +3380,11 @@
    "block": 18
   },
   "w3i": 420,
-  "name": "TRIGSTR_000",
-  "author": "TRIGSTR_003",
-  "desc": "TRIGSTR_015",
+  "name": "Roundabout",
+  "author": "Blizzard Entertainment",
+  "desc": "在这里耸立的高山间，有着许多从地底冒出的热泉。一条主要的道路在这里蜿蜒前行。行走在这里的时候可要小心被凶狠的敌人跟踪。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 12
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)Ruins.w3x",
@@ -3396,11 +3396,11 @@
    "block": 17
   },
   "w3i": 387,
-  "name": "TRIGSTR_008",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_009",
+  "name": "Ruins",
+  "author": "Blizzard Entertainment",
+  "desc": "虽然这城市已经很老很老了，但是它的美丽却并没有因此而消失。有着青翠的树木为伴，再加上那些华丽的装饰地砖，你还是能很容易地从荒野之中把它给认出来。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 9
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)StoneColdMountain.w3x",
@@ -3412,11 +3412,11 @@
    "block": 17
   },
   "w3i": 387,
-  "name": "TRIGSTR_003",
-  "author": "TRIGSTR_006",
-  "desc": "TRIGSTR_005",
+  "name": "Stone Cold Mountain",
+  "author": "暴雪娱乐",
+  "desc": "一直飘舞在石之冷山的暴风雪终于慢慢沉寂了。传说被派去探索那个区域的第一支远征军是落败而归。似乎是长时间的冰雪已经让冷山变得无人能触及了。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 9
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)Tanaris.w3x",
@@ -3428,11 +3428,11 @@
    "block": 17
   },
   "w3i": 387,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_003",
+  "name": "Tanaris",
+  "author": "Blizzard Entertainment",
+  "desc": "这座一度宁静的岛屿上现在居住着许多半人马和尖毛兽。在西面和东面。有魔力泉水。而北面和南面地精们的技术也许能为你带来方便。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 9
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)TidewaterGlades.w3x",
@@ -3444,11 +3444,11 @@
    "block": 18
   },
   "w3i": 387,
-  "name": "TRIGSTR_006",
-  "author": "TRIGSTR_009",
-  "desc": "TRIGSTR_008",
+  "name": "潮汐林地",
+  "author": "暴雪娱乐",
+  "desc": "这片茂盛的林地深藏着许多财宝，但也危机四伏。欣赏美景的同时不要放松警惕，你的敌手也许会伏击你的队伍。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 9
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)TurtleRock.w3x",
@@ -3460,11 +3460,11 @@
    "block": 17
   },
   "w3i": 487,
-  "name": "TRIGSTR_020",
-  "author": "TRIGSTR_023",
-  "desc": "TRIGSTR_022",
+  "name": "Turtle Rock",
+  "author": "Blizzard Entertainment",
+  "desc": "曾经是一座流亡者的岛屿，而今对追求宝物的人来说，是财富之岛。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 14
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)TwistedMeadows.w3x",
@@ -3476,11 +3476,11 @@
    "block": 17
   },
   "w3i": 387,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_003",
+  "name": "Twisted Meadows",
+  "author": "Blizzard Entertainment",
+  "desc": "上面的路都是弯弯曲曲的，就像那未来是多么地让人捉摸不透。快去寻找这里的各类宝藏吧，你或许会有惊奇的发现的。你也可以从地精实验室那里买来一艘地精飞艇，这样，你就能",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 9
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)Venetia.w3x",
@@ -3492,11 +3492,11 @@
    "block": 18
   },
   "w3i": 387,
-  "name": "TRIGSTR_006",
-  "author": "TRIGSTR_009",
-  "desc": "TRIGSTR_008",
+  "name": "Venetia",
+  "author": "Blizzard Entertainment",
+  "desc": "为了保护自己的魔法能量，那些叛逆的魔法师严禁了这里的所有贸易。在城市之外，那些无情的敌人也时刻准备着袭击那些大意的人。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 9
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)Wetlands.w3x",
@@ -3508,11 +3508,11 @@
    "block": 17
   },
   "w3i": 387,
-  "name": "TRIGSTR_006",
-  "author": "TRIGSTR_009",
-  "desc": "TRIGSTR_008",
+  "name": "Wetlands",
+  "author": "Blizzard Entertainment",
+  "desc": "有着瀑布的滋养，茂密的丛林几乎吞没了所有的都市。尽量利用当地居民所能提供的东西。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 9
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)Whirlwind.w3x",
@@ -3524,11 +3524,11 @@
    "block": 17
   },
   "w3i": 387,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_003",
+  "name": "Whirlwind",
+  "author": "Blizzard Entertainment",
+  "desc": "一群夜熊控制了该地区的雇佣兵供应所。同时，地精商人在争端之外赚取残存的大量利润。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 9
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(4)WindyWaste.w3x",
@@ -3540,11 +3540,11 @@
    "block": 17
   },
   "w3i": 387,
-  "name": "TRIGSTR_006",
-  "author": "TRIGSTR_009",
-  "desc": "TRIGSTR_008",
+  "name": "Windy Waste",
+  "author": "Blizzard Entertainment",
+  "desc": "队伍必须防守好一个斜坡和一扇传送门。那钥匙并没有在防御之中，但是控制着那些垃圾。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 9
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)Andorhal.w3x",
@@ -3556,11 +3556,11 @@
    "block": 17
   },
   "w3i": 475,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_003",
+  "name": "Andorhal",
+  "author": "Blizzard Entertainment",
+  "desc": "石桥跨过了城市的运河。当然，感谢当地的地精实验室，你也可以因此而拥有一种更为方便的运输方式。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 11
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)BloodstoneMesa.w3x",
@@ -3572,11 +3572,11 @@
    "block": 17
   },
   "w3i": 475,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_003",
+  "name": "Bloodstone Mesa",
+  "author": "Blizzard Entertainment",
+  "desc": "放眼望去，四周根本没有什么水。在白天，在那灼热的太阳之下，想生存下来都是极为困难的。然而荒漠之中，却有一个市场。那里的陶器或许能讨得你的喜欢。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 11
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)CopperCanyon.w3x",
@@ -3588,11 +3588,11 @@
    "block": 17
   },
   "w3i": 475,
-  "name": "TRIGSTR_008",
-  "author": "TRIGSTR_011",
-  "desc": "TRIGSTR_010",
+  "name": "Copper Canyon",
+  "author": "暴雪娱乐",
+  "desc": "虽然曾经遭受过肆意的破坏，也经历过魔法的冲击，但这片荒地却有着非常重要的战略意义。只要你善于利用，那么就可以扭转乾坤。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 11
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)Demon'sCrossing.w3x",
@@ -3604,11 +3604,11 @@
    "block": 17
   },
   "w3i": 475,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_003",
+  "name": "Demon's Crossing",
+  "author": "Blizzard Entertainment",
+  "desc": "最为强大的恶魔在这里。怨恨使得他们互相争斗。这里的河流中甚至都充满了死亡的味道。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 11
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)DragonBlight.w3x",
@@ -3620,11 +3620,11 @@
    "block": 17
   },
   "w3i": 475,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_003",
+  "name": "Dragonblight",
+  "author": "暴雪娱乐",
+  "desc": "那些据说每时每刻有着寒风凛凛的墓地被称之为龙疫。在那地底下有着无穷的宝藏。可是你怎样才可以击败那些时刻警惕着、守卫着这些神圣宝藏的巨龙呢?",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 11
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)Duststorm.w3x",
@@ -3636,11 +3636,11 @@
    "block": 17
   },
   "w3i": 475,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_003",
+  "name": "Duststorm",
+  "author": "Blizzard Entertainment",
+  "desc": "这块不毛之地完全找不到一丝生机，只有那些死在这被太阳烤得枯干之地上的亡魂尸骨潜伏着。因此，这块沙尘覆盖的土地便成了那些可以释放全部战力、不受环境影响之军队的野蛮",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 11
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)EmeraldShores.w3x",
@@ -3652,11 +3652,11 @@
    "block": 17
   },
   "w3i": 479,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_003",
+  "name": "Emerald Shores",
+  "author": "Blizzard Entertainment",
+  "desc": "从远方而来的舰队慕名而来掠夺这里的财宝.可是这个可要经过古老寺庙的守卫同意才行.",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 11
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)EnakrosWay.w3x",
@@ -3668,11 +3668,11 @@
    "block": 17
   },
   "w3i": 475,
-  "name": "TRIGSTR_008",
-  "author": "TRIGSTR_011",
-  "desc": "TRIGSTR_010",
+  "name": "Enakro's Way",
+  "author": "Blizzard Entertainment",
+  "desc": "当恩娜科洛面对塔萨拉斯的时候，大地开始破裂，峡谷也被分成了两半。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 11
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)Everfrost.w3x",
@@ -3684,11 +3684,11 @@
    "block": 17
   },
   "w3i": 475,
-  "name": "TRIGSTR_003",
-  "author": "TRIGSTR_006",
-  "desc": "TRIGSTR_005",
+  "name": "Everfrost",
+  "author": "Blizzard Entertainment",
+  "desc": "深藏在永冻冰原寒风刺骨的峭壁之间，是黑暗蜘蛛人盘据的国度，他们保护着冰冷的古墓，不让那些追逐黄金与财富的投机客轻易闯入。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 11
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)GnollWood.w3x",
@@ -3700,11 +3700,11 @@
    "block": 17
   },
   "w3i": 475,
-  "name": "TRIGSTR_007",
-  "author": "TRIGSTR_010",
-  "desc": "TRIGSTR_009",
+  "name": "Gnoll Wood",
+  "author": "Blizzard Entertainment",
+  "desc": "快速建立起你的防御，敌人马上就要来临了。在你的侦察河岸的时候，得要小心了。那些可怕的傀儡人就潜伏在山丛中。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 11
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)HavenOfTheDamned.w3x",
@@ -3716,11 +3716,11 @@
    "block": 17
   },
   "w3i": 475,
-  "name": "TRIGSTR_003",
-  "author": "TRIGSTR_006",
-  "desc": "TRIGSTR_012",
+  "name": "Haven of the Damned",
+  "author": "Blizzard Entertainment",
+  "desc": "这个被遗弃的岛屿曾经是流亡者的避难所。现在这里充满着战斗和迷茫的灵魂。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 11
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)Highperch.w3x",
@@ -3732,11 +3732,11 @@
    "block": 17
   },
   "w3i": 475,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_003",
+  "name": "Highperch",
+  "author": "暴雪娱乐",
+  "desc": "高地会将美与神奇的力量赐予那些能够抵挡原住民猛烈攻击的勇者，那些原住民会不顾一切地保护这里的神秘医疗之水。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 11
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)HinterlandRaid.w3x",
@@ -3748,11 +3748,11 @@
    "block": 17
   },
   "w3i": 475,
-  "name": "TRIGSTR_003",
-  "author": "TRIGSTR_006",
-  "desc": "TRIGSTR_005",
+  "name": "Hinterland Raid",
+  "author": "暴雪娱乐",
+  "desc": "在森林的深处，你追踪敌人的行踪，并准备对他们发起致命的攻击。快速集结你的部队，去迎接即将到来的挑战吧。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 11
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)Jack-o-Lantern.w3x",
@@ -3764,11 +3764,11 @@
    "block": 17
   },
   "w3i": 475,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_003",
+  "name": "Jack-o-Lantern",
+  "author": "Blizzard Entertainment",
+  "desc": "当你在这里探索的时候最好要小心。这里有很多的金币，但是，这些是不是敌人的诱饵呢？",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 11
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)JungleFever.w3x",
@@ -3780,11 +3780,11 @@
    "block": 18
   },
   "w3i": 1206,
-  "name": "TRIGSTR_012",
-  "author": "TRIGSTR_015",
-  "desc": "TRIGSTR_014",
+  "name": "Jungle Fever",
+  "author": "Blizzard Entertainment",
+  "desc": "慢慢地，这个小岛沉入了大海之中。快组队进入沼泽，但同时也不要忘记小心二字。危险的野兽通常就潜伏在这种地方。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 16
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)Monsoon.w3x",
@@ -3796,11 +3796,11 @@
    "block": 18
   },
   "w3i": 508,
-  "name": "TRIGSTR_007",
-  "author": "TRIGSTR_010",
-  "desc": "TRIGSTR_009",
+  "name": "Monsoon",
+  "author": "Blizzard Entertainment",
+  "desc": "食人魔和萨尔拥有了当地大多数的地盘。但是傀儡们在岛屿的中央也拥有自己的一席之地。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 14
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)Moonglade.w3x",
@@ -3812,11 +3812,11 @@
    "block": 17
   },
   "w3i": 475,
-  "name": "TRIGSTR_000",
-  "author": "TRIGSTR_003",
-  "desc": "TRIGSTR_002",
+  "name": "Moonglade",
+  "author": "暴雪娱乐",
+  "desc": "这片迄今仍未被燃烧军团污染的沼泽地上，居住着一个熊人部落，他们不欢迎入侵者。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 11
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)RiceFields.w3x",
@@ -3828,11 +3828,11 @@
    "block": 17
   },
   "w3i": 1530,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_003",
-  "desc": "TRIGSTR_011",
+  "name": "Rice Fields",
+  "author": "Blizzard Entertainment",
+  "desc": "当战争践踏这片宁静的农场后，艾泽拉斯的产粮区变成了无尽死亡之海。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 11
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)RiverOfSouls.w3x",
@@ -3844,11 +3844,11 @@
    "block": 17
   },
   "w3i": 475,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_003",
+  "name": "River of Souls",
+  "author": "Blizzard Entertainment",
+  "desc": "这战争已经有了好几年的历史。不要被河流的干净所迷惑了。这里曾经可谓是血流成河，现在游荡在附近的是那些亡魂。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 11
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)RollingHills.w3x",
@@ -3860,11 +3860,11 @@
    "block": 17
   },
   "w3i": 475,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_003",
+  "name": "Rolling Hills",
+  "author": "暴雪娱乐",
+  "desc": "轰……轰……战争就要开始了。战斗的鼓声召唤着英勇的战士。战线就要崩溃，联盟正在形成。没有什么可以阻止英雄的流血。冲啊……轰！",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 11
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)RuinsOfStratholme.w3x",
@@ -3876,11 +3876,11 @@
    "block": 17
   },
   "w3i": 475,
-  "name": "TRIGSTR_010",
-  "author": "TRIGSTR_013",
-  "desc": "TRIGSTR_012",
+  "name": "Ruins of Stratholme",
+  "author": "暴雪娱乐",
+  "desc": "这里曾经是联盟的前哨堡垒，然而现在却成了亡灵肆虐的地方。只有最勇敢的英雄才敢来到这片废墟，因为在这空荡荡的城市中依然有着亡灵的诡秘身影。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 11
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)SavageStorm.w3x",
@@ -3892,11 +3892,11 @@
    "block": 17
   },
   "w3i": 514,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_003",
+  "name": "Savage Storm",
+  "author": "Blizzard Entertainment",
+  "desc": "快速地扩张在雪原中杀出一条血路来。那样你才能购买各类的魔法物品和雇用到各类的单位。你也最好在高地建造一个基地，但是你也要明白那将是一个危险的举动！",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 11
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)ScorchedBasin.w3x",
@@ -3908,11 +3908,11 @@
    "block": 18
   },
   "w3i": 608,
-  "name": "TRIGSTR_010",
-  "author": "TRIGSTR_013",
-  "desc": "TRIGSTR_012",
+  "name": "Scorched Basin",
+  "author": "Blizzard Entertainment",
+  "desc": "极其恶毒的女妖开始进入这些沙地中，为了资源和半人马以及尖毛兽展开了激烈的竞争。 ",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 19
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)SilverpineForest.w3x",
@@ -3924,11 +3924,11 @@
    "block": 17
   },
   "w3i": 475,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_003",
+  "name": "Silverpine Forest",
+  "author": "Blizzard Entertainment",
+  "desc": "这里可以方便地雇用到各类的中立英雄。在这些富饶的资源和山林中，你能和自己的盟友组成一队也完全可以依靠自己的力量来孤军奋战。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 11
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)StranglethornVale.w3x",
@@ -3940,11 +3940,11 @@
    "block": 18
   },
   "w3i": 475,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_003",
+  "name": "Stranglethorn Vale",
+  "author": "Blizzard Entertainment",
+  "desc": "破碎的石柱和褪色的雕像点缀着这座青翠的岛屿，而今这里草木茂盛，大量法师移民到此地，激怒他们对你而言是种冒险。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 11
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)SunrockCove.w3x",
@@ -3956,11 +3956,11 @@
    "block": 18
   },
   "w3i": 475,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_012",
+  "name": "Sunrock Cove",
+  "author": "Blizzard Entertainment",
+  "desc": "岩石湾是一个著名的藏金点。记得要给你的地精飞艇一点小费，因为是他们将带领你到最后的胜利！",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 11
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)ThunderLake.w3x",
@@ -3972,11 +3972,11 @@
    "block": 17
   },
   "w3i": 475,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_003",
+  "name": "Thunder Lake",
+  "author": "Blizzard Entertainment",
+  "desc": "作为所有旅行者认路的标志，这个星型的湖是所有平原生物的家园。恰巧的是，这里的四周也布满了金矿。如果你够胆量的话，那么就去占领它们吧。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 11
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)TimbermawHold.w3x",
@@ -3988,11 +3988,11 @@
    "block": 17
   },
   "w3i": 475,
-  "name": "TRIGSTR_000",
-  "author": "TRIGSTR_003",
-  "desc": "TRIGSTR_002",
+  "name": "Timbermaw Hold",
+  "author": "Blizzard Entertainment",
+  "desc": "很多世纪以前，当赛特斯半身人在这里泛滥成灾的时候，古代的巨龙放弃了这片栖息已久的土地。现在快进入那沼泽之地并夺回那些失落的土地吧。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 11
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)Typhoon.w3x",
@@ -4004,11 +4004,11 @@
    "block": 17
   },
   "w3i": 475,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_003",
+  "name": "Typhoon",
+  "author": "Blizzard Entertainment",
+  "desc": "海雾让那些岛屿若隐若现。当你探索这里的时候小心了，因为没人知道这个人迹罕至的地方到底有着什么东西。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 11
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)UpperKingdom.w3x",
@@ -4020,11 +4020,11 @@
    "block": 17
   },
   "w3i": 475,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_003",
+  "name": "Upper Kingdom",
+  "author": "Blizzard Entertainment",
+  "desc": "在这个破碎的国度艾兹卓-尼拉布，冰柱就像野兽的獠牙一样刺穿大地。或许从当地的猛兽中召集一支自己的队伍将是一个非常好的主意。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 11
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)Wellspring.w3x",
@@ -4036,11 +4036,11 @@
    "block": 17
   },
   "w3i": 475,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_003",
+  "name": "Wellspring",
+  "author": "Blizzard Entertainment",
+  "desc": "傀儡人守卫着一个神圣的泉水，而那些强盗总是隐藏在了黑暗的深处。除非你喜欢自讨苦吃，否则就不要贸然进入地图的中央。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 11
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)WheelofChaos.w3x",
@@ -4052,11 +4052,11 @@
    "block": 18
   },
   "w3i": 475,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_003",
+  "name": "Wheel Of Chaos",
+  "author": "Blizzard Entertainment",
+  "desc": "不久前，一股入侵的黑暗巨魔势力像瘟疫般扫荡这片岛屿。无数曾繁衍于此的熊怪遭到了屠杀，残留的幸存者则四处躲藏求生。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 11
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(6)WizardsRetreat.w3x",
@@ -4068,11 +4068,11 @@
    "block": 17
   },
   "w3i": 475,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_003",
+  "name": "Wizard's Retreat",
+  "author": "Blizzard Entertainment",
+  "desc": "在雅拉西丘陵一带，有一块属于达拉朗巫师的静修之地，当他们从战场前线撤离时，就会回到这里热气蒸腾的法力之池中休养生息与放松身心。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 11
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(8)Battleground.w3x",
@@ -4084,11 +4084,11 @@
    "block": 17
   },
   "w3i": 663,
-  "name": "TRIGSTR_000",
-  "author": "TRIGSTR_003",
-  "desc": "TRIGSTR_002",
+  "name": "Battleground",
+  "author": "Blizzard Entertainment",
+  "desc": "冬天马上就要开始降临在这片曾经灼热的土地上。现在你尽可能地去搜集资源吧，因为那漫长的严寒已经不远了。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 18
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(8)Cherryville.w3x",
@@ -4100,11 +4100,11 @@
    "block": 17
   },
   "w3i": 563,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_003",
+  "name": "Cherryville",
+  "author": "Blizzard Entertainment",
+  "desc": "櫻桃鎮的存在說明了自然的真相...從蜿蜒的藤蔓之上，我們看到生命的勃發，從昆蟲脫落的軀殼，我們看到死亡的陰影。同時掌握了這兩種力量之人將會摧毀所有與之對抗的事物",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 13
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(8)Deadlands.w3x",
@@ -4116,11 +4116,11 @@
    "block": 17
   },
   "w3i": 563,
-  "name": "TRIGSTR_010",
-  "author": "TRIGSTR_013",
-  "desc": "TRIGSTR_012",
+  "name": "Deadlands",
+  "author": "Blizzard Entertainment",
+  "desc": "这里表面上看去比较平静。但实际上是这里的居民经常来这里进行掠夺。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 13
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(8)Deadlock.w3x",
@@ -4132,11 +4132,11 @@
    "block": 17
   },
   "w3i": 563,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_003",
+  "name": "Deadlock",
+  "author": "暴雪娱乐",
+  "desc": "在僵局持续了三年之后，半人马成为了野地上真正的统治者。快去占领尽可能多的金矿。否则你只会落入敌人的血刀之下。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 13
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(8)Deathknell.w3x",
@@ -4148,11 +4148,11 @@
    "block": 17
   },
   "w3i": 563,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_003",
+  "name": "Deathknell",
+  "author": "Blizzard Entertainment",
+  "desc": "丛林中四处散布的积水给行军带来了很多的不便。或许依靠空中运输工具将是一个非常好的主意。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 13
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(8)DragonFalls.w3x",
@@ -4164,11 +4164,11 @@
    "block": 17
   },
   "w3i": 563,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_003",
+  "name": "Dragon Falls",
+  "author": "暴雪娱乐",
+  "desc": "白杨谷森林的深处有一片受到绿龙保护的树林。传说只有在冬天的时候，旅行者来到那里才是安全的。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 13
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(8)Feralas.w3x",
@@ -4180,11 +4180,11 @@
    "block": 17
   },
   "w3i": 563,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_003",
+  "name": "Feralas",
+  "author": "Blizzard Entertainment",
+  "desc": "被浅浅的沼泽之地所分开，两个队伍准备在这里进行一场生死大战。森林是如此的茂密，以至于你可能需要自己砍伐出一条路来。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 13
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(8)Friends.w3x",
@@ -4196,11 +4196,11 @@
    "block": 17
   },
   "w3i": 563,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_003",
+  "name": "Friends",
+  "author": "Blizzard Entertainment",
+  "desc": "和你的盟友组队共同建造一个基地。在中央的小山上，神奇的泉水在等待着你。但是，它的那些巨型守卫也是对魔法免疫的。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 13
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(8)FullScaleAssault.w3x",
@@ -4212,11 +4212,11 @@
    "block": 17
   },
   "w3i": 563,
-  "name": "TRIGSTR_010",
-  "author": "TRIGSTR_013",
-  "desc": "TRIGSTR_012",
+  "name": "Full Scale Assault",
+  "author": "Blizzard Entertainment",
+  "desc": "在这个永远充满竞争的土地上，战斗伴随着死亡和荣耀不断的进行着。英勇地去战斗吧，在敌人跌倒之后就是你的胜利！最终的胜利！",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 13
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(8)GardenOfWar.w3x",
@@ -4228,11 +4228,11 @@
    "block": 17
   },
   "w3i": 563,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_003",
+  "name": "Garden of War",
+  "author": "Blizzard Entertainment",
+  "desc": "快准备好一场真正的挑战。大批大批的怪物让这片森林陷入了无尽的痛苦和磨难之中，可怕的食人魔也占据着那些重要的金矿资源。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 13
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(8)GoldRush.w3x",
@@ -4244,11 +4244,11 @@
    "block": 17
   },
   "w3i": 563,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_003",
+  "name": "Gold Rush",
+  "author": "暴雪娱乐",
+  "desc": "这里遍地都是金子，有无穷的力量和魅力。尽快占领这里，那样你才可达到尊贵的顶端。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 13
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(8)HurricaneIsle.w3x",
@@ -4260,11 +4260,11 @@
    "block": 17
   },
   "w3i": 567,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_003",
+  "name": "Hurricane Isle",
+  "author": "Blizzard Entertainment",
+  "desc": "在海洋最纷扰危险的区域里，有一座哥布尔统治的岛屿。他们人生里的一大目标就是把飞船卖给那些船只被此地习以为常之强烈龙卷风所摧毁的人们。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 13
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(8)LastManStanding.w3x",
@@ -4276,11 +4276,11 @@
    "block": 17
   },
   "w3i": 563,
-  "name": "TRIGSTR_010",
-  "author": "TRIGSTR_013",
-  "desc": "TRIGSTR_014",
+  "name": "Last Man Standing",
+  "author": "Blizzard Entertainment",
+  "desc": "虽然有着稠密的人口，这片土地仍然有着美好的发展前景。有了足够的金矿，你就能募集额外的军队。探索位于北方和南方的岛屿，那里你可以找到更加强大的盟友。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 13
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(8)MarketSquare.w3x",
@@ -4292,11 +4292,11 @@
    "block": 18
   },
   "w3i": 563,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_014",
+  "name": "Market Square",
+  "author": "Blizzard Entertainment",
+  "desc": "这个城市里有着各式各样的简单建筑。但可惜的是，这里的优雅氛围和宽阔街道却吸引了一个路过的战争领主的注意，随后也就是他率军入侵了这里。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 13
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(8)Mur'gulOasis.w3x",
@@ -4308,11 +4308,11 @@
    "block": 17
   },
   "w3i": 563,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_003",
+  "name": "Mur'gul Oasis",
+  "author": "Blizzard Entertainment",
+  "desc": "穆格尔一直以来都把这片大地看成是自己的家园。但是这里地下潜伏着危险的生物。所以要走在这片大地上的时候你得格外的小心。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 13
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(8)Northshire.w3x",
@@ -4324,11 +4324,11 @@
    "block": 17
   },
   "w3i": 563,
-  "name": "TRIGSTR_010",
-  "author": "TRIGSTR_013",
-  "desc": "TRIGSTR_012",
+  "name": "Northshire",
+  "author": "Blizzard Entertainment",
+  "desc": "魔法师和盗贼控制着大部分的遗迹。在夜间袭击它们或许可以得到意想不到的良好效果。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 13
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(8)PlainsOfSnow.w3x",
@@ -4340,11 +4340,11 @@
    "block": 17
   },
   "w3i": 563,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_003",
-  "desc": "TRIGSTR_013",
+  "name": "Plains of Snow",
+  "author": "Blizzard Entertainment",
+  "desc": "这北极的大地闪耀着耀眼的光芒，真是美丽极了，但同时它又是那么的无情。似乎在这种严寒的天气下，如果没有厚毛毯或者魔法的帮助，那么是没有什么生命可以存活下来的。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 13
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(8)RockQuarry.w3x",
@@ -4356,11 +4356,11 @@
    "block": 17
   },
   "w3i": 563,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_003",
+  "name": "Rock Quarry",
+  "author": "暴雪娱乐有限公司",
+  "desc": "最后的守护者，麦迪文曾经住在这个遭到遗弃的大地。是他安抚了这里那些不安的幽灵。现在你要小心那封闭的城市了，如果你一不小心的话，那么等待你的只将会是死亡。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 13
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(8)Sanctuary.w3x",
@@ -4372,11 +4372,11 @@
    "block": 17
   },
   "w3i": 563,
-  "name": "TRIGSTR_010",
-  "author": "TRIGSTR_013",
-  "desc": "TRIGSTR_012",
+  "name": "Sanctuary",
+  "author": "Blizzard Entertainment",
+  "desc": "快集合起来，去对抗那些残忍的城市居民。他们保护着的那些巨额财产可以让你轻松地扭转战斗的局势。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 13
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(8)ShamrockReef.w3x",
@@ -4388,11 +4388,11 @@
    "block": 17
   },
   "w3i": 563,
-  "name": "TRIGSTR_010",
-  "author": "TRIGSTR_013",
-  "desc": "TRIGSTR_014",
+  "name": "Shamrock Reef",
+  "author": "暴雪娱乐",
+  "desc": "这里到处都是茂盛的花草树木，你或许看不到任何的金币。但是你可以通过猎杀附近的怪兽来获取金币。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 13
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(8)Slalom.w3x",
@@ -4404,11 +4404,11 @@
    "block": 17
   },
   "w3i": 563,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_003",
+  "name": "Slalom",
+  "author": "暴雪娱乐",
+  "desc": "诺森德对于生物没有任何的怜悯。冰冷的风能刺透最厚的衣服，狡猾的北极怪兽会攻击任何可疑的来访者。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 13
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(8)SpiderFalls.w3x",
@@ -4420,11 +4420,11 @@
    "block": 17
   },
   "w3i": 563,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_003",
+  "name": "Spider Falls",
+  "author": "Blizzard Entertainment",
+  "desc": "大海在这片大陆上刻画出了很多河流，从上面看下去，似乎就是一只活生生的蜘蛛。或许你觉得可以通过桥来进行穿行，但是最好的交通工具还是宝贵的地精飞艇。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 13
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(8)TheCrossroads.w3x",
@@ -4436,11 +4436,11 @@
    "block": 17
   },
   "w3i": 563,
-  "name": "TRIGSTR_003",
-  "author": "TRIGSTR_006",
-  "desc": "TRIGSTR_005",
+  "name": "The Crossroads",
+  "author": "Blizzard Entertainment",
+  "desc": "为了谋求最大的利润，地精商人和雇佣兵将它们的服务卖给出价最快的人。快速地进行扩张。要不你就会彻底失败的。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 13
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(8)TwilightRuins.w3x",
@@ -4452,11 +4452,11 @@
    "block": 17
   },
   "w3i": 563,
-  "name": "TRIGSTR_010",
-  "author": "TRIGSTR_013",
-  "desc": "TRIGSTR_012",
+  "name": "Twilight Ruins",
+  "author": "Blizzard Entertainment",
+  "desc": "这座下沉的岛屿，对冒险者来说，隐藏者许多宝贵的机会，赶快去征服你的对手吧。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 13
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\(9)RoundVillage.w3x",
@@ -4468,11 +4468,11 @@
    "block": 18
   },
   "w3i": 607,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_015",
+  "name": "Round Village",
+  "author": "Blizzard Entertainment",
+  "desc": "虽然四周到处散布着泉水，这个丛林岛屿还是不适合一个人前往。尽快地去商店那里，在那里你可以得到一些帮助。但是如果你没有什么实力来守住中央的金矿的话，你最好还是打消",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 14
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\Scenario\\(10)ExtremeCandyWar2004.w3x",
@@ -4484,11 +4484,11 @@
    "block": 69
   },
   "w3i": 783,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_003",
+  "name": "|cffffaa00Extreme Candy War 2004|r",
+  "author": "暴雪娱乐",
+  "desc": "万圣节快乐！",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 65
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\Scenario\\(10)Skibi'sCastleTD.w3x",
@@ -4500,11 +4500,11 @@
    "block": 84
   },
   "w3i": 878,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_003",
+  "name": "|cff80ff80史奇毕的城堡炮塔防御战",
+  "author": "Blizzard Entertainment",
+  "desc": "风行于玩家之间的炮塔防御战地图的Blizzard官方版本，还附加了额外的小游戏修正！ 您可以只身挑战怪物们的攻击或分成两个人数上限各为五人的队伍。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 631
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\Scenario\\(12)WormWar.w3x",
@@ -4516,11 +4516,11 @@
    "block": 38
   },
   "w3i": 739,
-  "name": "TRIGSTR_015",
-  "author": "TRIGSTR_018",
-  "desc": "TRIGSTR_017",
+  "name": "Worm War",
+  "author": "Blizzard Entertainment",
+  "desc": "每条儒虫宝宝都梦想着有一天能在战场上成为一个勇敢的决斗士.在那里,儒虫们能通过蚕食绵羊的方式来成长.",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 64
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\Scenario\\(4)Monolith.w3x",
@@ -4532,11 +4532,11 @@
    "block": 45
   },
   "w3i": 2763,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_003",
+  "name": "Monolith",
+  "author": "Blizzard Entertainment",
+  "desc": "侦察兵报告说在森林的深处发现了一些神秘的石塔。这些石塔看上去似乎正在散发着一股邪恶的力量来腐蚀森林中的各类生物。摧毁这些石塔，将整片森林从它们的控制中给解救出来",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 258
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\Scenario\\(6)BlizzardTD.w3x",
@@ -4548,11 +4548,11 @@
    "block": 84
   },
   "w3i": 733,
-  "name": "TRIGSTR_003",
-  "author": "TRIGSTR_006",
-  "desc": "TRIGSTR_047",
+  "name": "Blizzard's Tower Defense",
+  "author": "Blizzard Entertainment",
+  "desc": "宇宙中最为狡诈的罪犯被关押在了这个坚固的牢笼里，它能将他们永久地锁在里面。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 1092
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\Scenario\\(6)BomberCommand.w3x",
@@ -4564,11 +4564,11 @@
    "block": 46
   },
   "w3i": 611,
-  "name": "TRIGSTR_003",
-  "author": "TRIGSTR_006",
-  "desc": "TRIGSTR_005",
+  "name": " 轰炸机命令",
+  "author": " 暴雪娱乐",
+  "desc": "士兵们已经占领了寒冰王冠，命令你的轰炸部队摧毁对方的城池吧，进攻是最好的防守。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 95
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\Scenario\\(8)AzerothGrandPrix.w3x",
@@ -4580,11 +4580,11 @@
    "block": 54
   },
   "w3i": 627,
-  "name": "TRIGSTR_003",
-  "author": "TRIGSTR_006",
-  "desc": "TRIGSTR_005",
+  "name": "Azeroth Grand Prix",
+  "author": "暴雪娱乐",
+  "desc": "传说中在北部边境那里有着一个秘密赛道，远处的人们经常去那里切磋赛车的技艺。这个活动的特色就在于它的无规则性，即使是最伟大的战士，在这里也有可能阴沟里翻船。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 25
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\Scenario\\(8)AzureTowerDefense.w3x",
@@ -4596,11 +4596,11 @@
    "block": 22
   },
   "w3i": 921,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_003",
+  "name": "Azure Tower Defense",
+  "author": "Blizzard Entertainment",
+  "desc": "邪恶的魔法力量已经让森林内所有的居民都发狂了。现在它们开始进攻世界之树，企图腐蚀它让其拥有邪恶的信仰。快去保护好世界之树，阻挡它们的疯狂进攻。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 372
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\FrozenThrone\\Scenario\\(8)FunnyBunnysEggHunt.w3x",
@@ -4612,11 +4612,11 @@
    "block": 136
   },
   "w3i": 671,
-  "name": "TRIGSTR_001",
-  "author": "TRIGSTR_004",
-  "desc": "TRIGSTR_003",
+  "name": "Funny Bunny's Egg Hunt",
+  "author": "暴雪娱乐",
+  "desc": "在兔子的领地上搜集各类的蛋。如果你能抓住复活节之兔的话，他们就会和你共享他们的蛋。但你也要小心了，因为也会有很多邪恶的兔子想阻止你的行动。",
   "version": 25,
-  "wtsCount": 0
+  "wtsCount": 107
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\NaRuTo_RZCDZ[3.2]beta2.w3x",
@@ -4644,11 +4644,11 @@
    "block": 19
   },
   "w3i": 360,
-  "name": "TRIGSTR_011",
-  "author": "TRIGSTR_019",
-  "desc": "TRIGSTR_018",
+  "name": "The Death Sheep",
+  "author": "暴雪娱乐",
+  "desc": "躲开羊群！\r\n\r\nS键左移，H键右移，ESC键必杀技。",
   "version": 18,
-  "wtsCount": 0
+  "wtsCount": 83
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\Scenario\\(4)WarChasers.w3m",
@@ -4660,11 +4660,11 @@
    "block": 19
   },
   "w3i": 640,
-  "name": "TRIGSTR_004",
-  "author": "TRIGSTR_007",
-  "desc": "TRIGSTR_006",
+  "name": "WarChasers",
+  "author": "暴雪娱乐",
+  "desc": "四个狂妄的灵魂占据了古代英雄的躯体，并联合起来，在传说中的城市中面对着压倒性的怪物群，杀出一条血路……\r\n(请打开字幕)",
   "version": 18,
-  "wtsCount": 0
+  "wtsCount": 106
  },
  {
   "file": "D:\\1\\魔兽争霸3冰封王座\\Maps\\Scenario\\(6)BlizzardTD.w3x",
