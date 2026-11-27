@@ -797,7 +797,7 @@ func start_boss(tier: int, boss_name := "") -> void:
 	f["ult_t"] = f["ult_cd"]
 	boss_alive = true
 	boss_spawned_once = true
-	_banner = ["", "一阶 boss", "二阶 boss", "三阶 boss", "四阶 boss"][tt] + "　" + str(d["name"])
+	_banner = ["", "一阶首领", "二阶首领", "三阶首领", "四阶首领"][tt] + "　" + str(d["name"])
 	_banner_t = 2.4
 	# v226：入场一记闷鼓 + 震一下；bgm_boss_intro 随后接上
 	Audio.sfx("drum", -5.0, 0.82)

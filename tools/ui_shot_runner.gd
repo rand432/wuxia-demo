@@ -1,4 +1,5 @@
 extends Control
+const Iso := preload("res://tools/test_isolation.gd")
 const LS := preload("res://shared/level_state.gd")
 const GS := preload("res://shared/game_state.gd")
 var scene_path := ""
@@ -7,25 +8,32 @@ var action := "still"
 var target_w := 450
 var target_h := 800
 var emulate_window := false
+var level := 6
 
 func _ready() -> void:
+	var isolation_error := Iso.verify()
+	if not isolation_error.is_empty():
+		print("[SHOT] REJECT " + isolation_error)
+		get_tree().quit(2)
+		return
 	process_mode = PROCESS_MODE_ALWAYS
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--scene="): scene_path = arg.get_slice("=", 1)
 		if arg.begins_with("--out="): out_path = arg.get_slice("=", 1)
 		if arg.begins_with("--action="): action = arg.get_slice("=", 1)
 		if arg.begins_with("--emulate="): emulate_window = arg.get_slice("=", 1) == "1"
+		if arg.begins_with("--level="): level = int(arg.get_slice("=", 1))
 		if arg.begins_with("--size="):
 			var w := arg.get_slice("=", 1).split("x")
 			if w.size() == 2:
 				target_w = int(w[0]); target_h = int(w[1])
-	LS.ensure_loaded()
-	LS.current_level = 6
-	GS.ensure_loaded()
-	if scene_path.is_empty() or out_path.is_empty():
-		push_error("缺少 --scene 或 --out")
+	if scene_path.is_empty() or out_path.is_empty() or level < 1 or level > 10:
+		push_error("需要 --scene 与 --out，关卡必须是 1 到 10")
 		get_tree().quit(2)
 		return
+	LS.ensure_loaded()
+	LS.current_level = level
+	GS.ensure_loaded()
 	var vp := SubViewport.new()
 	vp.size = Vector2i(target_w, target_h) if emulate_window else Vector2i(720, 1280)
 	vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
@@ -62,7 +70,7 @@ func _ready() -> void:
 		node.set("_tut", null)
 		node._tutorial_pause(false)
 	await _wait(600)
-	if action == "b32":
+	if action in ["b32", "b32_calm"]:
 		var core = node._core
 		node._no_ui = false if node.get("_no_ui") == null else node._no_ui
 		for i in 26:
@@ -72,10 +80,13 @@ func _ready() -> void:
 			core.spawn_challenge(4, 1)
 		core.start_boss(LS.boss_tier(), "困兽·终焉")
 		node._boss_spawned = true
-		core._push_float(core.hero_pos.x + 40.0, core.hero_pos.y - 90.0, "格挡", Color(0.72, 0.82, 0.94))
-		core._push_float(core.hero_pos.x - 60.0, core.hero_pos.y - 120.0, "盾破！", Color(0.96, 0.82, 0.50), true)
-		node._start_hero_dash(Vector2(120, -40))
-		await _wait(70)
+		if action == "b32":
+			core._push_float(core.hero_pos.x + 40.0, core.hero_pos.y - 90.0, "格挡", Color(0.72, 0.82, 0.94))
+			core._push_float(core.hero_pos.x - 60.0, core.hero_pos.y - 120.0, "盾破！", Color(0.96, 0.82, 0.50), true)
+			node._start_hero_dash(Vector2(120, -40))
+			await _wait(70)
+		else:
+			await _wait(400)
 		await _capture(vp, out_path)
 		get_tree().quit(0)
 		return

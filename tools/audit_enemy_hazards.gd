@@ -117,6 +117,10 @@ func _audit_guardian(level: int, name: String, atlas_id: String, attack: String,
 	var token = battle._foe_tokens[foe["_tid"]]
 	token.set_process(false)
 	assert(token.guardian and token._frame_atlas.resource_path == path)
+	assert(battle._boss_spot.get_parent() == battle._cam and battle._boss_veil.get_parent() == battle._cam)
+	assert(battle._boss_veil.z_index < battle._boss_spot.z_index
+		and battle._boss_spot.z_index < battle._hazard_view.z_index
+		and battle._hazard_view.z_index < token.z_index and token.z_index < battle._hero_token.z_index)
 	token._process(0.1)
 	assert(token._frame_index in range(4))
 	foe["x"] += 5.0
@@ -211,6 +215,7 @@ func _audit_crowd_melee(flag: String, title: String, atlas_id: String) -> bool:
 	token.set_process(false)
 	assert(token.unit_name == title and token._frame_atlas.resource_path == path)
 	assert(token.challenge_kind == -1 and not token.guardian and not token.round_mask)
+	assert(token.z_index < battle._hero_token.z_index - 1)
 	token._process(0.1)
 	assert(token._frame_index in range(4))
 	foe["x"] += 3.0

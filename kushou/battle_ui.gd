@@ -440,6 +440,11 @@ class FloatLayer extends Control:
 			draw_string_outline(ThemeDB.fallback_font, pos, str(fl["txt"]), HORIZONTAL_ALIGNMENT_CENTER, 120.0, fs, owidth, ocol)
 			draw_string(ThemeDB.fallback_font, pos, str(fl["txt"]), HORIZONTAL_ALIGNMENT_CENTER, 120.0, fs, fcol)
 
+var _portrait_window: Window
+var _portrait_window_size := Vector2i.ZERO
+var _portrait_original_aspect := Window.CONTENT_SCALE_ASPECT_KEEP
+var _battle_background: BgArt
+
 func _ready() -> void:
 	GameState.ensure_loaded()
 	Aud.play_battle_music()
@@ -464,6 +469,7 @@ func _ready() -> void:
 			if _entry_art.has(path):
 				_foe_tex_cache[key] = _entry_art[path]
 		_build_bg()
+	_setup_portrait_window()
 	if not _no_ui:
 		_build_hud()
 	_build_field()
@@ -511,6 +517,33 @@ func _ready() -> void:
 	if _el_ready > 50000:
 		print("[SLOW] battle_ui ready ", _el_ready / 1000.0, " ms")
 	set_process(true)
+
+func _setup_portrait_window() -> void:
+	var native_window := _battle_background != null and get_parent() == get_tree().root and DisplayServer.get_name() != "headless"
+	set_physics_process(native_window)
+	if not native_window:
+		return
+	_portrait_window = get_tree().root
+	_portrait_original_aspect = _portrait_window.content_scale_aspect
+	_layout_portrait_window()
+
+func _layout_portrait_window() -> void:
+	_portrait_window_size = _portrait_window.size
+	var extra := maxf(0.0, W * float(_portrait_window_size.y) / maxf(1.0, float(_portrait_window_size.x)) - H)
+	var aspect := Window.CONTENT_SCALE_ASPECT_EXPAND if extra > 0.0 else _portrait_original_aspect
+	if _portrait_window.content_scale_aspect != aspect:
+		_portrait_window.content_scale_aspect = aspect
+	set_anchors_preset(Control.PRESET_CENTER)
+	offset_left = -W * 0.5
+	offset_right = W * 0.5
+	offset_top = -H * 0.5
+	offset_bottom = H * 0.5
+	_battle_background.portrait_margin = extra * 0.5 + (1.0 if extra > 0.0 else 0.0)
+	_battle_background.queue_redraw()
+
+func _physics_process(_delta: float) -> void:
+	if _portrait_window.size != _portrait_window_size:
+		_layout_portrait_window()
 
 func _entry_dialog_builders() -> Array[Callable]:
 	return [_build_exit, _build_draw, _build_combined, _build_god_pick, _build_str, _build_trea]
@@ -654,6 +687,7 @@ class BgArt extends Control:
 	var courtyard := false
 	var cliff_pass := false
 	var final_court := false
+	var portrait_margin := 0.0
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
 	static func path_for(idx: int) -> String:
@@ -671,6 +705,19 @@ class BgArt extends Control:
 		final_court = path == FINAL_COURT and art != null
 		tex = art
 	func _draw() -> void:
+		if portrait_margin > 0.0:
+			var edge := Color(0.15, 0.12, 0.09)
+			if courtyard:
+				edge = Color(0.14, 0.13, 0.105)
+			elif cliff_pass:
+				edge = Color(0.17, 0.16, 0.15)
+			elif final_court:
+				edge = Color(0.125, 0.13, 0.10)
+			elif not village_yard:
+				edge = Color(0.72, 0.68, 0.60)
+			var outer := edge.darkened(0.38)
+			_fade_band(-portrait_margin, 0.0, outer, edge)
+			_fade_band(H, H + portrait_margin, edge, outer)
 		if village_yard and tex != null:
 			var surround := Color(0.15, 0.12, 0.09)
 			var clear := Color(surround, 0.0)
@@ -697,14 +744,15 @@ class BgArt extends Control:
 			_fade_band(834.0, bottom, clear, surround)
 			draw_rect(Rect2(0, bottom, W, H - bottom), surround)
 			return
-		draw_rect(Rect2(0, 0, 720, 1280), Color(0.93, 0.90, 0.82))
 		if courtyard and tex != null:
+			var surround := Color(0.14, 0.13, 0.105)
+			var clear := Color(surround, 0.0)
+			draw_rect(Rect2(Vector2.ZERO, size), surround)
 			draw_texture_rect(tex, Rect2(0, 140, 720, 750), false)
-			var paper := Color(0.93, 0.90, 0.82)
-			var clear := Color(paper, 0.0)
-			_fade_band(140, 209, paper, clear)
-			_fade_band(808, 890, clear, paper)
+			_fade_band(140, 220, surround, clear)
+			_fade_band(804, 890, clear, surround)
 			return
+		draw_rect(Rect2(0, 0, 720, 1280), Color(0.93, 0.90, 0.82))
 		if tex != null:
 			var s := maxf(size.x / float(tex.get_width()), size.y / float(tex.get_height()))
 			var w := float(tex.get_width()) * s
@@ -889,6 +937,7 @@ class CardSlot extends Control:
 
 func _build_bg() -> void:
 	var bg := BgArt.new()
+	_battle_background = bg
 	bg.size = Vector2(W, H)
 	var index := LevelState.current_level - 1
 	var path := BgArt.path_for(index)
@@ -1142,6 +1191,7 @@ func _build_field() -> void:
 	_hazard_view = HazardTelegraph.new()
 	_hazard_view.core = _core
 	_hazard_view.position = _core.position
+	_hazard_view.z_index = 4
 	_cam.add_child(_hazard_view)
 	_core.setup({"atk": 12.0, "hp_max": 200.0, "mp_max": 100.0})
 	_core.hero["basic_skill_bonus"] = _skill_level_bonus("zhujue") / 100.0
@@ -1193,7 +1243,7 @@ func _build_field() -> void:
 	_hero_token.bar_w = 0.0
 	_hero_token.unit_name = ""
 	_hero_token.position = _core.position + _core.hero_pos
-	_hero_token.z_index = 6
+	_hero_token.z_index = 7
 	_cam.add_child(_hero_token)
 	_combo_readout = ComboReadout.new()
 	_combo_readout.position = Vector2(448, 225)
@@ -1228,15 +1278,15 @@ func _build_field() -> void:
 	# 首领登场演出三件套（平时隐藏）
 	_boss_veil = ColorRect.new()
 	_boss_veil.color = Color(0.08, 0.06, 0.05, 0.0)
-	_boss_veil.position = Vector2(0, 150)
-	_boss_veil.size = Vector2(720, 720)
+	_boss_veil.position = FIELD_POS
+	_boss_veil.size = _core.size
 	_boss_veil.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_boss_veil.z_index = 14
+	_boss_veil.z_index = 2
 	_boss_veil.visible = false
-	add_child(_boss_veil)
+	_cam.add_child(_boss_veil)
 	_boss_spot = Sprite2D.new()
 	var g := Gradient.new()
-	g.set_color(0, Color(1.0, 0.92, 0.74, 0.75))
+	g.set_color(0, Color(1.0, 0.92, 0.74, 0.40))
 	g.set_color(1, Color(1.0, 0.85, 0.6, 0.0))
 	var gt := GradientTexture2D.new()
 	gt.gradient = g
@@ -1246,9 +1296,9 @@ func _build_field() -> void:
 	gt.width = 512
 	gt.height = 512
 	_boss_spot.texture = gt
-	_boss_spot.z_index = 15
+	_boss_spot.z_index = 3
 	_boss_spot.visible = false
-	add_child(_boss_spot)
+	_cam.add_child(_boss_spot)
 	_boss_name_lb = Label.new()
 	_boss_name_lb.size = Vector2(720, 70)
 	_boss_name_lb.position = Vector2(0, 468)
@@ -3045,7 +3095,7 @@ func _wave_interval() -> float:
 	return 14.0
 
 func _blocking_panel_open() -> bool:
-	if _draw_open or _exit_open:
+	if _is_open_panel(_draw_layer) or _exit_open:
 		return true
 	for panel in [_god_layer, _trea_layer, _str_layer, _chal_layer, _q_pop, _bm, _curio_detail, _attr_page,
 			_combined_layer, _combined_detail, _detail_layer, _str_menu]:
@@ -3128,6 +3178,9 @@ func _process(_delta: float) -> void:
 		_tick_pulses(_delta)
 		return
 	var blocked := _blocking_panel_open()
+	if blocked and not get("_dbg_block_logged"):
+		set("_dbg_block_logged", true)
+		print("[BLOCK] drawL=", _is_open_panel(_draw_layer), " drawopen=", _draw_open, " exit=", _exit_open, " god=", _is_open_panel(_god_layer), " trea=", _is_open_panel(_trea_layer), " str=", _is_open_panel(_str_layer), " chal=", _is_open_panel(_chal_layer), " q=", _is_open_panel(_q_pop), " bm=", _is_open_panel(_bm), " attr=", _is_open_panel(_attr_page), " combL=", _is_open_panel(_combined_layer), " combD=", _is_open_panel(_combined_detail), " detail=", _is_open_panel(_detail_layer), " menu=", _is_open_panel(_str_menu))
 	if not _tutorial_paused and _core != null:
 		_core.set_process(not blocked)
 	if blocked or (_core != null and not _core.running):
@@ -3808,7 +3861,7 @@ func _tutorial_pause(p: bool) -> void:
 		_tutorial_paused = false
 		set_process(_tutorial_ui_processing)
 		if _core != null:
-			_core.set_process(_tutorial_core_processing)
+			_core.set_process(not _blocking_panel_open())
 
 
 
@@ -5142,6 +5195,7 @@ func _make_foe_token(f: Dictionary):
 	tk.round_mask = needs_mark
 	tk.challenge_kind = challenge
 	tk.guardian = boss and challenge < 0
+	tk.z_index = 6 if tk.guardian else 5
 	tk.set_role("enemy")
 	tk.setup(foe_tex, rad, ring, false, frames)
 	tk.hp_ratio = 1.0
@@ -5166,7 +5220,6 @@ func _make_foe_token(f: Dictionary):
 	if mark != null:
 		mark.visible = needs_mark
 	if fresh:
-		tk.z_index = 5
 		_cam.add_child(tk)
 	else:
 		tk.reset_pose()
@@ -5818,9 +5871,9 @@ func _boss_intro_show(at: Vector2, nm: String) -> void:
 	_boss_veil.visible = true
 	_boss_veil.color.a = 0.0
 	var t1 := create_tween().bind_node(_boss_veil)
-	t1.tween_property(_boss_veil, "color:a", 0.55, 0.22)
-	t1.tween_interval(0.55)
-	t1.tween_property(_boss_veil, "color:a", 0.0, 0.75)
+	t1.tween_property(_boss_veil, "color:a", 0.30, 0.18)
+	t1.tween_interval(0.30)
+	t1.tween_property(_boss_veil, "color:a", 0.0, 0.48)
 	t1.tween_callback(func() -> void: _boss_veil.visible = false)
 	_boss_spot.visible = true
 	_boss_spot.position = at
@@ -5829,8 +5882,8 @@ func _boss_intro_show(at: Vector2, nm: String) -> void:
 	var t2 := create_tween().bind_node(_boss_spot)
 	t2.set_parallel(true)
 	t2.tween_property(_boss_spot, "modulate:a", 1.0, 0.16)
-	t2.tween_property(_boss_spot, "scale", Vector2(1.25, 1.25), 0.95).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	t2.chain().tween_property(_boss_spot, "modulate:a", 0.0, 0.45)
+	t2.tween_property(_boss_spot, "scale", Vector2(0.82, 0.82), 0.52).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	t2.chain().tween_property(_boss_spot, "modulate:a", 0.0, 0.38)
 	t2.chain().tween_callback(func() -> void: _boss_spot.visible = false)
 	_boss_name_lb.text = nm
 	_boss_name_lb.visible = true
@@ -9680,4 +9733,6 @@ func _play_video_after_beat(v: VideoStreamPlayer, was_running: bool) -> void:
 
 
 func _exit_tree() -> void:
+	if is_instance_valid(_portrait_window):
+		_portrait_window.content_scale_aspect = _portrait_original_aspect
 	Aud.stop_battle_sfx()

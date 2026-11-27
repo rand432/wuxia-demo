@@ -126,6 +126,16 @@ func _process(dt: float) -> void:
 	t += dt
 	cd -= dt
 	_track_wave(t)
+	if b._attr_page != null and b._is_open_panel(b._attr_page):
+		b._attr_page.close()
+	if b._combined_layer != null and b._is_open_panel(b._combined_layer):
+		b._show_combined(false)
+	if b._combined_detail != null and b._is_open_panel(b._combined_detail):
+		b._combined_detail.hide()
+	if b._draw_open and b._draw_layer != null and not b._draw_layer.visible:
+		b._show_draw(false)
+	if b._draw_layer != null and b._is_open_panel(b._draw_layer) and not b._draw_paid:
+		b._show_draw(false)
 	if b._tut != null and b._tut.visible:
 		var tg = b._tut._target
 		if tg == null or not is_instance_valid(tg) or not tg.is_visible_in_tree():
