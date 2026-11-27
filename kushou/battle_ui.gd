@@ -249,6 +249,10 @@ var _kill_pct := 0.0
 var _killnum_pct := 0.0
 var _virtual_cards: Array = []
 var _last_wave := 1
+var _wave_clock := 0.0
+var _wave_issued := {}
+var _wave_settled := {}
+var _withdrawn_waves := {}
 var _attack_count := 0
 var _hit_count := 0
 var _combo_t := 0.0
@@ -3014,6 +3018,69 @@ func _build_toast() -> void:
 	_toast_lb.z_index = 40
 	add_child(_toast_lb)
 
+func _wave_interval() -> float:
+	var lv := int(LevelState.current_level)
+	if lv <= 1:
+		return 12.0
+	if lv <= 5:
+		return 14.0
+	return 16.0
+
+func _schedule_tick(dt: float) -> void:
+	if _run_over or _core == null:
+		return
+	var w := int(_core.wave)
+	if not _wave_issued.has(w) and _core.wave_spawn_complete():
+		_wave_issued[w] = true
+	# 已排定刷完的波，场上清零才结算清波奖励（每波一次，与换波解耦）。
+	for k in _wave_issued.keys():
+		var i := int(k)
+		if _wave_settled.has(i) or _withdrawn_waves.has(i):
+			continue
+		if i <= w and _core.wave_alive(i) == 0:
+			_wave_settled[i] = true
+			_on_wave_clear(i)
+	# 第一关首次教学保留原来的“清空才过波”。
+	if int(LevelState.current_level) == 1 and not LevelState.tutorial_l1_done():
+		if _core.wave_cleared():
+			if w < _max_wave:
+				_core.set_wave(w + 1)
+				_core.wave_reset_quota()
+				_spawn_typed_foes()
+				_wave_clock = 0.0
+			else:
+				_run_cleared = true
+				_end_run(true)
+		return
+	if w >= _max_wave:
+		_core.boss_required = true
+		var normal_alive := 0
+		for f_v in _core.foes:
+			var f: Dictionary = f_v
+			if int(f.get("wave_tag", -1)) == w and not bool(f.get("boss", false)) \
+					and float(f.get("hp", 0.0)) > 0.0 and float(f.get("dying", 0.0)) <= 0.0:
+				normal_alive += 1
+		if not _boss_spawned and _core.wave_spawn_complete() and normal_alive <= 6:
+			_boss_spawned = true
+			print("[SCHED] boss wave=%d normal_alive=%d live=%d" % [w, normal_alive, _core.live_foes()])
+			_core.start_boss(LevelState.boss_tier(), "")
+		if _boss_spawned and not _core.boss_alive and _core.wave_alive(w) == 0:
+			if not _wave_settled.has(w):
+				_wave_settled[w] = true
+				_on_wave_clear(w)
+			if not _run_cleared:
+				_run_cleared = true
+				_end_run(true)
+		return
+	_wave_clock += dt
+	if _wave_clock >= _wave_interval() and _core.wave_spawn_complete():
+		_wave_issued[w] = true
+		print("[SCHED] advance %d->%d live=%d clock=%.1f" % [w, w + 1, _core.live_foes(), _wave_clock])
+		_core.set_wave(w + 1)
+		_core.wave_reset_quota()
+		_spawn_typed_foes()
+		_wave_clock = 0.0
+
 func _toast_card(name: String, quality: int, tail: String) -> void:
 	var col: String = QUALITY_COLORS[clampi(quality - 1, 0, 4)].to_html(false)
 	_toast("[color=#" + col + "]" + name + "[/color]　" + tail)
@@ -3041,31 +3108,14 @@ func _process(_delta: float) -> void:
 		if int(_core.wave) != _last_wave:
 			_last_wave = int(_core.wave)
 			_trigger_combos("每波")
-		# 最后一波：先把小怪清完，Boss 才登场（不同时出现）
-		if int(_core.wave) >= _max_wave:
-			_core.boss_required = true
-		if not _boss_spawned and not _run_cleared and int(_core.wave) >= _max_wave \
-				and _core.wave_spawn_complete() and _core.live_foes() <= 0:
-			_boss_spawned = true
-			_core.start_boss(LevelState.boss_tier(), "")
+		# 连续进攻调度：按战斗时间换波，旧怪留场；首领等末波排定且杂兵 ≤6 再入场。
+		_schedule_tick(_delta)
 		_run_time += _delta
 		_combo_t += _delta
 		if _combo_t >= 6.0:
 			_combo_t -= 6.0
 			_trigger_combos("每 6 秒")
-		# v2 波次推进：本波定额刷完 + 场上清空 → 进下一波；满 MAX_WAVE 收工
-		if not _run_cleared and _core.wave_cleared():
-			var cleared_wave := int(_core.wave)
-			if cleared_wave < _max_wave:
-				_core.set_wave(cleared_wave + 1)
-				_core.wave_reset_quota()
-				_spawn_typed_foes()
-				_on_wave_clear(cleared_wave)
-			else:
-				_run_cleared = true
-				_on_wave_clear(cleared_wave)
-				_end_run(true)
-				return
+
 		_refresh_wave_hud(int(_core.wave))
 		var hpr := clampf(float(_core.hero.get("hp", 0.0)) / maxf(1.0, float(_core.hero.get("hp_max", 1.0))), 0.0, 1.0)
 		# 逐关易伤规则集中在 balance_rules.gd（-1 = 本关不覆盖）
@@ -7607,8 +7657,13 @@ func _backwash() -> void:
 	# 回到普通波时不能沿用末波的首领门槛，也不能让旧场上的攻击追到重刷波。
 	if not _q_cur.is_empty() and str(_q_cur.get("kind", "")) in ["statue", "zone", "guard", "champion", "elite"]:
 		_q_finish("fail")
+	for k in _wave_issued.keys():
+		var wi := int(k)
+		if not _wave_settled.has(wi) and _core.wave_alive(wi) > 0:
+			_withdrawn_waves[wi] = true
 	_core.foes.clear()
 	_core.clear_enemy_attacks()
+	_wave_clock = 0.0
 	if _hero_token != null:
 		_hero_token.cancel_cast_poses()
 	_core._hero_pending = {}

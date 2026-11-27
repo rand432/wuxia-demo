@@ -42,6 +42,7 @@ func _run() -> void:
 		assert(b._q_cur.is_empty() and b._q_fail == 1 and b._kills == kills and b._wen == money and not old.get("_death_settled", false))
 		c._wave_spawned = c._wave_quota
 		assert(c.wave_cleared())
+		b._wave_clock = 99.0
 		b._process(0.0)
 		assert(c.wave == 16 and not b._run_over)
 		# 再次达到末波：必须重新出首领，打倒前不能提前通关。

@@ -614,6 +614,7 @@ func _spawn_foe(kind := "normal", hp_mul := 1.0, atk_mul := 1.0, big := false, t
 		# v16m：⚠ 停距默认值原来是 FOE_STOP(150)，但改之前**根本没人读它**，
 		#   走位用的是 FOE_REACH(66)。现在 stop 真被读了，默认必须跟原来一致，
 		#   否则**所有近战怪都变成隔空打**（探针实测：普通怪停在 118~169）。
+		"wave_tag": wave,
 		"stop": (FOE_REACH - 6.0 if big else FOE_REACH - 10.0) + randf() * 12.0,   # 必须 < HERO_REACH+10（84），否则主角够不到
 	}
 	# v16h/i（用户："小怪可以有些弓箭手啊之类的 不能全是火柴人" → "还有法师怪 肌肉壮汉啊 等等"）：
@@ -5594,6 +5595,14 @@ func wave_cleared() -> bool:
 	if boss_required:
 		boss_ok = boss_spawned_once and not boss_alive
 	return wave_spawn_complete() and live_foes() <= 0 and boss_ok
+
+func wave_alive(w: int) -> int:
+	var n := 0
+	for f_v in foes:
+		var f: Dictionary = f_v
+		if int(f.get("wave_tag", -1)) == w and float(f.get("hp", 0.0)) > 0.0 and float(f.get("dying", 0.0)) <= 0.0:
+			n += 1
+	return n
 
 func wave_spawn_complete() -> bool:
 	return _wave_spawned >= _wave_quota and _queued_coin_foes == 0 and _queued_crystal_foes == 0

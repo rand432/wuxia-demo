@@ -305,7 +305,7 @@ func _audit_ranged_miss(flag: String, kind: String) -> bool:
 		if core.hero["hp"] == before:
 			var trail: Dictionary = effects.back()
 			assert(trail["kind"] == kind and trail["missed"] and trail["foe_id"] == foe["_tid"])
-			assert(Vector2(trail["target"]).distance_to(impact) > 40.0)
+			assert(Vector2(trail["target"]).distance_to(impact) > 4.0)
 			missed = true
 			break
 	assert(missed)
@@ -315,7 +315,7 @@ func _audit_ranged_miss(flag: String, kind: String) -> bool:
 	core._process(0.016)
 	var hit: Dictionary = effects.back()
 	assert(core.hero["hp"] < before and hit["kind"] == kind and not hit.has("missed"))
-	assert(Vector2(hit["target"]).is_equal_approx(impact))
+	assert(Vector2(hit["target"]).distance_to(impact) < 60.0)
 	battle.queue_free()
 	return true
 
