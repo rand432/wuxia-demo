@@ -203,7 +203,11 @@ func _process(dt: float) -> void:
 			return
 		b._on_aug_card(b._aug_cards[0]); return
 	if not restrict_strength and b._str_tile != null and b._str_tile.visible and b._wen >= b._str_cost():
-		b._on_str_tile(); return
+		if b._str_lv >= 1 and b._wen >= b._str_batch_cost():
+			b._str_batch_upgrade()
+		else:
+			b._on_str_tile()
+		return
 	if b._trea_tile != null and b._trea_tile.visible and b._trea_charge > 0:
 		b._on_trea_tile()
 		if b._trea_layer != null and b._trea_layer.visible:

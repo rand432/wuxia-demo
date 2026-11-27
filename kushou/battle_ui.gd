@@ -184,6 +184,10 @@ var _bonds_done := 0            # 这一局已经成过几张
 var _trea_charge := TREA_CHARGE_START
 var _trea_milestones := 0
 var _str_menu: Control = null
+var _str_batch_btn: Button = null
+var _str_menu_single: Button = null
+var _str_menu_batch: Button = null
+var _str_menu_info: Label = null
 var _trea_reroll := 3
 var _trea_pending := false
 var _trea_layer: Control = null
@@ -2371,6 +2375,9 @@ func _build_bottom() -> void:
 	# 强化固定隐藏：清完第一波的教学那一刻才亮出来（不因重玩而提前显示）
 	_str_tile.visible = false
 	_str_tile.hot = false
+	_str_batch_btn = _btn("批升", Rect2(_str_tile.position.x + 6, _str_tile.position.y - 52, _str_tile.size.x - 12, 40), 18,
+		Color(0.20, 0.17, 0.13), Color(0.92, 0.82, 0.52), _open_str_menu)
+	_str_batch_btn.visible = false
 	_draw_tile = _tile(560, 1116, 136, "draw", "抽卡", true)
 	_draw_tile.visible = LevelState.show_button("draw")
 	_refresh_draw_tile()
@@ -3041,11 +3048,12 @@ func _grant_treasure_milestones(w: int) -> void:
 	var lv := int(LevelState.current_level)
 	if lv < 3 or _max_wave <= 0:
 		return
-	var marks: Array[float] = [0.25, 0.65] if lv <= 5 else [0.20, 0.50, 0.78]
+	var marks: Array = [0.25, 0.65] if lv <= 5 else [0.20, 0.50, 0.78]
 	var frac := float(w) / float(_max_wave)
-	while _trea_milestones < marks.size() and frac >= marks[_trea_milestones] + 0.0001:
+	while _trea_milestones < marks.size() and frac + 0.0001 >= float(marks[_trea_milestones]):
 		_trea_milestones += 1
 		_trea_charge += 1
+		print("[TREA] t=%.1f wave=%d charge=%d mark=%d" % [_run_time, w, _trea_charge, _trea_milestones])
 		_refresh_trea_tile()
 		_toast("宝物 · 第 %d 次机会已到账" % _trea_milestones)
 
@@ -3813,6 +3821,8 @@ func _refresh_str_tile() -> void:
 		_str_tile.sub = s
 		_str_tile.hot = hot
 		_str_tile.queue_redraw()
+	if _str_batch_btn != null:
+		_str_batch_btn.visible = _str_tile.visible and _str_lv >= 1 and not _str_pending
 
 # 点［强化］：扣文钱升一级；正好到 10 的倍数就开三选一
 func _open_bm() -> void:
@@ -3837,6 +3847,7 @@ func _on_str_tile() -> void:
 	if _coin_lb != null:
 		_coin_lb.text = str(_wen)
 	_str_lv += 1
+	print("[STR] t=%.1f lv=%d wen=%d" % [_run_time, _str_lv, _wen])
 	_apply_str_levels(1)
 	Aud.sfx("ui_click", -6.0)
 	_str_pop("强化 +1")
@@ -3872,6 +3883,78 @@ func _on_str_tile() -> void:
 				"每强化 10 级可大幅提升属性\n并可选择自己的发展方向",
 				func() -> void: pass)
 	_refresh_str_tile()
+
+func _str_next_node() -> int:
+	return (int(_str_lv / STR_EVERY) + 1) * STR_EVERY
+
+func _str_batch_cost() -> int:
+	var n := _str_next_node() - _str_lv
+	var total := 0
+	for i in n:
+		total += STR_COST_BASE + STR_COST_STEP * (_str_lv + i)
+	return total
+
+func _str_batch_upgrade() -> void:
+	if _str_pending:
+		_open_aug_pick()
+		return
+	var n := _str_next_node() - _str_lv
+	var total := _str_batch_cost()
+	if _wen < total:
+		_toast("批升需要 %d 文钱（现有 %d）" % [total, _wen])
+		return
+	_wen -= total
+	if _coin_lb != null:
+		_coin_lb.text = str(_wen)
+	for i in n:
+		_str_lv += 1
+	print("[STR] t=%.1f batch lv=%d cost=%d" % [_run_time, _str_lv, total])
+	_apply_str_levels(n)
+	Aud.sfx("ui_click", -6.0)
+	_str_pop("强化 +%d（批升至 Lv%d）" % [n, _str_lv])
+	if _core != null:
+		var hh: Dictionary = _core.hero
+		_core._push_float(_core.hero_pos.x, _core.hero_pos.y - 70.0,
+			"批升 · 气血 %d · 攻击 %d" % [int(float(hh.get("hp_max", 0))), int(float(hh.get("atk", 0)))],
+			Color(0.98, 0.86, 0.45), true)
+	_hide_str_menu()
+	if _str_lv % STR_EVERY == 0:
+		_str_pending = true
+		_aug_reroll += 1
+		_open_aug_pick()
+	_refresh_str_tile()
+
+func _hide_str_menu() -> void:
+	if _str_menu != null:
+		_str_menu.visible = false
+
+func _open_str_menu() -> void:
+	if _run_over or _str_pending:
+		return
+	if _str_menu == null:
+		_str_menu = Control.new()
+		_str_menu.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		_str_menu.mouse_filter = Control.MOUSE_FILTER_STOP
+		_str_menu.z_index = 35
+		add_child(_str_menu)
+		var dim := ColorRect.new()
+		dim.color = Color(0.03, 0.03, 0.04, 0.55)
+		dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		_str_menu.add_child(dim)
+		var p := _panel(Rect2(70, 430, 580, 250), Color(0.94, 0.89, 0.79), 10, Color(0.30, 0.24, 0.16), 2, _str_menu)
+		var title := _lbl("强化", Vector2(0, 14), Vector2(580, 34), 26, Color(0.24, 0.18, 0.10), p, HORIZONTAL_ALIGNMENT_CENTER)
+		_str_menu_info = _lbl("", Vector2(24, 60), Vector2(532, 58), 19, Color(0.30, 0.24, 0.16), p)
+		_str_menu_single = _btn("", Rect2(24, 132, 252, 64), 20, Color(0.32, 0.25, 0.16), Color(0.96, 0.90, 0.72), func() -> void:
+			_hide_str_menu()
+			_on_str_tile(), p)
+		_str_menu_batch = _btn("", Rect2(304, 132, 252, 64), 20, Color(0.50, 0.33, 0.12), Color(1.0, 0.92, 0.68), func() -> void:
+			_str_batch_upgrade(), p)
+		var close := _btn("关闭", Rect2(240, 204, 100, 34), 18, Color(0.30, 0.26, 0.20), Color(0.92, 0.88, 0.78), _hide_str_menu, p)
+	_str_menu_info.text = "当前 Lv%d，升 1 级 %d 文；批升到下一节点 Lv%d 共 %d 文" % [_str_lv, _str_cost(), _str_next_node(), _str_batch_cost()]
+	_str_menu_single.text = "升 1 级 · %d 文" % _str_cost()
+	_str_menu_batch.text = "批升 Lv%d · %d 文" % [_str_next_node(), _str_batch_cost()]
+	_str_menu.visible = true
+	_str_menu.move_to_front()
 
 # 点一下的即时反馈：［强化］钮上方冒一行字，往上飘走（不用 toast，免得连点排队）
 func _str_pop(txt: String) -> void:
@@ -9303,6 +9386,7 @@ func _q_roll() -> void:
 		return
 	var pick := _q_prepare(cand[randi() % cand.size()])
 	_q_offer = pick
+	print("[ENC] t=%.1f offer=%s" % [_run_time, str(pick.get("id", ""))])
 	_q_refresh()
 
 # 接受后：布置战场 + 倒计时从这里才开始

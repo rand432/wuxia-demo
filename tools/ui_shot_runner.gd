@@ -62,6 +62,15 @@ func _ready() -> void:
 		node.set("_tut", null)
 		node._tutorial_pause(false)
 	await _wait(600)
+	if action == "strmenu":
+		node._str_tile.visible = true
+		node._wen = 5000
+		node._str_lv = 1
+		node._open_str_menu()
+		await _wait(120)
+		await _capture(vp, out_path)
+		get_tree().quit(0)
+		return
 	if action == "float":
 		if node.get("_core") != null:
 			for i in 20:
