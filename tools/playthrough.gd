@@ -28,6 +28,12 @@ var waves: Array = []
 var wave_cur: Dictionary = {}
 var tracked_wave := -1
 var wall_start := 0
+var boss_prev_hp := -1.0
+var boss_hits := 0
+var boss_dmg := 0.0
+var boss_log_at := -1.0
+var boss_max_seen := 0.0
+var boss_hero_hp := 0.0
 
 func _ready() -> void:
 	if not OS.get_user_data_dir().replace("\\", "/").ends_with("wuxia-regression"):
@@ -96,6 +102,10 @@ func _start() -> void:
 	wave_cur = {}
 	tracked_wave = int(b._core.wave)
 	wall_start = Time.get_ticks_msec()
+	boss_prev_hp = -1.0
+	boss_hits = 0
+	boss_dmg = 0.0
+	boss_log_at = -1.0
 	_log("[GO] L%d" % lv)
 	_log("[SEED] %d" % audit_seed)
 	_log("[SCENARIO] build=%s seed=%d decision_cadence=0.3s" % ["restrict_strength" if restrict_strength else "auto", audit_seed])
@@ -125,6 +135,7 @@ func _process(dt: float) -> void:
 		done = true
 		var win: bool = b._run_cleared
 		_finalize_wave(t, win, false)
+		_log_boss_end()
 		_log_pace(t, win)
 		_log("[WALL] L%d %dms" % [lv, Time.get_ticks_msec() - wall_start])
 		_log("[END] L%d %s t=%.0fs wave=%d/%d kills=%d hp=%d/%d unlock=%d" % [
@@ -143,6 +154,7 @@ func _process(dt: float) -> void:
 		done = true
 		failures += 1
 		_finalize_wave(t, false, true)
+		_log_boss_end()
 		_log_pace(t, false)
 		_log("[WALL] L%d %dms" % [lv, Time.get_ticks_msec() - wall_start])
 		_log("[STATE] cards=%s wen=%d crystal=%d pending=%s god=%s ancestors=%s running=%s processing=%s" % [str(b._cards), b._wen, b._crystal, str(b._str_pending), str(b._god_layer.visible), str(b._ancestors.keys()), str(b._core.running), str(b._core.is_processing())])
@@ -262,6 +274,38 @@ func _track_wave(now: float) -> void:
 		wave_cur["boss_out"] = now
 	if float(wave_cur["cleared"]) < 0.0 and b._core.wave_cleared():
 		wave_cur["cleared"] = now
+	_track_boss(now)
+
+func _track_boss(now: float) -> void:
+	if b == null or b._core == null or not bool(b._core.boss_alive):
+		return
+	var bf: Dictionary = b._core._boss_foe(false)
+	if bf.is_empty():
+		return
+	var hp := float(bf.get("hp", 0.0))
+	boss_max_seen = float(bf.get("hp_max", boss_max_seen))
+	boss_hero_hp = float(b._core.hero.get("hp", 0.0))
+	if boss_prev_hp >= 0.0 and hp < boss_prev_hp:
+		boss_hits += 1
+		boss_dmg += boss_prev_hp - hp
+	boss_prev_hp = hp
+	if boss_log_at < 0.0 or now - boss_log_at >= 1.0:
+		boss_log_at = now
+		_log("[BOSS] L%d t=%.1f hp=%.0f/%.0f hero=%.0f/%.0f hits=%d dmg=%.0f str_lv=%d cards=%d" % [
+			lv, now, hp, float(bf.get("hp_max", 0.0)),
+			float(b._core.hero.get("hp", 0.0)), float(b._core.hero.get("hp_max", 1.0)),
+			boss_hits, boss_dmg, int(b._str_lv), b._cards.size()])
+
+func _log_boss_end() -> void:
+	if b == null or b._core == null:
+		return
+	var bf: Dictionary = b._core._boss_foe(false)
+	var hp := float(bf.get("hp", 0.0)) if not bf.is_empty() else boss_prev_hp
+	var hpm := float(bf.get("hp_max", 0.0)) if not bf.is_empty() else boss_max_seen
+	_log("[BOSS_END] L%d t=%.1f boss_hp=%.0f/%.0f hits=%d dmg=%.0f hero_hp=%.0f/%.0f str_lv=%d cards=%d wave=%d" % [
+		lv, t, hp, hpm, boss_hits, boss_dmg,
+		boss_hero_hp if bf.is_empty() else float(b._core.hero.get("hp", 0.0)), float(b._core.hero.get("hp_max", 1.0)),
+		int(b._str_lv), b._cards.size(), int(b._core.wave)])
 
 func _finalize_wave(now: float, win: bool, timed_out: bool) -> void:
 	if wave_cur.is_empty():
