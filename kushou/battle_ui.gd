@@ -1078,7 +1078,7 @@ func _build_field() -> void:
 	_core.position = FIELD_POS
 	_core.size = field_clip.size
 	_core.mouse_filter = Control.MOUSE_FILTER_IGNORE   # 战斗没有手动：点击穿透
-	_core.modulate = Color(1, 1, 1, 0.25)
+	_core.self_modulate = Color(1, 1, 1, 0.25)
 	_core.show_combo_counter = false
 	_core.show_basic_hit_numbers = false
 	_core.draw_hazard_warnings = false

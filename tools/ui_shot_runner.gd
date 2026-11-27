@@ -44,6 +44,9 @@ func _ready() -> void:
 		(node as Control).set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	if scene_path.find("forge_sheet") >= 0 and node.has_method("open"):
 		node.open("weapon")
+	if node.has_method("present"):
+		node.present({"win": true, "run_time": 228, "wave": 18, "max_wave": 18, "kills": 688,
+			"wen": 1234, "crystal": 56, "bonds": 3, "bonds_done": 1})
 	if node.has_method("_show_draw") and node.get("_tut") != null:
 		var tut = node.get("_tut")
 		tut.cancel()

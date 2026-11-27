@@ -831,6 +831,10 @@ func spawn_pack(kind: String) -> void:
 func reset_run() -> void:
 	foes.clear()
 	_floats.clear()
+	_hero_hit_flash = 0.0
+	_shield_block_flash = 0.0
+	_shield_block_visual.queue_redraw()
+	_quake_fx.clear()
 	_slashes.clear()
 	kill_normal = 0
 	_shards.clear()
@@ -898,6 +902,11 @@ func _process(delta: float) -> void:
 		dt = delta * 0.18
 	# 抖屏与特效的衰减走真实时间，别被顿帧拖慢
 	_shake = maxf(0.0, _shake - delta * 60.0)
+	_hero_hit_flash = maxf(0.0, _hero_hit_flash - delta)
+	if _shield_block_flash > 0.0:
+		_shield_block_flash = maxf(0.0, _shield_block_flash - delta)
+		_shield_block_visual.queue_redraw()
+	_update_quake(delta)
 	_hero_lunge = maxf(0.0, _hero_lunge - delta * 5.0)
 	_sfx_t = maxf(0.0, _sfx_t - delta)
 	_death_sfx_t = maxf(0.0, _death_sfx_t - delta)
@@ -961,7 +970,6 @@ func _process(delta: float) -> void:
 	if not _mirror_decoy.is_empty():
 		_mirror_decoy["taunt_t"] = maxf(0.0, float(_mirror_decoy.get("taunt_t", 0.0)) - dt)
 	intro_wait = maxf(0.0, intro_wait - delta)      # 开场等待倒计时
-	_hero_hit_flash = maxf(0.0, _hero_hit_flash - delta)
 	_banner_t = maxf(0.0, _banner_t - delta)
 	delta = dt
 	# 刷怪
@@ -1300,8 +1308,8 @@ func _process(delta: float) -> void:
 					hero_hit.emit()
 					if not running or frame_epoch != _enemy_attack_epoch:
 						break
-					_hero_hit_flash = 0.18
-					_shake = maxf(_shake, 3.5)
+					if d2 > 0.0:
+						_shake = maxf(_shake, 3.5)
 					# v14r：boss 词缀"嗜血"（打中回血）与二技能"剧毒"（打中带毒）接上进行为
 					# v14t：狐火——这一巴掌带火系溅射（火尾狐妖的技能，原来只是文本）
 					if int(f.get("boss_foxfire", 0)) > 0 and d2 > 0.0 and float(hero["hp"]) > 0.0 and float(f.get("hp", 0.0)) > 0.0 and not bool(f.get("_death_settled", false)):
@@ -1311,7 +1319,8 @@ func _process(delta: float) -> void:
 							break
 						_bursts.append({"x": hero_pos.x, "y": hero_pos.y - 16.0, "t": 0.0,
 							"col": Color(1.0, 0.52, 0.22), "scale": 1.5})
-						_push_float(hero_pos.x + 46.0, hero_pos.y - 52.0, "狐火 " + str(int(ffd)), Color(1.0, 0.62, 0.26))
+						if ffd > 0.0:
+							_push_float(hero_pos.x + 46.0, hero_pos.y - 52.0, "狐火 " + str(int(ffd)), Color(1.0, 0.62, 0.26))
 					# v14r：boss 词缀"嗜血"（打中回血）
 					var bls := float(f.get("boss_lifesteal", 0.0))
 					if bls > 0.0 and float(f["hp"]) > 0.0 and float(f["hp"]) < float(f["hp_max"]):
@@ -1334,7 +1343,9 @@ func _process(delta: float) -> void:
 						_bursts.append({"x": float(f["x"]), "y": float(f["y"]), "t": 0.0,
 							"col": Color(0.90, 0.64, 0.30), "scale": 0.6})
 					_on_hero_hurt(f)                 # 刺骨：挨打就反真实伤害
-					_push_float(size.x * 0.5 + float(randi() % 40 - 20), size.y - HERO_LINE - 40.0, "-" + str(int(d2)), Color(0.86, 0.36, 0.30))
+					var damage_offset := float(randi() % 40 - 20)
+					if d2 > 0.0:
+						_push_float(size.x * 0.5 + damage_offset, size.y - HERO_LINE - 40.0, "-" + str(int(d2)), Color(0.86, 0.36, 0.30))
 					if float(hero["hp"]) <= 0.0:
 						hero["hp"] = 0.0
 						running = false
@@ -1383,7 +1394,6 @@ func _process(delta: float) -> void:
 			hero["shield"] = sv
 			hero["shield_t"] = 6.0
 			_push_float(hero_pos.x, hero_pos.y - 84.0, "护盾 " + str(int(sv)), Color(0.66, 0.86, 1.0))
-	_update_quake(dt)
 	_delayed_tick(dt)            # v16a：延迟技（预警 → 落下）
 	if not running or frame_epoch != _enemy_attack_epoch:
 		queue_redraw()
@@ -1831,8 +1841,9 @@ func _delayed_hit(d: Dictionary, damage_scale := 1.0, allow_paper := true, is_im
 		dm = _apply_hero_damage(dm, d.get("caster", {}))
 		if not running or epoch != _enemy_attack_epoch:
 			return
-		_push_float(hero_pos.x, hero_pos.y - 100.0, str(d["kind"]) + "！ -" + str(int(dm)),
-			Color(1.0, 0.52, 0.34), true)
+		if dm > 0.0:
+			_push_float(hero_pos.x, hero_pos.y - 100.0, str(d["kind"]) + "！ -" + str(int(dm)),
+				Color(1.0, 0.52, 0.34), true)
 		# 只有带 push 的招式（冲撞类机制）才把主角推开；普通挨打不位移
 		var psh := float(d.get("push", 0.0)) if is_impact else 0.0
 		if psh > 0.0 and not bool(hero.get("curio_control_immune", false)):
@@ -3551,6 +3562,31 @@ func p_thorn_targets() -> int:
 #   层段（用户点名）：护盾每掉 10% 就震荡一次，造成"10% × 层数"的护盾值土系伤害——**也是范围**
 # ============================================================
 var _quake_fx: Array = []           # 土系震荡：{x, y, r, t, big}
+const SHIELD_BLOCK_TIME := 0.22
+var _shield_block_flash := 0.0
+var _shield_block_angle := -PI * 0.5
+var _shield_block_visual: Node2D
+
+func _init() -> void:
+	# 护盾接触点与角色图层一起显示，保留战场旧绘制层的淡化。
+	_shield_block_visual = Node2D.new()
+	_shield_block_visual.z_index = 4
+	add_child(_shield_block_visual)
+	_shield_block_visual.draw.connect(_draw_shield_block)
+
+func _draw_shield_block() -> void:
+	if _shield_block_flash <= 0.0:
+		return
+	var strength := _shield_block_flash / SHIELD_BLOCK_TIME
+	var center := hero_pos + Vector2(0, -22)
+	var angle := _shield_block_angle
+	var radius := 50.0 + 16.0 * (1.0 - strength)
+	_shield_block_visual.draw_arc(center, radius, angle - 0.70, angle + 0.70, 14, Color(0.97, 0.70, 0.30, strength * 0.6), 9.0, true)
+	_shield_block_visual.draw_arc(center, radius, angle - 0.51, angle + 0.51, 12, Color(1.0, 0.94, 0.70, strength), 3.0, true)
+	for i in range(-1, 2):
+		var ray := Vector2.from_angle(angle + float(i) * 0.35)
+		_shield_block_visual.draw_line(center + ray * (radius + 4.0), center + ray * (radius + 12.0),
+			Color(1.0, 0.84, 0.48, strength), 2.0, true)
 
 func fd_shield() -> float:
 	return float(hero["hp_max"]) * (0.40 + 0.15 * float(partners["fadu"].get("shield_lv", 0))) * p_star_mul("fadu")
@@ -3607,6 +3643,8 @@ func _update_shield(delta: float) -> void:
 	hero["shield_t"] = float(hero.get("shield_t", 0.0)) - delta
 	if float(hero["shield_t"]) <= 0.0:
 		hero["shield"] = 0.0
+		_shield_block_flash = 0.0
+		_shield_block_visual.queue_redraw()
 		_push_float(hero_pos.x, hero_pos.y - 70.0, "护盾消散", Color(0.80, 0.74, 0.60))
 
 # 挨打先扣盾：返回"还有多少要打到血上"；跨过每个 10% 就震荡一段，盾碎再来一发大的（都是范围）
@@ -3626,6 +3664,8 @@ func _absorb_by_shield(dmg: float) -> float:
 		if b < a:
 			_earth_quake(mx * step, false)
 	if left <= 0.0:
+		_shield_block_flash = 0.0
+		_shield_block_visual.queue_redraw()
 		_earth_quake(mx * fd_break_mul(), true)
 		_push_float(hero_pos.x - 20.0, hero_pos.y - 96.0, "盾破！", Color(0.96, 0.82, 0.50), true)
 		Audio.sfx("sword_in_ground", -4.0)
@@ -4923,7 +4963,8 @@ func _update_partners(delta: float) -> void:
 			pdm = _apply_hero_damage(pdm, {})
 			if epoch != _enemy_attack_epoch or (was_running and not running):
 				return
-			_push_float(hero_pos.x, hero_pos.y - 70.0, "毒 " + str(int(pdm)), Color(0.62, 0.90, 0.44))
+			if pdm > 0.0:
+				_push_float(hero_pos.x, hero_pos.y - 70.0, "毒 " + str(int(pdm)), Color(0.62, 0.90, 0.44))
 			if float(hero["hp"]) <= 0.0:
 				hero["hp"] = 0.0
 				running = false
@@ -5667,11 +5708,24 @@ func _apply_hero_damage(amount: float, attacker: Dictionary) -> float:
 		return 0.0
 	var epoch := _enemy_attack_epoch
 	var was_running := running
+	var shield_before := float(hero.get("shield", 0.0))
 	var remaining := _absorb_by_shield(amount)
 	if epoch != _enemy_attack_epoch or (was_running and not running):
 		return 0.0
+	var shield_after := float(hero.get("shield", 0.0))
+	if shield_after > 0.0 and shield_after < shield_before:
+		var source := Vector2(float(attacker.get("x", hero_pos.x)), float(attacker.get("y", hero_pos.y - 1.0)))
+		var direction := source - hero_pos
+		_shield_block_angle = direction.angle() if direction.length_squared() > 0.01 else -PI * 0.5
+		if _shield_block_flash <= 0.0:
+			_push_float(hero_pos.x, hero_pos.y - 70.0, "格挡", Color(0.99, 0.87, 0.53))
+		_shield_block_flash = SHIELD_BLOCK_TIME
+		_shield_block_visual.queue_redraw()
+		Audio.sfx("arrow_block", -13.0, 0.92, 180)
 	var actual := minf(float(hero["hp"]), maxf(0.0, remaining))
 	hero["hp"] = maxf(0.0, float(hero["hp"]) - remaining)
+	if actual > 0.0:
+		_hero_hit_flash = 0.18
 	_notify_hero_damage(actual, attacker)
 	return actual
 

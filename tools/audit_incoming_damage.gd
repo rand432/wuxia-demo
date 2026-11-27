@@ -52,6 +52,12 @@ func _run() -> void:
 	f["boss_lifesteal"] = 0.5
 	c._process(0.01)
 	assert(c.hero["hp"] == 1000.0 and c.hero["shield"] == 100.0 and f["hp"] == 500.0 and events.is_empty())
+	assert(c._hero_hit_flash == 0.0 and c._shield_block_flash > 0.0)
+	assert(c._floats.any(func(item): return item["txt"] == "格挡"))
+	assert(not c._floats.any(func(item): return item["txt"] == "-0"))
+	c.running = false
+	c._process(0.25)
+	assert(c._shield_block_flash == 0.0)
 	c.queue_free()
 	await process_frame
 	# 延迟技也先扣盾；盾破震荡仍真实生效一次。
@@ -61,6 +67,8 @@ func _run() -> void:
 	c._delayed_hit(c._delayed.back())
 	assert(c.hero["hp"] == 930.0 and c.hero["shield"] == 0.0 and f["hp"] == 470.0)
 	assert(events.size() == 1 and events[0][0] == 70.0)
+	assert(c._hero_hit_flash > 0.0 and c._shield_block_flash == 0.0)
+	assert(c._quake_fx.any(func(effect): return effect["big"]))
 	c.queue_free()
 	await process_frame
 	for poison_hit in [false, true]:
@@ -118,5 +126,5 @@ func _run() -> void:
 		if not shield_end: assert(f["hp"] == 500.0)
 		c.queue_free()
 		await process_frame
-	print("PASS: incoming actual HP loss; boss lifesteal; shield covers delayed/poison/fox; callback phase boundaries")
+	print("PASS: incoming actual HP loss; shield block and break feedback; boss lifesteal; delayed/poison/fox; callback phase boundaries")
 	Audio.quit_cleanly()
