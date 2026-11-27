@@ -344,4 +344,4 @@
 - 核查：卡框 1024×1536 已有 mipmap，450 下细纹偏软但连续，属源图到小尺寸采样，未动素材；结算面板底图开 mipmap 反而更糊（450 边框方差 1228→948），已回退
 - 验证：`audit_ui_gestures` 15/15、`choice_boundary`/`result_panel` 通过、`battle_navigation` 图形 PASS（`.shots/ui17_gestures.log`、`.shots/ui17_batnav.log`）；全量 **88/88**（`.shots/audit_batch17full2.txt`，首跑一次 menu_navigation 偶发 dummy 渲染误报）
 - 交付说明：`docs/交付_批次17_小窗清晰度_2026-11-28.md`
-- 提交：__H17__
+- 提交：cc254b9
